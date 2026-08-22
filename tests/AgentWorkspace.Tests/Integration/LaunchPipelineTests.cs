@@ -83,7 +83,7 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         var git = new GitManager(_processes, resolver);
         var yaml = new YamlStore(permissions);
         var configuration = new ConfigurationService(_paths, environment, yaml);
-        var workspace = new WorkspaceManager(_paths, git, yaml);
+        var workspace = new WorkspaceManager(_paths, git, yaml, TimeProvider.System);
 
         _projects = new ProjectService(configuration, workspace, git, new PathSemantics());
 
@@ -212,7 +212,7 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         var handoffs = new HandoffService(
             new WorkspaceManager(_paths, new GitManager(_processes,
                 new ExecutableResolver(new FakeEnvironmentProvider(Path.Combine(_root, "home")), [])),
-                new YamlStore(new NoOpFilePermissions())),
+                new YamlStore(new NoOpFilePermissions()), TimeProvider.System),
             TimeProvider.System);
 
         await handoffs.CreateAsync(ProjectSlug, "resume-here");

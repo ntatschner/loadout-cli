@@ -1,5 +1,6 @@
 using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Git;
+using AgentWorkspace.Core.Policies;
 using AgentWorkspace.Core.Security;
 using AgentWorkspace.Core.Workspace;
 using AgentWorkspace.Models.Diagnostics;
@@ -25,6 +26,7 @@ public sealed class DoctorService : IDoctorService
     private readonly IWorkspaceManager _workspace;
     private readonly IGitManager _git;
     private readonly ISecretProvider _secrets;
+    private readonly IPolicyService _policies;
     private readonly IEnumerable<IDiagnosticContributor> _contributors;
 
     public DoctorService(
@@ -35,6 +37,7 @@ public sealed class DoctorService : IDoctorService
         IWorkspaceManager workspace,
         IGitManager git,
         ISecretProvider secrets,
+        IPolicyService policies,
         IEnumerable<IDiagnosticContributor> contributors)
     {
         _paths = paths;
@@ -44,6 +47,7 @@ public sealed class DoctorService : IDoctorService
         _workspace = workspace;
         _git = git;
         _secrets = secrets;
+        _policies = policies;
         _contributors = contributors;
     }
 
@@ -58,6 +62,7 @@ public sealed class DoctorService : IDoctorService
         await AddWorkspaceChecksAsync(checks, config, ct).ConfigureAwait(false);
         await AddDiscoveryChecksAsync(checks, ct).ConfigureAwait(false);
         await AddSecretChecksAsync(checks, ct).ConfigureAwait(false);
+        await AddPolicyChecksAsync(checks, ct).ConfigureAwait(false);
         AddCapabilityChecks(checks);
         await AddContributedChecksAsync(checks, ct).ConfigureAwait(false);
 
@@ -234,6 +239,48 @@ public sealed class DoctorService : IDoctorService
             ? DiagnosticCheck.Ok("Secrets", "Provider", _secrets.Name)
             : DiagnosticCheck.Warn("Secrets", "Provider",
                 $"{_secrets.Name} is unavailable: {availability.Error}"));
+    }
+
+    /// <summary>
+    /// Reports policy compliance for the repository the user is standing in.
+    /// <para>
+    /// Only the current directory, deliberately: checking every registered
+    /// project would turn doctor into a slow command, and this is the
+    /// repository the person is most likely asking about. It also surfaces the
+    /// gap in spec section 51, where the pre-commit hook is per-clone and
+    /// silently absent on a fresh clone made on another machine.
+    /// </para>
+    /// </summary>
+    private async Task AddPolicyChecksAsync(List<DiagnosticCheck> checks, CancellationToken ct)
+    {
+        var result = await _policies.CheckAsync(Directory.GetCurrentDirectory(), ct)
+            .ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            // Not being inside a repository is the normal case for someone
+            // running doctor from their home directory, not a fault.
+            return;
+        }
+
+        var report = result.Value!;
+
+        checks.Add(report.Violations.Count == 0
+            ? DiagnosticCheck.Ok("Repository", "Agent files", "none tracked")
+            : DiagnosticCheck.Error("Repository", "Agent files",
+                $"{report.Violations.Count} tracked: "
+                + string.Join(", ", report.Violations.Take(5).Select(v => v.Path))));
+
+        if (report.Warnings.Count > 0)
+        {
+            checks.Add(DiagnosticCheck.Warn("Repository", "Untracked agent files",
+                $"{report.Warnings.Count} present and not ignored"));
+        }
+
+        checks.Add(report.HasPreCommitHook
+            ? DiagnosticCheck.Ok("Repository", "Pre-commit protection", "installed")
+            : DiagnosticCheck.Warn("Repository", "Pre-commit protection",
+                "not installed in this clone; hooks are per-clone, so run: agentctl protect"));
     }
 
     private void AddCapabilityChecks(List<DiagnosticCheck> checks)

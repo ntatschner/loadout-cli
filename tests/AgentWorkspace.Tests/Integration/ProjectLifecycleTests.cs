@@ -89,7 +89,7 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         machine.DiscoveryRoots = [_repositories];
         await configuration.SaveMachineAsync(machine);
 
-        _workspace = new WorkspaceManager(paths, _git, yaml);
+        _workspace = new WorkspaceManager(paths, _git, yaml, TimeProvider.System);
 
         _projects = new ProjectService(configuration, _workspace, _git, new PathSemantics());
     }

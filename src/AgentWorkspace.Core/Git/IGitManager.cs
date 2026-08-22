@@ -21,6 +21,19 @@ public sealed record GitRepositoryState(
 /// <param name="IsPrimary">True for the main working tree rather than a linked one.</param>
 public sealed record GitWorktree(string Path, string? Branch, bool IsPrimary);
 
+/// <summary>Which paths a listing should return.</summary>
+public enum GitFileSet
+{
+    /// <summary>Files git is tracking.</summary>
+    Tracked,
+
+    /// <summary>Files present but untracked and not ignored.</summary>
+    UntrackedAndVisible,
+
+    /// <summary>Files present, untracked and ignored.</summary>
+    Ignored,
+}
+
 /// <summary>
 /// Git operations, performed by invoking the user's own git binary.
 /// <para>
@@ -75,6 +88,19 @@ public interface IGitManager
         string message,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Creates a branch at the current HEAD without switching to it.
+    /// <para>
+    /// Used to preserve local work before a divergence is resolved
+    /// (spec section 47). Not switching matters: the user keeps the working
+    /// tree they had, and the branch is simply a label they can return to.
+    /// </para>
+    /// </summary>
+    Task<OperationResult> CreateBranchAsync(
+        string repositoryPath,
+        string branchName,
+        CancellationToken ct = default);
+
     /// <summary>Pushes the current branch to its upstream.</summary>
     Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default);
 
@@ -83,13 +109,29 @@ public interface IGitManager
         string repositoryPath,
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Paths matching the given patterns that git is currently tracking.
-    /// Backs the repository policy check of spec section 49.
-    /// </summary>
-    Task<OperationResult<IReadOnlyList<string>>> ListTrackedFilesAsync(
+    /// <summary>Which set of paths to ask git about.</summary>
+    /// <remarks>
+    /// The distinction is the whole substance of the policy check: a tracked
+    /// agent file is a violation, an untracked but visible one is a near miss,
+    /// and an ignored one is the system working.
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<string>>> ListFilesAsync(
         string repositoryPath,
         IReadOnlyList<string> patterns,
+        GitFileSet fileSet,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Writes a value to the user's global Git configuration.
+    /// <para>
+    /// Global rather than system or repository scope: spec section 50 wants one
+    /// rule covering every repository this user works in, without needing root
+    /// and without touching any repository's own .gitignore.
+    /// </para>
+    /// </summary>
+    Task<OperationResult> SetGlobalConfigValueAsync(
+        string key,
+        string value,
         CancellationToken ct = default);
 
     /// <summary>Reads a git config value, or null when it is unset.</summary>

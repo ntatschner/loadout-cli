@@ -23,7 +23,8 @@ public static class Program
     private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "doctor", "status", "list", "here", "launch", "project", "workspace",
-        "secret", "completion", "handoff", "profile", "--help", "-h", "--version",
+        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate",
+        "--help", "-h", "--version",
     };
 
     public static async Task<int> Main(string[] args)
@@ -151,6 +152,14 @@ public static class Program
         config.AddCommand<HereCommand>("here");
         config.AddCommand<CompletionCommand>("completion");
         config.AddCommand<HandoffCreateCommand>("handoff");
+        config.AddCommand<ProtectCommand>("protect");
+        config.AddCommand<MigrateCommand>("migrate");
+
+        config.AddBranch("repo", repo =>
+        {
+            repo.SetDescription("Inspect repository compliance.");
+            repo.AddCommand<RepoCheckCommand>("check");
+        });
 
         config.AddBranch("profile", profile =>
         {
@@ -170,6 +179,7 @@ public static class Program
             project.AddCommand<ProjectRemoveCommand>("remove");
             project.AddCommand<ProjectDiscoverCommand>("discover");
             project.AddCommand<ProjectOpenCommand>("open");
+            project.AddCommand<WorktreeListCommand>("worktrees");
         });
 
         config.AddBranch("workspace", workspace =>

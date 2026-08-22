@@ -20,12 +20,14 @@ public sealed class WorkspaceManager : IWorkspaceManager
     private readonly IPlatformPaths _paths;
     private readonly IGitManager _git;
     private readonly YamlStore _yaml;
+    private readonly TimeProvider _time;
 
-    public WorkspaceManager(IPlatformPaths paths, IGitManager git, YamlStore yaml)
+    public WorkspaceManager(IPlatformPaths paths, IGitManager git, YamlStore yaml, TimeProvider time)
     {
         _paths = paths;
         _git = git;
         _yaml = yaml;
+        _time = time;
     }
 
     /// <inheritdoc />
@@ -113,12 +115,28 @@ public sealed class WorkspaceManager : IWorkspaceManager
 
         var pullResult = await _git.PullFastForwardAsync(LocalPath, ct).ConfigureAwait(false);
 
+        if (pullResult.ExitCode == ExitCode.GitConflict)
+        {
+            // Local and remote have both moved. Before anything else touches
+            // the clone, the local state is labelled with a branch so it can
+            // always be recovered: spec section 47 says no data loss is
+            // acceptable, and a branch costs nothing.
+            var recovery = await CreateRecoveryBranchAsync(ct).ConfigureAwait(false);
+
+            var detail = recovery is null
+                ? "Local and remote workspaces have diverged, and a recovery branch could not be "
+                  + "created. Resolve it by hand before syncing again."
+                : $"Local and remote workspaces have diverged. Local work is preserved on "
+                  + $"branch '{recovery}'.";
+
+            return OperationResult<WorkspaceSyncResult>.Ok(new WorkspaceSyncResult(
+                WorkspaceSyncOutcome.Conflict, detail, cachedAt, recovery));
+        }
+
         if (pullResult.Failed)
         {
             return OperationResult<WorkspaceSyncResult>.Ok(new WorkspaceSyncResult(
-                pullResult.ExitCode == ExitCode.GitConflict
-                    ? WorkspaceSyncOutcome.Conflict
-                    : WorkspaceSyncOutcome.Offline,
+                WorkspaceSyncOutcome.Offline,
                 pullResult.Error ?? "The workspace could not be updated.",
                 cachedAt));
         }
@@ -216,6 +234,22 @@ public sealed class WorkspaceManager : IWorkspaceManager
         {
             return OperationResult.Fail($"Could not create the workspace structure: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Labels the current local state so a divergence can never lose it
+    /// (spec section 47). The branch is named for the machine and the moment,
+    /// which is what makes it recognisable weeks later.
+    /// </summary>
+    private async Task<string?> CreateRecoveryBranchAsync(CancellationToken ct)
+    {
+        var name = $"recovery/{_paths.Host.MachineName}/{_time.GetUtcNow():yyyy-MM-dd-HHmm}";
+
+        var result = await _git.CreateBranchAsync(LocalPath, name, ct).ConfigureAwait(false);
+
+        // A name collision means a branch from an earlier conflict this minute
+        // already holds the same commit, so nothing is at risk either way.
+        return result.Succeeded ? name : null;
     }
 
     private string RegistryPath => Path.Combine(LocalPath, "registry", "projects.yaml");

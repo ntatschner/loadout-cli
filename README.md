@@ -10,11 +10,11 @@ other platform.
 
 ## Status
 
-Milestones 1 and 2 are implemented. The platform seam, project registry, Git
+Milestones 1 to 3 are implemented. The platform seam, project registry, Git
 integration, agent detection, context compiler, profiles, preflight, handoffs,
-CLI and TUI all work on all three platforms. Policy enforcement, migration,
-conflict recovery and packaging are later milestones; see
-[Roadmap](#roadmap).
+repository policy, migration, conflict recovery, CLI and TUI all work on all
+three platforms. Packaging and an owned pseudo-terminal are the remaining
+milestone; see [Roadmap](#roadmap).
 
 ## Build and run
 
@@ -45,6 +45,10 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `agentctl project add\|list\|remove\|discover\|open` | Manage project registration |
 | `agentctl workspace status\|sync\|open` | Manage the central workspace clone |
 | `agentctl secret set\|test\|remove` | Manage credentials in the OS keystore |
+| `agentctl repo check` | Check a repository for tracked AI tooling files |
+| `agentctl protect` | Install a pre-commit hook, or `--global` Git excludes |
+| `agentctl migrate` | Move existing AI tooling files into the workspace |
+| `agentctl project worktrees <project>` | List a project's working trees |
 | `agentctl handoff <project>` | Create, show or list cross-agent handoffs |
 | `agentctl profile list <project>` | Show a project's context profiles |
 | `agentctl completion <shell>` | Emit a completion script |
@@ -100,6 +104,51 @@ Secret references resolve through the platform keystore during preflight and
 reach the child process only. The reference is what gets committed; the value
 never is, and it is never written to a log or a diagnostic report.
 
+## Repository cleanliness
+
+The launcher's central claim is that application repositories hold application
+source and agent state lives elsewhere. Three commands make that verifiable
+rather than aspirational:
+
+```bash
+agentctl repo check          # what is tracked that should not be
+agentctl migrate --dry-run   # what would move, and where
+agentctl protect --global    # stop it happening again
+```
+
+`repo check` distinguishes three states, and the distinction is the substance
+of it. A **tracked** agent file is a committed violation and exits 9. An
+**untracked but visible** one is a single `git add .` away from becoming one,
+so it warns. An **ignored** one is the system working, and is not reported.
+
+`migrate` always shows its plan first and **never deletes a tracked file**.
+Removing something Git is tracking rewrites the repository, which is a commit
+the user should make and review themselves; the launcher copies it into the
+workspace and tells them exactly what is still there. Untracked files are moved
+outright, because nothing committed them and moving them is the only way the
+repository actually becomes clean.
+
+`protect` installs a pre-commit hook written as POSIX shell, which Git runs the
+same way on all three platforms. It re-derives the check from Git rather than
+calling back into `agentctl`, so it keeps working on a machine where the
+launcher has been moved. A hook the launcher did not write is never overwritten
+or deleted. Hooks live in `.git/hooks` and so are per-clone — `agentctl doctor`
+reports when the clone you are standing in has none.
+
+## Conflict recovery
+
+When the local workspace and the remote have both moved, the launcher refuses
+to fast-forward. Before anything else touches the clone it labels the local
+state:
+
+```
+Conflict  Local and remote workspaces have diverged.
+          Local work is preserved on branch 'recovery/DEV-PC/2026-08-22-2114'.
+```
+
+HEAD is never moved and nothing is merged or reset. Spec section 47 says no
+data loss is acceptable, and a branch costs nothing.
+
 ## Architecture
 
 ```
@@ -149,6 +198,10 @@ the reason. Known gaps today:
 - **macOS desktop integration** — the `.app` bundle is not built yet, so there
   is no Spotlight or Launchpad entry. Every feature is reachable from the CLI
   and TUI.
+- **Workspace commits** — the launcher reads and writes workspace files but
+  does not yet commit them for you. A fresh clone also has no Git identity, so
+  the setup wizard of spec section 63 has to ask for one before auto-commit can
+  work.
 
 ## Testing
 
@@ -171,5 +224,5 @@ The suite is deliberately structured so most of it runs everywhere:
 
 - **M1 — done.** Platform seam, registry, Git, agent detection, CLI, TUI, doctor.
 - **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
-- **M3.** Repository policy, Git protection, migration, conflict recovery, worktree UI, real PTY.
-- **M4.** Installers, desktop integration, updates, macOS signing and notarisation.
+- **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
+- **M4.** Installers, desktop integration, updates, an owned PTY, macOS signing and notarisation.

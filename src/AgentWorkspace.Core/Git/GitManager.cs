@@ -194,6 +194,20 @@ public sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult> CreateBranchAsync(
+        string repositoryPath,
+        string branchName,
+        CancellationToken ct = default)
+    {
+        var result = await RunAsync(repositoryPath, ["branch", branchName], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error!);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default)
     {
         var result = await RunAsync(repositoryPath, ["push"], TimeSpan.FromMinutes(5), ct)
@@ -254,9 +268,10 @@ public sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
-    public async Task<OperationResult<IReadOnlyList<string>>> ListTrackedFilesAsync(
+    public async Task<OperationResult<IReadOnlyList<string>>> ListFilesAsync(
         string repositoryPath,
         IReadOnlyList<string> patterns,
+        GitFileSet fileSet,
         CancellationToken ct = default)
     {
         if (patterns.Count == 0)
@@ -264,7 +279,19 @@ public sealed class GitManager : IGitManager
             return OperationResult<IReadOnlyList<string>>.Ok([]);
         }
 
-        var arguments = new List<string> { "ls-files", "--cached", "--" };
+        var arguments = new List<string> { "ls-files" };
+
+        // --exclude-standard makes git apply the same ignore rules it would
+        // during a normal add, including the user's global exclude file, so the
+        // answer matches what a commit would actually pick up.
+        arguments.AddRange(fileSet switch
+        {
+            GitFileSet.Tracked => ["--cached"],
+            GitFileSet.UntrackedAndVisible => ["--others", "--exclude-standard"],
+            _ => (string[])["--others", "--ignored", "--exclude-standard"],
+        });
+
+        arguments.Add("--");
         arguments.AddRange(patterns);
 
         var result = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct)
@@ -280,6 +307,20 @@ public sealed class GitManager : IGitManager
             .ToList();
 
         return OperationResult<IReadOnlyList<string>>.Ok(files);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> SetGlobalConfigValueAsync(
+        string key,
+        string value,
+        CancellationToken ct = default)
+    {
+        var result = await RunAsync(null, ["config", "--global", key, value], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error!, ExitCode.ConfigurationInvalid);
     }
 
     /// <inheritdoc />

@@ -2,6 +2,7 @@ using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Context;
 using AgentWorkspace.Core.Diagnostics;
 using AgentWorkspace.Core.Git;
+using AgentWorkspace.Core.Policies;
 using AgentWorkspace.Core.Projects;
 using AgentWorkspace.Core.Workspace;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,8 @@ public static class ServiceRegistration
         services.AddSingleton<IContextCompiler, ContextCompiler>();
         services.AddSingleton<IHandoffService, HandoffService>();
         services.AddSingleton<IPreflightService, PreflightService>();
+        services.AddSingleton<IPolicyService, PolicyService>();
+        services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDoctorService, DoctorService>();
 

@@ -145,6 +145,7 @@ public sealed class WorkspaceSyncCommand : AsyncCommand<GlobalSettings>
                 outcome = sync.Outcome.ToString(),
                 detail = sync.Detail,
                 cachedAt = sync.CachedAtUtc,
+                recoveryBranch = sync.RecoveryBranch,
             });
         }
         else
@@ -162,6 +163,15 @@ public sealed class WorkspaceSyncCommand : AsyncCommand<GlobalSettings>
             {
                 output.WriteLine(
                     $"[dim]Cached workspace from {sync.CachedAtUtc:dd MMMM yyyy HH:mm} UTC.[/]");
+            }
+
+            if (sync.RecoveryBranch is not null)
+            {
+                // The single most important line when a conflict happens: the
+                // user needs to know their work is still reachable by name.
+                output.WriteBlankLine();
+                output.WriteLine($"Recovery branch: [bold]{Markup.Escape(sync.RecoveryBranch)}[/]");
+                output.WriteLine("[dim]Review it with:[/] git log " + sync.RecoveryBranch);
             }
         }
 

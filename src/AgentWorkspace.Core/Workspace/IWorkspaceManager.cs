@@ -24,10 +24,15 @@ public enum WorkspaceSyncOutcome
 /// <param name="Outcome">What happened.</param>
 /// <param name="Detail">Explanation suitable for display. Already redacted.</param>
 /// <param name="CachedAtUtc">When the local clone was last updated, shown in the offline prompt.</param>
+/// <param name="RecoveryBranch">
+/// Branch created to preserve local work when a divergence was detected
+/// (spec section 47), or null when none was needed.
+/// </param>
 public sealed record WorkspaceSyncResult(
     WorkspaceSyncOutcome Outcome,
     string Detail,
-    DateTimeOffset? CachedAtUtc);
+    DateTimeOffset? CachedAtUtc,
+    string? RecoveryBranch = null);
 
 /// <summary>
 /// Owns the local clone of the central agent-workspaces repository
