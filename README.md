@@ -37,12 +37,15 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 
 | Command | Purpose |
 |---|---|
-| `agentctl` | Interactive project selector |
+| `agentctl` | Interactive project selector, or first-run setup |
+| `agentctl setup` | Configure the launcher on this machine |
 | `agentctl <project>` | Launch the project's default agent |
 | `agentctl here` | Launch the agent for the current repository |
 | `agentctl doctor` | Platform, Git, workspace, secret and agent diagnostics |
 | `agentctl status` | Summary of workspace, projects and agents |
-| `agentctl project add\|list\|remove\|discover\|open` | Manage project registration |
+| `agentctl project add\|list\|show\|remove\|discover\|open` | Manage project registration |
+| `agentctl project clone\|relocate <project>` | Get a registered project onto this machine |
+| `agentctl config list\|get\|set\|edit` | Read and write launcher settings |
 | `agentctl workspace status\|sync\|open` | Manage the central workspace clone |
 | `agentctl secret set\|test\|remove` | Manage credentials in the OS keystore |
 | `agentctl repo check` | Check a repository for tracked AI tooling files |
@@ -103,6 +106,27 @@ never written to by an agent.
 Secret references resolve through the platform keystore during preflight and
 reach the child process only. The reference is what gets committed; the value
 never is, and it is never written to a log or a diagnostic report.
+
+## First run
+
+```bash
+agentctl setup
+```
+
+Running `agentctl` with no arguments on an unconfigured machine goes here too,
+because an empty project list tells a new user nothing about what to do next.
+
+The wizard offers the three choices of spec section 61 as equals — point at an
+existing central workspace, create a new one, or **run without central
+storage**. The last is a real way to use the tool, not a degraded mode: it
+creates the same directory layout locally, so adopting a shared workspace later
+is a matter of pushing what you already have.
+
+It then checks Git is present before asking anything, sets a Git identity if
+none exists (without one, every workspace commit later fails with "Author
+identity unknown"), picks a secret provider that actually works on this machine,
+offers the global Git excludes, and lists repositories it found in your
+development roots so you can register them.
 
 ## Repository cleanliness
 
@@ -199,9 +223,8 @@ the reason. Known gaps today:
   is no Spotlight or Launchpad entry. Every feature is reachable from the CLI
   and TUI.
 - **Workspace commits** — the launcher reads and writes workspace files but
-  does not yet commit them for you. A fresh clone also has no Git identity, so
-  the setup wizard of spec section 63 has to ask for one before auto-commit can
-  work.
+  does not yet commit them for you (spec section 46). Setup now ensures a Git
+  identity exists, which was the prerequisite.
 
 ## Testing
 
@@ -225,4 +248,5 @@ The suite is deliberately structured so most of it runs everywhere:
 - **M1 — done.** Platform seam, registry, Git, agent detection, CLI, TUI, doctor.
 - **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
 - **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
-- **M4.** Installers, desktop integration, updates, an owned PTY, macOS signing and notarisation.
+- **M4.** Installers, desktop integration, updates, workspace auto-commit, an
+  owned PTY, macOS signing and notarisation.

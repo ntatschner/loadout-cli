@@ -407,6 +407,80 @@ public sealed class ProjectService : IProjectService
             .ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    public async Task<OperationResult<ProjectResolution>> CloneAsync(
+        string handle,
+        string? destination = null,
+        CancellationToken ct = default)
+    {
+        var resolveResult = await ResolveAsync(handle, ct).ConfigureAwait(false);
+        if (resolveResult.Failed)
+        {
+            return OperationResult<ProjectResolution>.Fail(
+                resolveResult.Error!, resolveResult.ExitCode);
+        }
+
+        var project = resolveResult.Value!;
+
+        if (project.IsAvailableLocally)
+        {
+            return OperationResult<ProjectResolution>.Fail(
+                $"'{project.Entry.Name}' is already present at '{project.LocalPath}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(project.Entry.Remote))
+        {
+            // Without a remote there is nothing to clone from, and saying so is
+            // more useful than a git error about an empty URL.
+            return OperationResult<ProjectResolution>.Fail(
+                $"'{project.Entry.Name}' has no remote recorded, so it cannot be cloned. "
+                + "Locate an existing clone instead: agentctl project relocate "
+                + project.Entry.Slug + " <path>",
+                ExitCode.RepositoryUnavailable);
+        }
+
+        var machineResult = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
+        if (machineResult.Failed)
+        {
+            return OperationResult<ProjectResolution>.Fail(
+                machineResult.Error!, machineResult.ExitCode);
+        }
+
+        var target = destination
+            ?? Path.Combine(
+                machineResult.Value!.DefaultCloneRoot
+                    ?? throw new InvalidOperationException("No clone root is configured."),
+                project.Entry.Slug);
+
+        if (Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any())
+        {
+            // Cloning into an occupied directory would either fail obscurely or
+            // mix two repositories together.
+            return OperationResult<ProjectResolution>.Fail(
+                $"'{target}' already exists and is not empty. Pass a different destination, or "
+                + $"register the existing clone: agentctl project relocate {project.Entry.Slug} <path>");
+        }
+
+        var manifest = await _workspace.ReadProjectAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+        var branch = manifest.Succeeded ? manifest.Value!.Repository.DefaultBranch : null;
+
+        var cloneResult = await _git.CloneAsync(project.Entry.Remote, target, branch, ct)
+            .ConfigureAwait(false);
+
+        if (cloneResult.Failed)
+        {
+            return OperationResult<ProjectResolution>.Fail(cloneResult.Error!, cloneResult.ExitCode);
+        }
+
+        var mapResult = await MapLocallyAsync(project.Entry, target, ct).ConfigureAwait(false);
+        if (mapResult.Failed)
+        {
+            return OperationResult<ProjectResolution>.Fail(mapResult.Error!, mapResult.ExitCode);
+        }
+
+        return await ResolveAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+    }
+
     private async Task<OperationResult> MapLocallyAsync(
         ProjectRegistryEntry entry,
         string localPath,

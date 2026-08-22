@@ -23,7 +23,7 @@ public static class Program
     private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "doctor", "status", "list", "here", "launch", "project", "workspace",
-        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate",
+        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config",
         "--help", "-h", "--version",
     };
 
@@ -52,6 +52,7 @@ public static class Program
         services.AddSingleton(AnsiConsole.Console);
         services.AddSingleton(new PassthroughArguments(passthrough));
         services.AddSingleton<ILauncherTui, LauncherTui>();
+        services.AddSingleton<ISetupWizard, SetupWizard>();
 
         var registrar = new TypeRegistrar(services);
 
@@ -103,6 +104,16 @@ public static class Program
             return (int)ExitCode.InvalidArguments;
         }
 
+        // A machine that has never been configured gets the wizard rather than
+        // an empty project list, which would leave a new user with nothing to
+        // do and no hint about what to do next (spec section 61).
+        var wizard = provider.GetRequiredService<ISetupWizard>();
+
+        if (!wizard.IsConfigured())
+        {
+            return await wizard.RunAsync().ConfigureAwait(false);
+        }
+
         return await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
     }
 
@@ -146,6 +157,7 @@ public static class Program
             return (int)ExitCode.GeneralFailure;
         });
 
+        config.AddCommand<SetupCommand>("setup");
         config.AddCommand<DoctorCommand>("doctor");
         config.AddCommand<StatusCommand>("status");
         config.AddCommand<LaunchCommand>("launch");
@@ -154,6 +166,15 @@ public static class Program
         config.AddCommand<HandoffCreateCommand>("handoff");
         config.AddCommand<ProtectCommand>("protect");
         config.AddCommand<MigrateCommand>("migrate");
+
+        config.AddBranch("config", cfg =>
+        {
+            cfg.SetDescription("Read and write launcher settings.");
+            cfg.AddCommand<ConfigListCommand>("list");
+            cfg.AddCommand<ConfigGetCommand>("get");
+            cfg.AddCommand<ConfigSetCommand>("set");
+            cfg.AddCommand<ConfigEditCommand>("edit");
+        });
 
         config.AddBranch("repo", repo =>
         {
@@ -180,6 +201,9 @@ public static class Program
             project.AddCommand<ProjectDiscoverCommand>("discover");
             project.AddCommand<ProjectOpenCommand>("open");
             project.AddCommand<WorktreeListCommand>("worktrees");
+            project.AddCommand<ProjectCloneCommand>("clone");
+            project.AddCommand<ProjectRelocateCommand>("relocate");
+            project.AddCommand<ProjectShowCommand>("show");
         });
 
         config.AddBranch("workspace", workspace =>

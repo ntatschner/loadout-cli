@@ -74,4 +74,24 @@ public interface IProjectService
 
     /// <summary>Points a project at a different local path on this machine (spec section 75).</summary>
     Task<OperationResult> RelocateAsync(string handle, string newPath, CancellationToken ct = default);
+
+    /// <summary>
+    /// Clones a project that is registered centrally but absent here
+    /// (spec sections 28 and 75), then maps it locally.
+    /// <para>
+    /// This is the other half of cross-machine work: a project definition
+    /// travels through the workspace, but the source has to arrive somehow, and
+    /// making the user find the remote URL themselves defeats the point.
+    /// </para>
+    /// </summary>
+    /// <param name="handle">Slug, alias or name of the project.</param>
+    /// <param name="destination">
+    /// Where to clone to. Defaults to the machine's configured clone root plus
+    /// the project slug.
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<ProjectResolution>> CloneAsync(
+        string handle,
+        string? destination = null,
+        CancellationToken ct = default);
 }

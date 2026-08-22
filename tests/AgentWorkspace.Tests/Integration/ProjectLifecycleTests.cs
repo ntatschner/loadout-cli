@@ -299,6 +299,82 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         added.Value.Entry.DefaultAgent.Should().Be("codex");
     }
 
+    [Fact]
+    public async Task A_project_registered_elsewhere_can_be_cloned_here()
+    {
+        // Stand in for another machine: a real repository, registered, then the
+        // local mapping dropped so the project is known but absent.
+        var origin = await CreateBareRemoteAsync("shared");
+        var seed = await CreateRepositoryAsync("seed", origin);
+
+        await RunGitAsync(seed, "push", "origin", "main");
+        await _projects.AddAsync(seed, "shared");
+        await _projects.RemoveAsync("shared", fromWorkspace: false);
+
+        var beforeClone = await _projects.ResolveAsync("shared");
+        beforeClone.Value!.IsAvailableLocally.Should().BeFalse();
+
+        var destination = Path.Combine(_repositories, "cloned-here");
+
+        var cloned = await _projects.CloneAsync("shared", destination);
+
+        cloned.Succeeded.Should().BeTrue(cloned.Error);
+        cloned.Value!.IsAvailableLocally.Should().BeTrue();
+
+        // Cloning must also register the local path, or the next launch would
+        // still report the project as missing.
+        File.Exists(Path.Combine(destination, "README.md")).Should().BeTrue();
+        cloned.Value.LocalPath.Should().Be(destination);
+    }
+
+    [Fact]
+    public async Task Cloning_refuses_a_destination_that_is_already_occupied()
+    {
+        var origin = await CreateBareRemoteAsync("occupied");
+        var seed = await CreateRepositoryAsync("occupied-seed", origin);
+
+        await RunGitAsync(seed, "push", "origin", "main");
+        await _projects.AddAsync(seed, "occupied");
+        await _projects.RemoveAsync("occupied", fromWorkspace: false);
+
+        var destination = Path.Combine(_repositories, "already-there");
+        Directory.CreateDirectory(destination);
+        await File.WriteAllTextAsync(Path.Combine(destination, "existing.txt"), "mine");
+
+        var cloned = await _projects.CloneAsync("occupied", destination);
+
+        // Cloning into an occupied directory would mix two repositories or fail
+        // obscurely; refusing names the alternative.
+        cloned.Failed.Should().BeTrue();
+        cloned.Error.Should().Contain("relocate");
+
+        (await File.ReadAllTextAsync(Path.Combine(destination, "existing.txt")))
+            .Should().Be("mine");
+    }
+
+    [Fact]
+    public async Task Cloning_a_project_that_is_already_here_is_refused()
+    {
+        var repository = await CreateRepositoryAsync("present", "ssh://git.internal/apps/present.git");
+        await _projects.AddAsync(repository, "present");
+
+        var cloned = await _projects.CloneAsync("present");
+
+        cloned.Failed.Should().BeTrue();
+        cloned.Error.Should().Contain("already present");
+    }
+
+    /// <summary>Creates a bare repository to act as a remote.</summary>
+    private async Task<string> CreateBareRemoteAsync(string name)
+    {
+        var path = Path.Combine(_root, name + ".git");
+        Directory.CreateDirectory(path);
+
+        await RunGitAsync(_root, "init", "--bare", "--initial-branch", "main", path);
+
+        return path.Replace(Path.DirectorySeparatorChar, '/');
+    }
+
     /// <summary>Creates a real repository with one commit and an origin remote.</summary>
     private async Task<string> CreateRepositoryAsync(string name, string remote)
     {
