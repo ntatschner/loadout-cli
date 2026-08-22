@@ -211,6 +211,104 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
         headAfter.Should().Be(localHead);
     }
 
+    [Fact]
+    public async Task Saving_with_nothing_changed_makes_no_commit()
+    {
+        await _workspace.SyncAsync(Config());
+        await ConfigureIdentityAsync();
+
+        var before = (await RunGitAsync(_workspace.LocalPath, "rev-parse", "HEAD")).Trim();
+
+        var result = await _workspace.SaveAsync("StarStats", "claude", push: false);
+
+        // Spec section 46: do not commit meaningless changes. A session that
+        // only read must not leave an empty commit behind.
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value.Should().BeFalse();
+
+        (await RunGitAsync(_workspace.LocalPath, "rev-parse", "HEAD")).Trim().Should().Be(before);
+    }
+
+    [Fact]
+    public async Task Saving_records_the_project_agent_and_machine()
+    {
+        await _workspace.SyncAsync(Config());
+        await ConfigureIdentityAsync();
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "context-note.md"), "Something the session learned.");
+
+        var result = await _workspace.SaveAsync("StarStats", "claude", push: false);
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value.Should().BeTrue();
+
+        var message = await RunGitAsync(_workspace.LocalPath, "log", "-1", "--pretty=%B");
+
+        // The format of spec section 46, so a workspace history reads as a
+        // record of which machine did what to which project.
+        message.Should().Contain("agent-workspace: update StarStats context");
+        message.Should().Contain("Project: StarStats");
+        message.Should().Contain("Agent: claude");
+        message.Should().Contain("Machine: DEV-PC");
+    }
+
+    [Fact]
+    public async Task Saving_and_pushing_puts_the_change_on_the_remote()
+    {
+        await _workspace.SyncAsync(Config());
+        await ConfigureIdentityAsync();
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "shared-note.md"), "Visible to other machines.");
+
+        (await _workspace.SaveAsync("StarStats", "claude", push: true))
+            .Succeeded.Should().BeTrue();
+
+        // The other clone stands in for another machine, and this is the whole
+        // point of a central workspace: what one machine learns, another sees.
+        await RunGitAsync(_otherClone, "pull", "origin", "main");
+
+        File.Exists(Path.Combine(_otherClone, "shared-note.md")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Pending_changes_are_listed_before_they_are_saved()
+    {
+        await _workspace.SyncAsync(Config());
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "pending.md"), "Not committed yet.");
+
+        var pending = await _workspace.GetPendingChangesAsync();
+
+        pending.Succeeded.Should().BeTrue();
+        pending.Value!.Should().Contain(p => p.Contains("pending.md"));
+    }
+
+    [Fact]
+    public async Task A_failed_push_still_reports_the_commit_as_made()
+    {
+        await _workspace.SyncAsync(Config());
+        await ConfigureIdentityAsync();
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "local-note.md"), "Committed but unpushable.");
+
+        await RunGitAsync(_workspace.LocalPath, "remote", "set-url", "origin",
+            Path.Combine(_root, "gone.git").Replace(Path.DirectorySeparatorChar, '/'));
+
+        var result = await _workspace.SaveAsync("StarStats", "claude", push: true);
+
+        // The commit already happened, so nothing is lost; the message has to
+        // say that rather than implying the work went nowhere.
+        result.Failed.Should().BeTrue();
+        result.Error.Should().Contain("committed locally");
+
+        (await RunGitAsync(_workspace.LocalPath, "log", "-1", "--pretty=%B"))
+            .Should().Contain("agent-workspace");
+    }
+
     /// <summary>
     /// Gives the cloned workspace a committer identity.
     /// <para>

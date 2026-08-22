@@ -46,7 +46,8 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `agentctl project add\|list\|show\|remove\|discover\|open` | Manage project registration |
 | `agentctl project clone\|relocate <project>` | Get a registered project onto this machine |
 | `agentctl config list\|get\|set\|edit` | Read and write launcher settings |
-| `agentctl workspace status\|sync\|open` | Manage the central workspace clone |
+| `agentctl workspace status\|sync\|save\|open` | Manage the central workspace clone |
+| `agentctl desktop` | Install the Start Menu or `.desktop` entry |
 | `agentctl secret set\|test\|remove` | Manage credentials in the OS keystore |
 | `agentctl repo check` | Check a repository for tracked AI tooling files |
 | `agentctl protect` | Install a pre-commit hook, or `--global` Git excludes |
@@ -127,6 +128,39 @@ none exists (without one, every workspace commit later fails with "Author
 identity unknown"), picks a secret provider that actually works on this machine,
 offers the global Git excludes, and lists repositories it found in your
 development roots so you can register them.
+
+## Saving what a session produced
+
+Agents change workspace files during a session — context notes, decisions,
+handoffs. When the agent exits, the launcher applies the exit policy from
+`config.yaml`:
+
+| `sync-exit` | Behaviour |
+|---|---|
+| `prompt` (default) | Offers save-and-sync, save-locally, review, or leave |
+| `always` | Commits and pushes without asking |
+| `never` | Leaves the changes alone |
+
+Commits follow the format in spec section 46, so a workspace history reads as a
+record of which machine did what:
+
+```
+agent-workspace: update StarStats context
+
+Project: StarStats
+Agent: claude
+Machine: DEV-PC
+```
+
+A session that only read produces no commit. If a push fails the commit has
+already happened, and the message says so rather than implying the work went
+nowhere. The fourth option is deliberately "leave them uncommitted" rather than
+"discard": the launcher has no business deleting work somebody just did.
+
+The prompt lives in the CLI, not in core. Core decides whether a person needs
+to be asked; it never asks, because spec section 37 forbids a menu appearing in
+a pipe or a CI job. Non-interactively the changes are left in place and
+`agentctl workspace save` is suggested.
 
 ## Repository cleanliness
 
@@ -219,12 +253,10 @@ the reason. Known gaps today:
 - **Pseudo-terminal** — the launcher does not own a PTY yet. Agents inherit the
   current terminal, which gives correct signals, resize and exit codes for
   terminal launches. An owned PTY is needed only for desktop launch.
-- **macOS desktop integration** — the `.app` bundle is not built yet, so there
-  is no Spotlight or Launchpad entry. Every feature is reachable from the CLI
-  and TUI.
-- **Workspace commits** — the launcher reads and writes workspace files but
-  does not yet commit them for you (spec section 46). Setup now ensures a Git
-  identity exists, which was the prerequisite.
+- **macOS desktop integration** — `agentctl desktop` installs a Start Menu
+  shortcut on Windows and a `.desktop` entry on Linux. On macOS the `.app`
+  bundle is not built yet, so the command says so and declines. Every feature
+  stays reachable from the CLI and TUI.
 
 ## Testing
 
@@ -248,5 +280,6 @@ The suite is deliberately structured so most of it runs everywhere:
 - **M1 — done.** Platform seam, registry, Git, agent detection, CLI, TUI, doctor.
 - **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
 - **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
-- **M4.** Installers, desktop integration, updates, workspace auto-commit, an
-  owned PTY, macOS signing and notarisation.
+- **M4 — partly done.** Setup wizard, workspace save-on-exit and desktop
+  integration are in. Installers, the update system, an owned PTY and macOS
+  signing and notarisation remain.

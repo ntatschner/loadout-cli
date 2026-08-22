@@ -37,11 +37,26 @@ public sealed record LaunchRequest(
 /// <param name="SyncOutcome">What happened when the workspace was synchronised.</param>
 /// <param name="Warnings">Non-fatal findings worth showing the user.</param>
 /// <param name="Preflight">The preflight result, for callers that want to render it in full.</param>
+/// <param name="PendingWorkspaceChanges">
+/// Workspace files the session changed and that have not been committed
+/// (spec section 45).
+/// <para>
+/// Populated only when the exit policy is "prompt". Deciding what to do with
+/// them is a question for a person, and core must not ask one: spec section 37
+/// forbids a menu appearing in a pipe or a CI job, so the decision is handed
+/// back to whichever interface can actually hold a conversation.
+/// </para>
+/// </param>
+/// <param name="ProjectName">Project that ran, for building the commit message.</param>
+/// <param name="AgentName">Agent that ran, for building the commit message.</param>
 public sealed record LaunchOutcome(
     int AgentExitCode,
     WorkspaceSyncOutcome SyncOutcome,
     IReadOnlyList<string> Warnings,
-    PreflightResult? Preflight);
+    PreflightResult? Preflight,
+    IReadOnlyList<string>? PendingWorkspaceChanges = null,
+    string? ProjectName = null,
+    string? AgentName = null);
 
 /// <summary>Runs the launch sequence of spec section 45.</summary>
 public interface IAgentLauncher
@@ -236,8 +251,17 @@ public sealed class AgentLauncher : IAgentLauncher
             // pollute the recent-projects ordering.
             await _projects.RecordLaunchAsync(project.Entry.Slug, adapter.Name, ct).ConfigureAwait(false);
 
-            return OperationResult<LaunchOutcome>.Ok(
-                new LaunchOutcome(runResult.Value, syncOutcome, warnings, preflight));
+            var pending = await HandleExitPolicyAsync(
+                config, project.Entry.Name, adapter.Name, warnings, ct).ConfigureAwait(false);
+
+            return OperationResult<LaunchOutcome>.Ok(new LaunchOutcome(
+                runResult.Value,
+                syncOutcome,
+                warnings,
+                preflight,
+                pending,
+                project.Entry.Name,
+                adapter.Name));
         }
         finally
         {
@@ -337,6 +361,54 @@ public sealed class AgentLauncher : IAgentLauncher
         return compiled.Failed
             ? OperationResult<CompiledContext?>.Fail(compiled.Error!, compiled.ExitCode)
             : OperationResult<CompiledContext?>.Ok(compiled.Value);
+    }
+
+    /// <summary>
+    /// Applies the exit policy of spec section 45 to whatever the session
+    /// changed in the workspace.
+    /// </summary>
+    /// <returns>
+    /// The pending paths when a person needs to decide, or null when the policy
+    /// already settled it.
+    /// </returns>
+    private async Task<IReadOnlyList<string>?> HandleExitPolicyAsync(
+        Models.Configuration.LauncherConfig config,
+        string projectName,
+        string agentName,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        if (string.Equals(config.Sync.Exit, "never", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var pendingResult = await _workspace.GetPendingChangesAsync(ct).ConfigureAwait(false);
+
+        if (pendingResult.Failed || pendingResult.Value!.Count == 0)
+        {
+            // A session that only read changes nothing, which is the common
+            // case and must not produce an empty commit (spec section 46).
+            return null;
+        }
+
+        if (!string.Equals(config.Sync.Exit, "always", StringComparison.OrdinalIgnoreCase))
+        {
+            return pendingResult.Value;
+        }
+
+        var saveResult = await _workspace
+            .SaveAsync(projectName, agentName, push: true, ct)
+            .ConfigureAwait(false);
+
+        if (saveResult.Failed)
+        {
+            // The commit may well have succeeded and only the push failed, in
+            // which case nothing is lost and the next sync carries it.
+            warnings.Add(saveResult.Error!);
+        }
+
+        return null;
     }
 
     private async Task<WorkspaceSyncOutcome> SynchroniseAsync(

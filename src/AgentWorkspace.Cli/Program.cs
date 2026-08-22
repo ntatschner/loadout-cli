@@ -23,7 +23,7 @@ public static class Program
     private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "doctor", "status", "list", "here", "launch", "project", "workspace",
-        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config",
+        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config", "desktop",
         "--help", "-h", "--version",
     };
 
@@ -53,6 +53,7 @@ public static class Program
         services.AddSingleton(new PassthroughArguments(passthrough));
         services.AddSingleton<ILauncherTui, LauncherTui>();
         services.AddSingleton<ISetupWizard, SetupWizard>();
+        services.AddSingleton<WorkspaceSavePrompt>();
 
         var registrar = new TypeRegistrar(services);
 
@@ -165,6 +166,7 @@ public static class Program
         config.AddCommand<CompletionCommand>("completion");
         config.AddCommand<HandoffCreateCommand>("handoff");
         config.AddCommand<ProtectCommand>("protect");
+        config.AddCommand<DesktopCommand>("desktop");
         config.AddCommand<MigrateCommand>("migrate");
 
         config.AddBranch("config", cfg =>
@@ -211,6 +213,7 @@ public static class Program
             workspace.SetDescription("Manage the central workspace clone.");
             workspace.AddCommand<WorkspaceStatusCommand>("status");
             workspace.AddCommand<WorkspaceSyncCommand>("sync");
+            workspace.AddCommand<WorkspaceSaveCommand>("save");
             workspace.AddCommand<WorkspaceOpenCommand>("open");
         });
 

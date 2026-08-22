@@ -101,6 +101,13 @@ public interface IGitManager
         string branchName,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Paths with uncommitted changes, staged or not, including untracked ones.
+    /// </summary>
+    Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(
+        string repositoryPath,
+        CancellationToken ct = default);
+
     /// <summary>Pushes the current branch to its upstream.</summary>
     Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default);
 

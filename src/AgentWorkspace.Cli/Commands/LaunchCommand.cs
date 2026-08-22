@@ -19,15 +19,18 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
 {
     private readonly IAgentLauncher _launcher;
     private readonly PassthroughArguments _passthrough;
+    private readonly WorkspaceSavePrompt _savePrompt;
     private readonly IAnsiConsole _console;
 
     public LaunchCommand(
         IAgentLauncher launcher,
         PassthroughArguments passthrough,
+        WorkspaceSavePrompt savePrompt,
         IAnsiConsole console)
     {
         _launcher = launcher;
         _passthrough = passthrough;
+        _savePrompt = savePrompt;
         _console = console;
     }
 
@@ -76,6 +79,8 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
             output.WriteLine($"[yellow]warning[/] {Markup.Escape(warning)}");
         }
 
+        await _savePrompt.HandleAsync(outcome, settings).ConfigureAwait(false);
+
         // The agent's exit code is the command's exit code. A script wrapping
         // the launcher should see exactly what it would have seen running the
         // agent directly (spec section 40).
@@ -92,17 +97,20 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
     private readonly IProjectService _projects;
     private readonly IAgentLauncher _launcher;
     private readonly PassthroughArguments _passthrough;
+    private readonly WorkspaceSavePrompt _savePrompt;
     private readonly IAnsiConsole _console;
 
     public HereCommand(
         IProjectService projects,
         IAgentLauncher launcher,
         PassthroughArguments passthrough,
+        WorkspaceSavePrompt savePrompt,
         IAnsiConsole console)
     {
         _projects = projects;
         _launcher = launcher;
         _passthrough = passthrough;
+        _savePrompt = savePrompt;
         _console = console;
     }
 
@@ -153,6 +161,8 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
         {
             output.WriteLine($"[yellow]warning[/] {Markup.Escape(warning)}");
         }
+
+        await _savePrompt.HandleAsync(result.Value, settings).ConfigureAwait(false);
 
         return result.Value.AgentExitCode;
     }

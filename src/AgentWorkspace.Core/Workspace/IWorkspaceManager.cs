@@ -97,4 +97,29 @@ public interface IWorkspaceManager
 
     /// <summary>Creates the standard directory structure of spec section 11.</summary>
     Task<OperationResult> InitialiseStructureAsync(string workspaceName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Paths changed in the local workspace since the last commit, for showing
+    /// the user what would be saved (spec section 45).
+    /// </summary>
+    Task<OperationResult<IReadOnlyList<string>>> GetPendingChangesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Commits the workspace, and optionally pushes it (spec sections 45, 46).
+    /// <para>
+    /// The commit message follows the format in section 46 so a workspace
+    /// history reads as a record of which machine did what to which project.
+    /// Returns false when there was nothing to commit, which is the ordinary
+    /// outcome of a session that only read.
+    /// </para>
+    /// </summary>
+    /// <param name="projectName">Project the session was about.</param>
+    /// <param name="agentName">Agent that ran.</param>
+    /// <param name="push">Whether to push after committing.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<bool>> SaveAsync(
+        string projectName,
+        string agentName,
+        bool push,
+        CancellationToken ct = default);
 }

@@ -208,6 +208,29 @@ public sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(
+        string repositoryPath,
+        CancellationToken ct = default)
+    {
+        var result = await RunAsync(repositoryPath, ["status", "--porcelain"], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            return OperationResult<IReadOnlyList<string>>.Fail(result.Error!);
+        }
+
+        var paths = result.Value!
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            // Porcelain output is two status characters, a space, then the path.
+            .Select(line => line.Length > 3 ? line[3..].Trim() : line.Trim())
+            .Where(path => path.Length > 0)
+            .ToList();
+
+        return OperationResult<IReadOnlyList<string>>.Ok(paths);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default)
     {
         var result = await RunAsync(repositoryPath, ["push"], TimeSpan.FromMinutes(5), ct)

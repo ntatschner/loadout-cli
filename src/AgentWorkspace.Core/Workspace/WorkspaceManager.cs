@@ -236,6 +236,67 @@ public sealed class WorkspaceManager : IWorkspaceManager
         }
     }
 
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<string>>> GetPendingChangesAsync(
+        CancellationToken ct = default)
+    {
+        if (!IsCloned())
+        {
+            // Without Git there is nothing to commit, so there is nothing
+            // pending. Local-only mode is not a failure here.
+            return OperationResult<IReadOnlyList<string>>.Ok([]);
+        }
+
+        return await _git.ListChangedFilesAsync(LocalPath, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<bool>> SaveAsync(
+        string projectName,
+        string agentName,
+        bool push,
+        CancellationToken ct = default)
+    {
+        if (!IsCloned())
+        {
+            return OperationResult<bool>.Ok(false);
+        }
+
+        // The format of spec section 46, so a workspace history reads as a
+        // record of which machine did what to which project. A raw string
+        // literal keeps the line breaks visible rather than hidden in escapes.
+        var message =
+            $"""
+            agent-workspace: update {projectName} context
+
+            Project: {projectName}
+            Agent: {agentName}
+            Machine: {_paths.Host.MachineName}
+            """;
+
+        var commitResult = await _git.CommitAllAsync(LocalPath, message, ct).ConfigureAwait(false);
+
+        if (commitResult.Failed)
+        {
+            return OperationResult<bool>.Fail(commitResult.Error!, commitResult.ExitCode);
+        }
+
+        if (!commitResult.Value || !push)
+        {
+            return OperationResult<bool>.Ok(commitResult.Value);
+        }
+
+        var pushResult = await _git.PushAsync(LocalPath, ct).ConfigureAwait(false);
+
+        // The commit already happened, so a failed push is not a lost change:
+        // the work is safe locally and the next sync will carry it.
+        return pushResult.Succeeded
+            ? OperationResult<bool>.Ok(true)
+            : OperationResult<bool>.Fail(
+                $"The workspace was committed locally but could not be pushed: {pushResult.Error}",
+                pushResult.ExitCode);
+    }
+
     /// <summary>
     /// Labels the current local state so a divergence can never lose it
     /// (spec section 47). The branch is named for the machine and the moment,
