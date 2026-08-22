@@ -31,6 +31,7 @@ public static class ServiceRegistration
         services.AddSingleton<IPreflightService, PreflightService>();
         services.AddSingleton<IPolicyService, PolicyService>();
         services.AddSingleton<IMigrationService, MigrationService>();
+        services.AddSingleton<ISecurityProfileService, SecurityProfileService>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDoctorService, DoctorService>();
 

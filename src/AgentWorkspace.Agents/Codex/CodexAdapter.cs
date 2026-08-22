@@ -50,7 +50,7 @@ public sealed class CodexAdapter : AgentAdapterBase
         new Dictionary<string, string[]>
         {
             [AgentCapabilities.ExternalHome] = [CodexHomeVariable, "--config"],
-            [AgentCapabilities.Sandboxing] = ["--sandbox", "sandbox"],
+            [AgentCapabilities.Sandboxing] = ["--sandbox"],
             [AgentCapabilities.SessionResume] = ["resume"],
         };
 
@@ -81,10 +81,58 @@ public sealed class CodexAdapter : AgentAdapterBase
         }
 
         var arguments = new List<string>();
+
+        AddSecurityProfile(context, descriptor, arguments, warnings);
+
         arguments.AddRange(context.PassthroughArguments);
 
         return OperationResult<AgentInvocation>.Ok(
             new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));
+    }
+
+    /// <summary>
+    /// Translates the generic security profile into Codex's sandbox modes
+    /// (spec section 58).
+    /// <para>
+    /// Only ever tightens. danger-full-access and the bypass flag are
+    /// deliberately unreachable from here: a security profile lives in a shared
+    /// repository, and nothing in one should be able to disable a sandbox on
+    /// somebody else's machine.
+    /// </para>
+    /// </summary>
+    private static void AddSecurityProfile(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Security is null)
+        {
+            return;
+        }
+
+        var sandbox = context.Security.Filesystem switch
+        {
+            Models.Policies.FilesystemAccess.ReadOnly => "read-only",
+
+            // Restricted is stricter than ordinary development, and read-only
+            // is the strictest mode that still lets the agent work.
+            Models.Policies.FilesystemAccess.Restricted => "read-only",
+
+            _ => "workspace-write",
+        };
+
+        if (!descriptor.Supports(AgentCapabilities.Sandboxing))
+        {
+            warnings.Add(
+                "This build of Codex does not advertise --sandbox, so the security profile's "
+                + $"filesystem setting ({context.Security.Filesystem}) was not applied.");
+
+            return;
+        }
+
+        arguments.Add("--sandbox");
+        arguments.Add(sandbox);
     }
 
     /// <summary>

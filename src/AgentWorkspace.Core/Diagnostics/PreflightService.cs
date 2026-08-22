@@ -17,13 +17,18 @@ namespace AgentWorkspace.Core.Diagnostics;
 /// <param name="Agent">What agent detection found.</param>
 /// <param name="CompiledContext">The compiled context, or null when none was produced.</param>
 /// <param name="SyncOutcome">How the workspace synchronisation went.</param>
+/// <param name="Environment">
+/// The resolved environment and security profile (spec sections 57 and 58), or
+/// null when the project defines none.
+/// </param>
 public sealed record PreflightContext(
     ProjectResolution Project,
     ProjectManifest? Manifest,
     string WorkingDirectory,
     AgentDescriptor Agent,
     CompiledContext? CompiledContext,
-    WorkspaceSyncOutcome SyncOutcome);
+    WorkspaceSyncOutcome SyncOutcome,
+    Policies.ResolvedEnvironment? Environment = null);
 
 /// <summary>Preflight findings and the resolved environment for the launch.</summary>
 /// <param name="Checks">Everything that was verified, including what passed.</param>
@@ -175,7 +180,18 @@ public sealed class PreflightService : IPreflightService
             return environment;
         }
 
-        foreach (var (name, binding) in context.Manifest.Environment)
+        // The environment's merged bindings when one was selected, otherwise
+        // the project's own.
+        var bindings = context.Environment?.Environment ?? context.Manifest.Environment;
+
+        if (context.Environment?.Name is not null)
+        {
+            checks.Add(DiagnosticCheck.Ok("Environment", "Profile",
+                $"{context.Environment.Name} using security profile "
+                + $"'{context.Environment.ProfileName}'"));
+        }
+
+        foreach (var (name, binding) in bindings)
         {
             ct.ThrowIfCancellationRequested();
 

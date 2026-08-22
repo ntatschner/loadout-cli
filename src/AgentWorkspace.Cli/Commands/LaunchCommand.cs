@@ -62,6 +62,7 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
             settings.Worktree,
             settings.Profile,
             settings.Handoff,
+            settings.Environment,
             _passthrough.Arguments);
 
         var result = await _launcher.LaunchAsync(request).ConfigureAwait(false);
@@ -71,6 +72,18 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
         }
 
         var outcome = result.Value!;
+
+        // Verbose shows every preflight check, including the ones that passed,
+        // which is what someone debugging a launch actually wants to see.
+        if (output.IsVerbose && outcome.Preflight is not null)
+        {
+            foreach (var check in outcome.Preflight.Checks)
+            {
+                output.WriteVerbose(
+                    $"[dim]{Markup.Escape(check.Category)}[/] {Markup.Escape(check.Name)}  "
+                    + $"[dim]{Markup.Escape(check.Detail)}[/]");
+            }
+        }
 
         // Warnings are printed before the agent's own output would have
         // started, so a stale workspace is visible rather than buried.
@@ -149,6 +162,7 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
             settings.Worktree,
             settings.Profile,
             settings.Handoff,
+            settings.Environment,
             _passthrough.Arguments);
 
         var result = await _launcher.LaunchAsync(request).ConfigureAwait(false);

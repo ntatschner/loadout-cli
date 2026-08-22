@@ -2,6 +2,7 @@ using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Context;
 using AgentWorkspace.Core.Diagnostics;
 using AgentWorkspace.Core.Git;
+using AgentWorkspace.Core.Policies;
 using AgentWorkspace.Core.Projects;
 using AgentWorkspace.Core.Security;
 using AgentWorkspace.Core.Workspace;
@@ -21,6 +22,7 @@ namespace AgentWorkspace.Agents;
 /// <param name="Worktree">Named worktree to launch in instead of the main tree (spec section 71).</param>
 /// <param name="Profile">Context profile to apply (spec section 34).</param>
 /// <param name="IncludeHandoff">Append the most recent handoff to the context (spec section 69).</param>
+/// <param name="Environment">Environment to work in, such as production (spec section 57).</param>
 /// <param name="PassthroughArguments">Arguments after a bare double dash, passed through untouched.</param>
 public sealed record LaunchRequest(
     string ProjectHandle,
@@ -30,6 +32,7 @@ public sealed record LaunchRequest(
     string? Worktree = null,
     string? Profile = null,
     bool IncludeHandoff = false,
+    string? Environment = null,
     IReadOnlyList<string>? PassthroughArguments = null);
 
 /// <summary>How a launch ended.</summary>
@@ -77,6 +80,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly IContextCompiler _context;
     private readonly IHandoffService _handoffs;
     private readonly IPreflightService _preflight;
+    private readonly ISecurityProfileService _security;
 
     public AgentLauncher(
         IProjectService projects,
@@ -88,7 +92,8 @@ public sealed class AgentLauncher : IAgentLauncher
         IGitManager git,
         IContextCompiler context,
         IHandoffService handoffs,
-        IPreflightService preflight)
+        IPreflightService preflight,
+        ISecurityProfileService security)
     {
         _projects = projects;
         _workspace = workspace;
@@ -100,6 +105,7 @@ public sealed class AgentLauncher : IAgentLauncher
         _context = context;
         _handoffs = handoffs;
         _preflight = preflight;
+        _security = security;
     }
 
     /// <inheritdoc />
@@ -175,6 +181,26 @@ public sealed class AgentLauncher : IAgentLauncher
 
             var descriptor = await adapter.DetectAsync(ct).ConfigureAwait(false);
 
+            ResolvedEnvironment? environment = null;
+
+            if (manifest is not null)
+            {
+                var environmentResult = await _security
+                    .ResolveAsync(manifest, request.Environment, ct)
+                    .ConfigureAwait(false);
+
+                // Naming an environment that does not exist stops the launch.
+                // Falling back to the default would hand somebody who typed
+                // "prod" instead of "production" the permissive profile.
+                if (environmentResult.Failed)
+                {
+                    return OperationResult<LaunchOutcome>.Fail(
+                        environmentResult.Error!, environmentResult.ExitCode);
+                }
+
+                environment = environmentResult.Value;
+            }
+
             var preflightResult = await _preflight.RunAsync(
                 new PreflightContext(
                     project,
@@ -182,7 +208,8 @@ public sealed class AgentLauncher : IAgentLauncher
                     directoryResult.Value!,
                     descriptor,
                     compiled.Value,
-                    syncOutcome),
+                    syncOutcome,
+                    environment),
                 ct).ConfigureAwait(false);
 
             if (preflightResult.Failed)
@@ -215,7 +242,8 @@ public sealed class AgentLauncher : IAgentLauncher
                 request.PassthroughArguments ?? [],
                 manifest,
                 compiled.Value,
-                preflight.Environment);
+                preflight.Environment,
+                environment?.Profile);
 
             var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
             if (invocationResult.Failed)

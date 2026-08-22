@@ -129,6 +129,50 @@ identity unknown"), picks a secret provider that actually works on this machine,
 offers the global Git excludes, and lists repositories it found in your
 development roots so you can register them.
 
+## Environments and security profiles
+
+A project can define environments, and selecting one changes both which
+credentials resolve and how much the agent is allowed to do:
+
+```yaml
+environments:
+  production:
+    description: Production investigation
+    security_profile: production
+    environment:
+      DATABASE_URL:
+        secret: starstats/production-db
+```
+
+```bash
+agentctl starstats --environment production
+```
+
+Security profiles are expressed in the launcher's own vocabulary — filesystem,
+network, approvals, tool lists — and each adapter translates them into whatever
+its agent actually supports. A project says "production work is read-only"
+once, and Claude and Codex each honour it as far as they can:
+
+| Profile filesystem | Claude | Codex |
+|---|---|---|
+| `Repository` | agent default | `--sandbox workspace-write` |
+| `ReadOnly` | `--permission-mode plan` | `--sandbox read-only` |
+| `Restricted` | `--permission-mode manual` | `--sandbox read-only` |
+
+**A profile can only ever tighten.** There is no value that loosens an agent's
+defaults, and the adapters never emit `--dangerously-skip-permissions`,
+`bypassPermissions`, `danger-full-access` or their equivalents. A profile lives
+in a shared repository; if one could loosen a sandbox, anyone who could edit
+that repository could switch off somebody else's safety controls. Tests assert
+this over every built-in profile.
+
+Naming an environment that does not exist stops the launch rather than falling
+back — someone who typed `--environment prod` meaning `production` must not
+quietly get development's permissions.
+
+Where an installed agent does not advertise the option needed to enforce part of
+a profile, the launcher says so instead of proceeding silently.
+
 ## Saving what a session produced
 
 Agents change workspace files during a session — context notes, decisions,
@@ -280,6 +324,6 @@ The suite is deliberately structured so most of it runs everywhere:
 - **M1 — done.** Platform seam, registry, Git, agent detection, CLI, TUI, doctor.
 - **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
 - **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
-- **M4 — partly done.** Setup wizard, workspace save-on-exit and desktop
-  integration are in. Installers, the update system, an owned PTY and macOS
-  signing and notarisation remain.
+- **M4 — partly done.** Setup wizard, workspace save-on-exit, desktop
+  integration, environments and security profiles are in. Installers, the update
+  system, an owned PTY and macOS signing and notarisation remain.

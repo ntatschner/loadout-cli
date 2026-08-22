@@ -3,6 +3,7 @@ using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Context;
 using AgentWorkspace.Core.Diagnostics;
 using AgentWorkspace.Core.Git;
+using AgentWorkspace.Core.Policies;
 using AgentWorkspace.Core.Projects;
 using AgentWorkspace.Core.Workspace;
 using AgentWorkspace.Models.Agents;
@@ -123,7 +124,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             git,
             new ContextCompiler(permissions),
             new HandoffService(workspace, TimeProvider.System),
-            new PreflightService(git, new FakeSecretProvider()));
+            new PreflightService(git, new FakeSecretProvider()),
+            new SecurityProfileService(workspace, yaml));
     }
 
     public Task DisposeAsync()

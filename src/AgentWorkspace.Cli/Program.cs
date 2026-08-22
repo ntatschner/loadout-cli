@@ -85,8 +85,12 @@ public static class Program
             return await RunInteractiveAsync(provider).ConfigureAwait(false);
         }
 
+        // Read straight from argv because the exception handler runs outside any
+        // command, so it never sees the parsed settings.
+        var showFullExceptions = launcherArgs.Contains("--debug", StringComparer.Ordinal);
+
         var app = new CommandApp(registrar);
-        app.Configure(Configure);
+        app.Configure(config => Configure(config, showFullExceptions));
 
         return await app.RunAsync(Rewrite(launcherArgs)).ConfigureAwait(false);
     }
@@ -145,16 +149,24 @@ public static class Program
         return ["launch", .. args];
     }
 
-    private static void Configure(IConfigurator config)
+    private static void Configure(IConfigurator config, bool showFullExceptions)
     {
         config.SetApplicationName("agentctl");
         config.UseStrictParsing();
 
         // Exceptions are shown in full only when asked for. A stack trace is
-        // noise to someone whose workspace simply is not reachable.
+        // noise to someone whose workspace simply is not reachable, and it is
+        // exactly what is needed when the failure is a defect.
         config.SetExceptionHandler((ex, _) =>
         {
-            Console.Error.WriteLine(Core.Security.SecretRedactor.Redact(ex.Message));
+            Console.Error.WriteLine(Core.Security.SecretRedactor.Redact(
+                showFullExceptions ? ex.ToString() : ex.Message));
+
+            if (!showFullExceptions)
+            {
+                Console.Error.WriteLine("Run again with --debug for the full detail.");
+            }
+
             return (int)ExitCode.GeneralFailure;
         });
 

@@ -28,6 +28,10 @@ namespace AgentWorkspace.Agents;
 /// Environment variables from preflight, with secret references already
 /// resolved. Passed to the child process only, and never logged.
 /// </param>
+/// <param name="Security">
+/// The security posture to translate into whatever this agent supports
+/// (spec section 58), or null for the agent's own defaults.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -36,7 +40,8 @@ public sealed record AgentLaunchContext(
     IReadOnlyList<string> PassthroughArguments,
     ProjectManifest? Manifest = null,
     CompiledContext? CompiledContext = null,
-    IReadOnlyDictionary<string, string>? ResolvedEnvironment = null);
+    IReadOnlyDictionary<string, string>? ResolvedEnvironment = null,
+    Models.Policies.SecurityProfile? Security = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

@@ -38,6 +38,18 @@ public sealed class CommandOutput
 
     public bool IsJson => _settings.Json;
 
+    /// <summary>Whether the caller asked for extra detail.</summary>
+    public bool IsVerbose => _settings.Verbose || _settings.Debug;
+
+    /// <summary>Writes a line only when extra detail was asked for.</summary>
+    public void WriteVerbose(string markup)
+    {
+        if (IsVerbose)
+        {
+            WriteLine(markup);
+        }
+    }
+
     /// <summary>Writes an object as JSON. Only called when JSON output was requested.</summary>
     public void WriteJson<T>(T value) =>
         // Written to the raw stream rather than through the console so markup

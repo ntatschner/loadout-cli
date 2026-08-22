@@ -51,6 +51,12 @@ public sealed class ProjectManifest
     /// </summary>
     public Dictionary<string, EnvironmentBinding> Environment { get; set; } = [];
 
+    /// <summary>
+    /// Named environments such as development or production (spec section 57),
+    /// selected with --environment.
+    /// </summary>
+    public Dictionary<string, EnvironmentDefinition> Environments { get; set; } = [];
+
     public ProjectWorkspace Workspace { get; set; } = new();
 }
 

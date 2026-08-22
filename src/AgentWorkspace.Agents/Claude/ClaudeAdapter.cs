@@ -63,7 +63,15 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
             [AgentCapabilities.AdditionalDirectories] = ["--add-dir"],
             [AgentCapabilities.SessionResume] = ["--resume", "--continue"],
+            [PermissionMode] = ["--permission-mode"],
+            [ToolRestrictions] = ["--allowed-tools", "--disallowed-tools"],
         };
+
+    /// <summary>Capability key for the permission-mode option.</summary>
+    private const string PermissionMode = "permission_mode";
+
+    /// <summary>Capability key for the tool allow and deny options.</summary>
+    private const string ToolRestrictions = "tool_restrictions";
 
     /// <inheritdoc />
     public override async Task<OperationResult<AgentInvocation>> BuildInvocationAsync(
@@ -84,6 +92,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         AddSettings(context, descriptor, arguments, warnings);
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
+        AddSecurityProfile(context, descriptor, arguments, warnings);
 
         // Everything after a bare -- belongs to the agent untouched
         // (spec section 36), so it is appended last and never inspected.
@@ -200,6 +209,86 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         arguments.Add("--append-system-prompt");
         arguments.Add(content);
+    }
+
+    /// <summary>
+    /// Translates the generic security profile into Claude's own controls
+    /// (spec section 58).
+    /// <para>
+    /// Only ever tightens. The permissive values this option accepts —
+    /// bypassPermissions, dontAsk — are deliberately unreachable from here: a
+    /// file in a shared workspace repository must not be able to switch off
+    /// somebody's safety controls on their machine.
+    /// </para>
+    /// </summary>
+    private static void AddSecurityProfile(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Security is null)
+        {
+            return;
+        }
+
+        var security = context.Security;
+
+        var mode = security.Filesystem switch
+        {
+            // Plan mode reads without writing, which is what a review or
+            // production-investigation profile is asking for.
+            Models.Policies.FilesystemAccess.ReadOnly => "plan",
+
+            // Restricted still permits changes but asks first.
+            Models.Policies.FilesystemAccess.Restricted => "manual",
+
+            _ => security.Approvals == Models.Policies.ApprovalPolicy.Strict ? "manual" : null,
+        };
+
+        if (mode is not null)
+        {
+            if (descriptor.Supports(PermissionMode))
+            {
+                arguments.Add("--permission-mode");
+                arguments.Add(mode);
+            }
+            else
+            {
+                // A profile that cannot be enforced must be visible. Spec
+                // section 5 is explicit that a gap is never allowed to
+                // disappear quietly, and this one is about permissions.
+                warnings.Add(
+                    "This build of Claude Code does not advertise --permission-mode, so the security "
+                    + $"profile's filesystem setting ({security.Filesystem}) was not applied.");
+            }
+        }
+
+        if (security.AllowedTools.Count == 0 && security.DisallowedTools.Count == 0)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(ToolRestrictions))
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise tool restrictions, so the security "
+                + "profile's allowed and disallowed tool lists were not applied.");
+
+            return;
+        }
+
+        if (security.AllowedTools.Count > 0)
+        {
+            arguments.Add("--allowed-tools");
+            arguments.Add(string.Join(",", security.AllowedTools));
+        }
+
+        if (security.DisallowedTools.Count > 0)
+        {
+            arguments.Add("--disallowed-tools");
+            arguments.Add(string.Join(",", security.DisallowedTools));
+        }
     }
 
     /// <summary>
