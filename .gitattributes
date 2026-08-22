@@ -1,0 +1,16 @@
+# Normalise to LF in the repository. Without this, a Windows checkout commits
+# CRLF and the Linux and macOS CI legs see a diff on every file.
+* text=auto eol=lf
+
+# Shell scripts and desktop entries must keep LF even on a Windows checkout:
+# a CRLF shebang line makes the interpreter unfindable.
+*.sh text eol=lf
+*.desktop text eol=lf
+
+# Windows-only artefacts that genuinely want CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+*.png binary
+*.pkg binary
