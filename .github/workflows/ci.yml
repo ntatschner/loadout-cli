@@ -1,0 +1,106 @@
+name: CI
+
+# Spec section 92: every release must be built and tested against all Tier-1
+# operating systems. The three test legs below are the minimum the spec names
+# (Windows, Ubuntu, macOS); the publish leg proves the remaining architectures
+# compile.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  test:
+    name: Test on ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Never cancel siblings on the first failure. A macOS-only break is
+      # exactly the kind of thing that must not hide the Linux result.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+          - name: Ubuntu x64
+            os: ubuntu-latest
+          - name: macOS Apple Silicon
+            os: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The Secret Service is not present on a bare CI runner, so the Linux
+      # secret provider reports itself unavailable there. That is the correct
+      # behaviour under spec section 86 and the tests assert it rather than
+      # requiring a keyring to be installed.
+      - name: Show platform diagnostics
+        run: dotnet run --project src/AgentWorkspace.Cli -- doctor --json
+        continue-on-error: true
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: '**/results.trx'
+
+  publish:
+    name: Publish ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+          - rid: win-arm64
+            os: windows-latest
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: linux-arm64
+            os: ubuntu-latest
+          - rid: osx-x64
+            os: macos-latest
+          - rid: osx-arm64
+            os: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publish
+        run: >
+          dotnet publish src/AgentWorkspace.Cli/AgentWorkspace.Cli.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          --output artifacts/${{ matrix.rid }}
+
+      # The arm64 binaries are cross-compiled and never executed here: GitHub
+      # offers no hosted arm64 Windows or Linux runner. Release notes must say
+      # so rather than implying tested parity on those architectures.
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentctl-${{ matrix.rid }}
+          path: artifacts/${{ matrix.rid }}

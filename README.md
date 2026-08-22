@@ -1,0 +1,175 @@
+# Agent Workspace Launcher
+
+`agentctl` launches AI coding agents against development projects while keeping
+agent configuration, context, prompts, skills and runtime state **out of the
+application repository**.
+
+Windows, Linux and macOS are Tier-1: each runs the complete launcher natively,
+with no VM, container, remote host or compatibility layer standing in for any
+other platform.
+
+## Status
+
+Milestones 1 and 2 are implemented. The platform seam, project registry, Git
+integration, agent detection, context compiler, profiles, preflight, handoffs,
+CLI and TUI all work on all three platforms. Policy enforcement, migration,
+conflict recovery and packaging are later milestones; see
+[Roadmap](#roadmap).
+
+## Build and run
+
+```bash
+dotnet build
+dotnet run --project src/AgentWorkspace.Cli -- doctor
+dotnet test
+```
+
+Publish a self-contained binary:
+
+```bash
+dotnet publish src/AgentWorkspace.Cli -c Release -r osx-arm64 --self-contained
+```
+
+Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
+`linux-arm64`, `osx-x64`, `osx-arm64`.
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `agentctl` | Interactive project selector |
+| `agentctl <project>` | Launch the project's default agent |
+| `agentctl here` | Launch the agent for the current repository |
+| `agentctl doctor` | Platform, Git, workspace, secret and agent diagnostics |
+| `agentctl status` | Summary of workspace, projects and agents |
+| `agentctl project add\|list\|remove\|discover\|open` | Manage project registration |
+| `agentctl workspace status\|sync\|open` | Manage the central workspace clone |
+| `agentctl secret set\|test\|remove` | Manage credentials in the OS keystore |
+| `agentctl handoff <project>` | Create, show or list cross-agent handoffs |
+| `agentctl profile list <project>` | Show a project's context profiles |
+| `agentctl completion <shell>` | Emit a completion script |
+
+Every command accepts `--json`, and everything after a bare `--` is passed to
+the agent untouched:
+
+```bash
+agentctl starstats --agent claude --profile database -- --verbose
+```
+
+Exit codes are stable and documented in
+[`ExitCode.cs`](src/AgentWorkspace.Models/ExitCode.cs).
+
+## Context
+
+Each project gets a manifest in the central workspace at
+`projects/<slug>/project.yaml`. It lists the instruction files that make up the
+project's context, plus any named profiles:
+
+```yaml
+context:
+  global:
+    - global/instructions/engineering.md
+  project:
+    - context/architecture.md
+
+profiles:
+  database:
+    description: Audit and schema work
+    context:
+      - context/database.md
+
+environment:
+  ANTHROPIC_API_KEY:
+    secret: anthropic/default
+```
+
+At launch the compiler assembles those into one file, ordered from general to
+specific — organisation policy, then project, then the agent's own
+instructions, then the profile, then any handoff — so where two sources
+disagree the agent reads the narrower one last. The file lands in a per-launch
+runtime directory with owner-only permissions and is deleted when the agent
+exits.
+
+Only the launching agent's instructions are included, so a Claude session is
+never handed Codex's notes. Adapters differ only in delivery: Claude gets the
+file as a system prompt, Codex gets an ephemeral `CODEX_HOME` seeded from the
+workspace with the compiled context as its `AGENTS.md`. The workspace clone is
+never written to by an agent.
+
+Secret references resolve through the platform keystore during preflight and
+reach the child process only. The reference is what gets committed; the value
+never is, and it is never written to a log or a diagnostic report.
+
+## Architecture
+
+```
+AgentWorkspace.Models      Records, DTOs, config classes. No logic.
+AgentWorkspace.Platform    Abstractions + Windows / Linux / macOS / Unix implementations.
+AgentWorkspace.Core        Projects, Git, Workspace, Configuration, Security, Diagnostics.
+AgentWorkspace.Agents      Claude, Codex and generic adapters; the launch pipeline.
+AgentWorkspace.Cli         The agentctl executable.
+AgentWorkspace.Tui         The interactive selector.
+```
+
+The rule that makes cross-platform parity hold is that **`Core`, `Agents` and
+`Tui` depend on `Platform.Abstractions` only**. Exactly one file —
+[`PlatformServices.cs`](src/AgentWorkspace.Platform/PlatformServices.cs) —
+branches on the operating system. Two tests in
+[`ArchitectureTests.cs`](tests/AgentWorkspace.Tests/Architecture/ArchitectureTests.cs)
+enforce this: one reads each assembly's type-reference table to prove no shared
+assembly touches a platform implementation, the other proves no project carries
+an OS-suffixed target framework.
+
+### Where things are stored
+
+| | Windows | Linux | macOS |
+|---|---|---|---|
+| Config | `%APPDATA%\AgentWorkspaceLauncher` | `$XDG_CONFIG_HOME/agent-workspace-launcher` | `~/Library/Application Support/AgentWorkspaceLauncher` |
+| State | `%LOCALAPPDATA%\AgentWorkspaceLauncher` | `$XDG_DATA_HOME/agent-workspace-launcher` | `…/Application Support/AgentWorkspaceLauncher/state` |
+| Cache | `…\cache` | `$XDG_CACHE_HOME/agent-workspace-launcher` | `~/Library/Caches/AgentWorkspaceLauncher/cache` |
+| Logs | `…\logs` | `$XDG_STATE_HOME/agent-workspace-launcher/logs` | `~/Library/Logs/AgentWorkspaceLauncher` |
+| Secrets | Credential Manager | Secret Service (libsecret) | Keychain |
+
+macOS uses native conventions by default. Set `AGENTCTL_USE_XDG=1` to place
+launcher files under the XDG roots instead.
+
+`config.yaml` is portable user preference. `machines.yaml` holds this machine's
+absolute paths and never leaves it — the same project definition works unchanged
+on a Windows desktop, a Linux workstation and a Mac.
+
+### Capabilities, not silent gaps
+
+Anything a platform cannot do is reported rather than quietly skipped. Run
+`agentctl doctor` to see the full matrix; each unavailable capability carries
+the reason. Known gaps today:
+
+- **Pseudo-terminal** — the launcher does not own a PTY yet. Agents inherit the
+  current terminal, which gives correct signals, resize and exit codes for
+  terminal launches. An owned PTY is needed only for desktop launch.
+- **macOS desktop integration** — the `.app` bundle is not built yet, so there
+  is no Spotlight or Launchpad entry. Every feature is reachable from the CLI
+  and TUI.
+
+## Testing
+
+```bash
+dotnet test
+```
+
+The suite is deliberately structured so most of it runs everywhere:
+
+- **Shared acceptance tests** exercise registration, resolution, discovery and
+  Git against real repositories, with identical assertions on all three
+  platforms.
+- **Path layout tests** verify the Windows, Linux and macOS layouts from *any*
+  host by injecting the environment, so no layout is left unverified on a given
+  CI leg.
+- **Platform tests** (Credential Manager, Unix mode bits) skip rather than
+  silently pass off their platform, so the run summary shows what did not apply.
+
+## Roadmap
+
+- **M1 — done.** Platform seam, registry, Git, agent detection, CLI, TUI, doctor.
+- **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
+- **M3.** Repository policy, Git protection, migration, conflict recovery, worktree UI, real PTY.
+- **M4.** Installers, desktop integration, updates, macOS signing and notarisation.

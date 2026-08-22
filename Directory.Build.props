@@ -1,0 +1,31 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Tier-1 parity depends on this staying OS-neutral. A `net10.0-windows`
+         TFM anywhere in the tree breaks the Linux and macOS builds outright,
+         so the TFM is set once, here, and never overridden per project.
+         ArchitectureTests asserts that. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Globalization stays enabled. In invariant mode string.Normalize is a
+         no-op, which silently defeats the NFD/NFC path handling that spec
+         section 84 requires on macOS, and the launcher deals in user-chosen
+         directory names in arbitrary languages. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+
+    <!-- CA1416 (platform compatibility) is the analyser that enforces the
+         cross-platform contract at compile time rather than at CI time. -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <Product>Agent Workspace Launcher</Product>
+    <Company>TheCodeSaiyan Ltd</Company>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+</Project>

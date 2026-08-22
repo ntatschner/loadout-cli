@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Records, DTOs and config classes only. No logic, no dependencies. -->
+</Project>
