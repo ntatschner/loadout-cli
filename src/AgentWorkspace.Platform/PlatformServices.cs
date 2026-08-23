@@ -56,6 +56,11 @@ public static class PlatformServices
         services.AddSingleton(secrets);
         services.AddSingleton<IPlatformCapabilities>(capabilities);
 
+        // Transient: a pseudo-terminal owns a child process and its handles, so
+        // one instance cannot be shared between two sessions the way the
+        // stateless services above can.
+        services.AddTransient<IPseudoTerminal>(_ => CreatePseudoTerminal());
+
         return services;
     }
 
@@ -65,6 +70,29 @@ public static class PlatformServices
     // anything else outright.
     private const string UnsupportedPlatformMessage =
         "Only Windows, Linux and macOS are supported.";
+
+    /// <summary>
+    /// Creates a pseudo-terminal for this platform.
+    /// <para>
+    /// ConPTY on Windows, forkpty on Linux and macOS. The two are genuinely
+    /// different mechanisms rather than one with a compatibility shim, which is
+    /// why the seam exists at all.
+    /// </para>
+    /// </summary>
+    public static IPseudoTerminal CreatePseudoTerminal()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return new WindowsPseudoTerminal();
+        }
+
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            return new UnixPseudoTerminal();
+        }
+
+        throw new PlatformNotSupportedException(UnsupportedPlatformMessage);
+    }
 
     /// <summary>Identifies the current machine, refusing anything outside the Tier-1 set.</summary>
     public static HostPlatform DetectHost(IEnvironmentProvider environment)
@@ -253,12 +281,9 @@ public static class PlatformServices
                 PlatformCapability.NativeSecretStore,
                 secretAvailability.Error ?? "The native secret store is unavailable."));
 
-        // Not implemented on any platform yet. Stated plainly so it appears in
-        // doctor as a known gap rather than as a platform limitation.
-        statuses.Add(CapabilityStatus.Unsupported(
+        statuses.Add(CapabilityStatus.Supported(
             PlatformCapability.PseudoTerminal,
-            "The launcher does not own a pseudo-terminal yet. Agents inherit the current terminal, "
-            + "which gives correct signals, resize and exit codes for terminal launches."));
+            host.IsUnix ? "forkpty" : "ConPTY"));
 
         statuses.Add(host.IsUnix
             ? CapabilityStatus.Supported(PlatformCapability.UnixFilePermissions, "chmod mode bits")

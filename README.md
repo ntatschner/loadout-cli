@@ -559,6 +559,10 @@ The suite is deliberately structured so most of it runs everywhere:
 - **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
 - **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
 - **M4 — partly done.** Setup wizard, workspace save-on-exit, desktop
-  integration, environments, security profiles, release packaging and the
-  update system are in. Native installers (MSI, `.deb`, `.rpm`), an owned PTY,
-  and macOS signing and notarisation remain.
+  integration, environments, security profiles, release packaging, the update
+  system and an owned pseudo-terminal (ConPTY on Windows, `forkpty` on Linux and
+  macOS) are in. Native installers (MSI, `.deb`, `.rpm`) remain.
+- **macOS packaging — paused.** The platform seam, paths, Keychain and bundle
+  discovery stay in the build and in the test matrix; signing, notarisation and
+  a `.pkg` are deferred until there is a Developer ID and a Mac to verify them
+  on. Nothing about that is a code change, only work not yet done.

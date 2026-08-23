@@ -22,6 +22,18 @@ public sealed class WindowsFactAttribute : FactAttribute
     }
 }
 
+/// <summary>A theory that only makes sense on Windows.</summary>
+public sealed class WindowsTheoryAttribute : TheoryAttribute
+{
+    public WindowsTheoryAttribute()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Skip = "Windows-only: exercises Windows process and console behaviour.";
+        }
+    }
+}
+
 /// <summary>A test that only makes sense on Linux or macOS.</summary>
 public sealed class UnixFactAttribute : FactAttribute
 {
