@@ -1,6 +1,8 @@
 using System.Runtime.Versioning;
 using System.Text;
+using AgentWorkspace.Models;
 using AgentWorkspace.Platform.Abstractions;
+using AgentWorkspace.Platform.Unix;
 using AgentWorkspace.Platform.Windows;
 using FluentAssertions;
 using Xunit;
@@ -192,8 +194,251 @@ public sealed class PseudoTerminalTests
         WindowsPseudoTerminal.BuildCommandLine(new ProcessRequest("exe", arguments))
             .Should().Be(expected);
 
-    
-/// <summary>Reads until the child closes its end of the console.</summary>
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task A_child_runs_in_the_pty_and_its_output_comes_back()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        var started = await terminal.StartAsync(
+            new ProcessRequest("/bin/sh", ["-c", "echo PTY-MARKER-6f2a"]),
+            columns: 120,
+            rows: 30);
+
+        started.Succeeded.Should().BeTrue(started.Error ?? string.Empty);
+
+        var output = await DrainAsync(terminal);
+        var exit = await terminal.WaitForExitAsync();
+
+        output.Should().Contain("PTY-MARKER-6f2a");
+        exit.Value.Should().Be(0);
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task The_child_exit_code_is_reported_on_unix()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest("/bin/sh", ["-c", "exit 3"]),
+            columns: 80,
+            rows: 24);
+
+        await DrainAsync(terminal);
+
+        (await terminal.WaitForExitAsync()).Value.Should().Be(3);
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task A_child_killed_by_a_signal_is_not_reported_as_success()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest("/bin/sh", ["-c", "kill -TERM $$"]),
+            columns: 80,
+            rows: 24);
+
+        await DrainAsync(terminal);
+
+        // A process that died from a signal has no exit code of its own, and
+        // reporting the zero that leaves would turn a killed agent into a
+        // successful run. 128 plus the signal number is the shell convention.
+        (await terminal.WaitForExitAsync()).Value.Should().Be(143);
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task The_child_is_attached_to_a_real_terminal()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest("/bin/sh", ["-c", "tty"]),
+            columns: 80,
+            rows: 24);
+
+        var output = await DrainAsync(terminal);
+        await terminal.WaitForExitAsync();
+
+        // The whole point of forkpty over a pair of pipes. A child on a pipe
+        // reports "not a tty" and disables colour, paging and prompting.
+        output.Should().Contain("/dev/pts/").And.NotContain("not a tty");
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task The_child_sees_the_size_it_was_given_on_unix()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest("/bin/sh", ["-c", "stty size"]),
+            columns: 132,
+            rows: 43);
+
+        var output = await DrainAsync(terminal);
+        await terminal.WaitForExitAsync();
+
+        // stty prints rows then columns.
+        output.Should().Contain("43 132");
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task A_resize_reaches_the_child_on_unix()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest(
+                "/bin/sh",
+                ["-c", "read line; stty size"]),
+            columns: 80,
+            rows: 24);
+
+        terminal.Resize(140, 50).Succeeded.Should().BeTrue();
+
+        // Told to measure only after the resize, so this asserts the new size
+        // actually reached the terminal rather than that the call returned.
+        await terminal.WriteAsync(Encoding.UTF8.GetBytes("go\n"));
+
+        var output = await DrainAsync(terminal);
+        await terminal.WaitForExitAsync();
+
+        output.Should().Contain("50 140");
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Input_written_by_the_launcher_reaches_the_child_on_unix()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest("/bin/sh", ["-c", "read line; echo GOT:$line"]),
+            columns: 100,
+            rows: 30);
+
+        await terminal.WriteAsync(Encoding.UTF8.GetBytes("hello-pty\n"));
+
+        var output = await DrainAsync(terminal);
+        await terminal.WaitForExitAsync();
+
+        output.Should().Contain("GOT:hello-pty");
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task An_environment_variable_reaches_the_child_on_unix()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest(
+                "/bin/sh",
+                ["-c", "echo $AGENTCTL_PTY_TEST"],
+                Environment: new Dictionary<string, string>
+                {
+                    ["AGENTCTL_PTY_TEST"] = "value-9c3f",
+                }),
+            columns: 80,
+            rows: 24);
+
+        var output = await DrainAsync(terminal);
+        await terminal.WaitForExitAsync();
+
+        // Secrets reach an agent this way, so a lost variable is not cosmetic.
+        output.Should().Contain("value-9c3f");
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task The_working_directory_is_honoured_on_unix()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest("/bin/sh", ["-c", "pwd"], WorkingDirectory: "/tmp"),
+            columns: 80,
+            rows: 24);
+
+        var output = await DrainAsync(terminal);
+        await terminal.WaitForExitAsync();
+
+        output.Should().Contain("/tmp");
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task A_relative_executable_is_refused_rather_than_searched_for()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        var started = await terminal.StartAsync(
+            new ProcessRequest("sh", ["-c", "true"]),
+            columns: 80,
+            rows: 24);
+
+        // execve does not search PATH, and searching it in the forked child is
+        // not an option: nothing that allocates may run between fork and exec.
+        started.Failed.Should().BeTrue();
+        started.ExitCode.Should().Be(ExitCode.InvalidArguments);
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Starting_something_that_does_not_exist_fails_with_a_reason_on_unix()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        var started = await terminal.StartAsync(
+            new ProcessRequest("/usr/bin/agentctl-no-such-executable-4b7d", []),
+            columns: 80,
+            rows: 24);
+
+        // Reported here rather than as a child that exited 127. posix_spawn
+        // carries the exec failure back to the caller, so the launcher can say
+        // which agent could not be started instead of relaying a shell
+        // convention nobody outside a terminal would recognise.
+        started.Failed.Should().BeTrue();
+        started.ExitCode.Should().Be(ExitCode.AgentUnavailable);
+        started.Error.Should().Contain("agentctl-no-such-executable-4b7d");
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task The_exit_code_can_be_asked_for_twice()
+    {
+        using var terminal = new UnixPseudoTerminal();
+
+        await terminal.StartAsync(
+            new ProcessRequest("/bin/sh", ["-c", "exit 7"]),
+            columns: 80,
+            rows: 24);
+
+        await DrainAsync(terminal);
+
+        // A child can only be reaped once. Asking again must give the same
+        // answer rather than the error a second waitpid would return.
+        (await terminal.WaitForExitAsync()).Value.Should().Be(7);
+        (await terminal.WaitForExitAsync()).Value.Should().Be(7);
+    }
+
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public void Disposing_a_unix_terminal_that_never_started_is_harmless()
+    {
+        var terminal = new UnixPseudoTerminal();
+
+        terminal.Dispose();
+        terminal.Dispose();
+    }
+
+    /// <summary>Reads until the child closes its end of the console.</summary>
     private static async Task<string> DrainAsync(IPseudoTerminal terminal)
     {
         using var cancellation = new CancellationTokenSource(Patience);

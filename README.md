@@ -583,6 +583,55 @@ the reason. Known gaps today:
   bundle is not built yet, so the command says so and declines. Every feature
   stays reachable from the CLI and TUI.
 
+## Verifying the Linux build without Linux
+
+Everything below the platform seam is untestable from the host it was not
+written for, and "it compiles" is not the same claim as "it works". The Unix
+pseudo-terminal in particular allocates a tty, spawns into it and drives a real
+session; none of that is exercised by building it.
+
+```powershell
+pwsh ./build/verify-linux.ps1
+```
+
+That builds a container, runs the whole suite there, packages the archive, the
+`.deb` and the `.rpm`, installs the package, runs the installed command by name
+and removes it again. It is a development convenience only — spec section 1
+forbids a container from being any part of how the launcher runs, and CI still
+runs these tests natively on its Ubuntu leg.
+
+It earns its keep. Running it the first time found four defects that a Windows
+machine cannot see: a `waitpid` call that reaped unrelated child processes, a
+library that resolves under a name only present with development packages
+installed, a pre-commit hook test that proved nothing because a fake stood in
+for the executable bit, and an assertion about Windows paths that could only
+ever pass on Windows.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
+
+Every dependency is permissively licensed, and that is checked rather than
+assumed:
+
+```powershell
+pwsh ./build/licences.ps1 -Detailed
+```
+
+It reads the licence of every restored package from that package's own
+`.nuspec`, compares it against an allowlist of permissive SPDX identifiers, and
+fails on anything else. Packages old enough to declare a licence URL instead of
+an expression are listed explicitly in the script with what was found when
+somebody checked, so the next person neither repeats the work nor takes it on
+trust. CI runs it on every change.
+
+The check is not ceremony. FluentAssertions is Apache-2.0 up to version 7 and a
+paid commercial licence from version 8, so the reference is pinned to
+`[6.12.2]` rather than floated — a routine bump would otherwise swap an
+open-source test library for one this project cannot ship under, silently.
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) records every dependency and
+its licence.
+
 ## Testing
 
 ```bash

@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using AgentWorkspace.Models;
@@ -9,7 +8,7 @@ using Microsoft.Win32.SafeHandles;
 namespace AgentWorkspace.Platform.Unix;
 
 /// <summary>
-/// A pseudo-terminal owned by the launcher, built on <c>forkpty</c>.
+/// A pseudo-terminal owned by the launcher.
 /// <para>
 /// Shared by Linux and macOS: the pty interface is the same on both, which is
 /// the reason this lives in Unix rather than being written twice.
@@ -59,12 +58,6 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
             Rows = (ushort)Math.Clamp(rows, 1, ushort.MaxValue),
         };
 
-        // Everything the child touches is built here, in the parent, and pinned
-        // in unmanaged memory. See the remarks on Launch for why.
-        using var arguments = NativeStringArray.ForArguments(request);
-        using var environment = NativeStringArray.ForEnvironment(request);
-        using var path = new NativeString(request.Executable);
-
         var directory = request.WorkingDirectory;
 
         if (directory is not null && !Directory.Exists(directory))
@@ -73,82 +66,176 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
                 $"The working directory '{directory}' does not exist.", ExitCode.InvalidArguments));
         }
 
-        return Task.FromResult(Launch(path, arguments, environment, directory, ref size));
+        return Task.FromResult(Launch(request, directory, ref size));
     }
 
     /// <summary>
-    /// Forks and execs.
+    /// Allocates the pty and spawns the child into it.
     /// </summary>
     /// <remarks>
-    /// The few statements that run in the child are the delicate part of this
-    /// class. A forked process inherits one thread out of however many the
-    /// runtime was using, along with any locks the others were holding, so
-    /// anything that allocates, takes a lock or triggers compilation can
-    /// deadlock and never return. The rules observed here are therefore:
-    /// every string and array is marshalled before the fork, every method the
-    /// child calls is compiled before the fork, and the child does nothing but
-    /// exec and exit.
+    /// The child never sees managed code. posix_spawn does the fork and exec
+    /// inside the C library, so nothing about the runtime is duplicated: no
+    /// inherited locks, no half-copied heap, no rules about what may be called
+    /// between the two. That is the whole reason this is not forkpty, which is
+    /// the more obvious call and which corrupts the process it is called from.
     /// </remarks>
     private OperationResult Launch(
-        NativeString path,
-        NativeStringArray arguments,
-        NativeStringArray environment,
+        ProcessRequest request,
         string? directory,
         ref NativeTerminal.WindowSize size)
     {
-        // Compiled now so the child never has to. A first call inside a forked
-        // process would run the compiler while holding none of the locks it
-        // expects to exist.
-        RuntimeHelpers.PrepareMethod(
-            typeof(NativeTerminal).GetMethod(nameof(NativeTerminal.Execve))!.MethodHandle);
+        var master = NativeTerminal.OpenPseudoTerminal(NativeTerminal.MasterFlags);
 
-        RuntimeHelpers.PrepareMethod(
-            typeof(NativeTerminal).GetMethod(nameof(NativeTerminal.Exit))!.MethodHandle);
-
-        // Changed before the fork rather than after it. chdir in the child is
-        // one more call than the rules above allow, and the launcher is
-        // single-purpose enough that moving back afterwards is safe.
-        var previous = Directory.GetCurrentDirectory();
-
-        if (directory is not null)
+        if (master < 0)
         {
-            Directory.SetCurrentDirectory(directory);
+            return Failure("A pseudo-terminal could not be allocated");
         }
 
-        int child;
-
-        try
+        if (NativeTerminal.GrantSlave(master) != 0 || NativeTerminal.UnlockSlave(master) != 0)
         {
-            child = NativeTerminal.ForkPty(out var master, 0, 0, ref size);
+            NativeTerminal.Close(master);
 
-            if (child == 0)
-            {
-                // In the child. Two calls, no allocation, no return.
-                NativeTerminal.Execve(path.Pointer, arguments.Pointer, environment.Pointer);
-                NativeTerminal.Exit(127);
-            }
-
-            if (child < 0)
-            {
-                return OperationResult.Fail(
-                    "A pseudo-terminal could not be allocated: "
-                    + Marshal.GetLastPInvokeErrorMessage());
-            }
-
-            _child = child;
-            _master = new SafeFileHandle(master, ownsHandle: true);
-            _stream = new FileStream(_master, FileAccess.ReadWrite, bufferSize: 1, isAsync: false);
+            return Failure("The pseudo-terminal could not be unlocked");
         }
-        finally
+
+        var namePointer = NativeTerminal.SlaveName(master);
+
+        if (namePointer == 0)
         {
-            if (directory is not null)
-            {
-                Directory.SetCurrentDirectory(previous);
-            }
+            NativeTerminal.Close(master);
+
+            return Failure("The pseudo-terminal has no slave device");
         }
+
+        // Copied out immediately: the pointer is into storage the C library
+        // owns and reuses on the next call.
+        var slavePath = Marshal.PtrToStringAnsi(namePointer);
+
+        if (string.IsNullOrEmpty(slavePath))
+        {
+            NativeTerminal.Close(master);
+
+            return Failure("The pseudo-terminal has no slave device");
+        }
+
+        NativeTerminal.Ioctl(master, NativeTerminal.SetWindowSize, ref size);
+
+        var spawned = SpawnChild(request, directory, slavePath, out var child);
+
+        if (spawned.Failed)
+        {
+            NativeTerminal.Close(master);
+
+            return spawned;
+        }
+
+        _child = child;
+        _master = new SafeFileHandle(master, ownsHandle: true);
+        _stream = new FileStream(_master, FileAccess.ReadWrite, bufferSize: 1, isAsync: false);
 
         return OperationResult.Ok();
     }
+
+    private static OperationResult SpawnChild(
+        ProcessRequest request,
+        string? directory,
+        string slavePath,
+        out int child)
+    {
+        child = 0;
+
+        var actions = NativeTerminal.AllocateOpaque();
+        var attributes = NativeTerminal.AllocateOpaque();
+
+        var actionsReady = false;
+        var attributesReady = false;
+
+        using var path = new NativeString(request.Executable);
+        using var slave = new NativeString(slavePath);
+        using var workingDirectory = new NativeString(directory);
+        using var arguments = NativeStringArray.ForArguments(request);
+        using var environment = NativeStringArray.ForEnvironment(request);
+
+        try
+        {
+            if (NativeTerminal.FileActionsInit(actions) != 0)
+            {
+                return Failure("The spawn file actions could not be prepared");
+            }
+
+            actionsReady = true;
+
+            if (NativeTerminal.AttributesInit(attributes) != 0)
+            {
+                return Failure("The spawn attributes could not be prepared");
+            }
+
+            attributesReady = true;
+
+            // A new session, so the child leads its own process group and the
+            // pty can become its controlling terminal. Without that Ctrl+C
+            // never reaches it as SIGINT and the agent cannot be interrupted.
+            if (NativeTerminal.AttributesSetFlags(attributes, NativeTerminal.NewSession) != 0)
+            {
+                return Failure("The child could not be given its own session");
+            }
+
+            if (directory is not null
+                && NativeTerminal.FileActionsAddChangeDirectory(actions, workingDirectory.Pointer) != 0)
+            {
+                return Failure($"The working directory could not be set to '{directory}'");
+            }
+
+            // The slave is opened by the child rather than inherited from here.
+            // Opening a terminal as the leader of a new session is what makes
+            // it the controlling one, and that has to happen in the child.
+            if (NativeTerminal.FileActionsAddOpen(actions, 0, slave.Pointer, NativeTerminal.SlaveFlags, 0) != 0
+                || NativeTerminal.FileActionsAddDuplicate(actions, 0, 1) != 0
+                || NativeTerminal.FileActionsAddDuplicate(actions, 0, 2) != 0)
+            {
+                return Failure("The child's standard handles could not be attached to the terminal");
+            }
+
+            var result = NativeTerminal.Spawn(
+                out child,
+                path.Pointer,
+                actions,
+                attributes,
+                arguments.Pointer,
+                environment.Pointer);
+
+            if (result != 0)
+            {
+                // posix_spawn returns the error rather than setting errno, and
+                // it reports a missing executable here rather than in the child,
+                // which is more useful than the 127 a shell would give.
+                return OperationResult.Fail(
+                    $"'{request.Executable}' could not be started: "
+                    + new System.ComponentModel.Win32Exception(result).Message,
+                    ExitCode.AgentUnavailable);
+            }
+
+            return OperationResult.Ok();
+        }
+        finally
+        {
+            if (actionsReady)
+            {
+                NativeTerminal.FileActionsDestroy(actions);
+            }
+
+            if (attributesReady)
+            {
+                NativeTerminal.AttributesDestroy(attributes);
+            }
+
+            Marshal.FreeHGlobal(actions);
+            Marshal.FreeHGlobal(attributes);
+        }
+    }
+
+    private static OperationResult Failure(string what) =>
+        OperationResult.Fail($"{what}: {Marshal.GetLastPInvokeErrorMessage()}");
 
     /// <inheritdoc />
     public async Task<OperationResult> WriteAsync(
@@ -210,23 +297,8 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
             Rows = (ushort)Math.Clamp(rows, 1, ushort.MaxValue),
         };
 
-        // The request number differs between the two Unixes, and the wrong one
-        // fails harmlessly with EINVAL rather than doing something else, so the
-        // second attempt costs nothing.
-        var request = OperatingSystem.IsMacOS()
-            ? NativeTerminal.SetWindowSizeBsd
-            : NativeTerminal.SetWindowSize;
-
-        if (NativeTerminal.Ioctl((int)_master.DangerousGetHandle(), request, ref size) == 0)
-        {
-            return OperationResult.Ok();
-        }
-
-        var fallback = OperatingSystem.IsMacOS()
-            ? NativeTerminal.SetWindowSize
-            : NativeTerminal.SetWindowSizeBsd;
-
-        return NativeTerminal.Ioctl((int)_master.DangerousGetHandle(), fallback, ref size) == 0
+        return NativeTerminal.Ioctl(
+            (int)_master.DangerousGetHandle(), NativeTerminal.SetWindowSize, ref size) == 0
             ? OperationResult.Ok()
             : OperationResult.Fail(
                 "The terminal size could not be set: " + Marshal.GetLastPInvokeErrorMessage());
@@ -272,6 +344,16 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
             if (_exited)
             {
                 return _exitCode;
+            }
+
+            // Nothing was ever started, so there is nothing of ours to collect.
+            // The guard is not defensive tidiness: waitpid treats a pid of zero
+            // as "any child in my process group", so calling it here would reap
+            // some unrelated process the runtime was tracking, take its exit
+            // status away, and leave whatever was waiting on it hanging.
+            if (_child <= 0)
+            {
+                return null;
             }
 
             var result = NativeTerminal.WaitPid(_child, out var status, NativeTerminal.NoHang);
@@ -321,11 +403,18 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
     /// <summary>A NUL-terminated string in unmanaged memory.</summary>
     private readonly struct NativeString : IDisposable
     {
-        internal NativeString(string value) => Pointer = Marshal.StringToHGlobalAnsi(value);
+        internal NativeString(string? value) =>
+            Pointer = value is null ? 0 : Marshal.StringToHGlobalAnsi(value);
 
         internal nint Pointer { get; }
 
-        public void Dispose() => Marshal.FreeHGlobal(Pointer);
+        public void Dispose()
+        {
+            if (Pointer != 0)
+            {
+                Marshal.FreeHGlobal(Pointer);
+            }
+        }
     }
 
     /// <summary>

@@ -5,6 +5,7 @@ using AgentWorkspace.Core.Policies;
 using AgentWorkspace.Core.Workspace;
 using AgentWorkspace.Models.Platform;
 using AgentWorkspace.Models.Policies;
+using AgentWorkspace.Platform;
 using AgentWorkspace.Platform.Abstractions;
 using AgentWorkspace.Platform.Common;
 using AgentWorkspace.Platform.Linux;
@@ -60,7 +61,10 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
                 : [string.Empty],
         };
 
-        var permissions = new NoOpFilePermissions();
+        // Real permissions, not the fake. Git ignores a hook without the
+        // executable bit, so on Linux a fake that quietly succeeds turns the
+        // test that proves the hook blocks into one that proves nothing.
+        var permissions = PlatformServices.CreateFilePermissions();
 
         var paths = new LinuxPaths(
             environment,

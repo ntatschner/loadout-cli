@@ -25,7 +25,13 @@
 
     <Product>Agent Workspace Launcher</Product>
     <Company>TheCodeSaiyan Ltd</Company>
+    <Copyright>Copyright (c) 2026 TheCodeSaiyan Ltd</Copyright>
     <Version>0.1.0</Version>
+
+    <!-- Declared on the assemblies themselves so the licence travels with the
+         binary. build/licences.ps1 checks that every dependency can be shipped
+         under it. -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
 </Project>

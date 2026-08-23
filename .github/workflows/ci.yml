@@ -16,6 +16,25 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  licences:
+    name: Dependency licences
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # Checked on every change rather than at release time. The failure this
+      # catches is a dependency bump quietly swapping a permissive licence for
+      # one the project cannot ship under, and the moment to catch that is the
+      # pull request that does it.
+      - name: Check every dependency is permissively licensed
+        shell: pwsh
+        run: ./build/licences.ps1 -Detailed
+
   test:
     name: Test on ${{ matrix.name }}
     runs-on: ${{ matrix.os }}

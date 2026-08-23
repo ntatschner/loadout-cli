@@ -111,7 +111,16 @@ public static class PlatformServices
             environment.MachineName);
     }
 
-    private static IFilePermissions CreateFilePermissions() =>
+    /// <summary>
+    /// The file-permission implementation for this platform.
+    /// <para>
+    /// Public so a test can use the real one. Substituting a fake here is not a
+    /// neutral simplification: Git ignores a hook that is not executable, so on
+    /// Unix a fake that quietly succeeds turns a test proving the hook blocks
+    /// into one that proves nothing.
+    /// </para>
+    /// </summary>
+    public static IFilePermissions CreateFilePermissions() =>
         OperatingSystem.IsWindows()
             ? new WindowsFilePermissions()
             : new UnixFilePermissions();

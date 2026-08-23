@@ -24,7 +24,10 @@ public sealed class PathLayoutTests
     private static HostPlatform Host(HostOperatingSystem os) =>
         new(os, Architecture.Arm64, "test", "TEST-MACHINE");
 
-    [Fact]
+    // Windows-only because the assertion is a literal Windows path. Path.Combine
+    // uses whatever separator the host has, so on Linux this would be asserting
+    // something about the machine running the test rather than about the layout.
+    [WindowsFact]
     public void Windows_separates_roaming_configuration_from_local_state()
     {
         var environment = new FakeEnvironmentProvider(

@@ -1,0 +1,8 @@
+# Host build output must not reach the image: a Windows-built intermediate
+# confuses the Linux build in ways that look like real failures.
+**/bin/
+**/obj/
+artifacts/
+.git/
+.vs/
+*.user
