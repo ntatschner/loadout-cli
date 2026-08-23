@@ -150,6 +150,15 @@ agentctl setup
 Running `agentctl` with no arguments on an unconfigured machine goes here too,
 because an empty project list tells a new user nothing about what to do next.
 
+If you choose to create a new workspace and the GitHub CLI is installed and
+signed in, it offers to create the private repository and push for you. That is
+a convenience for one common host, not a dependency: the launcher is
+provider-agnostic (spec section 10), the other option takes any Git URL, and
+Forgejo, GitLab, Azure DevOps or a bare SSH repository all work the same way.
+The repository is always created private — a workspace holds project context,
+decisions and handoffs, and making that public is an irreversible disclosure
+that should not be one keystroke away.
+
 The wizard offers the three choices of spec section 61 as equals — point at an
 existing central workspace, create a new one, or **run without central
 storage**. The last is a real way to use the tool, not a degraded mode: it

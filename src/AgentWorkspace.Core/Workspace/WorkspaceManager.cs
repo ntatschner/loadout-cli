@@ -146,8 +146,21 @@ public sealed class WorkspaceManager : IWorkspaceManager
     }
 
     /// <inheritdoc />
-    public Task<OperationResult<WorkspaceManifest>> ReadManifestAsync(CancellationToken ct = default) =>
-        _yaml.LoadAsync(Path.Combine(LocalPath, ManifestFileName), () => new WorkspaceManifest(), ct);
+    public async Task<OperationResult<WorkspaceManifest>> ReadManifestAsync(
+        CancellationToken ct = default)
+    {
+        var path = Path.Combine(LocalPath, ManifestFileName);
+
+        if (!File.Exists(path))
+        {
+            return OperationResult<WorkspaceManifest>.Fail(
+                $"'{LocalPath}' has no {ManifestFileName}, so it is not an agent workspace. "
+                + "Check the remote, or create the structure with: agentctl setup",
+                ExitCode.ConfigurationInvalid);
+        }
+
+        return await _yaml.LoadAsync(path, () => new WorkspaceManifest(), ct).ConfigureAwait(false);
+    }
 
     /// <inheritdoc />
     public Task<OperationResult<ProjectRegistry>> ReadRegistryAsync(CancellationToken ct = default) =>
@@ -233,6 +246,85 @@ public sealed class WorkspaceManager : IWorkspaceManager
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return OperationResult.Fail($"Could not create the workspace structure: {ex.Message}");
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> InitialiseRepositoryAsync(
+        string defaultBranch,
+        CancellationToken ct = default)
+    {
+        if (IsCloned())
+        {
+            return OperationResult.Ok();
+        }
+
+        var branch = string.IsNullOrWhiteSpace(defaultBranch) ? "main" : defaultBranch;
+
+        var initResult = await _git.InitAsync(LocalPath, branch, ct).ConfigureAwait(false);
+        if (initResult.Failed)
+        {
+            return initResult;
+        }
+
+        var ignoreResult = await WriteIgnoreFileAsync(ct).ConfigureAwait(false);
+        if (ignoreResult.Failed)
+        {
+            return ignoreResult;
+        }
+
+        var commitResult = await _git
+            .CommitAllAsync(LocalPath, "agent-workspace: create workspace", ct)
+            .ConfigureAwait(false);
+
+        return commitResult.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(commitResult.Error!, commitResult.ExitCode);
+    }
+
+    /// <summary>
+    /// Keeps transient material out of the workspace repository.
+    /// <para>
+    /// Spec section 12 lists what must never be committed — caches, session
+    /// histories, logs, scratch data. The launcher does not put any of that
+    /// here, but an agent pointed at the workspace might, and one careless
+    /// commit is all it takes.
+    /// </para>
+    /// </summary>
+    private async Task<OperationResult> WriteIgnoreFileAsync(CancellationToken ct)
+    {
+        var content =
+            """
+            # Written by agentctl. Spec section 12: the workspace holds durable
+            # context, never transient state.
+            *.log
+            *.tmp
+            .DS_Store
+            Thumbs.db
+
+            cache/
+            caches/
+            logs/
+            sessions/
+            history/
+            runtime/
+
+            # Agent session state, wherever an agent decides to write it.
+            **/.codex/sessions/
+            **/.claude/projects/
+
+            """;
+
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(LocalPath, ".gitignore"), content, ct).ConfigureAwait(false);
+
+            return OperationResult.Ok();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult.Fail($"Could not write the workspace .gitignore: {ex.Message}");
         }
     }
 

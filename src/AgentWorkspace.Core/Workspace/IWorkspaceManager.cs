@@ -82,7 +82,15 @@ public interface IWorkspaceManager
         LauncherConfig config,
         CancellationToken ct = default);
 
-    /// <summary>Validates workspace.yaml and reports schema compatibility (spec section 91).</summary>
+    /// <summary>
+    /// Reads workspace.yaml (spec section 91).
+    /// <para>
+    /// Fails when the file is absent rather than returning a default. A clone
+    /// of some unrelated repository would otherwise report itself as a valid
+    /// schema-1 workspace, so a mistyped remote would look like it had worked
+    /// and simply contain no projects.
+    /// </para>
+    /// </summary>
     Task<OperationResult<WorkspaceManifest>> ReadManifestAsync(CancellationToken ct = default);
 
     /// <summary>Reads registry/projects.yaml. Returns an empty registry when absent.</summary>
@@ -97,6 +105,19 @@ public interface IWorkspaceManager
 
     /// <summary>Creates the standard directory structure of spec section 11.</summary>
     Task<OperationResult> InitialiseStructureAsync(string workspaceName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Turns a freshly created structure into a Git repository with its first
+    /// commit.
+    /// <para>
+    /// Without this the workspace is a plain directory: sync has nothing to
+    /// fetch and save-on-exit has nothing to commit into, so it would appear to
+    /// have been created while quietly doing nothing.
+    /// </para>
+    /// </summary>
+    Task<OperationResult> InitialiseRepositoryAsync(
+        string defaultBranch,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Paths changed in the local workspace since the last commit, for showing

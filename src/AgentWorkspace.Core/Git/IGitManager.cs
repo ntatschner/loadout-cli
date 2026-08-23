@@ -58,6 +58,29 @@ public interface IGitManager
     /// <summary>Reads branch, remote, cleanliness and HEAD in one pass.</summary>
     Task<OperationResult<GitRepositoryState>> GetStateAsync(string repositoryPath, CancellationToken ct = default);
 
+    /// <summary>
+    /// Initialises a repository, so a freshly created workspace is something
+    /// that can actually be committed and pushed rather than a bare directory.
+    /// </summary>
+    Task<OperationResult> InitAsync(
+        string path,
+        string defaultBranch = "main",
+        CancellationToken ct = default);
+
+    /// <summary>Points a repository at a remote, replacing any existing one of that name.</summary>
+    Task<OperationResult> SetRemoteAsync(
+        string repositoryPath,
+        string name,
+        string url,
+        CancellationToken ct = default);
+
+    /// <summary>Pushes a branch and sets it to track the remote.</summary>
+    Task<OperationResult> PushWithUpstreamAsync(
+        string repositoryPath,
+        string remote,
+        string branch,
+        CancellationToken ct = default);
+
     /// <summary>Clones a repository. Progress is inherited by the caller's terminal.</summary>
     Task<OperationResult> CloneAsync(
         string remote,

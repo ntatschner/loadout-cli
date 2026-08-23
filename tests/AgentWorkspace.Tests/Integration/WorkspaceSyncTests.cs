@@ -212,6 +212,64 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_created_workspace_is_a_real_repository_with_a_first_commit()
+    {
+        UseEnvironmentIdentity();
+
+        (await _workspace.InitialiseStructureAsync("local")).Succeeded.Should().BeTrue();
+
+        // Before this existed, "create a new workspace" produced a plain
+        // directory: sync had nothing to fetch and save had nothing to commit
+        // into, so it looked created while doing nothing.
+        _workspace.IsCloned().Should().BeFalse("nothing has initialised it yet");
+
+        var result = await _workspace.InitialiseRepositoryAsync("main");
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        _workspace.IsCloned().Should().BeTrue();
+
+        var log = await RunGitAsync(_workspace.LocalPath, "log", "--oneline");
+        log.Should().Contain("create workspace");
+
+        // And nothing is left uncommitted, so the first save is not a surprise
+        // diff of the structure itself.
+        (await _workspace.GetPendingChangesAsync()).Value!.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_created_workspace_ignores_transient_agent_state()
+    {
+        UseEnvironmentIdentity();
+        await _workspace.InitialiseStructureAsync("local");
+        await _workspace.InitialiseRepositoryAsync("main");
+
+        // Spec section 12: caches, sessions and logs must never reach the
+        // workspace. The launcher writes none of them, but an agent pointed at
+        // the workspace might, and one careless commit is all it takes.
+        Directory.CreateDirectory(Path.Combine(_workspace.LocalPath, "logs"));
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "logs", "session.log"), "noise");
+
+        var pending = await _workspace.GetPendingChangesAsync();
+
+        pending.Value!.Should().NotContain(p => p.Contains("session.log"));
+    }
+
+    [Fact]
+    public async Task Initialising_an_existing_clone_is_a_no_op()
+    {
+        await _workspace.SyncAsync(Config());
+
+        var head = (await RunGitAsync(_workspace.LocalPath, "rev-parse", "HEAD")).Trim();
+
+        (await _workspace.InitialiseRepositoryAsync("main")).Succeeded.Should().BeTrue();
+
+        // Re-running setup must not reinitialise a workspace somebody is
+        // already using.
+        (await RunGitAsync(_workspace.LocalPath, "rev-parse", "HEAD")).Trim().Should().Be(head);
+    }
+
+    [Fact]
     public async Task Saving_with_nothing_changed_makes_no_commit()
     {
         await _workspace.SyncAsync(Config());
@@ -322,6 +380,23 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
     {
         await RunGitAsync(_workspace.LocalPath, "config", "user.email", "tests@example.invalid");
         await RunGitAsync(_workspace.LocalPath, "config", "user.name", "Agent Workspace Tests");
+    }
+
+    /// <summary>
+    /// Gives git a committer identity without a repository to configure.
+    /// <para>
+    /// The first commit of a brand new workspace happens before any repository
+    /// exists to hold config, and a CI runner has no global identity either.
+    /// These environment variables are what git falls back to, and they are the
+    /// only way to supply one at that moment.
+    /// </para>
+    /// </summary>
+    private static void UseEnvironmentIdentity()
+    {
+        Environment.SetEnvironmentVariable("GIT_AUTHOR_NAME", "Agent Workspace Tests");
+        Environment.SetEnvironmentVariable("GIT_AUTHOR_EMAIL", "tests@example.invalid");
+        Environment.SetEnvironmentVariable("GIT_COMMITTER_NAME", "Agent Workspace Tests");
+        Environment.SetEnvironmentVariable("GIT_COMMITTER_EMAIL", "tests@example.invalid");
     }
 
     private LauncherConfig Config() => new()

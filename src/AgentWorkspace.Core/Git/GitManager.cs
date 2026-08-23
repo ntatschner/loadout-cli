@@ -97,6 +97,61 @@ public sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult> InitAsync(
+        string path,
+        string defaultBranch = "main",
+        CancellationToken ct = default)
+    {
+        Directory.CreateDirectory(path);
+
+        var result = await RunAsync(path, ["init", "--initial-branch", defaultBranch],
+            LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error!, ExitCode.RepositoryUnavailable);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> SetRemoteAsync(
+        string repositoryPath,
+        string name,
+        string url,
+        CancellationToken ct = default)
+    {
+        // Adding a remote that already exists fails, so an existing one is
+        // repointed instead. Re-running setup should not be an error.
+        var existing = await RunAsync(repositoryPath, ["remote", "get-url", name],
+            LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        var arguments = existing.Succeeded
+            ? new[] { "remote", "set-url", name, url }
+            : ["remote", "add", name, url];
+
+        var result = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error!, ExitCode.RepositoryUnavailable);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> PushWithUpstreamAsync(
+        string repositoryPath,
+        string remote,
+        string branch,
+        CancellationToken ct = default)
+    {
+        var result = await RunAsync(repositoryPath, ["push", "--set-upstream", remote, branch],
+            TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error!, ExitCode.WorkspaceSyncFailed);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> CloneAsync(
         string remote,
         string destination,

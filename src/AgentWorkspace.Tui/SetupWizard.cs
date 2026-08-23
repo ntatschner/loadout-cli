@@ -43,6 +43,8 @@ public sealed class SetupWizard : ISetupWizard
     private readonly IPolicyService _policies;
     private readonly ISecretProvider _secrets;
     private readonly IPlatformPaths _paths;
+    private readonly IExecutableResolver _resolver;
+    private readonly IProcessLauncher _processes;
 
     public SetupWizard(
         IAnsiConsole console,
@@ -53,7 +55,9 @@ public sealed class SetupWizard : ISetupWizard
         IAgentRegistry agents,
         IPolicyService policies,
         ISecretProvider secrets,
-        IPlatformPaths paths)
+        IPlatformPaths paths,
+        IExecutableResolver resolver,
+        IProcessLauncher processes)
     {
         _console = console;
         _configuration = configuration;
@@ -64,6 +68,8 @@ public sealed class SetupWizard : ISetupWizard
         _policies = policies;
         _secrets = secrets;
         _paths = paths;
+        _resolver = resolver;
+        _processes = processes;
     }
 
     /// <inheritdoc />
@@ -205,23 +211,175 @@ public sealed class SetupWizard : ISetupWizard
 
         _console.MarkupLine($"[green]+[/] Created  [dim]{Markup.Escape(_workspace.LocalPath)}[/]");
 
-        // The remote is optional at this point. Someone can build the workspace
-        // locally and push it somewhere later, and forcing a URL now would stop
-        // them starting.
-        if (_console.Confirm("Push this workspace to a Git remote now?", defaultValue: false))
-        {
-            config.Workspace.Remote = _console.Prompt(
-                new TextPrompt<string>("Git remote URL:")).Trim();
-        }
-        else
-        {
-            _console.MarkupLine(
-                "[dim]No remote configured. Add one later with:[/] agentctl config set workspace-remote <url>");
-        }
-
+        // The identity has to exist before the first commit, not after it.
         await EnsureGitIdentityAsync(ct).ConfigureAwait(false);
 
+        // The structure has to become a real repository here. Left as a plain
+        // directory it would look created while sync had nothing to fetch and
+        // save-on-exit had nothing to commit into.
+        var repository = await _workspace
+            .InitialiseRepositoryAsync(config.Workspace.Branch, ct)
+            .ConfigureAwait(false);
+
+        if (repository.Failed)
+        {
+            return repository;
+        }
+
+        _console.MarkupLine("[green]+[/] Git repository initialised with the first commit");
+
+        return await ConfigureRemoteAsync(config, name, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gives the new workspace somewhere to live.
+    /// <para>
+    /// Offers to create the repository through the GitHub CLI when it is
+    /// installed and signed in, because the alternative is telling somebody to
+    /// go and make an empty repository by hand and come back with a URL. The
+    /// launcher stays provider-agnostic either way (spec section 10): this is a
+    /// convenience for one common host, not a dependency on it, and the
+    /// second option accepts any Git URL at all.
+    /// </para>
+    /// </summary>
+    private async Task<OperationResult> ConfigureRemoteAsync(
+        LauncherConfig config,
+        string name,
+        CancellationToken ct)
+    {
+        const string ViaGitHub = "Create a private repository on GitHub";
+        const string ViaUrl = "Use a repository I have already created";
+        const string Later = "Stay local for now";
+
+        var gh = await FindAuthenticatedGitHubCliAsync(ct).ConfigureAwait(false);
+        var choices = new List<string>();
+
+        if (gh is not null)
+        {
+            choices.Add(ViaGitHub);
+        }
+
+        choices.Add(ViaUrl);
+        choices.Add(Later);
+
+        var choice = _console.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Where should this workspace live?")
+                .AddChoices(choices));
+
+        if (choice == Later)
+        {
+            _console.MarkupLine(
+                "[dim]Staying local. Add a remote later with:[/] "
+                + "agentctl config set workspace-remote <url>");
+
+            return OperationResult.Ok();
+        }
+
+        if (choice == ViaUrl)
+        {
+            config.Workspace.Remote = _console.Prompt(
+                new TextPrompt<string>("Git remote URL:")
+                    .Validate(value => string.IsNullOrWhiteSpace(value)
+                        ? ValidationResult.Error("A URL is required.")
+                        : ValidationResult.Success())).Trim();
+
+            return await PushAsync(config, ct).ConfigureAwait(false);
+        }
+
+        var repositoryName = _console.Prompt(
+            new TextPrompt<string>("Repository name:").DefaultValue(name));
+
+        // Private, and not offered as a choice. A workspace holds project
+        // context, decisions and handoffs; spec section 10 calls it a private
+        // repository, and making it public is an irreversible disclosure that
+        // should not be one keystroke away during setup.
+        _console.MarkupLine("[dim]It will be created private.[/]");
+
+        var created = await _processes.RunAsync(
+            new ProcessRequest(
+                gh!,
+                [
+                    "repo", "create", repositoryName,
+                    "--private",
+                    "--source", _workspace.LocalPath,
+                    "--push",
+                ],
+                _workspace.LocalPath),
+            TimeSpan.FromMinutes(2),
+            ct).ConfigureAwait(false);
+
+        if (created.Failed || created.Value?.Succeeded != true)
+        {
+            var detail = created.Value?.StandardError.Trim() ?? created.Error;
+
+            return OperationResult.Fail($"The GitHub repository could not be created: {detail}");
+        }
+
+        var remote = await _git
+            .GetConfigValueAsync("remote.origin.url", _workspace.LocalPath, ct)
+            .ConfigureAwait(false);
+
+        config.Workspace.Remote = remote.Value ?? string.Empty;
+
+        _console.MarkupLine(
+            $"[green]+[/] Created and pushed  [dim]{Markup.Escape(config.Workspace.Remote)}[/]");
+
         return OperationResult.Ok();
+    }
+
+    private async Task<OperationResult> PushAsync(LauncherConfig config, CancellationToken ct)
+    {
+        var remoteResult = await _git
+            .SetRemoteAsync(_workspace.LocalPath, "origin", config.Workspace.Remote, ct)
+            .ConfigureAwait(false);
+
+        if (remoteResult.Failed)
+        {
+            return remoteResult;
+        }
+
+        var pushResult = await _git
+            .PushWithUpstreamAsync(_workspace.LocalPath, "origin", config.Workspace.Branch, ct)
+            .ConfigureAwait(false);
+
+        if (pushResult.Failed)
+        {
+            // The workspace exists and is committed locally, so nothing is
+            // lost; only the push needs retrying. Failing setup outright here
+            // would throw away everything it just built.
+            _console.MarkupLine(
+                $"[yellow]The workspace could not be pushed:[/] {Markup.Escape(pushResult.Error!)}");
+
+            _console.MarkupLine("[dim]It is committed locally. Retry with:[/] agentctl workspace save");
+
+            return OperationResult.Ok();
+        }
+
+        _console.MarkupLine("[green]+[/] Pushed");
+
+        return OperationResult.Ok();
+    }
+
+    /// <summary>
+    /// Finds the GitHub CLI only when it is also signed in. An installed but
+    /// unauthenticated gh would offer a route that fails halfway through.
+    /// </summary>
+    private async Task<string?> FindAuthenticatedGitHubCliAsync(CancellationToken ct)
+    {
+        var gh = _resolver.Resolve("gh");
+
+        if (gh is null)
+        {
+            return null;
+        }
+
+        var status = await _processes.RunAsync(
+            new ProcessRequest(gh, ["auth", "status"]),
+            TimeSpan.FromSeconds(20),
+            ct).ConfigureAwait(false);
+
+        return status.Succeeded && status.Value?.Succeeded == true ? gh : null;
     }
 
     /// <summary>Spec section 61's third option, offered as an equal.</summary>

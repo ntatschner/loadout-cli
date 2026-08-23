@@ -43,9 +43,11 @@ public sealed class WorkspaceStatusCommand : AsyncCommand<GlobalSettings>
         var configured = _workspace.IsConfigured(config);
         var cloned = _workspace.IsCloned();
 
-        var manifest = cloned
-            ? (await _workspace.ReadManifestAsync().ConfigureAwait(false)).Value
+        var manifestResult = cloned
+            ? await _workspace.ReadManifestAsync().ConfigureAwait(false)
             : null;
+
+        var manifest = manifestResult?.Value;
 
         var registry = cloned
             ? (await _workspace.ReadRegistryAsync().ConfigureAwait(false)).Value
@@ -84,6 +86,12 @@ public sealed class WorkspaceStatusCommand : AsyncCommand<GlobalSettings>
         if (manifest is not null)
         {
             output.WriteLine($"Schema     {manifest.WorkspaceSchema}");
+        }
+        else if (manifestResult is not null)
+        {
+            // Cloned, but not a workspace. Almost always a mistyped remote, and
+            // saying so beats an empty project list that looks like success.
+            output.WriteLine($"[yellow]Schema[/]     {Markup.Escape(manifestResult.Error!)}");
         }
 
         if (registry is not null)
