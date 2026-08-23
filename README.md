@@ -1,12 +1,26 @@
-# Agent Workspace Launcher
+# Loadout
 
-`agentctl` launches AI coding agents against development projects while keeping
+`loadout` launches AI coding agents against development projects while keeping
 agent configuration, context, prompts, skills and runtime state **out of the
 application repository**.
 
 Windows, Linux and macOS are Tier-1: each runs the complete launcher natively,
 with no VM, container, remote host or compatibility layer standing in for any
 other platform.
+
+### Renamed from Agent Workspace Launcher
+
+The tool was called `agentctl` while it was a launcher. It is not only that any
+more — most of it is about what an agent is told and what that costs — so it is
+now `loadout`: the kit assembled for a job, chosen rather than carried wholesale.
+This departs from spec section 17, which names the binary `agentctl` with the
+alias `aiw`; the section is superseded rather than overlooked.
+
+Nothing from the old name is orphaned. The data directory is renamed in place on
+first run, the `AGENTCTL_SECRET_*` environment variables are still read, and a
+repository marked `agentctl.project` is still recognised —
+`loadout project link --all` re-marks it and clears the old key, so the fallback
+is a bridge rather than a permanent second answer.
 
 ## Status
 
@@ -21,9 +35,9 @@ milestone; see [Roadmap](#roadmap).
 Download the archive for your platform, verify it, and install:
 
 ```bash
-tar -xzf agentctl-0.1.0-linux-x64.tar.gz
+tar -xzf loadout-0.1.0-linux-x64.tar.gz
 ./install.sh                       # installs to ~/.local/bin, no root needed
-agentctl setup
+loadout setup
 ```
 
 `install.sh` verifies the SHA-256 before extracting anything and refuses to
@@ -33,7 +47,7 @@ Gatekeeper would otherwise block it, and clearing the attribute on one file is
 the honest fix. The documentation never tells anyone to disable Gatekeeper,
 which spec section 85 forbids.
 
-On Windows, extract the zip and put `agentctl.exe` somewhere on `PATH`.
+On Windows, extract the zip and put `loadout.exe` somewhere on `PATH`.
 
 ### Native installers
 
@@ -41,23 +55,23 @@ A release also carries an `.msi`, a `.deb` and an `.rpm` for people who would
 rather not manage a `PATH` entry by hand:
 
 ```powershell
-msiexec /i agentctl-0.1.0-win-x64.msi        # per-user, no elevation
+msiexec /i loadout-0.1.0-win-x64.msi        # per-user, no elevation
 ```
 
 ```bash
-sudo dpkg -i agentctl_0.1.0_amd64.deb        # or: sudo rpm -i agentctl-0.1.0-1.x86_64.rpm
+sudo dpkg -i loadout_0.1.0_amd64.deb        # or: sudo rpm -i loadout-0.1.0-1.x86_64.rpm
 ```
 
-The MSI installs per user into `%LOCALAPPDATA%\Programs\agentctl`, adds that
+The MSI installs per user into `%LOCALAPPDATA%\Programs\loadout`, adds that
 directory to the user `PATH` and creates a Start Menu entry. It installs
 somewhere other than the launcher's own data directory on purpose: they would
 otherwise share a parent, and an uninstall that tidied up its install root a
 little too enthusiastically would take the workspace clone and backup sets with
 it. Uninstalling removes the binaries, the `PATH` entry and the shortcut, and
-leaves everything under `%LOCALAPPDATA%\AgentWorkspaceLauncher` alone.
+leaves everything under `%LOCALAPPDATA%\Loadout` alone.
 
-The Linux packages put the self-contained build under `/usr/lib/agentctl` with
-a symlink at `/usr/bin/agentctl`, rather than emptying a hundred-file publish
+The Linux packages put the self-contained build under `/usr/lib/loadout` with
+a symlink at `/usr/bin/loadout`, rather than emptying a hundred-file publish
 directory into `/usr/bin`.
 
 macOS has archives only. A `.pkg` needs signing and notarisation to be
@@ -99,14 +113,14 @@ quietly broken archive.
 
 ```bash
 dotnet build
-dotnet run --project src/AgentWorkspace.Cli -- doctor
+dotnet run --project src/Loadout.Cli -- doctor
 dotnet test
 ```
 
 Publish a self-contained binary:
 
 ```bash
-dotnet publish src/AgentWorkspace.Cli -c Release -r osx-arm64 --self-contained
+dotnet publish src/Loadout.Cli -c Release -r osx-arm64 --self-contained
 ```
 
 Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
@@ -116,44 +130,44 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 
 | Command | Purpose |
 |---|---|
-| `agentctl` | Interactive project selector, or first-run setup |
-| `agentctl setup` | Configure the launcher on this machine |
-| `agentctl <project>` | Launch the project's default agent |
-| `agentctl here` | Launch the agent for the current repository |
-| `agentctl doctor` | Platform, Git, workspace, secret and agent diagnostics |
-| `agentctl status` | Summary of workspace, projects and agents |
-| `agentctl project add\|list\|show\|remove\|discover\|open` | Manage project registration |
-| `agentctl project clone\|relocate <project>` | Get a registered project onto this machine |
-| `agentctl project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
-| `agentctl project link [project]` | Record inside a repository which project it belongs to |
-| `agentctl config list\|get\|set\|edit` | Read and write launcher settings |
-| `agentctl workspace status\|sync\|save\|open` | Manage the central workspace clone |
-| `agentctl desktop` | Install the Start Menu or `.desktop` entry |
-| `agentctl update` | Check the release source and install a newer build |
-| `agentctl secret set\|test\|remove` | Manage credentials in the OS keystore |
-| `agentctl repo check` | Check a repository for tracked AI tooling files |
-| `agentctl protect` | Install a pre-commit hook, or `--global` Git excludes |
-| `agentctl migrate` | Move existing AI tooling files into the workspace |
-| `agentctl project worktrees <project>` | List a project's working trees |
-| `agentctl handoff <project>` | Create, show or list cross-agent handoffs |
-| `agentctl profile list <project>` | Show a project's context profiles |
-| `agentctl rules list\|budget\|audit <project>` | Inspect the instruction rules and what they cost |
-| `agentctl rules split <project>` | Break an oversized instruction file into scoped rules |
-| `agentctl memory list\|write\|audit\|reindex <project>` | Record and check durable project facts |
-| `agentctl memory import <project>` | Bring in memory an agent recorded outside the workspace |
-| `agentctl memory audit --clean <project>` | Remove empty topics, exact repeats and dead index lines |
-| `agentctl backup list\|restore` | Undo an operation that changed files |
-| `agentctl completion <shell>` | Emit a completion script |
+| `loadout` | Interactive project selector, or first-run setup |
+| `loadout setup` | Configure the launcher on this machine |
+| `loadout <project>` | Launch the project's default agent |
+| `loadout here` | Launch the agent for the current repository |
+| `loadout doctor` | Platform, Git, workspace, secret and agent diagnostics |
+| `loadout status` | Summary of workspace, projects and agents |
+| `loadout project add\|list\|show\|remove\|discover\|open` | Manage project registration |
+| `loadout project clone\|relocate <project>` | Get a registered project onto this machine |
+| `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
+| `loadout project link [project]` | Record inside a repository which project it belongs to |
+| `loadout config list\|get\|set\|edit` | Read and write launcher settings |
+| `loadout workspace status\|sync\|save\|open` | Manage the central workspace clone |
+| `loadout desktop` | Install the Start Menu or `.desktop` entry |
+| `loadout update` | Check the release source and install a newer build |
+| `loadout secret set\|test\|remove` | Manage credentials in the OS keystore |
+| `loadout repo check` | Check a repository for tracked AI tooling files |
+| `loadout protect` | Install a pre-commit hook, or `--global` Git excludes |
+| `loadout migrate` | Move existing AI tooling files into the workspace |
+| `loadout project worktrees <project>` | List a project's working trees |
+| `loadout handoff <project>` | Create, show or list cross-agent handoffs |
+| `loadout profile list <project>` | Show a project's context profiles |
+| `loadout rules list\|budget\|audit <project>` | Inspect the instruction rules and what they cost |
+| `loadout rules split <project>` | Break an oversized instruction file into scoped rules |
+| `loadout memory list\|write\|audit\|reindex <project>` | Record and check durable project facts |
+| `loadout memory import <project>` | Bring in memory an agent recorded outside the workspace |
+| `loadout memory audit --clean <project>` | Remove empty topics, exact repeats and dead index lines |
+| `loadout backup list\|restore` | Undo an operation that changed files |
+| `loadout completion <shell>` | Emit a completion script |
 
 Every command accepts `--json`, and everything after a bare `--` is passed to
 the agent untouched:
 
 ```bash
-agentctl starstats --agent claude --profile database -- --verbose
+loadout starstats --agent claude --profile database -- --verbose
 ```
 
 Exit codes are stable and documented in
-[`ExitCode.cs`](src/AgentWorkspace.Models/ExitCode.cs).
+[`ExitCode.cs`](src/Loadout.Models/ExitCode.cs).
 
 ## Context
 
@@ -217,19 +231,19 @@ rule is not: the context lists its name, scope and path, and the agent reads it
 when the work touches those paths. A project rule overrides a workspace rule of
 the same name, so a project can depart from the house style without editing it.
 
-`agentctl rules budget` reports what loads regardless of the task.
-`agentctl rules audit` reports the defects that cost tokens invisibly — an
+`loadout rules budget` reports what loads regardless of the task.
+`loadout rules audit` reports the defects that cost tokens invisibly — an
 instruction written in two places, a rule that declares globs *and*
 `alwaysApply` (the globs are decorative; it loads always), two rules claiming
 the same paths, and `@import` lines whose size appears in nobody's budget.
 
-`agentctl rules split` breaks an existing instruction file apart. It needs a map
+`loadout rules split` breaks an existing instruction file apart. It needs a map
 saying which sections belong to which rule and what each rule's scope is —
 that judgement is about the project and the tool will not guess it — so start
-with `agentctl rules split --write-map`, fill in the globs, then preview:
+with `loadout rules split --write-map`, fill in the globs, then preview:
 
 ```
-$ agentctl rules split --from instructions.md
+$ loadout rules split --from instructions.md
 instructions.md  6.4KB today
 
   authentik   authentik/**, **/blueprints/**   1.5KB
@@ -259,7 +273,7 @@ traps that keep catching people. It lives in the workspace repository at
 next and a wrong one can be corrected in a pull request like any other mistake.
 
 ```bash
-agentctl memory write starstats build-quirks \
+loadout memory write starstats build-quirks \
   --description "things that surprise people about the build" \
   --fact "The first build after a clean takes four minutes; the analyzers warm up."
 ```
@@ -271,13 +285,13 @@ it would make every session pay for every fact anyone ever recorded.
 ### Which project is this?
 
 Every registered repository records its project in its own Git config, under
-`agentctl.project`. That file, `.git/config`, is per-clone and is never
+`loadout.project`. That file, `.git/config`, is per-clone and is never
 committed, so the mark adds nothing to the repository's contents — the rule that
 application repositories hold application source only is about what gets
 committed, and a tracked marker file would breach it.
 
 It is written whenever a project is registered, cloned or relocated;
-`agentctl project link --all` fills it in for repositories registered before the
+`loadout project link --all` fills it in for repositories registered before the
 mark existed.
 
 Resolution takes the recorded path first, then the mark, then the canonical
@@ -287,7 +301,7 @@ mark to answer to another repository's name. The mark earns its place in the
 case the path cannot cover — a repository that has been moved is still
 recognised, rather than looking like one the launcher has never seen.
 
-`agentctl project survey` reports agent state on this machine that no project
+`loadout project survey` reports agent state on this machine that no project
 accounts for, and says what each piece appears to belong to:
 
 ```
@@ -295,7 +309,7 @@ D:\git\GateConquestRepos  7 topic(s)
   holds 2 repositories so this was recorded across all of them
     GateConquestFlask
     GateConquestWeb
-  decide which project it belongs to, then: agentctl memory import <project> --from ...
+  decide which project it belongs to, then: loadout memory import <project> --from ...
 ```
 
 `--adopt` takes on what can be taken on without a judgement call: importing
@@ -320,12 +334,12 @@ files a repository's hard-won notes under its neighbour.
 
 Several repositories were managed with an agent's own tooling before this
 launcher existed, and their accumulated facts sit in a machine-local directory
-nothing here reads. `agentctl doctor` reports when it finds any, and
-`agentctl memory import` brings it across:
+nothing here reads. `loadout doctor` reports when it finds any, and
+`loadout memory import` brings it across:
 
 ```bash
-agentctl memory import starstats                 # finds the agent's own layout
-agentctl memory import gateconquest --from <dir> # or point at it directly
+loadout memory import starstats                 # finds the agent's own layout
+loadout memory import gateconquest --from <dir> # or point at it directly
 ```
 
 Topics are copied verbatim, never overwriting one already in the workspace, and
@@ -335,7 +349,7 @@ push. The original is copied rather than moved, so nothing is lost if the import
 is wrong; removing the old copy is left to you.
 
 Repositories organised this way also arrive with their instructions already
-split into `.claude/rules/`. `agentctl migrate` moves those to
+split into `.claude/rules/`. `loadout migrate` moves those to
 `projects/<slug>/rules/` rather than into the agent's own directory: which
 instructions apply to which paths is true whichever agent reads them, and the
 rule loader only looks in the project's own rules directory. And `rules split`
@@ -352,10 +366,10 @@ Two checks keep memory worth loading:
 - **Facts that will rot are reported.** An account of a change ("added a retry
   to the upload step") belongs in the repository history and reads as present
   tense forever; a fact dated to the day it was written ("the highest migration
-  is 0052") misleads within weeks. `agentctl memory audit` reports those along
+  is 0052") misleads within weeks. `loadout memory audit` reports those along
   with duplicates, oversize topics, stale entries and index rot.
 
-`agentctl memory audit --clean` removes what can be removed without judgement:
+`loadout memory audit --clean` removes what can be removed without judgement:
 topics holding no facts, facts repeated word for word, and index lines pointing
 at files that are gone. It never rewrites prose and never merges two facts that
 merely say similar things — deciding which wording is the right one is the
@@ -369,7 +383,7 @@ Every operation that rewrites files takes a snapshot first — `migrate`,
 
 ```
 Migrated 4 item(s) into the workspace.
-Undo it with: agentctl backup restore 20260823-141502-a1b2
+Undo it with: loadout backup restore 20260823-141502-a1b2
 ```
 
 Each set records a SHA-256 per file. A restore verifies every digest before
@@ -395,17 +409,17 @@ settings file can hold a credential.
 ## First run
 
 ```bash
-agentctl setup
+loadout setup
 ```
 
-Running `agentctl` with no arguments on an unconfigured machine goes here too,
+Running `loadout` with no arguments on an unconfigured machine goes here too,
 because an empty project list tells a new user nothing about what to do next.
 
 Every question can also be answered up front, so provisioning a machine needs no
 one sitting at it:
 
 ```bash
-agentctl setup --create-new --github --name agent-workspaces   --register-discovered --migrate --global-excludes --non-interactive
+loadout setup --create-new --github --name agent-workspaces   --register-discovered --migrate --global-excludes --non-interactive
 ```
 
 Both routes run the same code — an interactive run is just one where nothing was
@@ -446,9 +460,9 @@ report nothing to migrate. Clean up first, then stop it happening again.
 ## Updating
 
 ```bash
-agentctl config set updates-source https://internal.example/agentctl/feed.json
-agentctl update --check
-agentctl update
+loadout config set updates-source https://internal.example/loadout/feed.json
+loadout update --check
+loadout update
 ```
 
 The source is any JSON document reachable over HTTP, or a path — a directory on
@@ -462,7 +476,7 @@ service has to answer:
   "notes": "What changed.",
   "artifacts": {
     "osx-arm64": {
-      "url": "https://internal.example/agentctl/agentctl-0.2.0-osx-arm64.tar.gz",
+      "url": "https://internal.example/loadout/loadout-0.2.0-osx-arm64.tar.gz",
       "sha256": "985daa42...",
       "size": 31110221
     }
@@ -478,7 +492,7 @@ launcher does, so:
   update is refused with exit 9.
 - **The hash is checked before anything is put in place**, and a mismatch leaves
   the working binary exactly where it was.
-- **The previous binary is kept** as `agentctl.previous`, so a bad update can be
+- **The previous binary is kept** as `loadout.previous`, so a bad update can be
   undone by hand rather than reinstalled.
 - **Nothing updates without being asked.** `--yes` or a prompt; non-interactively
   it refuses rather than swapping the binary out from under a script.
@@ -504,7 +518,7 @@ environments:
 ```
 
 ```bash
-agentctl starstats --environment production
+loadout starstats --environment production
 ```
 
 Security profiles are expressed in the launcher's own vocabulary — filesystem,
@@ -563,7 +577,7 @@ nowhere. The fourth option is deliberately "leave them uncommitted" rather than
 The prompt lives in the CLI, not in core. Core decides whether a person needs
 to be asked; it never asks, because spec section 37 forbids a menu appearing in
 a pipe or a CI job. Non-interactively the changes are left in place and
-`agentctl workspace save` is suggested.
+`loadout workspace save` is suggested.
 
 ## Repository cleanliness
 
@@ -572,9 +586,9 @@ source and agent state lives elsewhere. Three commands make that verifiable
 rather than aspirational:
 
 ```bash
-agentctl repo check          # what is tracked that should not be
-agentctl migrate --dry-run   # what would move, and where
-agentctl protect --global    # stop it happening again
+loadout repo check          # what is tracked that should not be
+loadout migrate --dry-run   # what would move, and where
+loadout protect --global    # stop it happening again
 ```
 
 `repo check` distinguishes three states, and the distinction is the substance
@@ -591,9 +605,9 @@ repository actually becomes clean.
 
 `protect` installs a pre-commit hook written as POSIX shell, which Git runs the
 same way on all three platforms. It re-derives the check from Git rather than
-calling back into `agentctl`, so it keeps working on a machine where the
+calling back into `loadout`, so it keeps working on a machine where the
 launcher has been moved. A hook the launcher did not write is never overwritten
-or deleted. Hooks live in `.git/hooks` and so are per-clone — `agentctl doctor`
+or deleted. Hooks live in `.git/hooks` and so are per-clone — `loadout doctor`
 reports when the clone you are standing in has none.
 
 ## Conflict recovery
@@ -613,19 +627,19 @@ data loss is acceptable, and a branch costs nothing.
 ## Architecture
 
 ```
-AgentWorkspace.Models      Records, DTOs, config classes. No logic.
-AgentWorkspace.Platform    Abstractions + Windows / Linux / macOS / Unix implementations.
-AgentWorkspace.Core        Projects, Git, Workspace, Configuration, Security, Diagnostics.
-AgentWorkspace.Agents      Claude, Codex and generic adapters; the launch pipeline.
-AgentWorkspace.Cli         The agentctl executable.
-AgentWorkspace.Tui         The interactive selector.
+Loadout.Models      Records, DTOs, config classes. No logic.
+Loadout.Platform    Abstractions + Windows / Linux / macOS / Unix implementations.
+Loadout.Core        Projects, Git, Workspace, Configuration, Security, Diagnostics.
+Loadout.Agents      Claude, Codex and generic adapters; the launch pipeline.
+Loadout.Cli         The loadout executable.
+Loadout.Tui         The interactive selector.
 ```
 
 The rule that makes cross-platform parity hold is that **`Core`, `Agents` and
 `Tui` depend on `Platform.Abstractions` only**. Exactly one file —
-[`PlatformServices.cs`](src/AgentWorkspace.Platform/PlatformServices.cs) —
+[`PlatformServices.cs`](src/Loadout.Platform/PlatformServices.cs) —
 branches on the operating system. Two tests in
-[`ArchitectureTests.cs`](tests/AgentWorkspace.Tests/Architecture/ArchitectureTests.cs)
+[`ArchitectureTests.cs`](tests/Loadout.Tests/Architecture/ArchitectureTests.cs)
 enforce this: one reads each assembly's type-reference table to prove no shared
 assembly touches a platform implementation, the other proves no project carries
 an OS-suffixed target framework.
@@ -634,10 +648,10 @@ an OS-suffixed target framework.
 
 | | Windows | Linux | macOS |
 |---|---|---|---|
-| Config | `%APPDATA%\AgentWorkspaceLauncher` | `$XDG_CONFIG_HOME/agent-workspace-launcher` | `~/Library/Application Support/AgentWorkspaceLauncher` |
-| State | `%LOCALAPPDATA%\AgentWorkspaceLauncher` | `$XDG_DATA_HOME/agent-workspace-launcher` | `…/Application Support/AgentWorkspaceLauncher/state` |
-| Cache | `…\cache` | `$XDG_CACHE_HOME/agent-workspace-launcher` | `~/Library/Caches/AgentWorkspaceLauncher/cache` |
-| Logs | `…\logs` | `$XDG_STATE_HOME/agent-workspace-launcher/logs` | `~/Library/Logs/AgentWorkspaceLauncher` |
+| Config | `%APPDATA%\Loadout` | `$XDG_CONFIG_HOME/loadout` | `~/Library/Application Support/Loadout` |
+| State | `%LOCALAPPDATA%\Loadout` | `$XDG_DATA_HOME/loadout` | `…/Application Support/Loadout/state` |
+| Cache | `…\cache` | `$XDG_CACHE_HOME/loadout` | `~/Library/Caches/Loadout/cache` |
+| Logs | `…\logs` | `$XDG_STATE_HOME/loadout/logs` | `~/Library/Logs/Loadout` |
 | Secrets | Credential Manager | Secret Service (libsecret) | Keychain |
 
 macOS uses native conventions by default. Set `AGENTCTL_USE_XDG=1` to place
@@ -650,13 +664,13 @@ on a Windows desktop, a Linux workstation and a Mac.
 ### Capabilities, not silent gaps
 
 Anything a platform cannot do is reported rather than quietly skipped. Run
-`agentctl doctor` to see the full matrix; each unavailable capability carries
+`loadout doctor` to see the full matrix; each unavailable capability carries
 the reason. Known gaps today:
 
 - **Pseudo-terminal** — the launcher does not own a PTY yet. Agents inherit the
   current terminal, which gives correct signals, resize and exit codes for
   terminal launches. An owned PTY is needed only for desktop launch.
-- **macOS desktop integration** — `agentctl desktop` installs a Start Menu
+- **macOS desktop integration** — `loadout desktop` installs a Start Menu
   shortcut on Windows and a `.desktop` entry on Linux. On macOS the `.app`
   bundle is not built yet, so the command says so and declines. Every feature
   stays reachable from the CLI and TUI.

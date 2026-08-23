@@ -38,7 +38,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repositoryRoot 'src/AgentWorkspace.Cli/AgentWorkspace.Cli.csproj'
+$project = Join-Path $repositoryRoot 'src/Loadout.Cli/Loadout.Cli.csproj'
 $staging = Join-Path $repositoryRoot "artifacts/installer/$Runtime"
 $payload = Join-Path $staging 'payload'
 
@@ -93,14 +93,14 @@ if ($Runtime.StartsWith('win-')) {
         throw "The WiX toolset is not installed. Run: dotnet tool install --global wix"
     }
 
-    $msi = Join-Path $output "agentctl-$Version-$Runtime.msi"
+    $msi = Join-Path $output "loadout-$Version-$Runtime.msi"
     if (Test-Path $msi) { Remove-Item $msi -Force }
 
     # The MSI architecture must match the payload. An x64 package refuses to
     # install on arm64, which is better than installing and then not running.
     $platform = if ($Runtime -eq 'win-arm64') { 'arm64' } else { 'x64' }
 
-    & wix build (Join-Path $PSScriptRoot 'windows/agentctl.wxs') `
+    & wix build (Join-Path $PSScriptRoot 'windows/loadout.wxs') `
         -arch $platform `
         -define "Version=$Version" `
         -define "PublishDir=$payload" `
@@ -125,19 +125,19 @@ if ($IsWindows) {
 
 $architecture = $debianArchitecture[$Runtime]
 $root = Join-Path $staging 'root'
-$binDirectory = Join-Path $root 'usr/lib/agentctl'
+$binDirectory = Join-Path $root 'usr/lib/loadout'
 $linkDirectory = Join-Path $root 'usr/bin'
 
 New-Item -ItemType Directory -Force -Path $binDirectory, $linkDirectory | Out-Null
 Copy-Item (Join-Path $payload '*') $binDirectory -Recurse -Force
 
-chmod 0755 (Join-Path $binDirectory 'agentctl')
+chmod 0755 (Join-Path $binDirectory 'loadout')
 if ($LASTEXITCODE -ne 0) { throw 'chmod failed for the published binary.' }
 
 # The binary lives under /usr/lib beside the runtime it needs, with a symlink on
 # PATH. Putting a hundred-file self-contained publish directly into /usr/bin
 # would be antisocial.
-& ln -sf '/usr/lib/agentctl/agentctl' (Join-Path $linkDirectory 'agentctl')
+& ln -sf '/usr/lib/loadout/loadout' (Join-Path $linkDirectory 'loadout')
 if ($LASTEXITCODE -ne 0) { throw 'Could not create the /usr/bin symlink.' }
 
 if (Get-Command dpkg-deb -ErrorAction SilentlyContinue) {
@@ -148,13 +148,13 @@ if (Get-Command dpkg-deb -ErrorAction SilentlyContinue) {
     # a .NET runtime here would be false and would block installation on a
     # machine that can run this perfectly well.
     $control = @"
-Package: agentctl
+Package: loadout
 Version: $Version
 Section: devel
 Priority: optional
 Architecture: $architecture
-Maintainer: Agent Workspace Launcher
-Description: Agent Workspace Launcher
+Maintainer: Loadout
+Description: Loadout
  Launches AI coding agents against registered projects, keeping agent
  configuration and context in a central workspace repository rather than in
  the application repositories themselves.
@@ -164,7 +164,7 @@ Description: Agent Workspace Launcher
     $control = $control.Replace("`r`n", "`n") + "`n"
     [System.IO.File]::WriteAllText((Join-Path $debianDirectory 'control'), $control)
 
-    $deb = Join-Path $output "agentctl_${Version}_$architecture.deb"
+    $deb = Join-Path $output "loadout_${Version}_$architecture.deb"
     if (Test-Path $deb) { Remove-Item $deb -Force }
 
     & dpkg-deb --build --root-owner-group $root $deb
@@ -183,10 +183,10 @@ if (Get-Command rpmbuild -ErrorAction SilentlyContinue) {
     $rpmArch = $rpmArchitecture[$Runtime]
 
     $spec = @"
-Name:           agentctl
+Name:           loadout
 Version:        $Version
 Release:        1
-Summary:        Agent Workspace Launcher
+Summary:        Loadout
 License:        MIT
 BuildArch:      $rpmArch
 AutoReqProv:    no
@@ -197,17 +197,17 @@ configuration and context in a central workspace repository rather than in the
 application repositories themselves.
 
 %install
-mkdir -p %{buildroot}/usr/lib/agentctl
+mkdir -p %{buildroot}/usr/lib/loadout
 mkdir -p %{buildroot}/usr/bin
-cp -r $binDirectory/* %{buildroot}/usr/lib/agentctl/
-ln -sf /usr/lib/agentctl/agentctl %{buildroot}/usr/bin/agentctl
+cp -r $binDirectory/* %{buildroot}/usr/lib/loadout/
+ln -sf /usr/lib/loadout/loadout %{buildroot}/usr/bin/loadout
 
 %files
-/usr/lib/agentctl
-/usr/bin/agentctl
+/usr/lib/loadout
+/usr/bin/loadout
 "@
 
-    $specPath = Join-Path $rpmRoot 'SPECS/agentctl.spec'
+    $specPath = Join-Path $rpmRoot 'SPECS/loadout.spec'
     [System.IO.File]::WriteAllText($specPath, $spec.Replace("`r`n", "`n") + "`n")
 
     # AutoReqProv is off above because rpmbuild would otherwise scan the

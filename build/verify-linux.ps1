@@ -37,7 +37,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$image = "agentctl-linux-verify:$Architecture"
+$image = "loadout-linux-verify:$Architecture"
 $platform = "linux/$Architecture"
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {

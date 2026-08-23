@@ -68,7 +68,7 @@ jobs:
           set -euo pipefail
           cd artifacts
 
-          archive=$(ls agentctl-*.{zip,tar.gz} 2>/dev/null | head -1)
+          archive=$(ls loadout-*.{zip,tar.gz} 2>/dev/null | head -1)
           echo "Checking $archive"
 
           # A release that fails its own checksum is worse than no release.
@@ -82,8 +82,8 @@ jobs:
             *.tar.gz)
               # The executable bit is the one property that silently ruins a
               # Unix release, so it is asserted rather than assumed.
-              if ! tar -tvzf "$archive" | grep -E '^-rwx.*agentctl$'; then
-                echo "agentctl is not executable inside $archive" >&2
+              if ! tar -tvzf "$archive" | grep -E '^-rwx.*loadout$'; then
+                echo "loadout is not executable inside $archive" >&2
                 exit 1
               fi
               ;;
@@ -103,16 +103,16 @@ jobs:
           set -euo pipefail
           mkdir -p smoke && cd smoke
 
-          archive=$(ls ../artifacts/agentctl-*.{zip,tar.gz} 2>/dev/null | head -1)
+          archive=$(ls ../artifacts/loadout-*.{zip,tar.gz} 2>/dev/null | head -1)
 
           case "$archive" in
             *.zip) unzip -q "$archive" ;;
             *) tar -xzf "$archive" ;;
           esac
 
-          ./agentctl --version
-          ./agentctl doctor --json > doctor.json
-          ./agentctl project list --json > projects.json
+          ./loadout --version
+          ./loadout doctor --json > doctor.json
+          ./loadout project list --json > projects.json
 
           # doctor is allowed to report problems on a bare runner; what it may
           # not do is fail to produce a report at all.
@@ -121,7 +121,7 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: agentctl-${{ matrix.rid }}
+          name: loadout-${{ matrix.rid }}
           path: |
             artifacts/*.zip
             artifacts/*.tar.gz
@@ -195,7 +195,7 @@ jobs:
           for deb in *.deb; do
             [ -e "$deb" ] || continue
 
-            dpkg-deb -c "$deb" | grep -q './usr/bin/agentctl' || {
+            dpkg-deb -c "$deb" | grep -q './usr/bin/loadout' || {
               echo "$deb puts nothing on PATH" >&2
               exit 1
             }
@@ -215,16 +215,16 @@ jobs:
         if: matrix.rid == 'linux-x64'
         run: |
           set -euo pipefail
-          sudo dpkg -i artifacts/agentctl_*_amd64.deb
-          agentctl --version
-          agentctl doctor --json > /dev/null
-          sudo dpkg -r agentctl
-          ! command -v agentctl
+          sudo dpkg -i artifacts/loadout_*_amd64.deb
+          loadout --version
+          loadout doctor --json > /dev/null
+          sudo dpkg -r loadout
+          ! command -v loadout
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: agentctl-installer-${{ matrix.rid }}
+          name: loadout-installer-${{ matrix.rid }}
           path: |
             artifacts/*.msi
             artifacts/*.deb
@@ -267,10 +267,10 @@ jobs:
           # CI, because GitHub offers no hosted runner for either. Saying so
           # beats implying a level of testing that did not happen.
           body: |
-            Self-contained builds of `agentctl`. No .NET installation required.
+            Self-contained builds of `loadout`. No .NET installation required.
 
             Archives work anywhere; the `.msi`, `.deb` and `.rpm` install
-            `agentctl` onto `PATH` for the current user or machine.
+            `loadout` onto `PATH` for the current user or machine.
 
             Tested on Windows x64, Linux x64 and macOS Apple Silicon. The
             `win-arm64` and `linux-arm64` builds are cross-compiled and not

@@ -1,6 +1,6 @@
 # Third-party notices
 
-`agentctl` is MIT licensed. It depends on the packages below, every one of them
+`loadout` is MIT licensed. It depends on the packages below, every one of them
 under a permissive licence compatible with shipping this project as open source.
 
 This file is checked rather than trusted: `build/licences.ps1` reads the licence
@@ -61,5 +61,5 @@ for whoever owns this project rather than one a build script should accept on
 their behalf. Version 5 asks for nothing.
 
 `dpkg-deb` and `rpmbuild` are invoked as external programs when building
-packages. Nothing from them is linked into or redistributed with `agentctl`, so
+packages. Nothing from them is linked into or redistributed with `loadout`, so
 their licences do not reach the released binaries.

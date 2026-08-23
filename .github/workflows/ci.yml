@@ -63,7 +63,7 @@ jobs:
       # behaviour under spec section 86 and the tests assert it rather than
       # requiring a keyring to be installed.
       - name: Show platform diagnostics
-        run: dotnet run --project src/AgentWorkspace.Cli -- doctor --json
+        run: dotnet run --project src/Loadout.Cli -- doctor --json
         continue-on-error: true
 
       - name: Build
@@ -109,7 +109,7 @@ jobs:
 
       - name: Publish
         run: >
-          dotnet publish src/AgentWorkspace.Cli/AgentWorkspace.Cli.csproj
+          dotnet publish src/Loadout.Cli/Loadout.Cli.csproj
           --configuration Release
           --runtime ${{ matrix.rid }}
           --self-contained true
@@ -121,5 +121,5 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: agentctl-${{ matrix.rid }}
+          name: loadout-${{ matrix.rid }}
           path: artifacts/${{ matrix.rid }}

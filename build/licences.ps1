@@ -32,7 +32,7 @@ Set-StrictMode -Version Latest
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 
 if (-not $Solution) {
-    $Solution = Join-Path $repositoryRoot 'AgentWorkspace.slnx'
+    $Solution = Join-Path $repositoryRoot 'Loadout.slnx'
 }
 
 # SPDX identifiers this project can ship under. Permissive only: a copyleft

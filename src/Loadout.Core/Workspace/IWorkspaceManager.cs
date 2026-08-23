@@ -1,0 +1,146 @@
+using Loadout.Models.Configuration;
+using Loadout.Models.Projects;
+using Loadout.Models.Results;
+
+namespace Loadout.Core.Workspace;
+
+/// <summary>How a synchronisation attempt ended (spec sections 45, 47, 48).</summary>
+public enum WorkspaceSyncOutcome
+{
+    /// <summary>The local clone is up to date with the remote.</summary>
+    Synced,
+
+    /// <summary>No central workspace is configured; the launcher is running local-only.</summary>
+    NotConfigured,
+
+    /// <summary>The remote was unreachable and the cached clone is being used instead.</summary>
+    Offline,
+
+    /// <summary>Local and remote have diverged and need a human decision.</summary>
+    Conflict,
+}
+
+/// <summary>Result of a synchronisation attempt.</summary>
+/// <param name="Outcome">What happened.</param>
+/// <param name="Detail">Explanation suitable for display. Already redacted.</param>
+/// <param name="CachedAtUtc">When the local clone was last updated, shown in the offline prompt.</param>
+/// <param name="RecoveryBranch">
+/// Branch created to preserve local work when a divergence was detected
+/// (spec section 47), or null when none was needed.
+/// </param>
+public sealed record WorkspaceSyncResult(
+    WorkspaceSyncOutcome Outcome,
+    string Detail,
+    DateTimeOffset? CachedAtUtc,
+    string? RecoveryBranch = null);
+
+/// <summary>
+/// Owns the local clone of the central agent-workspaces repository
+/// (spec sections 10, 11, 45, 76).
+/// <para>
+/// The launcher must work with no central workspace at all (spec section 61
+/// offers "run without central storage") and must keep working when the
+/// central server is unreachable (spec section 48). Neither is an error path:
+/// both are ordinary states this interface reports rather than throws on.
+/// </para>
+/// </summary>
+public interface IWorkspaceManager
+{
+    /// <summary>Absolute path to the local clone, whether or not it exists yet.</summary>
+    string LocalPath { get; }
+
+    /// <summary>Whether a central workspace remote has been configured.</summary>
+    bool IsConfigured(LauncherConfig config);
+
+    /// <summary>
+    /// Whether the local clone is a Git repository. Gates the Git operations
+    /// only; it is false in the local-only mode of spec section 61.
+    /// </summary>
+    bool IsCloned();
+
+    /// <summary>
+    /// Whether workspace content exists locally, whether or not it came from
+    /// Git.
+    /// <para>
+    /// This is the check that gates reading manifests and compiling context.
+    /// Spec section 61 offers "run without central storage", and in that mode
+    /// the launcher still writes a registry and project manifests into the same
+    /// directory. Gating context on IsCloned would silently deprive those users
+    /// of every profile and instruction file they had written.
+    /// </para>
+    /// </summary>
+    bool IsAvailable();
+
+    /// <summary>Clones the central workspace for the first time.</summary>
+    Task<OperationResult> CloneAsync(LauncherConfig config, CancellationToken ct = default);
+
+    /// <summary>
+    /// Brings the local clone up to date, degrading to offline rather than
+    /// failing when the remote cannot be reached within the configured timeout.
+    /// </summary>
+    Task<OperationResult<WorkspaceSyncResult>> SyncAsync(
+        LauncherConfig config,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads workspace.yaml (spec section 91).
+    /// <para>
+    /// Fails when the file is absent rather than returning a default. A clone
+    /// of some unrelated repository would otherwise report itself as a valid
+    /// schema-1 workspace, so a mistyped remote would look like it had worked
+    /// and simply contain no projects.
+    /// </para>
+    /// </summary>
+    Task<OperationResult<WorkspaceManifest>> ReadManifestAsync(CancellationToken ct = default);
+
+    /// <summary>Reads registry/projects.yaml. Returns an empty registry when absent.</summary>
+    Task<OperationResult<ProjectRegistry>> ReadRegistryAsync(CancellationToken ct = default);
+
+    Task<OperationResult> WriteRegistryAsync(ProjectRegistry registry, CancellationToken ct = default);
+
+    /// <summary>Reads one project manifest from projects/&lt;slug&gt;/project.yaml.</summary>
+    Task<OperationResult<ProjectManifest>> ReadProjectAsync(string slug, CancellationToken ct = default);
+
+    Task<OperationResult> WriteProjectAsync(ProjectManifest manifest, CancellationToken ct = default);
+
+    /// <summary>Creates the standard directory structure of spec section 11.</summary>
+    Task<OperationResult> InitialiseStructureAsync(string workspaceName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Turns a freshly created structure into a Git repository with its first
+    /// commit.
+    /// <para>
+    /// Without this the workspace is a plain directory: sync has nothing to
+    /// fetch and save-on-exit has nothing to commit into, so it would appear to
+    /// have been created while quietly doing nothing.
+    /// </para>
+    /// </summary>
+    Task<OperationResult> InitialiseRepositoryAsync(
+        string defaultBranch,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Paths changed in the local workspace since the last commit, for showing
+    /// the user what would be saved (spec section 45).
+    /// </summary>
+    Task<OperationResult<IReadOnlyList<string>>> GetPendingChangesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Commits the workspace, and optionally pushes it (spec sections 45, 46).
+    /// <para>
+    /// The commit message follows the format in section 46 so a workspace
+    /// history reads as a record of which machine did what to which project.
+    /// Returns false when there was nothing to commit, which is the ordinary
+    /// outcome of a session that only read.
+    /// </para>
+    /// </summary>
+    /// <param name="projectName">Project the session was about.</param>
+    /// <param name="agentName">Agent that ran.</param>
+    /// <param name="push">Whether to push after committing.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<bool>> SaveAsync(
+        string projectName,
+        string agentName,
+        bool push,
+        CancellationToken ct = default);
+}

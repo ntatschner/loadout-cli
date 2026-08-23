@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Loadout.Agents/Loadout.Agents.csproj" />
+    <Project Path="src/Loadout.Cli/Loadout.Cli.csproj" />
+    <Project Path="src/Loadout.Core/Loadout.Core.csproj" />
+    <Project Path="src/Loadout.Models/Loadout.Models.csproj" />
+    <Project Path="src/Loadout.Platform/Loadout.Platform.csproj" />
+    <Project Path="src/Loadout.Tui/Loadout.Tui.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Loadout.Tests/Loadout.Tests.csproj" />
+  </Folder>
+</Solution>

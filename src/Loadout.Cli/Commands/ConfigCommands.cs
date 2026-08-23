@@ -1,0 +1,362 @@
+using System.ComponentModel;
+using Loadout.Cli.Infrastructure;
+using Loadout.Core.Configuration;
+using Loadout.Core.Security;
+using Loadout.Models;
+using Loadout.Models.Configuration;
+using Loadout.Platform.Abstractions;
+using Spectre.Console;
+using Spectre.Console.Cli;
+
+namespace Loadout.Cli.Commands;
+
+/// <summary>
+/// The settings <c>loadout config</c> can read and write (spec section 77).
+/// <para>
+/// A registry rather than a switch in each command, so list, get and set can
+/// never disagree about which keys exist. Keys are hyphenated because that is
+/// what people type; the YAML underneath keeps its own naming.
+/// </para>
+/// </summary>
+internal static class ConfigKeys
+{
+    internal sealed record Entry(
+        string Key,
+        string Description,
+        Func<LauncherConfig, MachineConfig, string?> Read,
+        Action<LauncherConfig, MachineConfig, string> Write,
+        bool IsMachineLocal);
+
+    internal static IReadOnlyList<Entry> All =>
+    [
+        new("workspace-remote", "Git URL of the central workspace",
+            (c, _) => c.Workspace.Remote,
+            (c, _, v) => c.Workspace.Remote = v, false),
+
+        new("workspace-branch", "Branch of the central workspace",
+            (c, _) => c.Workspace.Branch,
+            (c, _, v) => c.Workspace.Branch = v, false),
+
+        new("default-agent", "Agent launched when a project names none",
+            (c, _) => c.DefaultAgent,
+            (c, _, v) => c.DefaultAgent = v, false),
+
+        new("sync-launch", "Sync policy at launch: auto, prompt or never",
+            (c, _) => c.Sync.Launch,
+            (c, _, v) => c.Sync.Launch = v, false),
+
+        new("sync-exit", "Sync policy at exit: prompt, always or never",
+            (c, _) => c.Sync.Exit,
+            (c, _, v) => c.Sync.Exit = v, false),
+
+        new("sync-timeout", "Seconds a launch-time fetch may block before going offline",
+            (c, _) => c.Sync.NetworkTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            (c, _, v) => c.Sync.NetworkTimeoutSeconds = int.Parse(v, System.Globalization.CultureInfo.InvariantCulture),
+            false),
+
+        new("secrets-provider", "native, environment, 1password, bitwarden, vault or custom",
+            (c, _) => c.Secrets.Provider,
+            (c, _, v) => c.Secrets.Provider = v, false),
+
+        new("terminal", "Preferred terminal, or 'current' to reuse this one",
+            (c, _) => c.Terminal.Preferred,
+            (c, _, v) => c.Terminal.Preferred = v, false),
+
+        new("updates-source", "Release feed URL",
+            (c, _) => c.Updates.Source,
+            (c, _, v) => c.Updates.Source = v, false),
+
+        // Machine-local from here down: these describe this machine's layout and
+        // must never travel to another one (spec section 15).
+        new("clone-root", "Where new clones are placed on this machine",
+            (_, m) => m.DefaultCloneRoot,
+            (_, m, v) => m.DefaultCloneRoot = v, true),
+
+        new("discovery-roots", "Comma-separated directories scanned for repositories",
+            (_, m) => string.Join(", ", m.DiscoveryRoots),
+            (_, m, v) => m.DiscoveryRoots = v
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList(),
+            true),
+
+        new("agent-search-paths", "Comma-separated extra directories searched for agent executables",
+            (c, _) => string.Join(", ", c.AgentSearchPaths),
+            (c, _, v) => c.AgentSearchPaths = v
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList(),
+            false),
+    ];
+
+    internal static Entry? Find(string key) =>
+        All.FirstOrDefault(e => string.Equals(e.Key, key, StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>Lists every setting and its current value (spec section 77).</summary>
+[Description("List configuration settings and their current values.")]
+public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
+{
+    private readonly IConfigurationService _configuration;
+    private readonly IAnsiConsole _console;
+
+    public ConfigListCommand(IConfigurationService configuration, IAnsiConsole console)
+    {
+        _configuration = configuration;
+        _console = console;
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings)
+    {
+        var output = new CommandOutput(_console, settings);
+
+        var config = await _configuration.LoadConfigAsync().ConfigureAwait(false);
+        if (config.Failed)
+        {
+            return output.Fail(config);
+        }
+
+        var machine = await _configuration.LoadMachineAsync().ConfigureAwait(false);
+        if (machine.Failed)
+        {
+            return output.Fail(machine);
+        }
+
+        var values = ConfigKeys.All
+            .Select(e => new
+            {
+                key = e.Key,
+                // A workspace URL can carry an embedded credential, so values
+                // are redacted even when the user asked to see them.
+                value = SecretRedactor.Redact(e.Read(config.Value!, machine.Value!)),
+                machineLocal = e.IsMachineLocal,
+                description = e.Description,
+            })
+            .ToList();
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { settings = values });
+            return CommandOutput.Success();
+        }
+
+        var table = new Table().Border(TableBorder.Simple).BorderColor(Color.Grey);
+        table.AddColumn("Setting");
+        table.AddColumn("Value");
+        table.AddColumn(string.Empty);
+
+        foreach (var value in values)
+        {
+            table.AddRow(
+                Markup.Escape(value.key),
+                value.value.Length == 0 ? "[dim](unset)[/]" : Markup.Escape(value.value),
+                value.machineLocal ? "[dim]this machine[/]" : string.Empty);
+        }
+
+        output.Write(table);
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Reads one setting (spec section 77).</summary>
+[Description("Print one configuration value.")]
+public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
+{
+    private readonly IConfigurationService _configuration;
+    private readonly IAnsiConsole _console;
+
+    public ConfigGetCommand(IConfigurationService configuration, IAnsiConsole console)
+    {
+        _configuration = configuration;
+        _console = console;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandArgument(0, "<key>")]
+        [Description("Setting name, for example default-agent.")]
+        public string Key { get; init; } = string.Empty;
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    {
+        var output = new CommandOutput(_console, settings);
+
+        var entry = ConfigKeys.Find(settings.Key);
+        if (entry is null)
+        {
+            return output.Fail(UnknownKeyMessage(settings.Key), ExitCode.InvalidArguments);
+        }
+
+        var config = await _configuration.LoadConfigAsync().ConfigureAwait(false);
+        var machine = await _configuration.LoadMachineAsync().ConfigureAwait(false);
+
+        if (config.Failed || machine.Failed)
+        {
+            return output.Fail(config.Failed ? config : machine);
+        }
+
+        var value = SecretRedactor.Redact(entry.Read(config.Value!, machine.Value!));
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { key = entry.Key, value });
+        }
+        else
+        {
+            // Written raw so it can be captured by a script without markup.
+            Console.Out.WriteLine(value);
+        }
+
+        return CommandOutput.Success();
+    }
+
+    internal static string UnknownKeyMessage(string key) =>
+        $"'{key}' is not a known setting. Available: "
+        + string.Join(", ", ConfigKeys.All.Select(e => e.Key));
+}
+
+/// <summary>Writes one setting (spec section 77).</summary>
+[Description("Set one configuration value.")]
+public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
+{
+    private readonly IConfigurationService _configuration;
+    private readonly IAnsiConsole _console;
+
+    public ConfigSetCommand(IConfigurationService configuration, IAnsiConsole console)
+    {
+        _configuration = configuration;
+        _console = console;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandArgument(0, "<key>")]
+        [Description("Setting name, for example default-agent.")]
+        public string Key { get; init; } = string.Empty;
+
+        [CommandArgument(1, "<value>")]
+        [Description("New value.")]
+        public string Value { get; init; } = string.Empty;
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    {
+        var output = new CommandOutput(_console, settings);
+
+        var entry = ConfigKeys.Find(settings.Key);
+        if (entry is null)
+        {
+            return output.Fail(
+                ConfigGetCommand.UnknownKeyMessage(settings.Key), ExitCode.InvalidArguments);
+        }
+
+        var config = await _configuration.LoadConfigAsync().ConfigureAwait(false);
+        var machine = await _configuration.LoadMachineAsync().ConfigureAwait(false);
+
+        if (config.Failed || machine.Failed)
+        {
+            return output.Fail(config.Failed ? config : machine);
+        }
+
+        try
+        {
+            entry.Write(config.Value!, machine.Value!, settings.Value);
+        }
+        catch (FormatException)
+        {
+            // Only the numeric settings can fail here, and naming the setting
+            // is more use than a bare parse error.
+            return output.Fail(
+                $"'{settings.Value}' is not valid for {entry.Key}. {entry.Description}.",
+                ExitCode.InvalidArguments);
+        }
+
+        var save = entry.IsMachineLocal
+            ? await _configuration.SaveMachineAsync(machine.Value!).ConfigureAwait(false)
+            : await _configuration.SaveConfigAsync(config.Value!).ConfigureAwait(false);
+
+        if (save.Failed)
+        {
+            return output.Fail(save);
+        }
+
+        output.WriteLine($"[green]Set[/] {Markup.Escape(entry.Key)} "
+            + $"[dim]= {Markup.Escape(SecretRedactor.Redact(settings.Value))}[/]");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Opens the config file in the platform's editor (spec section 77).</summary>
+[Description("Print the path of the configuration file, or open it.")]
+public sealed class ConfigEditCommand : AsyncCommand<ConfigEditCommand.Settings>
+{
+    private readonly IPlatformPaths _paths;
+    private readonly IApplicationLauncher _launcher;
+    private readonly IAnsiConsole _console;
+
+    public ConfigEditCommand(
+        IPlatformPaths paths,
+        IApplicationLauncher launcher,
+        IAnsiConsole console)
+    {
+        _paths = paths;
+        _launcher = launcher;
+        _console = console;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandOption("--machine")]
+        [Description("Open this machine's local configuration instead.")]
+        public bool Machine { get; init; }
+
+        [CommandOption("--path-only")]
+        [Description("Print the path and do not open anything.")]
+        public bool PathOnly { get; init; }
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    {
+        var output = new CommandOutput(_console, settings);
+
+        var path = settings.Machine ? _paths.Paths.MachinesFile : _paths.Paths.ConfigFile;
+
+        if (settings.PathOnly || output.IsJson)
+        {
+            if (output.IsJson)
+            {
+                output.WriteJson(new { path });
+            }
+            else
+            {
+                Console.Out.WriteLine(path);
+            }
+
+            return CommandOutput.Success();
+        }
+
+        if (!File.Exists(path))
+        {
+            return output.Fail(
+                $"'{path}' does not exist yet. Run: loadout setup",
+                ExitCode.ConfigurationInvalid);
+        }
+
+        var result = await _launcher.OpenInFileManagerAsync(path).ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            // Falling back to printing the path keeps the command useful on a
+            // headless machine, where there is nothing to open it with.
+            output.WriteLine($"[yellow]Could not open an editor:[/] {Markup.Escape(result.Error!)}");
+            Console.Out.WriteLine(path);
+        }
+
+        return CommandOutput.Success();
+    }
+}

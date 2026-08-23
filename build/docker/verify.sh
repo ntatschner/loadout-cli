@@ -67,21 +67,21 @@ dotnet test \
 heading 'Archive'
 pwsh -NoProfile -File ./build/package.ps1 -Runtime "$runtime" -Version "$version"
 
-archive="artifacts/agentctl-${version}-${runtime}.tar.gz"
+archive="artifacts/loadout-${version}-${runtime}.tar.gz"
 # Checked from inside artifacts/: a checksum file names the archive without a
 # directory, and sha256sum resolves that against the working directory.
 ( cd artifacts && sha256sum -c "$(basename "$archive").sha256" )
 
 # The executable bit is the one property that silently ruins a Unix release.
-tar -tvzf "$archive" | grep -E '^-rwx.*agentctl$' > /dev/null \
-    || { echo 'agentctl is not executable inside the archive' >&2; exit 1; }
+tar -tvzf "$archive" | grep -E '^-rwx.*loadout$' > /dev/null \
+    || { echo 'loadout is not executable inside the archive' >&2; exit 1; }
 
 heading 'Installing from the archive'
 rm -rf /tmp/from-archive && mkdir -p /tmp/from-archive
 tar -xzf "$archive" -C /tmp/from-archive
-/tmp/from-archive/agentctl --version
-/tmp/from-archive/agentctl doctor --json > /tmp/doctor.json
-/tmp/from-archive/agentctl project list --json > /dev/null
+/tmp/from-archive/loadout --version
+/tmp/from-archive/loadout doctor --json > /tmp/doctor.json
+/tmp/from-archive/loadout project list --json > /dev/null
 
 # Checked with grep rather than a JSON parser, so the image needs nothing
 # beyond what building the project already requires.
@@ -155,7 +155,7 @@ rpm=$(ls artifacts/*.rpm)
 ( cd artifacts && sha256sum -c "$(basename "$deb").sha256" )
 ( cd artifacts && sha256sum -c "$(basename "$rpm").sha256" )
 
-dpkg-deb -c "$deb" | grep -q './usr/bin/agentctl' \
+dpkg-deb -c "$deb" | grep -q './usr/bin/loadout' \
     || { echo 'the .deb puts nothing on PATH' >&2; exit 1; }
 
 if dpkg-deb -c "$deb" | grep -qE '\.(pdb|xml)$'; then
@@ -168,17 +168,17 @@ dpkg -i "$deb"
 
 # Run it by name, not by path: the point of installing a package is that the
 # command is simply there.
-agentctl --version
-agentctl doctor --json > /dev/null
+loadout --version
+loadout doctor --json > /dev/null
 
 heading 'Removing the package'
-dpkg -r agentctl
+dpkg -r loadout
 
 # The file is checked, not "command -v": the shell caches resolved paths, so it
 # would happily report a command that has just been deleted.
-if [ -e /usr/bin/agentctl ] || [ -e /usr/lib/agentctl ]; then
+if [ -e /usr/bin/loadout ] || [ -e /usr/lib/loadout ]; then
     echo 'the package left files behind after removal' >&2
-    ls -la /usr/bin/agentctl /usr/lib/agentctl 2>&1 || true
+    ls -la /usr/bin/loadout /usr/lib/loadout 2>&1 || true
     exit 1
 fi
 

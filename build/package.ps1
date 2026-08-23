@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Publishes agentctl for one runtime identifier and packages it for release.
+    Publishes loadout for one runtime identifier and packages it for release.
 
 .DESCRIPTION
     Written in PowerShell because pwsh runs on all three Tier-1 platforms, so
@@ -35,7 +35,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repositoryRoot 'src/AgentWorkspace.Cli/AgentWorkspace.Cli.csproj'
+$project = Join-Path $repositoryRoot 'src/Loadout.Cli/Loadout.Cli.csproj'
 $staging = Join-Path $repositoryRoot "artifacts/staging/$Runtime"
 $output = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     $OutputDirectory
@@ -72,7 +72,7 @@ Copy-Item (Join-Path $repositoryRoot 'README.md') $staging -Force
 $license = Join-Path $repositoryRoot 'LICENSE'
 if (Test-Path $license) { Copy-Item $license $staging -Force }
 
-$stem = "agentctl-$Version-$Runtime"
+$stem = "loadout-$Version-$Runtime"
 
 if ($Runtime.StartsWith('win-')) {
     $archive = Join-Path $output "$stem.zip"
@@ -92,14 +92,14 @@ else {
     if ($IsWindows) {
         # GNU tar can stamp a mode onto every entry. The README becoming
         # executable is cosmetically odd and entirely harmless; a non-executable
-        # agentctl is neither. The tar shipped in Windows itself is bsdtar,
+        # loadout is neither. The tar shipped in Windows itself is bsdtar,
         # which rejects the option, so this needs the GNU tar from Git.
         $tarArguments += '--mode=0755'
     }
     else {
         # On a real Unix host the mode is genuine, so it is set precisely and
         # the README keeps its ordinary permissions.
-        chmod 0755 (Join-Path $staging 'agentctl')
+        chmod 0755 (Join-Path $staging 'loadout')
         if ($LASTEXITCODE -ne 0) { throw "chmod failed for $Runtime." }
     }
 

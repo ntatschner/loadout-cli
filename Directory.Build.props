@@ -23,7 +23,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
 
-    <Product>Agent Workspace Launcher</Product>
+    <Product>Loadout</Product>
     <Company>TheCodeSaiyan Ltd</Company>
     <Copyright>Copyright (c) 2026 TheCodeSaiyan Ltd</Copyright>
     <Version>0.1.0</Version>

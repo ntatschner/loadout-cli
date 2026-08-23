@@ -1,0 +1,276 @@
+using Loadout.Agents;
+using Loadout.Cli.Commands;
+using Loadout.Cli.Infrastructure;
+using Loadout.Core;
+using Loadout.Models;
+using Loadout.Platform;
+using Loadout.Platform.Abstractions;
+using Loadout.Tui;
+using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
+using Spectre.Console.Cli;
+
+namespace Loadout.Cli;
+
+/// <summary>Composition root and entry point for loadout.</summary>
+public static class Program
+{
+    /// <summary>
+    /// Command names that must not be mistaken for a project name when they
+    /// appear first. Everything else in first position is treated as a project,
+    /// which is what makes "loadout starstats" work (spec section 35).
+    /// </summary>
+    private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "doctor", "status", "list", "here", "launch", "project", "workspace",
+        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config", "desktop", "update", "backup", "memory", "rules",
+        "--help", "-h", "--version",
+    };
+
+    public static async Task<int> Main(string[] args)
+    {
+        // Split before the parser sees anything: spec section 36 forbids the
+        // launcher from parsing or altering arguments after a bare separator.
+        var (launcherArgs, passthrough) = PassthroughArguments.Split(args);
+
+        var services = new ServiceCollection();
+
+        try
+        {
+            services.AddPlatformServices();
+        }
+        catch (PlatformNotSupportedException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return (int)ExitCode.GeneralFailure;
+        }
+
+        services
+            .AddCoreServices()
+            .AddAgentServices();
+
+        services.AddSingleton(AnsiConsole.Console);
+        services.AddSingleton(new PassthroughArguments(passthrough));
+        services.AddSingleton<ILauncherTui, LauncherTui>();
+        services.AddSingleton<ISetupWizard, SetupWizard>();
+        services.AddSingleton<WorkspaceSavePrompt>();
+
+        var registrar = new TypeRegistrar(services);
+
+        // Directories are created before any command runs so no command has to
+        // guess whether its storage exists (spec section 16).
+        var provider = services.BuildServiceProvider();
+        var paths = provider.GetRequiredService<IPlatformPaths>();
+
+        try
+        {
+            paths.EnsureDirectoriesExist();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A locked-down or redirected profile is a real situation on a
+            // managed machine, and the user needs to be told which path failed
+            // rather than handed a stack trace.
+            Console.Error.WriteLine(
+                $"The launcher could not create its storage under '{paths.Paths.Config}' "
+                + $"or '{paths.Paths.State}': {ex.Message}");
+
+            return (int)ExitCode.ConfigurationInvalid;
+        }
+
+        // No arguments means the interactive launcher, which is the same
+        // entry point the desktop shortcut uses (spec sections 17 and 21).
+        if (launcherArgs.Length == 0)
+        {
+            return await RunInteractiveAsync(provider).ConfigureAwait(false);
+        }
+
+        // Read straight from argv because the exception handler runs outside any
+        // command, so it never sees the parsed settings.
+        var showFullExceptions = launcherArgs.Contains("--debug", StringComparer.Ordinal);
+
+        var app = new CommandApp(registrar);
+        app.Configure(config => Configure(config, showFullExceptions));
+
+        return await app.RunAsync(Rewrite(launcherArgs)).ConfigureAwait(false);
+    }
+
+    private static async Task<int> RunInteractiveAsync(ServiceProvider provider)
+    {
+        // A redirected stream means a pipe, a script or a CI job, where spec
+        // section 37 says no menu may appear. Printing usage is the honest
+        // alternative to hanging on a prompt nobody can answer.
+        if (Console.IsOutputRedirected || Console.IsInputRedirected)
+        {
+            Console.Error.WriteLine(
+                "loadout was run with no arguments and no interactive terminal. "
+                + "Run 'loadout --help' for the available commands.");
+
+            return (int)ExitCode.InvalidArguments;
+        }
+
+        // A machine that has never been configured gets the wizard rather than
+        // an empty project list, which would leave a new user with nothing to
+        // do and no hint about what to do next (spec section 61).
+        var wizard = provider.GetRequiredService<ISetupWizard>();
+
+        if (!wizard.IsConfigured())
+        {
+            return await wizard.RunAsync(new SetupRequest()).ConfigureAwait(false);
+        }
+
+        return await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Turns "loadout starstats" into "loadout launch starstats".
+    /// <para>
+    /// Done here rather than with a default command so that a genuine typo
+    /// still produces a clear "no project matches" error, and so the command
+    /// table stays the single source of truth for what a command name is.
+    /// </para>
+    /// </summary>
+    internal static string[] Rewrite(string[] args)
+    {
+        if (args.Length == 0)
+        {
+            return args;
+        }
+
+        var first = args[0];
+
+        // An option in first position belongs to no command; leave it alone
+        // and let the parser produce its own message.
+        if (first.StartsWith('-') || KnownCommands.Contains(first))
+        {
+            return args;
+        }
+
+        return ["launch", .. args];
+    }
+
+    private static void Configure(IConfigurator config, bool showFullExceptions)
+    {
+        config.SetApplicationName("loadout");
+
+        // Without this, --version is rejected as an unknown option. It is the
+        // first thing anyone types against an unfamiliar binary, and the first
+        // thing a bug report asks for.
+        config.SetApplicationVersion(
+            typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
+
+        config.UseStrictParsing();
+
+        // Exceptions are shown in full only when asked for. A stack trace is
+        // noise to someone whose workspace simply is not reachable, and it is
+        // exactly what is needed when the failure is a defect.
+        config.SetExceptionHandler((ex, _) =>
+        {
+            Console.Error.WriteLine(Core.Security.SecretRedactor.Redact(
+                showFullExceptions ? ex.ToString() : ex.Message));
+
+            if (!showFullExceptions)
+            {
+                Console.Error.WriteLine("Run again with --debug for the full detail.");
+            }
+
+            return (int)ExitCode.GeneralFailure;
+        });
+
+        config.AddCommand<SetupCommand>("setup");
+        config.AddCommand<DoctorCommand>("doctor");
+        config.AddCommand<StatusCommand>("status");
+        config.AddCommand<LaunchCommand>("launch");
+        config.AddCommand<HereCommand>("here");
+        config.AddCommand<CompletionCommand>("completion");
+        config.AddCommand<HandoffCreateCommand>("handoff");
+        config.AddCommand<ProtectCommand>("protect");
+        config.AddCommand<DesktopCommand>("desktop");
+        config.AddCommand<UpdateCommand>("update");
+        config.AddCommand<MigrateCommand>("migrate");
+
+        config.AddBranch("backup", backup =>
+        {
+            backup.SetDescription("Inspect and restore snapshots taken before mutating operations.");
+            backup.AddCommand<BackupListCommand>("list");
+            backup.AddCommand<BackupRestoreCommand>("restore");
+        });
+
+        config.AddBranch("memory", memory =>
+        {
+            memory.SetDescription("Record and check the durable facts about a project.");
+            memory.AddCommand<MemoryListCommand>("list");
+            memory.AddCommand<MemoryWriteCommand>("write");
+            memory.AddCommand<MemoryAuditCommand>("audit");
+            memory.AddCommand<MemoryReindexCommand>("reindex");
+            memory.AddCommand<MemoryImportCommand>("import");
+        });
+
+        config.AddBranch("rules", rules =>
+        {
+            rules.SetDescription("Inspect the path-scoped instruction rules and what they cost.");
+            rules.AddCommand<RulesListCommand>("list");
+            rules.AddCommand<RulesBudgetCommand>("budget");
+            rules.AddCommand<RulesAuditCommand>("audit");
+            rules.AddCommand<RulesSplitCommand>("split");
+        });
+
+        config.AddBranch("config", cfg =>
+        {
+            cfg.SetDescription("Read and write launcher settings.");
+            cfg.AddCommand<ConfigListCommand>("list");
+            cfg.AddCommand<ConfigGetCommand>("get");
+            cfg.AddCommand<ConfigSetCommand>("set");
+            cfg.AddCommand<ConfigEditCommand>("edit");
+        });
+
+        config.AddBranch("repo", repo =>
+        {
+            repo.SetDescription("Inspect repository compliance.");
+            repo.AddCommand<RepoCheckCommand>("check");
+        });
+
+        config.AddBranch("profile", profile =>
+        {
+            profile.SetDescription("Inspect context profiles.");
+            profile.AddCommand<ProfileListCommand>("list");
+        });
+
+        // "list" is an alias for the most common listing, because typing
+        // "project list" for the default view gets old (spec section 35).
+        config.AddCommand<ProjectListCommand>("list");
+
+        config.AddBranch("project", project =>
+        {
+            project.SetDescription("Register, list and inspect projects.");
+            project.AddCommand<ProjectListCommand>("list");
+            project.AddCommand<ProjectAddCommand>("add");
+            project.AddCommand<ProjectRemoveCommand>("remove");
+            project.AddCommand<ProjectDiscoverCommand>("discover");
+            project.AddCommand<ProjectOpenCommand>("open");
+            project.AddCommand<WorktreeListCommand>("worktrees");
+            project.AddCommand<ProjectCloneCommand>("clone");
+            project.AddCommand<ProjectRelocateCommand>("relocate");
+            project.AddCommand<ProjectShowCommand>("show");
+            project.AddCommand<ProjectSurveyCommand>("survey");
+            project.AddCommand<ProjectLinkCommand>("link");
+        });
+
+        config.AddBranch("workspace", workspace =>
+        {
+            workspace.SetDescription("Manage the central workspace clone.");
+            workspace.AddCommand<WorkspaceStatusCommand>("status");
+            workspace.AddCommand<WorkspaceSyncCommand>("sync");
+            workspace.AddCommand<WorkspaceSaveCommand>("save");
+            workspace.AddCommand<WorkspaceOpenCommand>("open");
+        });
+
+        config.AddBranch("secret", secret =>
+        {
+            secret.SetDescription("Store and check secrets in the platform credential store.");
+            secret.AddCommand<SecretSetCommand>("set");
+            secret.AddCommand<SecretTestCommand>("test");
+            secret.AddCommand<SecretRemoveCommand>("remove");
+        });
+    }
+}

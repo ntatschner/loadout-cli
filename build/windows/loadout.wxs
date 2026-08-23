@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  The Windows installer (spec sections 18 to 20).
+
+  Per-user by default, and that is a deliberate choice rather than a default
+  taken. loadout manages one person's projects, credentials and workspace
+  clone; installing it for the whole machine would put a tool that reads a
+  user's Keychain-equivalent into a location every account shares, and would
+  demand an elevation prompt for something that needs none.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <Package Name="Loadout"
+           Manufacturer="Loadout"
+           Version="$(var.Version)"
+           UpgradeCode="b3cb085d-bc14-5901-ad7d-a4f6e3bae121"
+           Scope="perUser"
+           Compressed="yes">
+
+    <!--
+      Older versions are removed before the new files are laid down. The
+      alternative, removing afterwards, deletes files the new version just
+      wrote when the two share a name, which is every file here.
+    -->
+    <!--
+      A new upgrade code, because this is a different product identity from the
+      one that shipped under the previous name. An installation of that one is
+      not upgraded in place: it is a separate entry that can be removed on its
+      own terms, which is honest about what happened rather than pretending the
+      two were always the same thing.
+    -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of Loadout is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!--
+      Under Programs, not beside the launcher's own data directory. They share a
+      parent otherwise, and an uninstall that tidied up its install root a
+      little too enthusiastically would take somebody's workspace clone,
+      credentials mapping and backup sets with it. Keeping the two apart means
+      that mistake is not available to make.
+    -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="loadout">
+          <Directory Id="BINFOLDER" Name="bin" />
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="loadout" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="loadout" Level="1">
+      <ComponentGroupRef Id="Payload" />
+      <ComponentRef Id="PathEntry" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!--
+      The published output is harvested rather than listed. A self-contained
+      .NET publish is a hundred-odd files whose names change with the runtime
+      version, and a hand-written manifest would be wrong by the next upgrade.
+    -->
+    <ComponentGroup Id="Payload" Directory="BINFOLDER">
+      <Files Include="$(var.PublishDir)\**" />
+    </ComponentGroup>
+
+    <Component Id="PathEntry" Directory="BINFOLDER" Guid="51beb1d8-bbf7-595c-b97c-e02701dcde51">
+      <!--
+        On PATH because a launcher nobody can type the name of is not much use.
+        Per-user, matching the install scope, so it needs no elevation and
+        cannot affect anyone else's shell.
+      -->
+      <Environment Id="AgentctlPath"
+                   Name="PATH"
+                   Value="[BINFOLDER]"
+                   Permanent="no"
+                   Part="last"
+                   Action="set"
+                   System="no" />
+
+      <RegistryValue Root="HKCU"
+                     Key="Software\Loadout"
+                     Name="InstalledPath"
+                     Type="string"
+                     Value="[BINFOLDER]"
+                     KeyPath="yes" />
+    </Component>
+
+    <Component Id="StartMenuShortcut"
+               Directory="ApplicationProgramsFolder"
+               Guid="9c10030a-eabf-5fd1-9ba7-4f87f2f3263f">
+
+      <Shortcut Id="AgentctlShortcut"
+                Name="loadout"
+                Description="Loadout"
+                Target="[BINFOLDER]loadout.exe"
+                WorkingDirectory="BINFOLDER" />
+
+      <RemoveFolder Id="RemoveProgramsFolder" On="uninstall" />
+
+      <RegistryValue Root="HKCU"
+                     Key="Software\Loadout"
+                     Name="StartMenu"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+  </Package>
+</Wix>
