@@ -140,7 +140,7 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `loadout project clone\|relocate <project>` | Get a registered project onto this machine |
 | `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `loadout project link [project]` | Record inside a repository which project it belongs to |
-| `loadout config list\|get\|set\|edit` | Read and write launcher settings |
+| `loadout config list\|get\|set\|edit` | Read and write launcher settings, and say where they live |
 | `loadout workspace status\|sync\|save\|open` | Manage the central workspace clone |
 | `loadout desktop` | Install the Start Menu or `.desktop` entry |
 | `loadout update` | Check the release source and install a newer build |
@@ -209,6 +209,37 @@ never written to by an agent.
 Secret references resolve through the platform keystore during preflight and
 reach the child process only. The reference is what gets committed; the value
 never is, and it is never written to a log or a diagnostic report.
+
+## The launcher
+
+Running `loadout` with no arguments opens the selector. It is a loop: the
+repository you are standing in is lifted to the top, backing out of a project
+returns to the list rather than quitting, and a launch is what ends the session.
+
+Selecting a project shows what the session will start with — branch, whether the
+tree is clean, how much instruction text loads whatever the task, how many rules
+stay on demand, how many memory topics exist — and anything wrong with it: agent
+files committed to the repository, memory recorded where nothing reads it, an
+oversized instruction layer, no pre-commit protection in this clone. "Explain the
+warnings" names the command that fixes each one rather than running it, because
+every one of them changes files.
+
+Two entries sit below the projects. **Add a project** scans the configured
+folders or takes a path, registers what you pick, and offers to move any agent
+files it finds — the same flow first-run setup uses, because registering a
+project a fortnight later is the same job. **Settings and paths** shows the
+central workspace repository, the local clone, both configuration files and what
+they say, and lets you change the workspace repository, where clones are placed,
+which folders are scanned and the default agent.
+
+Changing the workspace repository moves any existing clone aside rather than
+reusing or deleting it. The clone belongs to the old repository, so a sync
+against a new remote would either fail or, worse, appear to work against the
+wrong history.
+
+The launcher is driven end to end in the tests with a scripted keyboard, which
+is how its worst defect was found: backing out of a project used to quit the
+whole thing.
 
 ## Instructions that scale
 

@@ -36,12 +36,16 @@ public sealed class LauncherTui : ILauncherTui
     private const string Quit = "Quit";
     private const string Back = "Back";
     private const string Settings = "Settings and paths";
+    private const string AddProject = "Add a project";
 
     /// <summary>
     /// Stands in for the settings entry so the list can hold one thing that is
     /// not a project without the selection returning two kinds of answer.
     /// </summary>
     private static readonly ProjectResolution SettingsSentinel =
+        new(new Models.Projects.ProjectRegistryEntry(), null, null, 0, false);
+
+    private static readonly ProjectResolution AddSentinel =
         new(new Models.Projects.ProjectRegistryEntry(), null, null, 0, false);
 
     private readonly IAnsiConsole _console;
@@ -56,6 +60,7 @@ public sealed class LauncherTui : ILauncherTui
     private readonly IProjectOverviewService _overviews;
     private readonly IApplicationLauncher _opener;
     private readonly IPlatformPaths _paths;
+    private readonly IProjectOnboarding _onboarding;
 
     public LauncherTui(
         IAnsiConsole console,
@@ -69,7 +74,8 @@ public sealed class LauncherTui : ILauncherTui
         IContextCompiler compiler,
         IProjectOverviewService overviews,
         IApplicationLauncher opener,
-        IPlatformPaths paths)
+        IPlatformPaths paths,
+        IProjectOnboarding onboarding)
     {
         _console = console;
         _projects = projects;
@@ -83,6 +89,7 @@ public sealed class LauncherTui : ILauncherTui
         _overviews = overviews;
         _opener = opener;
         _paths = paths;
+        _onboarding = onboarding;
     }
 
     /// <inheritdoc />
@@ -119,12 +126,22 @@ public sealed class LauncherTui : ILauncherTui
 
             if (projects.Count == 0)
             {
+                // Telling somebody the command to run is not the same as
+                // helping them: the launcher is already open, already knows
+                // where to look, and can simply ask.
                 _console.MarkupLine("[yellow]No projects are registered yet.[/]");
-                _console.MarkupLine("[dim]Register one with:[/] loadout project add <path>");
-                _console.MarkupLine(
-                    "[dim]Or find existing repositories with:[/] loadout project discover");
+                _console.WriteLine();
 
-                return (int)ExitCode.Success;
+                await AddProjectsAsync(ct).ConfigureAwait(false);
+
+                var added = await _projects.ListAsync(ct).ConfigureAwait(false);
+
+                if (added.Failed || added.Value!.Count == 0)
+                {
+                    return (int)ExitCode.Success;
+                }
+
+                continue;
             }
 
             var selected = SelectProject(projects, here);
@@ -136,7 +153,19 @@ public sealed class LauncherTui : ILauncherTui
 
             if (ReferenceEquals(selected, SettingsSentinel))
             {
-                ShowSettings(config);
+                var reloaded = await ShowSettingsAsync(config, ct).ConfigureAwait(false);
+
+                if (reloaded is not null)
+                {
+                    config = reloaded;
+                }
+
+                continue;
+            }
+
+            if (ReferenceEquals(selected, AddSentinel))
+            {
+                await AddProjectsAsync(ct).ConfigureAwait(false);
 
                 continue;
             }
@@ -155,55 +184,346 @@ public sealed class LauncherTui : ILauncherTui
     }
 
     /// <summary>
-    /// Shows where configuration lives and what it currently says.
-    /// <para>
-    /// Here because the question "where is any of this kept" had no answer
-    /// inside the launcher at all: the paths were only visible by running
-    /// doctor and reading carefully, and the settings only by knowing that a
-    /// config command existed. A tool that hides its own configuration is
-    /// asking people to take it on faith.
-    /// </para>
-    /// <para>
-    /// Read-only. Changing a setting from a menu means validating input in a
-    /// prompt, and the command that already does that is named at the bottom.
-    /// </para>
+    /// Brings a repository in, either by scanning the configured folders or by
+    /// being told where one is.
     /// </summary>
-    private void ShowSettings(LauncherConfig config)
+    private async Task AddProjectsAsync(CancellationToken ct)
     {
         _console.WriteLine();
-        _console.Write(new Rule("[bold]Settings[/]").LeftJustified());
 
+        var how = _console.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Where should it look?")
+                .AddChoices("Scan the folders I have configured", "I will give it a path", Back));
+
+        if (how == Back)
+        {
+            return;
+        }
+
+        if (how.StartsWith("Scan", StringComparison.Ordinal))
+        {
+            await _onboarding.AddAsync(new OnboardingOptions(), ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        var path = _console.Prompt(
+            new TextPrompt<string>("Path to the repository:").AllowEmpty());
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        await _onboarding.AddPathAsync(path, new OnboardingOptions(), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shows where configuration lives, what it says, and lets the answers be
+    /// changed.
+    /// <para>
+    /// Here because the question "where is any of this kept, and how do I point
+    /// it somewhere else" had no answer inside the launcher: the paths were
+    /// visible only by running doctor and reading carefully, and the settings
+    /// only by knowing a config command existed. A tool that hides its own
+    /// configuration is asking to be taken on faith.
+    /// </para>
+    /// <para>
+    /// Returns the reloaded configuration when something changed, so the rest
+    /// of the session is not working from a stale copy.
+    /// </para>
+    /// </summary>
+    private async Task<LauncherConfig?> ShowSettingsAsync(LauncherConfig config, CancellationToken ct)
+    {
+        var changed = false;
+
+        while (true)
+        {
+            _console.WriteLine();
+            _console.Write(new Rule("[bold]Settings[/]").LeftJustified());
+
+            WriteSettings(config);
+
+            _console.WriteLine();
+
+            var choice = _console.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("Change anything?")
+                    .AddChoices(
+                        "Central workspace repository",
+                        "Where new clones are placed",
+                        "Folders scanned for repositories",
+                        "Default agent",
+                        "Open the config file",
+                        Back));
+
+            if (choice == Back)
+            {
+                return changed ? config : null;
+            }
+
+            if (choice == "Open the config file")
+            {
+                await _opener
+                    .OpenInFileManagerAsync(_paths.Paths.Config, ct)
+                    .ConfigureAwait(false);
+
+                continue;
+            }
+
+            var edited = choice switch
+            {
+                "Central workspace repository" => await ChangeWorkspaceAsync(config, ct)
+                    .ConfigureAwait(false),
+
+                "Where new clones are placed" => await ChangeMachineValueAsync(
+                    "clone-root",
+                    "Where should new clones go?",
+                    ct).ConfigureAwait(false),
+
+                "Folders scanned for repositories" => await ChangeMachineValueAsync(
+                    "discovery-roots",
+                    "Which folders should be scanned? [dim](comma separated)[/]",
+                    ct).ConfigureAwait(false),
+
+                _ => await ChangeAgentAsync(config, ct).ConfigureAwait(false),
+            };
+
+            if (!edited)
+            {
+                continue;
+            }
+
+            changed = true;
+
+            var reloaded = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
+
+            if (reloaded.Succeeded)
+            {
+                config = reloaded.Value!;
+            }
+        }
+    }
+
+    private void WriteSettings(LauncherConfig config)
+    {
         var table = new Table().Border(TableBorder.None).HideHeaders();
         table.AddColumn(new TableColumn(string.Empty).PadRight(2));
         table.AddColumn(string.Empty);
 
-        table.AddRow("[dim]Workspace remote[/]", string.IsNullOrWhiteSpace(config.Workspace.Remote)
+        table.AddRow("[dim]Workspace repository[/]", string.IsNullOrWhiteSpace(config.Workspace.Remote)
             ? "[yellow]not set[/]"
             : Markup.Escape(config.Workspace.Remote));
 
-        table.AddRow("[dim]Workspace branch[/]", Markup.Escape(config.Workspace.Branch));
-        table.AddRow("[dim]Local clone[/]", Markup.Escape(_workspace.LocalPath));
+        table.AddRow("[dim]Branch[/]", Markup.Escape(config.Workspace.Branch));
+
+        table.AddRow("[dim]Local clone[/]", _workspace.IsCloned()
+            ? Markup.Escape(_workspace.LocalPath)
+            : $"[yellow]not cloned[/]  [dim]{Markup.Escape(_workspace.LocalPath)}[/]");
+
         table.AddRow("[dim]Default agent[/]", Markup.Escape(config.DefaultAgent));
         table.AddRow("[dim]Sync at launch[/]", Markup.Escape(config.Sync.Launch));
         table.AddRow("[dim]Sync at exit[/]", Markup.Escape(config.Sync.Exit));
         table.AddRow("[dim]Secrets[/]", Markup.Escape(config.Secrets.Provider));
 
         table.AddRow(
-            "[dim]Shared file[/]",
+            "[dim]Shared settings[/]",
             Markup.Escape(Path.Combine(_paths.Paths.Config, "config.yaml")));
 
         table.AddRow(
-            "[dim]Machine file[/]",
+            "[dim]This machine[/]",
             Markup.Escape(Path.Combine(_paths.Paths.State, "machines.yaml")));
 
         _console.Write(table);
+    }
+
+    /// <summary>
+    /// Points the launcher at a different central workspace.
+    /// <para>
+    /// The dangerous half is the clone that already exists. Changing the remote
+    /// leaves a directory full of another repository's projects, and the next
+    /// sync would either fail or, worse, appear to work against the wrong
+    /// history. The old clone is therefore moved aside rather than reused or
+    /// deleted: nothing is lost, and the new remote starts from nothing.
+    /// </para>
+    /// </summary>
+    private async Task<bool> ChangeWorkspaceAsync(LauncherConfig config, CancellationToken ct)
+    {
+        var current = config.Workspace.Remote;
 
         _console.WriteLine();
-        _console.MarkupLine("[dim]See everything:[/]  loadout config list");
-        _console.MarkupLine("[dim]What one means:[/]  loadout config get <setting> --explain");
-        _console.MarkupLine("[dim]Change one:[/]      loadout config set <setting> <value>");
-        _console.MarkupLine("[dim]Edit the file:[/]   loadout config edit");
+        _console.MarkupLine(
+            "[dim]The private Git repository holding your projects, instructions and memory.[/]");
+
+        var remote = _console.Prompt(
+            new TextPrompt<string>("Repository URL:")
+                .DefaultValue(current ?? string.Empty)
+                .AllowEmpty());
+
+        if (string.IsNullOrWhiteSpace(remote) || remote == current)
+        {
+            return false;
+        }
+
+        if (_workspace.IsCloned())
+        {
+            _console.WriteLine();
+            _console.MarkupLine(
+                $"[yellow]A clone of the current workspace is already at "
+                + $"{Markup.Escape(_workspace.LocalPath)}.[/]");
+
+            _console.MarkupLine(
+                "[dim]It belongs to the old repository, so it is moved aside rather than "
+                + "reused. Nothing in it is deleted.[/]");
+
+            if (!_console.Confirm("Continue?", defaultValue: false))
+            {
+                return false;
+            }
+
+            var moved = MoveCloneAside();
+
+            if (moved is null)
+            {
+                _console.MarkupLine(
+                    "[red]The existing clone could not be moved, so the remote was left "
+                    + "unchanged.[/]");
+
+                return false;
+            }
+
+            _console.MarkupLine($"[dim]Moved to {Markup.Escape(moved)}[/]");
+        }
+
+        config.Workspace.Remote = remote;
+
+        var saved = await _configuration.SaveConfigAsync(config, ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+
+            return false;
+        }
+
+        _console.MarkupLine("[green]Saved.[/] [dim]Fetch it with:[/] loadout workspace sync");
+
+        return true;
+    }
+
+    /// <summary>
+    /// Renames the existing clone out of the way, returning where it went.
+    /// <para>
+    /// A timestamp rather than a fixed name, so doing this twice does not
+    /// overwrite the first one.
+    /// </para>
+    /// </summary>
+    private string? MoveCloneAside()
+    {
+        var destination = _workspace.LocalPath + ".previous-"
+            + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+
+        try
+        {
+            Directory.Move(_workspace.LocalPath, destination);
+
+            return destination;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private async Task<bool> ChangeAgentAsync(LauncherConfig config, CancellationToken ct)
+    {
+        var names = _agents.Adapters.Select(a => a.Name).ToList();
+
+        if (names.Count == 0)
+        {
+            return false;
+        }
+
+        var chosen = _console.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Which agent should a project use when it names none?")
+                .AddChoices(names));
+
+        if (chosen == config.DefaultAgent)
+        {
+            return false;
+        }
+
+        config.DefaultAgent = chosen;
+
+        var saved = await _configuration.SaveConfigAsync(config, ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Edits one of the machine-local settings, which describe this machine's
+    /// layout and never travel to another one (spec section 15).
+    /// </summary>
+    private async Task<bool> ChangeMachineValueAsync(
+        string key,
+        string question,
+        CancellationToken ct)
+    {
+        var machine = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
+
+        if (machine.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(machine.Error!)}[/]");
+
+            return false;
+        }
+
+        var current = key == "clone-root"
+            ? machine.Value!.DefaultCloneRoot
+            : string.Join(", ", machine.Value!.DiscoveryRoots);
+
         _console.WriteLine();
+
+        var answer = _console.Prompt(
+            new TextPrompt<string>(question).DefaultValue(current ?? string.Empty).AllowEmpty());
+
+        if (string.IsNullOrWhiteSpace(answer) || answer == current)
+        {
+            return false;
+        }
+
+        if (key == "clone-root")
+        {
+            machine.Value!.DefaultCloneRoot = answer.Trim();
+        }
+        else
+        {
+            machine.Value!.DiscoveryRoots = answer
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+        }
+
+        var saved = await _configuration.SaveMachineAsync(machine.Value!, ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+
+            return false;
+        }
+
+        _console.MarkupLine("[green]Saved.[/]");
+
+        return true;
     }
 
     /// <summary>
@@ -259,6 +579,7 @@ public sealed class LauncherTui : ILauncherTui
             .Select(project => FormatProject(project, here))
             .ToList();
 
+        choices.Add(AddProject);
         choices.Add(Settings);
         choices.Add(Quit);
 
@@ -274,12 +595,13 @@ public sealed class LauncherTui : ILauncherTui
 
         var answer = _console.Prompt(prompt);
 
-        if (answer == Quit)
+        return answer switch
         {
-            return null;
-        }
-
-        return answer == Settings ? SettingsSentinel : ordered[choices.IndexOf(answer)];
+            Quit => null,
+            Settings => SettingsSentinel,
+            AddProject => AddSentinel,
+            _ => ordered[choices.IndexOf(answer)],
+        };
     }
 
     internal static List<ProjectResolution> Order(

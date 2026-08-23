@@ -51,6 +51,7 @@ public static class Program
 
         services.AddSingleton(AnsiConsole.Console);
         services.AddSingleton(new PassthroughArguments(passthrough));
+        services.AddSingleton<IProjectOnboarding, ProjectOnboarding>();
         services.AddSingleton<ILauncherTui, LauncherTui>();
         services.AddSingleton<ISetupWizard, SetupWizard>();
         services.AddSingleton<WorkspaceSavePrompt>();
