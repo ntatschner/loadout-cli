@@ -248,6 +248,40 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Files_git_already_ignores_are_left_alone_by_default()
+    {
+        // .codex is in this repository's .gitignore. It is not in the
+        // repository's content and never will be, so the repository is already
+        // compliant with respect to it. Taking it would remove a working local
+        // setup to solve a problem that does not exist.
+        var plan = (await _migrations.PlanAsync(_repository, "demo")).Value!;
+
+        plan.Steps.Should().NotContain(s => s.RepositoryRelativePath == ".codex");
+        Directory.Exists(Path.Combine(_repository, ".codex")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Ignored_files_move_when_they_are_explicitly_asked_for()
+    {
+        var plan = (await _migrations.PlanAsync(_repository, "demo", includeIgnored: true)).Value!;
+
+        // Sharing them across machines is a legitimate reason to want them in
+        // the workspace, so it is offered rather than forbidden.
+        plan.Steps.Should().Contain(s => s.RepositoryRelativePath == ".codex");
+    }
+
+    [Fact]
+    public async Task Applying_the_default_plan_leaves_an_ignored_directory_in_place()
+    {
+        var plan = (await _migrations.PlanAsync(_repository, "demo")).Value!;
+
+        await _migrations.ApplyAsync(plan);
+
+        Directory.Exists(Path.Combine(_repository, ".codex")).Should().BeTrue();
+        File.Exists(Path.Combine(_repository, ".codex", "config.toml")).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task The_pre_commit_hook_installs_and_reports_itself()
     {
         (await _policies.InstallHookAsync(_repository)).Succeeded.Should().BeTrue();

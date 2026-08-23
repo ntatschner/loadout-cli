@@ -41,10 +41,27 @@ public sealed record MigrationPlan(
 /// </summary>
 public interface IMigrationService
 {
-    /// <summary>Works out what would move, without changing anything.</summary>
+    /// <summary>
+    /// Works out what would move, without changing anything.
+    /// </summary>
+    /// <param name="repositoryPath">Repository to inspect.</param>
+    /// <param name="slug">Project the material belongs to.</param>
+    /// <param name="includeIgnored">
+    /// Whether to move files Git already ignores.
+    /// <para>
+    /// False by default, and that default matters. An ignored .claude
+    /// directory is not in the repository's content and never will be, so the
+    /// repository is already compliant with respect to it (spec sections 9 and
+    /// 97, where the policy check treats ignored files as the system working).
+    /// Moving one anyway would take away a working local setup to solve a
+    /// problem that does not exist. It is offered, not assumed.
+    /// </para>
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
     Task<OperationResult<MigrationPlan>> PlanAsync(
         string repositoryPath,
         string slug,
+        bool includeIgnored = false,
         CancellationToken ct = default);
 
     /// <summary>

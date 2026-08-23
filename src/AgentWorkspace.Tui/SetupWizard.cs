@@ -2,6 +2,7 @@ using AgentWorkspace.Agents;
 using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Git;
 using AgentWorkspace.Core.Policies;
+using AgentWorkspace.Models.Policies;
 using AgentWorkspace.Core.Projects;
 using AgentWorkspace.Core.Workspace;
 using AgentWorkspace.Models;
@@ -41,6 +42,7 @@ public sealed class SetupWizard : ISetupWizard
     private readonly IProjectService _projects;
     private readonly IAgentRegistry _agents;
     private readonly IPolicyService _policies;
+    private readonly IMigrationService _migrations;
     private readonly ISecretProvider _secrets;
     private readonly IPlatformPaths _paths;
     private readonly IExecutableResolver _resolver;
@@ -54,6 +56,7 @@ public sealed class SetupWizard : ISetupWizard
         IProjectService projects,
         IAgentRegistry agents,
         IPolicyService policies,
+        IMigrationService migrations,
         ISecretProvider secrets,
         IPlatformPaths paths,
         IExecutableResolver resolver,
@@ -66,6 +69,7 @@ public sealed class SetupWizard : ISetupWizard
         _projects = projects;
         _agents = agents;
         _policies = policies;
+        _migrations = migrations;
         _secrets = secrets;
         _paths = paths;
         _resolver = resolver;
@@ -582,13 +586,144 @@ public sealed class SetupWizard : ISetupWizard
                 .InstructionsText("[dim]Nothing is registered unless you pick it.[/]")
                 .AddChoices(unregistered.Select(r => r.Path)));
 
+        var registered = new List<Models.Projects.ProjectResolution>();
+
         foreach (var path in chosen)
         {
             var result = await _projects.AddAsync(path, null, ct).ConfigureAwait(false);
 
-            _console.MarkupLine(result.Succeeded
-                ? $"[green]+[/] {Markup.Escape(result.Value!.Entry.Name)}"
-                : $"[yellow]![/] {Markup.Escape(path)}  [dim]{Markup.Escape(result.Error!)}[/]");
+            if (result.Succeeded)
+            {
+                registered.Add(result.Value!);
+                _console.MarkupLine($"[green]+[/] {Markup.Escape(result.Value!.Entry.Name)}");
+            }
+            else
+            {
+                _console.MarkupLine(
+                    $"[yellow]![/] {Markup.Escape(path)}  [dim]{Markup.Escape(result.Error!)}[/]");
+            }
+        }
+
+        await OfferMigrationAsync(registered, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Offers to move existing agent configuration into the workspace
+    /// (spec section 96).
+    /// <para>
+    /// Registering a project does nothing to the agent files already sitting in
+    /// it, so without this step onboarding finishes with the repositories in
+    /// exactly the state they started. The plan is always shown before anything
+    /// moves, and files Git already ignores are left alone unless asked for:
+    /// those are not in the repository's content and never will be, so taking
+    /// them would remove a working setup to solve a problem that does not exist.
+    /// </para>
+    /// </summary>
+    private async Task OfferMigrationAsync(
+        IReadOnlyList<Models.Projects.ProjectResolution> projects,
+        CancellationToken ct)
+    {
+        if (projects.Count == 0)
+        {
+            return;
+        }
+
+        var plans = new List<MigrationPlan>();
+        var ignoredOnly = new List<string>();
+
+        foreach (var project in projects)
+        {
+            if (project.LocalPath is null)
+            {
+                continue;
+            }
+
+            var plan = await _migrations
+                .PlanAsync(project.LocalPath, project.Entry.Slug, includeIgnored: false, ct)
+                .ConfigureAwait(false);
+
+            if (plan.Succeeded && plan.Value!.Steps.Count > 0)
+            {
+                plans.Add(plan.Value);
+                continue;
+            }
+
+            // Nothing to move, but there may still be agent files here that are
+            // simply already excluded. Worth mentioning so the absence of a
+            // migration does not look like the launcher missing them.
+            var withIgnored = await _migrations
+                .PlanAsync(project.LocalPath, project.Entry.Slug, includeIgnored: true, ct)
+                .ConfigureAwait(false);
+
+            if (withIgnored.Succeeded && withIgnored.Value!.Steps.Count > 0)
+            {
+                ignoredOnly.Add(project.Entry.Name);
+            }
+        }
+
+        if (ignoredOnly.Count > 0)
+        {
+            _console.WriteLine();
+            _console.MarkupLine(
+                $"[dim]{string.Join(", ", ignoredOnly.Select(Markup.Escape))}: agent files are "
+                + "already excluded from Git and were left where they are. Move them with "
+                + "agentctl migrate --include-ignored if you want them shared across machines.[/]");
+        }
+
+        if (plans.Count == 0)
+        {
+            return;
+        }
+
+        _console.WriteLine();
+        _console.MarkupLine(
+            $"[bold]{plans.Count} project(s) have agent files in the repository[/]");
+
+        foreach (var plan in plans)
+        {
+            _console.WriteLine();
+            _console.MarkupLine($"[bold]{Markup.Escape(plan.Slug)}[/]");
+
+            foreach (var step in plan.Steps)
+            {
+                var note = step.Kind == PolicyFindingKind.Tracked
+                    ? "[yellow]tracked, will be copied not removed[/]"
+                    : "[dim]will be moved[/]";
+
+                _console.MarkupLine($"  {Markup.Escape(step.RepositoryRelativePath)}  {note}");
+            }
+        }
+
+        _console.WriteLine();
+
+        if (!_console.Confirm("Migrate these into the workspace now?", defaultValue: false))
+        {
+            _console.MarkupLine("[dim]Left alone. Run later with:[/] agentctl migrate <project>");
+            return;
+        }
+
+        foreach (var plan in plans)
+        {
+            var applied = await _migrations.ApplyAsync(plan, ct).ConfigureAwait(false);
+
+            if (applied.Failed)
+            {
+                _console.MarkupLine(
+                    $"[yellow]![/] {Markup.Escape(plan.Slug)}  {Markup.Escape(applied.Error!)}");
+
+                continue;
+            }
+
+            _console.MarkupLine($"[green]+[/] {Markup.Escape(plan.Slug)}");
+
+            foreach (var path in applied.Value!.TrackedLeftInPlace)
+            {
+                // The one thing the user must act on themselves, so it is said
+                // per project rather than buried in a summary.
+                _console.MarkupLine(
+                    $"    [yellow]{Markup.Escape(path)}[/] [dim]is still tracked; remove it with "
+                    + $"git rm --cached and commit[/]");
+            }
         }
     }
 }

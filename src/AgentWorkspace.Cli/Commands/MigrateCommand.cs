@@ -50,6 +50,10 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
         [CommandOption("--yes")]
         [Description("Apply without asking for confirmation.")]
         public bool Yes { get; init; }
+
+        [CommandOption("--include-ignored")]
+        [Description("Also move files Git already ignores. They are left alone by default.")]
+        public bool IncludeIgnored { get; init; }
     }
 
     /// <inheritdoc />
@@ -65,7 +69,9 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 
         var (repositoryPath, slug) = resolved.Value;
 
-        var planResult = await _migrations.PlanAsync(repositoryPath, slug).ConfigureAwait(false);
+        var planResult = await _migrations
+            .PlanAsync(repositoryPath, slug, settings.IncludeIgnored)
+            .ConfigureAwait(false);
         if (planResult.Failed)
         {
             return output.Fail(planResult);
@@ -82,7 +88,14 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
             else
             {
                 output.WriteLine("[green]Nothing to migrate.[/] "
-                    + "[dim]No AI tooling files were found in this repository.[/]");
+                    + "[dim]No AI tooling files are tracked or exposed in this repository.[/]");
+
+                if (!settings.IncludeIgnored)
+                {
+                    output.WriteLine(
+                        "[dim]Files Git already ignores were left alone. Move those too with:[/] "
+                        + "--include-ignored");
+                }
             }
 
             return CommandOutput.Success();

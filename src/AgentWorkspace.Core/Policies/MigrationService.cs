@@ -53,6 +53,7 @@ public sealed class MigrationService : IMigrationService
     public async Task<OperationResult<MigrationPlan>> PlanAsync(
         string repositoryPath,
         string slug,
+        bool includeIgnored = false,
         CancellationToken ct = default)
     {
         var checkResult = await _policies.CheckAsync(repositoryPath, ct).ConfigureAwait(false);
@@ -86,13 +87,24 @@ public sealed class MigrationService : IMigrationService
                 continue;
             }
 
+            var kind = ClassifyKind(source, report);
+
+            if (kind == PolicyFindingKind.Ignored && !includeIgnored)
+            {
+                // Already excluded from the repository, so nothing here is a
+                // compliance problem. Taking it would remove a working local
+                // setup for no gain.
+                claimed.Add(source);
+                continue;
+            }
+
             claimed.Add(source);
 
             steps.Add(new MigrationStep(
                 absolute,
                 source,
                 $"projects/{slug}/{destination}",
-                ClassifyKind(source, report),
+                kind,
                 isDirectory));
         }
 
