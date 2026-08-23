@@ -11,17 +11,14 @@ public sealed class MigrationService : IMigrationService
     /// <summary>
     /// Where each well-known agent artefact belongs in the workspace.
     /// <para>
-    /// Ordered longest-prefix-first so that <c>.claude/skills</c> is matched
-    /// before the bare <c>.claude</c> rule that would otherwise swallow it.
+    /// A directory moves as a unit. Listing its children separately as well
+    /// would plan the same copy twice and show the user three entries where one
+    /// happened, and any child mapped to a differently named destination would
+    /// collide with the copy the parent already made.
     /// </para>
     /// </summary>
     private static readonly (string Source, string Destination)[] KnownMappings =
     [
-        (".claude/settings.local.json", "agents/claude/settings.json"),
-        (".claude/settings.json", "agents/claude/settings.json"),
-        (".claude/skills", "agents/claude/skills"),
-        (".claude/agents", "agents/claude/agents"),
-        (".claude/commands", "agents/claude/commands"),
         (".claude", "agents/claude"),
         (".codex", "agents/codex"),
         (".cursor", "agents/cursor"),

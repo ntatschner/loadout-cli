@@ -248,6 +248,24 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task No_two_sources_map_onto_the_same_destination()
+    {
+        // A project carrying both .claude/settings.json and settings.local.json
+        // is ordinary, and mapping them onto one file meant the second silently
+        // overwrote the first.
+        await File.WriteAllTextAsync(
+            Path.Combine(_repository, ".claude", "settings.local.json"), "{\"local\": true}");
+
+        await RunGitAsync(_repository, "add", ".claude/settings.local.json");
+        await RunGitAsync(_repository, "commit", "--message", "add local settings");
+
+        var plan = (await _migrations.PlanAsync(_repository, "demo")).Value!;
+
+        plan.Steps.Select(s => s.WorkspaceRelativePath)
+            .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
     public async Task Files_git_already_ignores_are_left_alone_by_default()
     {
         // .codex is in this repository's .gitignore. It is not in the
