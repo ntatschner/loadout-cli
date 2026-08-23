@@ -150,6 +150,18 @@ agentctl setup
 Running `agentctl` with no arguments on an unconfigured machine goes here too,
 because an empty project list tells a new user nothing about what to do next.
 
+Every question can also be answered up front, so provisioning a machine needs no
+one sitting at it:
+
+```bash
+agentctl setup --create-new --github --name agent-workspaces   --register-discovered --migrate --global-excludes --non-interactive
+```
+
+Both routes run the same code — an interactive run is just one where nothing was
+answered in advance — so the scripted path cannot drift from the one people see.
+Anything genuinely unanswerable stops before doing any work and names the flag
+that would settle it, rather than failing halfway through a setup.
+
 If you choose to create a new workspace and the GitHub CLI is installed and
 signed in, it offers to create the private repository and push for you. That is
 a convenience for one common host, not a dependency: the launcher is
@@ -165,11 +177,20 @@ storage**. The last is a real way to use the tool, not a degraded mode: it
 creates the same directory layout locally, so adopting a shared workspace later
 is a matter of pushing what you already have.
 
-It then checks Git is present before asking anything, sets a Git identity if
-none exists (without one, every workspace commit later fails with "Author
-identity unknown"), picks a secret provider that actually works on this machine,
-offers the global Git excludes, and lists repositories it found in your
-development roots so you can register them.
+It then checks Git is present before asking anything and sets a **global** Git
+identity if none exists — global specifically, because a plain config read
+resolves through whatever repository you happen to be standing in, and a local
+identity in an unrelated project must not be mistaken for one the workspace can
+use. Without it every workspace commit fails with "Author identity unknown".
+
+It picks a secret provider that actually works on this machine, lists the
+repositories it found in your development roots, offers to register them, and
+then offers to migrate any agent files out of them.
+
+Migration runs **before** the global Git excludes are installed, and the order
+matters: installing the excludes first would make the very files migration
+exists to move become ignored, so setup would protect the repository and then
+report nothing to migrate. Clean up first, then stop it happening again.
 
 ## Updating
 

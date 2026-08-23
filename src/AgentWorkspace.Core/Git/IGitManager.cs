@@ -164,6 +164,19 @@ public interface IGitManager
         string value,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Reads a value from the user's global Git configuration specifically.
+    /// <para>
+    /// Distinct from the plain read, which resolves through whatever repository
+    /// the process happens to be standing in. For something like the committer
+    /// identity that difference decides correctness: a local identity in an
+    /// unrelated repository must not be mistaken for one the workspace can use.
+    /// </para>
+    /// </summary>
+    Task<OperationResult<string?>> GetGlobalConfigValueAsync(
+        string key,
+        CancellationToken ct = default);
+
     /// <summary>Reads a git config value, or null when it is unset.</summary>
     Task<OperationResult<string?>> GetConfigValueAsync(
         string key,

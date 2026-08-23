@@ -402,6 +402,19 @@ public sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<string?>> GetGlobalConfigValueAsync(
+        string key,
+        CancellationToken ct = default)
+    {
+        var result = await RunAsync(null, ["config", "--global", "--get", key],
+            LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        // git exits 1 when the key is unset, which is the answer rather than a
+        // failure.
+        return OperationResult<string?>.Ok(result.Succeeded ? result.Value!.Trim() : null);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<string?>> GetConfigValueAsync(
         string key,
         string? repositoryPath = null,

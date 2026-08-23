@@ -19,8 +19,11 @@ public interface ISetupWizard
     /// <summary>Whether the launcher has been configured on this machine.</summary>
     bool IsConfigured();
 
-    /// <summary>Runs the wizard. Returns the exit code for the process.</summary>
-    Task<int> RunAsync(CancellationToken ct = default);
+    /// <summary>
+    /// Runs the wizard, asking only for what the request has not answered.
+    /// Returns the exit code for the process.
+    /// </summary>
+    Task<int> RunAsync(SetupRequest request, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -80,8 +83,17 @@ public sealed class SetupWizard : ISetupWizard
     public bool IsConfigured() => File.Exists(_paths.Paths.ConfigFile);
 
     /// <inheritdoc />
-    public async Task<int> RunAsync(CancellationToken ct = default)
+    public async Task<int> RunAsync(SetupRequest request, CancellationToken ct = default)
     {
+        // Refuse before doing anything rather than halfway through: a setup that
+        // fails after creating a repository leaves the user worse off than one
+        // that never started.
+        if (request.MissingAnswer() is { } missing)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(missing)}[/]");
+            return (int)ExitCode.InvalidArguments;
+        }
+
         _console.Write(new Rule("[bold]Welcome to the AI Workspace Launcher[/]").LeftJustified());
         _console.WriteLine();
 
@@ -100,23 +112,35 @@ public sealed class SetupWizard : ISetupWizard
         _console.MarkupLine($"[green]+[/] {Markup.Escape(gitVersion.Value!)}");
         _console.WriteLine();
 
-        var choice = _console.Prompt(
-            new SelectionPrompt<string>()
-                .Title("No central workspace is configured. What would you like to do?")
-                .AddChoices(
-                    "Configure an existing central workspace",
-                    "Create a new central workspace",
-                    "Run without central storage"));
+        var mode = request.Mode;
+
+        if (mode == WorkspaceMode.Ask)
+        {
+            const string Existing = "Configure an existing central workspace";
+            const string Create = "Create a new central workspace";
+
+            var choice = _console.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("No central workspace is configured. What would you like to do?")
+                    .AddChoices(Existing, Create, "Run without central storage"));
+
+            mode = choice switch
+            {
+                Existing => WorkspaceMode.UseExisting,
+                Create => WorkspaceMode.CreateNew,
+                _ => WorkspaceMode.LocalOnly,
+            };
+        }
 
         var config = new LauncherConfig();
 
-        var outcome = choice switch
+        var outcome = mode switch
         {
-            "Configure an existing central workspace" =>
-                await ConfigureExistingAsync(config, ct).ConfigureAwait(false),
+            WorkspaceMode.UseExisting =>
+                await ConfigureExistingAsync(config, request, ct).ConfigureAwait(false),
 
-            "Create a new central workspace" =>
-                await CreateNewAsync(config, ct).ConfigureAwait(false),
+            WorkspaceMode.CreateNew =>
+                await CreateNewAsync(config, request, ct).ConfigureAwait(false),
 
             _ => await ConfigureLocalOnlyAsync(config, ct).ConfigureAwait(false),
         };
@@ -136,10 +160,16 @@ public sealed class SetupWizard : ISetupWizard
             return (int)save.ExitCode;
         }
 
-        await ConfigureDiscoveryRootsAsync(ct).ConfigureAwait(false);
-        await OfferGlobalProtectionAsync(ct).ConfigureAwait(false);
+        await ConfigureDiscoveryRootsAsync(request, ct).ConfigureAwait(false);
         await ShowDetectedAgentsAsync(ct).ConfigureAwait(false);
-        await OfferDiscoveredProjectsAsync(ct).ConfigureAwait(false);
+
+        // Migration happens inside this step, and it has to run before the
+        // global excludes are installed. Installing them first would make the
+        // very files migration exists to move become ignored, so setup would
+        // protect the repository and then report nothing to migrate. Clean up
+        // first, then stop it happening again.
+        await OfferDiscoveredProjectsAsync(request, ct).ConfigureAwait(false);
+        await OfferGlobalProtectionAsync(request, ct).ConfigureAwait(false);
 
         _console.WriteLine();
         _console.MarkupLine("[green]Setup complete.[/]");
@@ -152,18 +182,21 @@ public sealed class SetupWizard : ISetupWizard
     /// <summary>Spec section 62: point at a workspace somebody has already made.</summary>
     private async Task<OperationResult> ConfigureExistingAsync(
         LauncherConfig config,
+        SetupRequest request,
         CancellationToken ct)
     {
-        var remote = _console.Prompt(
+        config.Workspace.Remote = request.Remote ?? _console.Prompt(
             new TextPrompt<string>("Central workspace Git URL:")
                 .Validate(value => string.IsNullOrWhiteSpace(value)
                     ? ValidationResult.Error("A URL is required.")
                     : ValidationResult.Success()));
 
-        config.Workspace.Remote = remote.Trim();
+        config.Workspace.Remote = config.Workspace.Remote.Trim();
 
-        config.Workspace.Branch = _console.Prompt(
-            new TextPrompt<string>("Branch:").DefaultValue("main"));
+        config.Workspace.Branch = request.Branch
+            ?? (request.Interactive
+                ? _console.Prompt(new TextPrompt<string>("Branch:").DefaultValue("main"))
+                : "main");
 
         _console.WriteLine();
         _console.MarkupLine("[dim]Cloning...[/]");
@@ -199,13 +232,21 @@ public sealed class SetupWizard : ISetupWizard
     }
 
     /// <summary>Spec section 63: create the standard structure from nothing.</summary>
-    private async Task<OperationResult> CreateNewAsync(LauncherConfig config, CancellationToken ct)
+    private async Task<OperationResult> CreateNewAsync(
+        LauncherConfig config,
+        SetupRequest request,
+        CancellationToken ct)
     {
-        var name = _console.Prompt(
-            new TextPrompt<string>("Workspace name:").DefaultValue("agent-workspaces"));
+        var name = request.Name
+            ?? (request.Interactive
+                ? _console.Prompt(
+                    new TextPrompt<string>("Workspace name:").DefaultValue("agent-workspaces"))
+                : "agent-workspaces");
 
-        config.Workspace.Branch = _console.Prompt(
-            new TextPrompt<string>("Default branch:").DefaultValue("main"));
+        config.Workspace.Branch = request.Branch
+            ?? (request.Interactive
+                ? _console.Prompt(new TextPrompt<string>("Default branch:").DefaultValue("main"))
+                : "main");
 
         var initResult = await _workspace.InitialiseStructureAsync(name, ct).ConfigureAwait(false);
         if (initResult.Failed)
@@ -215,8 +256,14 @@ public sealed class SetupWizard : ISetupWizard
 
         _console.MarkupLine($"[green]+[/] Created  [dim]{Markup.Escape(_workspace.LocalPath)}[/]");
 
-        // The identity has to exist before the first commit, not after it.
-        await EnsureGitIdentityAsync(ct).ConfigureAwait(false);
+        // The identity has to exist before the first commit, not after it, and
+        // its absence stops setup rather than producing a commit that fails.
+        var identity = await EnsureGitIdentityAsync(request, ct).ConfigureAwait(false);
+
+        if (identity.Failed)
+        {
+            return identity;
+        }
 
         // The structure has to become a real repository here. Left as a plain
         // directory it would look created while sync had nothing to fetch and
@@ -232,7 +279,7 @@ public sealed class SetupWizard : ISetupWizard
 
         _console.MarkupLine("[green]+[/] Git repository initialised with the first commit");
 
-        return await ConfigureRemoteAsync(config, name, ct).ConfigureAwait(false);
+        return await ConfigureRemoteAsync(config, request, name, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -248,6 +295,7 @@ public sealed class SetupWizard : ISetupWizard
     /// </summary>
     private async Task<OperationResult> ConfigureRemoteAsync(
         LauncherConfig config,
+        SetupRequest request,
         string name,
         CancellationToken ct)
     {
@@ -256,22 +304,43 @@ public sealed class SetupWizard : ISetupWizard
         const string Later = "Stay local for now";
 
         var gh = await FindAuthenticatedGitHubCliAsync(ct).ConfigureAwait(false);
-        var choices = new List<string>();
+        var host = request.Host;
 
-        if (gh is not null)
+        if (host == WorkspaceHost.GitHub && gh is null)
         {
-            choices.Add(ViaGitHub);
+            // Asked for explicitly, so this is an error rather than a quiet
+            // fallback to a host the caller did not choose.
+            return OperationResult.Fail(
+                "GitHub was requested but the GitHub CLI is not installed and signed in. "
+                + "Run: gh auth login");
         }
 
-        choices.Add(ViaUrl);
-        choices.Add(Later);
+        if (host == WorkspaceHost.Ask)
+        {
+            var choices = new List<string>();
 
-        var choice = _console.Prompt(
-            new SelectionPrompt<string>()
-                .Title("Where should this workspace live?")
-                .AddChoices(choices));
+            if (gh is not null)
+            {
+                choices.Add(ViaGitHub);
+            }
 
-        if (choice == Later)
+            choices.Add(ViaUrl);
+            choices.Add(Later);
+
+            var choice = _console.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("Where should this workspace live?")
+                    .AddChoices(choices));
+
+            host = choice switch
+            {
+                ViaGitHub => WorkspaceHost.GitHub,
+                ViaUrl => WorkspaceHost.Url,
+                _ => WorkspaceHost.None,
+            };
+        }
+
+        if (host == WorkspaceHost.None)
         {
             _console.MarkupLine(
                 "[dim]Staying local. Add a remote later with:[/] "
@@ -280,19 +349,20 @@ public sealed class SetupWizard : ISetupWizard
             return OperationResult.Ok();
         }
 
-        if (choice == ViaUrl)
+        if (host == WorkspaceHost.Url)
         {
-            config.Workspace.Remote = _console.Prompt(
+            config.Workspace.Remote = (request.Remote ?? _console.Prompt(
                 new TextPrompt<string>("Git remote URL:")
                     .Validate(value => string.IsNullOrWhiteSpace(value)
                         ? ValidationResult.Error("A URL is required.")
-                        : ValidationResult.Success())).Trim();
+                        : ValidationResult.Success()))).Trim();
 
             return await PushAsync(config, ct).ConfigureAwait(false);
         }
 
-        var repositoryName = _console.Prompt(
-            new TextPrompt<string>("Repository name:").DefaultValue(name));
+        var repositoryName = request.Interactive
+            ? _console.Prompt(new TextPrompt<string>("Repository name:").DefaultValue(name))
+            : name;
 
         // Private, and not offered as a choice. A workspace holds project
         // context, decisions and handoffs; spec section 10 calls it a private
@@ -418,25 +488,44 @@ public sealed class SetupWizard : ISetupWizard
     /// Spec section 63 asks for this during setup for exactly that reason.
     /// </para>
     /// </summary>
-    private async Task EnsureGitIdentityAsync(CancellationToken ct)
+    private async Task<OperationResult> EnsureGitIdentityAsync(
+        SetupRequest request,
+        CancellationToken ct)
     {
-        var name = await _git.GetConfigValueAsync("user.name", null, ct).ConfigureAwait(false);
-        var email = await _git.GetConfigValueAsync("user.email", null, ct).ConfigureAwait(false);
+        // Global specifically. A plain read resolves through whatever repository
+        // the process is standing in, so running setup from inside some other
+        // project would find that project's identity and conclude, wrongly, that
+        // the workspace had one.
+        var name = await _git.GetGlobalConfigValueAsync("user.name", ct).ConfigureAwait(false);
+        var email = await _git.GetGlobalConfigValueAsync("user.email", ct).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(name.Value) && !string.IsNullOrWhiteSpace(email.Value))
         {
             _console.MarkupLine($"[green]+[/] Git identity  [dim]{Markup.Escape(name.Value)}[/]");
-            return;
+            return OperationResult.Ok();
         }
 
-        _console.MarkupLine("[yellow]No Git identity is configured.[/]");
+        _console.MarkupLine("[yellow]No global Git identity is configured.[/]");
+
+        if (!request.Interactive)
+        {
+            // Inventing one would put a fabricated author on every workspace
+            // commit from here on, so this stops with the two commands needed.
+            return OperationResult.Fail(
+                """
+                A Git identity is required before the workspace can be committed. Set one with:
+                  git config --global user.name "Your Name"
+                  git config --global user.email "you@example.com"
+                """,
+                ExitCode.ConfigurationInvalid);
+        }
 
         if (!_console.Confirm("Set one now?", defaultValue: true))
         {
-            _console.MarkupLine(
-                "[dim]Workspace commits will fail until one is set with: git config --global user.name[/]");
-
-            return;
+            return OperationResult.Fail(
+                "The workspace cannot be committed without a Git identity. "
+                + "Set one with git config --global user.name and rerun setup.",
+                ExitCode.ConfigurationInvalid);
         }
 
         var newName = _console.Prompt(new TextPrompt<string>("Your name:"));
@@ -446,6 +535,8 @@ public sealed class SetupWizard : ISetupWizard
         await _git.SetGlobalConfigValueAsync("user.email", newEmail.Trim(), ct).ConfigureAwait(false);
 
         _console.MarkupLine("[green]+[/] Git identity set");
+
+        return OperationResult.Ok();
     }
 
     private async Task ChooseSecretProviderAsync(LauncherConfig config, CancellationToken ct)
@@ -472,7 +563,7 @@ public sealed class SetupWizard : ISetupWizard
                 .AddChoices("environment", "1password", "bitwarden", "vault", "native"));
     }
 
-    private async Task ConfigureDiscoveryRootsAsync(CancellationToken ct)
+    private async Task ConfigureDiscoveryRootsAsync(SetupRequest request, CancellationToken ct)
     {
         var machineResult = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
 
@@ -494,6 +585,16 @@ public sealed class SetupWizard : ISetupWizard
             // ask rather than guess at somewhere it would then scan.
             _console.MarkupLine("[yellow]No conventional development roots were found.[/]");
 
+            if (!request.Interactive)
+            {
+                // Nothing to scan is a limitation to report, not a reason to
+                // invent a directory and start walking it.
+                _console.MarkupLine(
+                    "[dim]Set one later with:[/] agentctl config set discovery-roots <path>");
+
+                return;
+            }
+
             var root = _console.Prompt(
                 new TextPrompt<string>("Where do you keep your repositories?")
                     .AllowEmpty());
@@ -509,7 +610,7 @@ public sealed class SetupWizard : ISetupWizard
     }
 
     /// <summary>Offers the global Git excludes of spec section 50.</summary>
-    private async Task OfferGlobalProtectionAsync(CancellationToken ct)
+    private async Task OfferGlobalProtectionAsync(SetupRequest request, CancellationToken ct)
     {
         var existing = await _git.GetConfigValueAsync("core.excludesFile", null, ct)
             .ConfigureAwait(false);
@@ -522,9 +623,12 @@ public sealed class SetupWizard : ISetupWizard
 
         _console.WriteLine();
 
-        if (!_console.Confirm(
-            "Configure global Git excludes so agent files never enter a repository?",
-            defaultValue: true))
+        var install = request.InstallGlobalExcludes
+            ?? (request.Interactive && _console.Confirm(
+                "Configure global Git excludes so agent files never enter a repository?",
+                defaultValue: true));
+
+        if (!install)
         {
             return;
         }
@@ -558,7 +662,7 @@ public sealed class SetupWizard : ISetupWizard
     }
 
     /// <summary>Spec section 96: offer to register what is already on the machine.</summary>
-    private async Task OfferDiscoveredProjectsAsync(CancellationToken ct)
+    private async Task OfferDiscoveredProjectsAsync(SetupRequest request, CancellationToken ct)
     {
         var discovered = await _projects.DiscoverAsync(ct).ConfigureAwait(false);
 
@@ -577,14 +681,33 @@ public sealed class SetupWizard : ISetupWizard
         _console.WriteLine();
         _console.MarkupLine($"[bold]{unregistered.Count} repositories found[/]");
 
-        var chosen = _console.Prompt(
-            new MultiSelectionPrompt<string>()
-                .Title("Register any of these now? [dim](space to select, enter to confirm)[/]")
-                .NotRequired()
-                .PageSize(15)
-                .MoreChoicesText("[dim](move up and down for more)[/]")
-                .InstructionsText("[dim]Nothing is registered unless you pick it.[/]")
-                .AddChoices(unregistered.Select(r => r.Path)));
+        IReadOnlyList<string> chosen;
+
+        if (request.RegisterDiscovered)
+        {
+            chosen = unregistered.Select(r => r.Path).ToList();
+        }
+        else if (!request.Interactive)
+        {
+            // Registering somebody's whole disk because nobody could be asked
+            // would be a poor default, so it stays opt-in.
+            _console.MarkupLine(
+                "[dim]Register them with:[/] agentctl project add <path>  "
+                + "[dim]or rerun with --register-discovered[/]");
+
+            return;
+        }
+        else
+        {
+            chosen = _console.Prompt(
+                new MultiSelectionPrompt<string>()
+                    .Title("Register any of these now? [dim](space to select, enter to confirm)[/]")
+                    .NotRequired()
+                    .PageSize(15)
+                    .MoreChoicesText("[dim](move up and down for more)[/]")
+                    .InstructionsText("[dim]Nothing is registered unless you pick it.[/]")
+                    .AddChoices(unregistered.Select(r => r.Path)));
+        }
 
         var registered = new List<Models.Projects.ProjectResolution>();
 
@@ -604,7 +727,7 @@ public sealed class SetupWizard : ISetupWizard
             }
         }
 
-        await OfferMigrationAsync(registered, ct).ConfigureAwait(false);
+        await OfferMigrationAsync(registered, request, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -621,6 +744,7 @@ public sealed class SetupWizard : ISetupWizard
     /// </summary>
     private async Task OfferMigrationAsync(
         IReadOnlyList<Models.Projects.ProjectResolution> projects,
+        SetupRequest request,
         CancellationToken ct)
     {
         if (projects.Count == 0)
@@ -639,7 +763,7 @@ public sealed class SetupWizard : ISetupWizard
             }
 
             var plan = await _migrations
-                .PlanAsync(project.LocalPath, project.Entry.Slug, includeIgnored: false, ct)
+                .PlanAsync(project.LocalPath, project.Entry.Slug, request.IncludeIgnored, ct)
                 .ConfigureAwait(false);
 
             if (plan.Succeeded && plan.Value!.Steps.Count > 0)
@@ -696,7 +820,11 @@ public sealed class SetupWizard : ISetupWizard
 
         _console.WriteLine();
 
-        if (!_console.Confirm("Migrate these into the workspace now?", defaultValue: false))
+        var migrate = request.Migrate
+            || (request.Interactive
+                && _console.Confirm("Migrate these into the workspace now?", defaultValue: false));
+
+        if (!migrate)
         {
             _console.MarkupLine("[dim]Left alone. Run later with:[/] agentctl migrate <project>");
             return;

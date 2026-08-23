@@ -116,7 +116,7 @@ public static class Program
 
         if (!wizard.IsConfigured())
         {
-            return await wizard.RunAsync().ConfigureAwait(false);
+            return await wizard.RunAsync(new SetupRequest()).ConfigureAwait(false);
         }
 
         return await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
