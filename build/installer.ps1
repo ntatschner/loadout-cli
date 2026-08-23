@@ -108,6 +108,11 @@ if ($Runtime.StartsWith('win-')) {
 
     if ($LASTEXITCODE -ne 0) { throw "wix build failed for $Runtime." }
 
+    # WiX writes debug symbols beside the package. Same reasoning as stripping
+    # them from the payload: useful to us, dead weight next to a release, and
+    # one careless upload glob away from shipping.
+    Remove-Item ([System.IO.Path]::ChangeExtension($msi, '.wixpdb')) -ErrorAction SilentlyContinue
+
     Publish-Result $msi
     Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
 
