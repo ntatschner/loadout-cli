@@ -35,7 +35,54 @@ which spec section 85 forbids.
 
 On Windows, extract the zip and put `agentctl.exe` somewhere on `PATH`.
 
+### Native installers
+
+A release also carries an `.msi`, a `.deb` and an `.rpm` for people who would
+rather not manage a `PATH` entry by hand:
+
+```powershell
+msiexec /i agentctl-0.1.0-win-x64.msi        # per-user, no elevation
+```
+
+```bash
+sudo dpkg -i agentctl_0.1.0_amd64.deb        # or: sudo rpm -i agentctl-0.1.0-1.x86_64.rpm
+```
+
+The MSI installs per user into `%LOCALAPPDATA%\Programs\agentctl`, adds that
+directory to the user `PATH` and creates a Start Menu entry. It installs
+somewhere other than the launcher's own data directory on purpose: they would
+otherwise share a parent, and an uninstall that tidied up its install root a
+little too enthusiastically would take the workspace clone and backup sets with
+it. Uninstalling removes the binaries, the `PATH` entry and the shortcut, and
+leaves everything under `%LOCALAPPDATA%\AgentWorkspaceLauncher` alone.
+
+The Linux packages put the self-contained build under `/usr/lib/agentctl` with
+a symlink at `/usr/bin/agentctl`, rather than emptying a hundred-file publish
+directory into `/usr/bin`.
+
+macOS has archives only. A `.pkg` needs signing and notarisation to be
+installable without the user fighting Gatekeeper, and that needs a Developer ID
+and a Mac to verify it on; until both exist, shipping an unsigned installer
+would be worse than shipping none.
+
 ### Building a release locally
+
+```bash
+pwsh ./build/package.ps1 -Runtime linux-x64 -Version 0.1.0     # archive
+pwsh ./build/installer.ps1 -Runtime win-x64 -Version 0.1.0     # native installer
+```
+
+The installer script builds each format with the tooling that owns it — WiX for
+the MSI, `dpkg-deb` and `rpmbuild` for the Linux packages — so it refuses to
+build a Linux package on Windows rather than assembling the container format by
+hand. A `.deb` written by an `ar` writer of our own would work right up until it
+did not, and would then fail inside somebody else's package manager where the
+error would make no sense to them.
+
+The MSI needs WiX 5 (`dotnet tool install --global wix --version 5.0.2`). The
+pin is deliberate: WiX 6 and later require accepting the Open Source Maintenance
+Fee agreement, which is a decision for whoever owns this project rather than one
+a build script should make on their behalf.
 
 ```bash
 pwsh ./build/package.ps1 -Runtime osx-arm64 -Version 0.1.0
@@ -558,10 +605,10 @@ The suite is deliberately structured so most of it runs everywhere:
 - **M1 — done.** Platform seam, registry, Git, agent detection, CLI, TUI, doctor.
 - **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
 - **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
-- **M4 — partly done.** Setup wizard, workspace save-on-exit, desktop
-  integration, environments, security profiles, release packaging, the update
-  system and an owned pseudo-terminal (ConPTY on Windows, `forkpty` on Linux and
-  macOS) are in. Native installers (MSI, `.deb`, `.rpm`) remain.
+- **M4 — done, less macOS packaging.** Setup wizard, workspace save-on-exit,
+  desktop integration, environments, security profiles, release packaging, the
+  update system, an owned pseudo-terminal (ConPTY on Windows, `forkpty` on Linux
+  and macOS) and native installers (MSI, `.deb`, `.rpm`) are in.
 - **macOS packaging — paused.** The platform seam, paths, Keychain and bundle
   discovery stay in the build and in the test matrix; signing, notarisation and
   a `.pkg` are deferred until there is a Developer ID and a Mac to verify them
