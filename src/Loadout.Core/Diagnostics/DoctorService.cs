@@ -131,10 +131,23 @@ public sealed class DoctorService : IDoctorService
         var excludesResult = await _git.GetConfigValueAsync("core.excludesFile", null, ct)
             .ConfigureAwait(false);
 
-        checks.Add(excludesResult.Value is { Length: > 0 }
+        if (excludesResult.Value is not { Length: > 0 })
+        {
+            checks.Add(DiagnosticCheck.Warn("Git", "Global exclude file",
+                "not configured; agent files are not globally ignored (spec section 50)"));
+
+            return;
+        }
+
+        // The configured value is not the same claim as a working one. Git
+        // silently ignores an excludesFile that is not there, so reporting the
+        // setting without opening it says the protection is on when it is off
+        // — which is the one thing a check like this must never do.
+        checks.Add(File.Exists(excludesResult.Value)
             ? DiagnosticCheck.Ok("Git", "Global exclude file", excludesResult.Value)
             : DiagnosticCheck.Warn("Git", "Global exclude file",
-                "not configured; agent files are not globally ignored (spec section 50)"));
+                $"core.excludesFile points at '{excludesResult.Value}', which does not exist, so "
+                + "nothing is being globally ignored. Repair it with: loadout protect --global"));
     }
 
     private async Task AddWorkspaceChecksAsync(

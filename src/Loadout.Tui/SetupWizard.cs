@@ -94,7 +94,7 @@ public sealed class SetupWizard : ISetupWizard
             return (int)ExitCode.InvalidArguments;
         }
 
-        _console.Write(new Rule("[bold]Welcome to the AI Workspace Launcher[/]").LeftJustified());
+        _console.Write(new Rule("[bold]Welcome to Loadout[/]").LeftJustified());
         _console.WriteLine();
 
         // Nothing else works without git, so it is checked before the user is

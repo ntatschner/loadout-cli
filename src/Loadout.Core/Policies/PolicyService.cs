@@ -14,6 +14,17 @@ public sealed class PolicyService : IPolicyService
 {
     private const string PolicyFileName = "forbidden-repository-files.yaml";
     private const string ExcludeFileName = "loadout-global-excludes";
+
+    /// <summary>
+    /// Names this file has had. A configured path ending in one of these was
+    /// written by this tool, whatever it was called at the time, so repointing
+    /// it is tidying rather than trampling on a choice somebody made.
+    /// </summary>
+    private static readonly string[] OwnExcludeFileNames =
+    [
+        ExcludeFileName,
+        "agentctl-global-excludes",
+    ];
     private const string HookFileName = "pre-commit";
 
     /// <summary>
@@ -157,7 +168,8 @@ public sealed class PolicyService : IPolicyService
         var existing = await _git.GetConfigValueAsync("core.excludesFile", null, ct).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(existing.Value)
-            && !string.Equals(existing.Value, excludePath, StringComparison.OrdinalIgnoreCase))
+            && !string.Equals(existing.Value, excludePath, StringComparison.OrdinalIgnoreCase)
+            && !IsOurExcludeFile(existing.Value))
         {
             // Silently replacing a configured exclude file would disable rules
             // the user relies on, so the launcher writes its file and hands
@@ -174,6 +186,23 @@ public sealed class PolicyService : IPolicyService
         return setResult.Succeeded
             ? OperationResult<string>.Ok(excludePath)
             : OperationResult<string>.Fail(setResult.Error!, setResult.ExitCode);
+    }
+
+    /// <summary>
+    /// Whether a configured exclude path is one this tool wrote.
+    /// <para>
+    /// Compared by file name rather than full path, because the directory moves
+    /// when the tool is renamed and the stale value then looks exactly like
+    /// somebody else's carefully chosen exclude file. Refusing to touch it
+    /// would leave the protection pointing at a file that no longer exists,
+    /// with no way to repair it short of editing Git's configuration by hand.
+    /// </para>
+    /// </summary>
+    private static bool IsOurExcludeFile(string configured)
+    {
+        var name = Path.GetFileName(configured.Trim());
+
+        return OwnExcludeFileNames.Contains(name, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc />

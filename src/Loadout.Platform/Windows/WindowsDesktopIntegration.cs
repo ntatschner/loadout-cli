@@ -16,7 +16,7 @@ namespace Loadout.Platform.Windows;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsDesktopIntegration : IDesktopIntegration
 {
-    private const string ShortcutName = "AI Workspace Launcher.lnk";
+    private const string ShortcutName = "Loadout.lnk";
 
     private readonly IProcessLauncher _processes;
     private readonly IExecutableResolver _resolver;
@@ -84,7 +84,7 @@ public sealed class WindowsDesktopIntegration : IDesktopIntegration
             "$shell = New-Object -ComObject WScript.Shell; "
             + "$link = $shell.CreateShortcut($env:LOADOUT_SHORTCUT_PATH); "
             + "$link.TargetPath = $env:LOADOUT_TARGET_PATH; "
-            + "$link.Description = 'AI Workspace Launcher'; "
+            + "$link.Description = 'Loadout'; "
             + "$link.Save()";
 
         var result = await _processes.RunAsync(

@@ -32,6 +32,7 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
     private readonly ProcessLauncher _processes = new();
 
     private IPolicyService _policies = null!;
+    private IGitManager _git = null!;
     private IMigrationService _migrations = null!;
     private IBackupService _backups = null!;
     private IWorkspaceManager _workspace = null!;
@@ -78,6 +79,7 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
         paths.EnsureDirectoriesExist();
 
         var git = new GitManager(_processes, new ExecutableResolver(environment, []));
+        _git = git;
         var yaml = new YamlStore(permissions);
 
         _workspace = new WorkspaceManager(paths, git, yaml, TimeProvider.System);
@@ -487,6 +489,49 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
         // one is authoritative.
         File.Exists(Path.Combine(project, "agents", "claude", "rules", "database.md"))
             .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_exclude_file_this_tool_wrote_under_a_previous_name_is_repointed()
+    {
+        var installed = await _policies.InstallGlobalExcludesAsync();
+        installed.Succeeded.Should().BeTrue(installed.Error ?? string.Empty);
+
+        // What a rename leaves behind: the directory moved, so the configured
+        // path names a file that is no longer there. Refusing to touch it
+        // because it "differs" would leave the protection pointing at nothing,
+        // repairable only by editing Git's configuration by hand.
+        var stale = Path.Combine(_root, "old-home", "agentctl-global-excludes");
+
+        await _git.SetGlobalConfigValueAsync("core.excludesFile", stale);
+
+        var repaired = await _policies.InstallGlobalExcludesAsync();
+
+        repaired.Succeeded.Should().BeTrue(repaired.Error ?? string.Empty);
+
+        var configured = await _git.GetGlobalConfigValueAsync("core.excludesFile");
+
+        configured.Value.Should().Be(repaired.Value);
+        File.Exists(configured.Value).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task An_exclude_file_somebody_else_chose_is_still_left_alone()
+    {
+        var theirs = Path.Combine(_root, "mine", "gitignore");
+        Directory.CreateDirectory(Path.GetDirectoryName(theirs)!);
+        await File.WriteAllTextAsync(theirs, "*.tmp");
+
+        await _git.SetGlobalConfigValueAsync("core.excludesFile", theirs);
+
+        var result = await _policies.InstallGlobalExcludesAsync();
+
+        // Silently repointing this would disable rules somebody relies on. The
+        // rules are still written; the decision is handed back.
+        result.Failed.Should().BeTrue();
+        result.Error.Should().Contain("already points at");
+
+        (await _git.GetGlobalConfigValueAsync("core.excludesFile")).Value.Should().Be(theirs);
     }
 
     private async Task<string> CreateRepositoryAsync()

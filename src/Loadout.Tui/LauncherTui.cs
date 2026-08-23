@@ -101,7 +101,7 @@ public sealed class LauncherTui : ILauncherTui
 
     private async Task ShowHeaderAsync(Models.Configuration.LauncherConfig config, CancellationToken ct)
     {
-        _console.Write(new Rule("[bold]AI Workspace Launcher[/]").LeftJustified());
+        _console.Write(new Rule("[bold]Loadout[/]").LeftJustified());
 
         var workspaceLine = !_workspace.IsConfigured(config)
             ? "[dim]Workspace: not configured (local state only)[/]"

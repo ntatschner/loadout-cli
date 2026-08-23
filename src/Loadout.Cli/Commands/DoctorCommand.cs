@@ -74,7 +74,7 @@ public sealed class DoctorCommand : AsyncCommand<GlobalSettings>
 
     private static void Render(CommandOutput output, DiagnosticReport report)
     {
-        output.WriteLine("[bold]AI Workspace Launcher Diagnostics[/]");
+        output.WriteLine("[bold]Loadout Diagnostics[/]");
 
         foreach (var group in report.Checks.GroupBy(c => c.Category))
         {

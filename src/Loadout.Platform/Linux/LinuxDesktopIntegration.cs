@@ -68,7 +68,7 @@ public sealed class LinuxDesktopIntegration : IDesktopIntegration
             var content = new StringBuilder()
                 .AppendLine("[Desktop Entry]")
                 .AppendLine("Type=Application")
-                .AppendLine("Name=AI Workspace Launcher")
+                .AppendLine("Name=Loadout")
                 .AppendLine("Comment=Launch AI coding agents against development projects")
                 // Quoted so an install path containing spaces still parses,
                 // which the Desktop Entry specification requires.
