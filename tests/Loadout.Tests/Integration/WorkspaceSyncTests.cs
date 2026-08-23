@@ -237,6 +237,23 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_created_workspace_settles_line_endings_in_the_repository()
+    {
+        UseEnvironmentIdentity();
+        await _workspace.InitialiseStructureAsync("local");
+        await _workspace.InitialiseRepositoryAsync("main");
+
+        var attributes = Path.Combine(_workspace.LocalPath, ".gitattributes");
+
+        // The workspace is shared between machines by design. Without this, an
+        // instruction file written on Windows reads as modified on Linux and
+        // back again: the launcher reports pending changes after every launch
+        // for a file nobody edited, and saving commits the churn.
+        File.Exists(attributes).Should().BeTrue();
+        (await File.ReadAllTextAsync(attributes)).Should().Contain("text=auto eol=lf");
+    }
+
+    [Fact]
     public async Task A_created_workspace_ignores_transient_agent_state()
     {
         UseEnvironmentIdentity();

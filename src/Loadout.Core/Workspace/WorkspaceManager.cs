@@ -315,16 +315,32 @@ public sealed class WorkspaceManager : IWorkspaceManager
 
             """;
 
+        // The workspace is shared between machines by design, so line endings
+        // have to be settled in the repository rather than left to whatever
+        // each machine's Git happens to be configured to do. Without this, an
+        // instruction file written on Windows reads as modified on every
+        // machine forever: the launcher reports pending changes after every
+        // launch for a file nobody edited, and saving commits the churn.
+        var attributes =
+            """
+            # Written by loadout. The workspace is shared between machines, so
+            # line endings are decided here rather than by each machine's Git.
+            * text=auto eol=lf
+            """;
+
         try
         {
             await File.WriteAllTextAsync(
                 Path.Combine(LocalPath, ".gitignore"), content, ct).ConfigureAwait(false);
 
+            await File.WriteAllTextAsync(
+                Path.Combine(LocalPath, ".gitattributes"), attributes, ct).ConfigureAwait(false);
+
             return OperationResult.Ok();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return OperationResult.Fail($"Could not write the workspace .gitignore: {ex.Message}");
+            return OperationResult.Fail($"Could not write the workspace Git files: {ex.Message}");
         }
     }
 
