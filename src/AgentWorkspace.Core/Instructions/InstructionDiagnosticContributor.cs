@@ -1,0 +1,118 @@
+using AgentWorkspace.Core.Diagnostics;
+using AgentWorkspace.Core.Projects;
+using AgentWorkspace.Core.Workspace;
+using AgentWorkspace.Models.Diagnostics;
+
+namespace AgentWorkspace.Core.Instructions;
+
+/// <summary>
+/// Folds the health of the instruction layer into <c>agentctl doctor</c>.
+/// <para>
+/// The dedicated commands report far more, but somebody has to know they exist
+/// to run them. Doctor is where people look when something feels wrong, so the
+/// two failures that make an agent behave inexplicably belong here: a
+/// credential sitting in memory, and instruction files that have grown large
+/// enough to crowd out the task.
+/// </para>
+/// </summary>
+public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
+{
+    private const string Category = "Instructions";
+
+    /// <summary>The point past which the always-loaded layer is worth a second look.</summary>
+    private const long ComfortableAlwaysLoadedBytes = 20 * 1024;
+
+    private readonly IProjectService _projects;
+    private readonly IWorkspaceManager _workspace;
+    private readonly IRuleService _rules;
+    private readonly IMemoryService _memory;
+
+    public InstructionDiagnosticContributor(
+        IProjectService projects,
+        IWorkspaceManager workspace,
+        IRuleService rules,
+        IMemoryService memory)
+    {
+        _projects = projects;
+        _workspace = workspace;
+        _rules = rules;
+        _memory = memory;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<DiagnosticCheck>> ContributeAsync(CancellationToken ct = default)
+    {
+        if (!_workspace.IsAvailable())
+        {
+            return [];
+        }
+
+        var listed = await _projects.ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed || listed.Value!.Count == 0)
+        {
+            return [];
+        }
+
+        var checks = new List<DiagnosticCheck>();
+        var heavy = new List<string>();
+        var leaking = new List<string>();
+
+        foreach (var project in listed.Value)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var slug = project.Entry.Slug;
+
+            var rules = await _rules.LoadAsync(_workspace.LocalPath, slug, ct).ConfigureAwait(false);
+
+            if (rules.Succeeded)
+            {
+                var alwaysLoaded = rules.Value!
+                    .Where(r => r.AlwaysApply || r.IsUnscoped)
+                    .Sum(r => r.Bytes);
+
+                if (alwaysLoaded > ComfortableAlwaysLoadedBytes)
+                {
+                    heavy.Add($"{slug} ({alwaysLoaded / 1024}KB)");
+                }
+            }
+
+            var audit = await _memory.AuditAsync(_workspace.LocalPath, slug, ct: ct)
+                .ConfigureAwait(false);
+
+            if (audit.Succeeded && audit.Value!.Errors.Any())
+            {
+                leaking.Add(slug);
+            }
+        }
+
+        if (leaking.Count > 0)
+        {
+            // Named as an error, and deliberately without saying which pattern
+            // matched or where: the point is to send somebody to the audit, not
+            // to reprint the finding in a second place.
+            checks.Add(DiagnosticCheck.Error(
+                Category,
+                "Memory content",
+                $"Memory for {string.Join(", ", leaking)} contains something shaped like a "
+                + "credential. Run: agentctl memory audit <project>"));
+        }
+        else
+        {
+            checks.Add(DiagnosticCheck.Ok(
+                Category, "Memory content", "No credential-shaped content in project memory."));
+        }
+
+        checks.Add(heavy.Count > 0
+            ? DiagnosticCheck.Warn(
+                Category,
+                "Instruction budget",
+                $"Loaded on every session regardless of the task: {string.Join(", ", heavy)}. "
+                + "Run: agentctl rules budget <project>")
+            : DiagnosticCheck.Ok(
+                Category, "Instruction budget", "No project loads an oversized instruction layer."));
+
+        return checks;
+    }
+}

@@ -1,4 +1,5 @@
 using System.Text;
+using AgentWorkspace.Core.Instructions;
 using AgentWorkspace.Models;
 using AgentWorkspace.Models.Projects;
 using AgentWorkspace.Models.Results;
@@ -22,8 +23,18 @@ public sealed class ContextCompiler : IContextCompiler
     private const long MaximumSourceBytes = 512 * 1024;
 
     private readonly IFilePermissions _permissions;
+    private readonly IRuleService _rules;
+    private readonly IMemoryService _memory;
 
-    public ContextCompiler(IFilePermissions permissions) => _permissions = permissions;
+    public ContextCompiler(
+        IFilePermissions permissions,
+        IRuleService rules,
+        IMemoryService memory)
+    {
+        _permissions = permissions;
+        _rules = rules;
+        _memory = memory;
+    }
 
     /// <inheritdoc />
     public async Task<OperationResult<CompiledContext>> CompileAsync(
@@ -112,6 +123,12 @@ public sealed class ContextCompiler : IContextCompiler
             sources.Add(new ContextSource(entry.DisplayPath, entry.Heading, length));
         }
 
+        await AppendRulesAsync(builder, sources, workspacePath, manifest.Slug, ct)
+            .ConfigureAwait(false);
+
+        await AppendMemoryAsync(builder, sources, workspacePath, manifest.Slug, ct)
+            .ConfigureAwait(false);
+
         var outputPath = Path.Combine(runtimeDirectory, CompiledFileName);
 
         try
@@ -132,6 +149,127 @@ public sealed class ContextCompiler : IContextCompiler
         return OperationResult<CompiledContext>.Ok(
             new CompiledContext(outputPath, sources, missing, profileName));
     }
+
+    /// <summary>
+    /// Appends the instruction rules.
+    /// <para>
+    /// Always-apply rules are inlined; scoped ones are listed by name, scope and
+    /// path so the agent can open the one it needs. That split is the whole
+    /// reason for scoping: inlining every rule at launch would put the database
+    /// conventions in front of somebody editing a stylesheet, and a listing
+    /// costs a line each instead of a file each.
+    /// </para>
+    /// </summary>
+    private async Task AppendRulesAsync(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        string workspacePath,
+        string slug,
+        CancellationToken ct)
+    {
+        var loaded = await _rules.LoadAsync(workspacePath, slug, ct).ConfigureAwait(false);
+
+        // Rules are an optional layer. A workspace with none is the ordinary
+        // case, and a failure to read them must not stop a launch.
+        if (loaded.Failed || loaded.Value!.Count == 0)
+        {
+            return;
+        }
+
+        var rules = loaded.Value;
+        var always = rules.Where(r => r.AlwaysApply || r.IsUnscoped).ToList();
+        var scoped = rules.Where(r => !r.AlwaysApply && !r.IsUnscoped).ToList();
+
+        foreach (var rule in always)
+        {
+            builder.AppendLine();
+            builder.AppendLine($"## Rule: {rule.Name}");
+            builder.AppendLine();
+            builder.AppendLine($"<!-- source: {DisplayRulePath(workspacePath, rule.Path)} -->");
+            builder.AppendLine();
+            builder.AppendLine(rule.Body.TrimEnd());
+            builder.AppendLine();
+
+            sources.Add(new ContextSource(
+                DisplayRulePath(workspacePath, rule.Path), $"Rule: {rule.Name}", rule.Bytes));
+        }
+
+        if (scoped.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Rules available on demand");
+        builder.AppendLine();
+        builder.AppendLine(
+            "These are not loaded. Read one when the work touches the paths it names.");
+        builder.AppendLine();
+
+        foreach (var rule in scoped)
+        {
+            var description = string.IsNullOrWhiteSpace(rule.Description)
+                ? "no description"
+                : rule.Description;
+
+            builder.AppendLine(
+                $"- `{rule.Name}` ({string.Join(", ", rule.Globs)}) - {description}. "
+                + $"Read: `{DisplayRulePath(workspacePath, rule.Path)}`");
+        }
+
+        builder.AppendLine();
+    }
+
+    /// <summary>
+    /// Appends the memory index, and only the index.
+    /// <para>
+    /// The topics stay on disk with their paths listed. A project accumulates
+    /// memory for years, and inlining all of it would make every session pay
+    /// for every fact anyone ever recorded.
+    /// </para>
+    /// </summary>
+    private async Task AppendMemoryAsync(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        string workspacePath,
+        string slug,
+        CancellationToken ct)
+    {
+        var index = await _memory.ReadIndexAsync(workspacePath, slug, ct).ConfigureAwait(false);
+
+        if (index.Failed || index.Value is null)
+        {
+            return;
+        }
+
+        var relative = $"projects/{slug}/memory";
+
+        builder.AppendLine();
+        builder.AppendLine("## Project memory");
+        builder.AppendLine();
+        builder.AppendLine($"<!-- source: {relative}/MEMORY.md -->");
+        builder.AppendLine();
+        builder.AppendLine(
+            "Durable facts recorded from earlier sessions. Each entry is a file under "
+            + $"`{relative}/`; read the ones that bear on the task. The repository is "
+            + "authoritative: where memory and the code disagree, the code is right and the "
+            + "memory needs correcting.");
+        builder.AppendLine();
+        builder.AppendLine(index.Value.TrimEnd());
+        builder.AppendLine();
+
+        sources.Add(new ContextSource(
+            $"{relative}/MEMORY.md",
+            "Project memory",
+            Encoding.UTF8.GetByteCount(index.Value)));
+    }
+
+    /// <summary>
+    /// Shows a rule by its path inside the workspace rather than its absolute
+    /// location, so the compiled context reads the same on every machine.
+    /// </summary>
+    private static string DisplayRulePath(string workspacePath, string absolute) =>
+        Path.GetRelativePath(workspacePath, absolute).Replace(Path.DirectorySeparatorChar, '/');
 
     /// <inheritdoc />
     public IReadOnlyList<string> ListProfiles(ProjectManifest manifest, string agentName)

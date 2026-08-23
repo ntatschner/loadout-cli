@@ -153,6 +153,16 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
         output.WriteBlankLine();
         output.WriteLine($"[green]Migrated[/] {applied.Steps.Count} item(s) into the workspace.");
 
+        if (applied.BackupId is not null)
+        {
+            // Printed on success rather than buried in help. The moment
+            // somebody wants this is the moment they realise the migration did
+            // something they did not expect, and hunting for the incantation
+            // then is the worst possible time.
+            output.WriteLine(
+                $"[dim]Undo it with:[/] agentctl backup restore {Markup.Escape(applied.BackupId)}");
+        }
+
         if (applied.TrackedLeftInPlace.Count > 0)
         {
             // The most important sentence the command prints: the copy happened
@@ -237,5 +247,6 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                 isDirectory = s.IsDirectory,
             }),
             trackedLeftInPlace = plan.TrackedLeftInPlace,
+            backupId = plan.BackupId,
         });
 }

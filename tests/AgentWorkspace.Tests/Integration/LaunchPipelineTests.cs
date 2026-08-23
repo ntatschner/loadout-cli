@@ -1,6 +1,7 @@
 using AgentWorkspace.Agents;
 using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Context;
+using AgentWorkspace.Core.Instructions;
 using AgentWorkspace.Core.Diagnostics;
 using AgentWorkspace.Core.Git;
 using AgentWorkspace.Core.Policies;
@@ -122,7 +123,7 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             _paths,
             _processes,
             git,
-            new ContextCompiler(permissions),
+            new ContextCompiler(permissions, new RuleService(), new MemoryService(TimeProvider.System)),
             new HandoffService(workspace, TimeProvider.System),
             new PreflightService(git, new FakeSecretProvider()),
             new SecurityProfileService(workspace, yaml));

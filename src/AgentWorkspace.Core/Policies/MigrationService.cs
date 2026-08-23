@@ -1,3 +1,4 @@
+using AgentWorkspace.Core.Backups;
 using AgentWorkspace.Core.Git;
 using AgentWorkspace.Core.Workspace;
 using AgentWorkspace.Models.Policies;
@@ -35,15 +36,18 @@ public sealed class MigrationService : IMigrationService
     private readonly IPolicyService _policies;
     private readonly IWorkspaceManager _workspace;
     private readonly IGitManager _git;
+    private readonly IBackupService _backups;
 
     public MigrationService(
         IPolicyService policies,
         IWorkspaceManager workspace,
-        IGitManager git)
+        IGitManager git,
+        IBackupService backups)
     {
         _policies = policies;
         _workspace = workspace;
         _git = git;
+        _backups = backups;
     }
 
     /// <inheritdoc />
@@ -115,6 +119,21 @@ public sealed class MigrationService : IMigrationService
     {
         var trackedLeftInPlace = new List<string>();
 
+        // Snapshot before the first copy. Migration deletes untracked files
+        // from the repository and writes over whatever is already at the
+        // destination, so without this the command is a one-way door and the
+        // dry run is the only safety net there is.
+        var captured = await _backups
+            .CaptureAsync("migrate", plan.Slug, CollectAffectedPaths(plan), ct)
+            .ConfigureAwait(false);
+
+        if (captured.Failed)
+        {
+            return OperationResult<MigrationPlan>.Fail(
+                "The migration was not started because a backup could not be taken: "
+                + captured.Error);
+        }
+
         foreach (var step in plan.Steps)
         {
             ct.ThrowIfCancellationRequested();
@@ -159,8 +178,56 @@ public sealed class MigrationService : IMigrationService
             }
         }
 
-        return OperationResult<MigrationPlan>.Ok(
-            plan with { Applied = true, TrackedLeftInPlace = trackedLeftInPlace });
+        return OperationResult<MigrationPlan>.Ok(plan with
+        {
+            Applied = true,
+            TrackedLeftInPlace = trackedLeftInPlace,
+            BackupId = captured.Value!.Id,
+        });
+    }
+
+    /// <summary>
+    /// Every path the migration could write over or remove: each source file,
+    /// and the destination it would land on.
+    /// <para>
+    /// Destinations are included even when nothing is there yet. The backup
+    /// records them as absent, which is what lets a restore delete the copies
+    /// rather than leaving them behind as debris after a rollback.
+    /// </para>
+    /// </summary>
+    private List<string> CollectAffectedPaths(MigrationPlan plan)
+    {
+        var paths = new List<string>();
+
+        foreach (var step in plan.Steps)
+        {
+            var destination = Path.Combine(
+                _workspace.LocalPath,
+                step.WorkspaceRelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!step.IsDirectory)
+            {
+                paths.Add(step.SourcePath);
+                paths.Add(destination);
+                continue;
+            }
+
+            if (!Directory.Exists(step.SourcePath))
+            {
+                continue;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(
+                step.SourcePath, "*", SearchOption.AllDirectories))
+            {
+                paths.Add(file);
+                paths.Add(Path.Combine(
+                    destination,
+                    Path.GetRelativePath(step.SourcePath, file)));
+            }
+        }
+
+        return paths;
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using AgentWorkspace.Core.Context;
+using AgentWorkspace.Core.Instructions;
 using AgentWorkspace.Models.Projects;
 using AgentWorkspace.Tests.Fakes;
 using FluentAssertions;
@@ -16,7 +17,10 @@ public sealed class ContextCompilerTests : IDisposable
     private readonly string _root;
     private readonly string _workspace;
     private readonly string _runtime;
-    private readonly ContextCompiler _compiler = new(new NoOpFilePermissions());
+    private readonly ContextCompiler _compiler = new(
+        new NoOpFilePermissions(),
+        new RuleService(),
+        new MemoryService(TimeProvider.System));
 
     public ContextCompilerTests()
     {
@@ -248,4 +252,75 @@ public sealed class ContextCompilerTests : IDisposable
 
     private void WriteProject(string slug, string relative, string content) =>
         WriteWorkspace($"projects/{slug}/{relative}", content);
+
+    [Fact]
+    public async Task Rules_and_memory_reach_the_agent()
+    {
+        WriteProject("starstats", "rules/always.md", "---\nalwaysApply: true\n---\nHouse style.");
+        WriteProject(
+            "starstats",
+            "rules/database.md",
+            "---\ndescription: db work\nglobs: src/Data/**\n---\nMigration rules.");
+        WriteProject("starstats", "memory/MEMORY.md", "- [build-quirks](build-quirks.md) - the build");
+
+        var result = await _compiler.CompileAsync(Manifest(), _workspace, _runtime, "claude");
+
+        var compiled = await File.ReadAllTextAsync(result.Value!.FilePath);
+
+        // An always-apply rule is inlined, because it is going to be needed.
+        compiled.Should().Contain("House style.");
+
+        // A scoped one is listed rather than inlined: naming it costs a line,
+        // and inlining it would put the database conventions in front of
+        // somebody editing a stylesheet.
+        compiled.Should().NotContain("Migration rules.");
+        compiled.Should().Contain("database").And.Contain("src/Data/**");
+
+        compiled.Should().Contain("build-quirks");
+    }
+
+    [Fact]
+    public async Task Memory_topics_are_listed_rather_than_inlined()
+    {
+        WriteProject("starstats", "memory/MEMORY.md", "- [old](old.md) - an old topic");
+        WriteProject("starstats", "memory/old.md", "- A fact nobody needs this session.");
+
+        var result = await _compiler.CompileAsync(Manifest(), _workspace, _runtime, "claude");
+        var compiled = await File.ReadAllTextAsync(result.Value!.FilePath);
+
+        // A project accumulates memory for years. Inlining it would make every
+        // session pay for every fact anyone ever recorded.
+        compiled.Should().Contain("old");
+        compiled.Should().NotContain("A fact nobody needs this session.");
+    }
+
+    [Fact]
+    public async Task Compilation_succeeds_with_every_optional_layer_absent()
+    {
+        // The check that keeps the optional layers optional. Rules, memory,
+        // profiles and handoffs are all things the launcher adds; if any of
+        // them becomes load-bearing, a workspace without it silently stops
+        // working and nothing inside the session can tell you why.
+        var result = await _compiler.CompileAsync(Manifest(), _workspace, _runtime, "claude");
+
+        result.Succeeded.Should().BeTrue();
+
+        var compiled = await File.ReadAllTextAsync(result.Value!.FilePath);
+
+        compiled.Should().Contain("StarStats");
+        result.Value.MissingSources.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task An_unreadable_rules_directory_does_not_stop_a_launch()
+    {
+        // Rules live in a synced repository, so a half-finished sync or a
+        // permissions accident is an ordinary event. It must degrade to fewer
+        // instructions, never to a launch that refuses to start.
+        Directory.CreateDirectory(Path.Combine(_workspace, "projects", "starstats", "rules"));
+
+        var result = await _compiler.CompileAsync(Manifest(), _workspace, _runtime, "claude");
+
+        result.Succeeded.Should().BeTrue();
+    }
 }

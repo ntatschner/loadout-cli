@@ -1,7 +1,9 @@
+using AgentWorkspace.Core.Backups;
 using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Context;
 using AgentWorkspace.Core.Diagnostics;
 using AgentWorkspace.Core.Git;
+using AgentWorkspace.Core.Instructions;
 using AgentWorkspace.Core.Policies;
 using AgentWorkspace.Core.Projects;
 using AgentWorkspace.Core.Updates;
@@ -30,10 +32,14 @@ public static class ServiceRegistration
         services.AddSingleton<IContextCompiler, ContextCompiler>();
         services.AddSingleton<IHandoffService, HandoffService>();
         services.AddSingleton<IPreflightService, PreflightService>();
+        services.AddSingleton<IBackupService, BackupService>();
+        services.AddSingleton<IRuleService, RuleService>();
+        services.AddSingleton<IMemoryService, MemoryService>();
         services.AddSingleton<IPolicyService, PolicyService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<ISecurityProfileService, SecurityProfileService>();
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IDiagnosticContributor, InstructionDiagnosticContributor>();
         services.AddSingleton<IDoctorService, DoctorService>();
 
         // One client for the process, which is what HttpClient is designed for.

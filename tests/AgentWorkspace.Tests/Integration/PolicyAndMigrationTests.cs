@@ -1,3 +1,4 @@
+using AgentWorkspace.Core.Backups;
 using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Git;
 using AgentWorkspace.Core.Policies;
@@ -31,6 +32,7 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
 
     private IPolicyService _policies = null!;
     private IMigrationService _migrations = null!;
+    private IBackupService _backups = null!;
     private IWorkspaceManager _workspace = null!;
     private string _repository = null!;
 
@@ -76,7 +78,8 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
 
         _workspace = new WorkspaceManager(paths, git, yaml, TimeProvider.System);
         _policies = new PolicyService(_workspace, git, paths, permissions, yaml);
-        _migrations = new MigrationService(_policies, _workspace, git);
+        _backups = new BackupService(paths, permissions, yaml, TimeProvider.System);
+        _migrations = new MigrationService(_policies, _workspace, git, _backups);
 
         _repository = await CreateRepositoryAsync().ConfigureAwait(false);
     }

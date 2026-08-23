@@ -23,7 +23,7 @@ public static class Program
     private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "doctor", "status", "list", "here", "launch", "project", "workspace",
-        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config", "desktop", "update",
+        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config", "desktop", "update", "backup", "memory", "rules",
         "--help", "-h", "--version",
     };
 
@@ -188,6 +188,31 @@ public static class Program
         config.AddCommand<DesktopCommand>("desktop");
         config.AddCommand<UpdateCommand>("update");
         config.AddCommand<MigrateCommand>("migrate");
+
+        config.AddBranch("backup", backup =>
+        {
+            backup.SetDescription("Inspect and restore snapshots taken before mutating operations.");
+            backup.AddCommand<BackupListCommand>("list");
+            backup.AddCommand<BackupRestoreCommand>("restore");
+        });
+
+        config.AddBranch("memory", memory =>
+        {
+            memory.SetDescription("Record and check the durable facts about a project.");
+            memory.AddCommand<MemoryListCommand>("list");
+            memory.AddCommand<MemoryWriteCommand>("write");
+            memory.AddCommand<MemoryAuditCommand>("audit");
+            memory.AddCommand<MemoryReindexCommand>("reindex");
+        });
+
+        config.AddBranch("rules", rules =>
+        {
+            rules.SetDescription("Inspect the path-scoped instruction rules and what they cost.");
+            rules.AddCommand<RulesListCommand>("list");
+            rules.AddCommand<RulesBudgetCommand>("budget");
+            rules.AddCommand<RulesAuditCommand>("audit");
+            rules.AddCommand<RulesSplitCommand>("split");
+        });
 
         config.AddBranch("config", cfg =>
         {

@@ -88,6 +88,11 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `agentctl project worktrees <project>` | List a project's working trees |
 | `agentctl handoff <project>` | Create, show or list cross-agent handoffs |
 | `agentctl profile list <project>` | Show a project's context profiles |
+| `agentctl rules list\|budget\|audit <project>` | Inspect the instruction rules and what they cost |
+| `agentctl rules split <project>` | Break an oversized instruction file into scoped rules |
+| `agentctl memory list\|write\|audit\|reindex <project>` | Record and check durable project facts |
+| `agentctl memory audit --clean <project>` | Remove empty topics, exact repeats and dead index lines |
+| `agentctl backup list\|restore` | Undo an operation that changed files |
 | `agentctl completion <shell>` | Emit a completion script |
 
 Every command accepts `--json`, and everything after a bare `--` is passed to
@@ -140,6 +145,127 @@ never written to by an agent.
 Secret references resolve through the platform keystore during preflight and
 reach the child process only. The reference is what gets committed; the value
 never is, and it is never written to a log or a diagnostic report.
+
+## Instructions that scale
+
+An instruction file that is loaded on every session is paid for on every turn,
+whatever the task. Two mechanisms keep that cost proportionate.
+
+**Rules** are Markdown files under `global/rules/` and `projects/<slug>/rules/`
+carrying frontmatter that says when they apply:
+
+```markdown
+---
+description: Migrations and schema work
+globs: src/Data/**, **/*.sql
+alwaysApply: false
+---
+```
+
+A rule with `alwaysApply: true` is inlined into every compiled context. A scoped
+rule is not: the context lists its name, scope and path, and the agent reads it
+when the work touches those paths. A project rule overrides a workspace rule of
+the same name, so a project can depart from the house style without editing it.
+
+`agentctl rules budget` reports what loads regardless of the task.
+`agentctl rules audit` reports the defects that cost tokens invisibly — an
+instruction written in two places, a rule that declares globs *and*
+`alwaysApply` (the globs are decorative; it loads always), two rules claiming
+the same paths, and `@import` lines whose size appears in nobody's budget.
+
+`agentctl rules split` breaks an existing instruction file apart. It needs a map
+saying which sections belong to which rule and what each rule's scope is —
+that judgement is about the project and the tool will not guess it — so start
+with `agentctl rules split --write-map`, fill in the globs, then preview:
+
+```
+$ agentctl rules split --from instructions.md
+instructions.md  6.4KB today
+
+  authentik   authentik/**, **/blueprints/**   1.5KB
+    from  Authentik Blueprints (version 2025.12)
+    from  Auth Patterns
+  networking  **/docker-compose*.yml, traefik/**  932B
+  secrets     **/.env*, secrets/**             1011B
+
+  Always loaded  3KB  was 6.4KB
+  On demand      3.4KB
+
+Every line is accounted for.
+```
+
+Content moves verbatim, never reworded, and every non-blank line in the source
+must appear at least as often across the outputs or the split is refused rather
+than applied. A file that has already been split cannot be split again, because
+the second pass would rebuild the rules from a source whose content has already
+moved out of it.
+
+## Memory
+
+Memory holds durable facts a session should not have to rediscover:
+architecture, decisions and why they were made, non-obvious build behaviour,
+traps that keep catching people. It lives in the workspace repository at
+`projects/<slug>/memory/`, so a fact learned on one machine is available on the
+next and a wrong one can be corrected in a pull request like any other mistake.
+
+```bash
+agentctl memory write starstats build-quirks \
+  --description "things that surprise people about the build" \
+  --fact "The first build after a clean takes four minutes; the analyzers warm up."
+```
+
+Only the index reaches the compiled context. Topics stay on disk with their
+paths listed, because a project accumulates memory for years and inlining all of
+it would make every session pay for every fact anyone ever recorded.
+
+Two checks keep memory worth loading:
+
+- **Credentials are refused on write.** Memory is committed to a shared
+  repository, so writing a token and flagging it afterwards would mean the
+  disclosure had already happened. Findings name the *pattern* that matched and
+  never the value.
+- **Facts that will rot are reported.** An account of a change ("added a retry
+  to the upload step") belongs in the repository history and reads as present
+  tense forever; a fact dated to the day it was written ("the highest migration
+  is 0052") misleads within weeks. `agentctl memory audit` reports those along
+  with duplicates, oversize topics, stale entries and index rot.
+
+`agentctl memory audit --clean` removes what can be removed without judgement:
+topics holding no facts, facts repeated word for word, and index lines pointing
+at files that are gone. It never rewrites prose and never merges two facts that
+merely say similar things — deciding which wording is the right one is the
+judgement a tool should not be making on somebody's behalf. A backup is taken
+first, and `--apply` is required to change anything.
+
+## Undo
+
+Every operation that rewrites files takes a snapshot first — `migrate`,
+`rules split` — and prints the command that reverses it:
+
+```
+Migrated 4 item(s) into the workspace.
+Undo it with: agentctl backup restore 20260823-141502-a1b2
+```
+
+Each set records a SHA-256 per file. A restore verifies every digest before
+writing anything, so a corrupted set fails before it can leave the tree half
+restored, and it takes its own snapshot first so undoing an undo is possible.
+Paths that did not exist at capture time are recorded as absent, which is what
+lets a restore *remove* the files an operation created rather than leaving them
+behind.
+
+For structured files, the restore also reports which keys it would take away:
+
+```
+Settings that would be lost (present now, absent in the backup):
+  .claude/settings.json
+    - toolSearch
+```
+
+That is the failure a file-level backup cannot otherwise see. Every digest
+matches, the restore reports success, and a setting somebody turned on last week
+is gone with nothing to show it existed. Key paths only, never values, because a
+settings file can hold a credential.
 
 ## First run
 

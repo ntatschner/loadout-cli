@@ -24,11 +24,17 @@ public sealed record MigrationStep(
 /// Tracked paths that were copied into the workspace but deliberately not
 /// deleted from the repository.
 /// </param>
+/// <param name="BackupId">
+/// The snapshot taken before the migration ran, null for a plan that has not
+/// been applied. Printed so the person who just moved their configuration knows
+/// how to put it back without having to ask.
+/// </param>
 public sealed record MigrationPlan(
     string Slug,
     IReadOnlyList<MigrationStep> Steps,
     bool Applied,
-    IReadOnlyList<string> TrackedLeftInPlace);
+    IReadOnlyList<string> TrackedLeftInPlace,
+    string? BackupId = null);
 
 /// <summary>
 /// Moves existing agent configuration out of an application repository and into
