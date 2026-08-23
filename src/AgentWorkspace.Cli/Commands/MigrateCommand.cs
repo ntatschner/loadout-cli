@@ -2,6 +2,7 @@ using System.ComponentModel;
 using AgentWorkspace.Cli.Infrastructure;
 using AgentWorkspace.Core.Policies;
 using AgentWorkspace.Core.Projects;
+using AgentWorkspace.Core.Workspace;
 using AgentWorkspace.Models;
 using AgentWorkspace.Models.Policies;
 using AgentWorkspace.Models.Results;
@@ -25,15 +26,18 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 {
     private readonly IMigrationService _migrations;
     private readonly IProjectService _projects;
+    private readonly IWorkspaceManager _workspace;
     private readonly IAnsiConsole _console;
 
     public MigrateCommand(
         IMigrationService migrations,
         IProjectService projects,
+        IWorkspaceManager workspace,
         IAnsiConsole console)
     {
         _migrations = migrations;
         _projects = projects;
+        _workspace = workspace;
         _console = console;
     }
 
@@ -163,6 +167,8 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                 $"[dim]Undo it with:[/] agentctl backup restore {Markup.Escape(applied.BackupId)}");
         }
 
+        WriteInstructionHint(output, applied);
+
         if (applied.TrackedLeftInPlace.Count > 0)
         {
             // The most important sentence the command prints: the copy happened
@@ -232,6 +238,49 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
                 output.WriteLine("  [dim]will be copied, not removed[/]");
             }
         }
+    }
+
+    /// <summary>
+    /// Points out an instruction file that will now load on every session.
+    /// <para>
+    /// Said here because this is the moment it becomes true. A CLAUDE.md that
+    /// was a file in a repository is, after this command, part of what every
+    /// launch pays for, and nobody would think to go looking for a budget
+    /// command they have not heard of.
+    /// </para>
+    /// </summary>
+    private void WriteInstructionHint(CommandOutput output, MigrationPlan plan)
+    {
+        const long WorthMentioning = 8 * 1024;
+
+        // Measured at the destination, not the source. An untracked file has
+        // already been removed from the repository by this point, so measuring
+        // where it came from would find nothing and the hint would never fire
+        // for the case it exists to catch.
+        var instructions = plan.Steps
+            .Where(step => !step.IsDirectory
+                && step.WorkspaceRelativePath.EndsWith("instructions.md", StringComparison.Ordinal))
+            .Select(step => Path.Combine(
+                _workspace.LocalPath,
+                step.WorkspaceRelativePath.Replace('/', Path.DirectorySeparatorChar)))
+            .Where(File.Exists)
+            .Select(path => new FileInfo(path).Length)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        if (instructions < WorthMentioning)
+        {
+            return;
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine(
+            $"[yellow]{instructions / 1024}KB of instructions now load on every session[/] "
+            + "[dim]for this project, whatever the task. See what that costs, and what could be "
+            + "scoped to the paths it actually concerns:[/]");
+
+        output.WriteLine($"  agentctl rules budget {Markup.Escape(plan.Slug)}");
+        output.WriteLine($"  agentctl rules split {Markup.Escape(plan.Slug)} --write-map");
     }
 
     private static void WritePlanJson(CommandOutput output, MigrationPlan plan) =>
