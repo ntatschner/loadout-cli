@@ -1,5 +1,6 @@
 using AgentWorkspace.Core.Configuration;
 using AgentWorkspace.Core.Git;
+using AgentWorkspace.Core.Instructions;
 using AgentWorkspace.Core.Projects;
 using AgentWorkspace.Core.Workspace;
 using AgentWorkspace.Models.Platform;
@@ -449,6 +450,41 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
 
         // A repository's own subdirectories are source code, not more projects.
         attribution.RepositoriesInside(alpha).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_directory_that_is_not_a_repository_is_not_reported_as_one()
+    {
+        var attribution = new RepositoryAttribution(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()),
+            _projects,
+            new PathSemantics());
+
+        var plain = Path.Combine(_root, "just-a-folder");
+        Directory.CreateDirectory(plain);
+
+        // Telling somebody to register this would send them to a command that
+        // cannot succeed, which is worse than saying nothing.
+        attribution.RepositoriesInside(plain).Should().BeEmpty();
+
+        var repository = await CreateRepositoryAsync("solo", "https://example.com/solo.git");
+        attribution.RepositoriesInside(repository).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("alpha")]
+    [InlineData("has-hyphens-in-name")]
+    public async Task A_path_is_recovered_from_the_agents_own_directory_name(string name)
+    {
+        // The transform is lossy: separators, colons and dots all became the
+        // same hyphen. It is resolved against the filesystem rather than by
+        // parsing, because the question that matters is whether a real
+        // directory is there.
+        var repository = await CreateRepositoryAsync(name, $"https://example.com/{name}.git");
+
+        var slug = MemoryImporter.DerivedSlug(repository);
+
+        RepositoryAttribution.RecoverPath(slug).Should().Be(repository);
     }
 
     private async Task<string> CreateRepositoryAsync(string name, string remote)

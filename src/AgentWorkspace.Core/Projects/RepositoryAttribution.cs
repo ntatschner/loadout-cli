@@ -22,6 +22,16 @@ public enum AttributionKind
     /// <summary>A repository on disk that has never been registered.</summary>
     Unregistered,
 
+    /// <summary>
+    /// A directory that exists and is not a repository and holds none.
+    /// <para>
+    /// Distinguished from an unregistered repository because the remedy is
+    /// different and telling somebody to register it would send them to a
+    /// command that cannot succeed.
+    /// </para>
+    /// </summary>
+    NotARepository,
+
     /// <summary>Nothing is there any more.</summary>
     Missing,
 }
@@ -97,7 +107,7 @@ public sealed class RepositoryAttribution : IRepositoryAttribution
     /// <inheritdoc />
     public IReadOnlyList<string> RepositoriesInside(string directory)
     {
-        if (!Directory.Exists(directory) || Directory.Exists(Path.Combine(directory, ".git")))
+        if (!Directory.Exists(directory) || IsRepository(directory))
         {
             return [];
         }
@@ -105,7 +115,7 @@ public sealed class RepositoryAttribution : IRepositoryAttribution
         try
         {
             return Directory.EnumerateDirectories(directory)
-                .Where(child => Directory.Exists(Path.Combine(child, ".git")))
+                .Where(IsRepository)
                 .Order(StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
@@ -166,6 +176,21 @@ public sealed class RepositoryAttribution : IRepositoryAttribution
                 .ToList());
     }
 
+    /// <summary>
+    /// Whether a directory is a working tree.
+    /// <para>
+    /// A linked worktree has a .git file rather than a directory, so checking
+    /// only for the directory would report every worktree as not a repository
+    /// at all.
+    /// </para>
+    /// </summary>
+    private static bool IsRepository(string directory)
+    {
+        var git = Path.Combine(directory, ".git");
+
+        return Directory.Exists(git) || File.Exists(git);
+    }
+
     private StateAttribution Attribute(
         string stateDirectory,
         string memory,
@@ -183,82 +208,86 @@ public sealed class RepositoryAttribution : IRepositoryAttribution
                 memory, subject, AttributionKind.Project, project.Entry.Slug, [], topics);
         }
 
+        if (!Directory.Exists(subject))
+        {
+            return new StateAttribution(memory, subject, AttributionKind.Missing, null, [], topics);
+        }
+
+        // Asked before looking inside: a repository's own subdirectories are
+        // source code, and one of them being a repository in its own right does
+        // not make the parent a container.
+        if (IsRepository(subject))
+        {
+            return new StateAttribution(
+                memory, subject, AttributionKind.Unregistered, null, [], topics);
+        }
+
         var inside = RepositoriesInside(subject);
 
-        if (inside.Count > 1)
-        {
-            return new StateAttribution(
-                memory, subject, AttributionKind.Container, null, inside, topics);
-        }
-
-        if (Directory.Exists(subject))
-        {
-            return new StateAttribution(
-                memory, subject, AttributionKind.Unregistered, null, inside, topics);
-        }
-
-        return new StateAttribution(memory, subject, AttributionKind.Missing, null, [], topics);
+        return inside.Count > 0
+            ? new StateAttribution(memory, subject, AttributionKind.Container, null, inside, topics)
+            : new StateAttribution(
+                memory, subject, AttributionKind.NotARepository, null, [], topics);
     }
 
     /// <summary>
     /// Turns the agent's directory name back into the path it was made from.
     /// <para>
     /// The transform is lossy: every separator, colon and dot became the same
-    /// hyphen, so this cannot be undone exactly. It is resolved by trying the
-    /// candidates against the filesystem and taking one that exists, which
-    /// answers the question that actually matters — is this a real directory,
-    /// and what is in it.
+    /// hyphen, so it cannot be undone by reading the name. It is undone by
+    /// walking the filesystem instead — at each level, the longest run of parts
+    /// that names a directory that actually exists is taken, backtracking when
+    /// a choice leads nowhere. That answers the question that matters, which is
+    /// not how the name was built but whether a real directory is there.
     /// </para>
     /// </summary>
     internal static string RecoverPath(string slug)
     {
-        // Windows first: a leading "D--" is a drive letter and two separators.
+        // A leading "D--" is a drive letter followed by two separators.
         if (slug.Length > 3 && slug[1] == '-' && slug[2] == '-' && char.IsLetter(slug[0]))
         {
-            var candidate = slug[0] + ":\\" + slug[3..].Replace('-', '\\');
+            var root = slug[0] + ":" + Path.DirectorySeparatorChar;
 
-            if (Directory.Exists(candidate))
-            {
-                return candidate;
-            }
-
-            // A directory whose own name contains a hyphen cannot be told apart
-            // from a separator, so each hyphen is tried as part of a name
-            // working from the right, which is where compound names sit.
-            var recovered = TryVariants(slug[0] + ":\\", slug[3..]);
-
-            return recovered ?? candidate;
+            return Walk(root, slug[3..].Split('-'), 0)
+                ?? root + slug[3..].Replace('-', Path.DirectorySeparatorChar);
         }
 
-        var posix = "/" + slug.TrimStart('-').Replace('-', '/');
+        var body = slug.TrimStart('-');
 
-        return TryVariants("/", slug.TrimStart('-')) ?? posix;
+        return Walk("/", body.Split('-'), 0) ?? "/" + body.Replace('-', '/');
     }
 
-    private static string? TryVariants(string prefix, string body)
+    /// <summary>
+    /// Rebuilds a path one directory at a time, longest candidate first.
+    /// <para>
+    /// Longest first because a hyphen inside a name is more common than a
+    /// directory named after a single fragment of one, and backtracking because
+    /// "more common" is not "always": where both a directory and a longer name
+    /// beginning with it exist, the wrong branch has to be abandoned rather
+    /// than committed to.
+    /// </para>
+    /// </summary>
+    private static string? Walk(string current, string[] parts, int index)
     {
-        var separator = prefix.EndsWith('\\') ? '\\' : '/';
-        var parts = body.Split('-');
-
-        // Rebuilt from the right: the last hyphens are the ones most likely to
-        // be part of a name rather than a separator, so joining those first
-        // finds "home-servers-build" before it finds three nested directories.
-        for (var join = 0; join < parts.Length; join++)
+        if (index >= parts.Length)
         {
-            for (var start = parts.Length - 1 - join; start >= 0; start--)
+            return current;
+        }
+
+        for (var take = parts.Length - index; take >= 1; take--)
+        {
+            var candidate = Path.Combine(current, string.Join('-', parts.Skip(index).Take(take)));
+
+            if (!Directory.Exists(candidate))
             {
-                var rebuilt = parts.ToList();
-                var merged = string.Join('-', rebuilt.Skip(start).Take(join + 1));
+                continue;
+            }
 
-                rebuilt.RemoveRange(start, join + 1);
-                rebuilt.Insert(start, merged);
+            var resolved = Walk(candidate, parts, index + take);
 
-                var candidate = prefix + string.Join(separator, rebuilt);
-
-                if (Directory.Exists(candidate))
-                {
-                    return candidate;
-                }
+            if (resolved is not null)
+            {
+                return resolved;
             }
         }
 

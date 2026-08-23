@@ -124,7 +124,7 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `agentctl status` | Summary of workspace, projects and agents |
 | `agentctl project add\|list\|show\|remove\|discover\|open` | Manage project registration |
 | `agentctl project clone\|relocate <project>` | Get a registered project onto this machine |
-| `agentctl project survey` | Find agent state on this machine no project accounts for |
+| `agentctl project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `agentctl project link [project]` | Record inside a repository which project it belongs to |
 | `agentctl config list\|get\|set\|edit` | Read and write launcher settings |
 | `agentctl workspace status\|sync\|save\|open` | Manage the central workspace clone |
@@ -297,6 +297,17 @@ D:\git\GateConquestRepos  7 topic(s)
     GateConquestWeb
   decide which project it belongs to, then: agentctl memory import <project> --from ...
 ```
+
+`--adopt` takes on what can be taken on without a judgement call: importing
+memory for a project that already exists, and registering a repository that is
+plainly one repository before importing its memory. It previews first, asks per
+repository, and takes a backup before writing, so one can be accepted and its
+neighbour declined.
+
+It deliberately never touches the other cases. A directory holding several
+repositories needs somebody to say which one the state describes; a directory
+that is not a repository at all cannot be registered, and suggesting it would
+send you to a command that cannot succeed.
 
 That last case is the one worth having. Agents key their state by the directory
 they were started in, which is not always a repository: work done across several
