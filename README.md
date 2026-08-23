@@ -591,7 +591,8 @@ pseudo-terminal in particular allocates a tty, spawns into it and drives a real
 session; none of that is exercised by building it.
 
 ```powershell
-pwsh ./build/verify-linux.ps1
+pwsh ./build/verify-linux.ps1                      # linux-x64
+pwsh ./build/verify-linux.ps1 -Architecture arm64  # linux-arm64, emulated
 ```
 
 That builds a container, runs the whole suite there, packages the archive, the
@@ -606,6 +607,22 @@ library that resolves under a name only present with development packages
 installed, a pre-commit hook test that proved nothing because a fake stood in
 for the executable bit, and an assertion about Windows paths that could only
 ever pass on Windows.
+
+The `arm64` run is emulated, which is slow but is the only way to execute a
+`linux-arm64` build without arm64 hardware — that build is otherwise
+cross-compiled and never run anywhere. It found a fifth defect: `posix_spawn`
+reports a missing executable to the caller on x64 and lets the child exit 127 on
+arm64, so the same missing agent would have produced a clear error on one
+machine and silence on another. The launcher now checks before it spawns, which
+also matches what Windows already did.
+
+Emulation cannot build Debian or RPM packages: the `stat` that `tar
+--no-recursion` depends on returns `EINVAL` under QEMU, and a two-file package
+built by hand fails the same way. The script probes for that with a throwaway
+package and skips the step with a reason rather than reporting a defect that is
+not there. Packages for arm64 are built on an x86-64 host in CI, where `tar`
+behaves; installing an arm64 package *on* arm64 is the one thing still covered
+nowhere.
 
 ## Licence
 

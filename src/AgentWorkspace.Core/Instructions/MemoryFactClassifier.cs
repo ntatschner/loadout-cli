@@ -28,6 +28,16 @@ public enum FactVerdict
     /// future session could rely on.
     /// </summary>
     NoAssertion,
+
+    /// <summary>
+    /// The check could not be completed, so nothing is claimed either way.
+    /// <para>
+    /// Reported rather than resolved to one of the answers above. Guessing
+    /// "durable" would hide a check that did not run, and guessing anything
+    /// else would flag a fact on no evidence.
+    /// </para>
+    /// </summary>
+    NotAssessed,
 }
 
 /// <summary>
@@ -49,8 +59,40 @@ public static partial class MemoryFactClassifier
     /// <summary>Above this it is a document, and belongs in the workspace as one.</summary>
     private const int MaximumLength = 1200;
 
-    /// <summary>Classifies one candidate fact.</summary>
+    /// <summary>
+    /// How long a single pattern may run for.
+    /// <para>
+    /// Deliberately looser than the quarter-second the rule matcher allows.
+    /// That one runs on the launch path, where a stall is felt immediately;
+    /// this runs inside an audit, where finishing correctly matters more than
+    /// finishing quickly. The limit is wall-clock and so includes time the
+    /// thread spent descheduled, which on a loaded machine is most of it.
+    /// </para>
+    /// </summary>
+    private const int MatchTimeoutMilliseconds = 5000;
+
+    /// <summary>
+    /// Classifies one candidate fact.
+    /// <para>
+    /// Never throws. A regular-expression timeout here is not a hypothetical:
+    /// the limit is wall-clock, so a thread descheduled on a loaded machine can
+    /// exceed it while doing almost no work, and an unhandled exception out of
+    /// an audit would be a crash where a warning was wanted.
+    /// </para>
+    /// </summary>
     public static FactVerdict Classify(string? text)
+    {
+        try
+        {
+            return Assess(text);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return FactVerdict.NotAssessed;
+        }
+    }
+
+    private static FactVerdict Assess(string? text)
     {
         var value = (text ?? string.Empty).Trim();
 
@@ -112,6 +154,10 @@ public static partial class MemoryFactClassifier
             $"is over {MaximumLength} characters. That is a document; put it in the workspace "
             + "and reference it.",
 
+        FactVerdict.NotAssessed =>
+            "could not be checked in the time allowed, so nothing is claimed about it either "
+            + "way. Run the audit again on a less busy machine.",
+
         _ =>
             "makes no standing claim, so a later session has nothing to rely on. Say what is "
             + "true, what is required, or why something is the way it is.",
@@ -131,20 +177,20 @@ public static partial class MemoryFactClassifier
         + @"configured|enabled|disabled|committed|pushed|released|shipped)\b"
         + @"|\bnow (?:has|have|supports|uses|returns|includes|lives|works)\b"
         + @"|\bcompletes the implementation\b",
-        RegexOptions.None, 1000)]
+        RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex ChangeLog();
 
     [GeneratedRegex(
         @"(?i)\b(?:for now|temporarily|currently|as of (?:today|now|this week)|at the time of writing|"
         + @"until we|will be replaced|next is \d+|so far)\b|\bTODO\b|\bFIXME\b",
-        RegexOptions.None, 1000)]
+        RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex TimeSensitive();
 
     [GeneratedRegex(
         @"(?i)^\s*(?:at [\w.]+\(|npm ERR!|error TS\d+|Traceback|\s*File "".*"", line \d+)"
         + @"|\b(?:let me|i'?ll|i will|i'?m going to|let's)\b"
         + @"|\b\d+%\s*(?:complete|done)\b",
-        RegexOptions.None, 1000)]
+        RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex Noise();
 
     /// <summary>
@@ -156,7 +202,7 @@ public static partial class MemoryFactClassifier
         + @"must|must not|never|always|cannot|only|because|root cause|responsible for|enforces?|"
         + @"expects?|assumes?|defaults? to|returns?|throws?|fails? when|breaks? when|owns?|"
         + @"handles?|survives?)\b",
-        RegexOptions.None, 1000)]
+        RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex Assertion();
 
     /// <summary>
@@ -166,6 +212,6 @@ public static partial class MemoryFactClassifier
     [GeneratedRegex(
         @"(?i)\b(?:convention|rule|policy|constraint|invariant|contract|gotcha|caveat|limitation|"
         + @"known issue|trade-?off|rationale|decision|architecture|design)\b",
-        RegexOptions.None, 1000)]
+        RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex Subject();
 }

@@ -52,6 +52,17 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
                 ExitCode.InvalidArguments));
         }
 
+        if (!File.Exists(request.Executable))
+        {
+            // Checked here so the answer is the same everywhere. Whether
+            // posix_spawn reports a missing executable to the caller or lets
+            // the child exit 127 instead varies by architecture, so relying on
+            // it would mean a clear error on one machine and a bare exit code
+            // on another for the same mistake.
+            return Task.FromResult(OperationResult.Fail(
+                $"'{request.Executable}' does not exist.", ExitCode.AgentUnavailable));
+        }
+
         var size = new NativeTerminal.WindowSize
         {
             Columns = (ushort)Math.Clamp(columns, 1, ushort.MaxValue),

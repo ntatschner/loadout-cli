@@ -400,10 +400,11 @@ public sealed class PseudoTerminalTests
             columns: 80,
             rows: 24);
 
-        // Reported here rather than as a child that exited 127. posix_spawn
-        // carries the exec failure back to the caller, so the launcher can say
-        // which agent could not be started instead of relaying a shell
-        // convention nobody outside a terminal would recognise.
+        // Reported here rather than as a child that exited 127, and the same
+        // way on every architecture. posix_spawn itself is not consistent about
+        // this: on x64 it hands the exec failure back to the caller, and on
+        // arm64 it succeeds and lets the child carry the news, so the launcher
+        // checks before it spawns rather than depending on which.
         started.Failed.Should().BeTrue();
         started.ExitCode.Should().Be(ExitCode.AgentUnavailable);
         started.Error.Should().Contain("agentctl-no-such-executable-4b7d");

@@ -11,6 +11,18 @@ set -euo pipefail
 
 version="${AGENTCTL_VERSION:-0.1.0}"
 
+# Derived rather than passed in, so the same image verifies whichever
+# architecture it was built for. Getting this wrong would be quiet: the build
+# would succeed and produce a package for the other architecture entirely.
+case "$(uname -m)" in
+    x86_64)  runtime='linux-x64' ;;
+    aarch64) runtime='linux-arm64' ;;
+    *)
+        echo "No runtime identifier is known for $(uname -m)." >&2
+        exit 1
+        ;;
+esac
+
 heading() {
     printf '\n\033[1m%s\033[0m\n' "$1"
 }
@@ -18,7 +30,8 @@ heading() {
 heading 'Environment'
 dotnet --version
 pwsh --version
-echo "uname: $(uname -srm)"
+echo "uname:   $(uname -srm)"
+echo "runtime: ${runtime}"
 
 heading 'Build'
 dotnet build --configuration Release --nologo --verbosity quiet
@@ -52,9 +65,9 @@ dotnet test \
     --logger 'console;verbosity=normal'
 
 heading 'Archive'
-pwsh -NoProfile -File ./build/package.ps1 -Runtime linux-x64 -Version "$version"
+pwsh -NoProfile -File ./build/package.ps1 -Runtime "$runtime" -Version "$version"
 
-archive="artifacts/agentctl-${version}-linux-x64.tar.gz"
+archive="artifacts/agentctl-${version}-${runtime}.tar.gz"
 # Checked from inside artifacts/: a checksum file names the archive without a
 # directory, and sha256sum resolves that against the working directory.
 ( cd artifacts && sha256sum -c "$(basename "$archive").sha256" )
@@ -93,7 +106,48 @@ if [ -z "$verdict" ]; then
 fi
 
 heading 'Packages'
-pwsh -NoProfile -File ./build/installer.ps1 -Runtime linux-x64 -Version "$version"
+
+# Probed rather than assumed. Building a .deb runs tar with --no-recursion over
+# a list of names, and under QEMU user-mode emulation the stat behind that
+# returns EINVAL for every entry. It is nothing to do with this project: a
+# two-file package built by hand fails identically, and so does plain tar.
+#
+# So the capability is tested with a throwaway package and the step is skipped
+# with a reason when it is missing. Skipping silently would let a real
+# packaging break hide behind an emulator, and failing would report a defect
+# that is not there.
+packaging_works() {
+    local probe='/tmp/packaging-probe'
+
+    rm -rf "$probe"
+    mkdir -p "$probe/pkg/DEBIAN" "$probe/pkg/usr/bin"
+
+    printf 'probe\n' > "$probe/pkg/usr/bin/probe"
+    printf 'Package: probe\nVersion: 1\nArchitecture: all\nMaintainer: probe\nDescription: probe\n' \
+        > "$probe/pkg/DEBIAN/control"
+
+    dpkg-deb --build --root-owner-group "$probe/pkg" "$probe/probe.deb" > /dev/null 2>&1
+}
+
+if ! packaging_works; then
+    echo 'Skipped: this environment cannot build Debian packages.'
+    echo
+    echo 'A minimal package built by hand fails here too, so the cause is the'
+    echo 'environment rather than the project. Under QEMU emulation the stat'
+    echo 'that tar --no-recursion depends on returns EINVAL for every entry.'
+    echo
+    echo 'The build, the test suite and the archive above all ran natively for'
+    echo 'this architecture and are unaffected. Packages for it are built on an'
+    echo 'x86-64 host in CI, where tar behaves; what is not covered anywhere yet'
+    echo 'is installing an arm64 package on arm64 hardware.'
+
+    heading 'Done'
+    echo 'Linux build, tests and archive verified. Packaging skipped, see above.'
+
+    exit 0
+fi
+
+pwsh -NoProfile -File ./build/installer.ps1 -Runtime "$runtime" -Version "$version"
 
 deb=$(ls artifacts/*.deb)
 rpm=$(ls artifacts/*.rpm)
