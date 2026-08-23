@@ -96,11 +96,16 @@ internal static class ConfigKeys
 public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IConfigurationService _configuration;
+    private readonly IPlatformPaths _paths;
     private readonly IAnsiConsole _console;
 
-    public ConfigListCommand(IConfigurationService configuration, IAnsiConsole console)
+    public ConfigListCommand(
+        IConfigurationService configuration,
+        IPlatformPaths paths,
+        IAnsiConsole console)
     {
         _configuration = configuration;
+        _paths = paths;
         _console = console;
     }
 
@@ -139,6 +144,17 @@ public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
             return CommandOutput.Success();
         }
 
+        // Said before the values, because "where does this live" is the first
+        // question anybody has and the answer was previously only available by
+        // running an unrelated command and reading its output carefully.
+        output.WriteLine($"[dim]Shared    {Markup.Escape(_paths.Paths.Config)}"
+            + $"{Path.DirectorySeparatorChar}config.yaml[/]");
+
+        output.WriteLine($"[dim]Machine   {Markup.Escape(_paths.Paths.State)}"
+            + $"{Path.DirectorySeparatorChar}machines.yaml[/]");
+
+        output.WriteBlankLine();
+
         var table = new Table().Border(TableBorder.Simple).BorderColor(Color.Grey);
         table.AddColumn("Setting");
         table.AddColumn("Value");
@@ -154,6 +170,10 @@ public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
 
         output.Write(table);
 
+        output.WriteLine("[dim]What one means:[/] loadout config get <setting> --explain");
+        output.WriteLine("[dim]Change one:[/]     loadout config set <setting> <value>");
+        output.WriteLine("[dim]Edit the file:[/]  loadout config edit");
+
         return CommandOutput.Success();
     }
 }
@@ -163,11 +183,16 @@ public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
 public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
 {
     private readonly IConfigurationService _configuration;
+    private readonly IPlatformPaths _paths;
     private readonly IAnsiConsole _console;
 
-    public ConfigGetCommand(IConfigurationService configuration, IAnsiConsole console)
+    public ConfigGetCommand(
+        IConfigurationService configuration,
+        IPlatformPaths paths,
+        IAnsiConsole console)
     {
         _configuration = configuration;
+        _paths = paths;
         _console = console;
     }
 
@@ -176,6 +201,10 @@ public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
         [CommandArgument(0, "<key>")]
         [Description("Setting name, for example default-agent.")]
         public string Key { get; init; } = string.Empty;
+
+        [CommandOption("--explain")]
+        [Description("Say what the setting does, which file holds it and what it accepts.")]
+        public bool Explain { get; init; }
     }
 
     /// <inheritdoc />
@@ -201,16 +230,49 @@ public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
 
         if (output.IsJson)
         {
-            output.WriteJson(new { key = entry.Key, value });
+            output.WriteJson(new
+            {
+                key = entry.Key,
+                value,
+                description = entry.Description,
+                scope = entry.IsMachineLocal ? "machine" : "shared",
+                file = FileFor(entry),
+            });
+
+            return CommandOutput.Success();
         }
-        else
+
+        if (!settings.Explain)
         {
             // Written raw so it can be captured by a script without markup.
+            // The explanation is behind a flag for exactly this reason: adding
+            // it here would break every $(loadout config get ...) in existence.
             Console.Out.WriteLine(value);
+
+            return CommandOutput.Success();
         }
+
+        output.WriteLine($"[bold]{Markup.Escape(entry.Key)}[/]");
+        output.WriteLine(value.Length == 0
+            ? "  [dim](unset)[/]"
+            : $"  {Markup.Escape(value)}");
+
+        output.WriteBlankLine();
+        output.WriteLine($"  {Markup.Escape(entry.Description)}");
+
+        output.WriteLine(entry.IsMachineLocal
+            ? "  [dim]Machine-local: it describes this machine's layout and never travels "
+              + "to another one.[/]"
+            : "  [dim]Shared: it travels with the workspace to every machine you use.[/]");
+
+        output.WriteLine($"  [dim]{Markup.Escape(FileFor(entry))}[/]");
 
         return CommandOutput.Success();
     }
+
+    private string FileFor(ConfigKeys.Entry entry) => Path.Combine(
+        entry.IsMachineLocal ? _paths.Paths.State : _paths.Paths.Config,
+        entry.IsMachineLocal ? "machines.yaml" : "config.yaml");
 
     internal static string UnknownKeyMessage(string key) =>
         $"'{key}' is not a known setting. Available: "

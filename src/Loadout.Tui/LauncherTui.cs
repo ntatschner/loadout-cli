@@ -4,6 +4,7 @@ using Loadout.Core.Context;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
+using Loadout.Models.Configuration;
 using Loadout.Models.Projects;
 using Loadout.Platform.Abstractions;
 using Spectre.Console;
@@ -24,9 +25,25 @@ public interface ILauncherTui
 /// desktop session, which spec section 21 requires and section 86 depends on.
 /// There is no mouse interaction anywhere.
 /// </para>
+/// <para>
+/// It returns to where you came from rather than exiting. Backing out of a
+/// project used to quit the launcher entirely, which made browsing impossible:
+/// the only way to look at a second project was to start again.
+/// </para>
 /// </summary>
 public sealed class LauncherTui : ILauncherTui
 {
+    private const string Quit = "Quit";
+    private const string Back = "Back";
+    private const string Settings = "Settings and paths";
+
+    /// <summary>
+    /// Stands in for the settings entry so the list can hold one thing that is
+    /// not a project without the selection returning two kinds of answer.
+    /// </summary>
+    private static readonly ProjectResolution SettingsSentinel =
+        new(new Models.Projects.ProjectRegistryEntry(), null, null, 0, false);
+
     private readonly IAnsiConsole _console;
     private readonly IProjectService _projects;
     private readonly IWorkspaceManager _workspace;
@@ -36,6 +53,9 @@ public sealed class LauncherTui : ILauncherTui
     private readonly IShellProvider _shells;
     private readonly IProcessLauncher _processes;
     private readonly IContextCompiler _compiler;
+    private readonly IProjectOverviewService _overviews;
+    private readonly IApplicationLauncher _opener;
+    private readonly IPlatformPaths _paths;
 
     public LauncherTui(
         IAnsiConsole console,
@@ -46,7 +66,10 @@ public sealed class LauncherTui : ILauncherTui
         IAgentLauncher launcher,
         IShellProvider shells,
         IProcessLauncher processes,
-        IContextCompiler compiler)
+        IContextCompiler compiler,
+        IProjectOverviewService overviews,
+        IApplicationLauncher opener,
+        IPlatformPaths paths)
     {
         _console = console;
         _projects = projects;
@@ -57,6 +80,9 @@ public sealed class LauncherTui : ILauncherTui
         _shells = shells;
         _processes = processes;
         _compiler = compiler;
+        _overviews = overviews;
+        _opener = opener;
+        _paths = paths;
     }
 
     /// <inheritdoc />
@@ -73,33 +99,128 @@ public sealed class LauncherTui : ILauncherTui
 
         await ShowHeaderAsync(config, ct).ConfigureAwait(false);
 
-        var projectsResult = await _projects.ListAsync(ct).ConfigureAwait(false);
-        if (projectsResult.Failed)
+        // The repository you are standing in is almost always the one you
+        // meant, so it is offered first rather than left to be hunted for in a
+        // list sorted by something else.
+        var here = await ResolveCurrentAsync(ct).ConfigureAwait(false);
+
+        while (true)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(projectsResult.Error!)}[/]");
-            return (int)projectsResult.ExitCode;
+            ct.ThrowIfCancellationRequested();
+
+            var projectsResult = await _projects.ListAsync(ct).ConfigureAwait(false);
+            if (projectsResult.Failed)
+            {
+                _console.MarkupLine($"[red]{Markup.Escape(projectsResult.Error!)}[/]");
+                return (int)projectsResult.ExitCode;
+            }
+
+            var projects = projectsResult.Value!;
+
+            if (projects.Count == 0)
+            {
+                _console.MarkupLine("[yellow]No projects are registered yet.[/]");
+                _console.MarkupLine("[dim]Register one with:[/] loadout project add <path>");
+                _console.MarkupLine(
+                    "[dim]Or find existing repositories with:[/] loadout project discover");
+
+                return (int)ExitCode.Success;
+            }
+
+            var selected = SelectProject(projects, here);
+
+            if (selected is null)
+            {
+                return (int)ExitCode.Success;
+            }
+
+            if (ReferenceEquals(selected, SettingsSentinel))
+            {
+                ShowSettings(config);
+
+                continue;
+            }
+
+            var outcome = await ShowProjectAsync(selected, config, ct).ConfigureAwait(false);
+
+            // A launch ends the session: the agent has had the terminal and its
+            // exit code is the launcher's. Anything else returns to the list.
+            if (outcome is not null)
+            {
+                return outcome.Value;
+            }
+
+            _console.WriteLine();
         }
-
-        var projects = projectsResult.Value!;
-
-        if (projects.Count == 0)
-        {
-            _console.MarkupLine("[yellow]No projects are registered yet.[/]");
-            _console.MarkupLine("[dim]Register one with:[/] loadout project add <path>");
-            _console.MarkupLine("[dim]Or find existing repositories with:[/] loadout project discover");
-            return (int)ExitCode.Success;
-        }
-
-        var selected = SelectProject(projects);
-        if (selected is null)
-        {
-            return (int)ExitCode.Success;
-        }
-
-        return await ShowProjectMenuAsync(selected, config, ct).ConfigureAwait(false);
     }
 
-    private async Task ShowHeaderAsync(Models.Configuration.LauncherConfig config, CancellationToken ct)
+    /// <summary>
+    /// Shows where configuration lives and what it currently says.
+    /// <para>
+    /// Here because the question "where is any of this kept" had no answer
+    /// inside the launcher at all: the paths were only visible by running
+    /// doctor and reading carefully, and the settings only by knowing that a
+    /// config command existed. A tool that hides its own configuration is
+    /// asking people to take it on faith.
+    /// </para>
+    /// <para>
+    /// Read-only. Changing a setting from a menu means validating input in a
+    /// prompt, and the command that already does that is named at the bottom.
+    /// </para>
+    /// </summary>
+    private void ShowSettings(LauncherConfig config)
+    {
+        _console.WriteLine();
+        _console.Write(new Rule("[bold]Settings[/]").LeftJustified());
+
+        var table = new Table().Border(TableBorder.None).HideHeaders();
+        table.AddColumn(new TableColumn(string.Empty).PadRight(2));
+        table.AddColumn(string.Empty);
+
+        table.AddRow("[dim]Workspace remote[/]", string.IsNullOrWhiteSpace(config.Workspace.Remote)
+            ? "[yellow]not set[/]"
+            : Markup.Escape(config.Workspace.Remote));
+
+        table.AddRow("[dim]Workspace branch[/]", Markup.Escape(config.Workspace.Branch));
+        table.AddRow("[dim]Local clone[/]", Markup.Escape(_workspace.LocalPath));
+        table.AddRow("[dim]Default agent[/]", Markup.Escape(config.DefaultAgent));
+        table.AddRow("[dim]Sync at launch[/]", Markup.Escape(config.Sync.Launch));
+        table.AddRow("[dim]Sync at exit[/]", Markup.Escape(config.Sync.Exit));
+        table.AddRow("[dim]Secrets[/]", Markup.Escape(config.Secrets.Provider));
+
+        table.AddRow(
+            "[dim]Shared file[/]",
+            Markup.Escape(Path.Combine(_paths.Paths.Config, "config.yaml")));
+
+        table.AddRow(
+            "[dim]Machine file[/]",
+            Markup.Escape(Path.Combine(_paths.Paths.State, "machines.yaml")));
+
+        _console.Write(table);
+
+        _console.WriteLine();
+        _console.MarkupLine("[dim]See everything:[/]  loadout config list");
+        _console.MarkupLine("[dim]What one means:[/]  loadout config get <setting> --explain");
+        _console.MarkupLine("[dim]Change one:[/]      loadout config set <setting> <value>");
+        _console.MarkupLine("[dim]Edit the file:[/]   loadout config edit");
+        _console.WriteLine();
+    }
+
+    /// <summary>
+    /// The project owning the current directory, or null when there is none.
+    /// A failure here is not worth reporting: it means "you are not in a
+    /// registered repository", which is the ordinary case.
+    /// </summary>
+    private async Task<ProjectResolution?> ResolveCurrentAsync(CancellationToken ct)
+    {
+        var resolved = await _projects
+            .ResolveFromDirectoryAsync(Directory.GetCurrentDirectory(), ct)
+            .ConfigureAwait(false);
+
+        return resolved.Succeeded ? resolved.Value : null;
+    }
+
+    private async Task ShowHeaderAsync(LauncherConfig config, CancellationToken ct)
     {
         _console.Write(new Rule("[bold]Loadout[/]").LeftJustified());
 
@@ -124,19 +245,25 @@ public sealed class LauncherTui : ILauncherTui
     }
 
     /// <summary>
-    /// Shows the recent-projects list. Ordering comes from the service, which
-    /// puts pinned first, then most recent, then most frequent
-    /// (spec section 23).
+    /// Shows the project list. Ordering comes from the service, which puts
+    /// pinned first, then most recent, then most frequent (spec section 23),
+    /// except that the current repository is lifted to the top.
     /// </summary>
-    private ProjectResolution? SelectProject(IReadOnlyList<ProjectResolution> projects)
+    private ProjectResolution? SelectProject(
+        IReadOnlyList<ProjectResolution> projects,
+        ProjectResolution? here)
     {
-        const string Cancel = "Quit";
+        var ordered = Order(projects, here);
 
-        var choices = projects.Select(FormatProject).ToList();
-        choices.Add(Cancel);
+        var choices = ordered
+            .Select(project => FormatProject(project, here))
+            .ToList();
+
+        choices.Add(Settings);
+        choices.Add(Quit);
 
         var prompt = new SelectionPrompt<string>()
-            .Title("[bold]Recent projects[/]")
+            .Title("[bold]Projects[/]")
             .PageSize(15)
             .MoreChoicesText("[dim](move up and down for more)[/]")
             .AddChoices(choices);
@@ -147,28 +274,49 @@ public sealed class LauncherTui : ILauncherTui
 
         var answer = _console.Prompt(prompt);
 
-        if (answer == Cancel)
+        if (answer == Quit)
         {
             return null;
         }
 
-        return projects[choices.IndexOf(answer)];
+        return answer == Settings ? SettingsSentinel : ordered[choices.IndexOf(answer)];
     }
 
-    private static string FormatProject(ProjectResolution project)
+    internal static List<ProjectResolution> Order(
+        IReadOnlyList<ProjectResolution> projects,
+        ProjectResolution? here)
     {
-        var pin = project.Pinned ? "[yellow]*[/] " : "  ";
+        if (here is null)
+        {
+            return projects.ToList();
+        }
+
+        return projects
+            .Where(project => project.Entry.Slug == here.Entry.Slug)
+            .Concat(projects.Where(project => project.Entry.Slug != here.Entry.Slug))
+            .ToList();
+    }
+
+    private static string FormatProject(ProjectResolution project, ProjectResolution? here)
+    {
+        var marker = here is not null && project.Entry.Slug == here.Entry.Slug
+            ? "[green]>[/] "
+            : project.Pinned ? "[yellow]*[/] " : "  ";
 
         var suffix = project.IsAvailableLocally
             ? $"[dim]{Markup.Escape(project.Entry.DefaultAgent)}[/]"
             : "[yellow]not on this machine[/]";
 
-        return $"{pin}{Markup.Escape(project.Entry.Name)}  {suffix}";
+        return $"{marker}{Markup.Escape(project.Entry.Name)}  {suffix}";
     }
 
-    private async Task<int> ShowProjectMenuAsync(
+    /// <summary>
+    /// Shows one project and what can be done with it. Returns an exit code when
+    /// the session is over, and null to go back to the list.
+    /// </summary>
+    private async Task<int?> ShowProjectAsync(
         ProjectResolution project,
-        Models.Configuration.LauncherConfig config,
+        LauncherConfig config,
         CancellationToken ct)
     {
         _console.WriteLine();
@@ -176,18 +324,100 @@ public sealed class LauncherTui : ILauncherTui
 
         if (project.LocalPath is null)
         {
-            // Spec section 28: this is an offer to fix, not a dead end. The
-            // clone flow itself arrives with the project wizard.
-            _console.MarkupLine("[yellow]This repository is not available on this machine.[/]");
-            _console.MarkupLine(
-                $"[dim]Clone it with:[/] loadout project clone {Markup.Escape(project.Entry.Slug)}");
-
-            return (int)ExitCode.RepositoryUnavailable;
+            return await OfferCloneAsync(project, ct).ConfigureAwait(false);
         }
 
-        _console.MarkupLine($"[dim]{Markup.Escape(project.LocalPath)}[/]");
+        var described = await _overviews.DescribeAsync(project, ct).ConfigureAwait(false);
+
+        if (described.Succeeded)
+        {
+            WriteOverview(described.Value!);
+        }
+        else
+        {
+            _console.MarkupLine($"[dim]{Markup.Escape(project.LocalPath)}[/]");
+        }
+
         _console.WriteLine();
 
+        return await ChooseActionAsync(project, described.Value, config, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Renders what the session is about to start with.
+    /// <para>
+    /// The point is that the cost of a launch and anything wrong with it are
+    /// visible before it happens, not discoverable afterwards from a separate
+    /// command somebody has to know exists.
+    /// </para>
+    /// </summary>
+    private void WriteOverview(ProjectOverview overview)
+    {
+        _console.MarkupLine($"[dim]{Markup.Escape(overview.Project.LocalPath!)}[/]");
+
+        var branch = overview.Branch is null
+            ? "[dim]detached[/]"
+            : Markup.Escape(overview.Branch);
+
+        var state = overview.IsClean ? "[dim]clean[/]" : "[yellow]uncommitted changes[/]";
+
+        _console.MarkupLine($"  {branch}  {state}");
+
+        var budget = overview.IsOverBudget
+            ? $"[yellow]{FormatBytes(overview.AlwaysLoadedBytes)}[/]"
+            : $"[green]{FormatBytes(overview.AlwaysLoadedBytes)}[/]";
+
+        var scoped = overview.ScopedRules == 1 ? "1 scoped rule" : $"{overview.ScopedRules} scoped rules";
+
+        _console.MarkupLine(
+            $"  {budget} loaded every session  [dim]plus {scoped} on demand[/]");
+
+        if (overview.MemoryTopics > 0)
+        {
+            _console.MarkupLine(
+                $"  [dim]{overview.MemoryTopics} memory topic(s)[/]");
+        }
+
+        foreach (var warning in Warnings(overview))
+        {
+            _console.MarkupLine($"  [yellow]![/] {warning}");
+        }
+    }
+
+    /// <summary>
+    /// Things worth saying before a launch, in the order they matter.
+    /// </summary>
+    internal static IEnumerable<string> Warnings(ProjectOverview overview)
+    {
+        if (overview.TrackedAgentFiles > 0)
+        {
+            yield return
+                $"{overview.TrackedAgentFiles} agent file(s) are committed to this repository";
+        }
+
+        if (overview.PendingImports > 0)
+        {
+            yield return
+                $"{overview.PendingImports} memory topic(s) recorded outside the workspace";
+        }
+
+        if (overview.IsOverBudget)
+        {
+            yield return "the always-loaded instructions are larger than they need to be";
+        }
+
+        if (!overview.Protected)
+        {
+            yield return "no pre-commit protection in this clone";
+        }
+    }
+
+    private async Task<int?> ChooseActionAsync(
+        ProjectResolution project,
+        ProjectOverview? overview,
+        LauncherConfig config,
+        CancellationToken ct)
+    {
         var defaultAgent = string.IsNullOrWhiteSpace(project.Entry.DefaultAgent)
             ? config.DefaultAgent
             : project.Entry.DefaultAgent;
@@ -199,21 +429,42 @@ public sealed class LauncherTui : ILauncherTui
             .Select(a => $"Launch {a.Name}"));
 
         actions.Add("Open development shell");
-        actions.Add("Back");
+        actions.Add("Open in file manager");
+
+        if (overview?.HasWarnings == true)
+        {
+            actions.Add("Explain the warnings");
+        }
+
+        actions.Add(Back);
 
         var choice = _console.Prompt(
             new SelectionPrompt<string>()
                 .Title("What would you like to do?")
                 .AddChoices(actions));
 
-        if (choice == "Back")
+        if (choice == Back)
         {
-            return (int)ExitCode.Success;
+            return null;
+        }
+
+        if (choice == "Explain the warnings")
+        {
+            ExplainWarnings(project, overview!);
+
+            return await ChooseActionAsync(project, overview, config, ct).ConfigureAwait(false);
+        }
+
+        if (choice == "Open in file manager")
+        {
+            await _opener.OpenInFileManagerAsync(project.LocalPath!, ct).ConfigureAwait(false);
+
+            return null;
         }
 
         if (choice == "Open development shell")
         {
-            return await OpenShellAsync(project.LocalPath, ct).ConfigureAwait(false);
+            return await OpenShellAsync(project.LocalPath!, ct).ConfigureAwait(false);
         }
 
         var agentName = choice["Launch ".Length..];
@@ -235,6 +486,94 @@ public sealed class LauncherTui : ILauncherTui
         }
 
         return result.Value.AgentExitCode;
+    }
+
+    /// <summary>
+    /// Says what each warning means and which command fixes it.
+    /// <para>
+    /// A warning nobody can act on is only noise. The commands are printed
+    /// rather than run, because each of them changes files and the launcher is
+    /// not the place to agree to that in passing.
+    /// </para>
+    /// </summary>
+    private void ExplainWarnings(ProjectResolution project, ProjectOverview overview)
+    {
+        var slug = Markup.Escape(project.Entry.Slug);
+
+        _console.WriteLine();
+
+        if (overview.TrackedAgentFiles > 0)
+        {
+            _console.MarkupLine(
+                "[yellow]Agent files are committed to this repository.[/] "
+                + "[dim]They belong in the workspace, not in the application's history:[/]");
+
+            _console.MarkupLine($"  loadout migrate {slug}");
+        }
+
+        if (overview.PendingImports > 0)
+        {
+            _console.MarkupLine(
+                "[yellow]An agent recorded memory outside the workspace.[/] "
+                + "[dim]Nothing else reads it there:[/]");
+
+            _console.MarkupLine($"  loadout memory import {slug}");
+        }
+
+        if (overview.IsOverBudget)
+        {
+            _console.MarkupLine(
+                $"[yellow]{FormatBytes(overview.AlwaysLoadedBytes)} loads on every session[/] "
+                + "[dim]whatever the task. See what it is, and what could be scoped:[/]");
+
+            _console.MarkupLine($"  loadout rules budget {slug}");
+            _console.MarkupLine($"  loadout rules split {slug} --write-map");
+        }
+
+        if (!overview.Protected)
+        {
+            _console.MarkupLine(
+                "[yellow]This clone has no pre-commit protection.[/] "
+                + "[dim]Hooks are per-clone, so a fresh clone never has one:[/]");
+
+            _console.MarkupLine("  loadout protect");
+        }
+
+        _console.WriteLine();
+    }
+
+    /// <summary>
+    /// Offers to fetch a project that is registered but not here.
+    /// <para>
+    /// Spec section 28 calls this an offer to fix rather than a dead end, and
+    /// printing the command somebody should type instead of asking them is a
+    /// dead end with extra steps.
+    /// </para>
+    /// </summary>
+    private async Task<int?> OfferCloneAsync(ProjectResolution project, CancellationToken ct)
+    {
+        _console.MarkupLine("[yellow]This repository is not on this machine.[/]");
+        _console.MarkupLine($"[dim]{Markup.Escape(project.Entry.Remote)}[/]");
+        _console.WriteLine();
+
+        if (!_console.Confirm("Clone it now?", defaultValue: false))
+        {
+            return null;
+        }
+
+        var result = await _projects.CloneAsync(project.Entry.Slug, null, ct).ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+
+            return null;
+        }
+
+        _console.MarkupLine(
+            $"[green]Cloned[/] to {Markup.Escape(result.Value!.LocalPath ?? string.Empty)}");
+
+        return null;
     }
 
     /// <summary>
@@ -277,7 +616,7 @@ public sealed class LauncherTui : ILauncherTui
         return profiles[labels.IndexOf(chosen)];
     }
 
-    private async Task<int> OpenShellAsync(string workingDirectory, CancellationToken ct)
+    private async Task<int?> OpenShellAsync(string workingDirectory, CancellationToken ct)
     {
         var shellResult = _shells.GetInteractiveShellPath();
 
@@ -293,4 +632,8 @@ public sealed class LauncherTui : ILauncherTui
 
         return result.Succeeded ? result.Value : (int)result.ExitCode;
     }
+
+    internal static string FormatBytes(long bytes) => bytes < 1024
+        ? bytes.ToString(System.Globalization.CultureInfo.InvariantCulture) + "B"
+        : (bytes / 1024.0).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "KB";
 }

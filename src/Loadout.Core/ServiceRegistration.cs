@@ -37,6 +37,7 @@ public static class ServiceRegistration
         services.AddSingleton<IMemoryService, MemoryService>();
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();
+        services.AddSingleton<IProjectOverviewService, ProjectOverviewService>();
         services.AddSingleton<IPolicyService, PolicyService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<ISecurityProfileService, SecurityProfileService>();
