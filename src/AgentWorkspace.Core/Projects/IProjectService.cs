@@ -29,6 +29,13 @@ public sealed record DiscoveredRepository(
 public interface IProjectService
 {
     /// <summary>
+    /// Git configuration key a repository uses to name the project it belongs
+    /// to. Read by <see cref="ResolveFromDirectoryAsync"/> and written whenever
+    /// a project is mapped to a directory.
+    /// </summary>
+    const string ProjectMarker = "agentctl.project";
+
+    /// <summary>
     /// Every registered project joined to its local state, ordered for the
     /// recent-projects list: pinned first, then most recently launched, then
     /// most frequently launched (spec section 23).

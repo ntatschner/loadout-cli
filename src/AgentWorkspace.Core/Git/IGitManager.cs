@@ -177,6 +177,22 @@ public interface IGitManager
         string key,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Writes a value to one repository's own configuration.
+    /// <para>
+    /// This is where a repository records which project it belongs to. The
+    /// file it lands in, <c>.git/config</c>, is per-clone and is never
+    /// committed, so the mark leaves no trace in the repository's contents:
+    /// spec section 9's rule that application repositories hold application
+    /// source only is about what gets committed, and this does not.
+    /// </para>
+    /// </summary>
+    Task<OperationResult> SetLocalConfigValueAsync(
+        string key,
+        string value,
+        string repositoryPath,
+        CancellationToken ct = default);
+
     /// <summary>Reads a git config value, or null when it is unset.</summary>
     Task<OperationResult<string?>> GetConfigValueAsync(
         string key,

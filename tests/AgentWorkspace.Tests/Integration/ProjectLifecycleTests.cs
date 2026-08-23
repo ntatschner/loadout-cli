@@ -376,6 +376,81 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     }
 
     /// <summary>Creates a real repository with one commit and an origin remote.</summary>
+    [Fact]
+    public async Task A_registered_repository_records_which_project_it_is()
+    {
+        var repository = await CreateRepositoryAsync("marked", "https://example.com/marked.git");
+
+        await _projects.AddAsync(repository);
+
+        var marked = await _git.GetConfigValueAsync(IProjectService.ProjectMarker, repository);
+
+        marked.Value.Should().Be("marked");
+
+        // In .git/config, which is never committed. A tracked marker would
+        // breach the rule that application repositories hold application source
+        // only, and the launcher's own policy check would rightly flag it.
+        File.Exists(Path.Combine(repository, ".agentctl")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_repository_that_has_moved_is_still_recognised()
+    {
+        var original = await CreateRepositoryAsync("wanderer", "https://example.com/wanderer.git");
+        await _projects.AddAsync(original);
+
+        var moved = Path.Combine(_repositories, "moved-elsewhere");
+        Directory.Move(original, moved);
+
+        // The recorded path no longer matches anything, and the registry has no
+        // idea where it went. The repository itself still knows, which is the
+        // whole reason for writing it down there.
+        var resolved = await _projects.ResolveFromDirectoryAsync(moved);
+
+        resolved.Succeeded.Should().BeTrue(resolved.Error ?? string.Empty);
+        resolved.Value!.Entry.Slug.Should().Be("wanderer");
+    }
+
+    [Fact]
+    public async Task The_recorded_path_still_wins_over_a_stale_mark()
+    {
+        var first = await CreateRepositoryAsync("first", "https://example.com/first.git");
+        var second = await CreateRepositoryAsync("second", "https://example.com/second.git");
+
+        await _projects.AddAsync(first);
+        await _projects.AddAsync(second);
+
+        // A directory copied from elsewhere carries the mark of whatever it was
+        // copied from. The machine's own record of where a project lives is the
+        // stronger claim, so a stale mark cannot make one repository answer to
+        // another's name.
+        await _git.SetLocalConfigValueAsync(IProjectService.ProjectMarker, "first", second);
+
+        var resolved = await _projects.ResolveFromDirectoryAsync(second);
+
+        resolved.Value!.Entry.Slug.Should().Be("second");
+    }
+
+    [Fact]
+    public async Task A_directory_of_repositories_is_told_apart_from_a_repository()
+    {
+        var alpha = await CreateRepositoryAsync("alpha", "https://example.com/alpha.git");
+        await CreateRepositoryAsync("beta", "https://example.com/beta.git");
+
+        var attribution = new RepositoryAttribution(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()),
+            _projects,
+            new PathSemantics());
+
+        // The GateConquest shape: work done from a parent directory, so the
+        // agent recorded its memory against something that is not a repository
+        // and holds several.
+        attribution.RepositoriesInside(_repositories).Should().HaveCountGreaterThan(1);
+
+        // A repository's own subdirectories are source code, not more projects.
+        attribution.RepositoriesInside(alpha).Should().BeEmpty();
+    }
+
     private async Task<string> CreateRepositoryAsync(string name, string remote)
     {
         var path = Path.Combine(_repositories, name);

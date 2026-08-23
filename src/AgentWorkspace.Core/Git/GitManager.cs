@@ -402,6 +402,22 @@ public sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult> SetLocalConfigValueAsync(
+        string key,
+        string value,
+        string repositoryPath,
+        CancellationToken ct = default)
+    {
+        var result = await RunAsync(
+            repositoryPath, ["config", "--local", key, value], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error!, ExitCode.ConfigurationInvalid);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<string?>> GetGlobalConfigValueAsync(
         string key,
         CancellationToken ct = default)

@@ -121,6 +121,23 @@ public sealed class ProjectService : IProjectService
             return OperationResult<ProjectResolution>.Ok(byPath);
         }
 
+        // Then what the repository says about itself. This is what survives a
+        // move: the recorded path no longer matches, but the repository still
+        // knows which project it is, so the launcher can find it and say the
+        // path needs updating rather than claiming it has never seen it.
+        var marked = await _git.GetConfigValueAsync(IProjectService.ProjectMarker, root, ct).ConfigureAwait(false);
+
+        if (marked.Succeeded && marked.Value is { Length: > 0 } markedSlug)
+        {
+            var byMark = listResult.Value!.FirstOrDefault(
+                p => p.Entry.Slug.Equals(markedSlug, StringComparison.OrdinalIgnoreCase));
+
+            if (byMark is not null)
+            {
+                return OperationResult<ProjectResolution>.Ok(byMark);
+            }
+        }
+
         var stateResult = await _git.GetStateAsync(root, ct).ConfigureAwait(false);
         if (stateResult.Succeeded && stateResult.Value!.RemoteUrl is not null)
         {
@@ -510,8 +527,44 @@ public sealed class ProjectService : IProjectService
             };
         }
 
-        return await _configuration.SaveMachineAsync(machine, ct).ConfigureAwait(false);
+        var saved = await _configuration.SaveMachineAsync(machine, ct).ConfigureAwait(false);
+
+        if (saved.Succeeded)
+        {
+            await MarkRepositoryAsync(entry.Slug, localPath, ct).ConfigureAwait(false);
+        }
+
+        return saved;
     }
+
+    /// <summary>
+    /// Records inside the repository which project it belongs to.
+    /// <para>
+    /// The mapping was one-directional before this: the launcher knew where a
+    /// project lived, but a directory could not say what it was. That fails in
+    /// the cases that matter — a repository moved on disk, a second clone, a
+    /// worktree, or a directory holding several repositories where agent state
+    /// was recorded against the parent and could belong to any of them.
+    /// </para>
+    /// <para>
+    /// It goes in the repository's own Git configuration, which lives in
+    /// .git/config and is never committed. Spec section 9's rule is about what
+    /// a repository's contents hold, and this adds nothing to them; a tracked
+    /// marker file would breach it, and the launcher's own policy check would
+    /// rightly flag it.
+    /// </para>
+    /// <para>
+    /// A failure here is not fatal. The mark is a convenience that makes
+    /// resolution robust, not the source of truth, which stays in the machine
+    /// configuration.
+    /// </para>
+    /// </summary>
+    private async Task<OperationResult> MarkRepositoryAsync(
+        string slug,
+        string localPath,
+        CancellationToken ct) =>
+        await _git.SetLocalConfigValueAsync(IProjectService.ProjectMarker, slug, localPath, ct)
+            .ConfigureAwait(false);
 
     private ProjectResolution Join(ProjectRegistryEntry entry, MachineConfig machine)
     {

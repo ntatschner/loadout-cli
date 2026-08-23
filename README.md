@@ -124,6 +124,8 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `agentctl status` | Summary of workspace, projects and agents |
 | `agentctl project add\|list\|show\|remove\|discover\|open` | Manage project registration |
 | `agentctl project clone\|relocate <project>` | Get a registered project onto this machine |
+| `agentctl project survey` | Find agent state on this machine no project accounts for |
+| `agentctl project link [project]` | Record inside a repository which project it belongs to |
 | `agentctl config list\|get\|set\|edit` | Read and write launcher settings |
 | `agentctl workspace status\|sync\|save\|open` | Manage the central workspace clone |
 | `agentctl desktop` | Install the Start Menu or `.desktop` entry |
@@ -265,6 +267,43 @@ agentctl memory write starstats build-quirks \
 Only the index reaches the compiled context. Topics stay on disk with their
 paths listed, because a project accumulates memory for years and inlining all of
 it would make every session pay for every fact anyone ever recorded.
+
+### Which project is this?
+
+Every registered repository records its project in its own Git config, under
+`agentctl.project`. That file, `.git/config`, is per-clone and is never
+committed, so the mark adds nothing to the repository's contents — the rule that
+application repositories hold application source only is about what gets
+committed, and a tracked marker file would breach it.
+
+It is written whenever a project is registered, cloned or relocated;
+`agentctl project link --all` fills it in for repositories registered before the
+mark existed.
+
+Resolution takes the recorded path first, then the mark, then the canonical
+remote. The order matters: the path is this machine's own record of where a
+project lives, so a directory copied from elsewhere cannot use its inherited
+mark to answer to another repository's name. The mark earns its place in the
+case the path cannot cover — a repository that has been moved is still
+recognised, rather than looking like one the launcher has never seen.
+
+`agentctl project survey` reports agent state on this machine that no project
+accounts for, and says what each piece appears to belong to:
+
+```
+D:\git\GateConquestRepos  7 topic(s)
+  holds 2 repositories so this was recorded across all of them
+    GateConquestFlask
+    GateConquestWeb
+  decide which project it belongs to, then: agentctl memory import <project> --from ...
+```
+
+That last case is the one worth having. Agents key their state by the directory
+they were started in, which is not always a repository: work done across several
+repositories from their parent accumulates memory against the parent, where it
+describes all of them and belongs to none. The launcher names the candidates and
+stops. Picking one would be a guess presented as a fact, and the wrong guess
+files a repository's hard-won notes under its neighbour.
 
 ### Adopting a project that already has memory
 

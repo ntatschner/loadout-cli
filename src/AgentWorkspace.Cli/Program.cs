@@ -252,6 +252,8 @@ public static class Program
             project.AddCommand<ProjectCloneCommand>("clone");
             project.AddCommand<ProjectRelocateCommand>("relocate");
             project.AddCommand<ProjectShowCommand>("show");
+            project.AddCommand<ProjectSurveyCommand>("survey");
+            project.AddCommand<ProjectLinkCommand>("link");
         });
 
         config.AddBranch("workspace", workspace =>
