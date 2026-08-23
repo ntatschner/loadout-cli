@@ -152,6 +152,13 @@ public static class Program
     private static void Configure(IConfigurator config, bool showFullExceptions)
     {
         config.SetApplicationName("agentctl");
+
+        // Without this, --version is rejected as an unknown option. It is the
+        // first thing anyone types against an unfamiliar binary, and the first
+        // thing a bug report asks for.
+        config.SetApplicationVersion(
+            typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
+
         config.UseStrictParsing();
 
         // Exceptions are shown in full only when asked for. A stack trace is

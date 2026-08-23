@@ -94,6 +94,18 @@ public sealed class CliContractTests
     }
 
     [Fact]
+    public void The_executable_carries_a_real_version()
+    {
+        // agentctl --version reads this. When the assembly has no version the
+        // option still works but reports 0.0.0, which is worse than useless in
+        // a bug report. Packaging stamps the real one in via -p:Version.
+        var version = typeof(Program).Assembly.GetName().Version;
+
+        version.Should().NotBeNull();
+        version!.ToString(3).Should().NotBe("0.0.0");
+    }
+
+    [Fact]
     public void Generic_agent_placeholders_expand_from_the_launch_context()
     {
         var placeholders = new Dictionary<string, string>

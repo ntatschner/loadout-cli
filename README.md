@@ -16,6 +16,38 @@ repository policy, migration, conflict recovery, CLI and TUI all work on all
 three platforms. Packaging and an owned pseudo-terminal are the remaining
 milestone; see [Roadmap](#roadmap).
 
+## Install
+
+Download the archive for your platform, verify it, and install:
+
+```bash
+tar -xzf agentctl-0.1.0-linux-x64.tar.gz
+./install.sh                       # installs to ~/.local/bin, no root needed
+agentctl setup
+```
+
+`install.sh` verifies the SHA-256 before extracting anything and refuses to
+install on a mismatch. On macOS it also clears the download quarantine
+attribute from the installed binary — until the binary is signed and notarised
+Gatekeeper would otherwise block it, and clearing the attribute on one file is
+the honest fix. The documentation never tells anyone to disable Gatekeeper,
+which spec section 85 forbids.
+
+On Windows, extract the zip and put `agentctl.exe` somewhere on `PATH`.
+
+### Building a release locally
+
+```bash
+pwsh ./build/package.ps1 -Runtime osx-arm64 -Version 0.1.0
+```
+
+Produces the archive and its checksum in `artifacts/`. Unix archives are built
+with the executable bit set even when packaged from Windows, where the
+filesystem has no mode to preserve — without that the extracted binary would not
+run. This needs the GNU `tar` that ships with Git; the `bsdtar` built into
+Windows cannot set the bit and the script says so rather than producing a
+quietly broken archive.
+
 ## Build and run
 
 ```bash
@@ -325,5 +357,6 @@ The suite is deliberately structured so most of it runs everywhere:
 - **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
 - **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
 - **M4 — partly done.** Setup wizard, workspace save-on-exit, desktop
-  integration, environments and security profiles are in. Installers, the update
-  system, an owned PTY and macOS signing and notarisation remain.
+  integration, environments, security profiles and release packaging are in.
+  Native installers (MSI, `.deb`, `.rpm`), the update system, an owned PTY and
+  macOS signing and notarisation remain.
