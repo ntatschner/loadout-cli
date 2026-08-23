@@ -265,6 +265,12 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         await RunGitAsync(path, "init", "--initial-branch", "main");
         await RunGitAsync(path, "config", "user.email", "tests@example.invalid");
         await RunGitAsync(path, "config", "user.name", "Agent Workspace Tests");
+
+        // Neutralise whatever global exclude file the developer's machine has.
+        // Without this the suite passes or fails depending on whether agentctl
+        // protect --global has ever been run here, which is not a property of
+        // the code under test.
+        await RunGitAsync(path, "config", "core.excludesFile", "");
         await RunGitAsync(path, "remote", "add", "origin", "ssh://git.internal/apps/starstats.git");
 
         await File.WriteAllTextAsync(Path.Combine(path, "README.md"), "# StarStats");

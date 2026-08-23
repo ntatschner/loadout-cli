@@ -387,6 +387,12 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         // global Git identity, which a clean CI runner does not.
         await RunGitAsync(path, "config", "user.email", "tests@example.invalid");
         await RunGitAsync(path, "config", "user.name", "Agent Workspace Tests");
+
+        // Neutralise whatever global exclude file the developer's machine has.
+        // Without this the suite passes or fails depending on whether agentctl
+        // protect --global has ever been run here, which is not a property of
+        // the code under test.
+        await RunGitAsync(path, "config", "core.excludesFile", "");
         await RunGitAsync(path, "remote", "add", "origin", remote);
 
         await File.WriteAllTextAsync(Path.Combine(path, "README.md"), "# " + name);

@@ -291,7 +291,18 @@ public sealed class PolicyService : IPolicyService
     /// </summary>
     private static string BuildHook(RepositoryPolicy policy)
     {
-        var patterns = string.Join("\n", policy.Forbidden.Select(p => "  '" + p.Replace("'", "'\\''") + "'"));
+        // One quoted pattern per line inside a single-quoted heredoc. The
+        // previous attempt built a multi-line printf with backslash
+        // continuations, and losing them turned every pattern after the first
+        // into a command of its own: the hook errored on each line, exited zero
+        // and let the commit through. A heredoc needs no continuations, so
+        // there is nothing to lose.
+        //
+        // Quoting is single-quote-escaped so a pattern containing a quote
+        // cannot end the string and run as shell.
+        var patterns = string.Join(
+            "\n",
+            policy.Forbidden.Select(p => "'" + p.Replace("'", "'\\''") + "'"));
 
         return $"""
             #!/bin/sh
@@ -299,17 +310,23 @@ public sealed class PolicyService : IPolicyService
             # Blocks commits containing AI tooling files (spec section 51).
             # Remove with: agentctl protect --remove
 
-            patterns="$(printf '%s\n' \
-            {patterns.TrimStart()})"
-
             staged=""
-            for pattern in $patterns; do
-              match=$(git diff --cached --name-only --diff-filter=AM -- "$pattern")
+
+            while IFS= read -r pattern; do
+              [ -n "$pattern" ] || continue
+
+              # eval strips the surrounding quotes written above, so a pattern
+              # containing a space survives as one argument.
+              eval "set -- $pattern"
+
+              match=$(git diff --cached --name-only --diff-filter=AM -- "$1")
               if [ -n "$match" ]; then
                 staged="$staged$match
             "
               fi
-            done
+            done <<'AGENTCTL_PATTERNS'
+            {patterns}
+            AGENTCTL_PATTERNS
 
             if [ -n "$staged" ]; then
               echo "Commit blocked."

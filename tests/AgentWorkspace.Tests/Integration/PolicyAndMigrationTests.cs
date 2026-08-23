@@ -313,6 +313,54 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_hook_actually_blocks_a_commit_containing_an_agent_file()
+    {
+        // The point of the hook, and the thing that asserting its existence and
+        // its text does not establish. An earlier version errored on every
+        // pattern line, exited zero and let the commit through while looking
+        // installed and correct.
+        await _policies.InstallHookAsync(_repository);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_repository, "CLAUDE.md"), "Should never be committable.");
+
+        await RunGitAsync(_repository, "add", "--force", "CLAUDE.md");
+
+        var result = await _processes.RunAsync(
+            new ProcessRequest("git", ["commit", "--message", "should be blocked"], _repository),
+            TimeSpan.FromSeconds(60));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.ExitCode.Should().NotBe(0, "the hook must refuse the commit");
+
+        var output = result.Value.StandardOutput + result.Value.StandardError;
+        output.Should().Contain("Commit blocked");
+
+        // And the hook must not be producing shell errors while it does it.
+        output.Should().NotContain("command not found");
+        output.Should().NotContain("No such file or directory");
+    }
+
+    [Fact]
+    public async Task The_hook_allows_a_commit_that_touches_nothing_forbidden()
+    {
+        await _policies.InstallHookAsync(_repository);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_repository, "source.txt"), "Ordinary application source.");
+
+        await RunGitAsync(_repository, "add", "source.txt");
+
+        var result = await _processes.RunAsync(
+            new ProcessRequest("git", ["commit", "--message", "ordinary work"], _repository),
+            TimeSpan.FromSeconds(60));
+
+        // A hook that blocked everything would be worse than none at all.
+        result.Value!.ExitCode.Should().Be(0,
+            "ordinary commits must pass: " + result.Value.StandardOutput + result.Value.StandardError);
+    }
+
+    [Fact]
     public async Task A_hook_the_launcher_did_not_write_is_never_overwritten()
     {
         var hook = Path.Combine(_repository, ".git", "hooks", "pre-commit");
@@ -390,6 +438,12 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
         await RunGitAsync(path, "init", "--initial-branch", "main");
         await RunGitAsync(path, "config", "user.email", "tests@example.invalid");
         await RunGitAsync(path, "config", "user.name", "Agent Workspace Tests");
+
+        // Neutralise whatever global exclude file the developer's machine has.
+        // Without this the suite passes or fails depending on whether agentctl
+        // protect --global has ever been run here, which is not a property of
+        // the code under test.
+        await RunGitAsync(path, "config", "core.excludesFile", "");
         await RunGitAsync(path, "remote", "add", "origin", "ssh://git.internal/apps/demo.git");
 
         await File.WriteAllTextAsync(Path.Combine(path, ".gitignore"), ".codex/\n");
