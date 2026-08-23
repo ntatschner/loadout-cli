@@ -203,6 +203,7 @@ public static class Program
             memory.AddCommand<MemoryWriteCommand>("write");
             memory.AddCommand<MemoryAuditCommand>("audit");
             memory.AddCommand<MemoryReindexCommand>("reindex");
+            memory.AddCommand<MemoryImportCommand>("import");
         });
 
         config.AddBranch("rules", rules =>

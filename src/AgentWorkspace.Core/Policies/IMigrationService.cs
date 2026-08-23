@@ -9,12 +9,22 @@ namespace AgentWorkspace.Core.Policies;
 /// <param name="WorkspaceRelativePath">Where it would land in the central workspace.</param>
 /// <param name="Kind">Whether Git is tracking it, which decides how it can be removed.</param>
 /// <param name="IsDirectory">True when the whole subtree moves.</param>
+/// <param name="Excluded">
+/// Paths inside this directory that a separate step is moving somewhere else,
+/// relative to <paramref name="SourcePath"/>.
+/// <para>
+/// Without this a subtree claimed by a more specific mapping would be copied
+/// twice: once to where it belongs and once inside its parent, leaving two
+/// copies that drift apart with nothing to say which is authoritative.
+/// </para>
+/// </param>
 public sealed record MigrationStep(
     string SourcePath,
     string RepositoryRelativePath,
     string WorkspaceRelativePath,
     PolicyFindingKind Kind,
-    bool IsDirectory);
+    bool IsDirectory,
+    IReadOnlyList<string>? Excluded = null);
 
 /// <summary>What a migration would do, or did.</summary>
 /// <param name="Slug">Project the material belongs to.</param>

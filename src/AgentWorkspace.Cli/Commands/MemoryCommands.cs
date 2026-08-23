@@ -115,7 +115,7 @@ public sealed class MemoryListCommand : MemoryCommandBase<MemoryListCommand.Sett
 
             if (output.IsJson)
             {
-                output.WriteJson(new { topic.Name, topic.Description, topic.Bullets, topic.Links });
+                output.WriteJson(new { topic.Name, topic.Description, topic.Facts, topic.Links });
                 return CommandOutput.Success();
             }
 
@@ -128,7 +128,7 @@ public sealed class MemoryListCommand : MemoryCommandBase<MemoryListCommand.Sett
 
             output.WriteBlankLine();
 
-            foreach (var bullet in topic.Bullets)
+            foreach (var bullet in topic.Facts)
             {
                 output.WriteLine($"  - {Markup.Escape(bullet)}");
             }
@@ -146,7 +146,7 @@ public sealed class MemoryListCommand : MemoryCommandBase<MemoryListCommand.Sett
                     t.Name,
                     t.Description,
                     kind = t.Kind.ToString().ToLowerInvariant(),
-                    facts = t.Bullets.Count,
+                    facts = t.Facts.Count,
                     t.Bytes,
                 }),
             });
@@ -173,7 +173,7 @@ public sealed class MemoryListCommand : MemoryCommandBase<MemoryListCommand.Sett
             table.AddRow(
                 Markup.Escape(topic.Name),
                 topic.Kind.ToString().ToLowerInvariant(),
-                topic.Bullets.Count.ToString(CultureInfo.InvariantCulture),
+                topic.Facts.Count.ToString(CultureInfo.InvariantCulture),
                 Markup.Escape(topic.Description));
         }
 
@@ -287,12 +287,12 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
 
         if (output.IsJson)
         {
-            output.WriteJson(new { topic.Name, topic.Path, facts = topic.Bullets.Count });
+            output.WriteJson(new { topic.Name, topic.Path, facts = topic.Facts.Count });
             return CommandOutput.Success();
         }
 
         output.WriteLine(
-            $"[green]Recorded[/] {topic.Bullets.Count} fact(s) in "
+            $"[green]Recorded[/] {topic.Facts.Count} fact(s) in "
             + $"[bold]{Markup.Escape(topic.Name)}[/].");
         output.WriteLine($"[dim]{Markup.Escape(topic.Path)}[/]");
         output.WriteLine("[dim]It is in the workspace repository; commit it with: "
@@ -518,7 +518,7 @@ public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Se
     {
         output.WriteLine(
             $"[bold]{Markup.Escape(audit.Slug)}[/]  [dim]{audit.Topics.Count} topic(s), "
-            + $"{audit.Topics.Sum(t => t.Bullets.Count)} fact(s)[/]");
+            + $"{audit.Topics.Sum(t => t.Facts.Count)} fact(s)[/]");
 
         output.WriteBlankLine();
 

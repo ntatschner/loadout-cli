@@ -20,6 +20,16 @@ public sealed class MigrationService : IMigrationService
     /// </summary>
     private static readonly (string Source, string Destination)[] KnownMappings =
     [
+        // Listed before .claude so the more specific mapping claims it first.
+        //
+        // Scoped instruction rules are not Claude's private business: they say
+        // which instructions apply to which paths, which is true whichever
+        // agent is reading them. Leaving them under agents/claude would file
+        // them where only one adapter looks and where the rule loader does not
+        // look at all, so a project that had carefully scoped its instructions
+        // would find them silently stop being applied.
+        (".claude/rules", "rules"),
+
         (".claude", "agents/claude"),
         (".codex", "agents/codex"),
         (".cursor", "agents/cursor"),
@@ -109,7 +119,8 @@ public sealed class MigrationService : IMigrationService
                 isDirectory));
         }
 
-        return OperationResult<MigrationPlan>.Ok(new MigrationPlan(slug, steps, false, []));
+        return OperationResult<MigrationPlan>.Ok(
+            new MigrationPlan(slug, WithExclusions(steps), false, []));
     }
 
     /// <inheritdoc />
@@ -146,7 +157,7 @@ public sealed class MigrationService : IMigrationService
             {
                 if (step.IsDirectory)
                 {
-                    CopyDirectory(step.SourcePath, destination);
+                    CopyDirectory(step.SourcePath, destination, step.Excluded);
                 }
                 else
                 {
@@ -231,6 +242,42 @@ public sealed class MigrationService : IMigrationService
     }
 
     /// <summary>
+    /// Tells each directory step which of its children another step is taking.
+    /// <para>
+    /// A more specific mapping claims a subtree first, but the parent still
+    /// copies everything underneath it unless told not to. The result would be
+    /// two copies of the same rules in two places, and no way for a reader to
+    /// know which one is being used.
+    /// </para>
+    /// </summary>
+    private static List<MigrationStep> WithExclusions(List<MigrationStep> steps)
+    {
+        var result = new List<MigrationStep>();
+
+        foreach (var step in steps)
+        {
+            if (!step.IsDirectory)
+            {
+                result.Add(step);
+                continue;
+            }
+
+            var prefix = step.RepositoryRelativePath.Replace('\\', '/') + "/";
+
+            var excluded = steps
+                .Where(other => !ReferenceEquals(other, step))
+                .Select(other => other.RepositoryRelativePath.Replace('\\', '/'))
+                .Where(path => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .Select(path => path[prefix.Length..])
+                .ToList();
+
+            result.Add(excluded.Count == 0 ? step : step with { Excluded = excluded });
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Whether a longer mapping has already claimed this path, so that
     /// <c>.claude</c> does not move a subtree that <c>.claude/skills</c>
     /// already accounted for.
@@ -288,13 +335,37 @@ public sealed class MigrationService : IMigrationService
         }
     }
 
-    private static void CopyDirectory(string source, string destination)
+
+    /// <summary>Whether another step is taking this path out of the subtree.</summary>
+    private static bool IsExcluded(string relative, IReadOnlyList<string>? excluded)
+    {
+        if (excluded is null || excluded.Count == 0)
+        {
+            return false;
+        }
+
+        var normalised = relative.Replace('\\', '/');
+
+        return excluded.Any(path =>
+            normalised.Equals(path, StringComparison.OrdinalIgnoreCase)
+            || normalised.StartsWith(path + "/", StringComparison.OrdinalIgnoreCase));
+    }
+    private static void CopyDirectory(
+        string source,
+        string destination,
+        IReadOnlyList<string>? excluded = null)
     {
         Directory.CreateDirectory(destination);
 
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(source, file);
+
+            if (IsExcluded(relative, excluded))
+            {
+                continue;
+            }
+
             var target = Path.Combine(destination, relative);
 
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);

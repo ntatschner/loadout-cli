@@ -34,6 +34,13 @@ public sealed partial class InstructionSplitter
     private const string IndexHeading = "## Rules held separately";
 
     /// <summary>
+    /// How many distinct rule files a core document must point at before it is
+    /// taken to have been split already. One is a passing reference; several is
+    /// an index.
+    /// </summary>
+    private const int MinimumRuleReferences = 3;
+
+    /// <summary>
     /// Works out what the split would produce, without writing anything.
     /// </summary>
     /// <param name="sourcePath">Instruction file to split.</param>
@@ -79,6 +86,24 @@ public sealed partial class InstructionSplitter
                 $"'{Path.GetFileName(sourcePath)}' has already been split. Running again would "
                 + "rebuild the rules from a file whose content has already moved out of it. Edit "
                 + "the rules directly instead.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (LooksAlreadySplit(text))
+        {
+            // Detected by shape rather than by marker, because this launcher is
+            // not the only thing that has ever split an instruction file. A
+            // repository that arrives already organised this way is the good
+            // case, not an error — but splitting it a second time would rebuild
+            // its rules out of the summary that was left behind, replacing real
+            // instructions with a list of their own filenames.
+            return OperationResult<SplitPlan>.Fail(
+                $"'{Path.GetFileName(sourcePath)}' looks as though something has already split "
+                + "it: it points at rule files rather than containing the detail itself. "
+                + "Splitting it again would rebuild those rules from the summary left in its "
+                + "place.\n"
+                + "If those rules live in the repository, 'agentctl migrate' moves them into the "
+                + "workspace where the launcher reads them.",
                 ExitCode.InvalidArguments);
         }
 
@@ -135,6 +160,29 @@ public sealed partial class InstructionSplitter
         }
 
         return OperationResult<SplitPlan>.Ok(plan with { Applied = true });
+    }
+
+    /// <summary>
+    /// Whether an instruction file has already been decomposed, by this
+    /// launcher or by anything else.
+    /// <para>
+    /// The test is what the file does rather than what wrote it: a core file
+    /// that lists several rule files is one whose detail has already moved out,
+    /// whatever produced it. A single mention is not enough, because a file may
+    /// reasonably reference one rule in passing.
+    /// </para>
+    /// </summary>
+    internal static bool LooksAlreadySplit(string text)
+    {
+        if (SplitHeading().IsMatch(text))
+        {
+            return true;
+        }
+
+        return RuleReference().Matches(text)
+            .Select(match => match.Groups["name"].Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count() >= MinimumRuleReferences;
     }
 
     /// <summary>Paths a split would write, so they can be captured in a backup first.</summary>
@@ -517,6 +565,18 @@ public sealed partial class InstructionSplitter
 
     [GeneratedRegex(@"^##\s+(?<title>.+?)\s*$", RegexOptions.None, 1000)]
     private static partial Regex Heading();
+
+    /// <summary>
+    /// Headings that announce an index of rules. Covers the wording this
+    /// splitter writes and the one used by the toolkit these projects were
+    /// organised with before the launcher existed.
+    /// </summary>
+    [GeneratedRegex(@"(?im)^##\s+.*\b(subsystem notes|rules held separately|path-scoped)\b",
+        RegexOptions.None, 1000)]
+    private static partial Regex SplitHeading();
+
+    [GeneratedRegex(@"(?i)rules/(?<name>[A-Za-z0-9._-]+)\.md", RegexOptions.None, 1000)]
+    private static partial Regex RuleReference();
 
     [GeneratedRegex(@"^\s*[-*]\s+\S", RegexOptions.None, 1000)]
     private static partial Regex Bullet();

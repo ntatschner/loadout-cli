@@ -310,6 +310,170 @@ public sealed class InstructionsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_topic_written_as_prose_is_not_treated_as_empty()
+    {
+        // The shape memory actually arrives in. Only counting bullets reported
+        // a page of carefully written reasoning as holding nothing, which then
+        // had the audit flag it and an import refuse to bring it across.
+        WriteTopic("prose", """
+---
+description: no marketing in the repository
+---
+
+Do not commit marketing material to this repository: launch copy, campaign
+checklists or any sales-facing writing.
+
+**Why:** the repository is for what the product ships or builds from.
+
+**How to apply:** deliver launch copy in the conversation and write files
+outside the repository.
+""");
+
+        var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
+
+        topics.Value!.Single().Facts.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task A_wrapped_paragraph_is_one_fact_rather_than_four()
+    {
+        WriteTopic("wrapped", """
+---
+description: wrapped
+---
+
+The migration runner refuses to reorder a step once it has run, because the
+checksum it recorded no longer matches and it cannot tell an edit from a
+corruption.
+""");
+
+        var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
+
+        topics.Value!.Single().Facts.Should().ContainSingle()
+            .Which.Should().Contain("refuses to reorder a step once it has run");
+    }
+
+    [Fact]
+    public async Task A_topic_with_only_frontmatter_still_holds_nothing()
+    {
+        WriteTopic("bare", "---\ndescription: nothing\n---\n");
+
+        var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
+
+        topics.Value!.Single().Facts.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(@"D:\git\RSIStarCitizenTools\StarStats", "D--git-RSIStarCitizenTools-StarStats")]
+    [InlineData(@"D:\git\home-servers-build", "D--git-home-servers-build")]
+    [InlineData("/home/me/work/thing", "-home-me-work-thing")]
+    [InlineData(@"D:\git\dotted.name", "D--git-dotted-name")]
+    public void The_agents_own_directory_name_is_reproduced_exactly(string path, string expected) =>
+        // It has to match what the other tool already wrote, byte for byte, or
+        // the memory it recorded is simply never found.
+        MemoryImporter.DerivedSlug(path).Should().Be(expected);
+
+    [Fact]
+    public async Task Importing_brings_topics_in_and_rebuilds_the_index()
+    {
+        var source = Path.Combine(_root, "elsewhere");
+        Directory.CreateDirectory(source);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(source, "build-quirks.md"),
+            "---\ndescription: the build\n---\n\n- The first build takes four minutes.");
+
+        await File.WriteAllTextAsync(Path.Combine(source, "MEMORY.md"), "- [gone](gone.md) - stale");
+
+        var importer = new MemoryImporter(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()), _memory);
+
+        var imported = await importer.ImportAsync(_workspace.LocalPath, Slug, source, apply: true);
+
+        imported.Value!.Imported.Should().ContainSingle(t => t.Name == "build-quirks");
+
+        var index = await File.ReadAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "projects", Slug, "memory", "MEMORY.md"));
+
+        // The old index is not copied: it lists files that may not all have
+        // come across, so it is rebuilt from what actually arrived.
+        index.Should().Contain("build-quirks").And.NotContain("gone.md");
+    }
+
+    [Fact]
+    public async Task An_import_never_carries_a_credential_into_the_repository()
+    {
+        var source = Path.Combine(_root, "leaky");
+        Directory.CreateDirectory(source);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(source, "deploy.md"),
+            "---\ndescription: deploy\n---\n\n- Use ghp_abcdefghijklmnopqrstuvwxyz0123 to release.");
+
+        var importer = new MemoryImporter(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()), _memory);
+
+        var imported = await importer.ImportAsync(_workspace.LocalPath, Slug, source, apply: true);
+
+        // The workspace is a Git repository. Importing this would commit the
+        // credential and publish it on the next push, which no later audit can
+        // undo.
+        imported.Value!.Imported.Should().BeEmpty();
+        imported.Value.Skipped.Should().ContainKey("deploy");
+        imported.Value.Skipped["deploy"].Should().Contain("GitHub token")
+            .And.NotContain("ghp_abcdefghijklmnopqrstuvwxyz0123");
+
+        File.Exists(Path.Combine(_workspace.LocalPath, "projects", Slug, "memory", "deploy.md"))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_import_never_overwrites_a_topic_already_in_the_workspace()
+    {
+        WriteTopic("build-quirks", "---\ndescription: mine\n---\n\n- The workspace copy.");
+
+        var source = Path.Combine(_root, "second");
+        Directory.CreateDirectory(source);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(source, "build-quirks.md"),
+            "---\ndescription: theirs\n---\n\n- The imported copy.");
+
+        var importer = new MemoryImporter(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()), _memory);
+
+        var imported = await importer.ImportAsync(_workspace.LocalPath, Slug, source, apply: true);
+
+        imported.Value!.Skipped.Should().ContainKey("build-quirks");
+
+        var kept = await File.ReadAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "projects", Slug, "memory", "build-quirks.md"));
+
+        kept.Should().Contain("The workspace copy.");
+    }
+
+    [Fact]
+    public async Task An_import_preview_writes_nothing()
+    {
+        var source = Path.Combine(_root, "preview");
+        Directory.CreateDirectory(source);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(source, "topic.md"),
+            "---\ndescription: d\n---\n\n- A fact worth importing here.");
+
+        var importer = new MemoryImporter(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()), _memory);
+
+        var preview = await importer.ImportAsync(_workspace.LocalPath, Slug, source, apply: false);
+
+        preview.Value!.Imported.Should().ContainSingle();
+
+        File.Exists(Path.Combine(_workspace.LocalPath, "projects", Slug, "memory", "topic.md"))
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public async Task A_backup_restores_a_file_the_operation_overwrote()
     {
         var file = Path.Combine(_root, "notes.md");
@@ -486,7 +650,11 @@ public sealed class InstructionsTests : IAsyncLifetime
     [Fact]
     public async Task Cleanup_removes_a_topic_that_holds_no_facts()
     {
-        WriteTopic("empty", "---\ndescription: nothing here\n---\n\nSome prose but no bullets.");
+        // Frontmatter and nothing else. Prose is not emptiness: a topic that
+        // makes one point at length is stating a fact just as much as a list
+        // is, and deleting it as empty would lose exactly the notes people
+        // write when the reasoning is the valuable part.
+        WriteTopic("empty", "---\ndescription: nothing here\n---\n");
         WriteTopic("kept", "---\ndescription: kept\n---\n- A fact worth keeping around here.");
 
         var cleaned = await _memory.CleanAsync(_workspace.LocalPath, Slug, apply: true);
@@ -507,7 +675,7 @@ public sealed class InstructionsTests : IAsyncLifetime
 
         cleaned.Value!.RemovedBullets.Should().ContainSingle();
         (await _memory.ListAsync(_workspace.LocalPath, Slug)).Value!
-            .Single().Bullets.Should().ContainSingle();
+            .Single().Facts.Should().ContainSingle();
     }
 
     [Fact]
@@ -547,7 +715,7 @@ description: a
     [Fact]
     public async Task A_cleanup_preview_changes_nothing()
     {
-        WriteTopic("empty", "---\ndescription: nothing\n---\n\nNo bullets at all.");
+        WriteTopic("empty", "---\ndescription: nothing\n---\n");
 
         var preview = await _memory.CleanAsync(_workspace.LocalPath, Slug, apply: false);
 

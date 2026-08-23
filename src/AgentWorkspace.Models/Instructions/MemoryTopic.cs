@@ -29,7 +29,14 @@ public enum MemoryKind
 /// <param name="Path">Absolute path to the file.</param>
 /// <param name="Description">One-line summary used by the index.</param>
 /// <param name="Kind">What sort of knowledge it holds.</param>
-/// <param name="Bullets">The individual facts.</param>
+/// <param name="Facts">
+/// The individual facts, however the topic states them.
+/// <para>
+/// A bullet each is the tidiest form, but a topic that makes one point at
+/// length in prose is stating a fact just as much as a list is, and treating
+/// the second kind as empty would report real content as missing.
+/// </para>
+/// </param>
 /// <param name="Links">Names this topic references with wiki-style links.</param>
 /// <param name="Bytes">Size on disk.</param>
 /// <param name="WrittenUtc">Last write time, used to spot topics nobody has revisited.</param>
@@ -38,7 +45,7 @@ public sealed record MemoryTopic(
     string Path,
     string Description,
     MemoryKind Kind,
-    IReadOnlyList<string> Bullets,
+    IReadOnlyList<string> Facts,
     IReadOnlyList<string> Links,
     long Bytes,
     DateTimeOffset WrittenUtc);
@@ -112,4 +119,19 @@ public sealed record MemoryCleanup(
 
     /// <summary>Files a cleanup would touch, so they can be captured in a backup first.</summary>
     public int Count => RemovedTopics.Count + RemovedBullets.Count + RemovedIndexLines.Count;
+}
+
+/// <summary>What an import brought across, or would.</summary>
+/// <param name="SourcePath">Where the memory was read from.</param>
+/// <param name="Imported">Topics copied into the workspace.</param>
+/// <param name="Skipped">Topics left behind, with the reason for each.</param>
+/// <param name="Applied">False for a preview.</param>
+public sealed record MemoryImport(
+    string SourcePath,
+    IReadOnlyList<MemoryTopic> Imported,
+    IReadOnlyDictionary<string, string> Skipped,
+    bool Applied)
+{
+    /// <summary>Facts brought across, which is the number that matters.</summary>
+    public int Facts => Imported.Sum(topic => topic.Facts.Count);
 }

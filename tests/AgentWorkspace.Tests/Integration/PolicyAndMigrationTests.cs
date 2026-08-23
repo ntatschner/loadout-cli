@@ -435,6 +435,60 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
     /// Builds a repository holding one of each: a tracked agent file, an
     /// untracked one, and an ignored one.
     /// </summary>
+    [Fact]
+    public async Task Existing_scoped_rules_move_where_the_launcher_reads_them()
+    {
+        var rules = Path.Combine(_repository, ".claude", "rules");
+        Directory.CreateDirectory(rules);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(rules, "database.md"),
+            "---\nglobs: src/Data/**\n---\nMigrations are never edited once merged.");
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_repository, ".claude", "settings.json"), "{}");
+
+        var plan = await _migrations.PlanAsync(_repository, "starstats", includeIgnored: true);
+
+        var rulesStep = plan.Value!.Steps
+            .Single(s => s.RepositoryRelativePath.Replace('\\', '/') == ".claude/rules");
+
+        // Not agents/claude/rules. Which instructions apply to which paths is
+        // true whichever agent reads them, and the rule loader only looks in
+        // the project's own rules directory.
+        rulesStep.WorkspaceRelativePath.Should().Be("projects/starstats/rules");
+
+        var claudeStep = plan.Value.Steps
+            .Single(s => s.RepositoryRelativePath.Replace('\\', '/') == ".claude");
+
+        claudeStep.Excluded.Should().Contain("rules");
+    }
+
+    [Fact]
+    public async Task The_rules_are_not_also_copied_inside_the_agent_directory()
+    {
+        var rules = Path.Combine(_repository, ".claude", "rules");
+        Directory.CreateDirectory(rules);
+
+        await File.WriteAllTextAsync(Path.Combine(rules, "database.md"), "Schema rules.");
+        await File.WriteAllTextAsync(
+            Path.Combine(_repository, ".claude", "settings.json"), "{}");
+
+        var plan = await _migrations.PlanAsync(_repository, "starstats", includeIgnored: true);
+        var applied = await _migrations.ApplyAsync(plan.Value!);
+
+        applied.Succeeded.Should().BeTrue(applied.Error ?? string.Empty);
+
+        var project = Path.Combine(_workspace.LocalPath, "projects", "starstats");
+
+        File.Exists(Path.Combine(project, "rules", "database.md")).Should().BeTrue();
+
+        // Two copies in two places, drifting apart, with nothing to say which
+        // one is authoritative.
+        File.Exists(Path.Combine(project, "agents", "claude", "rules", "database.md"))
+            .Should().BeFalse();
+    }
+
     private async Task<string> CreateRepositoryAsync()
     {
         var path = Path.Combine(_root, "repo");

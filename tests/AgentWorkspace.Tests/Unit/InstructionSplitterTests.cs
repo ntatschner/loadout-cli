@@ -248,6 +248,55 @@ This file says how to work on the project.
         plan.Failed.Should().BeTrue();
     }
 
+    [Fact]
+    public async Task A_file_something_else_already_split_is_refused()
+    {
+        // The shape these projects arrive in: a short core that points at rule
+        // files, written by whatever organised them before the launcher
+        // existed. Splitting it again would rebuild those rules out of this
+        // summary, replacing real instructions with a list of their own names.
+        var source = WriteSource("""
+# Project instructions
+
+## Subsystem notes (path-scoped)
+
+Detail moved out of this file into `.claude/rules/`.
+
+- `.claude/rules/backend.md` - server rules
+- `.claude/rules/database.md` - schema rules
+- `.claude/rules/frontend.md` - UI rules
+""");
+
+        var plan = await _splitter.PlanAsync(source, Map());
+
+        plan.Failed.Should().BeTrue();
+        plan.Error.Should().Contain("already split");
+    }
+
+    [Fact]
+    public async Task An_index_of_rules_is_recognised_without_a_heading_to_announce_it()
+    {
+        var source = WriteSource("""
+# Project instructions
+
+Read `rules/backend.md`, `rules/database.md` and `rules/frontend.md` as needed.
+""");
+
+        // Recognised by what the file does rather than by who wrote it: no
+        // marker and no known heading, but it is plainly an index.
+        (await _splitter.PlanAsync(source, Map())).Failed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_file_that_mentions_one_rule_in_passing_is_not_treated_as_split()
+    {
+        var source = WriteSource(Source + "\n\nSee `rules/naming.md` for the naming convention.\n");
+
+        // One reference is a cross-reference, not an index. Refusing here would
+        // block the split that this file actually needs.
+        (await _splitter.PlanAsync(source, Map())).Succeeded.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("Database", "Database", true)]
     [InlineData("database", "Database", true)]

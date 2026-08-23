@@ -26,17 +26,20 @@ public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
     private readonly IWorkspaceManager _workspace;
     private readonly IRuleService _rules;
     private readonly IMemoryService _memory;
+    private readonly IMemoryImporter _importer;
 
     public InstructionDiagnosticContributor(
         IProjectService projects,
         IWorkspaceManager workspace,
         IRuleService rules,
-        IMemoryService memory)
+        IMemoryService memory,
+        IMemoryImporter importer)
     {
         _projects = projects;
         _workspace = workspace;
         _rules = rules;
         _memory = memory;
+        _importer = importer;
     }
 
     /// <inheritdoc />
@@ -57,6 +60,7 @@ public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
         var checks = new List<DiagnosticCheck>();
         var heavy = new List<string>();
         var leaking = new List<string>();
+        var elsewhere = new List<string>();
 
         foreach (var project in listed.Value)
         {
@@ -85,6 +89,27 @@ public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
             {
                 leaking.Add(slug);
             }
+
+            // Memory an agent recorded before this launcher existed sits in a
+            // machine-local directory nothing here reads. Reported because
+            // otherwise adopting the launcher looks like starting from nothing
+            // on exactly the projects that had accumulated the most, and
+            // nobody goes looking for a command they have not heard of.
+            if (project.LocalPath is not null
+                && _importer.Discover(project.LocalPath) is { } source)
+            {
+                // Asked rather than inferred from the workspace being empty. A
+                // project that has already imported some of it, or written its
+                // own, would otherwise never be told about the rest.
+                var pending = await _importer
+                    .ImportAsync(_workspace.LocalPath, slug, source, apply: false, ct)
+                    .ConfigureAwait(false);
+
+                if (pending.Succeeded && pending.Value!.Imported.Count > 0)
+                {
+                    elsewhere.Add($"{slug} ({pending.Value.Imported.Count})");
+                }
+            }
         }
 
         if (leaking.Count > 0)
@@ -102,6 +127,16 @@ public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
         {
             checks.Add(DiagnosticCheck.Ok(
                 Category, "Memory content", "No credential-shaped content in project memory."));
+        }
+
+        if (elsewhere.Count > 0)
+        {
+            checks.Add(DiagnosticCheck.Warn(
+                Category,
+                "Memory outside the workspace",
+                $"{string.Join(", ", elsewhere)} has memory recorded by an agent on this machine "
+                + "that the workspace does not hold, with the number of topics in brackets. Bring it in with: "
+                + "agentctl memory import <project>"));
         }
 
         checks.Add(heavy.Count > 0

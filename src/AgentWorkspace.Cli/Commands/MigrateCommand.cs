@@ -233,6 +233,15 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
             output.WriteLine($"  {label}");
             output.WriteLine($"  -> {Markup.Escape(step.WorkspaceRelativePath)}");
 
+            // Said out loud, because a subtree quietly going somewhere other
+            // than where the rest of its directory lands is exactly the kind of
+            // thing somebody needs to see before agreeing to it.
+            foreach (var excluded in step.Excluded ?? [])
+            {
+                output.WriteLine(
+                    $"  [dim]except {Markup.Escape(excluded)}/, which moves on its own[/]");
+            }
+
             if (step.Kind == PolicyFindingKind.Tracked)
             {
                 output.WriteLine("  [dim]will be copied, not removed[/]");

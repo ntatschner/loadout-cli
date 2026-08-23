@@ -138,6 +138,7 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `agentctl rules list\|budget\|audit <project>` | Inspect the instruction rules and what they cost |
 | `agentctl rules split <project>` | Break an oversized instruction file into scoped rules |
 | `agentctl memory list\|write\|audit\|reindex <project>` | Record and check durable project facts |
+| `agentctl memory import <project>` | Bring in memory an agent recorded outside the workspace |
 | `agentctl memory audit --clean <project>` | Remove empty topics, exact repeats and dead index lines |
 | `agentctl backup list\|restore` | Undo an operation that changed files |
 | `agentctl completion <shell>` | Emit a completion script |
@@ -264,6 +265,33 @@ agentctl memory write starstats build-quirks \
 Only the index reaches the compiled context. Topics stay on disk with their
 paths listed, because a project accumulates memory for years and inlining all of
 it would make every session pay for every fact anyone ever recorded.
+
+### Adopting a project that already has memory
+
+Several repositories were managed with an agent's own tooling before this
+launcher existed, and their accumulated facts sit in a machine-local directory
+nothing here reads. `agentctl doctor` reports when it finds any, and
+`agentctl memory import` brings it across:
+
+```bash
+agentctl memory import starstats                 # finds the agent's own layout
+agentctl memory import gateconquest --from <dir> # or point at it directly
+```
+
+Topics are copied verbatim, never overwriting one already in the workspace, and
+one holding something credential-shaped is refused rather than committed — the
+workspace is a Git repository, so importing a token would publish it on the next
+push. The original is copied rather than moved, so nothing is lost if the import
+is wrong; removing the old copy is left to you.
+
+Repositories organised this way also arrive with their instructions already
+split into `.claude/rules/`. `agentctl migrate` moves those to
+`projects/<slug>/rules/` rather than into the agent's own directory: which
+instructions apply to which paths is true whichever agent reads them, and the
+rule loader only looks in the project's own rules directory. And `rules split`
+refuses a file that something else has already split, recognising it by the fact
+that it points at rule files rather than containing the detail itself — splitting
+it again would rebuild those rules out of the summary left in their place.
 
 Two checks keep memory worth loading:
 

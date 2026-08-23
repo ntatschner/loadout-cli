@@ -49,7 +49,7 @@ public interface IMemoryService
         string name,
         string description,
         MemoryKind kind,
-        IReadOnlyList<string> bullets,
+        IReadOnlyList<string> facts,
         CancellationToken ct = default);
 
     /// <summary>
@@ -100,6 +100,15 @@ public interface IMemoryService
 /// <inheritdoc />
 public sealed partial class MemoryService : IMemoryService
 {
+    /// <summary>
+    /// Written into every topic this service creates, and skipped when reading
+    /// facts back out: it is a standing instruction about how to treat the
+    /// file, not something learned about the project.
+    /// </summary>
+    private const string RepositoryWinsNotice =
+        "The repository is authoritative. If one of these disagrees with the code, "
+        + "the code wins and this file is what needs correcting.";
+
     /// <summary>An index should stay an index. Past this it has become content.</summary>
     private const long MaximumIndexBytes = 8 * 1024;
 
@@ -212,10 +221,7 @@ public sealed partial class MemoryService : IMemoryService
             }
         }
 
-        var bullets = Bullet().Matches(text)
-            .Select(m => m.Groups["text"].Value.Trim())
-            .Where(b => b.Length > 0)
-            .ToList();
+        var facts = ExtractFacts(text, match.Success ? text[match.Length..] : text);
 
         var links = WikiLink().Matches(text)
             .Select(m => m.Groups["name"].Value.Trim())
@@ -227,11 +233,54 @@ public sealed partial class MemoryService : IMemoryService
             path,
             description,
             kind,
-            bullets,
+            facts,
             links,
             Encoding.UTF8.GetByteCount(text),
             new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero)));
     }
+
+    /// <summary>
+    /// Pulls the individual facts out of a topic.
+    /// <para>
+    /// Bullets when there are any, and paragraphs otherwise. A topic that makes
+    /// its point in prose is not an empty one, and reading it as empty would
+    /// have the audit report real content as missing and an import refuse to
+    /// bring it across.
+    /// </para>
+    /// </summary>
+    private static List<string> ExtractFacts(string text, string body)
+    {
+        var facts = Bullet().Matches(text)
+            .Select(m => m.Groups["text"].Value.Trim())
+            .Where(value => value.Length > 0)
+            .ToList();
+
+        if (facts.Count > 0)
+        {
+            return facts;
+        }
+
+        return Paragraph().Split(body.Trim())
+            .Select(paragraph => paragraph.Trim())
+            .Where(IsFact)
+            .Select(paragraph => WhiteSpace().Replace(paragraph, " "))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Whether a paragraph carries content rather than structure.
+    /// <para>
+    /// Headings, comments and the standing note this service writes into every
+    /// topic are not facts about the project, and counting them would make an
+    /// empty topic look occupied.
+    /// </para>
+    /// </summary>
+    private static bool IsFact(string paragraph) =>
+        paragraph.Length > 0
+        && !paragraph.StartsWith('#')
+        && !paragraph.StartsWith("<!--", StringComparison.Ordinal)
+        && !paragraph.StartsWith("---", StringComparison.Ordinal)
+        && !paragraph.StartsWith(RepositoryWinsNotice[..40], StringComparison.Ordinal);
 
     /// <inheritdoc />
     public async Task<OperationResult<MemoryAudit>> AuditAsync(
@@ -333,7 +382,7 @@ public sealed partial class MemoryService : IMemoryService
 
         foreach (var topic in topics)
         {
-            if (topic.Bullets.Count == 0)
+            if (topic.Facts.Count == 0)
             {
                 findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Warning, "empty",
                     "holds no facts."));
@@ -351,9 +400,9 @@ public sealed partial class MemoryService : IMemoryService
                     "has no description, so the index cannot say what it is for."));
             }
 
-            foreach (var bullet in topic.Bullets)
+            foreach (var fact in topic.Facts)
             {
-                var patterns = SecretScanner.Match(bullet);
+                var patterns = SecretScanner.Match(fact);
 
                 if (patterns.Count > 0)
                 {
@@ -365,7 +414,7 @@ public sealed partial class MemoryService : IMemoryService
                         + "Remove it and rotate the value."));
                 }
 
-                var verdict = MemoryFactClassifier.Classify(bullet);
+                var verdict = MemoryFactClassifier.Classify(fact);
 
                 if (verdict != FactVerdict.Durable)
                 {
@@ -377,17 +426,17 @@ public sealed partial class MemoryService : IMemoryService
                         topic.Name,
                         MemoryFindingSeverity.Info,
                         verdict.ToString().ToLowerInvariant(),
-                        $"\"{Truncate(bullet)}\" {MemoryFactClassifier.Explain(verdict)}"));
+                        $"\"{Truncate(fact)}\" {MemoryFactClassifier.Explain(verdict)}"));
                 }
 
-                var dated = DatedFact().Match(bullet);
+                var dated = DatedFact().Match(fact);
 
                 if (dated.Success
                     && DateTimeOffset.TryParse(dated.Value, out var when)
                     && when < staleBefore)
                 {
                     findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Info, "stale",
-                        $"dated {when:yyyy-MM-dd}: \"{Truncate(bullet)}\". Check it still holds."));
+                        $"dated {when:yyyy-MM-dd}: \"{Truncate(fact)}\". Check it still holds."));
                 }
             }
         }
@@ -401,19 +450,19 @@ public sealed partial class MemoryService : IMemoryService
 
         foreach (var topic in topics)
         {
-            foreach (var bullet in topic.Bullets)
+            foreach (var fact in topic.Facts)
             {
-                if (bullet.Length < MinimumComparableLength)
+                if (fact.Length < MinimumComparableLength)
                 {
                     continue;
                 }
 
-                var key = Normalise(bullet);
+                var key = Normalise(fact);
 
                 if (seen.TryGetValue(key, out var other))
                 {
                     findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Warning, "duplicate",
-                        $"repeats a fact already in '{other}': \"{Truncate(bullet)}\"."));
+                        $"repeats a fact already in '{other}': \"{Truncate(fact)}\"."));
                 }
                 else
                 {
@@ -444,7 +493,7 @@ public sealed partial class MemoryService : IMemoryService
         string name,
         string description,
         MemoryKind kind,
-        IReadOnlyList<string> bullets,
+        IReadOnlyList<string> facts,
         CancellationToken ct = default)
     {
         var safeName = Slugify(name);
@@ -458,9 +507,9 @@ public sealed partial class MemoryService : IMemoryService
         // Refuses to write a credential rather than writing it and flagging it
         // afterwards. Once it is on disk and committed it is disclosed, and an
         // audit finding does not undo that.
-        foreach (var bullet in bullets)
+        foreach (var fact in facts)
         {
-            var patterns = SecretScanner.Match(bullet);
+            var patterns = SecretScanner.Match(fact);
 
             if (patterns.Count > 0)
             {
@@ -482,14 +531,12 @@ public sealed partial class MemoryService : IMemoryService
             .AppendLine($"  type: {kind.ToString().ToLowerInvariant()}")
             .AppendLine("---")
             .AppendLine()
-            .AppendLine(
-                "The repository is authoritative. If one of these disagrees with the code, "
-                + "the code wins and this file is what needs correcting.")
+            .AppendLine(RepositoryWinsNotice)
             .AppendLine();
 
-        foreach (var bullet in bullets)
+        foreach (var fact in facts)
         {
-            builder.AppendLine($"- {bullet.Trim()}");
+            builder.AppendLine($"- {fact.Trim()}");
         }
 
         try
@@ -591,7 +638,7 @@ public sealed partial class MemoryService : IMemoryService
         {
             ct.ThrowIfCancellationRequested();
 
-            if (topic.Bullets.Count == 0)
+            if (topic.Facts.Count == 0)
             {
                 removedTopics.Add(topic.Name);
 
@@ -651,21 +698,21 @@ public sealed partial class MemoryService : IMemoryService
 
         foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
         {
-            var bullet = Bullet().Match(line);
+            var fact = Bullet().Match(line);
 
-            if (!bullet.Success)
+            if (!fact.Success)
             {
                 kept.Add(line);
                 continue;
             }
 
-            if (seen.Add(bullet.Groups["text"].Value.Trim()))
+            if (seen.Add(fact.Groups["text"].Value.Trim()))
             {
                 kept.Add(line);
                 continue;
             }
 
-            removed.Add(bullet.Groups["text"].Value.Trim());
+            removed.Add(fact.Groups["text"].Value.Trim());
         }
 
         if (apply && removed.Count > 0)
@@ -784,7 +831,7 @@ public sealed partial class MemoryService : IMemoryService
         value.Length <= 70 ? value : value[..70] + "...";
 
     /// <summary>
-    /// Reduces a bullet to a comparison key: case and punctuation differences
+    /// Reduces a fact to a comparison key: case and punctuation differences
     /// are not different facts.
     /// </summary>
     private static string Normalise(string value) =>
@@ -808,6 +855,17 @@ public sealed partial class MemoryService : IMemoryService
 
     [GeneratedRegex(@"\[\[(?<name>[^\]]+)\]\]", RegexOptions.None, 1000)]
     private static partial Regex WikiLink();
+
+    /// <summary>Paragraphs are separated by a blank line.</summary>
+    [GeneratedRegex(@"(\r?\n){2,}", RegexOptions.None, 1000)]
+    private static partial Regex Paragraph();
+
+    /// <summary>
+    /// Collapses the line breaks inside a paragraph, so a fact wrapped across
+    /// four lines is compared and reported as the one sentence it is.
+    /// </summary>
+    [GeneratedRegex(@"\s+", RegexOptions.None, 1000)]
+    private static partial Regex WhiteSpace();
 
     [GeneratedRegex(@"\((?<file>[^)]+\.md)\)", RegexOptions.None, 1000)]
     private static partial Regex IndexLink();
