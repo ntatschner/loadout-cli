@@ -4,6 +4,7 @@ using AgentWorkspace.Core.Diagnostics;
 using AgentWorkspace.Core.Git;
 using AgentWorkspace.Core.Policies;
 using AgentWorkspace.Core.Projects;
+using AgentWorkspace.Core.Updates;
 using AgentWorkspace.Core.Workspace;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -34,6 +35,20 @@ public static class ServiceRegistration
         services.AddSingleton<ISecurityProfileService, SecurityProfileService>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDoctorService, DoctorService>();
+
+        // One client for the process, which is what HttpClient is designed for.
+        // The update check is the only thing in the launcher that reaches the
+        // network on its own behalf; everything else goes through git.
+        services.AddSingleton(_ => new HttpClient
+        {
+            Timeout = TimeSpan.FromMinutes(5),
+        });
+
+        services.AddSingleton<IUpdateService>(provider => new UpdateService(
+            provider.GetRequiredService<IConfigurationService>(),
+            provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
+            provider.GetRequiredService<Platform.Abstractions.IFilePermissions>(),
+            provider.GetRequiredService<HttpClient>()));
 
         return services;
     }

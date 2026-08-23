@@ -23,7 +23,7 @@ public static class Program
     private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "doctor", "status", "list", "here", "launch", "project", "workspace",
-        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config", "desktop",
+        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config", "desktop", "update",
         "--help", "-h", "--version",
     };
 
@@ -186,6 +186,7 @@ public static class Program
         config.AddCommand<HandoffCreateCommand>("handoff");
         config.AddCommand<ProtectCommand>("protect");
         config.AddCommand<DesktopCommand>("desktop");
+        config.AddCommand<UpdateCommand>("update");
         config.AddCommand<MigrateCommand>("migrate");
 
         config.AddBranch("config", cfg =>

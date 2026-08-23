@@ -80,6 +80,7 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `agentctl config list\|get\|set\|edit` | Read and write launcher settings |
 | `agentctl workspace status\|sync\|save\|open` | Manage the central workspace clone |
 | `agentctl desktop` | Install the Start Menu or `.desktop` entry |
+| `agentctl update` | Check the release source and install a newer build |
 | `agentctl secret set\|test\|remove` | Manage credentials in the OS keystore |
 | `agentctl repo check` | Check a repository for tracked AI tooling files |
 | `agentctl protect` | Install a pre-commit hook, or `--global` Git excludes |
@@ -160,6 +161,51 @@ none exists (without one, every workspace commit later fails with "Author
 identity unknown"), picks a secret provider that actually works on this machine,
 offers the global Git excludes, and lists repositories it found in your
 development roots so you can register them.
+
+## Updating
+
+```bash
+agentctl config set updates-source https://internal.example/agentctl/feed.json
+agentctl update --check
+agentctl update
+```
+
+The source is any JSON document reachable over HTTP, or a path — a directory on
+a share is a perfectly good internal release source (spec section 79), and no
+service has to answer:
+
+```json
+{
+  "schemaVersion": 1,
+  "version": "0.2.0",
+  "notes": "What changed.",
+  "artifacts": {
+    "osx-arm64": {
+      "url": "https://internal.example/agentctl/agentctl-0.2.0-osx-arm64.tar.gz",
+      "sha256": "985daa42...",
+      "size": 31110221
+    }
+  }
+}
+```
+
+Replacing the binary somebody is about to run is the most dangerous thing the
+launcher does, so:
+
+- **A published SHA-256 is required.** A feed that will not commit to a hash can
+  hand over anything, and that download becomes the binary you run next. The
+  update is refused with exit 9.
+- **The hash is checked before anything is put in place**, and a mismatch leaves
+  the working binary exactly where it was.
+- **The previous binary is kept** as `agentctl.previous`, so a bad update can be
+  undone by hand rather than reinstalled.
+- **Nothing updates without being asked.** `--yes` or a prompt; non-interactively
+  it refuses rather than swapping the binary out from under a script.
+- **A malformed or older version is never treated as newer**, so a rolled-back or
+  broken feed cannot walk you backwards.
+
+The running executable is moved aside rather than overwritten, because Windows
+will not let a running image be replaced but will let it be renamed.
 
 ## Environments and security profiles
 
@@ -357,6 +403,6 @@ The suite is deliberately structured so most of it runs everywhere:
 - **M2 — done.** Context compiler, profiles, Claude and Codex invocation, preflight, handoffs.
 - **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
 - **M4 — partly done.** Setup wizard, workspace save-on-exit, desktop
-  integration, environments, security profiles and release packaging are in.
-  Native installers (MSI, `.deb`, `.rpm`), the update system, an owned PTY and
-  macOS signing and notarisation remain.
+  integration, environments, security profiles, release packaging and the
+  update system are in. Native installers (MSI, `.deb`, `.rpm`), an owned PTY,
+  and macOS signing and notarisation remain.
