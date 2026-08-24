@@ -248,7 +248,10 @@ ln -sf /usr/lib/loadout/loadout %{buildroot}/usr/bin/loadout
     # AutoReqProv is off above because rpmbuild would otherwise scan the
     # published .NET libraries and generate dependencies on shared objects that
     # ship inside this very package.
-    & rpmbuild --define "_topdir $rpmRoot" --define "_binary_payload w2.xzdio" -bb $specPath
+    # --target is what makes a cross-architecture build possible at all. Without
+    # it rpmbuild builds for the host and refuses an aarch64 package on an x86_64
+    # runner with "No compatible architectures found for build".
+    & rpmbuild --define "_topdir $rpmRoot" --define "_binary_payload w2.xzdio" --target $rpmArch -bb $specPath
     if ($LASTEXITCODE -ne 0) { throw "rpmbuild failed for $Runtime." }
 
     $rpm = Get-ChildItem (Join-Path $rpmRoot 'RPMS') -Filter '*.rpm' -Recurse |

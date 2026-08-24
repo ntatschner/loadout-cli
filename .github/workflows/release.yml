@@ -297,7 +297,11 @@ jobs:
           loadout --version
           loadout doctor --json > /dev/null
           sudo dpkg -r loadout
-          ! command -v loadout
+
+          # Checked on the filesystem, not with `command -v`: that consults the
+          # shell's hash table, which still holds the path from the successful
+          # run above and so reports a binary that has already been removed.
+          [ ! -e /usr/bin/loadout ]
 
       - name: Upload
         uses: actions/upload-artifact@v4
