@@ -67,6 +67,40 @@ public sealed class CliContractTests
     public void Real_commands_are_not_mistaken_for_project_names(string command) =>
         Program.Rewrite([command]).Should().Equal(command);
 
+    [Fact]
+    public void Every_registered_command_reaches_its_command_rather_than_a_project()
+    {
+        // The list that guards this used to be written out by hand, and a
+        // command nobody remembered to add to it did not fail loudly: it was
+        // silently treated as a project name and reported that no project
+        // matched it. Four commands added in one sitting all hit that.
+        // Asserting over the registered set rather than a second hand-written
+        // list is what keeps the guard honest.
+        var names = Program.CommandNames();
+
+        names.Should().NotBeEmpty();
+
+        // Projected rather than asserted in a loop so a failure names the
+        // offending command instead of reporting a length mismatch.
+        var misrouted = names
+            .Where(name => string.Join(' ', Program.Rewrite([name])) != name)
+            .ToList();
+
+        misrouted.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("drift")]
+    [InlineData("sessions")]
+    [InlineData("resume")]
+    [InlineData("statusline")]
+    public void Commands_added_later_are_registered_too(string command)
+    {
+        // Named explicitly as well, so deleting a registration is caught rather
+        // than quietly shrinking the set the theory above iterates.
+        Program.CommandNames().Should().Contain(command);
+    }
+
     [Theory]
     [InlineData("--help")]
     [InlineData("-h")]

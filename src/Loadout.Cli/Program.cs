@@ -19,13 +19,49 @@ public static class Program
     /// Command names that must not be mistaken for a project name when they
     /// appear first. Everything else in first position is treated as a project,
     /// which is what makes "loadout starstats" work (spec section 35).
+    /// <para>
+    /// Recorded as each command is registered rather than written out by hand.
+    /// The hand-written version was a standing trap: a new command that nobody
+    /// remembered to add here did not fail loudly, it silently became a project
+    /// name and reported that no project matched it.
+    /// </para>
     /// </summary>
-    private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> KnownCommands = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Registers a top-level command and records its name.</summary>
+    private static void Top<TCommand>(IConfigurator config, string name)
+        where TCommand : class, ICommandLimiter<CommandSettings>
     {
-        "doctor", "status", "list", "here", "launch", "project", "workspace",
-        "secret", "completion", "handoff", "profile", "repo", "protect", "migrate", "setup", "config", "desktop", "update", "backup", "memory", "rules",
-        "--help", "-h", "--version",
-    };
+        KnownCommands.Add(name);
+        config.AddCommand<TCommand>(name);
+    }
+
+    /// <summary>Registers a top-level branch and records its name.</summary>
+    private static void TopBranch(
+        IConfigurator config,
+        string name,
+        Action<IConfigurator<CommandSettings>> configure)
+    {
+        KnownCommands.Add(name);
+        config.AddBranch(name, configure);
+    }
+
+    /// <summary>
+    /// The registered names, configuring a throwaway parser first if nothing
+    /// has been registered yet. Registration only records names — it resolves
+    /// no services — so doing it twice costs nothing and means the rewrite is
+    /// correct even when called on its own.
+    /// </summary>
+    internal static IReadOnlySet<string> CommandNames()
+    {
+        if (KnownCommands.Count == 0)
+        {
+            var app = new CommandApp(new TypeRegistrar(new ServiceCollection()));
+            app.Configure(config => Configure(config, showFullExceptions: false));
+        }
+
+        return KnownCommands;
+    }
 
     public static async Task<int> Main(string[] args)
     {
@@ -55,6 +91,8 @@ public static class Program
         services.AddSingleton<ILauncherTui, LauncherTui>();
         services.AddSingleton<ISetupWizard, SetupWizard>();
         services.AddSingleton<WorkspaceSavePrompt>();
+        services.AddSingleton<StatuslineTargets>();
+        services.AddSingleton<SessionScope>();
 
         var registrar = new TypeRegistrar(services);
 
@@ -142,7 +180,7 @@ public static class Program
 
         // An option in first position belongs to no command; leave it alone
         // and let the parser produce its own message.
-        if (first.StartsWith('-') || KnownCommands.Contains(first))
+        if (first.StartsWith('-') || CommandNames().Contains(first))
         {
             return args;
         }
@@ -178,26 +216,26 @@ public static class Program
             return (int)ExitCode.GeneralFailure;
         });
 
-        config.AddCommand<SetupCommand>("setup");
-        config.AddCommand<DoctorCommand>("doctor");
-        config.AddCommand<StatusCommand>("status");
-        config.AddCommand<LaunchCommand>("launch");
-        config.AddCommand<HereCommand>("here");
-        config.AddCommand<CompletionCommand>("completion");
-        config.AddCommand<HandoffCreateCommand>("handoff");
-        config.AddCommand<ProtectCommand>("protect");
-        config.AddCommand<DesktopCommand>("desktop");
-        config.AddCommand<UpdateCommand>("update");
-        config.AddCommand<MigrateCommand>("migrate");
+        Top<SetupCommand>(config, "setup");
+        Top<DoctorCommand>(config, "doctor");
+        Top<StatusCommand>(config, "status");
+        Top<LaunchCommand>(config, "launch");
+        Top<HereCommand>(config, "here");
+        Top<CompletionCommand>(config, "completion");
+        Top<HandoffCreateCommand>(config, "handoff");
+        Top<ProtectCommand>(config, "protect");
+        Top<DesktopCommand>(config, "desktop");
+        Top<UpdateCommand>(config, "update");
+        Top<MigrateCommand>(config, "migrate");
 
-        config.AddBranch("backup", backup =>
+        TopBranch(config, "backup", backup =>
         {
             backup.SetDescription("Inspect and restore snapshots taken before mutating operations.");
             backup.AddCommand<BackupListCommand>("list");
             backup.AddCommand<BackupRestoreCommand>("restore");
         });
 
-        config.AddBranch("memory", memory =>
+        TopBranch(config, "memory", memory =>
         {
             memory.SetDescription("Record and check the durable facts about a project.");
             memory.AddCommand<MemoryListCommand>("list");
@@ -205,9 +243,10 @@ public static class Program
             memory.AddCommand<MemoryAuditCommand>("audit");
             memory.AddCommand<MemoryReindexCommand>("reindex");
             memory.AddCommand<MemoryImportCommand>("import");
+            memory.AddCommand<MemoryCompressCommand>("compress");
         });
 
-        config.AddBranch("rules", rules =>
+        TopBranch(config, "rules", rules =>
         {
             rules.SetDescription("Inspect the path-scoped instruction rules and what they cost.");
             rules.AddCommand<RulesListCommand>("list");
@@ -216,7 +255,7 @@ public static class Program
             rules.AddCommand<RulesSplitCommand>("split");
         });
 
-        config.AddBranch("config", cfg =>
+        TopBranch(config, "config", cfg =>
         {
             cfg.SetDescription("Read and write launcher settings.");
             cfg.AddCommand<ConfigListCommand>("list");
@@ -225,13 +264,30 @@ public static class Program
             cfg.AddCommand<ConfigEditCommand>("edit");
         });
 
-        config.AddBranch("repo", repo =>
+        Top<DriftCommand>(config, "drift");
+        Top<SessionListCommand>(config, "sessions");
+        Top<ResumeCommand>(config, "resume");
+
+        TopBranch(config, "statusline", statusline =>
+        {
+            statusline.SetDescription("Show the project, branch and context usage in the agent status line.");
+
+            // Rendering is the default because that is the form Claude invokes:
+            // the installed command is this binary plus one word.
+            statusline.SetDefaultCommand<StatuslineRenderCommand>();
+
+            statusline.AddCommand<StatuslineInstallCommand>("install");
+            statusline.AddCommand<StatuslineUninstallCommand>("uninstall");
+            statusline.AddCommand<StatuslineShowCommand>("show");
+        });
+
+        TopBranch(config, "repo", repo =>
         {
             repo.SetDescription("Inspect repository compliance.");
             repo.AddCommand<RepoCheckCommand>("check");
         });
 
-        config.AddBranch("profile", profile =>
+        TopBranch(config, "profile", profile =>
         {
             profile.SetDescription("Inspect context profiles.");
             profile.AddCommand<ProfileListCommand>("list");
@@ -239,9 +295,9 @@ public static class Program
 
         // "list" is an alias for the most common listing, because typing
         // "project list" for the default view gets old (spec section 35).
-        config.AddCommand<ProjectListCommand>("list");
+        Top<ProjectListCommand>(config, "list");
 
-        config.AddBranch("project", project =>
+        TopBranch(config, "project", project =>
         {
             project.SetDescription("Register, list and inspect projects.");
             project.AddCommand<ProjectListCommand>("list");
@@ -257,7 +313,7 @@ public static class Program
             project.AddCommand<ProjectLinkCommand>("link");
         });
 
-        config.AddBranch("workspace", workspace =>
+        TopBranch(config, "workspace", workspace =>
         {
             workspace.SetDescription("Manage the central workspace clone.");
             workspace.AddCommand<WorkspaceStatusCommand>("status");
@@ -266,7 +322,7 @@ public static class Program
             workspace.AddCommand<WorkspaceOpenCommand>("open");
         });
 
-        config.AddBranch("secret", secret =>
+        TopBranch(config, "secret", secret =>
         {
             secret.SetDescription("Store and check secrets in the platform credential store.");
             secret.AddCommand<SecretSetCommand>("set");
