@@ -76,6 +76,7 @@ public sealed class LauncherTui : ILauncherTui
     private readonly ISessionHistoryService _sessions;
     private readonly IDriftService _drift;
     private readonly IDoctorService _doctor;
+    private readonly TuiScreen _screen;
     private readonly IRemediationService _remediation;
 
     public LauncherTui(
@@ -114,10 +115,18 @@ public sealed class LauncherTui : ILauncherTui
         _drift = drift;
         _doctor = doctor;
         _remediation = remediation;
+        _screen = new TuiScreen(console);
     }
 
     /// <inheritdoc />
-    public async Task<int> RunAsync(CancellationToken ct = default)
+    public Task<int> RunAsync(CancellationToken ct = default) =>
+        // The whole session runs in the alternate screen where the terminal has
+        // one, so the launcher draws over its own area and gives the scrollback
+        // back untouched when it exits. A launcher that scrolls somebody's
+        // history away to show a menu has taken something it cannot return.
+        _screen.RunAsync(() => RunSessionAsync(ct));
+
+    private async Task<int> RunSessionAsync(CancellationToken ct)
     {
         var configResult = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
         if (configResult.Failed)
@@ -213,11 +222,12 @@ public sealed class LauncherTui : ILauncherTui
     /// </summary>
     private async Task AddProjectsAsync(CancellationToken ct)
     {
-        _console.WriteLine();
+        _screen.Begin("Add a project");
 
         var how = _console.Prompt(
             new SelectionPrompt<string>()
                 .Title("Where should it look?")
+                .PageSize(_screen.PageSize)
                 .AddChoices("Scan the folders I have configured", "I will give it a path", Back));
 
         if (how == Back)
@@ -264,8 +274,7 @@ public sealed class LauncherTui : ILauncherTui
 
         while (true)
         {
-            _console.WriteLine();
-            _console.Write(new Rule("[bold]Settings[/]").LeftJustified());
+            _screen.Begin("Settings");
 
             WriteSettings(config);
 
@@ -274,6 +283,7 @@ public sealed class LauncherTui : ILauncherTui
             var choice = _console.Prompt(
                 new SelectionPrompt<string>()
                     .Title("Change anything?")
+                .PageSize(_screen.PageSize)
                     .AddChoices(
                         "Central workspace repository",
                         "Where new clones are placed",
@@ -480,6 +490,7 @@ public sealed class LauncherTui : ILauncherTui
         var chosen = _console.Prompt(
             new SelectionPrompt<string>()
                 .Title("Which agent should a project use when it names none?")
+                .PageSize(_screen.PageSize)
                 .AddChoices(names));
 
         if (chosen == config.DefaultAgent)
@@ -574,7 +585,7 @@ public sealed class LauncherTui : ILauncherTui
 
     private async Task ShowHeaderAsync(LauncherConfig config, CancellationToken ct)
     {
-        _console.Write(new Rule("[bold]Loadout[/]").LeftJustified());
+        _screen.Begin("Loadout");
 
         var workspaceLine = !_workspace.IsConfigured(config)
             ? "[dim]Workspace: not configured (local state only)[/]"
@@ -617,7 +628,7 @@ public sealed class LauncherTui : ILauncherTui
 
         var prompt = new SelectionPrompt<string>()
             .Title("[bold]Projects[/]")
-            .PageSize(15)
+                .PageSize(_screen.PageSize)
             .MoreChoicesText("[dim](move up and down for more)[/]")
             .AddChoices(choices);
 
@@ -673,8 +684,7 @@ public sealed class LauncherTui : ILauncherTui
         LauncherConfig config,
         CancellationToken ct)
     {
-        _console.WriteLine();
-        _console.Write(new Rule($"[bold]{Markup.Escape(project.Entry.Name)}[/]").LeftJustified());
+        _screen.Begin(project.Entry.Name, project.LocalPath);
 
         if (project.LocalPath is null)
         {
@@ -796,6 +806,7 @@ public sealed class LauncherTui : ILauncherTui
         var choice = _console.Prompt(
             new SelectionPrompt<string>()
                 .Title("What would you like to do?")
+                .PageSize(_screen.PageSize)
                 .AddChoices(actions));
 
         if (choice == Back)
@@ -899,7 +910,7 @@ public sealed class LauncherTui : ILauncherTui
         var chosen = _console.Prompt(
             new SelectionPrompt<string>()
                 .Title("Which session?")
-                .PageSize(15)
+                .PageSize(_screen.PageSize)
                 .AddChoices(choices));
 
         if (chosen == Back)
@@ -944,7 +955,7 @@ public sealed class LauncherTui : ILauncherTui
     /// </summary>
     private async Task CheckMachineAsync(CancellationToken ct)
     {
-        _console.WriteLine();
+        _screen.Begin("This machine");
 
         var result = await _console.Status()
             .StartAsync("Checking...", _ => _doctor.RunAsync(ct))
@@ -993,6 +1004,8 @@ public sealed class LauncherTui : ILauncherTui
     /// </summary>
     private async Task ReviewProblemsAsync(ProjectResolution project, CancellationToken ct)
     {
+        _screen.Begin("Problems", project.Entry.Slug);
+
         var inspected = await _drift.InspectAsync(project.Entry.Slug, ct).ConfigureAwait(false);
 
         if (inspected.Failed || inspected.Value is not { Count: > 0 } reports)
@@ -1162,6 +1175,7 @@ public sealed class LauncherTui : ILauncherTui
         var chosen = _console.Prompt(
             new SelectionPrompt<string>()
                 .Title("What are you working on?")
+                .PageSize(_screen.PageSize)
                 .AddChoices(labels));
 
         return profiles[labels.IndexOf(chosen)];
