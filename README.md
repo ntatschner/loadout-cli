@@ -146,6 +146,9 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `loadout update` | Check the release source and install a newer build |
 | `loadout secret set\|test\|remove` | Manage credentials in the OS keystore |
 | `loadout repo check` | Check a repository for tracked AI tooling files |
+| `loadout drift [project]` | Show where projects have drifted from their recorded configuration |
+| `loadout drift --fix` | Put right the drift the launcher can fix itself |
+| `loadout doctor --fix` | Put right the findings the doctor can fix itself |
 | `loadout protect` | Install a pre-commit hook, or `--global` Git excludes |
 | `loadout migrate` | Move existing AI tooling files into the workspace |
 | `loadout project worktrees <project>` | List a project's working trees |
@@ -156,6 +159,10 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `loadout memory list\|write\|audit\|reindex <project>` | Record and check durable project facts |
 | `loadout memory import <project>` | Bring in memory an agent recorded outside the workspace |
 | `loadout memory audit --clean <project>` | Remove empty topics, exact repeats and dead index lines |
+| `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory |
+| `loadout sessions` | List recent agent sessions across every agent, newest first |
+| `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
+| `loadout statusline install\|uninstall\|show` | Put the project, branch and context spent in the agent's status line |
 | `loadout backup list\|restore` | Undo an operation that changed files |
 | `loadout completion <shell>` | Emit a completion script |
 
@@ -240,6 +247,50 @@ wrong history.
 The launcher is driven end to end in the tests with a scripted keyboard, which
 is how its worst defect was found: backing out of a project used to quit the
 whole thing.
+
+## The agent's status line
+
+Claude Code renders a status line by running a command and printing what it
+writes. It hands that command the session's working directory, model and context
+window counts — but it does not know which registered project the repository is,
+and it does not report the branch.
+
+```
+loadout | src/Loadout.Core | main* | Opus 5 | 42% ctx
+```
+
+`loadout statusline install` writes the entry. `--global` applies it to every
+session on this machine including ones started by hand; naming a project instead
+writes into the workspace, so it travels to every machine that clones it and
+applies only when the launcher starts the session.
+
+Each segment can be switched off with `loadout config set statusline-git false`
+and the rest keep working. A missing piece removes its own segment rather than
+the line, and an unreadable payload falls back to the working directory: an
+empty status line is indistinguishable from a broken one.
+
+Codex has no equivalent mechanism, so this is Claude Code only.
+
+## Sessions
+
+Each agent records its own conversations in its own private layout, and neither
+can say which project a session belonged to. `loadout sessions` reads both and
+attributes them:
+
+```
+1 minute ago   claude storefront-api     Fix the upload path
+5 minutes ago  claude storefront-web     Redesign the settings screen
+2 days ago     codex  storefront-api     Tidy the deploy script
+```
+
+`loadout resume` opens a picker, or takes a session id or `--last`. Resuming
+goes through the launcher rather than the agent directly, so the workspace
+synchronises and the context recompiles instead of a bare transcript being
+reopened. The interactive launcher offers the same picker per project.
+
+Neither storage format is a published contract, so both readers are
+best-effort by construction: a transcript that cannot be understood costs that
+one session and never the listing.
 
 ## Instructions that scale
 
@@ -360,6 +411,45 @@ repositories from their parent accumulates memory against the parent, where it
 describes all of them and belongs to none. The launcher names the candidates and
 stops. Picking one would be a guess presented as a fact, and the wrong guess
 files a repository's hard-won notes under its neighbour.
+
+### Compressing instructions into memory
+
+The context compiler inlines instructions in full but memory only by its index.
+A standing fact therefore costs a session the whole line on every launch while
+it sits in instructions, and one index entry once it sits in memory.
+
+`loadout memory compress <project>` moves the durable ones across:
+
+```
+Would compress starplatform
+
+  code-conventions          project, 16 fact(s)
+  component-modularization  project, 10 fact(s)
+  ...
+
+Always loaded: 102 KB -> 67 KB (34 KB off every session)
+
+Withheld 1 line(s) matching credentials in a URL, left in the instructions
+rather than copied into the workspace repository.
+
+Examined 178 list item(s). Left alone:
+    46  makes no standing claim, so a later session has nothing to rely on.
+```
+
+Three rules keep it trustworthy. Content moves **verbatim and is never
+reworded** — no model summarises anything, so the result cannot say something
+the source did not. Nothing is removed from the source until it has been read
+back out of the memory store. And only list items are considered: a bullet is a
+self-contained claim that can be lifted without leaving a hole, where a
+paragraph usually is not.
+
+Candidates are screened for credentials first. The memory store screens too and
+refuses a whole topic on one bad line, which is right for a direct write and
+wrong here — one credential-shaped URL would otherwise block every good fact in
+a large file. A withheld line stays exactly where it already was, disclosed no
+further than it already was, and is reported by pattern name only.
+
+What is left is prose, which `loadout rules split` scopes to paths instead.
 
 ### Adopting a project that already has memory
 
@@ -640,6 +730,35 @@ calling back into `loadout`, so it keeps working on a machine where the
 launcher has been moved. A hook the launcher did not write is never overwritten
 or deleted. Hooks live in `.git/hooks` and so are per-clone — `loadout doctor`
 reports when the clone you are standing in has none.
+
+## Drift
+
+`loadout doctor` answers whether this machine is set up, for wherever the shell
+is standing. `loadout drift` answers a different question: across every
+registered project, what has quietly stopped being true.
+
+```
+storefront-api
+  + Remote  https://github.com/example/storefront-api.git
+  x Agent files  1 agent file(s) are committed to this repository
+  ! Pre-commit protection  not installed in this clone (fixable)
+  ! Memory  3 topic(s) recorded on this machine the workspace does not hold (fixable)
+```
+
+Hooks are per-clone and untracked, so a fresh clone of a protected repository
+has no protection until somebody notices. Memory an agent recorded locally is
+lost the day the machine is rebuilt. Neither shows up in a repository nobody has
+opened this month, which is why this is a sweep rather than a check.
+
+Findings marked `(fixable)` carry a remedy the launcher can carry out.
+`--fix` previews each, asks once, applies, then **re-runs the checks** rather
+than trusting that the fix worked. Every remedy is idempotent.
+
+Three things are reported and deliberately never fixed automatically:
+untracking committed files rewrites the repository, splitting an oversized
+instruction layer is a judgement call, and a remote that disagrees with the
+registry could be wrong on either side. A fix that has to guess what was meant
+is not a fix, it is a second problem.
 
 ## Conflict recovery
 
