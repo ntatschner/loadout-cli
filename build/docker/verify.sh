@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-version="${AGENTCTL_VERSION:-0.1.0}"
+version="${LOADOUT_VERSION:-0.1.0}"
 
 # Derived rather than passed in, so the same image verifies whichever
 # architecture it was built for. Getting this wrong would be quiet: the build

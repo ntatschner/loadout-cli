@@ -36,14 +36,24 @@ public static class ServiceRegistration
         services.AddSingleton<IRuleService, RuleService>();
         services.AddSingleton<IMemoryService, MemoryService>();
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
+        services.AddSingleton<Instructions.MemoryCompressor>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();
         services.AddSingleton<IProjectOverviewService, ProjectOverviewService>();
+        services.AddSingleton<IDriftService, DriftService>();
         services.AddSingleton<IPolicyService, PolicyService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<ISecurityProfileService, SecurityProfileService>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDiagnosticContributor, InstructionDiagnosticContributor>();
         services.AddSingleton<IDoctorService, DoctorService>();
+        services.AddSingleton<IRemediationService, RemediationService>();
+
+        // Both are registered whether or not the agent is installed: each
+        // reports its own availability, so a machine with only one of them
+        // simply lists fewer sessions rather than failing.
+        services.AddSingleton<Sessions.ISessionHistory, Sessions.ClaudeSessionHistory>();
+        services.AddSingleton<Sessions.ISessionHistory, Sessions.CodexSessionHistory>();
+        services.AddSingleton<Sessions.ISessionHistoryService, Sessions.SessionHistoryService>();
 
         // One client for the process, which is what HttpClient is designed for.
         // The update check is the only thing in the launcher that reaches the

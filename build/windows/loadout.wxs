@@ -75,7 +75,7 @@
         Per-user, matching the install scope, so it needs no elevation and
         cannot affect anyone else's shell.
       -->
-      <Environment Id="AgentctlPath"
+      <Environment Id="LoadoutPath"
                    Name="PATH"
                    Value="[BINFOLDER]"
                    Permanent="no"
@@ -95,7 +95,7 @@
                Directory="ApplicationProgramsFolder"
                Guid="9c10030a-eabf-5fd1-9ba7-4f87f2f3263f">
 
-      <Shortcut Id="AgentctlShortcut"
+      <Shortcut Id="LoadoutShortcut"
                 Name="loadout"
                 Description="Loadout"
                 Target="[BINFOLDER]loadout.exe"

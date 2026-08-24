@@ -336,10 +336,10 @@ recognised, rather than looking like one the launcher has never seen.
 accounts for, and says what each piece appears to belong to:
 
 ```
-D:\git\GateConquestRepos  7 topic(s)
+D:\git\storefront-repos  7 topic(s)
   holds 2 repositories so this was recorded across all of them
-    GateConquestFlask
-    GateConquestWeb
+    storefront-api
+    storefront-web
   decide which project it belongs to, then: loadout memory import <project> --from ...
 ```
 
@@ -370,7 +370,7 @@ nothing here reads. `loadout doctor` reports when it finds any, and
 
 ```bash
 loadout memory import starstats                 # finds the agent's own layout
-loadout memory import gateconquest --from <dir> # or point at it directly
+loadout memory import storefront --from <dir>   # or point at it directly
 ```
 
 Topics are copied verbatim, never overwriting one already in the workspace, and

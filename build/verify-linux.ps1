@@ -63,7 +63,7 @@ try {
         Write-Host "Running under $platform emulation. This is considerably slower than native."
     }
 
-    & docker run --rm --platform $platform --env "AGENTCTL_VERSION=$Version" $image
+    & docker run --rm --platform $platform --env "LOADOUT_VERSION=$Version" $image
     if ($LASTEXITCODE -ne 0) { throw "The Linux verification failed for $platform." }
 }
 finally {

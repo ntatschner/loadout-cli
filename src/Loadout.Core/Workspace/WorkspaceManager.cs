@@ -313,6 +313,16 @@ public sealed class WorkspaceManager : IWorkspaceManager
             **/.codex/sessions/
             **/.claude/projects/
 
+            # Personal to one machine, not shared configuration. Migration
+            # copies an agent directory wholesale, so without this the
+            # per-machine tool approvals of whoever ran it travel to every
+            # other machine.
+            **/settings.local.json
+
+            # Build artefacts that arrive inside skills and prompts.
+            __pycache__/
+            *.pyc
+
             """;
 
         // The workspace is shared between machines by design, so line endings

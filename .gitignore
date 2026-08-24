@@ -5,3 +5,12 @@ artifacts/
 .vs/
 .idea/
 TestResults/
+
+# AI-assisted planning artefacts are internal development process output.
+# They record how something was decided, not what it is, and they name
+# whatever private repositories happened to be open at the time. The
+# documentation that belongs to the project lives in docs/.
+docs/plans/
+docs/specs/
+PLAN-*.md
+*.plan.md
