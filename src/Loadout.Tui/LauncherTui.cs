@@ -37,13 +37,13 @@ public interface ILauncherTui
 public sealed class LauncherTui : ILauncherTui
 {
     private const string Quit = "Quit";
-    private const string Back = "Back";
+    internal const string Back = "Back";
 
     /// <summary>The menu entry that reopens a previous conversation.</summary>
-    private const string ResumeEntry = "Resume a session";
+    internal const string ResumeEntry = "Resume a session";
 
     /// <summary>The menu entry that reviews what is wrong and offers to fix it.</summary>
-    private const string ProblemsEntry = "Review problems";
+    internal const string ProblemsEntry = "Review problems";
 
     /// <summary>The settings entry that checks the machine rather than a project.</summary>
     private const string CheckMachineEntry = "Check this machine";
@@ -53,7 +53,7 @@ public sealed class LauncherTui : ILauncherTui
     /// done often; this carries the rest, so the launcher is never a subset of
     /// the command line.
     /// </summary>
-    private const string AllCommandsEntry = "All commands…";
+    internal const string AllCommandsEntry = "All commands…";
     private const string Settings = "Settings and paths";
     private const string AddProject = "Add a project";
 
@@ -796,23 +796,10 @@ public sealed class LauncherTui : ILauncherTui
             ? config.DefaultAgent
             : project.Entry.DefaultAgent;
 
-        var actions = new List<string> { $"Launch {defaultAgent}" };
-
-        actions.AddRange(_agents.Adapters
-            .Where(a => !string.Equals(a.Name, defaultAgent, StringComparison.OrdinalIgnoreCase))
-            .Select(a => $"Launch {a.Name}"));
-
-        actions.Add(ResumeEntry);
-        actions.Add("Open development shell");
-        actions.Add("Open in file manager");
-        actions.Add(AllCommandsEntry);
-
-        if (overview?.HasWarnings == true)
-        {
-            actions.Add(ProblemsEntry);
-        }
-
-        actions.Add(Back);
+        var actions = ProjectActions(
+            defaultAgent,
+            _agents.Adapters.Select(a => a.Name),
+            overview?.HasWarnings == true);
 
         var choice = _console.Prompt(
             new SelectionPrompt<string>()
@@ -882,6 +869,44 @@ public sealed class LauncherTui : ILauncherTui
         }
 
         return result.Value.AgentExitCode;
+    }
+
+    /// <summary>
+    /// The project menu, in order.
+    /// <para>
+    /// One method rather than a list built here and a copy of its order kept in
+    /// the tests. That copy drifted three times in a single sitting: each entry
+    /// added here silently moved every index below it, and the tests failed
+    /// somewhere unrelated to the change that broke them.
+    /// </para>
+    /// </summary>
+    /// <param name="defaultAgent">Agent offered first, because it is the usual answer.</param>
+    /// <param name="agents">Every installed agent, so the rest are offered after it.</param>
+    /// <param name="hasWarnings">Whether there is anything to review.</param>
+    internal static List<string> ProjectActions(
+        string defaultAgent,
+        IEnumerable<string> agents,
+        bool hasWarnings)
+    {
+        var actions = new List<string> { $"Launch {defaultAgent}" };
+
+        actions.AddRange(agents
+            .Where(a => !string.Equals(a, defaultAgent, StringComparison.OrdinalIgnoreCase))
+            .Select(a => $"Launch {a}"));
+
+        actions.Add(ResumeEntry);
+        actions.Add("Open development shell");
+        actions.Add("Open in file manager");
+        actions.Add(AllCommandsEntry);
+
+        if (hasWarnings)
+        {
+            actions.Add(ProblemsEntry);
+        }
+
+        actions.Add(Back);
+
+        return actions;
     }
 
     /// <summary>

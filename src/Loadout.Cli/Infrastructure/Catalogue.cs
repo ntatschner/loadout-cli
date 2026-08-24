@@ -46,8 +46,28 @@ internal static class Catalogue
 
     private static readonly List<CatalogueEntry> Entries = [];
 
+    /// <summary>
+    /// Guards the list. Recording is check-then-add, and anything building a
+    /// parser on another thread races it: both callers see the path missing,
+    /// both add it, and the palette then shows the command twice. Adding to a
+    /// List from two threads can corrupt it outright rather than merely
+    /// duplicating.
+    /// </summary>
+    private static readonly Lock Gate = new();
+
     /// <summary>Everything registered so far.</summary>
-    internal static IReadOnlyList<CatalogueEntry> Commands => Entries;
+    internal static IReadOnlyList<CatalogueEntry> Commands
+    {
+        get
+        {
+            lock (Gate)
+            {
+                // Copied under the lock so a caller cannot be enumerating while
+                // another thread appends.
+                return [.. Entries];
+            }
+        }
+    }
 
     /// <summary>
     /// Notes one command. Called as it is registered with the parser, so the
@@ -55,13 +75,6 @@ internal static class Catalogue
     /// </summary>
     internal static void Record(string path, Type command)
     {
-        // Registration happens once per process, but a test may build the parser
-        // more than once and duplicates would double every menu.
-        if (Entries.Any(e => string.Equals(e.Path, path, StringComparison.Ordinal)))
-        {
-            return;
-        }
-
         var description = command
             .GetCustomAttributes(typeof(DescriptionAttribute), inherit: false)
             .OfType<DescriptionAttribute>()
@@ -74,7 +87,17 @@ internal static class Catalogue
 
         TerminalOnly.TryGetValue(group, out var reason);
 
-        Entries.Add(new CatalogueEntry(path, description, reason));
+        lock (Gate)
+        {
+            // Registration happens once per process, but a test may build the
+            // parser more than once and duplicates would double every menu.
+            if (Entries.Any(e => string.Equals(e.Path, path, StringComparison.Ordinal)))
+            {
+                return;
+            }
+
+            Entries.Add(new CatalogueEntry(path, description, reason));
+        }
     }
 }
 

@@ -201,11 +201,29 @@ public sealed class LauncherTuiTests : IAsyncLifetime
     /// The project menu, in order. Two agents ship built in, so the actions
     /// after them sit at fixed offsets.
     /// </summary>
-    // Launch (default), launch (other agent), resume, shell, file manager,
-    // all commands, problems, back.
-    private const int ResumeSession = 2;
-    private const int ReviewProblems = 6;
-    private const int BackFromProject = 7;
+    /// <summary>
+    /// Where an entry sits in the project menu, asked of the launcher rather
+    /// than written down here.
+    /// <para>
+    /// These were fixed numbers, and they broke three times in one sitting:
+    /// every entry added to the menu moved the ones below it, and the tests
+    /// then failed somewhere unrelated to the change that broke them.
+    /// </para>
+    /// </summary>
+    private static int Entry(string label)
+    {
+        // The two agents that ship built in, which is what the fixture has.
+        var actions = LauncherTui.ProjectActions("claude", ["claude", "codex"], hasWarnings: true);
+
+        var index = actions.IndexOf(label);
+
+        index.Should().BeGreaterThanOrEqualTo(0, $"'{label}' should be in the project menu");
+
+        return index;
+    }
+
+    private static int ReviewProblems => Entry(LauncherTui.ProblemsEntry);
+    private static int BackFromProject => Entry(LauncherTui.Back);
 
     /// <summary>The settings menu, in order.</summary>
     private const int WorkspaceRepository = 0;
