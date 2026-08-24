@@ -2,7 +2,9 @@ using Loadout.Agents;
 using Loadout.Core.Configuration;
 using Loadout.Core.Context;
 using Loadout.Core.Projects;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Sessions;
+using Loadout.Models.Diagnostics;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
@@ -39,6 +41,12 @@ public sealed class LauncherTui : ILauncherTui
 
     /// <summary>The menu entry that reopens a previous conversation.</summary>
     private const string ResumeEntry = "Resume a session";
+
+    /// <summary>The menu entry that reviews what is wrong and offers to fix it.</summary>
+    private const string ProblemsEntry = "Review problems";
+
+    /// <summary>The settings entry that checks the machine rather than a project.</summary>
+    private const string CheckMachineEntry = "Check this machine";
     private const string Settings = "Settings and paths";
     private const string AddProject = "Add a project";
 
@@ -66,6 +74,9 @@ public sealed class LauncherTui : ILauncherTui
     private readonly IPlatformPaths _paths;
     private readonly IProjectOnboarding _onboarding;
     private readonly ISessionHistoryService _sessions;
+    private readonly IDriftService _drift;
+    private readonly IDoctorService _doctor;
+    private readonly IRemediationService _remediation;
 
     public LauncherTui(
         IAnsiConsole console,
@@ -81,7 +92,10 @@ public sealed class LauncherTui : ILauncherTui
         IApplicationLauncher opener,
         IPlatformPaths paths,
         IProjectOnboarding onboarding,
-        ISessionHistoryService sessions)
+        ISessionHistoryService sessions,
+        IDriftService drift,
+        IDoctorService doctor,
+        IRemediationService remediation)
     {
         _console = console;
         _projects = projects;
@@ -97,6 +111,9 @@ public sealed class LauncherTui : ILauncherTui
         _paths = paths;
         _onboarding = onboarding;
         _sessions = sessions;
+        _drift = drift;
+        _doctor = doctor;
+        _remediation = remediation;
     }
 
     /// <inheritdoc />
@@ -263,11 +280,19 @@ public sealed class LauncherTui : ILauncherTui
                         "Folders scanned for repositories",
                         "Default agent",
                         "Open the config file",
+                        CheckMachineEntry,
                         Back));
 
             if (choice == Back)
             {
                 return changed ? config : null;
+            }
+
+            if (choice == CheckMachineEntry)
+            {
+                await CheckMachineAsync(ct).ConfigureAwait(false);
+
+                continue;
             }
 
             if (choice == "Open the config file")
@@ -763,7 +788,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (overview?.HasWarnings == true)
         {
-            actions.Add("Explain the warnings");
+            actions.Add(ProblemsEntry);
         }
 
         actions.Add(Back);
@@ -788,10 +813,12 @@ public sealed class LauncherTui : ILauncherTui
                 .ConfigureAwait(false);
         }
 
-        if (choice == "Explain the warnings")
+        if (choice == ProblemsEntry)
         {
-            ExplainWarnings(project, overview!);
+            await ReviewProblemsAsync(project, ct).ConfigureAwait(false);
 
+            // Back to the same menu: the overview is re-read on the way round,
+            // so anything just fixed stops being listed.
             return await ChooseActionAsync(project, overview, config, ct).ConfigureAwait(false);
         }
 
@@ -907,54 +934,160 @@ public sealed class LauncherTui : ILauncherTui
     }
 
     /// <summary>
-    /// Says what each warning means and which command fixes it.
+    /// Runs the same checks as the doctor and offers to put right what it can.
     /// <para>
-    /// A warning nobody can act on is only noise. The commands are printed
-    /// rather than run, because each of them changes files and the launcher is
-    /// not the place to agree to that in passing.
+    /// The project screen covers one repository. This covers the machine: the
+    /// global Git excludes, the agents, the workspace. Both end in the same
+    /// remediation service, so a fix behaves identically wherever it was
+    /// started from.
     /// </para>
     /// </summary>
-    private void ExplainWarnings(ProjectResolution project, ProjectOverview overview)
+    private async Task CheckMachineAsync(CancellationToken ct)
     {
-        var slug = Markup.Escape(project.Entry.Slug);
+        _console.WriteLine();
+
+        var result = await _console.Status()
+            .StartAsync("Checking...", _ => _doctor.RunAsync(ct))
+            .ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+
+            return;
+        }
+
+        var report = result.Value!;
+
+        foreach (var check in report.Checks)
+        {
+            if (check.Severity == DiagnosticSeverity.Info)
+            {
+                continue;
+            }
+
+            var colour = check.Severity == DiagnosticSeverity.Error ? "red" : "yellow";
+
+            _console.MarkupLine(
+                $"[{colour}]{Markup.Escape(check.Name)}[/] [dim]{Markup.Escape(check.Detail)}[/]");
+        }
+
+        await OfferRemediesAsync(report.Remedies, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shows everything wrong with a project and offers to put right the part
+    /// that can be.
+    /// <para>
+    /// Driven by the same drift service the command line uses rather than by a
+    /// second list of warnings kept here. The two had already diverged once:
+    /// this screen never mentioned a pre-commit hook left behind by an older
+    /// version, because only the drift check knew about it.
+    /// </para>
+    /// <para>
+    /// Findings without a remedy are shown too, with the command that would
+    /// help. Untracking committed files rewrites a repository and splitting an
+    /// instruction layer is a judgement call, so neither is something to do to
+    /// somebody from a menu.
+    /// </para>
+    /// </summary>
+    private async Task ReviewProblemsAsync(ProjectResolution project, CancellationToken ct)
+    {
+        var inspected = await _drift.InspectAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
+        if (inspected.Failed || inspected.Value is not { Count: > 0 } reports)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(inspected.Error ?? "Nothing could be inspected.")}[/]");
+
+            return;
+        }
+
+        var report = reports[0];
 
         _console.WriteLine();
 
-        if (overview.TrackedAgentFiles > 0)
+        foreach (var finding in report.Findings)
         {
-            _console.MarkupLine(
-                "[yellow]Agent files are committed to this repository.[/] "
-                + "[dim]They belong in the workspace, not in the application's history:[/]");
+            if (finding.Severity == DiagnosticSeverity.Info)
+            {
+                continue;
+            }
 
-            _console.MarkupLine($"  loadout migrate {slug}");
+            var colour = finding.Severity == DiagnosticSeverity.Error ? "red" : "yellow";
+
+            _console.MarkupLine(
+                $"[{colour}]{Markup.Escape(finding.Name)}[/] "
+                + $"[dim]{Markup.Escape(finding.Detail)}[/]");
         }
 
-        if (overview.PendingImports > 0)
-        {
-            _console.MarkupLine(
-                "[yellow]An agent recorded memory outside the workspace.[/] "
-                + "[dim]Nothing else reads it there:[/]");
+        await OfferRemediesAsync(report.Remedies, ct).ConfigureAwait(false);
+    }
 
-            _console.MarkupLine($"  loadout memory import {slug}");
+    /// <summary>
+    /// Previews every fix, asks once, then applies.
+    /// <para>
+    /// Shared by the project screen and the machine screen so a fix behaves
+    /// the same wherever it was reached from, and matches the command line for
+    /// the same reason.
+    /// </para>
+    /// </summary>
+    private async Task OfferRemediesAsync(IReadOnlyList<Remedy> remedies, CancellationToken ct)
+    {
+        if (remedies.Count == 0)
+        {
+            _console.WriteLine();
+            _console.MarkupLine("[dim]None of these can be put right automatically.[/]");
+            _console.WriteLine();
+
+            return;
         }
 
-        if (overview.IsOverBudget)
-        {
-            _console.MarkupLine(
-                $"[yellow]{FormatBytes(overview.AlwaysLoadedBytes)} loads on every session[/] "
-                + "[dim]whatever the task. See what it is, and what could be scoped:[/]");
+        _console.WriteLine();
+        _console.MarkupLine($"[bold]{remedies.Count} of these can be put right now[/]");
 
-            _console.MarkupLine($"  loadout rules budget {slug}");
-            _console.MarkupLine($"  loadout rules split {slug} --write-map");
+        // Previewed before anything is agreed to, exactly as the command line
+        // does it. A menu is a worse place to be surprised by a change than a
+        // terminal, not a better one.
+        var previews = new List<RemedyOutcome>();
+
+        foreach (var remedy in remedies)
+        {
+            var preview = await _remediation.PreviewAsync(remedy, ct).ConfigureAwait(false);
+
+            if (preview.Failed)
+            {
+                _console.MarkupLine(
+                    $"  [yellow]![/] {Markup.Escape(remedy.Description)} "
+                    + $"[dim]{Markup.Escape(preview.Error!)}[/]");
+
+                continue;
+            }
+
+            previews.Add(preview.Value!);
+
+            _console.MarkupLine($"  [green]+[/] {Markup.Escape(remedy.Description)}");
+            _console.MarkupLine($"    [dim]{Markup.Escape(preview.Value!.Detail)}[/]");
         }
 
-        if (!overview.Protected)
-        {
-            _console.MarkupLine(
-                "[yellow]This clone has no pre-commit protection.[/] "
-                + "[dim]Hooks are per-clone, so a fresh clone never has one:[/]");
+        _console.WriteLine();
 
-            _console.MarkupLine("  loadout protect");
+        if (previews.Count == 0 || !_console.Confirm($"Apply {previews.Count} fix(es)?", defaultValue: false))
+        {
+            _console.MarkupLine("[dim]Nothing was changed.[/]");
+            _console.WriteLine();
+
+            return;
+        }
+
+        foreach (var preview in previews)
+        {
+            var applied = await _remediation.ApplyAsync(preview.Remedy, ct).ConfigureAwait(false);
+
+            // One failing must not stop the others: they are independent, and
+            // stopping halfway leaves the least explicable state of all.
+            _console.MarkupLine(applied.Failed
+                ? $"  [red]x[/] {Markup.Escape(preview.Remedy.Description)} [dim]{Markup.Escape(applied.Error!)}[/]"
+                : $"  [green]+[/] {Markup.Escape(applied.Value!.Detail)}");
         }
 
         _console.WriteLine();

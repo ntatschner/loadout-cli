@@ -5,6 +5,7 @@ using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Sessions;
 using Loadout.Core.Workspace;
 using Loadout.Models.Platform;
@@ -98,6 +99,8 @@ public sealed class LauncherTuiTests : IAsyncLifetime
         var importer = new MemoryImporter(environment, memory);
         var policies = new PolicyService(workspace, git, paths, permissions, yaml);
 
+        var overviews = new ProjectOverviewService(git, workspace, rules, memory, importer, policies);
+
         var config = await _configuration.LoadConfigAsync().ConfigureAwait(false);
         var agents = new AgentRegistry(resolver, _processes, config.Value!);
 
@@ -115,7 +118,7 @@ public sealed class LauncherTuiTests : IAsyncLifetime
             new UnixShellProvider(environment, resolver),
             _processes,
             new ContextCompiler(permissions, rules, memory),
-            new ProjectOverviewService(git, workspace, rules, memory, importer, policies),
+            overviews,
             new NoOpApplicationLauncher(),
             paths,
             new ProjectOnboarding(
@@ -128,7 +131,10 @@ public sealed class LauncherTuiTests : IAsyncLifetime
                     new BackupService(paths, permissions, yaml, TimeProvider.System))),
             new SessionHistoryService(
                 [new ClaudeSessionHistory(environment), new CodexSessionHistory(environment)],
-                _projects));
+                _projects),
+            new DriftService(_projects, overviews, git),
+            new SilentDoctor(),
+            new RemediationService(policies, _projects, workspace, importer));
 
         _repository = await CreateRepositoryAsync("alpha").ConfigureAwait(false);
     }
@@ -195,12 +201,14 @@ public sealed class LauncherTuiTests : IAsyncLifetime
     /// after them sit at fixed offsets.
     /// </summary>
     private const int ResumeSession = 2;
-    private const int ExplainWarnings = 5;
+    private const int ReviewProblems = 5;
     private const int BackFromProject = 6;
 
     /// <summary>The settings menu, in order.</summary>
     private const int WorkspaceRepository = 0;
-    private const int BackFromSettings = 5;
+
+    /// <summary>Back sits below the machine check, which sits above it.</summary>
+    private const int BackFromSettings = 6;
 
     /// <summary>
     /// Anything past the last entry. Spectre stops at the bottom rather than
@@ -208,6 +216,11 @@ public sealed class LauncherTuiTests : IAsyncLifetime
     /// having to know how many projects exist.
     /// </summary>
     private const int Last = 99;
+
+    /// <summary>Answers a yes/no confirmation.</summary>
+    private void Accept() => _console.Input.PushTextWithEnter("y");
+
+    private void Decline() => _console.Input.PushTextWithEnter("n");
 
     /// <summary>Presses Down n times then Enter, which is how a menu is answered.</summary>
     private void Choose(int down)
@@ -288,22 +301,72 @@ public sealed class LauncherTuiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task An_unprotected_clone_is_warned_about_and_the_warning_can_be_explained()
+    public async Task An_unprotected_clone_is_reported_and_a_fix_is_offered()
     {
         await _projects.AddAsync(_repository);
 
         Choose(0);
-        Choose(ExplainWarnings);
+        Choose(ReviewProblems);
 
-        // Explaining returns to the same menu rather than leaving, so the
-        // warning can be read and then acted on or ignored.
+        Decline();
+
+        // Reviewing returns to the same menu rather than leaving, so a problem
+        // can be read and then acted on or ignored.
         Choose(BackFromProject);
         Choose(Last);
 
         await _tui.RunAsync();
 
-        Output.Should().Contain("pre-commit");
-        Output.Should().Contain("loadout protect");
+        Output.Should().Contain("Pre-commit protection");
+
+        // The launcher used to print the command and leave the person to it.
+        // Offering to run it is the difference between a diagnosis and a fix.
+        Output.Should().Contain("can be put right now");
+    }
+
+    [Fact]
+    public async Task Declining_the_offer_changes_nothing()
+    {
+        await _projects.AddAsync(_repository);
+
+        var hook = Path.Combine(_repository, ".git", "hooks", "pre-commit");
+
+        Choose(0);
+        Choose(ReviewProblems);
+
+        Decline();
+
+        Choose(BackFromProject);
+        Choose(Last);
+
+        await _tui.RunAsync();
+
+        Output.Should().Contain("Nothing was changed");
+        File.Exists(hook).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Accepting_the_offer_actually_installs_the_hook()
+    {
+        await _projects.AddAsync(_repository);
+
+        var hook = Path.Combine(_repository, ".git", "hooks", "pre-commit");
+
+        File.Exists(hook).Should().BeFalse("the repository starts unprotected");
+
+        Choose(0);
+        Choose(ReviewProblems);
+
+        Accept();
+
+        Choose(BackFromProject);
+        Choose(Last);
+
+        await _tui.RunAsync();
+
+        // The whole point: a menu that reports a problem and then fixes it,
+        // asserted against the filesystem rather than against what it printed.
+        File.Exists(hook).Should().BeTrue();
     }
 
     [Fact]
@@ -369,6 +432,19 @@ public sealed class LauncherTuiTests : IAsyncLifetime
 
         return count;
     }
+}
+
+/// <summary>
+/// A doctor that finds nothing, because these tests drive the project screen
+/// rather than the machine one. Building a real one would pull the whole
+/// platform in for a screen no test here opens.
+/// </summary>
+internal sealed class SilentDoctor : IDoctorService
+{
+    public Task<Models.Results.OperationResult<Models.Diagnostics.DiagnosticReport>> RunAsync(
+        CancellationToken ct = default) =>
+        Task.FromResult(Models.Results.OperationResult<Models.Diagnostics.DiagnosticReport>.Ok(
+            new Models.Diagnostics.DiagnosticReport([])));
 }
 
 /// <summary>Stands in for a real agent: the launcher is under test, not Claude.</summary>
