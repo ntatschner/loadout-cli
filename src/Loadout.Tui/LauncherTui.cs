@@ -47,6 +47,13 @@ public sealed class LauncherTui : ILauncherTui
 
     /// <summary>The settings entry that checks the machine rather than a project.</summary>
     private const string CheckMachineEntry = "Check this machine";
+
+    /// <summary>
+    /// The entry that reaches everything else. The grouped menus carry what is
+    /// done often; this carries the rest, so the launcher is never a subset of
+    /// the command line.
+    /// </summary>
+    private const string AllCommandsEntry = "All commands…";
     private const string Settings = "Settings and paths";
     private const string AddProject = "Add a project";
 
@@ -77,6 +84,7 @@ public sealed class LauncherTui : ILauncherTui
     private readonly IDriftService _drift;
     private readonly IDoctorService _doctor;
     private readonly TuiScreen _screen;
+    private readonly CommandPalette _palette;
     private readonly IRemediationService _remediation;
 
     public LauncherTui(
@@ -94,6 +102,7 @@ public sealed class LauncherTui : ILauncherTui
         IPlatformPaths paths,
         IProjectOnboarding onboarding,
         ISessionHistoryService sessions,
+        ICommandCatalogue catalogue,
         IDriftService drift,
         IDoctorService doctor,
         IRemediationService remediation)
@@ -116,6 +125,7 @@ public sealed class LauncherTui : ILauncherTui
         _doctor = doctor;
         _remediation = remediation;
         _screen = new TuiScreen(console);
+        _palette = new CommandPalette(console, catalogue, _screen);
     }
 
     /// <inheritdoc />
@@ -795,6 +805,7 @@ public sealed class LauncherTui : ILauncherTui
         actions.Add(ResumeEntry);
         actions.Add("Open development shell");
         actions.Add("Open in file manager");
+        actions.Add(AllCommandsEntry);
 
         if (overview?.HasWarnings == true)
         {
@@ -822,6 +833,13 @@ public sealed class LauncherTui : ILauncherTui
             // launcher, the same as backing out of any other question.
             return resumed ?? await ChooseActionAsync(project, overview, config, ct)
                 .ConfigureAwait(false);
+        }
+
+        if (choice == AllCommandsEntry)
+        {
+            await _palette.RunAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
+            return await ChooseActionAsync(project, overview, config, ct).ConfigureAwait(false);
         }
 
         if (choice == ProblemsEntry)

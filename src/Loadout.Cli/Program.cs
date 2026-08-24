@@ -33,17 +33,56 @@ public static class Program
         where TCommand : class, ICommandLimiter<CommandSettings>
     {
         KnownCommands.Add(name);
+        Catalogue.Record(name, typeof(TCommand));
         config.AddCommand<TCommand>(name);
     }
 
     /// <summary>Registers a top-level branch and records its name.</summary>
-    private static void TopBranch(
-        IConfigurator config,
-        string name,
-        Action<IConfigurator<CommandSettings>> configure)
+    private static void TopBranch(IConfigurator config, string name, Action<Branch> configure)
     {
         KnownCommands.Add(name);
-        config.AddBranch(name, configure);
+        config.AddBranch<CommandSettings>(name, branch => configure(new Branch(branch, name)));
+    }
+
+    /// <summary>
+    /// A branch that records what is added to it.
+    /// <para>
+    /// Sub-commands are registered through this rather than on the configurator
+    /// directly, so the catalogue the launcher reads is built from the same
+    /// registration the parser uses. A second list kept by hand is the thing
+    /// this exists to avoid.
+    /// </para>
+    /// </summary>
+    internal sealed class Branch
+    {
+        private readonly IConfigurator<CommandSettings> _inner;
+        private readonly string _name;
+
+        internal Branch(IConfigurator<CommandSettings> inner, string name)
+        {
+            _inner = inner;
+            _name = name;
+        }
+
+        internal void SetDescription(string description) => _inner.SetDescription(description);
+
+        /// <summary>
+        /// The command the branch runs when named on its own. Recorded under
+        /// the branch name, because that is what somebody types.
+        /// </summary>
+        internal void SetDefaultCommand<TCommand>()
+            where TCommand : class, ICommandLimiter<CommandSettings>
+        {
+            Catalogue.Record(_name, typeof(TCommand));
+            _inner.SetDefaultCommand<TCommand>();
+        }
+
+        internal void AddCommand<TCommand>(string name)
+            where TCommand : class, ICommandLimiter<CommandSettings>
+        {
+            Catalogue.Record($"{_name} {name}", typeof(TCommand));
+            _inner.AddCommand<TCommand>(name);
+        }
     }
 
     /// <summary>
@@ -52,6 +91,13 @@ public static class Program
     /// no services — so doing it twice costs nothing and means the rewrite is
     /// correct even when called on its own.
     /// </summary>
+    /// <summary>
+    /// Every command, as the launcher sees them. Exposed so a test can assert
+    /// that what the parser knows and what the launcher offers are the same.
+    /// </summary>
+    internal static IReadOnlyList<Loadout.Tui.CatalogueEntry> RegisteredCommands() =>
+        Infrastructure.Catalogue.Commands;
+
     internal static IReadOnlySet<string> CommandNames()
     {
         if (KnownCommands.Count == 0)
@@ -97,6 +143,12 @@ public static class Program
 
         var registrar = new TypeRegistrar(services);
 
+        // Registered as a factory so it can run the very parser it is
+        // registered into: the launcher hands a command back to the same
+        // CommandApp rather than carrying a second implementation of any of it.
+        services.AddSingleton<ICommandCatalogue>(_ =>
+            new CommandCatalogue(arguments => RunParserAsync(registrar, arguments)));
+
         // Directories are created before any command runs so no command has to
         // guess whether its storage exists (spec section 16).
         var provider = services.BuildServiceProvider();
@@ -133,6 +185,24 @@ public static class Program
         app.Configure(config => Configure(config, showFullExceptions));
 
         return await app.RunAsync(Rewrite(launcherArgs)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs one command through a parser configured exactly like the real one.
+    /// <para>
+    /// A fresh CommandApp rather than the one already running: that one is
+    /// mid-invocation when the launcher is on screen, and Spectre's parser is
+    /// not built to be re-entered. Configuration is cheap and records nothing
+    /// twice, because the catalogue ignores a path it already holds.
+    /// </para>
+    /// </summary>
+    private static Task<int> RunParserAsync(TypeRegistrar registrar, string[] arguments)
+    {
+        var app = new CommandApp(registrar);
+
+        app.Configure(config => Configure(config, showFullExceptions: false));
+
+        return app.RunAsync(arguments);
     }
 
     private static async Task<int> RunInteractiveAsync(ServiceProvider provider)

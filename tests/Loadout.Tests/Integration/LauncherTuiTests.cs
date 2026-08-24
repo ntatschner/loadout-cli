@@ -132,6 +132,7 @@ public sealed class LauncherTuiTests : IAsyncLifetime
             new SessionHistoryService(
                 [new ClaudeSessionHistory(environment), new CodexSessionHistory(environment)],
                 _projects),
+            new EmptyCatalogue(),
             new DriftService(_projects, overviews, git),
             new SilentDoctor(),
             new RemediationService(policies, _projects, workspace, importer));
@@ -200,9 +201,11 @@ public sealed class LauncherTuiTests : IAsyncLifetime
     /// The project menu, in order. Two agents ship built in, so the actions
     /// after them sit at fixed offsets.
     /// </summary>
+    // Launch (default), launch (other agent), resume, shell, file manager,
+    // all commands, problems, back.
     private const int ResumeSession = 2;
-    private const int ReviewProblems = 5;
-    private const int BackFromProject = 6;
+    private const int ReviewProblems = 6;
+    private const int BackFromProject = 7;
 
     /// <summary>The settings menu, in order.</summary>
     private const int WorkspaceRepository = 0;
@@ -445,6 +448,22 @@ internal sealed class SilentDoctor : IDoctorService
         CancellationToken ct = default) =>
         Task.FromResult(Models.Results.OperationResult<Models.Diagnostics.DiagnosticReport>.Ok(
             new Models.Diagnostics.DiagnosticReport([])));
+}
+
+/// <summary>
+/// A catalogue with nothing in it. These tests drive the grouped menus; the
+/// palette has its own tests, and building a real catalogue here would mean
+/// configuring the whole command line for a screen none of them opens.
+/// </summary>
+internal sealed class EmptyCatalogue : ICommandCatalogue
+{
+    public IReadOnlyList<CatalogueEntry> Commands => [];
+
+    public Task<int> RunAsync(
+        string path,
+        IReadOnlyList<string> arguments,
+        CancellationToken ct = default) =>
+        throw new NotSupportedException("No command is run from these tests.");
 }
 
 /// <summary>Stands in for a real agent: the launcher is under test, not Claude.</summary>
