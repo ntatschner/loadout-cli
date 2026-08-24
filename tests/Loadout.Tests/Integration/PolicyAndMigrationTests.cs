@@ -386,6 +386,54 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_hook_written_under_the_old_name_is_still_recognised_as_ours()
+    {
+        var hook = Path.Combine(_repository, ".git", "hooks", "pre-commit");
+        Directory.CreateDirectory(Path.GetDirectoryName(hook)!);
+
+        // Exactly what this tool wrote before it was renamed. Four real
+        // repositories were found stranded like this: install refused to
+        // upgrade them because they no longer looked like ours, remove refused
+        // to delete them for the same reason, and they went on naming a command
+        // that no longer exists.
+        await File.WriteAllTextAsync(
+            hook,
+            """
+            #!/bin/sh
+            # agentctl-managed-hook
+            echo old
+            exit 0
+            """);
+
+        var install = await _policies.InstallHookAsync(_repository);
+
+        install.Succeeded.Should().BeTrue(install.Error ?? string.Empty);
+
+        var upgraded = await File.ReadAllTextAsync(hook);
+
+        upgraded.Should().Contain("loadout-managed-hook");
+        upgraded.Should().NotContain("agentctl");
+    }
+
+    [Fact]
+    public async Task A_hook_written_under_the_old_name_can_be_removed()
+    {
+        var hook = Path.Combine(_repository, ".git", "hooks", "pre-commit");
+        Directory.CreateDirectory(Path.GetDirectoryName(hook)!);
+
+        await File.WriteAllTextAsync(
+            hook,
+            """
+            #!/bin/sh
+            # agentctl-managed-hook
+            exit 0
+            """);
+
+        (await _policies.RemoveHookAsync(_repository)).Succeeded.Should().BeTrue();
+        File.Exists(hook).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Removing_a_foreign_hook_is_refused_too()
     {
         var hook = Path.Combine(_repository, ".git", "hooks", "pre-commit");

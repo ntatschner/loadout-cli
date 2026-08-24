@@ -34,6 +34,24 @@ public sealed class PolicyService : IPolicyService
     /// </summary>
     private const string HookSignature = "# loadout-managed-hook";
 
+    /// <summary>
+    /// Signatures this launcher recognises as its own work, including the name
+    /// it used to go by.
+    /// <para>
+    /// A hook written before the rename is still this tool's hook. Recognising
+    /// only the current spelling stranded them: install refused to upgrade
+    /// them because they looked like somebody else's, remove refused to delete
+    /// them for the same reason, and they went on telling people to run a
+    /// command that no longer exists. Same failure as the global exclude file
+    /// after the rename, for the same reason.
+    /// </para>
+    /// </summary>
+    private static readonly string[] OwnHookSignatures =
+    [
+        HookSignature,
+        "# agentctl-managed-hook",
+    ];
+
     private readonly IWorkspaceManager _workspace;
     private readonly IGitManager _git;
     private readonly IPlatformPaths _paths;
@@ -120,7 +138,11 @@ public sealed class PolicyService : IPolicyService
             root,
             findings,
             !string.IsNullOrWhiteSpace(excludesResult.Value),
-            HasManagedHook(root)));
+            HasManagedHook(root),
+
+            // Ours, but written by an older version: protected in practice,
+            // and still worth replacing.
+            HasManagedHook(root) && !HasCurrentHook(root)));
     }
 
     /// <inheritdoc />
@@ -293,14 +315,48 @@ public sealed class PolicyService : IPolicyService
         Path.Combine(root, ".git", "hooks", HookFileName);
 
     /// <summary>Whether the repository carries a hook this launcher wrote.</summary>
+    /// <summary>
+    /// Whether the installed hook is this version's, rather than one written
+    /// under an older name.
+    /// <para>
+    /// Kept separate from <see cref="HasManagedHook"/> on purpose. Recognising
+    /// an old hook as ours is what lets it be replaced; reporting it as current
+    /// would leave it in place forever, still naming commands that no longer
+    /// exist. So one question guards the overwrite and the other drives the
+    /// upgrade.
+    /// </para>
+    /// </summary>
+    private static bool HasCurrentHook(string root)
+    {
+        try
+        {
+            var path = HookPath(root);
+
+            return File.Exists(path)
+                && File.ReadAllText(path).Contains(HookSignature, StringComparison.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private static bool HasManagedHook(string root)
     {
         var path = HookPath(root);
 
         try
         {
-            return File.Exists(path)
-                && File.ReadAllText(path).Contains(HookSignature, StringComparison.Ordinal);
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+
+            var contents = File.ReadAllText(path);
+
+            return Array.Exists(
+                OwnHookSignatures,
+                signature => contents.Contains(signature, StringComparison.Ordinal));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

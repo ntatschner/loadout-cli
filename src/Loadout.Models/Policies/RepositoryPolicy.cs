@@ -84,11 +84,13 @@ public sealed record PolicyFinding(string Path, PolicyFindingKind Kind, string P
 /// <param name="Findings">Everything matched, whatever its severity.</param>
 /// <param name="HasGlobalExcludes">Whether a global Git exclude file is configured (spec section 50).</param>
 /// <param name="HasPreCommitHook">Whether the launcher's pre-commit hook is installed (spec section 51).</param>
+/// <param name="HookNeedsUpgrade">The hook is the launcher own but was written by an older version.</param>
 public sealed record PolicyReport(
     string RepositoryPath,
     IReadOnlyList<PolicyFinding> Findings,
     bool HasGlobalExcludes,
-    bool HasPreCommitHook)
+    bool HasPreCommitHook,
+    bool HookNeedsUpgrade = false)
 {
     /// <summary>Tracked agent files: the repository is not clean.</summary>
     public IReadOnlyList<PolicyFinding> Violations =>

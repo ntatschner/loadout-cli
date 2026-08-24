@@ -18,6 +18,7 @@ namespace Loadout.Core.Projects;
 /// <param name="MemoryTopics">Durable facts recorded for this project.</param>
 /// <param name="PendingImports">Memory an agent recorded outside the workspace.</param>
 /// <param name="Protected">Whether this clone has the pre-commit hook installed.</param>
+/// <param name="HookNeedsUpgrade">The hook is the launcher's own but was written by an older version.</param>
 /// <param name="TrackedAgentFiles">Agent files committed to the repository, which is a policy breach.</param>
 public sealed record ProjectOverview(
     ProjectResolution Project,
@@ -28,7 +29,8 @@ public sealed record ProjectOverview(
     int MemoryTopics,
     int PendingImports,
     bool Protected,
-    int TrackedAgentFiles)
+    int TrackedAgentFiles,
+    bool HookNeedsUpgrade = false)
 {
     /// <summary>
     /// The point past which the always-loaded instructions are worth a look.
@@ -100,6 +102,7 @@ public sealed class ProjectOverviewService : IProjectOverviewService
         string? branch = null;
         var clean = true;
         var isProtected = false;
+        var hookNeedsUpgrade = false;
         var tracked = 0;
 
         if (path is not null)
@@ -117,6 +120,7 @@ public sealed class ProjectOverviewService : IProjectOverviewService
             if (report.Succeeded)
             {
                 isProtected = report.Value!.HasPreCommitHook;
+                hookNeedsUpgrade = report.Value.HookNeedsUpgrade;
 
                 tracked = report.Value!.Findings
                     .Count(f => f.Kind == Models.Policies.PolicyFindingKind.Tracked);
@@ -154,7 +158,8 @@ public sealed class ProjectOverviewService : IProjectOverviewService
             topics.Succeeded ? topics.Value!.Count : 0,
             pending,
             isProtected,
-            tracked));
+            tracked,
+            hookNeedsUpgrade));
     }
 
     /// <summary>
