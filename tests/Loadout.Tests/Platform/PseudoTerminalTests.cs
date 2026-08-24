@@ -264,9 +264,14 @@ public sealed class PseudoTerminalTests
         var output = await DrainAsync(terminal);
         await terminal.WaitForExitAsync();
 
-        // The whole point of forkpty over a pair of pipes. A child on a pipe
+        // The whole point of a pty over a pair of pipes: a child on a pipe
         // reports "not a tty" and disables colour, paging and prompting.
-        output.Should().Contain("/dev/pts/").And.NotContain("not a tty");
+        //
+        // Asserted as "names a device" rather than a particular device, because
+        // the two Unixes name them differently: Linux allocates /dev/pts/N and
+        // macOS /dev/ttysNNN. Pinning the Linux spelling made this a Linux
+        // test wearing a Unix label.
+        output.Should().Contain("/dev/").And.NotContain("not a tty");
     }
 
     [WindowSizeFact]

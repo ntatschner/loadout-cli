@@ -273,8 +273,11 @@ public sealed class RealLaunchTests : IAsyncLifetime
             .First(line => line.StartsWith("cwd=", StringComparison.Ordinal))[4..]
             .Trim();
 
-        Path.GetFullPath(cwd).TrimEnd(Path.DirectorySeparatorChar)
-            .Should().Be(Path.GetFullPath(_repository).TrimEnd(Path.DirectorySeparatorChar));
+        // Compared through the path semantics rather than as strings, which is
+        // the rule this project sets for itself and the reason it has one. On
+        // macOS the child reports /private/var/... for a directory created as
+        // /var/..., because /var is a link; two names, one directory.
+        new PathSemantics().PathsEqual(cwd, _repository).Should().BeTrue();
     }
 
     [Fact]

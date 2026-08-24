@@ -192,31 +192,77 @@ public sealed class PathSemantics : IPathSemantics
     }
 
     /// <summary>
+    /// How many links deep to follow before giving up. A cycle is the reason
+    /// for a limit rather than a count: following one forever would hang a
+    /// comparison, and no real tree is nested this far.
+    /// </summary>
+    private const int MaximumLinkDepth = 40;
+
+    /// <summary>
     /// Resolves symbolic links to their final target so that two routes to one
     /// repository compare equal. Spec section 84 calls this out for macOS and
     /// Linux, and Windows junctions behave the same way.
+    /// <para>
+    /// Every component is resolved, not only the last one. macOS makes that
+    /// unavoidable: <c>/var</c> is a link to <c>/private/var</c>, so every
+    /// temporary path has a symlinked ancestor and a leaf that is not a link at
+    /// all. Resolving the leaf alone left two names for one directory, and
+    /// project identity is built on these comparing equal.
+    /// </para>
     /// </summary>
     private static string ResolveLinks(string path)
     {
         try
         {
-            if (Directory.Exists(path))
-            {
-                return Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
-            }
-
-            if (File.Exists(path))
-            {
-                return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
-            }
+            return Walk(path, MaximumLinkDepth);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // A broken or circular link resolves to itself rather than failing
             // the whole comparison.
+            return path;
+        }
+    }
+
+    /// <summary>
+    /// Resolves a path by resolving its parent first, then its own last
+    /// component against the resolved parent.
+    /// </summary>
+    private static string Walk(string path, int budget)
+    {
+        if (budget <= 0)
+        {
+            return path;
         }
 
-        return path;
+        var parent = Path.GetDirectoryName(path);
+
+        // The volume root has no parent to resolve against.
+        if (string.IsNullOrEmpty(parent))
+        {
+            return path;
+        }
+
+        var resolvedParent = Walk(parent, budget - 1);
+
+        var candidate = Path.Combine(resolvedParent, Path.GetFileName(path));
+
+        var target = Directory.Exists(candidate)
+            ? Directory.ResolveLinkTarget(candidate, returnFinalTarget: true)?.FullName
+            : File.Exists(candidate)
+                ? File.ResolveLinkTarget(candidate, returnFinalTarget: true)?.FullName
+                : null;
+
+        if (target is null)
+        {
+            return candidate;
+        }
+
+        // A link can point at a relative path, and it can point at another
+        // link, so the target is resolved in turn rather than trusted.
+        return Walk(
+            Path.IsPathRooted(target) ? target : Path.Combine(resolvedParent, target),
+            budget - 1);
     }
 
     private static string TrimTrailingSeparator(string path)

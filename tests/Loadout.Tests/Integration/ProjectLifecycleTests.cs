@@ -261,7 +261,10 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         // It is the same project in a new place, so its history should not be
         // silently reset.
         resolved.LaunchCount.Should().Be(1);
-        resolved.LocalPath.Should().Be(moved);
+        // Through the path semantics, not string equality: on macOS a temporary
+        // directory has a symlinked ancestor, so the same directory has two
+        // spellings.
+        new PathSemantics().PathsEqual(resolved.LocalPath!, moved).Should().BeTrue();
     }
 
     [Fact]
