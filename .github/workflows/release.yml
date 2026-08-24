@@ -303,6 +303,28 @@ jobs:
           # run above and so reports a binary that has already been removed.
           [ ! -e /usr/bin/loadout ]
 
+      # Nothing looked inside the .rpm until a released one turned out to be
+      # missing 90% of itself. rpmbuild strips every ELF it recognises, which
+      # rewrites a .NET single-file binary without the bundle appended after
+      # its sections: 80 MB became 11 MB, and the package installed cleanly
+      # and did nothing.
+      #
+      # Read from the package metadata rather than by extracting, so this needs
+      # no tools the runner might not have.
+      - name: Check the rpm carries its payload
+        if: startsWith(matrix.rid, 'linux-')
+        run: |
+          set -euo pipefail
+          rpm=$(find artifacts -maxdepth 1 -name '*.rpm' | head -1)
+          [ -n "$rpm" ] || { echo "no rpm was produced" >&2; exit 1; }
+
+          size=$(rpm -qlvp "$rpm" | awk '$NF == "/usr/lib/loadout/loadout" { print $5 }')
+          echo "$(basename "$rpm") carries a $size byte binary"
+
+          # A self-contained publish is tens of megabytes on every runtime.
+          # Anything an order of magnitude under that is a stripped bundle.
+          [ "${size:-0}" -gt 40000000 ]
+
       - name: Upload
         uses: actions/upload-artifact@v4
         with:

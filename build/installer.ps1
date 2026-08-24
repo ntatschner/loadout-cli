@@ -225,6 +225,17 @@ Summary:        Loadout
 License:        MIT
 AutoReqProv:    no
 
+# rpmbuild runs a set of "build root policy" scripts after install, and one of
+# them strips every ELF it recognises. That destroys a .NET single-file bundle:
+# the application is appended after the ELF sections, and strip rewrites the
+# file without it. The binary drops from 80 MB to 11 MB and no longer runs.
+#
+# It only ever bit the native build. Cross-building for aarch64 on an x86_64
+# host left the binary alone because the host strip cannot read foreign ELF, so
+# the arm64 package was correct and the x86_64 one silently was not.
+%global __os_install_post %{nil}
+%global debug_package %{nil}
+
 %description
 Launches AI coding agents against registered projects, keeping agent
 configuration and context in a central workspace repository rather than in the
