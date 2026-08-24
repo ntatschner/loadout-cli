@@ -220,24 +220,62 @@ public sealed partial class InstructionSplitter
         var (_, sections) = Parse(text);
         var map = new SplitMap();
 
+        // Names are made unique rather than dropped on collision. Two headings
+        // can reduce to the same name, and skipping the second silently left a
+        // whole section unrouted — invisible in the map, and therefore left in
+        // the always-loaded core without anyone being told.
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var section in sections)
         {
             // Suggested, never assumed. Every section starts routed to a rule
             // named after itself with no globs, which the splitter refuses to
             // apply: the person has to say what each one is for, and that is
             // the decision the tool cannot make.
-            var name = Slug(section.Title);
+            var name = HeadingName.Unique(Slug(section.Title), used);
 
-            if (name.Length == 0 || map.Rules.Any(r => r.Name == name))
+            // Globs are read out of the heading rather than invented. A heading
+            // that says (`crates/core/src/modules`) has already stated which
+            // paths its rule concerns, and re-typing that by hand is the step
+            // that makes people abandon scoping halfway. Anything the heading
+            // does not name is still left empty, and the splitter still refuses
+            // to apply a rule with no globs, so nothing is decided here that a
+            // person does not confirm.
+            var globs = HeadingName.PathsIn(section.Title)
+                .Select(GlobFor)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            map.Rules.Add(new RuleTarget
             {
-                continue;
-            }
-
-            map.Rules.Add(new RuleTarget { Name = name, Description = section.Title });
+                Name = name,
+                Description = section.Title,
+                Globs = globs,
+            });
             map.Sections.Add(new SectionRoute { Pattern = section.Title, Rule = name });
         }
 
         return OperationResult<SplitMap>.Ok(map);
+    }
+
+    /// <summary>
+    /// Turns a path named in a heading into a glob.
+    /// <para>
+    /// A directory becomes everything beneath it; a file is already specific
+    /// enough to match itself.
+    /// </para>
+    /// </summary>
+    private static string GlobFor(string path)
+    {
+        var trimmed = path.Trim().TrimEnd('/');
+
+        // A trailing extension means a file was named; anything else is taken
+        // to be a directory, which is how these headings are written.
+        var name = trimmed[(trimmed.LastIndexOf('/') + 1)..];
+
+        return name.Contains('.', StringComparison.Ordinal)
+            ? trimmed
+            : trimmed + "/**";
     }
 
     private sealed record Section(string Title, string Heading, List<string> Lines);
@@ -548,20 +586,11 @@ public sealed partial class InstructionSplitter
         }
     }
 
-    private static string Slug(string title)
-    {
-        var cleaned = new string(title
-            .Trim()
-            .Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-')
-            .ToArray());
-
-        while (cleaned.Contains("--", StringComparison.Ordinal))
-        {
-            cleaned = cleaned.Replace("--", "-", StringComparison.Ordinal);
-        }
-
-        return cleaned.Trim('-');
-    }
+    /// <summary>
+    /// Names a rule after its heading, through the shared derivation so a
+    /// section produces the same name here as it does anywhere else.
+    /// </summary>
+    private static string Slug(string title) => HeadingName.From(title);
 
     [GeneratedRegex(@"^##\s+(?<title>.+?)\s*$", RegexOptions.None, 1000)]
     private static partial Regex Heading();
