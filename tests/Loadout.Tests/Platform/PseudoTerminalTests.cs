@@ -269,7 +269,7 @@ public sealed class PseudoTerminalTests
         output.Should().Contain("/dev/pts/").And.NotContain("not a tty");
     }
 
-    [UnixFact]
+    [WindowSizeFact]
     [UnsupportedOSPlatform("windows")]
     public async Task The_child_sees_the_size_it_was_given_on_unix()
     {
@@ -287,7 +287,7 @@ public sealed class PseudoTerminalTests
         output.Should().Contain("43 132");
     }
 
-    [UnixFact]
+    [WindowSizeFact]
     [UnsupportedOSPlatform("windows")]
     public async Task A_resize_reaches_the_child_on_unix()
     {

@@ -290,9 +290,20 @@ public static class PlatformServices
                 PlatformCapability.NativeSecretStore,
                 secretAvailability.Error ?? "The native secret store is unavailable."));
 
+        // Named for what it actually uses. forkpty was abandoned because
+        // forking a multi-threaded runtime leaves one live thread holding every
+        // lock the others held.
         statuses.Add(CapabilityStatus.Supported(
             PlatformCapability.PseudoTerminal,
-            host.IsUnix ? "forkpty" : "ConPTY"));
+            host.IsUnix ? "posix_spawn" : "ConPTY"));
+
+        statuses.Add(OperatingSystem.IsMacOS()
+            ? CapabilityStatus.Unsupported(
+                PlatformCapability.PseudoTerminalWindowSize,
+                "macOS declares ioctl as variadic, and on Apple Silicon a variadic argument is passed on the stack while a fixed-signature P/Invoke passes it in a register, so the window size never reaches the kernel. Measured on CI: the call returns success and the child reads 62432x27811. The session works; only the size the agent is told about is wrong.")
+            : CapabilityStatus.Supported(
+                PlatformCapability.PseudoTerminalWindowSize,
+                host.IsUnix ? "TIOCSWINSZ" : "ConPTY resize"));
 
         statuses.Add(host.IsUnix
             ? CapabilityStatus.Supported(PlatformCapability.UnixFilePermissions, "chmod mode bits")

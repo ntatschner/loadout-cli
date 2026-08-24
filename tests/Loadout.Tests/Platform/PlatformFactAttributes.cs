@@ -46,6 +46,32 @@ public sealed class UnixFactAttribute : FactAttribute
     }
 }
 
+/// <summary>
+/// A Unix test that additionally cannot pass on macOS, where setting a pty
+/// window size does not work.
+/// </summary>
+/// <remarks>
+/// Skipped with the reason rather than deleted, and the same reason is reported
+/// by <c>loadout doctor</c> as an unsupported capability. Spec section 35
+/// requires a gap to be documented, detectable and graceful — a silently
+/// missing test is none of those.
+/// </remarks>
+public sealed class WindowSizeFactAttribute : FactAttribute
+{
+    public WindowSizeFactAttribute()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Skip = "Unix-only: exercises a Unix pseudo-terminal.";
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            Skip = "Not supported on macOS: see "
+                + "PlatformCapability.PseudoTerminalWindowSize for the measured reason.";
+        }
+    }
+}
+
 /// <summary>A test that only makes sense on macOS.</summary>
 public sealed class MacOSFactAttribute : FactAttribute
 {

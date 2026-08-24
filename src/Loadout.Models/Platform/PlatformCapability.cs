@@ -16,8 +16,20 @@ public enum PlatformCapability
     /// <summary>An OS-native credential store is reachable (Credential Manager / Secret Service / Keychain).</summary>
     NativeSecretStore,
 
-    /// <summary>The launcher can allocate a pseudo-terminal it owns (ConPTY / forkpty).</summary>
+    /// <summary>The launcher can allocate a pseudo-terminal it owns (ConPTY / posix_spawn).</summary>
     PseudoTerminal,
+
+    /// <summary>
+    /// The size of an owned pseudo-terminal can be set and changed, so the
+    /// agent is told the real dimensions of the window it is drawing into.
+    /// <para>
+    /// Separate from <see cref="PseudoTerminal"/> because the two genuinely
+    /// come apart: a platform can allocate a terminal it cannot resize, and a
+    /// session in that state works perfectly except that anything drawing a
+    /// table or a progress bar measures the wrong width.
+    /// </para>
+    /// </summary>
+    PseudoTerminalWindowSize,
 
     /// <summary>Unix mode bits can be read and applied (chmod, executable bit).</summary>
     UnixFilePermissions,

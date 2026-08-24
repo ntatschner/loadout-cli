@@ -19,6 +19,13 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
 {
     private readonly object _gate = new();
 
+    /// <summary>
+    /// Whether the window size was accepted. False only where the
+    /// platform cannot set one, which is reported as a capability gap
+    /// rather than failing a launch that otherwise works.
+    /// </summary>
+    private bool _windowSizeApplied;
+
     private int _child;
     private int _exitCode;
     private bool _exited;
@@ -129,7 +136,12 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
             return Failure("The pseudo-terminal has no slave device");
         }
 
-        NativeTerminal.Ioctl(master, NativeTerminal.SetWindowSize, ref size);
+        // Checked rather than discarded. It fails on macOS for a known reason
+        // reported through PlatformCapability.PseudoTerminalWindowSize, and a
+        // session with the wrong size still works, so this records the fact
+        // without refusing to start.
+        _windowSizeApplied =
+            NativeTerminal.Ioctl(master, NativeTerminal.SetWindowSize, ref size) == 0;
 
         var spawned = SpawnChild(request, directory, slavePath, out var child);
 
