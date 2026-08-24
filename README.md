@@ -138,6 +138,7 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `loadout desktop` | Install the Start Menu or `.desktop` entry |
 | `loadout update` | Check the release source and install a newer build |
 | `loadout secret set\|test\|remove` | Manage credentials in the OS keystore |
+| `loadout mcp list\|add\|remove` | Manage the MCP servers a project loads, and see what clashes |
 | `loadout repo check` | Check a repository for tracked AI tooling files |
 | `loadout drift [project]` | Show where projects have drifted from their recorded configuration |
 | `loadout drift --fix` | Put right the drift the launcher can fix itself |
@@ -723,6 +724,45 @@ calling back into `loadout`, so it keeps working on a machine where the
 launcher has been moved. A hook the launcher did not write is never overwritten
 or deleted. Hooks live in `.git/hooks` and so are per-clone — `loadout doctor`
 reports when the clone you are standing in has none.
+
+## MCP servers
+
+An agent loads MCP servers from several places at once — an account's
+connectors, installed plugins, a project file, a user file — and nothing
+reconciles them. Nobody sees the whole set until something behaves oddly.
+
+`loadout mcp list` shows it, with where each server came from:
+
+```
+serena              installed  uvx --from git+https://github.com/oraios/serena …
+claude.ai Context7  installed  https://mcp.context7.com/mcp
+context7            project    https://mcp.context7.com/mcp
+
+claude.ai Context7, context7  the same service under more than one name, so every
+tool it offers is loaded twice and the model sees each one twice
+```
+
+Servers the workspace declares are held there rather than in the repository, and
+handed to the agent with `--mcp-config` at launch — so they are the same on
+every machine that clones the workspace, instead of on whichever one happened to
+have them configured.
+
+Three things are reported:
+
+| | |
+|---|---|
+| **The same service twice** | Two names reaching one endpoint. Every tool loads twice and the model sees each capability twice. |
+| **A shadowed name** | One name declared in two places. One will not load, and which is not obvious. |
+| **A machine-specific path** | A command or argument naming an absolute path. It cannot be right on another machine that clones the workspace. |
+
+`loadout mcp add` runs the same check before writing and refuses a server that
+clashes, unless you pass `--force`. Nothing is ever reconciled automatically:
+which of two servers should win is a decision, and a launcher is the wrong place
+to make it on somebody's behalf.
+
+Only enabled plugins are counted. A plugin that is installed and switched off
+contributes nothing, and warning about its servers would describe something that
+is not happening.
 
 ## Drift
 

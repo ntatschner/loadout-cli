@@ -2,6 +2,7 @@ using Loadout.Agents;
 using Loadout.Core.Configuration;
 using Loadout.Core.Context;
 using Loadout.Core.Instructions;
+using Loadout.Core.Mcp;
 using Loadout.Core.Diagnostics;
 using Loadout.Core.Git;
 using Loadout.Core.Policies;
@@ -126,7 +127,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             new ContextCompiler(permissions, new RuleService(), new MemoryService(TimeProvider.System)),
             new HandoffService(workspace, TimeProvider.System),
             new PreflightService(git, new FakeSecretProvider()),
-            new SecurityProfileService(workspace, yaml));
+            new SecurityProfileService(workspace, yaml),
+            new McpService(workspace));
     }
 
     public Task DisposeAsync()

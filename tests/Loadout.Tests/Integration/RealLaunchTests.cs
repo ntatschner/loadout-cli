@@ -4,6 +4,7 @@ using Loadout.Core.Context;
 using Loadout.Core.Diagnostics;
 using Loadout.Core.Git;
 using Loadout.Core.Instructions;
+using Loadout.Core.Mcp;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
@@ -129,7 +130,8 @@ public sealed class RealLaunchTests : IAsyncLifetime
             new ContextCompiler(permissions, rules, memory),
             new HandoffService(_workspace, TimeProvider.System),
             new PreflightService(git, new FakeSecretProvider()),
-            new SecurityProfileService(_workspace, yaml));
+            new SecurityProfileService(_workspace, yaml),
+            new McpService(_workspace));
 
         _repository = await CreateRepositoryAsync().ConfigureAwait(false);
 

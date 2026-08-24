@@ -1,0 +1,61 @@
+using Loadout.Models.Platform;
+using Loadout.Models.Results;
+using Loadout.Platform.Abstractions;
+
+namespace Loadout.Tests.Fakes;
+
+/// <summary>
+/// A process launcher that returns prepared output instead of running anything.
+/// <para>
+/// Used where the thing under test is how a program's output is read, not
+/// whether the program runs. Running the real agent would make the test depend
+/// on which servers happen to be configured on the machine it runs on.
+/// </para>
+/// </summary>
+public sealed class StubProcessLauncher : IProcessLauncher
+{
+    private readonly string _standardOutput;
+    private readonly int _exitCode;
+
+    public StubProcessLauncher(string standardOutput, int exitCode = 0)
+    {
+        _standardOutput = standardOutput;
+        _exitCode = exitCode;
+    }
+
+    /// <summary>Every request the test made, so a caller can assert on it.</summary>
+    public List<ProcessRequest> Requests { get; } = [];
+
+    /// <inheritdoc />
+    public Task<OperationResult<ProcessOutcome>> RunAsync(
+        ProcessRequest request,
+        TimeSpan? timeout = null,
+        CancellationToken ct = default)
+    {
+        Requests.Add(request);
+
+        return Task.FromResult(OperationResult<ProcessOutcome>.Ok(
+            new ProcessOutcome(_exitCode, _standardOutput, string.Empty)));
+    }
+
+    /// <inheritdoc />
+    public Task<OperationResult<int>> RunInteractiveAsync(
+        ProcessRequest request,
+        CancellationToken ct = default) =>
+        throw new NotSupportedException(
+            "Nothing in these tests launches an interactive process.");
+}
+
+/// <summary>An executable resolver that answers with one fixed path, or with nothing.</summary>
+public sealed class StubResolver : IExecutableResolver
+{
+    private readonly string? _path;
+
+    public StubResolver(string? path) => _path = path;
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> StandardSearchPaths => [];
+
+    /// <inheritdoc />
+    public string? Resolve(string name, IReadOnlyList<string>? additionalPaths = null) => _path;
+}

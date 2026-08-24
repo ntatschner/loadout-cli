@@ -85,6 +85,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly IContextCompiler _context;
     private readonly IHandoffService _handoffs;
     private readonly IPreflightService _preflight;
+    private readonly Core.Mcp.IMcpService _mcp;
     private readonly ISecurityProfileService _security;
 
     public AgentLauncher(
@@ -98,7 +99,8 @@ public sealed class AgentLauncher : IAgentLauncher
         IContextCompiler context,
         IHandoffService handoffs,
         IPreflightService preflight,
-        ISecurityProfileService security)
+        ISecurityProfileService security,
+        Core.Mcp.IMcpService mcp)
     {
         _projects = projects;
         _workspace = workspace;
@@ -110,6 +112,7 @@ public sealed class AgentLauncher : IAgentLauncher
         _context = context;
         _handoffs = handoffs;
         _preflight = preflight;
+        _mcp = mcp;
         _security = security;
     }
 
@@ -249,7 +252,12 @@ public sealed class AgentLauncher : IAgentLauncher
                 compiled.Value,
                 preflight.Environment,
                 environment?.Profile,
-                request.ResumeSessionId);
+                request.ResumeSessionId,
+
+                // Declared in the workspace, so the same servers are there on
+                // every machine that clones it rather than on whichever one
+                // happened to have them configured.
+                _mcp.ConfigFiles(project.Entry.Slug));
 
             var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
             if (invocationResult.Failed)

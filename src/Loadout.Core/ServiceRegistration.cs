@@ -40,6 +40,8 @@ public static class ServiceRegistration
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();
         services.AddSingleton<IProjectOverviewService, ProjectOverviewService>();
         services.AddSingleton<IDriftService, DriftService>();
+        services.AddSingleton<Mcp.IMcpService, Mcp.McpService>();
+        services.AddSingleton<Mcp.IInstalledMcpReader, Mcp.InstalledMcpReader>();
         services.AddSingleton<IPolicyService, PolicyService>();
         services.AddSingleton<IMigrationService, MigrationService>();
         services.AddSingleton<ISecurityProfileService, SecurityProfileService>();

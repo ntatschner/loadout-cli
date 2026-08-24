@@ -93,6 +93,7 @@ public static class Program
         services.AddSingleton<WorkspaceSavePrompt>();
         services.AddSingleton<StatuslineTargets>();
         services.AddSingleton<SessionScope>();
+        services.AddSingleton<McpScopeResolver>();
 
         var registrar = new TypeRegistrar(services);
 
@@ -262,6 +263,14 @@ public static class Program
             cfg.AddCommand<ConfigGetCommand>("get");
             cfg.AddCommand<ConfigSetCommand>("set");
             cfg.AddCommand<ConfigEditCommand>("edit");
+        });
+
+        TopBranch(config, "mcp", mcp =>
+        {
+            mcp.SetDescription("Manage the MCP servers a project loads.");
+            mcp.AddCommand<McpListCommand>("list");
+            mcp.AddCommand<McpAddCommand>("add");
+            mcp.AddCommand<McpRemoveCommand>("remove");
         });
 
         Top<DriftCommand>(config, "drift");

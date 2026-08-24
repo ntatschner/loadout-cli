@@ -37,6 +37,9 @@ public static class AgentCapabilities
     /// <summary>Settings can be supplied from a file outside the repository.</summary>
     public const string ExternalSettings = "external_settings";
 
+    /// <summary>MCP servers can be supplied from files the launcher controls.</summary>
+    public const string McpConfig = "mcp_config";
+
     /// <summary>A system prompt or instruction file can be supplied from outside the repository.</summary>
     public const string ExternalPrompt = "external_prompt";
 

@@ -62,6 +62,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             [SystemPromptFile] = ["--append-system-prompt-file"],
 
             [AgentCapabilities.AdditionalDirectories] = ["--add-dir"],
+            [AgentCapabilities.McpConfig] = ["--mcp-config"],
             [AgentCapabilities.SessionResume] = ["--resume", "--continue"],
             [PermissionMode] = ["--permission-mode"],
             [ToolRestrictions] = ["--allowed-tools", "--disallowed-tools"],
@@ -90,6 +91,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         var warnings = new List<string>();
 
         AddResume(context, descriptor, arguments, warnings);
+        AddMcpServers(context, descriptor, arguments, warnings);
         AddSettings(context, descriptor, arguments, warnings);
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
@@ -105,6 +107,42 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         return OperationResult<AgentInvocation>.Ok(
             new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));
+    }
+
+    /// <summary>
+    /// Hands Claude the MCP servers the workspace declares for this project.
+    /// <para>
+    /// Passed as files rather than folded into settings, because that is the
+    /// form the flag takes and because it keeps the scopes visible: the widest
+    /// file first and the project's after it, which is the order Claude applies
+    /// them in and the order a clash is reported in.
+    /// </para>
+    /// </summary>
+    private static void AddMcpServers(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.McpConfigFiles is not { Count: > 0 } files)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(AgentCapabilities.McpConfig))
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise --mcp-config, so the workspace's "
+                + "MCP servers were not applied.");
+
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            arguments.Add("--mcp-config");
+            arguments.Add(file);
+        }
     }
 
     /// <summary>
