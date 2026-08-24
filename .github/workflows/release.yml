@@ -23,6 +23,20 @@ jobs:
   package:
     name: Package ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    # Presence of ARTIFACT_SIGNING_ACCOUNT is the switch. Unset, the build
+    # scripts skip signing and produce unsigned artefacts; set, they refuse to
+    # run half-configured. The other two are read by build/sign-windows.ps1.
+    env:
+      ARTIFACT_SIGNING_ACCOUNT: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
+      ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+      ARTIFACT_SIGNING_PROFILE: ${{ secrets.ARTIFACT_SIGNING_PROFILE }}
+
+    # Required for the OIDC token azure/login exchanges. Harmless when signing
+    # is not configured, because no token is then requested.
+    permissions:
+      contents: read
+      id-token: write
+
     strategy:
       # One platform failing must not hide the others: a macOS-only packaging
       # break is exactly what this matrix exists to catch.
@@ -55,6 +69,19 @@ jobs:
 
       # pwsh is present on every GitHub runner, which is why the packaging
       # script is PowerShell: one command works on all three legs.
+      # Placed immediately before the step that signs, and deliberately not
+      # earlier. GitHub's OIDC assertion is valid for five minutes and
+      # azure/login cannot renew it, so a login sitting in front of a long
+      # build is already dead by the time signtool asks for a token:
+      # AADSTS700024, "Client assertion is not within its valid time range".
+      - name: Azure login for signing
+        if: startsWith(matrix.rid, 'win-') && env.ARTIFACT_SIGNING_ACCOUNT != ''
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Package
         shell: pwsh
         run: >
@@ -131,6 +158,20 @@ jobs:
   installer:
     name: Installer ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    # Presence of ARTIFACT_SIGNING_ACCOUNT is the switch. Unset, the build
+    # scripts skip signing and produce unsigned artefacts; set, they refuse to
+    # run half-configured. The other two are read by build/sign-windows.ps1.
+    env:
+      ARTIFACT_SIGNING_ACCOUNT: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
+      ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+      ARTIFACT_SIGNING_PROFILE: ${{ secrets.ARTIFACT_SIGNING_PROFILE }}
+
+    # Required for the OIDC token azure/login exchanges. Harmless when signing
+    # is not configured, because no token is then requested.
+    permissions:
+      contents: read
+      id-token: write
+
     strategy:
       fail-fast: false
       matrix:
@@ -168,6 +209,19 @@ jobs:
       - name: Install packaging tools
         if: startsWith(matrix.rid, 'linux-')
         run: sudo apt-get update && sudo apt-get install -y rpm
+
+      # Placed immediately before the step that signs, and deliberately not
+      # earlier. GitHub's OIDC assertion is valid for five minutes and
+      # azure/login cannot renew it, so a login sitting in front of a long
+      # build is already dead by the time signtool asks for a token:
+      # AADSTS700024, "Client assertion is not within its valid time range".
+      - name: Azure login for signing
+        if: startsWith(matrix.rid, 'win-') && env.ARTIFACT_SIGNING_ACCOUNT != ''
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Build installer
         shell: pwsh

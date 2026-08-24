@@ -70,6 +70,17 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $Runtime." }
 # megabyte describing internals nobody outside this repository will call.
 Get-ChildItem $payload -Include '*.pdb', '*.xml' -Recurse -File | Remove-Item -Force
 
+# Signed here, before packaging, so the executable inside the package carries a
+# signature too. Signing only the installer leaves the thing it installs
+# unsigned, which is what SmartScreen actually looks at when somebody runs it.
+#
+# A no-op unless Artifact Signing is configured in the environment, so a local
+# build takes this same path and simply produces an unsigned binary.
+if ($Runtime -like 'win-*') {
+    & (Join-Path $PSScriptRoot 'sign-windows.ps1') -Path (Join-Path $payload 'loadout.exe')
+    if ($LASTEXITCODE -ne 0) { throw "Signing the payload failed for $Runtime." }
+}
+
 # The Debian architecture names differ from the .NET runtime identifiers, and
 # a package built with the wrong one installs on nothing.
 $debianArchitecture = @{ 'linux-x64' = 'amd64'; 'linux-arm64' = 'arm64' }
@@ -112,6 +123,12 @@ if ($Runtime.StartsWith('win-')) {
     # them from the payload: useful to us, dead weight next to a release, and
     # one careless upload glob away from shipping.
     Remove-Item ([System.IO.Path]::ChangeExtension($msi, '.wixpdb')) -ErrorAction SilentlyContinue
+
+    # The package itself, after WiX has written it. This is the signature
+    # Windows checks when the MSI is double-clicked; the one on the payload
+    # above is what it checks afterwards, when the installed binary is run.
+    & (Join-Path $PSScriptRoot 'sign-windows.ps1') -Path $msi
+    if ($LASTEXITCODE -ne 0) { throw "Signing the installer failed for $Runtime." }
 
     Publish-Result $msi
     Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue

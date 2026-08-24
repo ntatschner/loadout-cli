@@ -823,6 +823,33 @@ the reason. Known gaps today:
   bundle is not built yet, so the command says so and declines. Every feature
   stays reachable from the CLI and TUI.
 
+## Code signing
+
+Windows binaries and installers are signed with Azure Trusted Signing under a
+certificate issued to TheCodeSaiyan Ltd. Both the executable and the installer
+around it are signed: the installer's signature is what Windows checks when the
+`.msi` is opened, and the executable's is what it checks afterwards, every time
+the installed command runs.
+
+There is no private key on any build machine. The certificate stays in Azure,
+`signtool` reaches it through Microsoft's signing library, and the build
+authenticates with a short-lived OIDC token exchanged by `azure/login` — so
+there is no long-lived credential to store, leak or rotate.
+
+Signing is driven entirely by environment, and the switch is the presence of
+`ARTIFACT_SIGNING_ACCOUNT`:
+
+| State | What happens |
+|---|---|
+| Unset | Builds unsigned, with a notice. This is a developer machine. |
+| Set, others missing | Refuses to build, rather than silently shipping unsigned. |
+| Fully set | Signs and then verifies each file. |
+
+`build/sign-windows.ps1` holds the whole of it, and `package.ps1` and
+`installer.ps1` call it at the two points that matter. A local build takes the
+same path and simply produces an unsigned binary, so the signed and unsigned
+builds differ in one input rather than in which script ran.
+
 ## Verifying the Linux build without Linux
 
 Everything below the platform seam is untestable from the host it was not

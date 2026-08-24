@@ -67,6 +67,15 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $Runtime." }
 # a quarter of a megabyte of text describing internals a user will never call.
 Get-ChildItem $staging -Include '*.pdb', '*.xml' -Recurse -File | Remove-Item -Force
 
+# The archive ships the executable directly, with no installer around it, so
+# this is the only signature a user of the .tar.gz or .zip ever sees. A no-op
+# unless Artifact Signing is configured, which it is not on a developer
+# machine.
+if ($Runtime -like 'win-*') {
+    & (Join-Path $PSScriptRoot 'sign-windows.ps1') -Path (Join-Path $staging 'loadout.exe')
+    if ($LASTEXITCODE -ne 0) { throw "Signing the archive payload failed for $Runtime." }
+}
+
 Copy-Item (Join-Path $repositoryRoot 'README.md') $staging -Force
 
 $license = Join-Path $repositoryRoot 'LICENSE'
