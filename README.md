@@ -28,7 +28,7 @@ a capability rather than skipped silently. See
 Download the archive for your platform, verify it, and install:
 
 ```bash
-tar -xzf loadout-0.2.0-linux-x64.tar.gz
+tar -xzf loadout-0.3.0-linux-x64.tar.gz
 ./install.sh                       # installs to ~/.local/bin, no root needed
 loadout setup
 ```
@@ -48,11 +48,11 @@ A release also carries an `.msi`, a `.deb` and an `.rpm` for people who would
 rather not manage a `PATH` entry by hand:
 
 ```powershell
-msiexec /i loadout-0.2.0-win-x64.msi        # per-user, no elevation
+msiexec /i loadout-0.3.0-win-x64.msi        # per-user, no elevation
 ```
 
 ```bash
-sudo dpkg -i loadout_0.2.0_amd64.deb        # or: sudo rpm -i loadout-0.2.0-1.x86_64.rpm
+sudo dpkg -i loadout_0.3.0_amd64.deb        # or: sudo rpm -i loadout-0.3.0-1.x86_64.rpm
 ```
 
 The MSI installs per user into `%LOCALAPPDATA%\Programs\loadout`, adds that
@@ -75,8 +75,8 @@ would be worse than shipping none.
 ### Building a release locally
 
 ```bash
-pwsh ./build/package.ps1 -Runtime linux-x64 -Version 0.2.0     # archive
-pwsh ./build/installer.ps1 -Runtime win-x64 -Version 0.2.0     # native installer
+pwsh ./build/package.ps1 -Runtime linux-x64 -Version 0.3.0     # archive
+pwsh ./build/installer.ps1 -Runtime win-x64 -Version 0.3.0     # native installer
 ```
 
 The installer script builds each format with the tooling that owns it — WiX for
@@ -92,7 +92,7 @@ Fee agreement, which is a decision for whoever owns this project rather than one
 a build script should make on their behalf.
 
 ```bash
-pwsh ./build/package.ps1 -Runtime osx-arm64 -Version 0.2.0
+pwsh ./build/package.ps1 -Runtime osx-arm64 -Version 0.3.0
 ```
 
 Produces the archive and its checksum in `artifacts/`. Unix archives are built
@@ -587,11 +587,11 @@ service has to answer:
 ```json
 {
   "schemaVersion": 1,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "notes": "What changed.",
   "artifacts": {
     "osx-arm64": {
-      "url": "https://internal.example/loadout/loadout-0.2.0-osx-arm64.tar.gz",
+      "url": "https://internal.example/loadout/loadout-0.3.0-osx-arm64.tar.gz",
       "sha256": "985daa42...",
       "size": 31110221
     }
