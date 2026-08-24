@@ -318,7 +318,12 @@ jobs:
           rpm=$(find artifacts -maxdepth 1 -name '*.rpm' | head -1)
           [ -n "$rpm" ] || { echo "no rpm was produced" >&2; exit 1; }
 
-          size=$(rpm -qlvp "$rpm" | awk '$NF == "/usr/lib/loadout/loadout" { print $5 }')
+          # Queried as name/size pairs rather than parsed out of the long
+          # listing: there, the /usr/bin symlink line ends with the same path
+          # as its target, so matching on the last field picked the symlink and
+          # read its 24-byte size.
+          size=$(rpm -qp --qf '[%{FILENAMES} %{FILESIZES}
+]' "$rpm"                  | awk '$1 == "/usr/lib/loadout/loadout" { print $2 }')
           echo "$(basename "$rpm") carries a $size byte binary"
 
           # A self-contained publish is tens of megabytes on every runtime.
