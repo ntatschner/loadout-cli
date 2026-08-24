@@ -33,6 +33,67 @@
     <MajorUpgrade AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer version of Loadout is already installed." />
 
+    <!--
+      The launcher is closed before its own file is replaced.
+
+      Windows normally does this itself. The Restart Manager notices which
+      process holds a file the installer needs, closes it, and starts it again
+      afterwards. But it can be switched off machine-wide, and on a managed or
+      hardened Windows build it often is:
+
+        HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer
+          DisableAutomaticApplicationShutdown = 1
+
+      With that set the install log reads "RESTART MANAGER: Disabled by
+      DisableAutomaticApplicationShutdown system policy; Windows Installer will
+      use the built-in FilesInUse functionality", and that fallback is a dialog
+      offering Retry or Cancel. Retry can never succeed, because nothing closed
+      the process in between, so the install ends in 1603 — which from outside
+      is indistinguishable from the installer crashing.
+
+      Upgrading is exactly when the launcher is most likely to be open, because
+      the launcher is the thing somebody sits in. So it is closed here rather
+      than asked about.
+
+      Why this and not util:CloseApplication, which exists for the purpose: it
+      works in two halves, an immediate action that schedules a deferred one to
+      do the closing. Deferred actions can only be scheduled once the install
+      script exists, which is after InstallInitialize. But the dialog above
+      comes from InstallValidate, which runs before InstallInitialize, so any
+      action that has to be reached after InstallInitialize is already too
+      late. Scheduling it early instead only moves the failure:
+
+        WixCloseApplications: Error 0x80070643: failed to schedule
+        CloseApplicationsDeferred action
+
+      Closing the launcher therefore has to happen in a single immediate
+      action, which is what this is.
+
+      Killed rather than asked to close, because a console program owns no
+      window to send WM_CLOSE to. Nothing is lost by it: settings are written
+      when they are changed, not when the launcher exits. Only this user's
+      processes are matched, and the action deliberately does not touch the
+      process tree — an agent the launcher started is somebody's running
+      session, and an installer has no business ending it.
+    -->
+    <StandardDirectory Id="System64Folder" />
+
+    <CustomAction Id="CloseRunningLoadout"
+                  Directory="System64Folder"
+                  ExeCommand="[System64Folder]taskkill.exe /F /IM loadout.exe"
+                  Execute="immediate"
+                  Impersonate="yes"
+                  Return="ignore" />
+
+    <!--
+      Return="ignore" because "no such process" is the ordinary case: taskkill
+      exits 128 when the launcher was not running, and that must not fail an
+      install that had nothing to close.
+    -->
+    <InstallExecuteSequence>
+      <Custom Action="CloseRunningLoadout" Before="InstallValidate" />
+    </InstallExecuteSequence>
+
     <MediaTemplate EmbedCab="yes" />
 
     <!--

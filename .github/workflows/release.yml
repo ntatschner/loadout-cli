@@ -254,6 +254,19 @@ jobs:
           -Runtime ${{ matrix.rid }}
           -Version ${{ steps.version.outputs.value }}
 
+      # The MSI's own authoring, which no checksum or file listing reaches.
+      # 0.3.0 shipped an installer that could not upgrade over a running
+      # launcher and failed with 1603, and it was invisible here because the
+      # package built and installed perfectly on a machine whose Restart
+      # Manager was available. See build/verify-windows.ps1.
+      - name: Check the installer can upgrade over a running launcher
+        if: startsWith(matrix.rid, 'win-')
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts/*.msi | ForEach-Object {
+            ./build/verify-windows.ps1 -Path $_.FullName
+          }
+
       - name: Check the package holds what it should
         shell: bash
         run: |
