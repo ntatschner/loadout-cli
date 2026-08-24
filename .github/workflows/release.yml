@@ -23,6 +23,13 @@ jobs:
   package:
     name: Package ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    # Named so the OIDC subject stays constant. Without it the subject carries
+    # the ref, which differs for every tag, and a federated credential can only
+    # match a fixed subject — this account's subjects also carry immutable
+    # owner and repository IDs, which the portal's GitHub Actions preset cannot
+    # express, so one stable subject is the only workable shape.
+    environment: release
+
     # Presence of ARTIFACT_SIGNING_ACCOUNT is the switch. Unset, the build
     # scripts skip signing and produce unsigned artefacts; set, they refuse to
     # run half-configured. The other two are read by build/sign-windows.ps1.
@@ -158,6 +165,13 @@ jobs:
   installer:
     name: Installer ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    # Named so the OIDC subject stays constant. Without it the subject carries
+    # the ref, which differs for every tag, and a federated credential can only
+    # match a fixed subject — this account's subjects also carry immutable
+    # owner and repository IDs, which the portal's GitHub Actions preset cannot
+    # express, so one stable subject is the only workable shape.
+    environment: release
+
     # Presence of ARTIFACT_SIGNING_ACCOUNT is the switch. Unset, the build
     # scripts skip signing and produce unsigned artefacts; set, they refuse to
     # run half-configured. The other two are read by build/sign-windows.ps1.
