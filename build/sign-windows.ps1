@@ -56,10 +56,13 @@ foreach ($pair in @{ ARTIFACT_SIGNING_ENDPOINT = $endpoint; ARTIFACT_SIGNING_PRO
     }
 }
 
-$files = foreach ($candidate in $Path) {
+# Wrapped so one path yields a one-element array rather than a bare string:
+# Set-StrictMode -Version Latest refuses .Count on a scalar, and every call
+# here signs exactly one file.
+$files = @(foreach ($candidate in $Path) {
     if (-not (Test-Path $candidate)) { throw "There is nothing to sign at '$candidate'." }
     (Resolve-Path $candidate).Path
-}
+})
 
 # Reused across calls within one job. installer.ps1 signs twice — the payload
 # before packaging and the package after — and downloading the dlib each time
