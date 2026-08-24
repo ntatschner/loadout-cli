@@ -1,0 +1,57 @@
+# Reports the OIDC subject GitHub actually sends, so a federated credential can
+# be configured against the real claim rather than a documented one.
+#
+# The portal's "GitHub Actions" preset builds the subject for you, and when its
+# assumptions do not match the workflow — an environment in play, or a tag
+# pattern it cannot express — the credential it writes never matches the token
+# and every login fails with AADSTS70021. Reading the claim removes the guess.
+#
+# Temporary. Delete once the credentials exist.
+name: OIDC subject
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # The subject a job carries with no environment: the branch or tag ref.
+  ref:
+    name: Subject from a bare ref
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the claim
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('api://AzureADTokenExchange')
+            const claims = JSON.parse(
+              Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
+
+            // Claims only, never the token. iss, aud and sub are the three the
+            // credential is matched on and none of them is a secret.
+            core.info(`iss: ${claims.iss}`)
+            core.info(`aud: ${claims.aud}`)
+            core.info(`sub: ${claims.sub}`)
+
+  # The subject the same job carries once it names an environment. This is the
+  # one worth having: it does not change between tags, so a single credential
+  # covers every release.
+  environment:
+    name: Subject from the release environment
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Read the claim
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken('api://AzureADTokenExchange')
+            const claims = JSON.parse(
+              Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
+
+            core.info(`iss: ${claims.iss}`)
+            core.info(`aud: ${claims.aud}`)
+            core.info(`sub: ${claims.sub}`)
