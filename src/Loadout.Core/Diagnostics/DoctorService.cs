@@ -134,7 +134,10 @@ public sealed class DoctorService : IDoctorService
         if (excludesResult.Value is not { Length: > 0 })
         {
             checks.Add(DiagnosticCheck.Warn("Git", "Global exclude file",
-                "not configured; agent files are not globally ignored (spec section 50)"));
+                "not configured; agent files are not globally ignored (spec section 50)",
+                new Remedy(
+                    RemedyKind.RepairGlobalExcludes,
+                    "Write the global exclude file and point Git at it")));
 
             return;
         }
@@ -147,7 +150,10 @@ public sealed class DoctorService : IDoctorService
             ? DiagnosticCheck.Ok("Git", "Global exclude file", excludesResult.Value)
             : DiagnosticCheck.Warn("Git", "Global exclude file",
                 $"core.excludesFile points at '{excludesResult.Value}', which does not exist, so "
-                + "nothing is being globally ignored. Repair it with: loadout protect --global"));
+                + "nothing is being globally ignored. Repair it with: loadout protect --global",
+                new Remedy(
+                    RemedyKind.RepairGlobalExcludes,
+                    "Rewrite the global exclude file and repoint Git at it")));
     }
 
     private async Task AddWorkspaceChecksAsync(
@@ -266,8 +272,9 @@ public sealed class DoctorService : IDoctorService
     /// </summary>
     private async Task AddPolicyChecksAsync(List<DiagnosticCheck> checks, CancellationToken ct)
     {
-        var result = await _policies.CheckAsync(Directory.GetCurrentDirectory(), ct)
-            .ConfigureAwait(false);
+        var repository = Directory.GetCurrentDirectory();
+
+        var result = await _policies.CheckAsync(repository, ct).ConfigureAwait(false);
 
         if (result.Failed)
         {
@@ -293,7 +300,11 @@ public sealed class DoctorService : IDoctorService
         checks.Add(report.HasPreCommitHook
             ? DiagnosticCheck.Ok("Repository", "Pre-commit protection", "installed")
             : DiagnosticCheck.Warn("Repository", "Pre-commit protection",
-                "not installed in this clone; hooks are per-clone, so run: loadout protect"));
+                "not installed in this clone; hooks are per-clone, so run: loadout protect",
+                new Remedy(
+                    RemedyKind.InstallPreCommitHook,
+                    "Install the pre-commit hook in this clone",
+                    repository)));
     }
 
     private void AddCapabilityChecks(List<DiagnosticCheck> checks)

@@ -8,6 +8,18 @@ using Spectre.Console.Cli;
 
 namespace Loadout.Cli.Commands;
 
+/// <summary>Options for the doctor report.</summary>
+public sealed class DoctorSettings : GlobalSettings
+{
+    [CommandOption("--fix")]
+    [Description("Offer to put right the findings the launcher can fix itself.")]
+    public bool Fix { get; init; }
+
+    [CommandOption("--yes")]
+    [Description("With --fix, apply without asking first.")]
+    public bool Yes { get; init; }
+}
+
 /// <summary>
 /// Reports on the launcher, the platform, Git, the workspace and the agents
 /// (spec section 60).
@@ -19,19 +31,24 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Check the launcher, platform, Git, workspace, secrets and agents.")]
-public sealed class DoctorCommand : AsyncCommand<GlobalSettings>
+public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
 {
     private readonly IDoctorService _doctor;
+    private readonly IRemediationService _remediation;
     private readonly IAnsiConsole _console;
 
-    public DoctorCommand(IDoctorService doctor, IAnsiConsole console)
+    public DoctorCommand(
+        IDoctorService doctor,
+        IRemediationService remediation,
+        IAnsiConsole console)
     {
         _doctor = doctor;
+        _remediation = remediation;
         _console = console;
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, DoctorSettings settings)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -55,12 +72,43 @@ public sealed class DoctorCommand : AsyncCommand<GlobalSettings>
                     name = c.Name,
                     severity = c.Severity.ToString(),
                     detail = c.Detail,
+                    fixable = c.Remedy is not null,
+                }),
+                remedies = report.Remedies.Select(r => new
+                {
+                    kind = r.Kind.ToString(),
+                    description = r.Description,
+                    target = r.Target,
                 }),
             });
         }
         else
         {
             Render(output, report);
+        }
+
+        if (settings.Fix)
+        {
+            var changed = await RemediateAsync(output, report, settings).ConfigureAwait(false);
+
+            if (changed)
+            {
+                // Re-checked rather than assumed. A remedy that reported
+                // success without actually clearing the finding is exactly the
+                // failure a command like this exists to catch.
+                var recheck = await _doctor.RunAsync().ConfigureAwait(false);
+
+                if (recheck.Succeeded)
+                {
+                    report = recheck.Value!;
+
+                    output.WriteBlankLine();
+                    output.WriteLine("[bold]After fixing[/]");
+                    output.WriteLine(
+                        $"Overall: {Colourise(report.Overall)} "
+                        + $"[dim]({report.Remedies.Count} still fixable)[/]");
+                }
+            }
         }
 
         // The exit code follows the worst finding so a scripted health check
@@ -71,6 +119,115 @@ public sealed class DoctorCommand : AsyncCommand<GlobalSettings>
             _ => (int)ExitCode.Success,
         };
     }
+
+    /// <summary>
+    /// Shows what each remedy would do, then applies the ones agreed to.
+    /// <para>
+    /// Preview first, always. These write hooks and copy memory into a shared
+    /// repository, and nothing else in this tool mutates without showing the
+    /// change first. A fix that surprises somebody is worse than a warning
+    /// they ignored.
+    /// </para>
+    /// </summary>
+    private async Task<bool> RemediateAsync(
+        CommandOutput output,
+        DiagnosticReport report,
+        DoctorSettings settings)
+    {
+        var remedies = report.Remedies;
+
+        output.WriteBlankLine();
+
+        if (remedies.Count == 0)
+        {
+            output.WriteLine("[dim]Nothing here can be fixed automatically.[/]");
+
+            return false;
+        }
+
+        output.WriteLine("[bold]Fixable[/]");
+
+        var previews = new List<RemedyOutcome>();
+
+        foreach (var remedy in remedies)
+        {
+            var preview = await _remediation.PreviewAsync(remedy).ConfigureAwait(false);
+
+            if (preview.Failed)
+            {
+                output.WriteLine(
+                    $"  [yellow]![/] {Markup.Escape(remedy.Description)} "
+                    + $"[dim]cannot be previewed: {Markup.Escape(preview.Error!)}[/]");
+
+                continue;
+            }
+
+            previews.Add(preview.Value!);
+
+            output.WriteLine($"  [green]+[/] {Markup.Escape(remedy.Description)}");
+            output.WriteLine($"    [dim]{Markup.Escape(preview.Value!.Detail)}[/]");
+        }
+
+        if (previews.Count == 0)
+        {
+            return false;
+        }
+
+        if (!settings.Yes)
+        {
+            output.WriteBlankLine();
+
+            // Spec section 37: never a prompt where nobody can answer it.
+            if (settings.NonInteractive || Console.IsInputRedirected || Console.IsOutputRedirected)
+            {
+                output.WriteLine(
+                    "[dim]Nothing was changed. Re-run with --fix --yes to apply these.[/]");
+
+                return false;
+            }
+
+            if (!_console.Confirm($"Apply {previews.Count} fix(es)?", defaultValue: false))
+            {
+                output.WriteLine("[dim]Nothing was changed.[/]");
+
+                return false;
+            }
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine("[bold]Fixing[/]");
+
+        var applied = 0;
+
+        foreach (var preview in previews)
+        {
+            var result = await _remediation.ApplyAsync(preview.Remedy).ConfigureAwait(false);
+
+            if (result.Failed)
+            {
+                // One remedy failing must not stop the others. They are
+                // independent, and stopping halfway leaves the least
+                // explicable state of all.
+                output.WriteLine(
+                    $"  [red]x[/] {Markup.Escape(preview.Remedy.Description)} "
+                    + $"[dim]{Markup.Escape(result.Error!)}[/]");
+
+                continue;
+            }
+
+            applied++;
+            output.WriteLine($"  [green]+[/] {Markup.Escape(result.Value!.Detail)}");
+        }
+
+        return applied > 0;
+    }
+
+    private static string Colourise(DiagnosticSeverity severity) => severity switch
+    {
+        DiagnosticSeverity.Error => "[red]UNHEALTHY[/]",
+        DiagnosticSeverity.Warning => "[yellow]DEGRADED[/]",
+        _ => "[green]HEALTHY[/]",
+    };
 
     private static void Render(CommandOutput output, DiagnosticReport report)
     {
@@ -92,7 +249,8 @@ public sealed class DoctorCommand : AsyncCommand<GlobalSettings>
 
                 output.WriteLine(
                     $"[{colour}]{glyph}[/] {Markup.Escape(check.Name)}  "
-                    + $"[dim]{Markup.Escape(check.Detail)}[/]");
+                    + $"[dim]{Markup.Escape(check.Detail)}[/]"
+                    + (check.Remedy is null ? string.Empty : " [dim](fixable)[/]"));
             }
         }
 
@@ -105,5 +263,12 @@ public sealed class DoctorCommand : AsyncCommand<GlobalSettings>
 
         output.WriteBlankLine();
         output.WriteLine($"Overall: [{verdictColour}]{report.Verdict}[/]");
+
+        if (report.Remedies.Count > 0)
+        {
+            output.WriteLine(
+                $"[dim]{report.Remedies.Count} of these can be put right for you: "
+                + "loadout doctor --fix[/]");
+        }
     }
 }

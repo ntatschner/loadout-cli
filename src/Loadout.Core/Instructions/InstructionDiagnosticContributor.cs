@@ -60,7 +60,7 @@ public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
         var checks = new List<DiagnosticCheck>();
         var heavy = new List<string>();
         var leaking = new List<string>();
-        var elsewhere = new List<string>();
+        var elsewhere = new List<(string Slug, int Topics)>();
 
         foreach (var project in listed.Value)
         {
@@ -107,7 +107,7 @@ public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
 
                 if (pending.Succeeded && pending.Value!.Imported.Count > 0)
                 {
-                    elsewhere.Add($"{slug} ({pending.Value.Imported.Count})");
+                    elsewhere.Add((slug, pending.Value.Imported.Count));
                 }
             }
         }
@@ -129,14 +129,20 @@ public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
                 Category, "Memory content", "No credential-shaped content in project memory."));
         }
 
-        if (elsewhere.Count > 0)
+        // One finding per project rather than one listing them all. Each is
+        // separately fixable, and a single line naming four projects cannot
+        // carry four remedies.
+        foreach (var (slug, topics) in elsewhere)
         {
             checks.Add(DiagnosticCheck.Warn(
                 Category,
-                "Memory outside the workspace",
-                $"{string.Join(", ", elsewhere)} has memory recorded by an agent on this machine "
-                + "that the workspace does not hold, with the number of topics in brackets. Bring it in with: "
-                + "loadout memory import <project>"));
+                $"Memory outside the workspace: {slug}",
+                $"{topics} topic(s) recorded by an agent on this machine that the workspace does "
+                + $"not hold. Bring it in with: loadout memory import {slug}",
+                new Remedy(
+                    RemedyKind.ImportProjectMemory,
+                    $"Import {topics} memory topic(s) for {slug} into the workspace",
+                    slug)));
         }
 
         checks.Add(heavy.Count > 0
