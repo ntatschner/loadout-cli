@@ -8,27 +8,20 @@ Windows, Linux and macOS are Tier-1: each runs the complete launcher natively,
 with no VM, container, remote host or compatibility layer standing in for any
 other platform.
 
-### Renamed from Agent Workspace Launcher
-
-The tool was called `agentctl` while it was a launcher. It is not only that any
-more — most of it is about what an agent is told and what that costs — so it is
-now `loadout`: the kit assembled for a job, chosen rather than carried wholesale.
-This departs from spec section 17, which names the binary `agentctl` with the
-alias `aiw`; the section is superseded rather than overlooked.
-
-Nothing from the old name is orphaned. The data directory is renamed in place on
-first run, the `AGENTCTL_SECRET_*` environment variables are still read, and a
-repository marked `agentctl.project` is still recognised —
-`loadout project link --all` re-marks it and clears the old key, so the fallback
-is a bridge rather than a permanent second answer.
-
 ## Status
 
-Milestones 1 to 3 are implemented. The platform seam, project registry, Git
-integration, agent detection, context compiler, profiles, preflight, handoffs,
-repository policy, migration, conflict recovery, CLI and TUI all work on all
-three platforms. Packaging and an owned pseudo-terminal are the remaining
-milestone; see [Roadmap](#roadmap).
+Milestones 1 to 4 are implemented, less macOS packaging. The platform seam,
+project registry, Git integration, agent detection, context compiler, profiles,
+preflight, handoffs, repository policy, migration, conflict recovery, an owned
+pseudo-terminal, native installers, the CLI and the TUI all work on all three
+platforms.
+
+Continuous integration runs the full suite on Windows, Ubuntu and macOS Apple
+Silicon, and publishes all six runtime identifiers. The same test methods run on
+every platform; where a platform genuinely cannot do something it is reported as
+a capability rather than skipped silently. See
+[Capabilities](#capabilities-not-silent-gaps) for the known gaps and
+[Roadmap](#roadmap) for what is deferred.
 
 ## Install
 
@@ -804,7 +797,7 @@ an OS-suffixed target framework.
 | Logs | `…\logs` | `$XDG_STATE_HOME/loadout/logs` | `~/Library/Logs/Loadout` |
 | Secrets | Credential Manager | Secret Service (libsecret) | Keychain |
 
-macOS uses native conventions by default. Set `AGENTCTL_USE_XDG=1` to place
+macOS uses native conventions by default. Set `LOADOUT_USE_XDG=1` to place
 launcher files under the XDG roots instead.
 
 `config.yaml` is portable user preference. `machines.yaml` holds this machine's
@@ -817,9 +810,14 @@ Anything a platform cannot do is reported rather than quietly skipped. Run
 `loadout doctor` to see the full matrix; each unavailable capability carries
 the reason. Known gaps today:
 
-- **Pseudo-terminal** — the launcher does not own a PTY yet. Agents inherit the
-  current terminal, which gives correct signals, resize and exit codes for
-  terminal launches. An owned PTY is needed only for desktop launch.
+- **Pseudo-terminal window size on macOS** — the launcher owns a real PTY on
+  every platform, but on macOS it cannot set that terminal's size. `ioctl` is
+  variadic there, and on Apple Silicon a variadic argument is passed on the
+  stack while a fixed-signature P/Invoke passes it in a register, so the size
+  never reaches the kernel: the call reports success and the child reads a
+  size that was never sent. The session works; only the dimensions the agent
+  is told about are wrong, so anything drawing a table or a progress bar
+  measures the wrong width.
 - **macOS desktop integration** — `loadout desktop` installs a Start Menu
   shortcut on Windows and a `.desktop` entry on Linux. On macOS the `.app`
   bundle is not built yet, so the command says so and declines. Every feature
@@ -915,8 +913,9 @@ The suite is deliberately structured so most of it runs everywhere:
 - **M3 — done.** Repository policy, Git protection, migration, conflict recovery, worktrees.
 - **M4 — done, less macOS packaging.** Setup wizard, workspace save-on-exit,
   desktop integration, environments, security profiles, release packaging, the
-  update system, an owned pseudo-terminal (ConPTY on Windows, `forkpty` on Linux
-  and macOS) and native installers (MSI, `.deb`, `.rpm`) are in.
+  update system, an owned pseudo-terminal (ConPTY on Windows, `posix_spawn`
+  into a pty on Linux and macOS) and native installers (MSI, `.deb`, `.rpm`)
+  are in.
 - **macOS packaging — paused.** The platform seam, paths, Keychain and bundle
   discovery stay in the build and in the test matrix; signing, notarisation and
   a `.pkg` are deferred until there is a Developer ID and a Mac to verify them

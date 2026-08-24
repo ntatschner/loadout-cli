@@ -74,7 +74,8 @@ public static class PlatformServices
     /// <summary>
     /// Creates a pseudo-terminal for this platform.
     /// <para>
-    /// ConPTY on Windows, forkpty on Linux and macOS. The two are genuinely
+    /// ConPTY on Windows, posix_spawn into a pty on Linux and macOS. The two
+    /// are genuinely
     /// different mechanisms rather than one with a compatibility shim, which is
     /// why the seam exists at all.
     /// </para>

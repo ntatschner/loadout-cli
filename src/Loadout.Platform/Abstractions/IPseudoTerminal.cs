@@ -11,7 +11,8 @@ namespace Loadout.Platform.Abstractions;
 /// a future remote mode.
 /// </para>
 /// <para>
-/// Implementations are ConPTY on Windows and forkpty on Linux and macOS.
+/// Implementations are ConPTY on Windows and posix_spawn into a pty on Linux
+/// and macOS.
 /// Availability is reported through PlatformCapability.PseudoTerminal so a
 /// platform lacking it degrades visibly rather than silently.
 /// </para>
