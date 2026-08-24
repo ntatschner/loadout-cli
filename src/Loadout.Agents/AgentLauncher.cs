@@ -24,6 +24,10 @@ namespace Loadout.Agents;
 /// <param name="IncludeHandoff">Append the most recent handoff to the context (spec section 69).</param>
 /// <param name="Environment">Environment to work in, such as production (spec section 57).</param>
 /// <param name="PassthroughArguments">Arguments after a bare double dash, passed through untouched.</param>
+/// <param name="ResumeSessionId">
+/// A previous conversation to pick up rather than starting a new one. Handed to
+/// the agent only when it advertises that it can resume (spec section 66).
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -33,7 +37,8 @@ public sealed record LaunchRequest(
     string? Profile = null,
     bool IncludeHandoff = false,
     string? Environment = null,
-    IReadOnlyList<string>? PassthroughArguments = null);
+    IReadOnlyList<string>? PassthroughArguments = null,
+    string? ResumeSessionId = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -243,7 +248,8 @@ public sealed class AgentLauncher : IAgentLauncher
                 manifest,
                 compiled.Value,
                 preflight.Environment,
-                environment?.Profile);
+                environment?.Profile,
+                request.ResumeSessionId);
 
             var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
             if (invocationResult.Failed)

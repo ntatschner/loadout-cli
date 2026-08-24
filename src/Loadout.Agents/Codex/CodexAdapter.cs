@@ -82,6 +82,23 @@ public sealed class CodexAdapter : AgentAdapterBase
 
         var arguments = new List<string>();
 
+        // Codex resumes through a subcommand rather than a flag, so it has to
+        // come first: everything after it is read as arguments to "resume".
+        if (context.ResumeSessionId is { Length: > 0 } session)
+        {
+            if (descriptor.Supports(AgentCapabilities.SessionResume))
+            {
+                arguments.Add("resume");
+                arguments.Add(session);
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Codex does not advertise a resume subcommand, so a new "
+                    + "session was started instead of continuing the previous one.");
+            }
+        }
+
         AddSecurityProfile(context, descriptor, arguments, warnings);
 
         arguments.AddRange(context.PassthroughArguments);

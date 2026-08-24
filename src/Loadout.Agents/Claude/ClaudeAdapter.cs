@@ -89,6 +89,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         var arguments = new List<string>();
         var warnings = new List<string>();
 
+        AddResume(context, descriptor, arguments, warnings);
         AddSettings(context, descriptor, arguments, warnings);
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
@@ -104,6 +105,38 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         return OperationResult<AgentInvocation>.Ok(
             new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));
+    }
+
+    /// <summary>
+    /// Asks Claude to pick up a previous conversation (spec section 66).
+    /// <para>
+    /// Only when the installed build advertises the flag. Passing --resume to
+    /// one that does not know it would fail the whole launch, which is a far
+    /// worse outcome than starting a fresh session.
+    /// </para>
+    /// </summary>
+    private static void AddResume(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.ResumeSessionId is not { Length: > 0 } session)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(AgentCapabilities.SessionResume))
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise --resume, so a new session was "
+                + "started instead of continuing the previous one.");
+
+            return;
+        }
+
+        arguments.Add("--resume");
+        arguments.Add(session);
     }
 
     /// <summary>

@@ -32,6 +32,10 @@ namespace Loadout.Agents;
 /// The security posture to translate into whatever this agent supports
 /// (spec section 58), or null for the agent's own defaults.
 /// </param>
+/// <param name="ResumeSessionId">
+/// The session to resume, or null to start fresh. Each adapter places it where
+/// its own agent expects it, which is not the same place twice.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -41,7 +45,8 @@ public sealed record AgentLaunchContext(
     ProjectManifest? Manifest = null,
     CompiledContext? CompiledContext = null,
     IReadOnlyDictionary<string, string>? ResolvedEnvironment = null,
-    Models.Policies.SecurityProfile? Security = null);
+    Models.Policies.SecurityProfile? Security = null,
+    string? ResumeSessionId = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

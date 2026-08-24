@@ -2,6 +2,7 @@ using Loadout.Agents;
 using Loadout.Core.Configuration;
 using Loadout.Core.Context;
 using Loadout.Core.Projects;
+using Loadout.Core.Sessions;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
@@ -35,6 +36,9 @@ public sealed class LauncherTui : ILauncherTui
 {
     private const string Quit = "Quit";
     private const string Back = "Back";
+
+    /// <summary>The menu entry that reopens a previous conversation.</summary>
+    private const string ResumeEntry = "Resume a session";
     private const string Settings = "Settings and paths";
     private const string AddProject = "Add a project";
 
@@ -61,6 +65,7 @@ public sealed class LauncherTui : ILauncherTui
     private readonly IApplicationLauncher _opener;
     private readonly IPlatformPaths _paths;
     private readonly IProjectOnboarding _onboarding;
+    private readonly ISessionHistoryService _sessions;
 
     public LauncherTui(
         IAnsiConsole console,
@@ -75,7 +80,8 @@ public sealed class LauncherTui : ILauncherTui
         IProjectOverviewService overviews,
         IApplicationLauncher opener,
         IPlatformPaths paths,
-        IProjectOnboarding onboarding)
+        IProjectOnboarding onboarding,
+        ISessionHistoryService sessions)
     {
         _console = console;
         _projects = projects;
@@ -90,6 +96,7 @@ public sealed class LauncherTui : ILauncherTui
         _opener = opener;
         _paths = paths;
         _onboarding = onboarding;
+        _sessions = sessions;
     }
 
     /// <inheritdoc />
@@ -750,6 +757,7 @@ public sealed class LauncherTui : ILauncherTui
             .Where(a => !string.Equals(a.Name, defaultAgent, StringComparison.OrdinalIgnoreCase))
             .Select(a => $"Launch {a.Name}"));
 
+        actions.Add(ResumeEntry);
         actions.Add("Open development shell");
         actions.Add("Open in file manager");
 
@@ -768,6 +776,16 @@ public sealed class LauncherTui : ILauncherTui
         if (choice == Back)
         {
             return null;
+        }
+
+        if (choice == ResumeEntry)
+        {
+            var resumed = await ResumeAsync(project, ct).ConfigureAwait(false);
+
+            // Nothing chosen means back to this menu rather than out of the
+            // launcher, the same as backing out of any other question.
+            return resumed ?? await ChooseActionAsync(project, overview, config, ct)
+                .ConfigureAwait(false);
         }
 
         if (choice == "Explain the warnings")
@@ -799,6 +817,84 @@ public sealed class LauncherTui : ILauncherTui
         if (result.Failed)
         {
             _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+            return (int)result.ExitCode;
+        }
+
+        foreach (var warning in result.Value!.Warnings)
+        {
+            _console.MarkupLine($"[yellow]warning[/] {Markup.Escape(warning)}");
+        }
+
+        return result.Value.AgentExitCode;
+    }
+
+    /// <summary>
+    /// Offers this project's previous conversations and reopens the chosen one.
+    /// <para>
+    /// Both agents can already resume, but only from inside themselves and only
+    /// by identifier. Doing it here means the choice is made against titles and
+    /// times, and the session comes back with its project — synchronised
+    /// workspace, recompiled context — rather than just its transcript.
+    /// </para>
+    /// </summary>
+    private async Task<int?> ResumeAsync(ProjectResolution project, CancellationToken ct)
+    {
+        var listed = await _sessions
+            .ListAsync(new SessionQuery(project.Entry.Slug, Limit: 15), ct)
+            .ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(listed.Error!)}[/]");
+
+            return null;
+        }
+
+        var sessions = listed.Value!;
+
+        if (sessions.Count == 0)
+        {
+            _console.MarkupLine(
+                $"[dim]No recorded sessions for {Markup.Escape(project.Entry.Slug)} yet.[/]");
+            _console.WriteLine();
+
+            return null;
+        }
+
+        var width = Math.Max(40, _console.Profile.Width - 4);
+
+        var choices = sessions
+            .Select(s => SessionDisplay.Line(s, width))
+            .ToList();
+
+        choices.Add(Back);
+
+        var chosen = _console.Prompt(
+            new SelectionPrompt<string>()
+                .Title("Which session?")
+                .PageSize(15)
+                .AddChoices(choices));
+
+        if (chosen == Back)
+        {
+            return null;
+        }
+
+        // Matched by position: the rendered line is padded and truncated, so it
+        // is not a reliable key to look the session back up by.
+        var session = sessions[choices.IndexOf(chosen)];
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(
+                project.Entry.Slug,
+                session.Agent,
+                ResumeSessionId: session.SessionId),
+            ct).ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+
             return (int)result.ExitCode;
         }
 

@@ -5,6 +5,7 @@ using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
+using Loadout.Core.Sessions;
 using Loadout.Core.Workspace;
 using Loadout.Models.Platform;
 using Loadout.Platform;
@@ -124,7 +125,10 @@ public sealed class LauncherTuiTests : IAsyncLifetime
                     policies,
                     workspace,
                     git,
-                    new BackupService(paths, permissions, yaml, TimeProvider.System))));
+                    new BackupService(paths, permissions, yaml, TimeProvider.System))),
+            new SessionHistoryService(
+                [new ClaudeSessionHistory(environment), new CodexSessionHistory(environment)],
+                _projects));
 
         _repository = await CreateRepositoryAsync("alpha").ConfigureAwait(false);
     }
@@ -190,8 +194,9 @@ public sealed class LauncherTuiTests : IAsyncLifetime
     /// The project menu, in order. Two agents ship built in, so the actions
     /// after them sit at fixed offsets.
     /// </summary>
-    private const int ExplainWarnings = 4;
-    private const int BackFromProject = 5;
+    private const int ResumeSession = 2;
+    private const int ExplainWarnings = 5;
+    private const int BackFromProject = 6;
 
     /// <summary>The settings menu, in order.</summary>
     private const int WorkspaceRepository = 0;
