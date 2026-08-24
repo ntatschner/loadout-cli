@@ -223,7 +223,6 @@ Version:        $rpmVersion
 Release:        $rpmRelease
 Summary:        Loadout
 License:        MIT
-BuildArch:      $rpmArch
 AutoReqProv:    no
 
 %description
@@ -248,9 +247,14 @@ ln -sf /usr/lib/loadout/loadout %{buildroot}/usr/bin/loadout
     # AutoReqProv is off above because rpmbuild would otherwise scan the
     # published .NET libraries and generate dependencies on shared objects that
     # ship inside this very package.
-    # --target is what makes a cross-architecture build possible at all. Without
-    # it rpmbuild builds for the host and refuses an aarch64 package on an x86_64
-    # runner with "No compatible architectures found for build".
+    # --target is what makes a cross-architecture build possible, and it is also
+    # why the spec above carries no BuildArch. Setting both is what rpm 4.18
+    # rejects with "No compatible architectures found for build": the spec
+    # pins an architecture the host cannot build for, and --target pinning the
+    # same one does not resolve the contradiction. --target alone does.
+    #
+    # Confirmed against rpm 4.18.2, the version on the runner: BuildArch plus
+    # --target fails, --target alone writes the aarch64 package.
     & rpmbuild --define "_topdir $rpmRoot" --define "_binary_payload w2.xzdio" --target $rpmArch -bb $specPath
     if ($LASTEXITCODE -ne 0) { throw "rpmbuild failed for $Runtime." }
 
