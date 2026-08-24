@@ -26,9 +26,14 @@ public sealed class ConfigKeyTests
         var config = new LauncherConfig();
         var machine = new MachineConfig();
 
-        // Numeric settings need a value they can parse; everything else takes
-        // an arbitrary string.
-        var value = key == "sync-timeout" ? "42" : "round-trip-value";
+        // The sample is chosen from the shape of the current value rather than
+        // from a list of key names, so a new setting is covered by this test
+        // the moment it is added rather than when somebody remembers to.
+        var current = entry.Read(config, machine);
+
+        var value = current is "true" or "false"
+            ? "false"
+            : int.TryParse(current, out _) ? "42" : "round-trip-value";
 
         entry.Write(config, machine, value);
 

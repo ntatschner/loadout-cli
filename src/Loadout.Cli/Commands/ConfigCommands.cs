@@ -66,6 +66,34 @@ internal static class ConfigKeys
             (c, _) => c.Updates.Source,
             (c, _, v) => c.Updates.Source = v, false),
 
+        new("statusline-project", "Show the project slug in the agent status line",
+            (c, _) => Boolean(c.Statusline.ShowProject),
+            (c, _, v) => c.Statusline.ShowProject = Flag(v), false),
+
+        new("statusline-directory", "Show the working directory in the agent status line",
+            (c, _) => Boolean(c.Statusline.ShowDirectory),
+            (c, _, v) => c.Statusline.ShowDirectory = Flag(v), false),
+
+        new("statusline-git", "Show the branch and whether the tree is dirty",
+            (c, _) => Boolean(c.Statusline.ShowGit),
+            (c, _, v) => c.Statusline.ShowGit = Flag(v), false),
+
+        new("statusline-model", "Show the model name in the agent status line",
+            (c, _) => Boolean(c.Statusline.ShowModel),
+            (c, _, v) => c.Statusline.ShowModel = Flag(v), false),
+
+        new("statusline-context", "Show how much of the context window is spent",
+            (c, _) => Boolean(c.Statusline.ShowContext),
+            (c, _, v) => c.Statusline.ShowContext = Flag(v), false),
+
+        new("statusline-colour", "Colour the agent status line with ANSI escapes",
+            (c, _) => Boolean(c.Statusline.Colour),
+            (c, _, v) => c.Statusline.Colour = Flag(v), false),
+
+        new("statusline-separator", "Text drawn between status line segments",
+            (c, _) => c.Statusline.Separator,
+            (c, _, v) => c.Statusline.Separator = v, false),
+
         // Machine-local from here down: these describe this machine's layout and
         // must never travel to another one (spec section 15).
         new("clone-root", "Where new clones are placed on this machine",
@@ -86,6 +114,23 @@ internal static class ConfigKeys
                 .ToList(),
             false),
     ];
+
+    /// <summary>How a flag is shown, in the spelling the setter accepts back.</summary>
+    private static string Boolean(bool value) => value ? "true" : "false";
+
+    /// <summary>
+    /// Reads a flag generously. Somebody turning a segment off will type
+    /// whichever of these came to mind, and refusing all but one spelling
+    /// would be pedantry rather than validation.
+    /// </summary>
+    private static bool Flag(string value) =>
+        value.Trim().ToLowerInvariant() switch
+        {
+            "true" or "yes" or "on" or "1" => true,
+            "false" or "no" or "off" or "0" => false,
+            _ => throw new FormatException(
+                $"'{value}' is not a yes or no. Use true or false."),
+        };
 
     internal static Entry? Find(string key) =>
         All.FirstOrDefault(e => string.Equals(e.Key, key, StringComparison.OrdinalIgnoreCase));

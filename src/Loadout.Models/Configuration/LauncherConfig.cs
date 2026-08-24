@@ -24,6 +24,8 @@ public sealed class LauncherConfig
 
     public UpdateSettings Updates { get; set; } = new();
 
+    public StatuslineSettings Statusline { get; set; } = new();
+
     /// <summary>Explicit extra directories to search for agent executables (spec section 65).</summary>
     public List<string> AgentSearchPaths { get; set; } = [];
 
@@ -34,6 +36,41 @@ public sealed class LauncherConfig
     /// has changed since this launcher was built.
     /// </summary>
     public Dictionary<string, Agents.GenericAgentDefinition> CustomAgents { get; set; } = [];
+}
+
+/// <summary>
+/// What the agent's own status line shows.
+/// <para>
+/// Claude Code renders a status line by running a command and printing what it
+/// writes, so this is the one place the launcher can put its own knowledge in
+/// front of somebody mid-session: which registered project this is, and how
+/// much of the context window the session has spent. Claude knows neither.
+/// </para>
+/// </summary>
+public sealed class StatuslineSettings
+{
+    /// <summary>The registered project's slug, which the agent has no idea about.</summary>
+    public bool ShowProject { get; set; } = true;
+
+    /// <summary>Where in the repository the session is, relative to its root.</summary>
+    public bool ShowDirectory { get; set; } = true;
+
+    /// <summary>Branch, whether the tree is dirty, and the worktree when in a linked one.</summary>
+    public bool ShowGit { get; set; } = true;
+
+    public bool ShowModel { get; set; } = true;
+
+    /// <summary>How much of the context window is spent, which is the whole point of the tool.</summary>
+    public bool ShowContext { get; set; } = true;
+
+    /// <summary>
+    /// Colour via ANSI escapes. Off produces a plain line, which is what a
+    /// terminal that mangles escapes — or a test — wants.
+    /// </summary>
+    public bool Colour { get; set; } = true;
+
+    /// <summary>Separator drawn between segments.</summary>
+    public string Separator { get; set; } = " | ";
 }
 
 /// <summary>Connection details for the central agent-workspaces repository (spec section 10).</summary>
