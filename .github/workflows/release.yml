@@ -107,7 +107,7 @@ jobs:
           # that matched nothing. With pipefail that fails the step even though
           # the archive was found. Linux and macOS build a .tar.gz and no .zip,
           # so this failed every non-Windows leg the first time the workflow ran.
-          archive=$(find . -maxdepth 1 -name 'loadout-*.zip' -o -name 'loadout-*.tar.gz' | head -1)
+          archive=$(find . -maxdepth 1 \( -name 'loadout-*.zip' -o -name 'loadout-*.tar.gz' \) | head -1)
           if [ -z "$archive" ]; then echo "no archive was produced" >&2; exit 1; fi
           archive=${archive#./}
           echo "Checking $archive"
@@ -144,7 +144,10 @@ jobs:
           set -euo pipefail
           mkdir -p smoke && cd smoke
 
-          archive=$(ls ../artifacts/loadout-*.{zip,tar.gz} 2>/dev/null | head -1)
+          # Same reasoning as the archive check: two globs, and whichever one
+          # this platform does not produce makes ls exit non-zero.
+          archive=$(find ../artifacts -maxdepth 1 \( -name 'loadout-*.zip' -o -name 'loadout-*.tar.gz' \) | head -1)
+          if [ -z "$archive" ]; then echo "no archive to smoke test" >&2; exit 1; fi
 
           case "$archive" in
             *.zip) unzip -q "$archive" ;;

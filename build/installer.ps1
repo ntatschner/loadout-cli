@@ -204,10 +204,23 @@ if (Get-Command rpmbuild -ErrorAction SilentlyContinue) {
 
     $rpmArch = $rpmArchitecture[$Runtime]
 
+    # RPM forbids a hyphen in Version, so a pre-release tag like v0.2.0-beta.1
+    # fails the build outright. The conventional mapping puts the pre-release
+    # into Release with a leading 0., which also orders it correctly: rpm sorts
+    # 0.beta.1 before 1, so the beta upgrades cleanly to the final release.
+    if ($Version -match '^([^-]+)-(.+)$') {
+        $rpmVersion = $Matches[1]
+        $rpmRelease = '0.' + ($Matches[2] -replace '-', '.')
+    }
+    else {
+        $rpmVersion = $Version
+        $rpmRelease = '1'
+    }
+
     $spec = @"
 Name:           loadout
-Version:        $Version
-Release:        1
+Version:        $rpmVersion
+Release:        $rpmRelease
 Summary:        Loadout
 License:        MIT
 BuildArch:      $rpmArch
