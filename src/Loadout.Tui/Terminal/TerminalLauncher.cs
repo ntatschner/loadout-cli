@@ -4,6 +4,7 @@ using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Projects;
+using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 using Spectre.Console;
 using Terminal.Gui.App;
@@ -80,36 +81,47 @@ public sealed class TerminalLauncher : ILauncherTui
 
         var config = configResult.Value!;
 
-        // Read once, outside the screen. Working out which repository somebody
-        // is standing in touches git, and doing it while the toolkit is drawing
-        // would stall the first frame.
-        var here = await ResolveCurrentAsync(ct).ConfigureAwait(false);
-
         var workspaceState = !_workspace.IsConfigured(config)
             ? "workspace not configured"
             : _workspace.IsCloned()
                 ? "workspace connected"
                 : "workspace not cloned";
 
-        var installed = (await _agents.DetectAllAsync(ct).ConfigureAwait(false))
-            .Where(agent => agent.IsInstalled)
-            .Select(agent => agent.DisplayName)
-            .ToList();
+        // Worked out once. Which repository somebody is standing in does not
+        // change while the launcher is open, and it costs a git call.
+        ProjectResolution? here = null;
+        IReadOnlyList<string>? installed = null;
+
+        var opening = true;
 
         while (true)
         {
             ct.ThrowIfCancellationRequested();
 
-            var projectsResult = await _projects.ListAsync(ct).ConfigureAwait(false);
-
-            if (projectsResult.Failed)
-            {
-                _console.MarkupLine($"[red]{Markup.Escape(projectsResult.Error!)}[/]");
-                return (int)projectsResult.ExitCode;
-            }
-
             var intent = await ShowAsync(
-                projectsResult.Value!, here, workspaceState, installed, ct).ConfigureAwait(false);
+                async () =>
+                {
+                    here ??= await ResolveCurrentAsync(ct).ConfigureAwait(false);
+
+                    installed ??= (await _agents.DetectAllAsync(ct).ConfigureAwait(false))
+                        .Where(agent => agent.IsInstalled)
+                        .Select(agent => agent.DisplayName)
+                        .ToList();
+
+                    var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
+
+                    return (projects, here, installed);
+                },
+                workspaceState,
+                opening,
+                ct).ConfigureAwait(false);
+
+            opening = false;
+
+            if (intent is null)
+            {
+                return (int)ExitCode.GeneralFailure;
+            }
 
             var outcome = await ActOnAsync(intent, ct).ConfigureAwait(false);
 
@@ -127,40 +139,61 @@ public sealed class TerminalLauncher : ILauncherTui
     /// <summary>
     /// Puts the screen up and waits for it to close.
     /// </summary>
-    private async Task<LauncherIntent> ShowAsync(
-        IReadOnlyList<ProjectResolution> projects,
-        ProjectResolution? here,
+    /// <param name="load">
+    /// Reads what the screen needs. Started before the opening animation rather
+    /// than after it, so the animation covers the wait instead of adding to it.
+    /// </param>
+    /// <param name="workspaceState">One phrase describing the workspace.</param>
+    /// <param name="opening">Whether this is the first screen of the session.</param>
+    /// <param name="ct">Cancels the session.</param>
+    private async Task<LauncherIntent?> ShowAsync(
+        Func<Task<(OperationResult<IReadOnlyList<ProjectResolution>> Projects,
+                   ProjectResolution? Here,
+                   IReadOnlyList<string> Agents)>> load,
         string workspaceState,
-        IReadOnlyList<string> agents,
+        bool opening,
         CancellationToken ct)
     {
         using IApplication application = Application.Create();
 
         application.Init();
 
-        try
-        {
-            using var window = new LauncherWindow(
-                projects,
-                here,
-                workspaceState,
-                agents,
-                (project, token) => OverviewAsync(project, token),
-                w => ShowPalette(w, application),
-                application);
+        // Started first, deliberately. Detecting agents and resolving the
+        // current repository both shell out, and running them behind the
+        // animation means the launcher is ready by the time it finishes rather
+        // than beginning to think once it has.
+        var loading = load();
 
-            await application.RunAsync(window, ct).ConfigureAwait(false);
+        SplashScreen.Play(application, "reading your projects", opening && Watching);
 
-            return window.Intent ?? LauncherIntent.Quit;
-        }
-        finally
+        var (projects, here, agents) = await loading.ConfigureAwait(false);
+
+        if (projects.Failed)
         {
-            // Disposed by the using, but the terminal has to be given back
-            // before anything else writes to it, and leaving that to a
-            // finaliser would be leaving it to chance.
-            _ = ct;
+            _console.MarkupLine($"[red]{Markup.Escape(projects.Error!)}[/]");
+            return null;
         }
+
+        using var window = new LauncherWindow(
+            projects.Value!,
+            here,
+            workspaceState,
+            agents,
+            (project, token) => OverviewAsync(project, token),
+            w => ShowPalette(w, application),
+            application);
+
+        await application.RunAsync(window, ct).ConfigureAwait(false);
+
+        return window.Intent ?? LauncherIntent.Quit;
     }
+
+    /// <summary>
+    /// Whether there is somebody at the terminal to see any of this. False for
+    /// a redirected run, where an animation would spend a second of a script's
+    /// time on something nobody will look at.
+    /// </summary>
+    private bool Watching => _console.Profile.Capabilities.Interactive;
 
     /// <summary>
     /// Offers everything the command line can do, so the launcher is never a

@@ -118,6 +118,12 @@ internal sealed class ProjectDetailView : FrameView
         SetEnabled(project.IsAvailableLocally);
     }
 
+    /// <summary>
+    /// Replaces the status line without redrawing the rest, which is what an
+    /// animation needs: rebuilding the panel every frame would flicker.
+    /// </summary>
+    internal void SetStatus(string status) => _branch.Text = status;
+
     /// <summary>Shows everything known about the project.</summary>
     internal void Show(ProjectResolution project, ProjectOverview? overview, string? failure)
     {

@@ -20,8 +20,8 @@ namespace Loadout.Tui.Terminal;
 /// </summary>
 internal sealed class LauncherWindow : Window
 {
-    /// <summary>Shown while an overview is still being read.</summary>
-    private const string Loading = "reading…";
+    /// <summary>How often the reading indicator moves.</summary>
+    private static readonly TimeSpan PulseInterval = TimeSpan.FromMilliseconds(90);
 
     private readonly IReadOnlyList<ProjectResolution> _projects;
     private readonly Func<ProjectResolution, CancellationToken, Task<ProjectOverview?>> _overview;
@@ -42,6 +42,11 @@ internal sealed class LauncherWindow : Window
     /// cursor with another project's details.
     /// </summary>
     private CancellationTokenSource? _pending;
+
+    /// <summary>Handle of the timer moving the reading indicator, when one is running.</summary>
+    private object? _pulse;
+
+    private int _pulseStep;
 
     /// <summary>What was chosen. Null until the screen is closed.</summary>
     internal LauncherIntent? Intent { get; private set; }
@@ -280,7 +285,7 @@ internal sealed class LauncherWindow : Window
             return;
         }
 
-        _detail.ShowHeading(project, Loading);
+        StartPulsing();
 
         _ = Task.Run(
             async () =>
@@ -316,16 +321,56 @@ internal sealed class LauncherWindow : Window
                         return;
                     }
 
+                    StopPulsing();
+
                     _detail.Show(project, overview, failure);
                 });
             },
             CancellationToken.None);
     }
 
+    /// <summary>
+    /// Moves a small bar while a project's details are read, so a slow
+    /// repository looks like it is being worked on rather than like the
+    /// launcher has stopped. Deliberately not a progress bar: nothing here
+    /// knows how much of the read is left, and a bar that guesses is a lie.
+    /// </summary>
+    private void StartPulsing()
+    {
+        StopPulsing();
+
+        _pulseStep = 0;
+
+        _detail.ShowHeading(Selected!, Wordmark.Pulse(_pulseStep));
+
+        _pulse = _application.AddTimeout(PulseInterval, () =>
+        {
+            if (Selected is null)
+            {
+                return false;
+            }
+
+            _detail.SetStatus(Wordmark.Pulse(++_pulseStep));
+
+            return true;
+        });
+    }
+
+    private void StopPulsing()
+    {
+        if (_pulse is not null)
+        {
+            _application.RemoveTimeout(_pulse);
+            _pulse = null;
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            StopPulsing();
+
             _pending?.Cancel();
             _pending?.Dispose();
         }
