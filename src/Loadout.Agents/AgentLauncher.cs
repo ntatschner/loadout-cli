@@ -7,6 +7,7 @@ using Loadout.Core.Projects;
 using Loadout.Core.Security;
 using Loadout.Core.Workspace;
 using Loadout.Models;
+using Loadout.Models.Configuration;
 using Loadout.Models.Diagnostics;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
@@ -57,6 +58,10 @@ public sealed record LaunchRequest(
 /// </param>
 /// <param name="ProjectName">Project that ran, for building the commit message.</param>
 /// <param name="AgentName">Agent that ran, for building the commit message.</param>
+/// <param name="AgentSource">
+/// Which layer chose the agent. Four can, and until this said so there was no
+/// answer to "why is it launching that one?" short of reading the code.
+/// </param>
 public sealed record LaunchOutcome(
     int AgentExitCode,
     WorkspaceSyncOutcome SyncOutcome,
@@ -64,7 +69,8 @@ public sealed record LaunchOutcome(
     PreflightResult? Preflight,
     IReadOnlyList<string>? PendingWorkspaceChanges = null,
     string? ProjectName = null,
-    string? AgentName = null);
+    string? AgentName = null,
+    SettingSource AgentSource = SettingSource.BuiltIn);
 
 /// <summary>Runs the launch sequence of spec section 45.</summary>
 public interface IAgentLauncher
@@ -162,11 +168,19 @@ public sealed class AgentLauncher : IAgentLauncher
 
         var manifest = await LoadManifestAsync(project.Entry.Slug, warnings, ct).ConfigureAwait(false);
 
-        var agentName = request.AgentName
-            ?? manifest?.Agents.Default
-            ?? (string.IsNullOrWhiteSpace(project.Entry.DefaultAgent)
-                ? config.DefaultAgent
-                : project.Entry.DefaultAgent);
+        var agent = ResolveAgent(request, manifest, project, config);
+        var agentName = agent.Value;
+
+        // Said only when it is worth saying. A project that names its own agent
+        // is not a surprise; falling through to a personal default because
+        // nothing names one is exactly the case where somebody later asks why
+        // it started the agent it did.
+        if (agent.Source == SettingSource.SharedConfiguration)
+        {
+            warnings.Add(
+                $"'{project.Entry.Name}' names no agent, so {agent.Value} was used — "
+                + $"{agent.Explanation}.");
+        }
 
         var adapterResult = _agents.Resolve(agentName);
         if (adapterResult.Failed)
@@ -303,7 +317,8 @@ public sealed class AgentLauncher : IAgentLauncher
                 preflight,
                 pending,
                 project.Entry.Name,
-                adapter.Name));
+                adapter.Name,
+                agent.Source));
         }
         finally
         {
@@ -490,6 +505,43 @@ public sealed class AgentLauncher : IAgentLauncher
         }
 
         return outcome.Outcome;
+    }
+
+    /// <summary>
+    /// Chooses the agent, and records which layer chose it.
+    /// </summary>
+    /// <remarks>
+    /// The order is unchanged and is the product decision: what was asked for
+    /// beats what the project says, and what the project says beats a personal
+    /// default. What is new is that the answer carries where it came from, so
+    /// somebody surprised by it can be told rather than left to guess.
+    /// </remarks>
+    internal static Resolved<string> ResolveAgent(
+        LaunchRequest request,
+        ProjectManifest? manifest,
+        ProjectResolution project,
+        LauncherConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(config);
+
+        if (request.AgentName is { Length: > 0 } asked)
+        {
+            return new Resolved<string>(asked, SettingSource.CommandLine);
+        }
+
+        if (manifest?.Agents.Default is { Length: > 0 } declared)
+        {
+            return new Resolved<string>(declared, SettingSource.ProjectManifest);
+        }
+
+        if (!string.IsNullOrWhiteSpace(project.Entry.DefaultAgent))
+        {
+            return new Resolved<string>(project.Entry.DefaultAgent, SettingSource.ProjectRegistry);
+        }
+
+        return new Resolved<string>(config.DefaultAgent, SettingSource.SharedConfiguration);
     }
 
     private async Task<OperationResult<string>> ResolveWorkingDirectoryAsync(
