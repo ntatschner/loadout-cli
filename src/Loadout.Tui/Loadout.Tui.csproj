@@ -1,6 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <!--
+      Spectre stays for the first-run flows, which are a sequence of questions
+      rather than a screen, and read better as one.
+    -->
     <PackageReference Include="Spectre.Console" Version="0.51.*" />
+
+    <!--
+      The launcher itself is a screen: panels that stay put, a list beside the
+      detail for what it is pointing at, and fields that can be typed into. That
+      is a widget toolkit's job, and doing it with cursor control over prompts
+      is how the old launcher ended up redrawing itself into the scrollback.
+    -->
+    <PackageReference Include="Terminal.Gui" Version="2.4.*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Loadout.Agents\Loadout.Agents.csproj" />

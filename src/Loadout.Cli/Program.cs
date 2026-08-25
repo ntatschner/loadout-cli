@@ -134,7 +134,11 @@ public static class Program
         services.AddSingleton(AnsiConsole.Console);
         services.AddSingleton(new PassthroughArguments(passthrough));
         services.AddSingleton<IProjectOnboarding, ProjectOnboarding>();
-        services.AddSingleton<ILauncherTui, LauncherTui>();
+        // The screen-based launcher. The prompt-based one it replaced could
+        // only ever show one thing at a time: choosing a project meant losing
+        // the list, and reading what was wrong with a project meant losing the
+        // project.
+        services.AddSingleton<ILauncherTui, Loadout.Tui.Terminal.TerminalLauncher>();
         services.AddSingleton<ISetupWizard, SetupWizard>();
         services.AddSingleton<WorkspaceSavePrompt>();
         services.AddSingleton<StatuslineTargets>();
