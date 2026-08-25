@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using System.Text;
 using Loadout.Models;
+using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 using Loadout.Platform.Unix;
 using Loadout.Platform.Windows;
@@ -444,7 +445,32 @@ public sealed class PseudoTerminalTests
         terminal.Dispose();
     }
 
-    /// <summary>Reads until the child closes its end of the console.</summary>
+    /// <summary>
+    /// Reads until the child closes its end of the console, or until patience
+    /// runs out — and returns what arrived either way.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Running out of patience used to throw, which failed the test like this:
+    /// </para>
+    /// <code>
+    /// System.Threading.Tasks.TaskCanceledException : A task was canceled.
+    ///    at WindowsPseudoTerminal.ReadAsync(...)
+    ///    at PseudoTerminalTests.DrainAsync(...)
+    /// </code>
+    /// <para>
+    /// That says nothing about what was wrong, and it fires even when every
+    /// byte the test wanted had already been read: a pseudo-console does not
+    /// reliably report end-of-file merely because the child exited, so the loop
+    /// can sit waiting for a close that is not coming. On a busy CI runner that
+    /// is a test which fails for no reason anybody can act on.
+    /// </para>
+    /// <para>
+    /// Returning what arrived instead lets the assertion in the test do the
+    /// talking. If the output really was missing, the failure now names what
+    /// was expected and what was there.
+    /// </para>
+    /// </remarks>
     private static async Task<string> DrainAsync(IPseudoTerminal terminal)
     {
         using var cancellation = new CancellationTokenSource(Patience);
@@ -454,7 +480,16 @@ public sealed class PseudoTerminalTests
 
         while (true)
         {
-            var read = await terminal.ReadAsync(buffer, cancellation.Token);
+            OperationResult<int> read;
+
+            try
+            {
+                read = await terminal.ReadAsync(buffer, cancellation.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return builder.ToString();
+            }
 
             if (read.Failed || read.Value == 0)
             {
