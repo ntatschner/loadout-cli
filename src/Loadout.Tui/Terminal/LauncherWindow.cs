@@ -29,6 +29,7 @@ internal sealed class LauncherWindow : Window
     private readonly IApplication _application;
     private readonly Action<LauncherWindow> _showPalette;
     private readonly IReadOnlyList<AgentSession> _recent;
+    private readonly IReadOnlyList<string> _agents;
 
     private readonly TextField _filter;
     private readonly ListView _list;
@@ -78,6 +79,7 @@ internal sealed class LauncherWindow : Window
         _recent = recent;
         _application = application;
         _showPalette = showPalette;
+        _agents = agents;
         _shown = [.. projects];
 
         Title = "Loadout";
@@ -420,17 +422,100 @@ internal sealed class LauncherWindow : Window
         }
     }
 
-    private static string Row(ProjectResolution project, ProjectResolution? here)
+    private string Row(ProjectResolution project, ProjectResolution? here)
     {
         var marker = here is not null && project.Entry.Slug == here.Entry.Slug
             ? "▸"
             : project.Pinned ? "★" : " ";
 
-        var suffix = project.IsAvailableLocally
-            ? project.Entry.DefaultAgent
-            : "not on this machine";
+        // Readiness in words as well as a mark, never colour alone: a
+        // monochrome terminal, and somebody who cannot tell red from green,
+        // must read the same thing everybody else does.
+        var readiness = _readiness.TryGetValue(project.Entry.Slug, out var known)
+            ? known
+            : ProjectReadinessRules.Of(null, project.IsAvailableLocally, agentInstalled: true);
 
-        return $"{marker} {project.Entry.Name}  ({suffix})";
+        var state = ProjectReadinessRules.Mark(readiness)
+            + " " + ProjectReadinessRules.Label(readiness);
+
+        return $"{marker} {project.Entry.Name}  [{state}]  {project.Entry.DefaultAgent}";
+    }
+
+    /// <summary>
+    /// Readiness per project, filled in as each overview arrives.
+    /// </summary>
+    /// <remarks>
+    /// A project's state cannot be known until its details have been read, and
+    /// reading every project's details before drawing anything would make the
+    /// launcher wait on the slowest repository somebody owns. Rows therefore
+    /// start with what is knowable without a read and are corrected as the
+    /// answers come in.
+    /// </remarks>
+    private readonly Dictionary<string, Readiness> _readiness = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Notes a project's readiness and redraws the list.
+    /// </summary>
+    /// <remarks>
+    /// Called from both paths that produce an overview. It was originally only
+    /// on the one that waits, so a project whose details were already to hand
+    /// stayed at its provisional state for ever — which is every project under
+    /// test, and any project read from a cache.
+    /// </remarks>
+    private void Record(ProjectResolution project, ProjectOverview? overview)
+    {
+        _readiness[project.Entry.Slug] = ProjectReadinessRules.Of(
+            overview,
+            project.IsAvailableLocally,
+            _agents.Count == 0
+                || _agents.Any(agent => agent.Contains(
+                    project.Entry.DefaultAgent, StringComparison.OrdinalIgnoreCase)));
+
+        RefreshRows();
+    }
+
+    /// <summary>
+    /// Redraws the rows in place, keeping the cursor where it was.
+    /// </summary>
+    private void RefreshRows()
+    {
+        // Redrawing sets the source and restores the cursor, and both raise the
+        // selection-changed event that asks for an overview — which redraws.
+        // Without this the first answer to arrive recurses until the stack runs
+        // out, which it did, immediately.
+        if (_refreshing)
+        {
+            return;
+        }
+
+        _refreshing = true;
+
+        try
+        {
+            RefreshRowsCore();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    private bool _refreshing;
+
+    private void RefreshRowsCore()
+    {
+        var selected = _list.SelectedItem;
+
+        _list.SetSource(new ObservableCollection<string>(
+            _shown.Select(project => Row(project, here: null))));
+
+        // Moving the cursor because a row was relabelled would be its own bug:
+        // somebody arrowing down a list must not be dragged back to the top by
+        // an answer arriving behind them.
+        if (selected is int index && index >= 0 && index < _shown.Count)
+        {
+            _list.SelectedItem = index;
+        }
     }
 
     private void ApplyFilter()
@@ -484,6 +569,8 @@ internal sealed class LauncherWindow : Window
         // frame, which reads as a flicker rather than as progress.
         if (reading.IsCompletedSuccessfully)
         {
+            Record(project, reading.Result);
+
             _detail.Show(project, reading.Result, failure: null);
             return;
         }
@@ -525,6 +612,8 @@ internal sealed class LauncherWindow : Window
                     }
 
                     StopPulsing();
+
+                    Record(project, overview);
 
                     _detail.Show(project, overview, failure);
                 });

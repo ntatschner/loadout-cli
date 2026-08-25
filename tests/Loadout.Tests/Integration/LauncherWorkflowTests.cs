@@ -216,6 +216,29 @@ public sealed class LauncherWorkflowTests
     }
 
     [Fact]
+    public void The_list_says_whether_a_project_is_ready_at_a_glance()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        // Scanning a list of projects, the question is not "what is wrong with
+        // this one" but "can I work on it". Readiness answers that without
+        // selecting anything.
+        var screen = session.ScreenShowing("Ready");
+
+        screen.Should().Contain("Ready");
+    }
+
+    [Fact]
+    public void A_project_that_is_not_here_is_shown_as_blocked()
+    {
+        using var session = Launcher([Project("gone", "Gone", path: null)]);
+
+        var screen = session.Screen;
+
+        screen.Should().Contain("Blocked");
+    }
+
+    [Fact]
     public void The_menu_bar_is_on_screen_with_its_groups_named()
     {
         using var session = Launcher([Project("alpha", "Alpha")]);
