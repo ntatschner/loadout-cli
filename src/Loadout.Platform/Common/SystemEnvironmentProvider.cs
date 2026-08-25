@@ -20,17 +20,34 @@ public sealed class SystemEnvironmentProvider : IEnvironmentProvider
     {
         get
         {
-            // SpecialFolder.UserProfile is correct on all three platforms and
-            // survives the case where HOME or USERPROFILE is unset.
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            // The environment is asked first, and that order matters.
+            //
+            // SpecialFolder.UserProfile reads the account's own record of where
+            // its profile is — on Windows from the user token, not from the
+            // environment — so it ignores USERPROFILE even when something has
+            // deliberately set it. Preferring it meant the home directory could
+            // not be pointed anywhere else by anyone: not by a test isolating a
+            // run, and not by a person redirecting it on purpose. A subprocess
+            // given a throwaway USERPROFILE still read the real one, and found
+            // the real agent sessions in it.
+            //
+            // HOME on Unix and USERPROFILE on Windows are the conventional
+            // answers to this question and are set on any ordinary machine.
+            // SpecialFolder stays as the fallback for the case that motivated
+            // it, which is neither being set at all.
+            var home = GetVariable("HOME") ?? GetVariable("USERPROFILE");
+
             if (!string.IsNullOrWhiteSpace(home))
             {
                 return home;
             }
 
-            return GetVariable("HOME") ?? GetVariable("USERPROFILE")
-                ?? throw new InvalidOperationException(
-                    "No home directory could be determined from UserProfile, HOME or USERPROFILE.");
+            home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+            return string.IsNullOrWhiteSpace(home)
+                ? throw new InvalidOperationException(
+                    "No home directory could be determined from HOME, USERPROFILE or UserProfile.")
+                : home;
         }
     }
 
