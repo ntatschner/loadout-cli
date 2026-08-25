@@ -264,7 +264,8 @@ public sealed class TerminalLauncher : ILauncherTui
             case LauncherAction.Resume when intent.Project is { } resuming:
                 // The same command somebody would have typed, rather than a
                 // second implementation of the session picker.
-                await _catalogue.RunAsync("resume", [resuming.Entry.Slug], ct).ConfigureAwait(false);
+                await _catalogue.RunAsync(LauncherCommands.Resume, [resuming.Entry.Slug], ct)
+                    .ConfigureAwait(false);
                 return null;
 
             case LauncherAction.FileManager when intent.Project?.LocalPath is { } directory:
@@ -280,7 +281,8 @@ public sealed class TerminalLauncher : ILauncherTui
                 return null;
 
             case LauncherAction.Clone when intent.Project is { } cloning:
-                await _catalogue.RunAsync("project clone", [cloning.Entry.Slug], ct).ConfigureAwait(false);
+                await _catalogue.RunAsync(LauncherCommands.Clone, [cloning.Entry.Slug], ct)
+                    .ConfigureAwait(false);
                 Pause();
                 return null;
 

@@ -126,6 +126,24 @@ public sealed class CommandParityTests
     }
 
     [Fact]
+    public void Every_command_the_launcher_runs_for_you_exists()
+    {
+        var paths = Catalogue().Select(e => e.Path).ToHashSet(StringComparer.Ordinal);
+
+        // The launcher types these on somebody's behalf, so they are a second
+        // list written by hand — exactly what the catalogue exists to avoid,
+        // one layer up. It had already drifted: the settings entry ran
+        // "config show" and the command is "config list", which failed as
+        // "Unknown command" and read like the user's mistake rather than ours.
+        foreach (var command in Loadout.Tui.Terminal.LauncherCommands.All)
+        {
+            paths.Should().Contain(
+                command,
+                $"the launcher runs '{command}', so it has to be a real command");
+        }
+    }
+
+    [Fact]
     public void Configuring_twice_does_not_duplicate_the_catalogue()
     {
         var first = Catalogue().Count;

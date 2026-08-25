@@ -184,7 +184,8 @@ internal sealed class LauncherWindow : Window
                 new MenuItem
                 {
                     Title = "Open in _editor",
-                    Action = () => WithSelected(p => RunCommand($"code {p.Entry.Slug}")),
+                    Action = () => WithSelected(p =>
+                        RunCommand($"{LauncherCommands.Editor} {p.Entry.Slug}")),
                 },
                 new MenuItem
                 {
@@ -213,9 +214,21 @@ internal sealed class LauncherWindow : Window
             new MenuBarItem("_Tools", [
                 new MenuItem { Title = "All _commands…", Action = () => _showPalette(this) },
                 new Line(),
-                new MenuItem { Title = "Check this _machine", Action = () => RunCommand("doctor") },
-                new MenuItem { Title = "Configuration _drift", Action = () => RunCommand("drift") },
-                new MenuItem { Title = "_Settings and paths", Action = () => RunCommand("config show") },
+                new MenuItem
+                {
+                    Title = "Check this _machine",
+                    Action = () => RunCommand(LauncherCommands.Doctor),
+                },
+                new MenuItem
+                {
+                    Title = "Configuration _drift",
+                    Action = () => RunCommand(LauncherCommands.Drift),
+                },
+                new MenuItem
+                {
+                    Title = "_Settings and paths",
+                    Action = () => RunCommand(LauncherCommands.Settings),
+                },
             ]),
             new MenuBarItem("_Help", [
                 new MenuItem { Title = "_Keys", Action = ShowKeys },
