@@ -21,4 +21,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Loadout.Cli\Loadout.Cli.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Copied so the runner sees it. Without this the file sits in the source
+         tree being ignored, which looks like configuration and is not. -->
+    <None Update="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

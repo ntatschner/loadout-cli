@@ -145,8 +145,41 @@ public sealed class LoadoutProcess : IDisposable
         }
     }
 
+    /// <summary>
+    /// Windows' status code for a process that could not finish initialising.
+    /// </summary>
+    /// <remarks>
+    /// STATUS_DLL_INIT_FAILED. Starting many processes in quick succession
+    /// exhausts a per-session resource and the next one dies before its entry
+    /// point runs: Process.Start succeeds, then the process exits with this and
+    /// writes nothing at all. It is not a failure of the command, and it is
+    /// distinguishable from one — a command that ran and failed says something.
+    /// </remarks>
+    private const int ProcessInitialisationFailed = unchecked((int)0xC0000142);
+
     /// <summary>Runs one command and captures everything it produced.</summary>
     public async Task<LoadoutRun> RunAsync(params string[] arguments)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            var run = await RunOnceAsync(arguments).ConfigureAwait(false);
+
+            var startupFailure = run.ExitCode == ProcessInitialisationFailed
+                && run.StandardOutput.Length == 0
+                && run.StandardError.Length == 0;
+
+            if (!startupFailure || attempt >= 4)
+            {
+                return run;
+            }
+
+            // Give the resource a moment to come back rather than reporting a
+            // failure the command never had.
+            await Task.Delay(250).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<LoadoutRun> RunOnceAsync(string[] arguments)
     {
         var executable = Executable
             ?? throw new InvalidOperationException(
