@@ -122,6 +122,26 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
         report.Violations.Select(v => v.Path).Should().Contain("CLAUDE.md");
     }
 
+    [Theory]
+    [InlineData(".github/workflows/ci.yml")]
+    [InlineData(".github/copilot-instructions.md")]
+    [InlineData(".devcontainer/devcontainer.json")]
+    [InlineData(".vscode/settings.json")]
+    [InlineData(".editorconfig")]
+    [InlineData("AGENTS.md")]
+    [InlineData("README.md")]
+    public async Task What_a_repository_needs_in_order_to_ship_is_left_alone(string path)
+    {
+        var report = (await _policies.CheckAsync(_repository)).Value!;
+
+        // The line the policy draws: it covers what the launcher and its
+        // agents set up, and nothing the project needs to build, test or ship.
+        // A pre-commit hook that refuses a workflow file is a hook nobody keeps
+        // installed, and the forbidden list only ever grows, so this is checked
+        // rather than left as an intention in a comment.
+        report.Findings.Select(f => f.Path).Should().NotContain(path);
+    }
+
     [Fact]
     public async Task Untracked_but_visible_files_warn_rather_than_fail()
     {
@@ -606,7 +626,36 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
         await File.WriteAllTextAsync(
             Path.Combine(path, ".claude", "settings.json"), "{\"tracked\": true}");
 
-        await RunGitAsync(path, "add", ".gitignore", "README.md", "CLAUDE.md", ".claude/settings.json");
+        // Things a repository needs in order to build, test and ship. They are
+        // committed on purpose and the policy must never object to them.
+        Directory.CreateDirectory(Path.Combine(path, ".github", "workflows"));
+        Directory.CreateDirectory(Path.Combine(path, ".devcontainer"));
+        Directory.CreateDirectory(Path.Combine(path, ".vscode"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(path, ".github", "workflows", "ci.yml"), "name: CI");
+        await File.WriteAllTextAsync(
+            Path.Combine(path, ".github", "copilot-instructions.md"), "Be helpful.");
+        await File.WriteAllTextAsync(
+            Path.Combine(path, ".devcontainer", "devcontainer.json"), "{}");
+        await File.WriteAllTextAsync(
+            Path.Combine(path, ".vscode", "settings.json"), "{}");
+        await File.WriteAllTextAsync(Path.Combine(path, ".editorconfig"), "root = true");
+        await File.WriteAllTextAsync(Path.Combine(path, "AGENTS.md"), "Agent instructions.");
+
+        await RunGitAsync(
+            path,
+            "add",
+            ".gitignore",
+            "README.md",
+            "CLAUDE.md",
+            ".claude/settings.json",
+            ".github/workflows/ci.yml",
+            ".github/copilot-instructions.md",
+            ".devcontainer/devcontainer.json",
+            ".vscode/settings.json",
+            ".editorconfig",
+            "AGENTS.md");
         await RunGitAsync(path, "commit", "--message", "initial");
 
         // Written after the commit so they stay untracked and ignored.

@@ -46,14 +46,50 @@ public sealed class RepositoryPolicy
             ".continue/**",
             ".roo/**",
             ".serena/**",
+            ".superpowers/**",
             ".aider*",
             ".ai/**",
             ".agent/**",
+            ".agents/**",
+
+            // What an agent's tools leave behind, which is not configuration
+            // but is still nobody's source code: browser traces, screenshots
+            // and saved sessions. Eighteen of these were found committed
+            // across one developer's repositories.
+            ".playwright-mcp/**",
+
+            // The same tools as the directories above, in the shape they take
+            // when a project has one file rather than a directory.
+            ".cursorrules",
+            ".windsurfrules",
+            ".clinerules",
+            ".cline/**",
+            ".roomodes",
+
             "CLAUDE.md",
             "CLAUDE.local.md",
             "AGENTS.override.md",
         ],
 
+        // Where the line is drawn, because it is not obvious and the list
+        // will keep growing: this covers what the launcher and its agents set
+        // up, and nothing a repository needs in order to build, test or ship.
+        //
+        // So .github stays out of it, and so does everything else that belongs
+        // to the project rather than to an agent — CI definitions, dev
+        // containers, editor settings a team shares, lockfiles, build caches.
+        // A pre-commit hook that refuses a workflow file would be a tool
+        // nobody keeps installed. That holds even for .github's agent
+        // instructions: copilot-instructions.md is agent configuration by any
+        // reasonable reading, but it lives where GitHub requires it, and
+        // reaching into .github to take it is a bigger promise than this
+        // should make.
+        //
+        // .mcp.json is deliberately absent too. Claude Code documents it as a
+        // file a team shares through the repository, and forbidding it would
+        // be overruling a decision the agent's own authors made rather than
+        // one this launcher gets to make.
+        //
         // .serena is forbidden knowing that Serena disagrees. It writes its
         // own .serena/.gitignore excluding only /cache and
         // /project.local.yml, which means it intends project.yml and
