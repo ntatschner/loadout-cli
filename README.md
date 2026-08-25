@@ -161,6 +161,11 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `loadout backup list\|restore` | Undo an operation that changed files |
 | `loadout completion <shell>` | Emit a completion script |
 
+**Every command that can change something accepts `--dry-run`,** and it always
+means the same thing: show what would happen and change nothing. Several
+commands have their own older spelling — `--apply` on some, `--fix` on others —
+and those still work; where both are given, the more cautious wins.
+
 Every command accepts `--json`, and everything after a bare `--` is passed to
 the agent untouched:
 
@@ -218,11 +223,32 @@ Running `loadout` with no arguments opens a full-screen launcher: the project
 list on the left, everything known about the selected project on the right, a
 filter you can type into, and a menu naming what the launcher can do.
 
+Every row says whether you can work on that project, so the list answers the
+question without you selecting anything:
+
+| State | Means |
+|---|---|
+| `+ Ready` | Nothing is in the way |
+| `! Attention` | It will launch, and something is worth knowing first |
+| `x Blocked` | It will not launch until something is done |
+
+**Blocked is reserved for what genuinely stops a launch** — the repository is
+not on this machine, or the agent it wants is not installed here. Committed
+agent files, an oversized instruction layer, memory recorded where nothing reads
+it, a missing pre-commit hook: all worth fixing, none of them stopping you, so
+all of them Attention. A list where everything is blocked says no more than a
+list with no states at all, and teaches you to ignore the one project that
+really is.
+
+Every state is a word and a mark, never colour alone, so a monochrome terminal
+and anyone who cannot tell red from green read the same thing.
+
 The right-hand panel shows what a session would start with — branch, whether the
 tree is clean, how much instruction text loads whatever the task, how many rules
-stay on demand, how many memory topics exist — and anything wrong with it: agent
-files committed to the repository, memory recorded where nothing reads it, an
-oversized instruction layer, no pre-commit protection in this clone.
+stay on demand, how many memory topics exist — and anything wrong with it.
+
+Under the project list, **Recent** shows what you were last doing. Choosing one
+reopens that conversation rather than asking again which you meant.
 
 | Key | Does |
 |---|---|
@@ -232,10 +258,18 @@ oversized instruction layer, no pre-commit protection in this clone.
 | `F9` | Menu |
 | `Ctrl+Q` | Quit |
 
-**Ctrl+P reaches everything.** The command list is built while the commands are
-registered rather than written out by hand, so a command added tomorrow appears
-without anybody remembering to add it, and a test asserts the two agree. The few
-that cannot work from a menu — `completion` writes a script to be piped
+**Ctrl+P reaches everything, and finds it by what it is for.** Searching `undo`
+reaches `backup restore`; `broken` reaches `doctor`; `vscode` reaches `code`.
+Nobody wanting to undo a mistake searches for the words "backup restore", and a
+palette matching only names leaves them believing the capability is absent.
+
+The list is built while the commands are registered rather than written out by
+hand, so a command added tomorrow appears without anybody remembering to add it,
+and a test asserts the two agree. Commands are grouped by what they are for and
+the ones that change files say so, because a palette that looks the same for
+reading settings and rewriting them is asking you to remember which is which.
+
+The few that cannot work from a menu — `completion` writes a script to be piped
 somewhere, `statusline` is run by the agent several times a minute — are listed
 with the reason rather than hidden. Something you cannot find is
 indistinguishable from something that does not exist.
@@ -1021,6 +1055,23 @@ open-source test library for one this project cannot ship under, silently.
 its licence.
 
 ## Testing
+
+The suite covers more than units. Four kinds are worth knowing about, because
+each exists for a class of defect that reached a user:
+
+- **Contract tests** run the built command line as a real process against a
+  throwaway home and pin the shape of every `--json` document. Renaming a
+  published property fails them. `--json` is what scripts read, and nothing
+  asserted any of it before.
+- **Interaction tests** drive the launcher with keystrokes on a headless ANSI
+  driver, at 80×24 through 200×60, and assert on what was actually drawn.
+  Building screens without pressing keys let three defects through: a crash on
+  startup, a menu naming a command that did not exist, and a capability that
+  vanished in a rewrite.
+- **Leakage tests** plant a synthetic credential and search every output path
+  for it — stdout, stderr, JSON, and a full stack trace under `--debug`.
+- **Mutation checks** are how the tests above were trusted: each was confirmed
+  by breaking the thing it covers and watching it fail.
 
 ```bash
 dotnet test
