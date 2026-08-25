@@ -148,17 +148,17 @@ internal sealed class LauncherWindow : Window
 
         Populate(here);
 
-        KeyBindings.Add(Key.Q.WithCtrl, Command.Quit);
+        this.Bind(Key.Q.WithCtrl, Command.Quit);
         AddCommand(Command.Quit, () => { Close(LauncherIntent.Quit); return true; });
 
-        KeyBindings.Add(Key.N.WithCtrl, Command.New);
+        this.Bind(Key.N.WithCtrl, Command.New);
         AddCommand(Command.New, () =>
         {
             Close(new LauncherIntent(LauncherAction.AddProject));
             return true;
         });
 
-        KeyBindings.Add(Key.P.WithCtrl, Command.Open);
+        this.Bind(Key.P.WithCtrl, Command.Open);
         AddCommand(Command.Open, () => { _showPalette(this); return true; });
     }
 

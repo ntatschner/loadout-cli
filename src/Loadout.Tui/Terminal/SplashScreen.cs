@@ -68,9 +68,9 @@ internal sealed class SplashScreen : Window
         // Any key at all, rather than a named one. Somebody reaching for the
         // keyboard during a splash screen wants it gone, and making them find
         // the right key to dismiss it defeats the point.
-        KeyBindings.Add(Key.Esc, Command.Quit);
-        KeyBindings.Add(Key.Enter, Command.Quit);
-        KeyBindings.Add(Key.Space, Command.Quit);
+        this.Bind(Key.Esc, Command.Quit);
+        this.Bind(Key.Enter, Command.Quit);
+        this.Bind(Key.Space, Command.Quit);
 
         AddCommand(Command.Quit, () => { Finish(); return true; });
 

@@ -108,6 +108,14 @@ internal sealed class ProblemsWindow : Window
                 ? ["None of these can be put right automatically."]
                 : offered.Select(o => o.Remedy.Description)));
 
+        // Selected up front, so the panel beside it is showing something the
+        // moment the screen opens. Without this the preview stays blank until
+        // the cursor is moved, which reads as "this fix does nothing".
+        if (offered.Count > 0)
+        {
+            _remedies.SelectedItem = 0;
+        }
+
         remediesFrame.Add(_remedies);
 
         var previewFrame = new FrameView
@@ -148,7 +156,7 @@ internal sealed class ProblemsWindow : Window
 
         _remedies.ValueChanged += (_, _) => ShowPreview();
 
-        KeyBindings.Add(Key.Esc, Command.Quit);
+        this.Bind(Key.Esc, Command.Quit);
         AddCommand(Command.Quit, () => { _application.RequestStop(this); return true; });
 
         Add(findingsFrame, remediesFrame, previewFrame, apply, close);

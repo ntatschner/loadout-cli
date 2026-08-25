@@ -57,7 +57,7 @@ internal sealed class ChoiceDialog : Window
         choose.Accepting += (_, e) => { e.Handled = true; Accept(); };
         cancel.Accepting += (_, e) => { e.Handled = true; _application.RequestStop(this); };
 
-        KeyBindings.Add(Key.Esc, Command.Quit);
+        this.Bind(Key.Esc, Command.Quit);
         AddCommand(Command.Quit, () => { _application.RequestStop(this); return true; });
 
         Add(_choices, choose, cancel);

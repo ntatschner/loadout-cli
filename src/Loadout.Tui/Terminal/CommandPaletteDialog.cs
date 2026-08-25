@@ -102,7 +102,7 @@ internal sealed class CommandPaletteDialog : Dialog
             _application.RequestStop(this);
         };
 
-        KeyBindings.Add(Key.Esc, Command.Quit);
+        this.Bind(Key.Esc, Command.Quit);
         AddCommand(Command.Quit, () => { _application.RequestStop(this); return true; });
 
         Add(filter, _list, _explanation, close);
