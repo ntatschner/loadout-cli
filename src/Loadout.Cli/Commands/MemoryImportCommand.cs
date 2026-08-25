@@ -6,6 +6,7 @@ using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Instructions;
+using Loadout.Models.Projects;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -46,6 +47,10 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
         [Description("Where to read from. Found automatically when the agent's own layout is used.")]
         public string? From { get; init; }
 
+        [CommandOption("--all")]
+        [Description("Every project on this machine that has memory waiting, rather than one.")]
+        public bool All { get; init; }
+
         [CommandOption("--apply")]
         [Description("Actually import. Without this the command only reports what it would do.")]
         public bool ApplyRequested { get; init; }
@@ -66,6 +71,18 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
         var output = new CommandOutput(Console, settings);
+
+        if (settings.All)
+        {
+            if (settings.Project is not null)
+            {
+                return output.Fail(
+                    "Give a project or --all, not both.",
+                    ExitCode.InvalidArguments);
+            }
+
+            return await ImportAllAsync(settings, output).ConfigureAwait(false);
+        }
 
         var resolution = settings.Project is not null
             ? await Projects.ResolveAsync(settings.Project).ConfigureAwait(false)
@@ -180,6 +197,170 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
             + "the old copy yourself so there is only one.[/]");
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Imports for every project on this machine that has something waiting.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Memory recorded outside the workspace is the single most common thing
+    /// wrong with a registry: fifteen of sixteen projects on the machine this
+    /// was written for. That is one finding about how the agents have been
+    /// used, not fifteen findings about fifteen projects, and answering it one
+    /// project at a time meant typing the same command fifteen times.
+    /// </para>
+    /// <para>
+    /// Each project is still previewed, backed up and imported on its own, so
+    /// one failure leaves the rest done and reported rather than abandoning
+    /// the run half way.
+    /// </para>
+    /// </remarks>
+    private async Task<int> ImportAllAsync(Settings settings, CommandOutput output)
+    {
+        var listed = await Projects.ListAsync().ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return output.Fail(listed);
+        }
+
+        var waiting = new List<(ProjectResolution Project, string Source, MemoryImport Preview)>();
+
+        foreach (var project in listed.Value!)
+        {
+            if (project.LocalPath is null)
+            {
+                continue;
+            }
+
+            var source = _importer.Discover(project.LocalPath);
+
+            if (source is null)
+            {
+                continue;
+            }
+
+            var previewed = await _importer
+                .ImportAsync(Workspace.LocalPath, project.Entry.Slug, source, apply: false)
+                .ConfigureAwait(false);
+
+            if (previewed.Failed || previewed.Value!.Imported.Count == 0)
+            {
+                continue;
+            }
+
+            waiting.Add((project, source, previewed.Value));
+        }
+
+        if (waiting.Count == 0)
+        {
+            if (output.IsJson)
+            {
+                output.WriteJson(new { projects = Array.Empty<object>() });
+            }
+            else
+            {
+                output.WriteLine("[dim]No project has memory waiting outside the workspace.[/]");
+            }
+
+            return CommandOutput.Success();
+        }
+
+        if (!settings.Apply)
+        {
+            if (output.IsJson)
+            {
+                output.WriteJson(new
+                {
+                    projects = waiting.Select(w => new
+                    {
+                        project = w.Project.Entry.Slug,
+                        source = w.Preview.SourcePath,
+                        topics = w.Preview.Imported.Count,
+                        facts = w.Preview.Facts,
+                    }),
+                });
+
+                return CommandOutput.Success();
+            }
+
+            foreach (var (project, _, preview) in waiting)
+            {
+                output.WriteLine(
+                    $"  [bold]{Markup.Escape(project.Entry.Name)}[/]  "
+                    + $"[dim]{preview.Imported.Count} topic(s), {preview.Facts} fact(s)[/]");
+            }
+
+            output.WriteBlankLine();
+            output.WriteLine("[dim]Nothing was changed. Add --apply to import all of it.[/]");
+
+            return CommandOutput.Success();
+        }
+
+        var topics = 0;
+        var facts = 0;
+        var failed = new List<string>();
+
+        foreach (var (project, source, preview) in waiting)
+        {
+            var captured = await _backups.CaptureAsync(
+                "memory import",
+                project.Entry.Slug,
+                preview.Imported
+                    .Select(topic => Path.Combine(
+                        Workspace.LocalPath, "projects", project.Entry.Slug, "memory",
+                        topic.Name + ".md"))
+                    .ToList()).ConfigureAwait(false);
+
+            if (captured.Failed)
+            {
+                failed.Add($"{project.Entry.Name}: no backup could be taken, so nothing was imported");
+                continue;
+            }
+
+            var applied = await _importer
+                .ImportAsync(Workspace.LocalPath, project.Entry.Slug, source, apply: true)
+                .ConfigureAwait(false);
+
+            if (applied.Failed)
+            {
+                failed.Add($"{project.Entry.Name}: {applied.Error}");
+                continue;
+            }
+
+            topics += applied.Value!.Imported.Count;
+            facts += applied.Value.Facts;
+
+            if (!output.IsJson)
+            {
+                output.WriteLine(
+                    $"  [green]imported[/]  {Markup.Escape(project.Entry.Name)}  "
+                    + $"[dim]{applied.Value.Imported.Count} topic(s)[/]");
+            }
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { projects = waiting.Count, topics, facts, failed });
+        }
+        else
+        {
+            output.WriteBlankLine();
+            output.WriteLine($"[green]Imported[/] {topics} topic(s), {facts} fact(s) "
+                + $"across {waiting.Count - failed.Count} project(s).");
+
+            foreach (var failure in failed)
+            {
+                output.WriteLine($"  [yellow]![/] [dim]{Markup.Escape(failure)}[/]");
+            }
+
+            output.WriteLine("[dim]The originals were copied, not moved.[/]");
+        }
+
+        return failed.Count == 0
+            ? CommandOutput.Success()
+            : (int)ExitCode.GeneralFailure;
     }
 
     private static void Render(CommandOutput output, MemoryImport import)

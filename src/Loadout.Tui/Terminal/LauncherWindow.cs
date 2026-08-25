@@ -524,13 +524,37 @@ internal sealed class LauncherWindow : Window
         // must read the same thing everybody else does.
         var readiness = _readiness.TryGetValue(project.Entry.Slug, out var known)
             ? known
-            : ProjectReadinessRules.Of(null, project.IsAvailableLocally, agentInstalled: true);
+            : ProjectReadinessRules.Provisional(
+                project.IsAvailableLocally,
+                _agents.Count == 0
+                    || _agents.Any(agent => agent.Contains(
+                        project.Entry.DefaultAgent, StringComparison.OrdinalIgnoreCase)));
 
-        var state = $"[{ProjectReadinessRules.Mark(readiness)} "
-            + $"{ProjectReadinessRules.Label(readiness)}]";
-
-        return Fit(marker, project.Entry.Name, state, width);
+        return Fit(marker, project.Entry.Name, Badge(readiness), width);
     }
+
+    /// <summary>
+    /// The label a row carries, which for most rows is nothing at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only a project that cannot be started says so in the list. Everything
+    /// else is either fine or has something worth reading, and reading it is
+    /// what the pane beside the list is for — a column of identical badges
+    /// down a list of sixteen projects distinguishes none of them from each
+    /// other, which is the one job a list has.
+    /// </para>
+    /// <para>
+    /// This costs nothing in timeliness, because both things that block a
+    /// launch are known from the registry: whether the repository is on this
+    /// machine, and whether its agent is installed. A blocked project is
+    /// marked the instant the list is drawn, without reading anything.
+    /// </para>
+    /// </remarks>
+    private static string Badge(Readiness readiness) =>
+        readiness is Readiness.Blocked or Readiness.Unsupported
+            ? $"[{ProjectReadinessRules.Mark(readiness)} {ProjectReadinessRules.Label(readiness)}]"
+            : string.Empty;
 
     /// <summary>
     /// Lays a row out across the width the list actually has.
@@ -567,6 +591,11 @@ internal sealed class LauncherWindow : Window
         ArgumentNullException.ThrowIfNull(state);
 
         var head = $"{marker} {name}";
+
+        if (state.Length == 0)
+        {
+            return width <= 0 ? head : Shorten(head, width);
+        }
 
         if (width <= 0)
         {

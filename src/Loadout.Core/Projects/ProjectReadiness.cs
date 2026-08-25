@@ -11,6 +11,20 @@ namespace Loadout.Core.Projects;
 /// </summary>
 public enum Readiness
 {
+    /// <summary>
+    /// It has not been read yet, so nothing is claimed about it either way.
+    /// </summary>
+    /// <remarks>
+    /// The launcher reads a project's details only when it is selected, so at
+    /// any moment almost every project in the list is in this state. It was
+    /// previously reported as NeedsAttention — the launcher asked for the
+    /// readiness of a project it had never looked at, was handed a null
+    /// overview, and a null overview means "read it and found nothing good to
+    /// say". Fifteen of sixteen projects on the machine this was written for
+    /// carried a warning that meant only that the cursor had not been on them.
+    /// </remarks>
+    Unknown,
+
     /// <summary>Nothing is in the way.</summary>
     Ready,
 
@@ -29,6 +43,23 @@ public enum Readiness
 /// </summary>
 public static class ProjectReadinessRules
 {
+    /// <summary>
+    /// What can be said about a project before anything has been read.
+    /// </summary>
+    /// <remarks>
+    /// Both things that block a launch — the repository not being here, and
+    /// the agent not being installed — are known from the registry alone, so a
+    /// list can be honest about what it cannot start without reading a single
+    /// repository. Everything else waits until there is something to base it
+    /// on.
+    /// </remarks>
+    /// <param name="isAvailableLocally">Whether the repository is on this machine.</param>
+    /// <param name="agentInstalled">Whether the agent it would launch is installed here.</param>
+    public static Readiness Provisional(bool isAvailableLocally, bool agentInstalled) =>
+        !isAvailableLocally || !agentInstalled
+            ? Readiness.Blocked
+            : Readiness.Unknown;
+
     /// <summary>
     /// The state a project is in.
     /// </summary>
@@ -86,6 +117,7 @@ public static class ProjectReadinessRules
     /// </remarks>
     public static string Label(Readiness readiness) => readiness switch
     {
+        Readiness.Unknown => string.Empty,
         Readiness.Ready => "Ready",
         Readiness.NeedsAttention => "Attention",
         Readiness.Blocked => "Blocked",
@@ -95,6 +127,7 @@ public static class ProjectReadinessRules
     /// <summary>A mark that survives a terminal with no colour at all.</summary>
     public static string Mark(Readiness readiness) => readiness switch
     {
+        Readiness.Unknown => string.Empty,
         Readiness.Ready => "+",
         Readiness.NeedsAttention => "!",
         Readiness.Blocked => "x",
@@ -110,6 +143,7 @@ public static class ProjectReadinessRules
             Readiness.Blocked when !isAvailableLocally => "not on this machine",
             Readiness.Blocked when !agentInstalled => "its agent is not installed here",
             Readiness.NeedsAttention => "something is worth looking at first",
+            Readiness.Unknown => "it has not been read yet",
             _ => string.Empty,
         };
 }

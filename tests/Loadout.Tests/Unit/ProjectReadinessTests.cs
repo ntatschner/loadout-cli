@@ -96,4 +96,32 @@ public sealed class ProjectReadinessTests
         ProjectReadinessRules.Because(Readiness.Blocked, true, false)
             .Should().Contain("agent is not installed");
     }
+
+    [Fact]
+    public void A_project_that_has_not_been_read_yet_is_unknown_rather_than_a_warning()
+    {
+        ProjectReadinessRules.Provisional(isAvailableLocally: true, agentInstalled: true)
+            .Should().Be(Readiness.Unknown);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void What_stops_a_launch_is_known_without_reading_the_repository(
+        bool isAvailableLocally,
+        bool agentInstalled)
+    {
+        // Both are answered by the registry alone, so a list can say what it
+        // cannot start the moment it is drawn rather than once every project
+        // has been visited.
+        ProjectReadinessRules.Provisional(isAvailableLocally, agentInstalled)
+            .Should().Be(Readiness.Blocked);
+    }
+
+    [Fact]
+    public void Unknown_says_nothing_at_all_rather_than_something_neutral()
+    {
+        ProjectReadinessRules.Mark(Readiness.Unknown).Should().BeEmpty();
+        ProjectReadinessRules.Label(Readiness.Unknown).Should().BeEmpty();
+    }
 }

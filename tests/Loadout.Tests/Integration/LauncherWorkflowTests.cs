@@ -217,16 +217,41 @@ public sealed class LauncherWorkflowTests
     }
 
     [Fact]
-    public void The_list_says_whether_a_project_is_ready_at_a_glance()
+    public void A_project_with_nothing_in_the_way_carries_no_badge()
     {
         using var session = Launcher([Project("alpha", "Alpha")]);
 
-        // Scanning a list of projects, the question is not "what is wrong with
-        // this one" but "can I work on it". Readiness answers that without
-        // selecting anything.
-        var screen = session.ScreenShowing("Ready");
+        var screen = session.Screen;
 
-        screen.Should().Contain("Ready");
+        // Scanning a list of projects, the question is not "what is wrong with
+        // this one" but "which one am I working on". Only a project that
+        // cannot be started interrupts that, because only that changes the
+        // answer. A badge on every row distinguishes no row from any other.
+        screen.Should().Contain("Alpha");
+        screen.Should().NotContain("[+ Ready]");
+        screen.Should().NotContain("[! Attention]");
+    }
+
+    [Fact]
+    public void A_project_nobody_has_looked_at_is_not_reported_as_needing_attention()
+    {
+        using var session = Launcher([
+            Project("alpha", "Alpha"),
+            Project("beta", "Beta"),
+            Project("gamma", "Gamma"),
+        ]);
+
+        var screen = session.Screen;
+
+        // The launcher reads a project's details only when it is selected. Ask
+        // for the readiness of one it has never looked at and it handed back a
+        // null overview — which means "it was read and there was nothing good
+        // to say", not "it has not been read". So every project the cursor had
+        // not touched wore a warning: fifteen of sixteen, on the machine where
+        // this was found, all of them fine.
+        screen.Should().Contain("Beta");
+        screen.Should().Contain("Gamma");
+        screen.Should().NotContain("Attention");
     }
 
     [Fact]
