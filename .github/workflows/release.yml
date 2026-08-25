@@ -267,6 +267,29 @@ jobs:
             ./build/verify-windows.ps1 -Path $_.FullName
           }
 
+      # Installing it is the only way to know it installs, and until now that
+      # was true of the .deb and not of the MSI — the one people double-click.
+      # An upgrade that could not complete shipped twice and was found by a
+      # user both times, which is what this is here to stop.
+      #
+      # The runner is disposable, so this costs nothing but the minute it takes.
+      - name: Install, upgrade and uninstall it
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $msi = Get-ChildItem artifacts/*win-x64.msi | Select-Object -First 1
+
+          # Upgraded over the last release rather than installed fresh, because
+          # a fresh install has never been the thing that broke.
+          $previous = (gh release list --repo ${{ github.repository }} --limit 5 --json tagName `
+            | ConvertFrom-Json |
+              Where-Object { $_.tagName -ne '${{ github.ref_name }}' } |
+              Select-Object -First 1).tagName -replace '^v', ''
+
+          ./build/verify-windows-install.ps1 -Msi $msi.FullName -PreviousVersion $previous
+
       - name: Check the package holds what it should
         shell: bash
         run: |
