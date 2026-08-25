@@ -159,6 +159,26 @@ public interface IGitManager
     /// and without touching any repository's own .gitignore.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Removes paths from the index, leaving them on disk.
+    /// <para>
+    /// This is <c>git rm --cached</c>. It stages a removal; it does not touch
+    /// history and it does not delete anything. The distinction matters because
+    /// the launcher long declined to offer this as a fix, on the belief that
+    /// untracking "rewrites the repository". It does not — rewriting history is
+    /// filter-repo, an entirely different operation with entirely different
+    /// consequences — and that mistaken belief left the most common finding in
+    /// the whole tool with no fix attached to it.
+    /// </para>
+    /// </summary>
+    /// <param name="repositoryPath">Repository to act on.</param>
+    /// <param name="paths">Repository-relative paths to remove from the index.</param>
+    /// <param name="ct">Cancels the operation.</param>
+    Task<OperationResult> UntrackAsync(
+        string repositoryPath,
+        IReadOnlyList<string> paths,
+        CancellationToken ct = default);
+
     Task<OperationResult> SetGlobalConfigValueAsync(
         string key,
         string value,

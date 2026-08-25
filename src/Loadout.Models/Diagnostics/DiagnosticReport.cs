@@ -19,6 +19,12 @@ public enum RemedyKind
 
     /// <summary>Bring machine-local agent memory into the workspace. Target is the project slug.</summary>
     ImportProjectMemory,
+
+    /// <summary>
+    /// Remove committed agent files from the index, leaving them on disk.
+    /// Target is the repository path.
+    /// </summary>
+    UntrackAgentFiles,
 }
 
 /// <summary>

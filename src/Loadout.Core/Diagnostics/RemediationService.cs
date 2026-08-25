@@ -1,3 +1,4 @@
+using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
@@ -47,17 +48,20 @@ public sealed class RemediationService : IRemediationService
     private readonly IProjectService _projects;
     private readonly IWorkspaceManager _workspace;
     private readonly IMemoryImporter _importer;
+    private readonly IGitManager _git;
 
     public RemediationService(
         IPolicyService policies,
         IProjectService projects,
         IWorkspaceManager workspace,
-        IMemoryImporter importer)
+        IMemoryImporter importer,
+        IGitManager git)
     {
         _policies = policies;
         _projects = projects;
         _workspace = workspace;
         _importer = importer;
+        _git = git;
     }
 
     /// <inheritdoc />
@@ -84,6 +88,7 @@ public sealed class RemediationService : IRemediationService
             RemedyKind.InstallPreCommitHook => await HookAsync(remedy, apply, ct).ConfigureAwait(false),
             RemedyKind.RepairGlobalExcludes => await ExcludesAsync(remedy, apply, ct).ConfigureAwait(false),
             RemedyKind.ImportProjectMemory => await MemoryAsync(remedy, apply, ct).ConfigureAwait(false),
+            RemedyKind.UntrackAgentFiles => await UntrackAsync(remedy, apply, ct).ConfigureAwait(false),
             _ => OperationResult<RemedyOutcome>.Fail(
                 $"This build does not know how to apply '{remedy.Kind}'.",
                 ExitCode.InvalidArguments),
@@ -95,6 +100,78 @@ public sealed class RemediationService : IRemediationService
     /// untracked, so this is the fix that comes up most: a fresh clone of a
     /// protected repository has no protection until somebody runs it.
     /// </summary>
+    /// <summary>
+    /// Takes committed agent files out of the index, leaving every one of them
+    /// on disk.
+    /// <para>
+    /// This was advice for a long time, on the stated grounds that untracking
+    /// "rewrites the repository". It does not. <c>git rm --cached</c> stages a
+    /// removal: history is untouched, nothing is deleted, and the change is
+    /// undone with <c>git reset</c> like any other staged change. Rewriting
+    /// history is filter-repo, which this does not do and should not.
+    /// </para>
+    /// <para>
+    /// The commit is left to the person. Staging is reversible and local;
+    /// committing is neither, and a tool that commits on somebody's behalf is
+    /// making a decision about their history that it was not asked to make.
+    /// </para>
+    /// </summary>
+    private async Task<OperationResult<RemedyOutcome>> UntrackAsync(
+        Remedy remedy,
+        bool apply,
+        CancellationToken ct)
+    {
+        if (remedy.Target is not { Length: > 0 } repository)
+        {
+            return OperationResult<RemedyOutcome>.Fail(
+                "Untracking needs a repository, and none was recorded with the finding.",
+                ExitCode.InvalidArguments);
+        }
+
+        var checkResult = await _policies.CheckAsync(repository, ct).ConfigureAwait(false);
+
+        if (checkResult.Failed)
+        {
+            return OperationResult<RemedyOutcome>.Fail(checkResult.Error!, checkResult.ExitCode);
+        }
+
+        // Re-read rather than trusting what the finding said. The report may be
+        // minutes old, and untracking a path that has since been dealt with
+        // would stage a removal nobody asked for.
+        var tracked = checkResult.Value!.Violations.Select(v => v.Path).ToList();
+
+        if (tracked.Count == 0)
+        {
+            return apply
+                ? Done(remedy, "Nothing is committed that should not be.")
+                : Preview(remedy, "Nothing is committed that should not be.");
+        }
+
+        var listed = string.Join(Environment.NewLine, tracked.Select(path => "  " + path));
+
+        if (!apply)
+        {
+            return Preview(
+                remedy,
+                $"Remove {tracked.Count} file(s) from the index, keeping every one on disk:"
+                + Environment.NewLine + listed
+                + Environment.NewLine
+                + "History is not touched. Commit the staged removal when you are ready.");
+        }
+
+        var removed = await _git.UntrackAsync(repository, tracked, ct).ConfigureAwait(false);
+
+        if (removed.Failed)
+        {
+            return OperationResult<RemedyOutcome>.Fail(removed.Error!, removed.ExitCode);
+        }
+
+        return Done(
+            remedy,
+            $"{tracked.Count} file(s) removed from the index and left on disk. "
+            + "Commit the staged removal to finish.");
+    }
+
     private async Task<OperationResult<RemedyOutcome>> HookAsync(
         Remedy remedy,
         bool apply,

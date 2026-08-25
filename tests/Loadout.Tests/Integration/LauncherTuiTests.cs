@@ -135,7 +135,7 @@ public sealed class LauncherTuiTests : IAsyncLifetime
             new EmptyCatalogue(),
             new DriftService(_projects, overviews, git),
             new SilentDoctor(),
-            new RemediationService(policies, _projects, workspace, importer));
+            new RemediationService(policies, _projects, workspace, importer, git));
 
         _repository = await CreateRepositoryAsync("alpha").ConfigureAwait(false);
     }

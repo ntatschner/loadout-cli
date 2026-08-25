@@ -388,6 +388,32 @@ public sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult> UntrackAsync(
+        string repositoryPath,
+        IReadOnlyList<string> paths,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        if (paths.Count == 0)
+        {
+            return OperationResult.Ok();
+        }
+
+        // --cached is the whole point: the file leaves the index and stays on
+        // disk. -r so a path that turns out to be a directory works rather than
+        // failing with "not removing recursively without -r".
+        var arguments = new List<string> { "rm", "--cached", "-r", "--quiet", "--" };
+
+        arguments.AddRange(paths);
+
+        var result = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return result.Succeeded ? OperationResult.Ok() : OperationResult.Fail(result.Error!);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> SetGlobalConfigValueAsync(
         string key,
         string value,

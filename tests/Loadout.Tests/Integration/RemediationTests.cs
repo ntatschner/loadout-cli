@@ -87,7 +87,8 @@ public sealed class RemediationTests : IAsyncLifetime
             _policies,
             projects,
             workspace,
-            new MemoryImporter(environment, new MemoryService(TimeProvider.System)));
+            new MemoryImporter(environment, new MemoryService(TimeProvider.System)),
+            git);
 
         _repository = await CreateRepositoryAsync().ConfigureAwait(false);
     }
@@ -130,6 +131,108 @@ public sealed class RemediationTests : IAsyncLifetime
         await RunGitAsync(path, "commit", "-m", "first");
 
         return path;
+    }
+
+    /// <summary>Commits an agent file, which is the state the fix exists for.</summary>
+    private async Task CommitAgentFileAsync(string relative)
+    {
+        var full = Path.Combine(_repository, relative.Replace('/', Path.DirectorySeparatorChar));
+
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        await File.WriteAllTextAsync(full, "agent state");
+
+        await RunGitAsync(_repository, "add", "--force", relative);
+        await RunGitAsync(_repository, "commit", "-m", "committed agent state");
+    }
+
+    private async Task<string> TrackedFilesAsync()
+    {
+        var result = await _processes.RunAsync(
+            new ProcessRequest("git", ["ls-files"], _repository),
+            TimeSpan.FromSeconds(60));
+
+        return result.Value!.StandardOutput;
+    }
+
+    private async Task<string> RevisionsAsync()
+    {
+        var result = await _processes.RunAsync(
+            new ProcessRequest("git", ["rev-list", "--all"], _repository),
+            TimeSpan.FromSeconds(60));
+
+        return result.Value!.StandardOutput;
+    }
+
+    [Fact]
+    public async Task Previewing_the_untracking_stages_nothing()
+    {
+        await CommitAgentFileAsync(".serena/project.yml");
+
+        var before = await TrackedFilesAsync();
+
+        var preview = await _remediation.PreviewAsync(
+            new Remedy(RemedyKind.UntrackAgentFiles, "Untrack", _repository));
+
+        preview.Succeeded.Should().BeTrue(preview.Error ?? string.Empty);
+        preview.Value!.Applied.Should().BeFalse();
+
+        // Says which files, so nobody has to take it on trust.
+        preview.Value.Detail.Should().Contain(".serena/project.yml");
+
+        (await TrackedFilesAsync()).Should().Be(before);
+    }
+
+    [Fact]
+    public async Task Applying_it_untracks_the_file_but_leaves_it_on_disk()
+    {
+        await CommitAgentFileAsync(".serena/project.yml");
+
+        var applied = await _remediation.ApplyAsync(
+            new Remedy(RemedyKind.UntrackAgentFiles, "Untrack", _repository));
+
+        applied.Succeeded.Should().BeTrue(applied.Error ?? string.Empty);
+
+        (await TrackedFilesAsync()).Should().NotContain(".serena/project.yml");
+
+        // The whole point: the file is still there. Somebody's agent
+        // configuration is not deleted to satisfy a policy.
+        File.Exists(Path.Combine(_repository, ".serena", "project.yml")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Untracking_does_not_touch_history()
+    {
+        await CommitAgentFileAsync(".serena/project.yml");
+
+        var before = await RevisionsAsync();
+
+        await _remediation.ApplyAsync(
+            new Remedy(RemedyKind.UntrackAgentFiles, "Untrack", _repository));
+
+        // The reason this was advice rather than a fix for so long was a belief
+        // that untracking rewrites the repository. Every commit that existed
+        // before still exists, with the same hash.
+        (await RevisionsAsync()).Should().Be(before);
+    }
+
+    [Fact]
+    public async Task Untracking_when_there_is_nothing_to_untrack_is_harmless()
+    {
+        var applied = await _remediation.ApplyAsync(
+            new Remedy(RemedyKind.UntrackAgentFiles, "Untrack", _repository));
+
+        applied.Succeeded.Should().BeTrue(applied.Error ?? string.Empty);
+        applied.Value!.Detail.Should().Contain("Nothing");
+    }
+
+    [Fact]
+    public async Task Untracking_without_a_repository_fails_rather_than_guessing()
+    {
+        var applied = await _remediation.ApplyAsync(
+            new Remedy(RemedyKind.UntrackAgentFiles, "Untrack"));
+
+        applied.Failed.Should().BeTrue();
+        applied.Error.Should().NotBeNullOrWhiteSpace();
     }
 
     private async Task RunGitAsync(string workingDirectory, params string[] arguments)

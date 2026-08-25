@@ -152,8 +152,20 @@ public sealed class DriftService : IDriftService
                 slug,
                 "Agent files",
                 $"{overview.TrackedAgentFiles} agent file(s) are committed to this repository. "
-                + "They belong in the workspace. Untracking them rewrites the repository, so "
-                + "review them first: loadout repo check"));
+                + "They belong in the workspace. Removing them from the index leaves them on "
+                + "disk and does not touch history; the commit is yours to make.",
+
+                // This carried no fix for a long time, because the message here
+                // claimed untracking "rewrites the repository". It does not:
+                // git rm --cached stages a removal, history is untouched, and
+                // git reset undoes it. That one wrong sentence left the most
+                // common finding in the tool as advice rather than an action.
+                overview.Project.LocalPath is { Length: > 0 } repository
+                    ? new Remedy(
+                        RemedyKind.UntrackAgentFiles,
+                        $"Take {overview.TrackedAgentFiles} committed agent file(s) out of the index",
+                        repository)
+                    : null));
 
         findings.Add(overview.Protected && !overview.HookNeedsUpgrade
             ? DiagnosticCheck.Ok(slug, "Pre-commit protection", "installed")
