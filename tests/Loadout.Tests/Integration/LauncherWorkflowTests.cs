@@ -52,7 +52,8 @@ public sealed class LauncherWorkflowTests
         Action<LauncherWindow>? onPalette = null,
         int width = TuiSession.DefaultWidth,
         int height = TuiSession.DefaultHeight,
-        IReadOnlyList<AgentSession>? recent = null)
+        IReadOnlyList<AgentSession>? recent = null,
+        ProjectResolution? here = null)
     {
         LauncherWindow? built = null;
 
@@ -61,7 +62,7 @@ public sealed class LauncherWorkflowTests
             {
                 built = new LauncherWindow(
                     projects,
-                    here: null,
+                    here,
                     "workspace connected",
                     ["claude"],
                     (project, _) => Task.FromResult<ProjectOverview?>(Overview(project)),
@@ -421,6 +422,45 @@ public sealed class LauncherWorkflowTests
         session.Press(Key.Enter);
 
         Window.Intent!.Project!.Entry.Slug.Should().Be("beta");
+    }
+
+    [Fact]
+    public void Buttons_are_drawn_with_characters_a_console_font_has()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        var screen = session.Screen;
+
+        // Terminal.Gui brackets every button in U+27E6 and U+27E7, the
+        // mathematical white square brackets. Cascadia Mono has neither, and
+        // Cascadia Mono is what a Windows console draws with unless somebody
+        // has changed it, so every button in the launcher read as:
+        //
+        //     ⊡ Launch claude ⊡    ⊡ Resume ⊡    ⊡ Shell ⊡
+        //
+        // The text was right the whole time. A missing glyph is a decision the
+        // font makes long after the character has left this program, which is
+        // why it took a photograph of a real console to find.
+        screen.Should().NotContain("⟦");
+        screen.Should().NotContain("⟧");
+        screen.Should().Contain("[ Launch");
+    }
+
+    [Fact]
+    public void The_project_you_are_standing_in_stays_marked_once_its_details_arrive()
+    {
+        var here = Project("beta", "Beta");
+
+        using var session = Launcher([Project("alpha", "Alpha"), here], here: here);
+
+        // Waiting for the state to arrive is the point. The marker was passed
+        // in once and used only for the first draw; every redraw after that —
+        // and one happens per project as its details come back — rebuilt the
+        // rows without it. So it was correct until the moment anything else
+        // happened, which is to say it was never actually seen.
+        var screen = session.ScreenShowing("Ready");
+
+        screen.Should().Contain("▸ Beta");
     }
 }
 

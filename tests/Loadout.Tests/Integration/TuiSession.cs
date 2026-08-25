@@ -1,4 +1,5 @@
 using System.Drawing;
+using Loadout.Tui.Terminal;
 using Terminal.Gui.App;
 using Terminal.Gui.Drivers;
 using Terminal.Gui.Input;
@@ -73,6 +74,11 @@ internal sealed class TuiSession : IDisposable
         IApplication application = Terminal.Gui.App.Application.Create();
 
         application.Init(DriverRegistry.Names.ANSI);
+
+        // The same substitution the launcher makes when it starts. Without it
+        // the harness would draw buttons with characters the application never
+        // shows anybody, and a test asserting on them would prove nothing.
+        ConsoleGlyphs.MakeLegible();
 
         // Sized before the screen is built, because a view that lays out
         // against a zero-size screen caches the wrong bounds.

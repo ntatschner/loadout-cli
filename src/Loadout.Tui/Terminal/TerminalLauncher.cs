@@ -203,7 +203,7 @@ public sealed class TerminalLauncher : ILauncherTui
     {
         using IApplication application = Application.Create();
 
-        application.Init();
+        application.InitLegibly();
 
         // Started first, deliberately. Detecting agents and resolving the
         // current repository both shell out, and running them behind the
@@ -472,7 +472,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using (IApplication application = Application.Create())
         {
-            application.Init();
+            application.InitLegibly();
 
             using var window = new ProblemsWindow(heading, findings, offered, application);
 
@@ -534,7 +534,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using (IApplication application = Application.Create())
         {
-            application.Init();
+            application.InitLegibly();
 
             var editor = _editors.Describe(config);
 
@@ -707,7 +707,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using IApplication application = Application.Create();
 
-        application.Init();
+        application.InitLegibly();
 
         using var chooser = new ChoiceDialog("What are you working on?", labels, application);
 

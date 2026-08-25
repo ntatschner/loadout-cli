@@ -75,6 +75,7 @@ internal sealed class LauncherWindow : Window
         ArgumentNullException.ThrowIfNull(application);
 
         _projects = projects;
+        _here = here;
         _overview = overview;
         _recent = recent;
         _application = application;
@@ -112,11 +113,17 @@ internal sealed class LauncherWindow : Window
         // noticed, because nothing tested it.
         var recentHeight = _recent.Count == 0 ? 0 : Math.Min(_recent.Count + 2, 7);
 
+        // Thirty-eight per cent left the detail pane two thirds empty while
+        // the list beside it was cutting names in half. The detail pane holds
+        // five short labelled lines and a row of buttons; it does not need
+        // most of the screen, and the list does.
+        var columnWidth = Dim.Percent(46);
+
         var listFrame = new FrameView
         {
             X = 0,
             Y = 3,
-            Width = Dim.Percent(38),
+            Width = columnWidth,
             Height = Dim.Fill(2 + recentHeight),
             Title = "Projects",
             BorderStyle = LineStyle.Rounded,
@@ -134,14 +141,25 @@ internal sealed class LauncherWindow : Window
                 Height = Dim.Fill(),
             };
 
-            _recentList.SetSource(new ObservableCollection<string>(
-                _recent.Select(session =>
-                    $"{session.Agent} · {SessionDisplay.Ago(session.LastActive)} · {session.Label}")));
+            _recentLabels = [.. _recent.Select(session =>
+                $"{session.Agent} · {SessionDisplay.Ago(session.LastActive)} · {session.Label}")];
 
-            // Selected up front. A list with nothing selected has nothing to
-            // accept, so Enter on it did nothing at all — the same omission
-            // that left the problems screen showing an empty preview.
-            _recentList.SelectedItem = 0;
+            _recentList.SetSource(new ObservableCollection<string>(_recentLabels));
+
+            // Selected when it is reached, not before. A list with nothing
+            // selected has nothing to accept, so Enter on it did nothing at
+            // all — but selecting up front drew a highlighted row in Recent
+            // while the highlighted row in Projects was the one with the
+            // focus, so two rows on the screen looked chosen at once and
+            // neither the keyboard nor the eye agreed on which. Enter still
+            // works, because reaching it is what focusing it means.
+            _recentList.HasFocusChanged += (_, e) =>
+            {
+                if (e.NewValue && _recentList.SelectedItem is null)
+                {
+                    _recentList.SelectedItem = 0;
+                }
+            };
 
             _recentList.Accepted += (_, e) => { e.Handled = true; ResumeSelectedSession(); };
 
@@ -149,7 +167,7 @@ internal sealed class LauncherWindow : Window
             {
                 X = 0,
                 Y = Pos.Bottom(listFrame),
-                Width = Dim.Percent(38),
+                Width = columnWidth,
                 Height = recentHeight,
                 Title = "Recent",
                 BorderStyle = LineStyle.Rounded,
@@ -191,6 +209,11 @@ internal sealed class LauncherWindow : Window
             Add(BuildMenu(), filterLabel, _filter, listFrame, _detail, _summary);
         }
 
+        // A row cannot be laid out against a width the list does not have
+        // yet, and the width changes again whenever the window is resized.
+        // Both lists are therefore refitted whenever the layout settles.
+        SubViewsLaidOut += (_, _) => FitToLayout();
+
         _filter.TextChanged += (_, _) => ApplyFilter();
 
         _list.ValueChanged += (_, _) =>
@@ -226,7 +249,7 @@ internal sealed class LauncherWindow : Window
         _detail.Problems += (_, _) => Close(new LauncherIntent(
             LauncherAction.Problems, Selected));
 
-        Populate(here);
+        Populate();
 
         this.Bind(Key.Q.WithCtrl, Command.Quit);
         AddCommand(Command.Quit, () => { Close(LauncherIntent.Quit); return true; });
@@ -400,23 +423,65 @@ internal sealed class LauncherWindow : Window
     /// It is almost always the one they meant, and hunting for it in a list
     /// ordered by something else is work the launcher can do instead.
     /// </summary>
-    private void Populate(ProjectResolution? here)
+    private void Populate()
     {
-        if (here is not null)
+        if (_here is not null)
         {
             _shown = [
-                .. _projects.Where(p => p.Entry.Slug == here.Entry.Slug),
-                .. _projects.Where(p => p.Entry.Slug != here.Entry.Slug),
+                .. _projects.Where(p => p.Entry.Slug == _here.Entry.Slug),
+                .. _projects.Where(p => p.Entry.Slug != _here.Entry.Slug),
             ];
         }
 
-        Render(here);
+        Render();
     }
 
-    private void Render(ProjectResolution? here)
+    /// <summary>
+    /// The width a row has to fill, or zero before the list has been laid out.
+    /// </summary>
+    private int RowWidth => _list.Viewport.Width;
+
+    /// <summary>The width the rows were last built for.</summary>
+    private int _fittedTo;
+
+    /// <summary>Recent sessions in full, before being cut to the column.</summary>
+    private IReadOnlyList<string> _recentLabels = [];
+
+    /// <summary>
+    /// Rebuilds both lists for the width they now have.
+    /// </summary>
+    private void FitToLayout()
+    {
+        if (RowWidth == _fittedTo)
+        {
+            return;
+        }
+
+        _fittedTo = RowWidth;
+
+        RefreshRows();
+        FitRecent();
+    }
+
+    private void FitRecent()
+    {
+        if (_recentList is null)
+        {
+            return;
+        }
+
+        var selected = _recentList.SelectedItem;
+
+        _recentList.SetSource(new ObservableCollection<string>(
+            _recentLabels.Select(label => Shorten(label, _recentList.Viewport.Width))));
+
+        _recentList.SelectedItem = selected;
+    }
+
+    private void Render()
     {
         var rows = new ObservableCollection<string>(
-            _shown.Select(project => Row(project, here)));
+            _shown.Select(project => Row(project, RowWidth)));
 
         _list.SetSource(rows);
 
@@ -437,9 +502,20 @@ internal sealed class LauncherWindow : Window
         }
     }
 
-    private string Row(ProjectResolution project, ProjectResolution? here)
+    /// <summary>
+    /// The repository somebody is standing in, if it is one of theirs.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than passed, because it is needed every time the rows are
+    /// redrawn and redrawing happens for reasons that have nothing to do with
+    /// it. Passing it once meant the marker was drawn at startup and lost the
+    /// instant the first overview arrived, which is to say it was never seen.
+    /// </remarks>
+    private readonly ProjectResolution? _here;
+
+    private string Row(ProjectResolution project, int width)
     {
-        var marker = here is not null && project.Entry.Slug == here.Entry.Slug
+        var marker = _here is not null && project.Entry.Slug == _here.Entry.Slug
             ? "▸"
             : project.Pinned ? "★" : " ";
 
@@ -450,11 +526,78 @@ internal sealed class LauncherWindow : Window
             ? known
             : ProjectReadinessRules.Of(null, project.IsAvailableLocally, agentInstalled: true);
 
-        var state = ProjectReadinessRules.Mark(readiness)
-            + " " + ProjectReadinessRules.Label(readiness);
+        var state = $"[{ProjectReadinessRules.Mark(readiness)} "
+            + $"{ProjectReadinessRules.Label(readiness)}]";
 
-        return $"{marker} {project.Entry.Name}  [{state}]  {project.Entry.DefaultAgent}";
+        return Fit(marker, project.Entry.Name, state, width);
     }
+
+    /// <summary>
+    /// Lays a row out across the width the list actually has.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The row used to be built by joining its parts with two spaces and
+    /// hoping. In a column of forty-three characters — which is what a
+    /// hundred-and-twenty column terminal gives it — that produced rows like:
+    /// </para>
+    /// <code>
+    ///   TheCodeSaiyan-PowerShell-tcs.core  [! At
+    ///   home-servers-build  [! Attention]  claud
+    /// </code>
+    /// <para>
+    /// Cut wherever the edge happened to fall, so the state — the part worth
+    /// scanning down — was the part that went missing, and only for the
+    /// projects with the longest names. Here the state is placed against the
+    /// right edge where it lines up between rows, and the name gives way
+    /// first, because a shortened name is still recognisable and a shortened
+    /// state is not.
+    /// </para>
+    /// </remarks>
+    /// <param name="marker">Whether this is the current or a pinned project.</param>
+    /// <param name="name">The project's name.</param>
+    /// <param name="state">Its readiness, already bracketed.</param>
+    /// <param name="width">
+    /// The column's width. Zero or less when the list has not been laid out
+    /// yet, in which case nothing is trimmed and the first layout will redraw.
+    /// </param>
+    internal static string Fit(string marker, string name, string state, int width)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(state);
+
+        var head = $"{marker} {name}";
+
+        if (width <= 0)
+        {
+            return $"{head}  {state}";
+        }
+
+        // One space so the state never touches the border, and two so it is
+        // never mistaken for part of the name.
+        var room = width - state.Length - 1;
+
+        if (room < MinimumNameWidth)
+        {
+            // Too narrow to show both. The name wins: somebody who cannot tell
+            // which project a row is cannot use the list at all, whereas the
+            // state is also written in the detail pane beside it.
+            return Shorten(head, width);
+        }
+
+        return Shorten(head, room - 1).PadRight(room) + state;
+    }
+
+    /// <summary>How little of a name is still worth showing beside a state.</summary>
+    private const int MinimumNameWidth = 12;
+
+    /// <summary>
+    /// Cuts text to a width, marking the cut so it does not read as the whole.
+    /// </summary>
+    private static string Shorten(string text, int width) =>
+        text.Length <= width ? text
+            : width <= 1 ? text[..Math.Max(0, width)]
+            : text[..(width - 1)] + "…";
 
     /// <summary>
     /// Readiness per project, filled in as each overview arrives.
@@ -522,7 +665,7 @@ internal sealed class LauncherWindow : Window
         var selected = _list.SelectedItem;
 
         _list.SetSource(new ObservableCollection<string>(
-            _shown.Select(project => Row(project, here: null))));
+            _shown.Select(project => Row(project, RowWidth))));
 
         // Moving the cursor because a row was relabelled would be its own bug:
         // somebody arrowing down a list must not be dragged back to the top by
@@ -543,7 +686,7 @@ internal sealed class LauncherWindow : Window
                 p.Entry.Name.Contains(text, StringComparison.OrdinalIgnoreCase)
                 || p.Entry.Slug.Contains(text, StringComparison.OrdinalIgnoreCase))];
 
-        Render(here: null);
+        Render();
     }
 
     private void LaunchSelected()
