@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+using Loadout.Core.Configuration;
 using Loadout.Models.Configuration;
 using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
@@ -15,31 +17,35 @@ namespace Loadout.Tui.Terminal;
 /// what actually differs.
 /// </para>
 /// </summary>
-/// <param name="WorkspaceRemote">The central repository holding projects and instructions.</param>
-/// <param name="WorkspaceBranch">Which branch of it to track.</param>
-/// <param name="DefaultAgent">The agent used when a project does not name one.</param>
-/// <param name="SyncAtLaunch">Whether the workspace is fetched before a launch.</param>
-/// <param name="SyncAtExit">Whether work is pushed when a session ends.</param>
-/// <param name="EditorCommand">The editor's command-line name.</param>
+/// <param name="Values">
+/// Every setting the screen showed, keyed the way <c>loadout config</c> keys
+/// it. Held as text because that is what was typed and what the registry's
+/// own setters take; a value that will not parse is the caller's to report.
+/// </param>
 /// <param name="EditorProfiles">
 /// Editor profile per agent. Empty values mean "no profile for that agent",
 /// which is a real answer and not a missing one.
 /// </param>
 internal sealed record SettingsEdit(
-    string WorkspaceRemote,
-    string WorkspaceBranch,
-    string DefaultAgent,
-    string SyncAtLaunch,
-    string SyncAtExit,
-    string EditorCommand,
+    IReadOnlyDictionary<string, string> Values,
     IReadOnlyDictionary<string, string> EditorProfiles);
 
 /// <summary>
 /// The launcher's settings, and where everything lives.
 /// <para>
-/// A screen rather than a printed table. The old one could show the settings or
-/// let you change one, never both at once, so changing two meant going round
-/// twice and losing sight of the rest each time.
+/// Every setting, generated from the same registry <c>loadout config</c> reads.
+/// It used to name six of them by hand — workspace, branch, default agent, the
+/// two sync policies and the editor command — out of twenty-one. The other
+/// fifteen could only be reached by typing <c>loadout config set</c>, and
+/// nothing said so: which terminal opens, where clones land, which directories
+/// are scanned for repositories, where agents are looked for, the secrets
+/// backend, the update feed, and every part of the agent status line were all
+/// invisible to anybody who opened the screen meant for changing settings.
+/// </para>
+/// <para>
+/// Generated rather than listed, so that gap cannot reopen. A setting added to
+/// the registry appears here without anybody remembering to add it, and a test
+/// asserts exactly that.
 /// </para>
 /// <para>
 /// Nothing is saved from here. The screen hands back what was typed and closes,
@@ -50,24 +56,51 @@ internal sealed record SettingsEdit(
 /// </summary>
 internal sealed class SettingsWindow : Window
 {
-    private const int LabelWidth = 22;
+    private const int LabelWidth = 24;
+
+    /// <summary>Read-only entries have no key, so they are named by this.</summary>
+    private const string Places = "Where things are kept";
 
     private readonly IApplication _application;
 
-    private readonly TextField _remote;
-    private readonly TextField _branch;
-    private readonly TextField _agent;
-    private readonly TextField _syncLaunch;
-    private readonly TextField _syncExit;
-    private readonly TextField _editor;
+    /// <summary>One field per setting, keyed the way the registry keys it.</summary>
+    private readonly Dictionary<string, TextField> _fields = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// One tick per yes-or-no setting, keyed the way the registry keys it.
+    /// </summary>
+    private readonly Dictionary<string, CheckBox> _flags = new(StringComparer.Ordinal);
 
     /// <summary>One field per installed agent, keyed by the agent's name.</summary>
     private readonly Dictionary<string, TextField> _profiles = [];
 
+    /// <summary>One page per group, shown when its group is chosen.</summary>
+    private readonly Dictionary<string, View> _pages = new(StringComparer.Ordinal);
+
+    private readonly ListView _groups;
+
+    private readonly Label _hint;
+
     /// <summary>What was typed, or null if the screen was dismissed.</summary>
     internal SettingsEdit? Edit { get; private set; }
 
+    /// <summary>
+    /// Every setting this screen can change, keyed the way the registry keys
+    /// it.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so a test can hold the screen against the registry rather than
+    /// against a list somebody wrote down. The list somebody wrote down is
+    /// what went wrong: six of twenty-one settings had fields and the gap was
+    /// invisible from either side.
+    /// </remarks>
+    internal IReadOnlyCollection<string> Editable => [.. _fields.Keys, .. _flags.Keys];
+
     /// <param name="config">The settings as they stand.</param>
+    /// <param name="machine">
+    /// This machine's own settings. Separate because they must never travel to
+    /// another machine, and two of the keys shown here live in it.
+    /// </param>
     /// <param name="places">Where things are kept, as label and path pairs.</param>
     /// <param name="agents">Installed agents, so a profile can be mapped to each.</param>
     /// <param name="editorName">The editor's command, named in the hint.</param>
@@ -78,6 +111,7 @@ internal sealed class SettingsWindow : Window
     /// <param name="application">The running application.</param>
     internal SettingsWindow(
         LauncherConfig config,
+        MachineConfig machine,
         IReadOnlyList<(string Label, string Value)> places,
         IReadOnlyList<string> agents,
         string editorName,
@@ -85,7 +119,9 @@ internal sealed class SettingsWindow : Window
         IApplication application)
     {
         ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(machine);
         ArgumentNullException.ThrowIfNull(places);
+        ArgumentNullException.ThrowIfNull(agents);
         ArgumentNullException.ThrowIfNull(application);
 
         _application = application;
@@ -93,122 +129,103 @@ internal sealed class SettingsWindow : Window
         Title = "Settings";
         BorderStyle = LineStyle.Rounded;
 
-        var settings = new FrameView
+        // Grouped down the side rather than scrolled. Twenty-one settings do
+        // not fit a short terminal, and a scrolling pane whose fields take the
+        // focus one at a time is a screen where the thing you are typing into
+        // can be off the top of it.
+        var shown = SectionsOf(agents, places);
+
+        Sections = shown;
+
+        _groups = new ListView
         {
             X = 0,
             Y = 0,
             Width = Dim.Fill(),
-            Height = 10,
-            Title = "Settings",
-            BorderStyle = LineStyle.Single,
+            Height = Dim.Fill(),
+            ShowMarks = false,
         };
 
-        _remote = Field(settings, "Workspace repository", config.Workspace.Remote ?? string.Empty, 0);
-        _branch = Field(settings, "Branch", config.Workspace.Branch, 1);
-        _agent = Field(settings, "Default agent", config.DefaultAgent, 2);
-        _syncLaunch = Field(settings, "Sync at launch", config.Sync.Launch, 3);
-        _syncExit = Field(settings, "Sync at exit", config.Sync.Exit, 4);
-        _editor = Field(settings, "Editor command", config.Editor.Command, 5);
+        _groups.SetSource(new ObservableCollection<string>(shown));
 
-        // Said rather than left to be discovered by typing something that is
-        // not installed and finding out at launch.
-        settings.Add(new Label
+        var groupFrame = new FrameView
+        {
+            X = 0,
+            Y = 0,
+            Width = Dim.Percent(28),
+            Height = Dim.Fill(3),
+            Title = "Sections",
+            BorderStyle = LineStyle.Rounded,
+        };
+
+        groupFrame.Add(_groups);
+
+        var pageFrame = new FrameView
+        {
+            X = Pos.Right(groupFrame),
+            Y = 0,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(3),
+            Title = shown[0],
+            BorderStyle = LineStyle.Rounded,
+        };
+
+        foreach (var group in shown)
+        {
+            var page = BuildPage(group, config, machine, agents, editorName, known, places);
+
+            page.Visible = false;
+
+            _pages[group] = page;
+
+            pageFrame.Add(page);
+        }
+
+        // Said as the field is reached rather than crammed beside it. The
+        // descriptions are sentences — "Seconds a launch-time fetch may block
+        // before going offline" — and there is no column wide enough for
+        // twenty-one of those next to the field they describe.
+        _hint = new Label
         {
             X = 1,
-            Y = 7,
+            Y = Pos.AnchorEnd(2),
             Width = Dim.Fill(1),
-            Text = agents.Count == 0
-                ? "No agents are installed on this machine."
-                : $"Installed: {string.Join(", ", agents)}",
-        });
-
-        // A row per installed agent, rather than one field holding a syntax
-        // somebody has to look up. The whole feature was unreachable before
-        // this: the plumbing existed, and nothing anywhere let anyone switch it
-        // on, so opening a project in the editor did nothing a bare "code ."
-        // would not have done.
-        var profilesFrame = new FrameView
-        {
-            X = 0,
-            Y = Pos.Bottom(settings),
-            Width = Dim.Fill(),
-            Height = agents.Count == 0 ? 3 : agents.Count + 3,
-            Title = "Editor profile per agent",
-            BorderStyle = LineStyle.Single,
+            Text = string.Empty,
         };
-
-        if (agents.Count == 0)
-        {
-            profilesFrame.Add(new Label
-            {
-                X = 1,
-                Y = 0,
-                Text = "No agents are installed, so there is nothing to map a profile to.",
-            });
-        }
-        else
-        {
-            for (var i = 0; i < agents.Count; i++)
-            {
-                var agent = agents[i];
-
-                profilesFrame.Add(new Label { X = 1, Y = i, Text = agent });
-
-                var field = new TextField
-                {
-                    X = 1 + LabelWidth,
-                    Y = i,
-                    Width = Dim.Fill(2),
-                    Text = config.Editor.Profiles.TryGetValue(agent, out var existing)
-                        ? existing
-                        : string.Empty,
-                };
-
-                profilesFrame.Add(field);
-                _profiles[agent] = field;
-            }
-
-            profilesFrame.Add(new Label
-            {
-                X = 1,
-                Y = agents.Count,
-                Width = Dim.Fill(2),
-                Text = known.Count == 0
-                    ? "The editor reported no profiles, so a name typed here will be created."
-                    : $"Profiles {editorName} has: {string.Join(", ", known)}",
-            });
-        }
-
-        var whereFrame = new FrameView
-        {
-            X = 0,
-            Y = Pos.Bottom(profilesFrame),
-            Width = Dim.Fill(),
-            Height = Dim.Fill(2),
-            Title = "Where things are kept",
-            BorderStyle = LineStyle.Single,
-        };
-
-        for (var i = 0; i < places.Count; i++)
-        {
-            whereFrame.Add(new Label { X = 1, Y = i, Text = places[i].Label });
-            whereFrame.Add(new Label { X = 1 + LabelWidth, Y = i, Text = places[i].Value });
-        }
 
         var save = new Button { X = 1, Y = Pos.AnchorEnd(1), Text = "_Save", IsDefault = true };
         var cancel = new Button { X = Pos.Right(save) + 2, Y = Pos.AnchorEnd(1), Text = "_Close" };
+
+        _groups.ValueChanged += (_, _) =>
+        {
+            if (_groups.SelectedItem is not int index || index < 0 || index >= shown.Count)
+            {
+                return;
+            }
+
+            Show(shown[index]);
+
+            pageFrame.Title = shown[index];
+        };
 
         save.Accepting += (_, e) =>
         {
             e.Handled = true;
 
+            var values = _fields.ToDictionary(
+                pair => pair.Key,
+                pair => (pair.Value.Text ?? string.Empty).Trim(),
+                StringComparer.Ordinal);
+
+            foreach (var (key, box) in _flags)
+            {
+                // In the spelling the registry's own setter takes back, so a
+                // tick and a typed "true" are the same edit.
+                values[key] = box.Value == CheckState.Checked ? "true" : "false";
+            }
+
             Edit = new SettingsEdit(
-                (_remote.Text ?? string.Empty).Trim(),
-                (_branch.Text ?? string.Empty).Trim(),
-                (_agent.Text ?? string.Empty).Trim(),
-                (_syncLaunch.Text ?? string.Empty).Trim(),
-                (_syncExit.Text ?? string.Empty).Trim(),
-                (_editor.Text ?? string.Empty).Trim(),
+                values,
                 _profiles.ToDictionary(
                     pair => pair.Key,
                     pair => (pair.Value.Text ?? string.Empty).Trim(),
@@ -222,8 +239,201 @@ internal sealed class SettingsWindow : Window
         this.Bind(Key.Esc, Command.Quit);
         AddCommand(Command.Quit, () => { _application.RequestStop(this); return true; });
 
-        Add(settings, profilesFrame, whereFrame, save, cancel);
+        Add(groupFrame, pageFrame, _hint, save, cancel);
+
+        Show(shown[0]);
+
+        _groups.SelectedItem = 0;
     }
+
+    /// <summary>
+    /// The groups worth showing, in the registry's own order, plus the paths.
+    /// </summary>
+    private static List<string> SectionsOf(
+        IReadOnlyList<string> agents,
+        IReadOnlyList<(string Label, string Value)> places)
+    {
+        var groups = ConfigKeys.Groups.InOrder
+            .Where(group => ConfigKeys.All.Any(entry => Belongs(entry, group, agents)))
+            .ToList();
+
+        if (places.Count > 0)
+        {
+            groups.Add(Places);
+        }
+
+        return groups;
+    }
+
+    /// <summary>
+    /// Whether a setting appears under a group when the screen is built.
+    /// </summary>
+    /// <remarks>
+    /// editor-profiles is the one setting not shown as itself. Its value is a
+    /// map written "claude=Agents;codex=Codex", and a single field holding a
+    /// syntax somebody has to look up is worse than a row per installed agent —
+    /// so the Editor group draws those rows instead, and this hides the raw
+    /// key so it is not asked for twice.
+    /// </remarks>
+    private static bool Belongs(ConfigKeys.Entry entry, string group, IReadOnlyList<string> agents) =>
+        string.Equals(entry.Group, group, StringComparison.Ordinal)
+        && (entry.Key != "editor-profiles" || agents.Count > 0);
+
+    private View BuildPage(
+        string group,
+        LauncherConfig config,
+        MachineConfig machine,
+        IReadOnlyList<string> agents,
+        string editorName,
+        IReadOnlyList<string> known,
+        IReadOnlyList<(string Label, string Value)> places)
+    {
+        var page = new View { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
+
+        if (string.Equals(group, Places, StringComparison.Ordinal))
+        {
+            for (var i = 0; i < places.Count; i++)
+            {
+                page.Add(new Label { X = 1, Y = i, Text = places[i].Label });
+                page.Add(new Label { X = 1 + LabelWidth, Y = i, Text = places[i].Value });
+            }
+
+            return page;
+        }
+
+        var row = 0;
+
+        foreach (var entry in ConfigKeys.All.Where(e => Belongs(e, group, agents)))
+        {
+            if (entry.Key == "editor-profiles")
+            {
+                row = AddProfiles(page, config, agents, editorName, known, row);
+                continue;
+            }
+
+            var current = entry.Read(config, machine) ?? string.Empty;
+
+            View control;
+
+            if (entry.IsFlag)
+            {
+                var box = new CheckBox
+                {
+                    X = 1 + LabelWidth,
+                    Y = row,
+                    Text = string.Empty,
+                    Value = IsYes(current) ? CheckState.Checked : CheckState.UnChecked,
+                };
+
+                page.Add(new Label { X = 1, Y = row, Text = entry.Key });
+                page.Add(box);
+
+                _flags[entry.Key] = box;
+
+                control = box;
+            }
+            else
+            {
+                var field = Field(page, entry.Key, current, row);
+
+                _fields[entry.Key] = field;
+
+                control = field;
+            }
+
+            control.HasFocusChanged += (_, e) =>
+            {
+                if (e.NewValue)
+                {
+                    _hint.Text = entry.Description;
+                }
+            };
+
+            row++;
+        }
+
+        return page;
+    }
+
+    /// <summary>
+    /// A row per installed agent, rather than one field holding a syntax
+    /// somebody has to look up.
+    /// </summary>
+    private int AddProfiles(
+        View page,
+        LauncherConfig config,
+        IReadOnlyList<string> agents,
+        string editorName,
+        IReadOnlyList<string> known,
+        int row)
+    {
+        page.Add(new Label
+        {
+            X = 1,
+            Y = row + 1,
+            Width = Dim.Fill(1),
+            Text = "Editor profile per agent",
+        });
+
+        row += 2;
+
+        foreach (var agent in agents)
+        {
+            var field = Field(page, agent, config.Editor.Profiles.GetValueOrDefault(agent, string.Empty), row);
+
+            field.HasFocusChanged += (_, e) =>
+            {
+                if (e.NewValue)
+                {
+                    _hint.Text = $"Which {editorName} profile opens {agent}. Blank means no profile.";
+                }
+            };
+
+            _profiles[agent] = field;
+
+            row++;
+        }
+
+        page.Add(new Label
+        {
+            X = 1,
+            Y = row,
+            Width = Dim.Fill(1),
+            Text = known.Count == 0
+                ? "The editor reported no profiles, so a name typed here will be created."
+                : $"Profiles {editorName} has: {string.Join(", ", known)}",
+        });
+
+        return row + 1;
+    }
+
+    /// <summary>The sections, in the order the list offers them.</summary>
+    internal IReadOnlyList<string> Sections { get; }
+
+    /// <summary>Opens a section, as choosing it in the list does.</summary>
+    internal void Open(int section)
+    {
+        _groups.SelectedItem = section;
+    }
+
+    /// <summary>Shows one group and hides the rest.</summary>
+    private void Show(string group)
+    {
+        foreach (var (name, page) in _pages)
+        {
+            page.Visible = string.Equals(name, group, StringComparison.Ordinal);
+        }
+
+        _hint.Text = string.Empty;
+    }
+
+    /// <summary>
+    /// Reads a flag the way the registry's own setter reads one, so a value
+    /// somebody typed as "yes" does not come back unticked and get written
+    /// out as "false".
+    /// </summary>
+    private static bool IsYes(string value) =>
+        value.Trim().ToLowerInvariant() is "true" or "yes" or "on" or "1";
 
     private static TextField Field(View parent, string label, string value, int row)
     {

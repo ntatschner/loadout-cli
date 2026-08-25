@@ -3,6 +3,7 @@ using Loadout.Models.Diagnostics;
 using Loadout.Tui;
 using Loadout.Tui.Terminal;
 using FluentAssertions;
+using Loadout.Core.Configuration;
 using Terminal.Gui.App;
 using Terminal.Gui.Drivers;
 using Xunit;
@@ -197,6 +198,7 @@ public sealed class ScreenConstructionTests
 
         using var settings = new SettingsWindow(
             config,
+            new Loadout.Models.Configuration.MachineConfig(),
             [("Shared settings", "/config/config.yaml"), ("This machine", "/state/machines.yaml")],
             ["claude"],
             "code",
@@ -211,17 +213,72 @@ public sealed class ScreenConstructionTests
         // Both halves at once, which is the point: the printed version could
         // show the settings or change one, never both.
         screen.Should().Contain("workspace.git");
-        screen.Should().Contain("codex");
-        screen.Should().Contain("config.yaml");
-        screen.Should().Contain("machines.yaml");
 
-        // The mapping that makes the editor integration do anything. It was
-        // configurable from nowhere at all before: the command existed, the
-        // plumbing existed, and there was no field, no config key and no
-        // prompt, so opening a project in the editor did nothing that a bare
-        // "code ." would not have done.
-        screen.Should().Contain("Editor profile per agent");
-        screen.Should().Contain("Agents");
+        // The groups down the side, so what is not on the open page is at
+        // least visibly reachable rather than absent.
+        screen.Should().Contain("Workspace");
+        screen.Should().Contain("Agent status line");
+        screen.Should().Contain("Where things are kept");
+    }
+
+    [Fact]
+    public void Every_setting_the_config_command_has_can_be_changed_on_the_screen()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var settings = new SettingsWindow(
+            new Loadout.Models.Configuration.LauncherConfig(),
+            new Loadout.Models.Configuration.MachineConfig(),
+            [("Shared settings", "/config/config.yaml")],
+            ["claude"],
+            "code",
+            [],
+            app);
+
+        // Held against the registry rather than against a list written here,
+        // because a list written here is exactly what went wrong: the screen
+        // named six settings by hand out of twenty-one, and the fifteen it
+        // omitted were unreachable from anywhere but 'loadout config set'.
+        var expected = ConfigKeys.All
+            .Select(entry => entry.Key)
+            .Where(key => key != "editor-profiles")
+            .ToList();
+
+        settings.Editable.Should().BeEquivalentTo(
+            expected,
+            "a setting 'loadout config' can change must be changeable on the screen for changing settings");
+    }
+
+    [Fact]
+    public void The_agent_to_editor_profile_map_gets_a_row_per_agent_rather_than_a_syntax()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var settings = new SettingsWindow(
+            new Loadout.Models.Configuration.LauncherConfig(),
+            new Loadout.Models.Configuration.MachineConfig(),
+            [("Shared settings", "/config/config.yaml")],
+            ["claude", "codex"],
+            "code",
+            ["Agents"],
+            app);
+
+        // The one setting deliberately not shown as itself. Its value is
+        // written "claude=Agents;codex=Codex", and a field holding a syntax
+        // somebody has to look up is worse than a row per installed agent.
+        settings.Editable.Should().NotContain("editor-profiles");
+
+        app.Begin(settings);
+        app.LayoutAndDraw();
+
+        // Reachable, even though it is not the page that opens.
+        (app.Driver?.ToString() ?? string.Empty).Should().Contain("Editor");
     }
 
     [Fact]
@@ -234,6 +291,7 @@ public sealed class ScreenConstructionTests
 
         using var settings = new SettingsWindow(
             new Loadout.Models.Configuration.LauncherConfig(),
+            new Loadout.Models.Configuration.MachineConfig(),
             [("Shared settings", "/config/config.yaml")],
             [],
             "code",

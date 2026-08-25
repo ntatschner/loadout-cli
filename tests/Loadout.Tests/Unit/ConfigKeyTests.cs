@@ -1,4 +1,5 @@
 using Loadout.Cli.Commands;
+using Loadout.Core.Configuration;
 using Loadout.Models.Configuration;
 using FluentAssertions;
 using Xunit;

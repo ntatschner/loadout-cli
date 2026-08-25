@@ -514,6 +514,17 @@ public sealed class TerminalLauncher : ILauncherTui
 
         var config = loaded.Value!;
 
+        var loadedMachine = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
+
+        if (loadedMachine.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(loadedMachine.Error!)}[/]");
+            Pause();
+            return;
+        }
+
+        var machine = loadedMachine.Value!;
+
         var places = new List<(string, string)>
         {
             ("Shared settings", Path.Combine(_paths.Paths.Config, "config.yaml")),
@@ -539,7 +550,8 @@ public sealed class TerminalLauncher : ILauncherTui
             var editor = _editors.Describe(config);
 
             using var window = new SettingsWindow(
-                config, places, agents, editor.Command, editor.Profiles ?? [], application);
+                config, machine, places, agents, editor.Command, editor.Profiles ?? [],
+                application);
 
             await application.RunAsync(window, ct).ConfigureAwait(false);
 
@@ -548,7 +560,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (edit is not null)
         {
-            await ApplySettingsAsync(config, edit, ct).ConfigureAwait(false);
+            await ApplySettingsAsync(config, machine, edit, ct).ConfigureAwait(false);
         }
     }
 
@@ -558,13 +570,15 @@ public sealed class TerminalLauncher : ILauncherTui
     /// </summary>
     private async Task ApplySettingsAsync(
         LauncherConfig config,
+        MachineConfig machine,
         SettingsEdit edit,
         CancellationToken ct)
     {
-        var remoteChanged = !string.Equals(
-            edit.WorkspaceRemote,
-            config.Workspace.Remote ?? string.Empty,
-            StringComparison.Ordinal);
+        var remoteChanged = edit.Values.TryGetValue("workspace-remote", out var remote)
+            && !string.Equals(
+                remote,
+                config.Workspace.Remote ?? string.Empty,
+                StringComparison.Ordinal);
 
         if (remoteChanged && _workspace.IsCloned())
         {
@@ -587,12 +601,39 @@ public sealed class TerminalLauncher : ILauncherTui
             _console.MarkupLine($"[dim]Moved the previous clone to {Markup.Escape(moved)}[/]");
         }
 
-        config.Workspace.Remote = edit.WorkspaceRemote;
-        config.Workspace.Branch = edit.WorkspaceBranch;
-        config.DefaultAgent = edit.DefaultAgent;
-        config.Sync.Launch = edit.SyncAtLaunch;
-        config.Sync.Exit = edit.SyncAtExit;
-        config.Editor.Command = edit.EditorCommand;
+        // Written through the same registry the screen was built from and
+        // that 'loadout config set' writes through, so a setting cannot be
+        // editable on one and inert on the other.
+        foreach (var (key, value) in edit.Values)
+        {
+            var entry = ConfigKeys.Find(key);
+
+            if (entry is null)
+            {
+                continue;
+            }
+
+            var current = entry.Read(config, machine) ?? string.Empty;
+
+            if (string.Equals(current, value, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                entry.Write(config, machine, value);
+            }
+            catch (Exception failure) when (failure is FormatException or OverflowException
+                or ArgumentException)
+            {
+                // Said and skipped, not thrown. One mistyped number must not
+                // discard the other twenty settings somebody just changed.
+                _console.MarkupLine(
+                    $"[yellow]{Markup.Escape(key)} was left alone:[/] "
+                    + Markup.Escape(failure.Message));
+            }
+        }
 
         // Replaced rather than merged, so clearing a field actually clears it.
         config.Editor.Profiles.Clear();
@@ -607,6 +648,17 @@ public sealed class TerminalLauncher : ILauncherTui
         if (saved.Failed)
         {
             _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+            Pause();
+            return;
+        }
+
+        // Two of the settings on that screen live here, and a machine's own
+        // layout never travels to another machine.
+        var savedMachine = await _configuration.SaveMachineAsync(machine, ct).ConfigureAwait(false);
+
+        if (savedMachine.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(savedMachine.Error!)}[/]");
             Pause();
             return;
         }
