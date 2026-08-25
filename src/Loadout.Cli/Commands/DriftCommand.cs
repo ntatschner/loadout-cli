@@ -6,6 +6,7 @@ using Loadout.Models;
 using Loadout.Models.Diagnostics;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -50,6 +51,7 @@ public sealed class DriftSettings : GlobalSettings
 /// </para>
 /// </summary>
 [Description("Show where projects have drifted from their recorded configuration.")]
+[CommandMeta(CommandCategory.Health, Intent = "changed differs configuration out of date fix", Mutates = true, Example = "--fix")]
 public sealed class DriftCommand : AsyncCommand<DriftSettings>
 {
     private readonly IDriftService _drift;

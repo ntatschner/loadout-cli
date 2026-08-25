@@ -9,6 +9,7 @@ using Loadout.Models;
 using Loadout.Models.Instructions;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -22,6 +23,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Split an oversized instruction file into path-scoped rules.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "break up oversized instructions scoped", Mutates = true)]
 public sealed class RulesSplitCommand : RulesCommandBase<RulesSplitCommand.Settings>
 {
     private readonly IBackupService _backups;

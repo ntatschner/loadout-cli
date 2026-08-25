@@ -5,6 +5,7 @@ using Loadout.Core.Projects;
 using Loadout.Models;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -17,6 +18,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Record inside a repository which project it belongs to.")]
+[CommandMeta(CommandCategory.Projects, Intent = "associate mark belongs which project", Mutates = true)]
 public sealed class ProjectLinkCommand : AsyncCommand<ProjectLinkCommand.Settings>
 {
     private readonly IProjectService _projects;

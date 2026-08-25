@@ -8,6 +8,7 @@ using Loadout.Models;
 using Loadout.Models.Instructions;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -21,6 +22,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Import memory an agent recorded outside the workspace.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "bring in adopt existing memory", Mutates = true)]
 public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.Settings>
 {
     private readonly IMemoryImporter _importer;

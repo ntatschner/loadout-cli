@@ -8,6 +8,7 @@ using Loadout.Models.Policies;
 using Loadout.Models.Results;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -22,6 +23,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Move existing AI tooling files into the central workspace.")]
+[CommandMeta(CommandCategory.Workspace, Intent = "move existing adopt bring in convert", Mutates = true, Example = "--dry-run")]
 public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
 {
     private readonly IMigrationService _migrations;

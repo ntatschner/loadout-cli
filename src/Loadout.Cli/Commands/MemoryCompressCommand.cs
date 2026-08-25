@@ -6,6 +6,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -50,6 +51,7 @@ public sealed class MemoryCompressSettings : GlobalSettings
 /// </para>
 /// </summary>
 [Description("Move durable facts out of always-loaded instructions into the memory store.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "shrink instructions budget too big", Mutates = true)]
 public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
 {
     private readonly IProjectService _projects;

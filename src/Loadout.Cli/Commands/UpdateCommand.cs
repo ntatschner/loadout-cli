@@ -4,6 +4,7 @@ using Loadout.Core.Updates;
 using Loadout.Models;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -17,6 +18,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Check for a newer release and install it.")]
+[CommandMeta(CommandCategory.Administration, Intent = "upgrade new version install latest", Mutates = true, RequiresNetwork = true)]
 public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
 {
     private readonly IUpdateService _updates;

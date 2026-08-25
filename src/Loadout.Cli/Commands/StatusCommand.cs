@@ -7,11 +7,13 @@ using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
 /// <summary>Summarises workspace, projects, agents and the current repository (spec section 78).</summary>
 [Description("Summarise the workspace, projects, agents and current repository.")]
+[CommandMeta(CommandCategory.Health, Intent = "state summary overview what is set up")]
 public sealed class StatusCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IProjectService _projects;

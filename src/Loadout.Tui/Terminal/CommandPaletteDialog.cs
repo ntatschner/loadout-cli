@@ -42,7 +42,7 @@ internal sealed class CommandPaletteDialog : Dialog
         _application = application;
 
         _all = [.. commands
-            .OrderBy(entry => entry.Group, StringComparer.Ordinal)
+            .OrderBy(entry => CategoryOrder(entry.Category))
             .ThenBy(entry => entry.Path, StringComparer.Ordinal)];
 
         _shown = [.. _all];
@@ -70,11 +70,11 @@ internal sealed class CommandPaletteDialog : Dialog
         {
             var text = filter.Text?.Trim() ?? string.Empty;
 
-            _shown = text.Length == 0
-                ? [.. _all]
-                : [.. _all.Where(entry =>
-                    entry.Path.Contains(text, StringComparison.OrdinalIgnoreCase)
-                    || entry.Description.Contains(text, StringComparison.OrdinalIgnoreCase))];
+            // Matches on what a command is for as well as what it is called.
+            // Somebody wanting to undo a mistake types "undo", not "backup
+            // restore", and a palette that only matches names leaves them
+            // believing the capability is absent.
+            _shown = [.. _all.Where(entry => entry.Matches(text))];
 
             Render();
         };
@@ -138,8 +138,23 @@ internal sealed class CommandPaletteDialog : Dialog
                 : entry.Description;
     }
 
-    private static string Describe(CatalogueEntry entry) =>
-        entry.TerminalOnly is { Length: > 0 }
-            ? $"  {entry.Path}   (terminal only)"
-            : $"  {entry.Path}";
+    /// <summary>Where a category sits in the list, unknown ones last.</summary>
+    private static int CategoryOrder(string category)
+    {
+        var index = CommandCategory.All.ToList().IndexOf(category);
+
+        return index < 0 ? int.MaxValue : index;
+    }
+
+    private static string Describe(CatalogueEntry entry)
+    {
+        // Says up front whether choosing this changes anything. A palette that
+        // looks the same for "show me the settings" and "rewrite the settings"
+        // is asking somebody to remember which is which.
+        var marks = entry.TerminalOnly is { Length: > 0 }
+            ? "   (terminal only)"
+            : entry.Mutates ? "   (changes files)" : string.Empty;
+
+        return $"  {entry.Path}{marks}";
+    }
 }

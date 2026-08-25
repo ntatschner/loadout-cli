@@ -169,8 +169,7 @@ public sealed class LoadoutProcess : IDisposable
 
         Isolate(start);
 
-        using var process = Process.Start(start)
-            ?? throw new InvalidOperationException("The command line could not be started.");
+        using var process = StartWithRetry(start);
 
         // Read both streams before waiting. A process that fills a redirected
         // pipe blocks writing to it, and waiting first would deadlock against
@@ -184,6 +183,45 @@ public sealed class LoadoutProcess : IDisposable
             process.ExitCode,
             await output.ConfigureAwait(false),
             await error.ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Starts the process, retrying briefly if the file is momentarily
+    /// unavailable.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An executable that has just been written can refuse to start for a
+    /// moment on Windows while it is scanned. Running the whole suite straight
+    /// after a build occasionally failed a scattering of these tests, and the
+    /// same tests passed on the next run with nothing changed.
+    /// </para>
+    /// <para>
+    /// Only the launch is retried, and only for the errors that mean "not
+    /// available yet". Nothing about the command's behaviour is retried, so
+    /// this cannot turn a real failure into a pass — a command that starts and
+    /// then does the wrong thing still fails, once.
+    /// </para>
+    /// </remarks>
+    private static Process StartWithRetry(ProcessStartInfo start)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return Process.Start(start)
+                    ?? throw new InvalidOperationException(
+                        "The command line could not be started.");
+            }
+            catch (System.ComponentModel.Win32Exception) when (attempt < 4)
+            {
+                Thread.Sleep(150);
+            }
+            catch (IOException) when (attempt < 4)
+            {
+                Thread.Sleep(150);
+            }
+        }
     }
 
     /// <summary>

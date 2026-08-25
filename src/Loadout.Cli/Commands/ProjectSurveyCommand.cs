@@ -7,6 +7,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -22,6 +23,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Find agent state on this machine that no project accounts for.")]
+[CommandMeta(CommandCategory.Projects, Intent = "find unaccounted adopt discover stray", Mutates = true)]
 public sealed class ProjectSurveyCommand : AsyncCommand<ProjectSurveyCommand.Settings>
 {
     private readonly IRepositoryAttribution _attribution;

@@ -5,11 +5,13 @@ using Loadout.Models;
 using Loadout.Platform.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
 /// <summary>Lists registered projects and whether each is available here (spec section 75).</summary>
 [Description("List registered projects.")]
+[CommandMeta(CommandCategory.Projects, Intent = "show all registered repositories")]
 public sealed class ProjectListCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IProjectService _projects;

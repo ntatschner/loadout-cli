@@ -9,6 +9,7 @@ using Loadout.Models;
 using Loadout.Platform.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -25,6 +26,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Render the agent status line. Claude runs this; you do not need to.")]
+[CommandMeta(CommandCategory.Integration, Intent = "prompt status bar agent display context")]
 public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
 {
     /// <summary>

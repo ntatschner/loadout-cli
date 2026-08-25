@@ -6,6 +6,7 @@ using Loadout.Core.Projects;
 using Loadout.Models;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -25,6 +26,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Open a project in the editor, under the profile for its agent.")]
+[CommandMeta(CommandCategory.Integration, Intent = "editor vscode open ide profile")]
 public sealed class CodeCommand : AsyncCommand<CodeCommand.Settings>
 {
     private readonly IEditorService _editors;

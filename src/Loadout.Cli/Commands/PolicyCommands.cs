@@ -7,6 +7,7 @@ using Loadout.Models.Policies;
 using Loadout.Models.Results;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -204,6 +205,7 @@ public sealed class RepoCheckCommand : AsyncCommand<RepoCheckCommand.Settings>
 /// Installs the Git-level protections of spec sections 50 and 51.
 /// </summary>
 [Description("Install Git protections that keep AI tooling files out of a repository.")]
+[CommandMeta(CommandCategory.Safety, Intent = "hook excludes guard prevent commit agent files", Mutates = true, Example = "--global")]
 public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
 {
     private readonly IPolicyService _policies;

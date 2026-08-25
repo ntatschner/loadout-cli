@@ -6,6 +6,7 @@ using Loadout.Models;
 using Loadout.Platform.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -19,6 +20,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Create a cross-agent handoff document for a project.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "pass between agents share context", Mutates = true)]
 public sealed class HandoffCreateCommand : AsyncCommand<HandoffCreateCommand.Settings>
 {
     private readonly IProjectService _projects;

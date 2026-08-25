@@ -4,6 +4,7 @@ using Loadout.Models;
 using Loadout.Platform.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -18,6 +19,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Print a shell completion script for powershell, bash, zsh or fish.")]
+[CommandMeta(CommandCategory.Integration, Intent = "shell tab complete bash zsh fish", Example = "zsh")]
 public sealed class CompletionCommand : Command<CompletionCommand.Settings>
 {
     private static readonly string[] TopLevelCommands =

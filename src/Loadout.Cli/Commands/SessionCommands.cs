@@ -5,6 +5,7 @@ using Loadout.Core.Sessions;
 using Loadout.Models;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -33,6 +34,7 @@ public class SessionSettings : GlobalSettings
 /// </para>
 /// </summary>
 [Description("List recent agent sessions, newest first.")]
+[CommandMeta(CommandCategory.Start, Intent = "history recent previous what was i doing")]
 public sealed class SessionListCommand : AsyncCommand<SessionSettings>
 {
     private readonly ISessionHistoryService _sessions;
@@ -138,6 +140,7 @@ public sealed class ResumeSettings : SessionSettings
 /// </para>
 /// </summary>
 [Description("Resume a previous agent session.")]
+[CommandMeta(CommandCategory.Start, Intent = "continue carry on last session again")]
 public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
 {
     private readonly ISessionHistoryService _sessions;

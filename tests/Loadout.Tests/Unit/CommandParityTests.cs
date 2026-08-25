@@ -144,6 +144,60 @@ public sealed class CommandParityTests
     }
 
     [Fact]
+    public void Every_top_level_command_declares_a_category()
+    {
+        var catalogue = Catalogue();
+
+        // Sub-commands take their branch's category; a branch itself must say.
+        var topLevel = catalogue
+            .Where(e => !e.Path.Contains(' ', StringComparison.Ordinal))
+            .ToList();
+
+        topLevel.Should().NotBeEmpty();
+
+        var uncategorised = topLevel
+            .Where(e => e.Category.Length == 0)
+            .Select(e => e.Path)
+            .ToList();
+
+        // Without this the next command added is invisible to grouped help and
+        // lands in whatever bucket the renderer uses for the ones it does not
+        // recognise — which is how a command comes to exist and be unfindable.
+        uncategorised.Should().BeEmpty(
+            "these commands declare no category: " + string.Join(", ", uncategorised));
+    }
+
+    [Fact]
+    public void A_category_is_one_of_the_known_ones()
+    {
+        var known = Loadout.Tui.CommandCategory.All.ToHashSet(StringComparer.Ordinal);
+
+        foreach (var entry in Catalogue().Where(e => e.Category.Length > 0))
+        {
+            known.Should().Contain(
+                entry.Category,
+                $"'{entry.Path}' is filed under a category nothing else knows about");
+        }
+    }
+
+    [Fact]
+    public void Searching_by_intent_finds_a_command_by_what_it_is_for()
+    {
+        var catalogue = Catalogue();
+
+        // The point of intent words: nobody wanting to undo a mistake searches
+        // for "backup restore".
+        catalogue.Where(e => e.Matches("undo")).Select(e => e.Path)
+            .Should().Contain(p => p.StartsWith("backup", StringComparison.Ordinal));
+
+        catalogue.Where(e => e.Matches("broken")).Select(e => e.Path)
+            .Should().Contain("doctor");
+
+        catalogue.Where(e => e.Matches("vscode")).Select(e => e.Path)
+            .Should().Contain("code");
+    }
+
+    [Fact]
     public void Configuring_twice_does_not_duplicate_the_catalogue()
     {
         var first = Catalogue().Count;

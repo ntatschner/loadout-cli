@@ -4,6 +4,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Projects;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -15,6 +16,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Launch an agent against a project.")]
+[CommandMeta(CommandCategory.Start, Intent = "run open work begin agent claude codex", Example = "starstats")]
 public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
 {
     private readonly IAgentLauncher _launcher;
@@ -105,6 +107,7 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
 /// Launches the project that owns the current directory (spec section 24).
 /// </summary>
 [Description("Launch the agent for the repository in the current directory.")]
+[CommandMeta(CommandCategory.Start, Intent = "this repo current directory run here")]
 public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
 {
     private readonly IProjectService _projects;

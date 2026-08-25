@@ -6,6 +6,7 @@ using Loadout.Models;
 using Loadout.Platform.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -18,6 +19,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Install or remove the desktop entry for the launcher.")]
+[CommandMeta(CommandCategory.Integration, Intent = "start menu shortcut icon desktop entry", Mutates = true)]
 public sealed class DesktopCommand : AsyncCommand<DesktopCommand.Settings>
 {
     private readonly IDesktopIntegration _desktop;

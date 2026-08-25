@@ -5,6 +5,7 @@ using Loadout.Models;
 using Loadout.Models.Diagnostics;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -42,6 +43,7 @@ public sealed class DoctorSettings : GlobalSettings
 /// </para>
 /// </summary>
 [Description("Check the launcher, platform, Git, workspace, secrets and agents.")]
+[CommandMeta(CommandCategory.Health, Intent = "check broken problem diagnose wrong health fix", Mutates = true, Example = "--fix")]
 public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
 {
     private readonly IDoctorService _doctor;

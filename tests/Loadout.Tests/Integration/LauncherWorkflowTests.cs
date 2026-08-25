@@ -285,6 +285,50 @@ public sealed class DialogWorkflowTests
     }
 
     [Fact]
+    public void The_palette_finds_a_command_by_what_it_is_for()
+    {
+        using var session = TuiSession.Start(app => new CommandPaletteDialog(
+            [
+                new CatalogueEntry(
+                    "backup restore", "Undo an operation that changed files", null,
+                    CommandCategory.Workspace, "undo revert mistake recover"),
+                new CatalogueEntry(
+                    "doctor", "Check this machine", null, CommandCategory.Health, "broken wrong"),
+            ],
+            app));
+
+        // "revert" appears in neither the path nor the description, so this
+        // only finds it through the intent words. Searching for "undo" would
+        // have passed on the description alone and proved nothing.
+        session.Type("revert");
+
+        var screen = session.Screen;
+
+        screen.Should().Contain("backup restore");
+        screen.Should().NotContain("doctor");
+    }
+
+    [Fact]
+    public void The_palette_says_which_commands_change_things()
+    {
+        using var session = TuiSession.Start(app => new CommandPaletteDialog(
+            [
+                new CatalogueEntry(
+                    "migrate", "Move existing agent files", null,
+                    CommandCategory.Workspace, "move adopt", Mutates: true),
+                new CatalogueEntry(
+                    "status", "Summarise state", null, CommandCategory.Health, "state"),
+            ],
+            app));
+
+        var screen = session.Screen;
+
+        // A palette that looks the same for "show me the settings" and
+        // "rewrite the settings" asks somebody to remember which is which.
+        screen.Should().Contain("changes files");
+    }
+
+    [Fact]
     public void Typing_in_the_palette_narrows_it_to_what_was_typed()
     {
         using var session = TuiSession.Start(app => new CommandPaletteDialog(

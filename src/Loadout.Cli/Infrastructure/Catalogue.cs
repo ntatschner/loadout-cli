@@ -96,7 +96,20 @@ internal static class Catalogue
                 return;
             }
 
-            Entries.Add(new CatalogueEntry(path, description, reason));
+            var meta = command
+                .GetCustomAttributes(typeof(CommandMetaAttribute), inherit: false)
+                .OfType<CommandMetaAttribute>()
+                .FirstOrDefault();
+
+            Entries.Add(new CatalogueEntry(
+                path,
+                description,
+                reason,
+                meta?.Category ?? string.Empty,
+                meta?.Intent ?? string.Empty,
+                meta?.Mutates ?? false,
+                meta?.RequiresNetwork ?? false,
+                meta?.Example ?? string.Empty));
         }
     }
 }
