@@ -67,6 +67,23 @@ public static class Program
         internal void SetDescription(string description) => _inner.SetDescription(description);
 
         /// <summary>
+        /// Describes the branch and files it under a category.
+        /// </summary>
+        /// <remarks>
+        /// A branch is a thing somebody types — "loadout backup" is how anybody
+        /// would look for restoring something — but only its sub-commands were
+        /// ever recorded. Eleven whole families were invisible to any listing
+        /// that showed top-level commands, which is worse than the flat help
+        /// they were meant to improve on, because that at least named them.
+        /// </remarks>
+        internal void Describe(string description, string category, string intent = "")
+        {
+            _inner.SetDescription(description);
+
+            Catalogue.RecordBranch(_name, description, category, intent);
+        }
+
+        /// <summary>
         /// The command the branch runs when named on its own. Recorded under
         /// the branch name, because that is what somebody types.
         /// </summary>
@@ -305,14 +322,20 @@ public static class Program
 
         TopBranch(config, "backup", backup =>
         {
-            backup.SetDescription("Inspect and restore snapshots taken before mutating operations.");
+            backup.Describe(
+                "Inspect and restore snapshots taken before mutating operations.",
+                CommandCategory.Workspace,
+                "undo revert restore mistake recover snapshot");
             backup.AddCommand<BackupListCommand>("list");
             backup.AddCommand<BackupRestoreCommand>("restore");
         });
 
         TopBranch(config, "memory", memory =>
         {
-            memory.SetDescription("Record and check the durable facts about a project.");
+            memory.Describe(
+                "Record and check the durable facts about a project.",
+                CommandCategory.AgentConfiguration,
+                "facts remember notes knowledge");
             memory.AddCommand<MemoryListCommand>("list");
             memory.AddCommand<MemoryWriteCommand>("write");
             memory.AddCommand<MemoryAuditCommand>("audit");
@@ -323,7 +346,10 @@ public static class Program
 
         TopBranch(config, "rules", rules =>
         {
-            rules.SetDescription("Inspect the path-scoped instruction rules and what they cost.");
+            rules.Describe(
+                "Inspect the path-scoped instruction rules and what they cost.",
+                CommandCategory.AgentConfiguration,
+                "instructions budget cost tokens scoped");
             rules.AddCommand<RulesListCommand>("list");
             rules.AddCommand<RulesBudgetCommand>("budget");
             rules.AddCommand<RulesAuditCommand>("audit");
@@ -332,7 +358,10 @@ public static class Program
 
         TopBranch(config, "config", cfg =>
         {
-            cfg.SetDescription("Read and write launcher settings.");
+            cfg.Describe(
+                "Read and write launcher settings.",
+                CommandCategory.Administration,
+                "settings preferences change option value");
             cfg.AddCommand<ConfigListCommand>("list");
             cfg.AddCommand<ConfigGetCommand>("get");
             cfg.AddCommand<ConfigSetCommand>("set");
@@ -341,7 +370,10 @@ public static class Program
 
         TopBranch(config, "mcp", mcp =>
         {
-            mcp.SetDescription("Manage the MCP servers a project loads.");
+            mcp.Describe(
+                "Manage the MCP servers a project loads.",
+                CommandCategory.AgentConfiguration,
+                "servers tools model context protocol");
             mcp.AddCommand<McpListCommand>("list");
             mcp.AddCommand<McpAddCommand>("add");
             mcp.AddCommand<McpRemoveCommand>("remove");
@@ -349,12 +381,16 @@ public static class Program
 
         Top<DriftCommand>(config, "drift");
         Top<CodeCommand>(config, "code");
+        Top<CommandsCommand>(config, "commands");
         Top<SessionListCommand>(config, "sessions");
         Top<ResumeCommand>(config, "resume");
 
         TopBranch(config, "statusline", statusline =>
         {
-            statusline.SetDescription("Show the project, branch and context usage in the agent status line.");
+            statusline.Describe(
+                "Show the project, branch and context usage in the agent status line.",
+                CommandCategory.Integration,
+                "prompt status bar agent display");
 
             // Rendering is the default because that is the form Claude invokes:
             // the installed command is this binary plus one word.
@@ -367,13 +403,19 @@ public static class Program
 
         TopBranch(config, "repo", repo =>
         {
-            repo.SetDescription("Inspect repository compliance.");
+            repo.Describe(
+                "Inspect repository compliance.",
+                CommandCategory.Safety,
+                "agent files tracked committed check compliance");
             repo.AddCommand<RepoCheckCommand>("check");
         });
 
         TopBranch(config, "profile", profile =>
         {
-            profile.SetDescription("Inspect context profiles.");
+            profile.Describe(
+                "Inspect context profiles.",
+                CommandCategory.AgentConfiguration,
+                "context which instructions load");
             profile.AddCommand<ProfileListCommand>("list");
         });
 
@@ -383,7 +425,10 @@ public static class Program
 
         TopBranch(config, "project", project =>
         {
-            project.SetDescription("Register, list and inspect projects.");
+            project.Describe(
+                "Register, list and inspect projects.",
+                CommandCategory.Projects,
+                "register add remove list repositories");
             project.AddCommand<ProjectListCommand>("list");
             project.AddCommand<ProjectAddCommand>("add");
             project.AddCommand<ProjectRemoveCommand>("remove");
@@ -399,7 +444,10 @@ public static class Program
 
         TopBranch(config, "workspace", workspace =>
         {
-            workspace.SetDescription("Manage the central workspace clone.");
+            workspace.Describe(
+                "Manage the central workspace clone.",
+                CommandCategory.Workspace,
+                "central sync push pull share machines computer laptop switch move new");
             workspace.AddCommand<WorkspaceStatusCommand>("status");
             workspace.AddCommand<WorkspaceSyncCommand>("sync");
             workspace.AddCommand<WorkspaceSaveCommand>("save");
@@ -408,7 +456,10 @@ public static class Program
 
         TopBranch(config, "secret", secret =>
         {
-            secret.SetDescription("Store and check secrets in the platform credential store.");
+            secret.Describe(
+                "Store and check secrets in the platform credential store.",
+                CommandCategory.Safety,
+                "credential token password keychain");
             secret.AddCommand<SecretSetCommand>("set");
             secret.AddCommand<SecretTestCommand>("test");
             secret.AddCommand<SecretRemoveCommand>("remove");

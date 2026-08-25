@@ -95,10 +95,17 @@ public sealed record CatalogueEntry(
             return true;
         }
 
-        return Path.Contains(text, StringComparison.OrdinalIgnoreCase)
-            || Description.Contains(text, StringComparison.OrdinalIgnoreCase)
-            || Intent.Contains(text, StringComparison.OrdinalIgnoreCase)
-            || Category.Contains(text, StringComparison.OrdinalIgnoreCase);
+        // Every word has to land somewhere, rather than the whole phrase
+        // having to appear verbatim. People describe what they want in more
+        // than one word — "new machine", "switch computer" — and matching the
+        // phrase as written found nothing for any of them.
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return words.All(word =>
+            Path.Contains(word, StringComparison.OrdinalIgnoreCase)
+            || Description.Contains(word, StringComparison.OrdinalIgnoreCase)
+            || Intent.Contains(word, StringComparison.OrdinalIgnoreCase)
+            || Category.Contains(word, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>True when running this from the launcher makes sense.</summary>

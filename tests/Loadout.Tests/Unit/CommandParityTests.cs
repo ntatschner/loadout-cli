@@ -198,6 +198,40 @@ public sealed class CommandParityTests
     }
 
     [Fact]
+    public void A_branch_is_listed_in_its_own_right()
+    {
+        var paths = Catalogue().Select(e => e.Path).ToHashSet(StringComparer.Ordinal);
+
+        // Only sub-commands were recorded, so every listing of top-level
+        // commands silently omitted eleven whole families — worse than the flat
+        // help it was meant to improve on, which at least named them. Somebody
+        // looking for how to undo something types "backup", not "backup
+        // restore".
+        foreach (var branch in new[]
+        {
+            "backup", "config", "mcp", "memory", "profile",
+            "project", "repo", "rules", "secret", "statusline", "workspace",
+        })
+        {
+            paths.Should().Contain(branch, $"'{branch}' is something somebody types");
+        }
+    }
+
+    [Fact]
+    public void Searching_several_words_finds_what_matches_all_of_them()
+    {
+        var catalogue = Catalogue();
+
+        // People describe what they want in more than one word. Matching the
+        // phrase as written found nothing for any of them.
+        catalogue.Where(e => e.Matches("new machine")).Select(e => e.Path)
+            .Should().Contain("setup");
+
+        catalogue.Where(e => e.Matches("undo a mistake")).Select(e => e.Path)
+            .Should().Contain("backup");
+    }
+
+    [Fact]
     public void Configuring_twice_does_not_duplicate_the_catalogue()
     {
         var first = Catalogue().Count;

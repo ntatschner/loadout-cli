@@ -21,7 +21,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Configure the launcher on this machine.")]
-[CommandMeta(CommandCategory.Workspace, Intent = "first run start install configure new machine", Mutates = true, RequiresNetwork = true)]
+[CommandMeta(CommandCategory.Workspace, Intent = "first run start install configure new machine computer laptop", Mutates = true, RequiresNetwork = true)]
 public sealed class SetupCommand : AsyncCommand<SetupCommand.Settings>
 {
     private readonly ISetupWizard _wizard;

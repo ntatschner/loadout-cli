@@ -70,6 +70,34 @@ internal static class Catalogue
     }
 
     /// <summary>
+    /// Notes a branch — a name that groups sub-commands, such as
+    /// <c>backup</c> — as something in its own right.
+    /// </summary>
+    /// <remarks>
+    /// Only sub-commands were recorded before, so every listing of top-level
+    /// commands silently omitted eleven whole families. Somebody looking for
+    /// how to undo something types "backup", not "backup restore".
+    /// </remarks>
+    internal static void RecordBranch(
+        string name,
+        string description,
+        string category,
+        string intent)
+    {
+        TerminalOnly.TryGetValue(name, out var reason);
+
+        lock (Gate)
+        {
+            if (Entries.Any(e => string.Equals(e.Path, name, StringComparison.Ordinal)))
+            {
+                return;
+            }
+
+            Entries.Add(new CatalogueEntry(name, description, reason, category, intent));
+        }
+    }
+
+    /// <summary>
     /// Notes one command. Called as it is registered with the parser, so the
     /// two cannot disagree.
     /// </summary>
