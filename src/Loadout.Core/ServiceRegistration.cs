@@ -47,6 +47,9 @@ public static class ServiceRegistration
         services.AddSingleton<ISecurityProfileService, SecurityProfileService>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDiagnosticContributor, InstructionDiagnosticContributor>();
+
+        services.AddSingleton<Editors.IEditorService, Editors.EditorService>();
+        services.AddSingleton<IDiagnosticContributor, Editors.EditorDiagnosticContributor>();
         services.AddSingleton<IDoctorService, DoctorService>();
         services.AddSingleton<IRemediationService, RemediationService>();
 

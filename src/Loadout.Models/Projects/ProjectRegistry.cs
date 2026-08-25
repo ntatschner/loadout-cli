@@ -26,4 +26,10 @@ public sealed class ProjectRegistryEntry
     public List<string> Aliases { get; set; } = [];
 
     public string DefaultAgent { get; set; } = "claude";
+
+    /// <summary>
+    /// Editor profile to open this project under, overriding the one its agent
+    /// would otherwise use. Empty for the usual case, where the agent decides.
+    /// </summary>
+    public string EditorProfile { get; set; } = string.Empty;
 }

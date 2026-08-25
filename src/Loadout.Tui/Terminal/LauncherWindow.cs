@@ -183,6 +183,11 @@ internal sealed class LauncherWindow : Window
                 },
                 new MenuItem
                 {
+                    Title = "Open in _editor",
+                    Action = () => WithSelected(p => RunCommand($"code {p.Entry.Slug}")),
+                },
+                new MenuItem
+                {
                     Title = "Open in _file manager",
                     Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.FileManager, p))),
                 },

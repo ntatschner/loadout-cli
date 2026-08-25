@@ -29,6 +29,9 @@ public sealed class LauncherConfig
     /// <summary>Explicit extra directories to search for agent executables (spec section 65).</summary>
     public List<string> AgentSearchPaths { get; set; } = [];
 
+    /// <summary>How a project is opened in an editor, and under which profile.</summary>
+    public EditorSettings Editor { get; set; } = new();
+
     /// <summary>
     /// User-defined agents, keyed by the name used on the command line
     /// (spec section 88). An entry whose key matches a built-in adapter
@@ -36,6 +39,38 @@ public sealed class LauncherConfig
     /// has changed since this launcher was built.
     /// </summary>
     public Dictionary<string, Agents.GenericAgentDefinition> CustomAgents { get; set; } = [];
+}
+
+/// <summary>
+/// Which editor a project opens in, and under which profile.
+/// <para>
+/// VS Code keeps settings, extensions and keybindings in named profiles, and
+/// working with an agent usually wants a different set from working without
+/// one. This maps an agent to the profile to open alongside it, so opening a
+/// project for Claude and opening the same project for Codex can put the editor
+/// in two different states without anybody switching by hand.
+/// </para>
+/// <para>
+/// Names only, never contents. Loadout opens the editor with a profile; it does
+/// not write what is inside one. VS Code stores profile contents in an internal
+/// layout that is not a published contract, and rewriting it would be a promise
+/// this cannot keep across editor versions.
+/// </para>
+/// </summary>
+public sealed class EditorSettings
+{
+    /// <summary>
+    /// The editor's command-line name. Resolved the same way an agent is, so a
+    /// fork that ships its own launcher works by naming it here.
+    /// </summary>
+    public string Command { get; set; } = "code";
+
+    /// <summary>
+    /// Agent name to editor profile name. An agent with no entry opens the
+    /// editor with whatever profile it would have used anyway, which is the
+    /// right answer for somebody who does not use profiles.
+    /// </summary>
+    public Dictionary<string, string> Profiles { get; set; } = [];
 }
 
 /// <summary>

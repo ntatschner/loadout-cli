@@ -348,6 +348,7 @@ public static class Program
         });
 
         Top<DriftCommand>(config, "drift");
+        Top<CodeCommand>(config, "code");
         Top<SessionListCommand>(config, "sessions");
         Top<ResumeCommand>(config, "resume");
 
