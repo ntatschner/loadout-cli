@@ -116,11 +116,24 @@ public sealed class LoadoutProcess : IDisposable
                     continue;
                 }
 
-                // The runtime identifier subfolder is not known here and differs
-                // per machine, so it is searched for rather than assumed.
-                var found = Directory
+                // A build can leave more than one runtime identifier behind —
+                // cross-compiling win-arm64 alongside win-x64 is ordinary — and
+                // taking whichever the filesystem happened to return first
+                // would sometimes hand back an executable this machine cannot
+                // run. The one matching this process is preferred, and the
+                // search only falls back when there is nothing better.
+                var candidates = Directory
                     .EnumerateFiles(cli, name, SearchOption.AllDirectories)
-                    .FirstOrDefault();
+                    .ToList();
+
+                var current = System.Runtime.InteropServices.RuntimeInformation
+                    .RuntimeIdentifier;
+
+                var matching = candidates.FirstOrDefault(path =>
+                    Path.GetFileName(Path.GetDirectoryName(path))
+                        is { } rid && string.Equals(rid, current, StringComparison.OrdinalIgnoreCase));
+
+                var found = matching ?? candidates.FirstOrDefault();
 
                 if (found is not null)
                 {

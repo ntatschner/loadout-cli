@@ -69,6 +69,22 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release
 
+      # The contract tests run the built command line as a real process, and
+      # skip themselves with a reason when it is absent. That is right for a
+      # developer who has only built the tests, and wrong here: a skipped test
+      # is indistinguishable from a passing one in a green run, so CI asserts
+      # the executable exists before trusting the result.
+      - name: Check the command line was built
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=$(find src/Loadout.Cli/bin/Release -type f \( -name loadout -o -name loadout.exe \) | head -1)
+          if [ -z "$found" ]; then
+            echo "The command line executable was not produced, so the contract tests would skip." >&2
+            exit 1
+          fi
+          echo "Found $found"
+
       - name: Test
         run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx"
 
