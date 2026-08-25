@@ -26,6 +26,7 @@ internal sealed class LauncherWindow : Window
     private readonly IReadOnlyList<ProjectResolution> _projects;
     private readonly Func<ProjectResolution, CancellationToken, Task<ProjectOverview?>> _overview;
     private readonly IApplication _application;
+    private readonly Action<LauncherWindow> _showPalette;
 
     private readonly TextField _filter;
     private readonly ListView _list;
@@ -67,6 +68,7 @@ internal sealed class LauncherWindow : Window
         _projects = projects;
         _overview = overview;
         _application = application;
+        _showPalette = showPalette;
         _shown = [.. projects];
 
         Title = "Loadout";
@@ -76,12 +78,12 @@ internal sealed class LauncherWindow : Window
         // searching is a list where the search box should already be visible.
         _filter = new TextField
         {
-            X = 1,
+            X = 9,
             Y = 1,
             Width = Dim.Fill(1),
         };
 
-        var filterLabel = new Label { X = 1, Y = 0, Text = "Filter" };
+        var filterLabel = new Label { X = 1, Y = 1, Text = "Filter" };
 
         _list = new ListView
         {
@@ -97,7 +99,7 @@ internal sealed class LauncherWindow : Window
             X = 0,
             Y = 3,
             Width = Dim.Percent(38),
-            Height = Dim.Fill(1),
+            Height = Dim.Fill(2),
             Title = "Projects",
             BorderStyle = LineStyle.Rounded,
         };
@@ -109,7 +111,7 @@ internal sealed class LauncherWindow : Window
             X = Pos.Right(listFrame),
             Y = 3,
             Width = Dim.Fill(),
-            Height = Dim.Fill(1),
+            Height = Dim.Fill(2),
         };
 
         // One line that says what state the machine is in, so it is answered
@@ -122,7 +124,7 @@ internal sealed class LauncherWindow : Window
             Text = Describe(projects.Count, workspaceState, agents),
         };
 
-        Add(filterLabel, _filter, listFrame, _detail, _summary);
+        Add(BuildMenu(), filterLabel, _filter, listFrame, _detail, _summary);
 
         _filter.TextChanged += (_, _) => ApplyFilter();
 
@@ -141,14 +143,105 @@ internal sealed class LauncherWindow : Window
         _detail.Shell += (_, _) => Close(new LauncherIntent(
             LauncherAction.Shell, Selected));
 
+        _detail.Problems += (_, _) => Close(new LauncherIntent(
+            LauncherAction.Problems, Selected));
+
         Populate(here);
 
         KeyBindings.Add(Key.Q.WithCtrl, Command.Quit);
         AddCommand(Command.Quit, () => { Close(LauncherIntent.Quit); return true; });
 
+        KeyBindings.Add(Key.N.WithCtrl, Command.New);
+        AddCommand(Command.New, () =>
+        {
+            Close(new LauncherIntent(LauncherAction.AddProject));
+            return true;
+        });
+
         KeyBindings.Add(Key.P.WithCtrl, Command.Open);
-        AddCommand(Command.Open, () => { showPalette(this); return true; });
+        AddCommand(Command.Open, () => { _showPalette(this); return true; });
     }
+
+    /// <summary>
+    /// The menu. Everything reachable from the screen is in it, named, so that
+    /// what the launcher can do is discoverable by looking rather than by
+    /// already knowing which key to press.
+    /// </summary>
+    private MenuBar BuildMenu() =>
+        new([
+            new MenuBarItem("_Project", [
+                new MenuItem { Title = "_Launch", Action = LaunchSelected },
+                new MenuItem
+                {
+                    Title = "_Resume a session",
+                    Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.Resume, p))),
+                },
+                new MenuItem
+                {
+                    Title = "Open development _shell",
+                    Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.Shell, p))),
+                },
+                new MenuItem
+                {
+                    Title = "Open in _file manager",
+                    Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.FileManager, p))),
+                },
+                new Line(),
+                new MenuItem
+                {
+                    Title = "Review _problems…",
+                    Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.Problems, p))),
+                },
+                new MenuItem
+                {
+                    Title = "_Clone onto this machine",
+                    Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.Clone, p))),
+                },
+            ]),
+            new MenuBarItem("_Registry", [
+                new MenuItem
+                {
+                    Title = "_Add a project…",
+                    Action = () => Close(new LauncherIntent(LauncherAction.AddProject)),
+                },
+            ]),
+            new MenuBarItem("_Tools", [
+                new MenuItem { Title = "All _commands…", Action = () => _showPalette(this) },
+                new Line(),
+                new MenuItem { Title = "Check this _machine", Action = () => RunCommand("doctor") },
+                new MenuItem { Title = "Configuration _drift", Action = () => RunCommand("drift") },
+                new MenuItem { Title = "_Settings and paths", Action = () => RunCommand("config show") },
+            ]),
+            new MenuBarItem("_Help", [
+                new MenuItem { Title = "_Keys", Action = ShowKeys },
+            ]),
+        ]);
+
+    /// <summary>
+    /// Runs an action against the selected project, and does nothing at all
+    /// when there is not one. A menu entry that throws on an empty registry
+    /// would be a worse answer than one that quietly declines.
+    /// </summary>
+    private void WithSelected(Action<ProjectResolution> action)
+    {
+        if (Selected is { } project)
+        {
+            action(project);
+        }
+    }
+
+    private void ShowKeys() =>
+        MessageBox.Query(
+            _application,
+            "Keys",
+            string.Join(
+                Environment.NewLine,
+                "Enter      launch the selected project",
+                "Ctrl+P     all commands",
+                "Ctrl+Q     quit",
+                "F9         menu",
+                "Tab        move between the filter, the list and the buttons"),
+            "_Close");
 
     /// <summary>The project under the cursor, if the list is not empty.</summary>
     internal ProjectResolution? Selected =>
@@ -178,7 +271,8 @@ internal sealed class LauncherWindow : Window
             ? "no agents installed"
             : string.Join(", ", agents);
 
-        return $"{projects}  ·  {workspace}  ·  {installed}      Ctrl+P commands   Ctrl+Q quit";
+        return $"{projects}  ·  {workspace}  ·  {installed}"
+            + "      Ctrl+P commands   Ctrl+N add   F9 menu   Ctrl+Q quit";
     }
 
     /// <summary>
@@ -213,7 +307,13 @@ internal sealed class LauncherWindow : Window
         }
         else
         {
-            _detail.ShowNothing();
+            // An empty registry is the state a new person is in, and a blank
+            // screen with no way forward is the worst possible answer to it.
+            // Telling somebody the command to type is not much better: the
+            // launcher is already open and already knows where to look.
+            _detail.ShowNothing(_projects.Count == 0
+                ? "No projects are registered yet. Choose Registry ▸ Add a project, or press Ctrl+N."
+                : "Nothing matches that filter.");
         }
     }
 

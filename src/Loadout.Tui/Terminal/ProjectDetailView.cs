@@ -32,6 +32,7 @@ internal sealed class ProjectDetailView : FrameView
     private readonly Button _launch;
     private readonly Button _resume;
     private readonly Button _shell;
+    private readonly Button _problems;
 
     /// <summary>Raised with the agent to start.</summary>
     internal event EventHandler<string>? Launch;
@@ -41,6 +42,9 @@ internal sealed class ProjectDetailView : FrameView
 
     /// <summary>Raised to open a development shell.</summary>
     internal event EventHandler<EventArgs>? Shell;
+
+    /// <summary>Raised to look at what is wrong and offer to fix it.</summary>
+    internal event EventHandler<EventArgs>? Problems;
 
     internal ProjectDetailView()
     {
@@ -73,11 +77,22 @@ internal sealed class ProjectDetailView : FrameView
         _resume = new Button { X = Pos.Right(_launch) + 1, Y = Pos.AnchorEnd(2), Text = "_Resume" };
         _shell = new Button { X = Pos.Right(_resume) + 1, Y = Pos.AnchorEnd(2), Text = "_Shell" };
 
+        // Only offered when there is something to look at, so its presence is
+        // itself the signal that something needs attention.
+        _problems = new Button
+        {
+            X = Pos.Right(_shell) + 1,
+            Y = Pos.AnchorEnd(2),
+            Text = "_Problems",
+            Visible = false,
+        };
+
         _launch.Accepting += (_, e) => { e.Handled = true; Launch?.Invoke(this, _agent); };
         _resume.Accepting += (_, e) => { e.Handled = true; Resume?.Invoke(this, EventArgs.Empty); };
         _shell.Accepting += (_, e) => { e.Handled = true; Shell?.Invoke(this, EventArgs.Empty); };
+        _problems.Accepting += (_, e) => { e.Handled = true; Problems?.Invoke(this, EventArgs.Empty); };
 
-        Add(_path, _warningsFrame, _launch, _resume, _shell);
+        Add(_path, _warningsFrame, _launch, _resume, _shell, _problems);
     }
 
     /// <summary>The agent the launch button would start.</summary>
@@ -114,6 +129,7 @@ internal sealed class ProjectDetailView : FrameView
         _memory.Text = string.Empty;
 
         _warningsFrame.Visible = false;
+        _problems.Visible = false;
 
         SetEnabled(project.IsAvailableLocally);
     }
@@ -163,6 +179,7 @@ internal sealed class ProjectDetailView : FrameView
         var warnings = Warnings(overview).ToList();
 
         _warningsFrame.Visible = warnings.Count > 0;
+        _problems.Visible = warnings.Count > 0;
 
         if (warnings.Count > 0)
         {
@@ -171,15 +188,19 @@ internal sealed class ProjectDetailView : FrameView
     }
 
     /// <summary>Clears the panel, for when there is no project to describe.</summary>
-    internal void ShowNothing()
+    /// <param name="because">What to say instead, which is the only thing on
+    /// screen when the registry is empty and so has to be a way forward rather
+    /// than a statement of fact.</param>
+    internal void ShowNothing(string because = "No project selected.")
     {
         Title = "Details";
-        _path.Text = "No project selected.";
+        _path.Text = because;
         _branch.Text = string.Empty;
         _context.Text = string.Empty;
         _rules.Text = string.Empty;
         _memory.Text = string.Empty;
         _warningsFrame.Visible = false;
+        _problems.Visible = false;
 
         SetEnabled(false);
     }

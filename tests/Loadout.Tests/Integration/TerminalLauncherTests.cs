@@ -266,4 +266,79 @@ public sealed class TerminalLauncherTests
             p => Overview(p),
             (window, _, _) => window.Selected.Should().BeNull());
     }
+
+    [Fact]
+    public void An_empty_registry_is_given_a_way_forward()
+    {
+        // The state every new person starts in. A blank screen with nothing to
+        // act on is the worst possible answer to it, and naming a command to
+        // type is barely better when the launcher is already open.
+        OnScreen(
+            [],
+            p => Overview(p),
+            (_, _, screen) => screen.Should().Contain("Add a project"));
+    }
+
+    [Fact]
+    public void The_menu_names_what_the_launcher_can_do()
+    {
+        // Discoverable by looking rather than by already knowing which key to
+        // press, which was the whole complaint about the prompt-based one.
+        OnScreen(
+            [Project("alpha", "Alpha")],
+            p => Overview(p),
+            (_, _, screen) =>
+            {
+                screen.Should().Contain("Project");
+                screen.Should().Contain("Registry");
+                screen.Should().Contain("Tools");
+            });
+    }
+
+    [Fact]
+    public void A_project_with_nothing_wrong_does_not_offer_to_fix_anything()
+    {
+        OnScreen(
+            [Project("alpha", "Alpha")],
+            p => Overview(p),
+            (_, app, _) =>
+            {
+                var screen = ScreenShowing(app, "main");
+
+                screen.Should().NotContain("Needs attention");
+            });
+    }
+
+    [Fact]
+    public void A_project_with_something_wrong_says_what_and_offers_to_fix_it()
+    {
+        OnScreen(
+            [Project("alpha", "Alpha")],
+            p => Overview(p, guarded: false, trackedAgentFiles: 2),
+            (_, app, _) =>
+            {
+                var screen = ScreenShowing(app, "Needs attention");
+
+                screen.Should().Contain("Needs attention");
+                screen.Should().Contain("pre-commit");
+
+                // The button appearing at all is the signal that something
+                // needs looking at, so its absence would be the bug.
+                screen.Should().Contain("Problems");
+            });
+    }
+
+    [Fact]
+    public void Asking_to_add_a_project_leaves_the_screen_to_do_it()
+    {
+        OnScreen(
+            [],
+            p => Overview(p),
+            (window, _, _) =>
+            {
+                window.Close(new LauncherIntent(LauncherAction.AddProject));
+
+                window.Intent!.Action.Should().Be(LauncherAction.AddProject);
+            });
+    }
 }

@@ -28,6 +28,25 @@ internal enum LauncherAction
 
     /// <summary>Run a command from the catalogue, as though it had been typed.</summary>
     Command,
+
+    /// <summary>Bring one or more repositories into the registry.</summary>
+    AddProject,
+
+    /// <summary>Reveal the project's directory in the platform file manager.</summary>
+    FileManager,
+
+    /// <summary>Fetch a registered project that is not on this machine yet.</summary>
+    Clone,
+
+    /// <summary>
+    /// Look at what is wrong with the project, and put right what can be.
+    /// <para>
+    /// A screen of its own rather than a dialog over the launcher, because
+    /// inspecting a repository and applying a fix are both slow enough to
+    /// freeze a screen that tried to do them while still drawing it.
+    /// </para>
+    /// </summary>
+    Problems,
 }
 
 /// <summary>

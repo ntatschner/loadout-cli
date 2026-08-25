@@ -1,8 +1,11 @@
 using Loadout.Agents;
 using Loadout.Core.Configuration;
+using Loadout.Core.Context;
+using Loadout.Core.Diagnostics;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
+using Loadout.Models.Diagnostics;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
@@ -43,6 +46,11 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IProcessLauncher _processes;
     private readonly IProjectOverviewService _overviews;
     private readonly ICommandCatalogue _catalogue;
+    private readonly IApplicationLauncher _opener;
+    private readonly IProjectOnboarding _onboarding;
+    private readonly IDriftService _drift;
+    private readonly IRemediationService _remediation;
+    private readonly IContextCompiler _compiler;
 
     public TerminalLauncher(
         IAnsiConsole console,
@@ -54,7 +62,12 @@ public sealed class TerminalLauncher : ILauncherTui
         IShellProvider shells,
         IProcessLauncher processes,
         IProjectOverviewService overviews,
-        ICommandCatalogue catalogue)
+        ICommandCatalogue catalogue,
+        IApplicationLauncher opener,
+        IProjectOnboarding onboarding,
+        IDriftService drift,
+        IRemediationService remediation,
+        IContextCompiler compiler)
     {
         _console = console;
         _projects = projects;
@@ -66,6 +79,11 @@ public sealed class TerminalLauncher : ILauncherTui
         _processes = processes;
         _overviews = overviews;
         _catalogue = catalogue;
+        _opener = opener;
+        _onboarding = onboarding;
+        _drift = drift;
+        _remediation = remediation;
+        _compiler = compiler;
     }
 
     /// <inheritdoc />
@@ -249,6 +267,27 @@ public sealed class TerminalLauncher : ILauncherTui
                 await _catalogue.RunAsync("resume", [resuming.Entry.Slug], ct).ConfigureAwait(false);
                 return null;
 
+            case LauncherAction.FileManager when intent.Project?.LocalPath is { } directory:
+                await _opener.OpenInFileManagerAsync(directory, ct).ConfigureAwait(false);
+                return null;
+
+            case LauncherAction.AddProject:
+                // A sequence of questions, which reads better asked one at a
+                // time than laid out on a screen. Run with the terminal handed
+                // back, like everything else that needs it.
+                await _onboarding.AddAsync(new OnboardingOptions(), ct).ConfigureAwait(false);
+                Pause();
+                return null;
+
+            case LauncherAction.Clone when intent.Project is { } cloning:
+                await _catalogue.RunAsync("project clone", [cloning.Entry.Slug], ct).ConfigureAwait(false);
+                Pause();
+                return null;
+
+            case LauncherAction.Problems when intent.Project is { } troubled:
+                await ReviewProblemsAsync(troubled, ct).ConfigureAwait(false);
+                return null;
+
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
                 await _catalogue.RunAsync(path, [], ct).ConfigureAwait(false);
 
@@ -263,13 +302,92 @@ public sealed class TerminalLauncher : ILauncherTui
         }
     }
 
+    /// <summary>
+    /// Shows what is wrong with a project and applies whatever was ticked.
+    /// <para>
+    /// Inspecting and previewing both happen before the screen opens, and
+    /// applying happens after it closes. Neither is quick enough to do while a
+    /// screen is being drawn, and a screen that stops repainting mid-fix is
+    /// indistinguishable from one that has crashed.
+    /// </para>
+    /// </summary>
+    private async Task ReviewProblemsAsync(ProjectResolution project, CancellationToken ct)
+    {
+        var inspected = await _drift.InspectAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
+        if (inspected.Failed || inspected.Value is not { Count: > 0 } reports)
+        {
+            _console.MarkupLine(
+                $"[red]{Markup.Escape(inspected.Error ?? "Nothing could be inspected.")}[/]");
+
+            Pause();
+            return;
+        }
+
+        var report = reports[0];
+
+        var offered = new List<OfferedRemedy>();
+
+        foreach (var remedy in report.Remedies)
+        {
+            var preview = await _remediation.PreviewAsync(remedy, ct).ConfigureAwait(false);
+
+            offered.Add(new OfferedRemedy(
+                remedy,
+                preview.Succeeded
+                    ? preview.Value!.Detail
+                    : preview.Error ?? "This could not be previewed."));
+        }
+
+        IReadOnlyList<Remedy> chosen;
+
+        using (IApplication application = Application.Create())
+        {
+            application.Init();
+
+            using var window = new ProblemsWindow(
+                project.Entry.Name, report.Findings, offered, application);
+
+            await application.RunAsync(window, ct).ConfigureAwait(false);
+
+            chosen = window.Chosen;
+        }
+
+        if (chosen.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var remedy in chosen)
+        {
+            var applied = await _remediation.ApplyAsync(remedy, ct).ConfigureAwait(false);
+
+            if (applied.Failed)
+            {
+                _console.MarkupLine(
+                    $"[red]{Markup.Escape(remedy.Description)}: {Markup.Escape(applied.Error!)}[/]");
+
+                continue;
+            }
+
+            _console.MarkupLine($"[green]done[/] {Markup.Escape(remedy.Description)}");
+        }
+
+        Pause();
+    }
+
     private async Task<int?> LaunchAsync(
         ProjectResolution project,
         string? agent,
         CancellationToken ct)
     {
+        var agentName = agent ?? project.Entry.DefaultAgent;
+
+        var profile = await ChooseProfileAsync(project.Entry.Slug, agentName, ct)
+            .ConfigureAwait(false);
+
         var result = await _launcher.LaunchAsync(
-            new LaunchRequest(project.Entry.Slug, agent ?? project.Entry.DefaultAgent),
+            new LaunchRequest(project.Entry.Slug, agentName, Profile: profile),
             ct).ConfigureAwait(false);
 
         if (result.Failed)
@@ -284,6 +402,51 @@ public sealed class TerminalLauncher : ILauncherTui
         }
 
         return result.Value.AgentExitCode;
+    }
+
+    /// <summary>
+    /// Asks which context profile to start with, when there is more than one.
+    /// <para>
+    /// Asked only when the answer matters. A project with a single profile has
+    /// nothing to choose between, and putting a dialog up to say so would be a
+    /// question whose answer is already known.
+    /// </para>
+    /// </summary>
+    private async Task<string?> ChooseProfileAsync(
+        string slug,
+        string agentName,
+        CancellationToken ct)
+    {
+        var manifest = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+        if (manifest.Failed)
+        {
+            return null;
+        }
+
+        var profiles = _compiler.ListProfiles(manifest.Value!, agentName);
+
+        if (profiles.Count <= 1)
+        {
+            return null;
+        }
+
+        var labels = profiles
+            .Select(name => manifest.Value!.Profiles.TryGetValue(name, out var profile)
+                && !string.IsNullOrWhiteSpace(profile.Description)
+                    ? $"{name}  ({profile.Description})"
+                    : name)
+            .ToList();
+
+        using IApplication application = Application.Create();
+
+        application.Init();
+
+        using var chooser = new ChoiceDialog("What are you working on?", labels, application);
+
+        await application.RunAsync(chooser, ct).ConfigureAwait(false);
+
+        return chooser.ChosenIndex is int index ? profiles[index] : null;
     }
 
     private async Task<int?> OpenShellAsync(string workingDirectory, CancellationToken ct)
