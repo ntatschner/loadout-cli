@@ -45,6 +45,7 @@ public sealed class RepositoryPolicy
             ".windsurf/**",
             ".continue/**",
             ".roo/**",
+            ".serena/**",
             ".aider*",
             ".ai/**",
             ".agent/**",
@@ -53,6 +54,15 @@ public sealed class RepositoryPolicy
             "AGENTS.override.md",
         ],
 
+        // .serena is forbidden knowing that Serena disagrees. It writes its
+        // own .serena/.gitignore excluding only /cache and
+        // /project.local.yml, which means it intends project.yml and
+        // memories/ to be committed. That is a reasonable position and it is
+        // not this launcher's: memory an agent recorded belongs in the
+        // workspace, where every machine and every agent can read it, not in
+        // one application repository. A project that wants Serena's layout
+        // instead says so in Allowed, which is what Allowed is for.
+        //
         // AGENTS.md is deliberately absent from the forbidden list. Spec
         // section 9 names it as the example of a file a project may legitimately
         // choose to version, so the default must not fight that choice.
