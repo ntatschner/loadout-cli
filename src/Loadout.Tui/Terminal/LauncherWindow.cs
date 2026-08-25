@@ -217,17 +217,17 @@ internal sealed class LauncherWindow : Window
                 new MenuItem
                 {
                     Title = "Check this _machine",
-                    Action = () => RunCommand(LauncherCommands.Doctor),
+                    Action = () => Close(new LauncherIntent(LauncherAction.MachineCheck)),
                 },
                 new MenuItem
                 {
                     Title = "Configuration _drift",
-                    Action = () => RunCommand(LauncherCommands.Drift),
+                    Action = () => Close(new LauncherIntent(LauncherAction.Drift)),
                 },
                 new MenuItem
                 {
                     Title = "_Settings and paths",
-                    Action = () => RunCommand(LauncherCommands.Settings),
+                    Action = () => Close(new LauncherIntent(LauncherAction.Settings)),
                 },
             ]),
             new MenuBarItem("_Help", [

@@ -5,6 +5,7 @@ using Loadout.Core.Diagnostics;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
+using Loadout.Models.Configuration;
 using Loadout.Models.Diagnostics;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
@@ -51,6 +52,8 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IDriftService _drift;
     private readonly IRemediationService _remediation;
     private readonly IContextCompiler _compiler;
+    private readonly IDoctorService _doctor;
+    private readonly IPlatformPaths _paths;
 
     public TerminalLauncher(
         IAnsiConsole console,
@@ -67,7 +70,9 @@ public sealed class TerminalLauncher : ILauncherTui
         IProjectOnboarding onboarding,
         IDriftService drift,
         IRemediationService remediation,
-        IContextCompiler compiler)
+        IContextCompiler compiler,
+        IDoctorService doctor,
+        IPlatformPaths paths)
     {
         _console = console;
         _projects = projects;
@@ -84,6 +89,8 @@ public sealed class TerminalLauncher : ILauncherTui
         _drift = drift;
         _remediation = remediation;
         _compiler = compiler;
+        _doctor = doctor;
+        _paths = paths;
     }
 
     /// <inheritdoc />
@@ -290,6 +297,18 @@ public sealed class TerminalLauncher : ILauncherTui
                 await ReviewProblemsAsync(troubled, ct).ConfigureAwait(false);
                 return null;
 
+            case LauncherAction.MachineCheck:
+                await CheckMachineAsync(ct).ConfigureAwait(false);
+                return null;
+
+            case LauncherAction.Settings:
+                await ShowSettingsAsync(ct).ConfigureAwait(false);
+                return null;
+
+            case LauncherAction.Drift:
+                await CheckDriftAsync(ct).ConfigureAwait(false);
+                return null;
+
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
                 await _catalogue.RunAsync(path, [], ct).ConfigureAwait(false);
 
@@ -328,9 +347,86 @@ public sealed class TerminalLauncher : ILauncherTui
 
         var report = reports[0];
 
+        await ShowFindingsAsync(
+            $"Problems - {project.Entry.Name}", report.Findings, report.Remedies, ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Checks the machine over, on the same screen a project's problems use.
+    /// <para>
+    /// The two are the same shape - a list of findings, some of which can be
+    /// put right - so they are the same screen. A second one would be the first
+    /// one built twice, and the two would drift.
+    /// </para>
+    /// </summary>
+    private async Task CheckMachineAsync(CancellationToken ct)
+    {
+        var report = await _doctor.RunAsync(ct).ConfigureAwait(false);
+
+        if (report.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(report.Error!)}[/]");
+            Pause();
+            return;
+        }
+
+        var checks = report.Value!.Checks;
+
+        var remedies = checks.Select(check => check.Remedy).OfType<Remedy>().ToList();
+
+        await ShowFindingsAsync("This machine", checks, remedies, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shows where every project has drifted from what was recorded for it.
+    /// <para>
+    /// Findings carry the project they came from, because a list of twenty that
+    /// does not say which repository each belongs to is a list nobody can act
+    /// on.
+    /// </para>
+    /// </summary>
+    private async Task CheckDriftAsync(CancellationToken ct)
+    {
+        var inspected = await _drift.InspectAsync(ct: ct).ConfigureAwait(false);
+
+        if (inspected.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(inspected.Error!)}[/]");
+            Pause();
+            return;
+        }
+
+        var reports = inspected.Value!;
+
+        var findings = reports
+            .SelectMany(report => report.Findings
+                .Select(finding => finding with { Name = $"{report.Slug}: {finding.Name}" }))
+            .ToList();
+
+        var remedies = reports.SelectMany(report => report.Remedies).ToList();
+
+        await ShowFindingsAsync("Configuration drift", findings, remedies, ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shows findings, and applies whatever was ticked.
+    /// <para>
+    /// Previewing happens before the screen opens and applying after it closes.
+    /// Neither is quick enough to do while a screen is being drawn, and a
+    /// screen that stops repainting mid-fix looks like one that has crashed.
+    /// </para>
+    /// </summary>
+    private async Task ShowFindingsAsync(
+        string heading,
+        IReadOnlyList<DiagnosticCheck> findings,
+        IReadOnlyList<Remedy> remedies,
+        CancellationToken ct)
+    {
         var offered = new List<OfferedRemedy>();
 
-        foreach (var remedy in report.Remedies)
+        foreach (var remedy in remedies)
         {
             var preview = await _remediation.PreviewAsync(remedy, ct).ConfigureAwait(false);
 
@@ -347,8 +443,7 @@ public sealed class TerminalLauncher : ILauncherTui
         {
             application.Init();
 
-            using var window = new ProblemsWindow(
-                project.Entry.Name, report.Findings, offered, application);
+            using var window = new ProblemsWindow(heading, findings, offered, application);
 
             await application.RunAsync(window, ct).ConfigureAwait(false);
 
@@ -364,18 +459,146 @@ public sealed class TerminalLauncher : ILauncherTui
         {
             var applied = await _remediation.ApplyAsync(remedy, ct).ConfigureAwait(false);
 
-            if (applied.Failed)
-            {
-                _console.MarkupLine(
-                    $"[red]{Markup.Escape(remedy.Description)}: {Markup.Escape(applied.Error!)}[/]");
-
-                continue;
-            }
-
-            _console.MarkupLine($"[green]done[/] {Markup.Escape(remedy.Description)}");
+            _console.MarkupLine(applied.Failed
+                ? $"[red]{Markup.Escape(remedy.Description)}: {Markup.Escape(applied.Error!)}[/]"
+                : $"[green]done[/] {Markup.Escape(remedy.Description)}");
         }
 
         Pause();
+    }
+
+    /// <summary>
+    /// Shows the settings and writes back only what actually changed.
+    /// </summary>
+    private async Task ShowSettingsAsync(CancellationToken ct)
+    {
+        var loaded = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
+
+        if (loaded.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(loaded.Error!)}[/]");
+            Pause();
+            return;
+        }
+
+        var config = loaded.Value!;
+
+        var places = new List<(string, string)>
+        {
+            ("Shared settings", Path.Combine(_paths.Paths.Config, "config.yaml")),
+            ("This machine", Path.Combine(_paths.Paths.State, "machines.yaml")),
+            ("Workspace clone", _workspace.IsCloned()
+                ? _workspace.LocalPath
+                : $"{_workspace.LocalPath}  (not cloned)"),
+            ("State", _paths.Paths.State),
+            ("Logs", _paths.Paths.Logs),
+        };
+
+        var agents = (await _agents.DetectAllAsync(ct).ConfigureAwait(false))
+            .Where(agent => agent.IsInstalled)
+            .Select(agent => agent.DisplayName)
+            .ToList();
+
+        SettingsEdit? edit;
+
+        using (IApplication application = Application.Create())
+        {
+            application.Init();
+
+            using var window = new SettingsWindow(config, places, agents, application);
+
+            await application.RunAsync(window, ct).ConfigureAwait(false);
+
+            edit = window.Edit;
+        }
+
+        if (edit is not null)
+        {
+            await ApplySettingsAsync(config, edit, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Writes back the settings that changed, handling the one that is
+    /// dangerous.
+    /// </summary>
+    private async Task ApplySettingsAsync(
+        LauncherConfig config,
+        SettingsEdit edit,
+        CancellationToken ct)
+    {
+        var remoteChanged = !string.Equals(
+            edit.WorkspaceRemote,
+            config.Workspace.Remote ?? string.Empty,
+            StringComparison.Ordinal);
+
+        if (remoteChanged && _workspace.IsCloned())
+        {
+            // The clone belongs to the old repository. Reusing it would leave a
+            // directory full of another repository's projects, and the next
+            // sync would either fail or, worse, appear to work against the
+            // wrong history. Moved aside rather than deleted: nothing is lost.
+            var moved = MoveCloneAside();
+
+            if (moved is null)
+            {
+                _console.MarkupLine(
+                    "[red]The existing workspace clone could not be moved, so the repository "
+                    + "was left unchanged.[/] Nothing else was saved either.");
+
+                Pause();
+                return;
+            }
+
+            _console.MarkupLine($"[dim]Moved the previous clone to {Markup.Escape(moved)}[/]");
+        }
+
+        config.Workspace.Remote = edit.WorkspaceRemote;
+        config.Workspace.Branch = edit.WorkspaceBranch;
+        config.DefaultAgent = edit.DefaultAgent;
+        config.Sync.Launch = edit.SyncAtLaunch;
+        config.Sync.Exit = edit.SyncAtExit;
+        config.Editor.Command = edit.EditorCommand;
+
+        var saved = await _configuration.SaveConfigAsync(config, ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+            Pause();
+            return;
+        }
+
+        _console.MarkupLine("[green]Saved.[/]");
+
+        if (remoteChanged)
+        {
+            _console.MarkupLine("[dim]Fetch the new workspace with:[/] loadout workspace sync");
+        }
+
+        Pause();
+    }
+
+    /// <summary>
+    /// Renames the existing clone out of the way, returning where it went.
+    /// Timestamped, so doing this twice does not overwrite the first one.
+    /// </summary>
+    private string? MoveCloneAside()
+    {
+        var destination = _workspace.LocalPath + ".previous-"
+            + DateTime.Now.ToString(
+                "yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+
+        try
+        {
+            Directory.Move(_workspace.LocalPath, destination);
+
+            return destination;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     private async Task<int?> LaunchAsync(

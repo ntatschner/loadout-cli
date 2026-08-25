@@ -181,6 +181,89 @@ public sealed class ScreenConstructionTests
     }
 
     [Fact]
+    public void The_settings_screen_shows_the_settings_and_where_they_live()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var config = new Loadout.Models.Configuration.LauncherConfig
+        {
+            DefaultAgent = "codex",
+        };
+
+        config.Workspace.Remote = "git@example.com:me/workspace.git";
+
+        using var settings = new SettingsWindow(
+            config,
+            [("Shared settings", "/config/config.yaml"), ("This machine", "/state/machines.yaml")],
+            ["Claude Code"],
+            app);
+
+        app.Begin(settings);
+        app.LayoutAndDraw();
+
+        var screen = app.Driver?.ToString() ?? string.Empty;
+
+        // Both halves at once, which is the point: the printed version could
+        // show the settings or change one, never both.
+        screen.Should().Contain("workspace.git");
+        screen.Should().Contain("codex");
+        screen.Should().Contain("config.yaml");
+        screen.Should().Contain("machines.yaml");
+    }
+
+    [Fact]
+    public void Looking_at_the_settings_does_not_change_them()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var settings = new SettingsWindow(
+            new Loadout.Models.Configuration.LauncherConfig(),
+            [("Shared settings", "/config/config.yaml")],
+            [],
+            app);
+
+        app.Begin(settings);
+        app.LayoutAndDraw();
+
+        // Null until Save is chosen. Opening the screen must never be the same
+        // as agreeing to whatever is in it.
+        settings.Edit.Should().BeNull();
+    }
+
+    [Fact]
+    public void The_machine_check_uses_the_same_screen_as_a_project_problem()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        // Same screen, different heading. The two are the same shape, so a
+        // second implementation would only be the first one drifting.
+        using var machine = new ProblemsWindow(
+            "This machine",
+            [DiagnosticCheck.Warn("Git", "Global exclude file", "no global excludes configured")],
+            [new OfferedRemedy(
+                new Remedy(RemedyKind.RepairGlobalExcludes, "Repair the global excludes"),
+                "would write ~/.config/git/ignore")],
+            app);
+
+        app.Begin(machine);
+        app.LayoutAndDraw();
+
+        var screen = app.Driver?.ToString() ?? string.Empty;
+
+        screen.Should().Contain("This machine");
+        screen.Should().Contain("global excludes");
+    }
+
+    [Fact]
     public void A_question_can_be_built_and_drawn()
     {
         Drawn(app => new ChoiceDialog("What are you working on?", ["database", "frontend"], app));

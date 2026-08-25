@@ -19,15 +19,6 @@ namespace Loadout.Tui.Terminal;
 /// </summary>
 internal static class LauncherCommands
 {
-    /// <summary>Checks this machine over.</summary>
-    internal const string Doctor = "doctor";
-
-    /// <summary>Reports where projects have drifted from their recorded configuration.</summary>
-    internal const string Drift = "drift";
-
-    /// <summary>Shows the launcher's settings and where they live.</summary>
-    internal const string Settings = "config list";
-
     /// <summary>Opens a project in the editor under the profile for its agent.</summary>
     internal const string Editor = "code";
 
@@ -38,5 +29,5 @@ internal static class LauncherCommands
     internal const string Clone = "project clone";
 
     /// <summary>Every one of them, for the test that checks they are real.</summary>
-    internal static IReadOnlyList<string> All => [Doctor, Drift, Settings, Editor, Resume, Clone];
+    internal static IReadOnlyList<string> All => [Editor, Resume, Clone];
 }

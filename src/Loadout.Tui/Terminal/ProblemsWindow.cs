@@ -40,7 +40,7 @@ internal sealed class ProblemsWindow : Window
     internal IReadOnlyList<Remedy> Chosen { get; private set; } = [];
 
     internal ProblemsWindow(
-        string project,
+        string heading,
         IReadOnlyList<DiagnosticCheck> findings,
         IReadOnlyList<OfferedRemedy> offered,
         IApplication application)
@@ -52,7 +52,11 @@ internal sealed class ProblemsWindow : Window
         _offered = offered;
         _application = application;
 
-        Title = $"Problems — {project}";
+        // A heading rather than a project name, because the same screen shows
+        // what is wrong with a project and what is wrong with the machine. Both
+        // are a list of findings, some of which can be put right, and building
+        // two screens for that would be building the second one twice.
+        Title = heading;
         BorderStyle = LineStyle.Rounded;
 
         // Info-level findings are not problems, and listing them here would

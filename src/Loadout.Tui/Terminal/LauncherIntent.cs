@@ -47,6 +47,15 @@ internal enum LauncherAction
     /// </para>
     /// </summary>
     Problems,
+
+    /// <summary>Check the machine over, and put right what can be.</summary>
+    MachineCheck,
+
+    /// <summary>Show the launcher's settings, and where everything is kept.</summary>
+    Settings,
+
+    /// <summary>Show where projects have drifted from their recorded configuration.</summary>
+    Drift,
 }
 
 /// <summary>
