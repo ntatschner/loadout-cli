@@ -198,7 +198,9 @@ public sealed class ScreenConstructionTests
         using var settings = new SettingsWindow(
             config,
             [("Shared settings", "/config/config.yaml"), ("This machine", "/state/machines.yaml")],
-            ["Claude Code"],
+            ["claude"],
+            "code",
+            ["Agents"],
             app);
 
         app.Begin(settings);
@@ -212,6 +214,14 @@ public sealed class ScreenConstructionTests
         screen.Should().Contain("codex");
         screen.Should().Contain("config.yaml");
         screen.Should().Contain("machines.yaml");
+
+        // The mapping that makes the editor integration do anything. It was
+        // configurable from nowhere at all before: the command existed, the
+        // plumbing existed, and there was no field, no config key and no
+        // prompt, so opening a project in the editor did nothing that a bare
+        // "code ." would not have done.
+        screen.Should().Contain("Editor profile per agent");
+        screen.Should().Contain("Agents");
     }
 
     [Fact]
@@ -225,6 +235,8 @@ public sealed class ScreenConstructionTests
         using var settings = new SettingsWindow(
             new Loadout.Models.Configuration.LauncherConfig(),
             [("Shared settings", "/config/config.yaml")],
+            [],
+            "code",
             [],
             app);
 

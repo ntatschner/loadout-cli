@@ -31,13 +31,27 @@ public sealed class ConfigKeyTests
         // the moment it is added rather than when somebody remembers to.
         var current = entry.Read(config, machine);
 
-        var value = current is "true" or "false"
-            ? "false"
-            : int.TryParse(current, out _) ? "42" : "round-trip-value";
+        var value = entry.Sample
+            ?? (current is "true" or "false"
+                ? "false"
+                : int.TryParse(current, out _) ? "42" : "round-trip-value");
 
         entry.Write(config, machine, value);
 
         entry.Read(config, machine).Should().Be(value);
+    }
+
+    [Fact]
+    public void A_setting_that_parses_its_value_rejects_a_bad_one()
+    {
+        var entry = ConfigKeys.Find("editor-profiles")!;
+
+        // "claude" alone is not an agent and a profile. Saying so beats
+        // storing it and leaving somebody to work out later why the editor
+        // opens without the profile they asked for.
+        var act = () => entry.Write(new LauncherConfig(), new MachineConfig(), "claude");
+
+        act.Should().Throw<FormatException>();
     }
 
     [Theory]

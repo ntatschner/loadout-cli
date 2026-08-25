@@ -2,6 +2,7 @@ using Loadout.Agents;
 using Loadout.Core.Configuration;
 using Loadout.Core.Context;
 using Loadout.Core.Diagnostics;
+using Loadout.Core.Editors;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
@@ -54,6 +55,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IContextCompiler _compiler;
     private readonly IDoctorService _doctor;
     private readonly IPlatformPaths _paths;
+    private readonly IEditorService _editors;
 
     public TerminalLauncher(
         IAnsiConsole console,
@@ -72,7 +74,8 @@ public sealed class TerminalLauncher : ILauncherTui
         IRemediationService remediation,
         IContextCompiler compiler,
         IDoctorService doctor,
-        IPlatformPaths paths)
+        IPlatformPaths paths,
+        IEditorService editors)
     {
         _console = console;
         _projects = projects;
@@ -91,6 +94,7 @@ public sealed class TerminalLauncher : ILauncherTui
         _compiler = compiler;
         _doctor = doctor;
         _paths = paths;
+        _editors = editors;
     }
 
     /// <inheritdoc />
@@ -505,7 +509,10 @@ public sealed class TerminalLauncher : ILauncherTui
         {
             application.Init();
 
-            using var window = new SettingsWindow(config, places, agents, application);
+            var editor = _editors.Describe(config);
+
+            using var window = new SettingsWindow(
+                config, places, agents, editor.Command, editor.Profiles ?? [], application);
 
             await application.RunAsync(window, ct).ConfigureAwait(false);
 
@@ -559,6 +566,14 @@ public sealed class TerminalLauncher : ILauncherTui
         config.Sync.Launch = edit.SyncAtLaunch;
         config.Sync.Exit = edit.SyncAtExit;
         config.Editor.Command = edit.EditorCommand;
+
+        // Replaced rather than merged, so clearing a field actually clears it.
+        config.Editor.Profiles.Clear();
+
+        foreach (var (agent, profile) in edit.EditorProfiles.Where(p => p.Value.Length > 0))
+        {
+            config.Editor.Profiles[agent] = profile;
+        }
 
         var saved = await _configuration.SaveConfigAsync(config, ct).ConfigureAwait(false);
 

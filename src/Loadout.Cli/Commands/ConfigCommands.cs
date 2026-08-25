@@ -20,12 +20,50 @@ namespace Loadout.Cli.Commands;
 /// </summary>
 internal static class ConfigKeys
 {
+    /// <summary>
+    /// One setting. <c>Sample</c> is a valid value, needed only for settings
+    /// whose value has a shape rather than being free text: a test infers a
+    /// sample from the current value, which keeps a new setting covered the
+    /// moment it is added, and that inference cannot work for a setting that
+    /// parses what it is given.
+    /// </summary>
     internal sealed record Entry(
         string Key,
         string Description,
         Func<LauncherConfig, MachineConfig, string?> Read,
         Action<LauncherConfig, MachineConfig, string> Write,
-        bool IsMachineLocal);
+        bool IsMachineLocal,
+        string? Sample = null);
+
+    /// <summary>Renders the agent-to-profile map as one settable string.</summary>
+    private static string? FormatProfiles(Dictionary<string, string> profiles) =>
+        profiles.Count == 0
+            ? null
+            : string.Join(";", profiles.Select(pair => $"{pair.Key}={pair.Value}"));
+
+    /// <summary>
+    /// Replaces the map from "claude=Agents;codex=Codex". Replaces rather than
+    /// merges, so that removing an entry is possible at all: with a merge the
+    /// only way to unset one would be to edit the YAML by hand.
+    /// </summary>
+    private static void WriteProfiles(Dictionary<string, string> profiles, string value)
+    {
+        profiles.Clear();
+
+        foreach (var pair in value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = pair.Split('=', 2, StringSplitOptions.TrimEntries);
+
+            if (parts.Length != 2 || parts[0].Length == 0 || parts[1].Length == 0)
+            {
+                throw new FormatException(
+                    $"'{pair}' is not an agent and a profile. Write them as claude=Agents, "
+                    + "separated by semicolons.");
+            }
+
+            profiles[parts[0]] = parts[1];
+        }
+    }
 
     internal static IReadOnlyList<Entry> All =>
     [
@@ -40,6 +78,18 @@ internal static class ConfigKeys
         new("default-agent", "Agent launched when a project names none",
             (c, _) => c.DefaultAgent,
             (c, _, v) => c.DefaultAgent = v, false),
+
+        new("editor-command", "Editor opened by 'loadout code': code, code-insiders, codium, cursor",
+            (c, _) => c.Editor.Command,
+            (c, _, v) => c.Editor.Command = v, false),
+
+        // One key rather than one per agent, because the set of agents is not
+        // fixed and a key list that has to be regenerated when somebody adds a
+        // custom agent is a key list that will be wrong.
+        new("editor-profiles", "Editor profile per agent, as claude=Agents;codex=Codex",
+            (c, _) => FormatProfiles(c.Editor.Profiles),
+            (c, _, v) => WriteProfiles(c.Editor.Profiles, v), false,
+            Sample: "claude=Agents;codex=Codex"),
 
         new("sync-launch", "Sync policy at launch: auto, prompt or never",
             (c, _) => c.Sync.Launch,
