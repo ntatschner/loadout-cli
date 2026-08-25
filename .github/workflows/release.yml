@@ -372,9 +372,26 @@ jobs:
 
       - name: Collect checksums
         run: |
+          set -euo pipefail
           cd downloaded
-          cat *.sha256 > SHA256SUMS
-          ls -la
+
+          # Each sidecar is written without a trailing newline, deliberately, so
+          # that a single-entry file carries no line ending for sha256sum to
+          # trip over. Concatenating them therefore needs the newlines putting
+          # back: "cat *.sha256 > SHA256SUMS" produced one unusable line, and
+          # every release up to 0.4.0 shipped a manifest that sha256sum -c
+          # rejects with "no properly formatted SHA256 checksum lines found".
+          for sidecar in *.sha256; do
+            cat "$sidecar"
+            echo
+          done > SHA256SUMS
+
+          # Verified here, against the very files about to be published. The
+          # manifest was broken for four releases precisely because nothing
+          # ever read it back.
+          sha256sum -c SHA256SUMS
+
+          cat SHA256SUMS
 
       # Pinned like every other action here. This is the one step with
       # contents: write, so a moved tag upstream would be a moved tag with
