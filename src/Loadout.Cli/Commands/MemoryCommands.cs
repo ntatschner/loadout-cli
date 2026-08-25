@@ -347,7 +347,18 @@ public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Se
 
         [CommandOption("--apply")]
         [Description("With --clean, actually remove it. A backup is taken first.")]
-        public bool Apply { get; init; }
+        public bool ApplyRequested { get; init; }
+
+        /// <summary>
+        /// Whether to go ahead, once --dry-run has had its say.
+        /// </summary>
+        /// <remarks>
+        /// --dry-run is accepted on every command and always means the
+        /// same thing, so it overrides --apply rather than
+        /// competing with it. Asking for both is not a contradiction to
+        /// resolve: the more cautious of the two is what was meant.
+        /// </remarks>
+        public bool Apply => ApplyRequested && !DryRun;
     }
 
     /// <inheritdoc />

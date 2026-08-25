@@ -13,7 +13,18 @@ public sealed class DoctorSettings : GlobalSettings
 {
     [CommandOption("--fix")]
     [Description("Offer to put right the findings the launcher can fix itself.")]
-    public bool Fix { get; init; }
+    public bool FixRequested { get; init; }
+
+    /// <summary>
+    /// Whether to go ahead, once --dry-run has had its say.
+    /// </summary>
+    /// <remarks>
+    /// --dry-run is accepted on every command and always means the
+    /// same thing, so it overrides --fix rather than
+    /// competing with it. Asking for both is not a contradiction to
+    /// resolve: the more cautious of the two is what was meant.
+    /// </remarks>
+    public bool Fix => FixRequested && !DryRun;
 
     [CommandOption("--yes")]
     [Description("With --fix, apply without asking first.")]

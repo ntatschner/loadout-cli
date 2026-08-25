@@ -187,47 +187,54 @@ public sealed class LoadoutProcess : IDisposable
     }
 
     /// <summary>
-    /// Refuses to run an executable older than the code under test.
+    /// Refuses to run a command line built from different code than the tests.
     /// </summary>
     /// <remarks>
     /// <para>
     /// These tests execute an artefact rather than calling into an assembly,
     /// which is the point — but it means the thing being tested and the thing
-    /// that was just compiled can come apart. An executable left over from an
-    /// earlier build passes or fails according to source nobody is looking at
-    /// any more, and the result is worse than a failure because it looks like
-    /// an answer.
+    /// just compiled can come apart. An executable left over from an earlier
+    /// build passes or fails according to source nobody is looking at any more,
+    /// which is worse than a failure because it looks like an answer.
     /// </para>
     /// <para>
-    /// The copy of the command line assembly beside the tests is rebuilt with
-    /// them, so it dates the code under test. If the executable predates it,
-    /// this says so rather than reporting whatever the old one happened to do.
+    /// Compared by content, not by timestamp. Timestamps cannot tell "stale"
+    /// apart from "correctly not rebuilt": building the test project alone
+    /// gives its copy a new write time while the command line keeps its older
+    /// one, and a guard comparing those declared everything stale on the first
+    /// run after any build. The assembly beside the tests is copied from the
+    /// command line's own build, so when the two are in step the files are
+    /// byte-for-byte identical and when they are not they differ.
     /// </para>
     /// </remarks>
     private static void EnsureCurrent(string executable)
     {
-        var reference = Path.Combine(AppContext.BaseDirectory, "loadout.dll");
+        var mine = Path.Combine(AppContext.BaseDirectory, "loadout.dll");
+        var theirs = Path.Combine(Path.GetDirectoryName(executable)!, "loadout.dll");
 
-        if (!File.Exists(reference))
+        if (!File.Exists(mine) || !File.Exists(theirs))
         {
+            // A single-file publish carries no separate assembly to compare
+            // against, and neither does a tree that has not been built the way
+            // this expects. Say nothing rather than guess.
             return;
         }
 
-        var built = File.GetLastWriteTimeUtc(executable);
-        var current = File.GetLastWriteTimeUtc(reference);
-
-        // A second of slack: the two are produced by the same build and their
-        // timestamps differ by milliseconds, which must not read as stale.
-        if (built >= current.AddSeconds(-1))
+        if (Same(mine, theirs))
         {
             return;
         }
 
         throw new InvalidOperationException(
-            $"The command line at {executable} was built at {built:u}, before the code under "
-            + $"test at {current:u}. It would be tested against source that is no longer there. "
-            + "Run: dotnet build src/Loadout.Cli");
+            $"The command line at {executable} was built from different code than these tests. "
+            + "It would be tested against source that is no longer here. "
+            + "Run: dotnet build");
     }
+
+    private static bool Same(string first, string second) =>
+        System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(first))
+            .SequenceEqual(
+                System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(second)));
 
     /// <summary>
     /// Points every storage root at the throwaway home, on whichever platform

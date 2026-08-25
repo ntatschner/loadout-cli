@@ -47,10 +47,6 @@ public sealed class MigrateCommand : AsyncCommand<MigrateCommand.Settings>
         [Description("Project to migrate. Defaults to the repository in the current directory.")]
         public string? Project { get; init; }
 
-        [CommandOption("--dry-run")]
-        [Description("Show the plan and change nothing.")]
-        public bool DryRun { get; init; }
-
         [CommandOption("--yes")]
         [Description("Apply without asking for confirmation.")]
         public bool Yes { get; init; }
