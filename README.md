@@ -123,7 +123,7 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 
 | Command | Purpose |
 |---|---|
-| `loadout` | Interactive project selector, or first-run setup |
+| `loadout` | Full-screen launcher, or first-run setup |
 | `loadout setup` | Configure the launcher on this machine |
 | `loadout <project>` | Launch the project's default agent |
 | `loadout here` | Launch the agent for the current repository |
@@ -133,6 +133,7 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 | `loadout project clone\|relocate <project>` | Get a registered project onto this machine |
 | `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `loadout project link [project]` | Record inside a repository which project it belongs to |
+| `loadout code [project]` | Open a project in the editor, under the profile its agent uses |
 | `loadout config list\|get\|set\|edit` | Read and write launcher settings, and say where they live |
 | `loadout workspace status\|sync\|save\|open` | Manage the central workspace clone |
 | `loadout desktop` | Install the Start Menu or `.desktop` entry |
@@ -213,34 +214,97 @@ never is, and it is never written to a log or a diagnostic report.
 
 ## The launcher
 
-Running `loadout` with no arguments opens the selector. It is a loop: the
-repository you are standing in is lifted to the top, backing out of a project
-returns to the list rather than quitting, and a launch is what ends the session.
+Running `loadout` with no arguments opens a full-screen launcher: the project
+list on the left, everything known about the selected project on the right, a
+filter you can type into, and a menu naming what the launcher can do.
 
-Selecting a project shows what the session will start with — branch, whether the
+The right-hand panel shows what a session would start with — branch, whether the
 tree is clean, how much instruction text loads whatever the task, how many rules
 stay on demand, how many memory topics exist — and anything wrong with it: agent
 files committed to the repository, memory recorded where nothing reads it, an
-oversized instruction layer, no pre-commit protection in this clone. "Explain the
-warnings" names the command that fixes each one rather than running it, because
-every one of them changes files.
+oversized instruction layer, no pre-commit protection in this clone.
 
-Two entries sit below the projects. **Add a project** scans the configured
-folders or takes a path, registers what you pick, and offers to move any agent
-files it finds — the same flow first-run setup uses, because registering a
-project a fortnight later is the same job. **Settings and paths** shows the
-central workspace repository, the local clone, both configuration files and what
-they say, and lets you change the workspace repository, where clones are placed,
-which folders are scanned and the default agent.
+| Key | Does |
+|---|---|
+| `Enter` | Launch the selected project |
+| `Ctrl+P` | Every command the CLI has, filtered as you type |
+| `Ctrl+N` | Add a project |
+| `F9` | Menu |
+| `Ctrl+Q` | Quit |
+
+**Ctrl+P reaches everything.** The command list is built while the commands are
+registered rather than written out by hand, so a command added tomorrow appears
+without anybody remembering to add it, and a test asserts the two agree. The few
+that cannot work from a menu — `completion` writes a script to be piped
+somewhere, `statusline` is run by the agent several times a minute — are listed
+with the reason rather than hidden. Something you cannot find is
+indistinguishable from something that does not exist.
+
+**Problems** is a screen of its own: what was found, what can be put right, and
+what each fix says it would change, ticked rather than applied as you move
+through the list. Nothing is applied from that screen — inspecting a repository
+and applying a fix are both slow enough that doing them while still drawing
+would look like a hang, so the screen collects what was ticked, closes, and the
+fixes run with the terminal handed back.
+
+That is the rule the whole launcher follows. Anything needing the terminal for
+itself — an agent, a shell, a command's output — happens with the screen closed,
+and running a command hands it to the same parser you would have typed at rather
+than to a second implementation.
+
+Adding a project stays a sequence of questions rather than a form: it scans the
+configured folders or takes a path, registers what you pick, and offers to move
+any agent files it finds. That is the same flow first-run setup uses, because
+registering a project a fortnight later is the same job.
 
 Changing the workspace repository moves any existing clone aside rather than
 reusing or deleting it. The clone belongs to the old repository, so a sync
 against a new remote would either fail or, worse, appear to work against the
 wrong history.
 
-The launcher is driven end to end in the tests with a scripted keyboard, which
-is how its worst defect was found: backing out of a project used to quit the
-whole thing.
+The launcher is driven end to end in the tests through a headless ANSI driver
+that reports back what was actually drawn, so the assertions are about what
+somebody would be looking at rather than about text that happened to be
+printed.
+
+## Editors
+
+VS Code keeps settings, extensions and keybindings in named profiles, and
+working with an agent usually wants a different set from working without one.
+`loadout code` opens a project under the profile that suits it, so the same
+repository opened for Claude and opened for Codex can put the editor in two
+different states.
+
+```yaml
+# config.yaml
+editor:
+  command: code          # or code-insiders, codium, cursor
+  profiles:
+    claude: Agents
+    codex: Codex
+```
+
+The profile used is the project's own if it names one, then the one configured
+for the agent it uses, then none — so if you do not use profiles you get the
+editor you always get.
+
+```bash
+loadout code                            # this repository, its agent's profile
+loadout code starstats --agent codex    # that project, as Codex would want it
+loadout code --editor-profile Agents    # this profile, whatever is configured
+```
+
+`--editor-profile`, not `--profile`: that one already exists and means a context
+profile — which instructions an agent loads — and has nothing to do with the
+editor.
+
+Profiles are opened, never written. Their contents live in a layout the editor
+does not publish, and rewriting it would be a promise that could not be kept
+across editor versions. Reading it to report on it is a different matter, so
+`loadout doctor` says which editor was found and which profiles exist, and warns
+when a project or an agent names one that does not. Where the profiles cannot be
+read at all it says so rather than reporting them as missing — a wrong "that
+does not exist" sends you looking for a problem you do not have.
 
 ## The agent's status line
 
@@ -815,7 +879,7 @@ Loadout.Platform    Abstractions + Windows / Linux / macOS / Unix implementation
 Loadout.Core        Projects, Git, Workspace, Configuration, Security, Diagnostics.
 Loadout.Agents      Claude, Codex and generic adapters; the launch pipeline.
 Loadout.Cli         The loadout executable.
-Loadout.Tui         The interactive selector.
+Loadout.Tui         The full-screen launcher, and the first-run questions.
 ```
 
 The rule that makes cross-platform parity hold is that **`Core`, `Agents` and

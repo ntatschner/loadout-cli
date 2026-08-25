@@ -12,6 +12,7 @@ outside the allowlist. CI runs it on every change.
 | Package | Licence |
 |---|---|
 | [Spectre.Console](https://spectreconsole.net/) | MIT |
+| [Terminal.Gui](https://github.com/gui-cs/Terminal.Gui) | MIT |
 | [Spectre.Console.Cli](https://spectreconsole.net/) | MIT |
 | [YamlDotNet](https://github.com/aaubry/YamlDotNet) | MIT |
 | Microsoft.Extensions.DependencyInjection | MIT |
