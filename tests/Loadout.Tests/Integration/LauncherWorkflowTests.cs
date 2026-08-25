@@ -334,6 +334,50 @@ public sealed class LauncherWorkflowTests
     }
 
     [Fact]
+    public void Typing_a_filter_settles_rather_than_reading_for_ever()
+    {
+        var reads = 0;
+
+        using var session = TuiSession.Start(app => new LauncherWindow(
+            [Project("alpha", "Alpha"), Project("beta", "Beta")],
+            here: null,
+            "workspace connected",
+            ["claude"],
+            (project, _) =>
+            {
+                Interlocked.Increment(ref reads);
+                return Task.Run(() => (ProjectOverview?)Overview(project));
+            },
+            _ => { },
+            [],
+            app));
+
+        session.Type("bet");
+
+        for (var i = 0; i < 25; i++)
+        {
+            session.Pump();
+            Thread.Sleep(5);
+        }
+
+        var afterTyping = reads;
+
+        for (var i = 0; i < 25; i++)
+        {
+            session.Pump();
+            Thread.Sleep(5);
+        }
+
+        // The invariant the branch-line loop broke, stated generally: once an
+        // interaction is over the launcher stops working. Filtering narrows the
+        // list and so does change the selection, which is a real reason to
+        // read — but only until the answer arrives.
+        reads.Should().Be(
+            afterTyping,
+            $"the launcher must settle ({afterTyping} reads while typing, {reads} after)");
+    }
+
+    [Fact]
     public void The_menu_bar_is_on_screen_with_its_groups_named()
     {
         using var session = Launcher([Project("alpha", "Alpha")]);
