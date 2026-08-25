@@ -416,6 +416,48 @@ jobs:
 
           cat SHA256SUMS
 
+      # What changed in this version, which until now was written into the
+      # tag and read by nobody: the release body below is the same paragraph
+      # for every version, so the notes never reached the page people
+      # actually look at.
+      - name: Read the notes out of the tag
+        id: notes
+        run: |
+          if [ "${{ github.ref_type }}" != "tag" ]; then
+            echo "This was built by hand rather than from a tag, so it has no notes." > notes.md
+          else
+            git fetch --force origin "refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}"
+            git tag -l --format='%(contents:body)' "${{ github.ref_name }}" > notes.md
+          fi
+
+          # An unannotated tag has no body, and an empty heading is worse
+          # than none.
+          if [ ! -s notes.md ]; then
+            echo "No notes were written for this version." > notes.md
+          fi
+
+          # The standing paragraph every release carries, after what is
+          # particular to this one.
+          cat >> notes.md <<'STANDING'
+
+          ---
+
+          Self-contained builds of `loadout`. No .NET installation required.
+
+          Archives work anywhere; the `.msi`, `.deb` and `.rpm` install
+          `loadout` onto `PATH` for the current user or machine.
+
+          Tested on Windows x64, Linux x64 and macOS Apple Silicon. The
+          `win-arm64` and `linux-arm64` builds are cross-compiled and not
+          executed in CI, and macOS packages are not signed or notarised.
+
+          Verify a download against `SHA256SUMS`, then see the README for
+          installation.
+          STANDING
+
+
+          cat notes.md
+
       # Pinned like every other action here. This is the one step with
       # contents: write, so a moved tag upstream would be a moved tag with
       # permission to publish.
@@ -428,18 +470,8 @@ jobs:
             downloaded/*.deb
             downloaded/*.rpm
             downloaded/SHA256SUMS
-          # arm64 Windows and Linux are cross-compiled and never executed in
-          # CI, because GitHub offers no hosted runner for either. Saying so
-          # beats implying a level of testing that did not happen.
-          body: |
-            Self-contained builds of `loadout`. No .NET installation required.
-
-            Archives work anywhere; the `.msi`, `.deb` and `.rpm` install
-            `loadout` onto `PATH` for the current user or machine.
-
-            Tested on Windows x64, Linux x64 and macOS Apple Silicon. The
-            `win-arm64` and `linux-arm64` builds are cross-compiled and not
-            executed in CI, and macOS packages are not signed or notarised.
-
-            Verify a download against `SHA256SUMS`, then see the README for
-            installation.
+          # What changed, then the standing paragraph. arm64 Windows and
+          # Linux are cross-compiled and never executed in CI, because GitHub
+          # offers no hosted runner for either, and that is said there rather
+          # than implying a level of testing that did not happen.
+          body_path: notes.md
