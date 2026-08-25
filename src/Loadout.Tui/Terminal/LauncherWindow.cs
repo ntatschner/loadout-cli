@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Loadout.Core.Projects;
+using Loadout.Core.Sessions;
 using Loadout.Models.Projects;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
@@ -27,6 +28,7 @@ internal sealed class LauncherWindow : Window
     private readonly Func<ProjectResolution, CancellationToken, Task<ProjectOverview?>> _overview;
     private readonly IApplication _application;
     private readonly Action<LauncherWindow> _showPalette;
+    private readonly IReadOnlyList<AgentSession> _recent;
 
     private readonly TextField _filter;
     private readonly ListView _list;
@@ -44,6 +46,11 @@ internal sealed class LauncherWindow : Window
     /// </summary>
     private CancellationTokenSource? _pending;
 
+    /// <summary>Recent conversations, when there are any to show.</summary>
+    private readonly ListView? _recentList;
+
+    private readonly FrameView? _recentFrame;
+
     /// <summary>Handle of the timer moving the reading indicator, when one is running.</summary>
     private object? _pulse;
 
@@ -59,6 +66,7 @@ internal sealed class LauncherWindow : Window
         IReadOnlyList<string> agents,
         Func<ProjectResolution, CancellationToken, Task<ProjectOverview?>> overview,
         Action<LauncherWindow> showPalette,
+        IReadOnlyList<AgentSession> recent,
         IApplication application)
     {
         ArgumentNullException.ThrowIfNull(projects);
@@ -67,6 +75,7 @@ internal sealed class LauncherWindow : Window
 
         _projects = projects;
         _overview = overview;
+        _recent = recent;
         _application = application;
         _showPalette = showPalette;
         _shown = [.. projects];
@@ -94,17 +103,60 @@ internal sealed class LauncherWindow : Window
             ShowMarks = false,
         };
 
+        // Recent work gets a strip of the left column, under the projects.
+        // "What was I doing?" is the question somebody opening a launcher most
+        // often has, and the previous launcher could answer it before this one
+        // was written — the rewrite dropped the session picker and no test
+        // noticed, because nothing tested it.
+        var recentHeight = _recent.Count == 0 ? 0 : Math.Min(_recent.Count + 2, 7);
+
         var listFrame = new FrameView
         {
             X = 0,
             Y = 3,
             Width = Dim.Percent(38),
-            Height = Dim.Fill(2),
+            Height = Dim.Fill(2 + recentHeight),
             Title = "Projects",
             BorderStyle = LineStyle.Rounded,
         };
 
         listFrame.Add(_list);
+
+        if (recentHeight > 0)
+        {
+            _recentList = new ListView
+            {
+                X = 0,
+                Y = 0,
+                Width = Dim.Fill(),
+                Height = Dim.Fill(),
+            };
+
+            _recentList.SetSource(new ObservableCollection<string>(
+                _recent.Select(session =>
+                    $"{session.Agent} · {SessionDisplay.Ago(session.LastActive)} · {session.Label}")));
+
+            // Selected up front. A list with nothing selected has nothing to
+            // accept, so Enter on it did nothing at all — the same omission
+            // that left the problems screen showing an empty preview.
+            _recentList.SelectedItem = 0;
+
+            _recentList.Accepted += (_, e) => { e.Handled = true; ResumeSelectedSession(); };
+
+            var recentFrame = new FrameView
+            {
+                X = 0,
+                Y = Pos.Bottom(listFrame),
+                Width = Dim.Percent(38),
+                Height = recentHeight,
+                Title = "Recent",
+                BorderStyle = LineStyle.Rounded,
+            };
+
+            recentFrame.Add(_recentList);
+
+            _recentFrame = recentFrame;
+        }
 
         _detail = new ProjectDetailView
         {
@@ -124,7 +176,18 @@ internal sealed class LauncherWindow : Window
             Text = Describe(projects.Count, workspaceState, agents),
         };
 
-        Add(BuildMenu(), filterLabel, _filter, listFrame, _detail, _summary);
+        // Added between the project list and the detail, so tabbing follows
+        // the way the screen reads: down the left column, then across. Adding
+        // it last put it behind every button in the detail pane, which is four
+        // stops past where somebody would look for it.
+        if (_recentFrame is not null)
+        {
+            Add(BuildMenu(), filterLabel, _filter, listFrame, _recentFrame, _detail, _summary);
+        }
+        else
+        {
+            Add(BuildMenu(), filterLabel, _filter, listFrame, _detail, _summary);
+        }
 
         _filter.TextChanged += (_, _) => ApplyFilter();
 
@@ -260,6 +323,28 @@ internal sealed class LauncherWindow : Window
                 "F9         menu",
                 "Tab        move between the filter, the list and the buttons"),
             "_Close");
+
+    /// <summary>
+    /// Reopens the conversation under the cursor in the recent list.
+    /// </summary>
+    private void ResumeSelectedSession()
+    {
+        if (_recentList?.SelectedItem is not int index
+            || index < 0
+            || index >= _recent.Count)
+        {
+            return;
+        }
+
+        var session = _recent[index];
+
+        // Carries the session, so this reopens the one that was chosen rather
+        // than putting a picker up over a choice already made.
+        Close(new LauncherIntent(
+            LauncherAction.Resume,
+            _projects.FirstOrDefault(p => p.Entry.Slug == session.ProjectSlug),
+            SessionId: session.SessionId));
+    }
 
     /// <summary>The project under the cursor, if the list is not empty.</summary>
     internal ProjectResolution? Selected =>

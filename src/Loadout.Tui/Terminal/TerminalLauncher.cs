@@ -4,6 +4,7 @@ using Loadout.Core.Context;
 using Loadout.Core.Diagnostics;
 using Loadout.Core.Editors;
 using Loadout.Core.Projects;
+using Loadout.Core.Sessions;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
@@ -56,6 +57,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IDoctorService _doctor;
     private readonly IPlatformPaths _paths;
     private readonly IEditorService _editors;
+    private readonly ISessionHistoryService _sessions;
 
     public TerminalLauncher(
         IAnsiConsole console,
@@ -75,7 +77,8 @@ public sealed class TerminalLauncher : ILauncherTui
         IContextCompiler compiler,
         IDoctorService doctor,
         IPlatformPaths paths,
-        IEditorService editors)
+        IEditorService editors,
+        ISessionHistoryService sessions)
     {
         _console = console;
         _projects = projects;
@@ -95,6 +98,7 @@ public sealed class TerminalLauncher : ILauncherTui
         _doctor = doctor;
         _paths = paths;
         _editors = editors;
+        _sessions = sessions;
     }
 
     /// <inheritdoc />
@@ -139,7 +143,20 @@ public sealed class TerminalLauncher : ILauncherTui
 
                     var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
 
-                    return (projects, here, installed);
+                    // Read behind the opening animation like everything else,
+                    // and tolerated when it fails: not being able to say what
+                    // you were last doing is no reason to refuse to open.
+                    var sessions = await _sessions
+                        .ListAsync(new SessionQuery(Limit: 5), ct)
+                        .ConfigureAwait(false);
+
+                    return (
+                        projects,
+                        here,
+                        installed,
+                        sessions.Succeeded
+                            ? sessions.Value!
+                            : (IReadOnlyList<AgentSession>)[]);
                 },
                 workspaceState,
                 opening,
@@ -178,7 +195,8 @@ public sealed class TerminalLauncher : ILauncherTui
     private async Task<LauncherIntent?> ShowAsync(
         Func<Task<(OperationResult<IReadOnlyList<ProjectResolution>> Projects,
                    ProjectResolution? Here,
-                   IReadOnlyList<string> Agents)>> load,
+                   IReadOnlyList<string> Agents,
+                   IReadOnlyList<AgentSession> Recent)>> load,
         string workspaceState,
         bool opening,
         CancellationToken ct)
@@ -195,7 +213,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         SplashScreen.Play(application, "reading your projects", opening && Watching);
 
-        var (projects, here, agents) = await loading.ConfigureAwait(false);
+        var (projects, here, agents, recent) = await loading.ConfigureAwait(false);
 
         if (projects.Failed)
         {
@@ -210,6 +228,7 @@ public sealed class TerminalLauncher : ILauncherTui
             agents,
             (project, token) => OverviewAsync(project, token),
             w => ShowPalette(w, application),
+            recent,
             application);
 
         await application.RunAsync(window, ct).ConfigureAwait(false);
@@ -272,11 +291,19 @@ public sealed class TerminalLauncher : ILauncherTui
             case LauncherAction.Shell when intent.Project?.LocalPath is { } path:
                 return await OpenShellAsync(path, ct).ConfigureAwait(false);
 
-            case LauncherAction.Resume when intent.Project is { } resuming:
+            case LauncherAction.Resume:
                 // The same command somebody would have typed, rather than a
-                // second implementation of the session picker.
-                await _catalogue.RunAsync(LauncherCommands.Resume, [resuming.Entry.Slug], ct)
-                    .ConfigureAwait(false);
+                // second implementation of the session picker. A session chosen
+                // from the recent list reopens that one; choosing Resume
+                // without picking reaches the picker, which is what it is for.
+                await _catalogue.RunAsync(
+                    LauncherCommands.Resume,
+                    intent.SessionId is { Length: > 0 } chosen
+                        ? [chosen]
+                        : intent.Project is { } resuming ? [resuming.Entry.Slug] : [],
+                    ct).ConfigureAwait(false);
+
+                Pause();
                 return null;
 
             case LauncherAction.FileManager when intent.Project?.LocalPath is { } directory:

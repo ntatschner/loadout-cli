@@ -1,4 +1,5 @@
 using Loadout.Core.Projects;
+using Loadout.Core.Sessions;
 using Loadout.Models.Diagnostics;
 using Loadout.Models.Projects;
 using Loadout.Tui;
@@ -50,7 +51,8 @@ public sealed class LauncherWorkflowTests
         IReadOnlyList<ProjectResolution> projects,
         Action<LauncherWindow>? onPalette = null,
         int width = TuiSession.DefaultWidth,
-        int height = TuiSession.DefaultHeight)
+        int height = TuiSession.DefaultHeight,
+        IReadOnlyList<AgentSession>? recent = null)
     {
         LauncherWindow? built = null;
 
@@ -64,6 +66,7 @@ public sealed class LauncherWorkflowTests
                     ["claude"],
                     (project, _) => Task.FromResult<ProjectOverview?>(Overview(project)),
                     window => onPalette?.Invoke(window),
+                    recent ?? [],
                     app);
 
                 return built;
@@ -161,6 +164,55 @@ public sealed class LauncherWorkflowTests
         // Launching something that is not on the machine would fail later and
         // less clearly. Nothing should happen here.
         Window.Intent.Should().BeNull();
+    }
+
+    private static AgentSession Session(string id, string agent, string project, string title) =>
+        new(agent, id, title, "/repos/x", "main", DateTimeOffset.UtcNow.AddHours(-2),
+            "/transcripts/" + id, project);
+
+    [Fact]
+    public void Recent_work_is_on_the_launcher()
+    {
+        using var session = Launcher(
+            [Project("alpha", "Alpha")],
+            recent: [Session("s1", "claude", "alpha", "parser rewrite")]);
+
+        // "What was I doing?" is the question somebody opening a launcher most
+        // often has. The previous launcher could answer it and the rewrite
+        // dropped the capability, with no test noticing.
+        var screen = session.Screen;
+
+        screen.Should().Contain("Recent");
+        screen.Should().Contain("parser rewrite");
+    }
+
+    [Fact]
+    public void Choosing_a_recent_session_reopens_that_one_rather_than_asking_again()
+    {
+        using var session = Launcher(
+            [Project("alpha", "Alpha")],
+            recent: [Session("session-abc", "claude", "alpha", "parser rewrite")]);
+
+        // Filter, then projects, then recent — the order the screen reads.
+        session.Tab().Tab();
+        session.Press(Key.Enter);
+
+        Window.Intent.Should().NotBeNull();
+        Window.Intent!.Action.Should().Be(LauncherAction.Resume);
+
+        // Carries the chosen session, so resuming reopens it instead of
+        // putting a picker up over a choice already made.
+        Window.Intent.SessionId.Should().Be("session-abc");
+    }
+
+    [Fact]
+    public void With_no_recent_work_the_launcher_does_not_show_an_empty_panel()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")], recent: []);
+
+        // A panel headed "Recent" with nothing under it is worse than no
+        // panel: it takes space and answers nothing.
+        session.Screen.Should().NotContain("Recent");
     }
 
     [Fact]

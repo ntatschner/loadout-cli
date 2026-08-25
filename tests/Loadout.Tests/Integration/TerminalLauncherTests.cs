@@ -80,6 +80,7 @@ public sealed class TerminalLauncherTests
             ["Claude Code"],
             (project, _) => Task.FromResult(overview(project)),
             _ => { },
+            [],
             app);
 
         app.Begin(window);

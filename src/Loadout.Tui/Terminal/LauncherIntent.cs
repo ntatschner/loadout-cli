@@ -68,11 +68,17 @@ internal enum LauncherAction
 /// What to run, for <see cref="LauncherAction.Command"/>. The same string
 /// somebody would have typed, so the parser can take it unaltered.
 /// </param>
+/// <param name="SessionId">
+/// Which previous conversation to reopen, for
+/// <see cref="LauncherAction.Resume"/>. Null means "let the picker ask",
+/// which is what choosing Resume without picking a session means.
+/// </param>
 internal sealed record LauncherIntent(
     LauncherAction Action,
     ProjectResolution? Project = null,
     string? Agent = null,
-    string? CommandPath = null)
+    string? CommandPath = null,
+    string? SessionId = null)
 {
     /// <summary>Closing the launcher without asking for anything.</summary>
     internal static readonly LauncherIntent Quit = new(LauncherAction.Quit);
