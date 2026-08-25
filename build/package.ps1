@@ -55,6 +55,7 @@ Write-Host "Publishing $Runtime..."
     --configuration Release `
     --runtime $Runtime `
     --self-contained true `
+    -p:PublishSingleFile=true `
     --output $staging `
     -p:Version=$Version `
     --nologo `

@@ -3,10 +3,16 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>loadout</AssemblyName>
     <RootNamespace>Loadout.Cli</RootNamespace>
-    <!-- Self-contained single-file per spec 7. Trimming and NativeAOT stay off:
-         YamlDotNet's reflection-based deserialisation does not survive them. -->
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
+    <!-- Trimming and NativeAOT stay off: YamlDotNet's reflection-based
+         deserialisation does not survive them.
+
+         Self-contained single-file publishing per spec 7 is asked for by the
+         build scripts rather than declared here. Declaring it made every
+         ordinary build a self-contained one, which forces a runtime identifier
+         and moves the output into bin/<config>/net10.0/<rid>/. "dotnet test"
+         does not refresh that copy, so the tests that run the built command
+         line were executing whatever an earlier build had left there — passing
+         or failing against source nobody was looking at any more. -->
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
   <ItemGroup>

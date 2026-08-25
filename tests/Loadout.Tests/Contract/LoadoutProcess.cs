@@ -152,6 +152,8 @@ public sealed class LoadoutProcess : IDisposable
             ?? throw new InvalidOperationException(
                 "The command line has not been built. Run: dotnet build src/Loadout.Cli");
 
+        EnsureCurrent(executable);
+
         var start = new ProcessStartInfo(executable)
         {
             RedirectStandardOutput = true,
@@ -182,6 +184,49 @@ public sealed class LoadoutProcess : IDisposable
             process.ExitCode,
             await output.ConfigureAwait(false),
             await error.ConfigureAwait(false));
+    }
+
+    /// <summary>
+    /// Refuses to run an executable older than the code under test.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These tests execute an artefact rather than calling into an assembly,
+    /// which is the point — but it means the thing being tested and the thing
+    /// that was just compiled can come apart. An executable left over from an
+    /// earlier build passes or fails according to source nobody is looking at
+    /// any more, and the result is worse than a failure because it looks like
+    /// an answer.
+    /// </para>
+    /// <para>
+    /// The copy of the command line assembly beside the tests is rebuilt with
+    /// them, so it dates the code under test. If the executable predates it,
+    /// this says so rather than reporting whatever the old one happened to do.
+    /// </para>
+    /// </remarks>
+    private static void EnsureCurrent(string executable)
+    {
+        var reference = Path.Combine(AppContext.BaseDirectory, "loadout.dll");
+
+        if (!File.Exists(reference))
+        {
+            return;
+        }
+
+        var built = File.GetLastWriteTimeUtc(executable);
+        var current = File.GetLastWriteTimeUtc(reference);
+
+        // A second of slack: the two are produced by the same build and their
+        // timestamps differ by milliseconds, which must not read as stale.
+        if (built >= current.AddSeconds(-1))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The command line at {executable} was built at {built:u}, before the code under "
+            + $"test at {current:u}. It would be tested against source that is no longer there. "
+            + "Run: dotnet build src/Loadout.Cli");
     }
 
     /// <summary>
