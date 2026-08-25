@@ -193,7 +193,22 @@ internal sealed class LauncherWindow : Window
 
         _filter.TextChanged += (_, _) => ApplyFilter();
 
-        _list.ValueChanged += (_, _) => ShowSelected();
+        _list.ValueChanged += (_, _) =>
+        {
+            // Ignored while the rows are being redrawn. Redrawing sets the
+            // source and restores the cursor, and both raise this — so reading
+            // a project's details, which redraws the rows to show its
+            // readiness, asked for those details again. Each turn restarted the
+            // read and put the reading indicator back, so the branch line
+            // pulsed for ever and the answer never settled: seventeen reads of
+            // one project in a second and a half, growing.
+            if (_refreshing)
+            {
+                return;
+            }
+
+            ShowSelected();
+        };
 
         // Enter on the list starts the usual thing for that project, which is
         // the reason somebody opened the launcher at all.

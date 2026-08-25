@@ -239,6 +239,101 @@ public sealed class LauncherWorkflowTests
     }
 
     [Fact]
+    public void A_slow_project_is_read_once_rather_than_for_ever()
+    {
+        var reads = 0;
+
+        LauncherWindow? built = null;
+
+        using var session = TuiSession.Start(app =>
+        {
+            built = new LauncherWindow(
+                [Project("alpha", "Alpha")],
+                here: null,
+                "workspace connected",
+                ["claude"],
+                (project, _) =>
+                {
+                    Interlocked.Increment(ref reads);
+
+                    // Genuinely asynchronous, which is what a real repository
+                    // read is. A synchronous answer hides this entirely.
+                    return Task.Run(() => (ProjectOverview?)Overview(project));
+                },
+                _ => { },
+                [],
+                app);
+
+            return built;
+        });
+
+        // Pump for long enough that a loop would show itself many times over.
+        var deadline = Environment.TickCount64 + 1500;
+
+        while (Environment.TickCount64 < deadline)
+        {
+            session.Pump();
+            Thread.Sleep(10);
+        }
+
+        // Recording a project's readiness redraws the rows, redrawing sets the
+        // selection, and setting the selection asks for the overview again.
+        // Each turn restarted the read and put the reading indicator back, so
+        // the branch line pulsed for ever and the answer never settled.
+        reads.Should().BeLessThan(
+            5,
+            $"reading a project once should not cause it to be read again ({reads} reads)");
+    }
+
+    [Fact]
+    public void Moving_down_the_list_still_reads_each_project()
+    {
+        var read = new List<string>();
+
+        LauncherWindow? built = null;
+
+        using var session = TuiSession.Start(app =>
+        {
+            built = new LauncherWindow(
+                [Project("alpha", "Alpha"), Project("beta", "Beta")],
+                here: null,
+                "workspace connected",
+                ["claude"],
+                (project, _) =>
+                {
+                    lock (read)
+                    {
+                        read.Add(project.Entry.Slug);
+                    }
+
+                    return Task.Run(() => (ProjectOverview?)Overview(project));
+                },
+                _ => { },
+                [],
+                app);
+
+            return built;
+        });
+
+        // The fix for the endless re-reading ignores selection changes while
+        // the rows are redrawn. It must not also ignore the real ones: moving
+        // the cursor to another project has to fetch that project.
+        session.Tab();
+        session.Press(Key.CursorDown);
+
+        for (var i = 0; i < 20; i++)
+        {
+            session.Pump();
+            Thread.Sleep(5);
+        }
+
+        lock (read)
+        {
+            read.Should().Contain("beta", "moving to a project must read it");
+        }
+    }
+
+    [Fact]
     public void The_menu_bar_is_on_screen_with_its_groups_named()
     {
         using var session = Launcher([Project("alpha", "Alpha")]);

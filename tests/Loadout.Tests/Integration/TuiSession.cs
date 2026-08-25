@@ -125,6 +125,37 @@ internal sealed class TuiSession : IDisposable
         return this;
     }
 
+    /// <summary>
+    /// Runs the main loop for one iteration, draining work posted to it from
+    /// other threads.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// RaiseIteration does not do this. Anything a background read hands back
+    /// through <c>Invoke</c> sits in the queue until the loop itself runs, so a
+    /// test that only raised the event saw none of it — which is why a defect
+    /// that only appears once an asynchronous answer arrives could not be
+    /// reproduced here at all.
+    /// </para>
+    /// </remarks>
+    internal TuiSession Pump()
+    {
+        _application.StopAfterFirstIteration = true;
+
+        try
+        {
+            _application.Run(_window);
+        }
+        finally
+        {
+            _application.StopAfterFirstIteration = false;
+        }
+
+        _application.LayoutAndDraw();
+
+        return this;
+    }
+
     /// <summary>What is on the screen right now.</summary>
     internal string Screen => _application.Driver?.ToString() ?? string.Empty;
 
