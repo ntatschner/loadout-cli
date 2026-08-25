@@ -24,6 +24,7 @@ namespace Loadout.Tests.Contract;
 /// types would test neither the writer nor the exit code.
 /// </para>
 /// </summary>
+[Collection(ContractCollection.Name)]
 public sealed class JsonContractTests
 {
     /// <summary>Asserts the document is an object carrying at least these properties.</summary>

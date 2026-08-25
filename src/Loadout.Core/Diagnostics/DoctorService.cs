@@ -283,28 +283,11 @@ public sealed class DoctorService : IDoctorService
             return;
         }
 
-        var report = result.Value!;
-
-        checks.Add(report.Violations.Count == 0
-            ? DiagnosticCheck.Ok("Repository", "Agent files", "none tracked")
-            : DiagnosticCheck.Error("Repository", "Agent files",
-                $"{report.Violations.Count} tracked: "
-                + string.Join(", ", report.Violations.Take(5).Select(v => v.Path))));
-
-        if (report.Warnings.Count > 0)
-        {
-            checks.Add(DiagnosticCheck.Warn("Repository", "Untracked agent files",
-                $"{report.Warnings.Count} present and not ignored"));
-        }
-
-        checks.Add(report.HasPreCommitHook
-            ? DiagnosticCheck.Ok("Repository", "Pre-commit protection", "installed")
-            : DiagnosticCheck.Warn("Repository", "Pre-commit protection",
-                "not installed in this clone; hooks are per-clone, so run: loadout protect",
-                new Remedy(
-                    RemedyKind.InstallPreCommitHook,
-                    "Install the pre-commit hook in this clone",
-                    repository)));
+        // One projection, shared with everything else that reports policy
+        // findings. The summary that used to be written here attached no fix to
+        // the committed-files finding, so the doctor could report it and not
+        // act on it while drift offered to.
+        checks.AddRange(PolicyDiagnostics.Describe(result.Value!, repository));
     }
 
     private void AddCapabilityChecks(List<DiagnosticCheck> checks)

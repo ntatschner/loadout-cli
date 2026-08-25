@@ -1,3 +1,4 @@
+using Loadout.Models.Diagnostics;
 using Loadout.Core.Backups;
 using Loadout.Core.Configuration;
 using Loadout.Core.Git;
@@ -140,6 +141,42 @@ public sealed class PolicyAndMigrationTests : IAsyncLifetime
         // installed, and the forbidden list only ever grows, so this is checked
         // rather than left as an intention in a comment.
         report.Findings.Select(f => f.Path).Should().NotContain(path);
+    }
+
+    [Fact]
+    public async Task A_committed_agent_file_is_reported_with_a_way_to_put_it_right()
+    {
+        var report = (await _policies.CheckAsync(_repository)).Value!;
+
+        var checks = Loadout.Core.Policies.PolicyDiagnostics.Describe(report, _repository);
+
+        var agentFiles = checks.Single(c => c.Name == "Agent files");
+
+        agentFiles.Severity.Should().Be(DiagnosticSeverity.Error);
+
+        // The gap this projection closed: doctor reported nine committed agent
+        // files as an error it could do nothing about, while drift offered to
+        // untrack the same nine. Reporting a problem and declining to act on it
+        // is worse than either answer alone.
+        agentFiles.Remedy.Should().NotBeNull();
+        agentFiles.Remedy!.Kind.Should().Be(RemedyKind.UntrackAgentFiles);
+        agentFiles.Remedy.Target.Should().Be(_repository);
+    }
+
+    [Fact]
+    public async Task Every_policy_finding_that_can_be_fixed_carries_its_fix()
+    {
+        var report = (await _policies.CheckAsync(_repository)).Value!;
+
+        var checks = Loadout.Core.Policies.PolicyDiagnostics.Describe(report, _repository);
+
+        // Anything worse than Info is either actionable or explained. A warning
+        // with neither is a dead end for whoever is reading it.
+        foreach (var check in checks.Where(c => c.Severity != DiagnosticSeverity.Info))
+        {
+            (check.Remedy is not null || check.Detail.Length > 0).Should().BeTrue(
+                $"'{check.Name}' must offer a fix or say why there is none");
+        }
     }
 
     [Fact]

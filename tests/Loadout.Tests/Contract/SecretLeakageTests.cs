@@ -18,6 +18,7 @@ namespace Loadout.Tests.Contract;
 /// that it cannot occur by accident, so a hit is always a leak.
 /// </para>
 /// </summary>
+[Collection(ContractCollection.Name)]
 public sealed class SecretLeakageTests
 {
     /// <summary>
