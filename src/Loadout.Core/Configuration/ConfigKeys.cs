@@ -146,7 +146,16 @@ public static class ConfigKeys
             (c, _, v) => c.Secrets.Provider = v, false,
             Group: Groups.Secrets),
 
-        new("terminal", "Preferred terminal, or 'current' to reuse this one",
+        // Nothing reads this yet. ITerminalProvider is implemented for all
+        // three platforms, registered for injection, and injected nowhere —
+        // so an agent always launches in the terminal the launcher was
+        // started from, whatever this says. Said in the description because
+        // that is the one place every surface shows: config list, config get,
+        // and the hint under the field on the settings screen, which is where
+        // it became a problem. A setting that can be changed and does nothing
+        // is worse the more prominent it is.
+        new("terminal",
+            "Preferred terminal. Not yet honoured: agents launch in the current one",
             (c, _) => c.Terminal.Preferred,
             (c, _, v) => c.Terminal.Preferred = v, false,
             Group: Groups.Terminal),
