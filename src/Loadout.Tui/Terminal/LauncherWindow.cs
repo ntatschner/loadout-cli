@@ -380,9 +380,13 @@ internal sealed class LauncherWindow : Window
     /// </remarks>
     private void BindTheKeyboard()
     {
-        // Settings, from anywhere. The comma is what an editor uses and the
-        // only reason it was not here already is that nothing had asked.
-        this.Bind(new Key(',').WithCtrl, Command.Edit);
+        // Settings, from anywhere. Ctrl+comma is what an editor uses and it
+        // was the first choice; it works under the ANSI driver the tests run
+        // on and does nothing whatever in a real Windows console, where
+        // Ctrl+Q and the arrows and F10 all work. A key that passes its test
+        // and fails on the machine is worse than no key, so this is F2, which
+        // was pressed in a real console before being written down.
+        this.Bind(Key.F2, Command.Edit);
 
         AddCommand(Command.Edit, () =>
         {
@@ -529,6 +533,18 @@ internal sealed class LauncherWindow : Window
         Visible = false,
     };
 
+    /// <summary>
+    /// The keys, named from the toolkit where the toolkit owns them.
+    /// </summary>
+    /// <remarks>
+    /// The menu key was written here as F9 and F9 does nothing: Terminal.Gui
+    /// used it in version 1 and the default is F10 in version 2. Both the
+    /// status line and this list advertised a key that had not worked for as
+    /// long as the launcher had been on version 2, and nothing noticed,
+    /// because a string in a status bar agrees with a string in a help panel
+    /// no matter how wrong they both are. Asking the menu bar what its key is
+    /// cannot drift.
+    /// </remarks>
     private static readonly string[] KeyList =
     [
         "Enter      launch the selected project",
@@ -536,9 +552,9 @@ internal sealed class LauncherWindow : Window
         "?          show or hide this list",
         "Ctrl+P     all commands",
         "Ctrl+N     add a project",
-        "Ctrl+,     settings and paths",
+        "F2         settings and paths",
         "Ctrl+Q     quit",
-        "F9         menu",
+        MenuBar.DefaultKey + "        menu",
         "Tab        the filter, the list, the buttons",
     ];
 
@@ -593,7 +609,7 @@ internal sealed class LauncherWindow : Window
             : string.Join(", ", agents);
 
         return $"{projects}  ·  {workspace}  ·  {installed}"
-            + "      Ctrl+P commands   Ctrl+N add   F9 menu   Ctrl+Q quit";
+            + $"      Ctrl+P commands   Ctrl+N add   {MenuBar.DefaultKey} menu   Ctrl+Q quit";
     }
 
     /// <summary>

@@ -7,6 +7,7 @@ using Loadout.Tui.Terminal;
 using FluentAssertions;
 using Terminal.Gui.App;
 using Terminal.Gui.Input;
+using Terminal.Gui.Views;
 using Xunit;
 
 namespace Loadout.Tests.Integration;
@@ -573,10 +574,29 @@ public sealed class LauncherWorkflowTests
     {
         using var session = Launcher([Project("alpha", "Alpha")]);
 
-        session.Press(new Key(',').WithCtrl);
+        session.Press(Key.F2);
 
         Window.Intent.Should().NotBeNull();
         Window.Intent!.Action.Should().Be(LauncherAction.Settings);
+    }
+
+    [Fact]
+    public void The_menu_key_it_advertises_is_the_menu_key_it_has()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        var screen = session.Screen;
+
+        // It said F9 and F9 did nothing. Terminal.Gui used F9 in version 1 and
+        // uses F10 in version 2, so the status line and the help panel had both
+        // been naming a dead key for as long as the launcher had been on
+        // version 2 — and agreed with each other the whole time, which is why
+        // nothing caught it. Pressing it in a real console was what caught it.
+        screen.Should().Contain(
+            $"{MenuBar.DefaultKey} menu",
+            "the key named on screen has to be the one the menu bar answers to");
+
+        screen.Should().NotContain("F9 menu");
     }
 }
 

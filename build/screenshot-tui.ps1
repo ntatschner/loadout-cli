@@ -36,24 +36,21 @@
 .PARAMETER Exe
     The program to photograph. Defaults to this repository's debug build.
 
-.PARAMETER Type
-    Text to type before the photograph, so a screen that changes as somebody
-    types — the launcher's filter, for one — can be photographed as it will
-    actually look.
+.PARAMETER Keys
+    Keys to send before the photograph, so a screen reached by pressing
+    something can be photographed too. Named keys go in braces — {DOWN} {F2}
+    {F10} {CTRL-Q} — and anything else is typed a character at a time. See
+    build/send-keys.ps1 for the full list.
 
-    Only text. Pressing a key is not supported and the attempts are recorded
-    here so nobody repeats them. SendKeys does nothing whatever: it posts
-    window messages and a console reads its input buffer, not its messages.
-    Writing to that buffer does work, which is what this does — but only for
-    characters. The same records carrying correct virtual key and scan codes
-    for Tab, Enter, the arrows or the function keys are ignored, and so are
-    the escape sequences a real terminal would send for them.
+    An earlier version of this said pressing a key was not supported, on the
+    evidence that an injected arrow did nothing. That was wrong, and wrong in
+    an instructive way: at the time an arrow genuinely did nothing at the
+    filter, so the test could not tell a key that never arrived from a key
+    that arrived and had nothing to do. Once the arrow was given a job, the
+    same injection moved the list on the first try.
 
-    For a screen that has to be navigated to, render it through the test
-    harness instead — tests/Loadout.Tests/Integration/SettingsScreenTests.cs
-    opens every section of the settings screen and reads what was drawn. That
-    misses only what the font does with the characters, which is what the
-    -Glyphs sheet is for.
+    Ctrl and a punctuation key is the one combination that really does not
+    arrive. Ctrl+Q, the arrows, the function keys and every letter do.
 
 .PARAMETER Glyphs
     Photograph a sheet of the characters Terminal.Gui decorates controls with,
@@ -68,12 +65,12 @@
     ./build/screenshot-tui.ps1 -Out launcher.png
 
 .EXAMPLE
-    ./build/screenshot-tui.ps1 -Type 'star' -Out filtered.png
+    ./build/screenshot-tui.ps1 -Keys '{DOWN}','?' -Out keys.png
 #>
 [CmdletBinding()]
 param(
     [string]   $Exe      = "$PSScriptRoot/../src/Loadout.Cli/bin/Debug/net10.0/loadout.exe",
-    [string]   $Type     = '',
+    [string[]] $Keys     = @(),
     [string]   $Out      = 'launcher.png',
     [int]      $Cols     = 120,
     [int]      $Rows     = 34,
@@ -231,91 +228,16 @@ if ($handle -eq [IntPtr]::Zero) { throw 'No console window appeared.' }
 
 Start-Sleep -Milliseconds $SettleMs
 
-if ($Type.Length -gt 0) {
+if ($Keys.Count -gt 0) {
     $app = Get-Process $leaf -ErrorAction SilentlyContinue |
         Where-Object { $_.Id -notin $running } |
         Select-Object -First 1
 
-    if (-not $app) { throw "No $leaf process to type into." }
+    if (-not $app) { throw "No $leaf process to send keys to." }
 
-    # A separate process, because writing to another console's input buffer
-    # means detaching from this one's first, and this one is where the output
-    # goes.
-    $typist = Join-Path $scratch 'type.ps1'
-
-    @'
-param([int] $Target, [string] $Text)
-
-Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-
-public static class Typist
-{
-    [StructLayout(LayoutKind.Sequential)]
-    public struct INPUT_RECORD
-    {
-        public ushort EventType;
-        public uint   KeyDown;
-        public ushort RepeatCount;
-        public ushort VirtualKeyCode;
-        public ushort VirtualScanCode;
-        public ushort UnicodeChar;
-        public uint   ControlKeyState;
-    }
-
-    [DllImport("kernel32.dll")] public static extern bool FreeConsole();
-    [DllImport("kernel32.dll", SetLastError = true)] public static extern bool AttachConsole(uint pid);
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern IntPtr CreateFileW(string name, uint access, uint share,
-        IntPtr security, uint creation, uint flags, IntPtr template);
-    [DllImport("kernel32.dll")] public static extern bool WriteConsoleInputW(
-        IntPtr handle, INPUT_RECORD[] records, uint count, out uint written);
-    [DllImport("user32.dll")] public static extern uint MapVirtualKeyW(uint code, uint type);
-
-    public static void Type(uint pid, string text)
-    {
-        FreeConsole();
-
-        if (!AttachConsole(pid))
-        {
-            throw new Exception("Could not attach to that console: " + Marshal.GetLastWin32Error());
-        }
-
-        // CONIN$, which is what a console application actually reads. Window
-        // messages never reach it, which is why SendKeys does nothing at all.
-        IntPtr conin = CreateFileW("CONIN$", 0xC0000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
-
-        if (conin == new IntPtr(-1))
-        {
-            throw new Exception("CONIN$ would not open: " + Marshal.GetLastWin32Error());
-        }
-
-        foreach (char c in text)
-        {
-            var records = new INPUT_RECORD[2];
-
-            for (int half = 0; half < 2; half++)
-            {
-                records[half].EventType = 1;                       // KEY_EVENT
-                records[half].KeyDown = half == 0 ? 1u : 0u;
-                records[half].RepeatCount = 1;
-                records[half].VirtualKeyCode = (ushort)char.ToUpperInvariant(c);
-                records[half].VirtualScanCode = (ushort)MapVirtualKeyW(char.ToUpperInvariant(c), 0);
-                records[half].UnicodeChar = c;
-            }
-
-            uint written;
-            WriteConsoleInputW(conin, records, 2, out written);
-        }
-    }
-}
-"@
-
-[Typist]::Type([uint32]$Target, $Text)
-'@ | Set-Content -Path $typist -Encoding UTF8
-
-    & pwsh -NoProfile -ExecutionPolicy Bypass -File $typist -Target $app.Id -Text $Type
+    & pwsh -NoProfile -ExecutionPolicy Bypass `
+        -File (Join-Path $PSScriptRoot 'send-keys.ps1') `
+        -Target $app.Id -Keys ($Keys -join [char]1)
 
     Start-Sleep -Milliseconds 1200
 }
