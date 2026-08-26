@@ -134,21 +134,31 @@ public sealed class TerminalLauncher : ILauncherTui
             var intent = await ShowAsync(
                 async () =>
                 {
-                    here ??= await ResolveCurrentAsync(ct).ConfigureAwait(false);
+                    // Started together, awaited afterwards. These ask four
+                    // unrelated questions — which repository you are standing
+                    // in, which agents this machine has, what is registered,
+                    // and what you were last doing — and not one of them needs
+                    // another's answer. Awaiting them in turn only added the
+                    // four times together, and two of them shell out.
+                    var locating = here is null
+                        ? ResolveCurrentAsync(ct)
+                        : Task.FromResult<ProjectResolution?>(here);
 
-                    installed ??= (await _agents.DetectAllAsync(ct).ConfigureAwait(false))
-                        .Where(agent => agent.IsInstalled)
-                        .Select(agent => agent.DisplayName)
-                        .ToList();
+                    var detecting = installed is null
+                        ? InstalledAgentsAsync(ct)
+                        : Task.FromResult(installed);
 
-                    var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
+                    var listing = _projects.ListAsync(ct);
 
-                    // Read behind the opening animation like everything else,
-                    // and tolerated when it fails: not being able to say what
-                    // you were last doing is no reason to refuse to open.
-                    var sessions = await _sessions
-                        .ListAsync(new SessionQuery(Limit: 5), ct)
-                        .ConfigureAwait(false);
+                    // Tolerated when it fails: not being able to say what you
+                    // were last doing is no reason to refuse to open.
+                    var recalling = _sessions.ListAsync(new SessionQuery(Limit: 5), ct);
+
+                    here = await locating.ConfigureAwait(false);
+                    installed = await detecting.ConfigureAwait(false);
+
+                    var projects = await listing.ConfigureAwait(false);
+                    var sessions = await recalling.ConfigureAwait(false);
 
                     return (
                         projects,
@@ -497,6 +507,13 @@ public sealed class TerminalLauncher : ILauncherTui
 
         Pause();
     }
+
+    /// <summary>The agents this machine actually has, by display name.</summary>
+    private async Task<IReadOnlyList<string>> InstalledAgentsAsync(CancellationToken ct) =>
+        (await _agents.DetectAllAsync(ct).ConfigureAwait(false))
+            .Where(agent => agent.IsInstalled)
+            .Select(agent => agent.DisplayName)
+            .ToList();
 
     /// <summary>
     /// Shows the settings and writes back only what actually changed.
