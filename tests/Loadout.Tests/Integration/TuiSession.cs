@@ -96,6 +96,12 @@ internal sealed class TuiSession : IDisposable
         // shows anybody, and a test asserting on them would prove nothing.
         ConsoleGlyphs.MakeLegible();
 
+        // And the same palette, for the same reason. Colours do not reach the
+        // text these tests assert on, so this proves nothing about how it
+        // looks — but a theme that names a scheme the toolkit does not have
+        // throws, and it should throw here rather than in somebody's terminal.
+        LauncherTheme.Apply();
+
         // Sized before the screen is built, because a view that lays out
         // against a zero-size screen caches the wrong bounds.
         application.Screen = new Rectangle(0, 0, width, height);

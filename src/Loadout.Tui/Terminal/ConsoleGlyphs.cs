@@ -63,6 +63,18 @@ internal static class ConsoleGlyphs
         // After Init, which is where the configuration that sets these is
         // applied. Before it, they are overwritten by the defaults again.
         MakeLegible();
+
+        // Asked for the full range where the terminal has it. A palette
+        // chosen in twenty-four bit colour and then quantised to sixteen is
+        // not the palette anybody designed: the accent came out red rather
+        // than amber, and a soft grey came out as bright cyan, which is how
+        // the borders were misread as unthemed for three attempts running.
+        if (application.Driver is { SupportsTrueColor: true } driver)
+        {
+            driver.Force16Colors = false;
+        }
+
+        LauncherTheme.Apply();
     }
 
     /// <summary>
