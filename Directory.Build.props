@@ -26,7 +26,7 @@
     <Product>Loadout</Product>
     <Company>TheCodeSaiyan Ltd</Company>
     <Copyright>Copyright (c) 2026 TheCodeSaiyan Ltd</Copyright>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
 
     <!-- Declared on the assemblies themselves so the licence travels with the
          binary. build/licences.ps1 checks that every dependency can be shipped
