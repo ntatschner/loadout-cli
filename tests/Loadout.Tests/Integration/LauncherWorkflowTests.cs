@@ -598,6 +598,48 @@ public sealed class LauncherWorkflowTests
 
         screen.Should().NotContain("F9 menu");
     }
+
+    [Fact]
+    public void Enter_in_the_filter_opens_what_the_filter_narrowed_to()
+    {
+        using var session = Launcher([
+            Project("alpha", "Alpha", "/repos/alpha"),
+            Project("beta", "Beta", "/repos/beta"),
+        ]);
+
+        // Reported from use: opening a project did not work and had to be
+        // tried again. The filter is where the cursor starts, so narrowing the
+        // list and pressing Enter is the shortest path anybody would take —
+        // and Enter was handled by the list alone, so from the filter it did
+        // nothing whatever. No message, no launch. Going back and arrowing
+        // into the list first worked, which is what made it look intermittent.
+        session.Type("bet");
+        session.Press(Key.Enter);
+
+        Window.Intent.Should().NotBeNull("Enter in the filter has to open something");
+        Window.Intent!.Action.Should().Be(LauncherAction.Launch);
+        Window.Intent.Project!.Entry.Slug.Should().Be("beta");
+    }
+
+    [Fact]
+    public void A_project_that_cannot_be_opened_says_so_rather_than_nothing()
+    {
+        using var session = Launcher([Project("gone", "Gone", path: null)]);
+
+        session.Press(Key.Enter);
+
+        // The old code was a single pattern match, and a project that is not
+        // on this machine simply failed it: no launch, no message, nothing to
+        // tell it apart from a keystroke that never arrived. Silence is the
+        // one answer a person cannot act on.
+        Window.Intent.Should().BeNull("there is nothing here to open");
+
+        // Asserted on the part only the refusal adds. "not on this machine"
+        // was the first choice and proved nothing: the detail pane says that
+        // already, as the reason the project is Blocked, so the test passed
+        // with the message deleted.
+        session.Screen.Should().Contain("Clone onto this machine");
+    }
 }
 
 /// <summary>

@@ -3,6 +3,7 @@ using Loadout.Agents;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Sessions;
 using Loadout.Models;
+using Loadout.Models.Results;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -183,12 +184,33 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
                 ExitCode.ProjectNotFound);
         }
 
-        var chosen = await ChooseAsync(sessions, settings, output).ConfigureAwait(false);
+        AgentSession? chosen;
 
-        if (chosen is null)
+        if (settings.Session is { Length: > 0 } wanted)
         {
-            // Backing out of the picker is a decision, not a failure.
-            return CommandOutput.Success();
+            // Asked for by name, so a name that matches nothing is an error
+            // and not a shrug. This used to fall in with the picker's null,
+            // which means "changed my mind" — so 'resume nonsense' printed
+            // nothing, exited zero, and looked exactly like success. It is
+            // how the launcher's Resume button appeared to do nothing at all.
+            var match = Match(sessions, wanted);
+
+            if (match.Failed)
+            {
+                return output.Fail(match);
+            }
+
+            chosen = match.Value!;
+        }
+        else
+        {
+            chosen = await ChooseAsync(sessions, settings, output).ConfigureAwait(false);
+
+            if (chosen is null)
+            {
+                // Backing out of the picker is a decision, not a failure.
+                return CommandOutput.Success();
+            }
         }
 
         if (chosen.ProjectSlug is not { Length: > 0 } slug)
@@ -230,24 +252,48 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
     }
 
     /// <summary>
-    /// Works out which session was meant: named outright, the most recent, or
-    /// whichever one is picked from the list.
+    /// The one session whose id starts with what was asked for.
+    /// </summary>
+    /// <remarks>
+    /// Prefixes are accepted because nobody types a whole UUID. Separated out
+    /// so that "no such session" and "more than one" can be said, which they
+    /// could not while this returned the same null the picker returns when
+    /// somebody backs out of it.
+    /// </remarks>
+    internal static OperationResult<AgentSession> Match(
+        IReadOnlyList<AgentSession> sessions,
+        string wanted)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+
+        var matches = sessions
+            .Where(s => s.SessionId.StartsWith(wanted, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return matches switch
+        {
+            [var only] => OperationResult<AgentSession>.Ok(only),
+
+            [] => OperationResult<AgentSession>.Fail(
+                $"No recorded session starts with '{wanted}'. "
+                + "Run 'loadout sessions' to see what there is.",
+                ExitCode.ProjectNotFound),
+
+            _ => OperationResult<AgentSession>.Fail(
+                $"{matches.Count} sessions start with '{wanted}'. Give more of the id.",
+                ExitCode.InvalidArguments),
+        };
+    }
+
+    /// <summary>
+    /// Works out which session was meant: the most recent, or whichever one is
+    /// picked from the list.
     /// </summary>
     private async Task<AgentSession?> ChooseAsync(
         IReadOnlyList<AgentSession> sessions,
         ResumeSettings settings,
         CommandOutput output)
     {
-        if (settings.Session is { Length: > 0 } wanted)
-        {
-            // Prefixes are accepted because nobody types a whole UUID.
-            var matches = sessions
-                .Where(s => s.SessionId.StartsWith(wanted, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            return matches.Count == 1 ? matches[0] : null;
-        }
-
         if (settings.Last)
         {
             return sessions[0];

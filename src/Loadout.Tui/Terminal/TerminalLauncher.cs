@@ -303,14 +303,10 @@ public sealed class TerminalLauncher : ILauncherTui
 
             case LauncherAction.Resume:
                 // The same command somebody would have typed, rather than a
-                // second implementation of the session picker. A session chosen
-                // from the recent list reopens that one; choosing Resume
-                // without picking reaches the picker, which is what it is for.
+                // second implementation of the session picker.
                 await _catalogue.RunAsync(
                     LauncherCommands.Resume,
-                    intent.SessionId is { Length: > 0 } chosen
-                        ? [chosen]
-                        : intent.Project is { } resuming ? [resuming.Entry.Slug] : [],
+                    ResumeArguments(intent),
                     ct).ConfigureAwait(false);
 
                 Pause();
@@ -506,6 +502,38 @@ public sealed class TerminalLauncher : ILauncherTui
         }
 
         Pause();
+    }
+
+    /// <summary>
+    /// How <c>resume</c> is called for what was chosen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reported from use: Resume did not work. The button and the menu entry
+    /// pass a project rather than a session, and the project's slug was being
+    /// handed to <c>resume</c>'s positional argument — which is a session id.
+    /// A slug never prefixes a session id, so nothing matched, and a session
+    /// named but not found used to be indistinguishable from backing out of
+    /// the picker: no output, exit zero, nothing to see. The comment here
+    /// claimed it reached the picker. It did not.
+    /// </para>
+    /// <para>
+    /// A project scopes the list instead, which is what the option is for, so
+    /// Resume on a project offers that project's sessions.
+    /// </para>
+    /// </remarks>
+    internal static IReadOnlyList<string> ResumeArguments(LauncherIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+
+        if (intent.SessionId is { Length: > 0 } chosen)
+        {
+            return [chosen];
+        }
+
+        return intent.Project is { } scope
+            ? ["--project", scope.Entry.Slug]
+            : [];
     }
 
     /// <summary>The agents this machine actually has, by display name.</summary>

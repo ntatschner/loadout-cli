@@ -196,6 +196,10 @@ internal sealed class LauncherWindow : Window
             Text = Describe(projects.Count, workspaceState, agents),
         };
 
+        // Kept, so that anything said along the bottom can be taken back when
+        // the cursor moves off whatever it was about.
+        _state = _summary.Text;
+
         // Added between the project list and the detail, so tabbing follows
         // the way the screen reads: down the left column, then across. Adding
         // it last put it behind every button in the detail pane, which is four
@@ -423,6 +427,18 @@ internal sealed class LauncherWindow : Window
             if (key == Key.CursorDown)
             {
                 MoveInto(_list, by: 1);
+                key.Handled = true;
+            }
+            else if (key == Key.Enter)
+            {
+                // Reported from use: opening a project did not work and had to
+                // be tried again. Enter was handled by the list alone, and the
+                // cursor starts in the filter — so narrowing the list and
+                // pressing Enter, which is the shortest path anybody would
+                // take, did nothing at all. Going back and arrowing into the
+                // list first worked, which is what made it look intermittent
+                // rather than simply missing.
+                LaunchSelected();
                 key.Handled = true;
             }
         };
@@ -914,12 +930,40 @@ internal sealed class LauncherWindow : Window
 
     private void LaunchSelected()
     {
-        if (Selected is { IsAvailableLocally: true } project)
+        if (Selected is not { } project)
         {
-            Close(new LauncherIntent(
-                LauncherAction.Launch, project, project.Entry.DefaultAgent));
+            return;
         }
+
+        // Said rather than swallowed. This used to be one pattern match: a
+        // project that is not on this machine failed it, and Enter did nothing
+        // whatever — no launch, no message, nothing to distinguish it from a
+        // key that had not registered.
+        if (!project.IsAvailableLocally)
+        {
+            Say($"{project.Entry.Name} is not on this machine. "
+                + "Registry ▸ Clone onto this machine.");
+
+            return;
+        }
+
+        Close(new LauncherIntent(
+            LauncherAction.Launch, project, project.Entry.DefaultAgent));
     }
+
+    /// <summary>
+    /// Says something along the bottom, until the cursor moves off whatever it
+    /// was about.
+    /// </summary>
+    private void Say(string message)
+    {
+        _summary.Text = message;
+
+        SetNeedsDraw();
+    }
+
+    /// <summary>What the bottom line says when it has nothing else to say.</summary>
+    private readonly string _state = string.Empty;
 
     /// <summary>
     /// Shows what is known about the selected project, reading the parts that
@@ -928,6 +972,13 @@ internal sealed class LauncherWindow : Window
     /// </summary>
     private void ShowSelected()
     {
+        // Whatever was said about the last project stops being true the moment
+        // the cursor leaves it.
+        if (_summary.Text != _state)
+        {
+            _summary.Text = _state;
+        }
+
         var project = Selected;
 
         if (project is null)
