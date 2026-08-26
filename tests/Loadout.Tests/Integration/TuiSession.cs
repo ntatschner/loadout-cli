@@ -55,6 +55,22 @@ internal sealed class TuiSession : IDisposable
         _application.Begin(window);
         _application.LayoutAndDraw();
 
+        // Checked, because it is not always obeyed. Two sizes asked for in one
+        // test class produced two screens of the same width: the driver is not
+        // rebuilt between applications in a process, and the size the second
+        // asked for was the size the first got. A test that believes it is
+        // proving something at eighty columns while rendering at a hundred and
+        // twenty proves the opposite of what it claims, and says nothing while
+        // it does it.
+        var drawn = Rendered(application);
+
+        if (drawn != width)
+        {
+            throw new InvalidOperationException(
+                $"Asked for a screen {width} columns wide and the driver drew {drawn}. "
+                + "Anything asserted against this would be asserted at the wrong size.");
+        }
+
         _injector = _application.GetInputInjector();
     }
 
@@ -86,6 +102,22 @@ internal sealed class TuiSession : IDisposable
 
         return new TuiSession(application, build(application), width, height);
     }
+
+    /// <summary>
+    /// How wide the driver's buffer is, which is the width being drawn at.
+    /// </summary>
+    /// <remarks>
+    /// Measured without trimming. A screen that does not fill its width — a
+    /// dialog centred on an empty background — still occupies the whole
+    /// buffer, and trimming the blanks off the end reported it as narrow and
+    /// failed four honest tests.
+    /// </remarks>
+    private static int Rendered(IApplication application) =>
+        (application.Driver?.ToString() ?? string.Empty)
+            .Split(Environment.NewLine)
+            .Select(line => line.Length)
+            .DefaultIfEmpty(0)
+            .Max();
 
     /// <summary>Presses one key and redraws.</summary>
     internal TuiSession Press(Key key)

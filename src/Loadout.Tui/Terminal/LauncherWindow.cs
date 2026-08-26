@@ -32,7 +32,7 @@ internal sealed class LauncherWindow : Window
     private readonly IReadOnlyList<string> _agents;
 
     private readonly TextField _filter;
-    private readonly ListView _list;
+    private readonly KeyedListView _list;
     private readonly ProjectDetailView _detail;
     private readonly Label _summary;
 
@@ -48,7 +48,7 @@ internal sealed class LauncherWindow : Window
     private CancellationTokenSource? _pending;
 
     /// <summary>Recent conversations, when there are any to show.</summary>
-    private readonly ListView? _recentList;
+    private readonly KeyedListView? _recentList;
 
     private readonly FrameView? _recentFrame;
 
@@ -97,7 +97,7 @@ internal sealed class LauncherWindow : Window
 
         var filterLabel = new Label { X = 1, Y = 1, Text = "Filter" };
 
-        _list = new ListView
+        _list = new KeyedListView
         {
             X = 0,
             Y = 0,
@@ -133,7 +133,7 @@ internal sealed class LauncherWindow : Window
 
         if (recentHeight > 0)
         {
-            _recentList = new ListView
+            _recentList = new KeyedListView
             {
                 X = 0,
                 Y = 0,
@@ -212,6 +212,13 @@ internal sealed class LauncherWindow : Window
         // A row cannot be laid out against a width the list does not have
         // yet, and the width changes again whenever the window is resized.
         // Both lists are therefore refitted whenever the layout settles.
+        for (var i = 0; i < KeyList.Length; i++)
+        {
+            _keys.Add(new Label { X = 1, Y = i, Text = KeyList[i] });
+        }
+
+        Add(_keys);
+
         SubViewsLaidOut += (_, _) => FitToLayout();
 
         _filter.TextChanged += (_, _) => ApplyFilter();
@@ -262,6 +269,8 @@ internal sealed class LauncherWindow : Window
         });
 
         this.Bind(Key.P.WithCtrl, Command.Open);
+
+        BindTheKeyboard();
         AddCommand(Command.Open, () => { _showPalette(this); return true; });
     }
 
@@ -351,18 +360,187 @@ internal sealed class LauncherWindow : Window
         }
     }
 
-    private void ShowKeys() =>
-        MessageBox.Query(
-            _application,
-            "Keys",
-            string.Join(
-                Environment.NewLine,
-                "Enter      launch the selected project",
-                "Ctrl+P     all commands",
-                "Ctrl+Q     quit",
-                "F9         menu",
-                "Tab        move between the filter, the list and the buttons"),
-            "_Close");
+    /// <summary>
+    /// The keys somebody would try, bound to what they would expect.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The whole explicit key surface was Esc, Ctrl+Q, Ctrl+N and Ctrl+P.
+    /// Everything else — reaching the list, opening settings, finding out what
+    /// any of the keys were — went through a menu bar behind F9, which is the
+    /// least discoverable thing on the screen and the one thing a person
+    /// coming from any other terminal application will not think to press.
+    /// </para>
+    /// <para>
+    /// Scope is the whole design here. <c>j</c> and <c>k</c> belong to the
+    /// list and nowhere else, because a filter that cannot spell "jamboree" is
+    /// a worse tool than one that costs a keystroke. <c>/</c> and <c>?</c> are
+    /// the same: bound where letters are not being typed.
+    /// </para>
+    /// </remarks>
+    private void BindTheKeyboard()
+    {
+        // Settings, from anywhere. The comma is what an editor uses and the
+        // only reason it was not here already is that nothing had asked.
+        this.Bind(new Key(',').WithCtrl, Command.Edit);
+
+        AddCommand(Command.Edit, () =>
+        {
+            Close(new LauncherIntent(LauncherAction.Settings));
+            return true;
+        });
+
+        // j and k are bound on the lists themselves, to commands a list
+        // already implements. Nothing custom is needed: Down is Down.
+        //
+        // KeyDown looked like the seam and is not one — the event does not
+        // fire for a focused ListView — and AddCommand is protected, so a
+        // view's commands cannot be added from outside it. Binding an existing
+        // command is the mechanism the toolkit actually intends.
+        // Bound on the lists rather than the window, and that is the whole
+        // design. A window's own bindings are not consulted while a child has
+        // the focus, so these would never fire there; on the lists they fire
+        // exactly where they should, and the filter keeps every character it
+        // is given. A project can still be searched for by a name with a
+        // slash or a question mark in it.
+        foreach (var list in new[] { _list, _recentList }.OfType<KeyedListView>())
+        {
+            list.Bind(Key.J, Command.Down);
+            list.Bind(Key.K, Command.Up);
+
+            list.OnKey(new Key('?'), Command.Context, () => { ShowKeys(); return true; });
+        }
+
+        // An arrow next to a filtered list means "go down the list" in every
+        // tool that has one. Here it meant nothing, and reaching the list took
+        // a Tab that nobody thinks to press.
+        _filter.KeyDown += (_, key) =>
+        {
+            if (key == Key.CursorDown)
+            {
+                MoveInto(_list, by: 1);
+                key.Handled = true;
+            }
+        };
+
+    }
+
+    /// <summary>Moves the focus onto a list and the cursor with it.</summary>
+    private void MoveInto(ListView list, int by)
+    {
+        FocusOn(list);
+
+        Step(list, by);
+    }
+
+    /// <summary>
+    /// Puts the focus on a view, the way pressing Tab would.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Forward only, and that is a limitation rather than a choice. There is
+    /// no way to ask for a particular view: ApplicationNavigation offers
+    /// AdvanceFocus and GetFocused and nothing else, and SetFocus moves what
+    /// is reported without moving where keys are routed — after it, an arrow
+    /// pressed at the project list moved nothing and the keystroke reached
+    /// neither view.
+    /// </para>
+    /// <para>
+    /// This is why there is no <c>/</c> key for returning to the filter. The
+    /// filter sits before the list in the tab order, advancing forty times
+    /// does not wrap round to it, and advancing backwards does not arrive
+    /// either. A key listed in the help that silently does nothing is worse
+    /// than no key at all, so it is not listed and not bound. Shift+Tab
+    /// already goes back.
+    /// </para>
+    /// </remarks>
+    /// <remarks>
+    /// <para>
+    /// <c>SetFocus</c> is the obvious call and it is not enough. It moves what
+    /// the application reports as focused, and keys carry on being routed as
+    /// though nothing had changed: after it, an arrow pressed at the project
+    /// list moved nothing, and the keystroke went nowhere at all rather than
+    /// to either view. Advancing focus is what the real Tab handler does, and
+    /// keys follow it.
+    /// </para>
+    /// <para>
+    /// Advanced until the view has it, rather than once, so that the tab order
+    /// can change without silently landing this on the wrong view. The bound
+    /// is there because a screen with nothing focusable would otherwise spin.
+    /// </para>
+    /// </remarks>
+    private void FocusOn(View view)
+    {
+        // Both ways round. The filter sits before the list in the tab order,
+        // so going only forward to reach it means walking past every button
+        // in the detail pane and hoping the order wraps — which it need not.
+        for (var guard = 0; guard < 40 && !view.HasFocus; guard++)
+        {
+            _application.Navigation?.AdvanceFocus(NavigationDirection.Forward, behavior: null);
+        }
+    }
+
+    /// <summary>Moves a list's cursor, stopping at either end.</summary>
+    private static void Step(ListView list, int by)
+    {
+        if (list.Source is null || list.Source.Count == 0)
+        {
+            return;
+        }
+
+        var at = list.SelectedItem ?? 0;
+
+        list.SelectedItem = Math.Clamp(at + by, 0, list.Source.Count - 1);
+    }
+
+    /// <summary>Shows or hides the key list.</summary>
+    /// <remarks>
+    /// <para>
+    /// A panel rather than a message box. MessageBox.Query runs a nested loop
+    /// and blocks until somebody dismisses it, which is right for a question
+    /// and wrong for a reference: a test that pressed ? never came back, and
+    /// what hangs a test hangs whatever else is driving the screen.
+    /// </para>
+    /// <para>
+    /// It also reads better. Help you can leave open while you try the key it
+    /// just told you about is help; help that blocks the screen it describes
+    /// is a quiz.
+    /// </para>
+    /// </remarks>
+    private void ShowKeys()
+    {
+        _keys.Visible = !_keys.Visible;
+
+        // Added last and left there. Subviews draw in order, so the panel is
+        // already on top; moving it to the start would draw it first, which
+        // is to say underneath the screen it is meant to cover.
+        SetNeedsDraw();
+    }
+
+    /// <summary>The key list, shown over the screen it describes.</summary>
+    private readonly FrameView _keys = new()
+    {
+        X = Pos.Center(),
+        Y = Pos.Center(),
+        Width = 58,
+        Height = 15,
+        Title = "Keys",
+        BorderStyle = LineStyle.Rounded,
+        Visible = false,
+    };
+
+    private static readonly string[] KeyList =
+    [
+        "Enter      launch the selected project",
+        "j / k      move down and up the list, as the arrows do",
+        "?          show or hide this list",
+        "Ctrl+P     all commands",
+        "Ctrl+N     add a project",
+        "Ctrl+,     settings and paths",
+        "Ctrl+Q     quit",
+        "F9         menu",
+        "Tab        the filter, the list, the buttons",
+    ];
 
     /// <summary>
     /// Reopens the conversation under the cursor in the recent list.

@@ -59,7 +59,14 @@ internal sealed class SettingsWindow : Window
     private const int LabelWidth = 24;
 
     /// <summary>Read-only entries have no key, so they are named by this.</summary>
-    private const string Places = "Where things are kept";
+    /// <remarks>
+    /// Short because it has to fit the column at eighty characters, which is
+    /// the floor this application is meant to work at. "Where things are kept"
+    /// read better and was cut to "Where things are ke" — the same defect the
+    /// project list had, rebuilt from scratch in a new screen a day after it
+    /// was fixed in the old one.
+    /// </remarks>
+    private const string Places = "Paths";
 
     private readonly IApplication _application;
 
@@ -148,11 +155,16 @@ internal sealed class SettingsWindow : Window
 
         _groups.SetSource(new ObservableCollection<string>(shown));
 
+        // Wide enough for the longest section and no wider. Twenty-eight per
+        // cent was a third of an eighty-column terminal and still too narrow
+        // for the longest name, while wasting a dozen columns on a wide one.
+        var columnWidth = shown.Max(section => section.Length) + 4;
+
         var groupFrame = new FrameView
         {
             X = 0,
             Y = 0,
-            Width = Dim.Percent(28),
+            Width = Dim.Absolute(columnWidth),
             Height = Dim.Fill(3),
             Title = "Sections",
             BorderStyle = LineStyle.Rounded,

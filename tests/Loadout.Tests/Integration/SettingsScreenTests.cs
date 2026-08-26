@@ -114,14 +114,17 @@ public sealed class SettingsScreenTests
         screen.Should().NotContain("true", "a setting whose whole vocabulary is yes and no is a tick");
     }
 
-    [Fact]
-    public void The_section_list_names_every_section_at_once()
+    [Theory]
+    [InlineData(80, 24)]
+    [InlineData(100, 30)]
+    [InlineData(140, 40)]
+    public void The_section_list_names_every_section_at_once(int width, int height)
     {
         using IApplication app = Application.Create();
 
         app.Init(DriverRegistry.Names.ANSI);
         ConsoleGlyphs.MakeLegible();
-        app.Screen = new Rectangle(0, 0, Width, Height);
+        app.Screen = new Rectangle(0, 0, width, height);
 
         using var settings = Build(app, ["claude"]);
 
@@ -130,11 +133,55 @@ public sealed class SettingsScreenTests
 
         var screen = app.Driver?.ToString() ?? string.Empty;
 
-        // What is not on the open page must still be visibly there, or the
-        // screen has only moved the problem rather than fixed it.
+        // Whole, not merely present. At eighty columns the section column was
+        // a share of the screen rather than the width of what it held, and
+        // "Where things are kept" was drawn as "Where things are ke" — cut by
+        // the frame, unmarked, exactly as the project rows used to be.
         foreach (var section in settings.Sections)
         {
-            screen.Should().Contain(section);
+            screen.Should().Contain(
+                section,
+                $"a section nobody can read the name of cannot be chosen, at {width}x{height}");
         }
+    }
+
+    [Theory]
+    [InlineData(80, 24)]
+    [InlineData(140, 40)]
+    public void Every_setting_is_reachable_at_any_size_worth_supporting(int width, int height)
+    {
+        var unseen = ConfigKeys.All
+            .Select(entry => entry.Key)
+            .Where(key => key != "editor-profiles")
+            .ToHashSet(StringComparer.Ordinal);
+
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        ConsoleGlyphs.MakeLegible();
+        app.Screen = new Rectangle(0, 0, width, height);
+
+        using var settings = Build(app, ["claude"]);
+
+        app.Begin(settings);
+
+        for (var section = 0; section < settings.Sections.Count; section++)
+        {
+            settings.Open(section);
+
+            app.LayoutAndDraw();
+
+            var screen = app.Driver?.ToString() ?? string.Empty;
+
+            foreach (var key in unseen.ToList())
+            {
+                if (screen.Contains(key, StringComparison.Ordinal))
+                {
+                    unseen.Remove(key);
+                }
+            }
+        }
+
+        unseen.Should().BeEmpty($"every setting must be reachable at {width}x{height}");
     }
 }

@@ -218,7 +218,7 @@ public sealed class ScreenConstructionTests
         // least visibly reachable rather than absent.
         screen.Should().Contain("Workspace");
         screen.Should().Contain("Agent status line");
-        screen.Should().Contain("Where things are kept");
+        screen.Should().Contain("Paths");
     }
 
     [Fact]

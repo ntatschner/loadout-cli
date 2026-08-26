@@ -487,6 +487,97 @@ public sealed class LauncherWorkflowTests
 
         screen.Should().Contain("▸ Beta");
     }
+
+    /// <summary>
+    /// Where the cursor is, read from the detail pane rather than from the
+    /// list, because the pane names one project and the list names them all.
+    /// </summary>
+    private static void ShouldBeLookingAt(string screen, string slug) =>
+        screen.Should().Contain($"/repos/{slug}");
+
+    [Fact]
+    public void Down_from_the_filter_moves_into_the_list()
+    {
+        using var session = Launcher([
+            Project("alpha", "Alpha", "/repos/alpha"),
+            Project("beta", "Beta", "/repos/beta"),
+        ]);
+
+        // The filter has the focus when the screen opens, so that typing
+        // narrows the list without pressing anything first. Reaching the list
+        // afterwards took a Tab, which is a keystroke nobody expects: an arrow
+        // key next to a filtered list means "move down the list" in every
+        // other tool that has one.
+        session.Press(Key.CursorDown);
+
+        ShouldBeLookingAt(session.Screen, "beta");
+    }
+
+    [Fact]
+    public void J_and_K_move_the_selection_like_the_arrows()
+    {
+        using var session = Launcher([
+            Project("alpha", "Alpha", "/repos/alpha"),
+            Project("beta", "Beta", "/repos/beta"),
+            Project("gamma", "Gamma", "/repos/gamma"),
+        ]);
+
+        session.Press(Key.CursorDown);
+        session.Press(Key.J);
+
+        ShouldBeLookingAt(session.Screen, "gamma");
+
+        session.Press(Key.K);
+
+        ShouldBeLookingAt(session.Screen, "beta");
+    }
+
+    [Fact]
+    public void Letters_still_reach_the_filter_rather_than_moving_the_cursor()
+    {
+        using var session = Launcher([
+            Project("alpha", "Alpha", "/repos/alpha"),
+            Project("jamboree", "Jamboree", "/repos/jamboree"),
+        ]);
+
+        // j and k move the cursor in the list and nowhere else. Binding them
+        // on the window would make the filter unable to spell "jamboree",
+        // which is a worse bargain than the keystroke it saves.
+        session.Type("jam");
+
+        var screen = session.Screen;
+
+        screen.Should().Contain("Jamboree");
+        screen.Should().NotContain("Alpha");
+    }
+
+    [Fact]
+    public void The_keys_are_one_key_away()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        session.Press(Key.CursorDown);
+        session.Press(new Key('?'));
+
+        // Help behind a menu behind F9 is help nobody finds. ? is what every
+        // other terminal application uses.
+        //
+        // Asserted on a line only the key list carries. "Ctrl+P" was the first
+        // choice and proved nothing: the status bar along the bottom already
+        // says "Ctrl+P commands", so the test passed before the key existed.
+        session.Screen.Should().Contain("launch the selected project");
+    }
+
+    [Fact]
+    public void Settings_has_a_key_of_its_own()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        session.Press(new Key(',').WithCtrl);
+
+        Window.Intent.Should().NotBeNull();
+        Window.Intent!.Action.Should().Be(LauncherAction.Settings);
+    }
 }
 
 /// <summary>
