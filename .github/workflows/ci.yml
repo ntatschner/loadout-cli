@@ -19,6 +19,7 @@ jobs:
   licences:
     name: Dependency licences
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +39,11 @@ jobs:
   test:
     name: Test on ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # Bounded so a hang fails visibly instead of burning the job's whole
+    # allowance. The win-x64 installer job hung for forty-eight minutes on
+    # the 0.8.0 release and was killed with no log left to read, which is a
+    # much worse outcome than a fast failure naming the step.
+    timeout-minutes: 30
     strategy:
       # Never cancel siblings on the first failure. A macOS-only break is
       # exactly the kind of thing that must not hide the Linux result.
@@ -98,6 +104,7 @@ jobs:
   publish:
     name: Publish ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     needs: test
     strategy:
       fail-fast: false

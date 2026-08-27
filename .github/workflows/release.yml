@@ -23,6 +23,11 @@ jobs:
   package:
     name: Package ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    # Bounded so a hang fails visibly instead of burning the job's whole
+    # allowance. The win-x64 installer job hung for forty-eight minutes on
+    # the 0.8.0 release and was killed with no log left to read, which is a
+    # much worse outcome than a fast failure naming the step.
+    timeout-minutes: 30
     # Named so the OIDC subject stays constant. Without it the subject carries
     # the ref, which differs for every tag, and a federated credential can only
     # match a fixed subject — this account's subjects also carry immutable
@@ -175,6 +180,7 @@ jobs:
   installer:
     name: Installer ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     # Named so the OIDC subject stays constant. Without it the subject carries
     # the ref, which differs for every tag, and a federated credential can only
     # match a fixed subject — this account's subjects also carry immutable
@@ -380,6 +386,7 @@ jobs:
   release:
     name: Publish release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [package, installer]
     if: github.ref_type == 'tag'
     permissions:

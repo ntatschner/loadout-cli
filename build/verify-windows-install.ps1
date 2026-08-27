@@ -74,6 +74,41 @@ function Invoke-Msi {
     }
 }
 
+<#
+.SYNOPSIS
+    Runs the installed launcher with a deadline.
+
+.DESCRIPTION
+    Every msiexec call here has always been bounded; running the installed
+    binary was not. That is the gap the 0.8.0 release fell into: the win-x64
+    installer job hung for forty-eight minutes and was killed with no log left
+    to read, so what it had been waiting on could not be established at all.
+
+    A command that will not finish is a defect worth reporting as itself. Two
+    minutes is far longer than any of these take and far shorter than a job.
+#>
+function Invoke-Bounded {
+    param([string] $Label, [string[]] $Arguments, [int] $TimeoutSeconds = 120)
+
+    $out = Join-Path $logs "$Label.out"
+    $err = Join-Path $logs "$Label.err"
+
+    $process = Start-Process $installed -PassThru -NoNewWindow `
+        -ArgumentList $Arguments -RedirectStandardOutput $out -RedirectStandardError $err
+
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        try { $process.Kill($true) } catch { }
+
+        throw "'loadout $($Arguments -join ' ')' did not finish within $TimeoutSeconds seconds. " +
+            "It is waiting on something. Output so far: $out"
+    }
+
+    return [pscustomobject]@{
+        ExitCode = $process.ExitCode
+        Output   = @(Get-Content $out -ErrorAction SilentlyContinue)
+    }
+}
+
 function Assert-Runs {
     param([string] $Expected)
 
@@ -81,7 +116,7 @@ function Assert-Runs {
         throw "Nothing was installed at $installed."
     }
 
-    $version = (& $installed --version) -join ''
+    $version = (Invoke-Bounded 'version' @('--version')).Output -join ''
 
     if ($Expected -and $version -ne $Expected) {
         throw "Expected version $Expected, found $version."
@@ -89,10 +124,10 @@ function Assert-Runs {
 
     # Running it is the point. A package that lays down a file which cannot
     # start is a package that passed every check that mattered less.
-    & $installed doctor --json | Out-Null
+    $doctor = Invoke-Bounded 'doctor' @('doctor', '--json')
 
-    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) {
-        throw "doctor exited $LASTEXITCODE, which is neither success nor an ordinary report of problems."
+    if ($doctor.ExitCode -ne 0 -and $doctor.ExitCode -ne 1) {
+        throw "doctor exited $($doctor.ExitCode), which is neither success nor an ordinary report of problems."
     }
 
     Write-Host "  runs, reports $version"
