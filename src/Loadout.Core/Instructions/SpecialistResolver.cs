@@ -118,7 +118,8 @@ public sealed class SpecialistResolver : ISpecialistResolver
 
         var kept = ApplyBudget(ordered, request, omitted, out var budget);
 
-        return new EffectiveInstructions(mode, kept, Order(omitted).ToList(), conflicts, budget);
+        return new EffectiveInstructions(
+            mode, kept, Order(omitted).ToList(), conflicts, budget, evidence.Truncated);
     }
 
     /// <summary>The mode asked for, or the default when it was not named or does not exist.</summary>

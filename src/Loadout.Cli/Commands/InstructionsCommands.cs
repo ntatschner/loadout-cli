@@ -446,6 +446,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
                 overBudget = effective.Budget.IsOverBudget,
                 nearBudget = effective.Budget.IsNearBudget,
             },
+            evidenceTruncated = effective.EvidenceTruncated,
         };
 
     private static object Selection(SpecialistSelection selection) => new
@@ -521,6 +522,17 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
         else
         {
             output.WriteLine("  [dim]No budget set.[/]");
+        }
+
+        if (effective.EvidenceTruncated)
+        {
+            // A partial scan produces an answer that looks exactly as confident
+            // as a complete one. Saying so is the difference between "no C#
+            // here" and "no C# in the part I looked at".
+            output.WriteBlankLine();
+            output.WriteLine(
+                "[yellow]The repository was too large to scan in full, so what was detected "
+                + "from files may be incomplete.[/]");
         }
 
         output.WriteBlankLine();

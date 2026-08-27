@@ -133,12 +133,22 @@ public sealed record InstructionContextBudget(
 /// </param>
 /// <param name="Conflicts">Contradictions found between selected specialists.</param>
 /// <param name="Budget">What it costs.</param>
+/// <param name="EvidenceTruncated">
+/// Whether the repository scan stopped before the end.
+/// <para>
+/// Carried because a partial scan can genuinely misread a repository — a
+/// language living past the cut-off simply is not seen — and the result looks
+/// exactly like a confident answer. Saying so is the difference between "no C#
+/// here" and "no C# in the part I looked at".
+/// </para>
+/// </param>
 public sealed record EffectiveInstructions(
     string Mode,
     IReadOnlyList<SpecialistSelection> Selected,
     IReadOnlyList<SpecialistSelection> Omitted,
     IReadOnlyList<InstructionConflict> Conflicts,
-    InstructionContextBudget Budget)
+    InstructionContextBudget Budget,
+    bool EvidenceTruncated = false)
 {
     public IEnumerable<SpecialistSelection> OfKind(SpecialistKind kind) =>
         Selected.Where(s => s.Specialist.Kind == kind);

@@ -125,21 +125,10 @@ public sealed class InstructionService : IInstructionService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var catalogue = await _library
-            .LoadAsync(request.WorkspacePath, request.Manifest?.Slug, ct)
-            .ConfigureAwait(false);
-
-        var evidence = RepositoryEvidence.None;
-
-        if (request.RepositoryPath is { Length: > 0 } path)
-        {
-            var read = await _evidence.ReadAsync(path, ct).ConfigureAwait(false);
-
-            // A repository that cannot be scanned costs one signal, not the
-            // launch. Everything the task and the user said still applies.
-            evidence = read.Succeeded ? read.Value! : RepositoryEvidence.None;
-        }
-
+        // Asked first, so that switching the feature off actually skips the
+        // work rather than doing all of it and discarding the answer. It was
+        // the other way round to begin with, which made "off" cost a full
+        // repository scan on every launch for nothing.
         var settings = await SettingsAsync(ct).ConfigureAwait(false);
 
         if (!settings.Specialists)
@@ -153,6 +142,21 @@ public sealed class InstructionService : IInstructionService
                 [],
                 [],
                 new InstructionContextBudget(0, 0, settings.MaxTokens, settings.WarnAtPercent)));
+        }
+
+        var catalogue = await _library
+            .LoadAsync(request.WorkspacePath, request.Manifest?.Slug, ct)
+            .ConfigureAwait(false);
+
+        var evidence = RepositoryEvidence.None;
+
+        if (request.RepositoryPath is { Length: > 0 } path)
+        {
+            var read = await _evidence.ReadAsync(path, ct).ConfigureAwait(false);
+
+            // A repository that cannot be scanned costs one signal, not the
+            // launch. Everything the task and the user said still applies.
+            evidence = read.Succeeded ? read.Value! : RepositoryEvidence.None;
         }
 
         var preferences = Preferences(request);
