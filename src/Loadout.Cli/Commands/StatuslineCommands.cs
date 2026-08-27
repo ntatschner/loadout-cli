@@ -404,6 +404,15 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
             installations.Add((target.Description, target.SettingsPath, command.Value));
         }
 
+        // What an install would write today. A recorded command that differs is
+        // not merely out of date: it may not run at all. Claude reports nothing
+        // when the status line command fails — the line simply does not appear
+        // — so "installed" said of a command that cannot execute is exactly the
+        // report that hid a shell-quoting defect through a whole release.
+        var expected = StatuslineTargets.ExecutablePath() is { } current
+            ? StatuslineInstaller.CommandFor(current)
+            : null;
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -440,6 +449,12 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
                     scope = i.Description,
                     path = i.Path,
                     command = i.Command,
+
+                    // Null when nothing is installed, or when this launcher
+                    // cannot tell where it lives and so has nothing to compare.
+                    matchesCurrent = i.Command is null || expected is null
+                        ? (bool?)null
+                        : i.Command == expected,
                 }),
             });
 
@@ -466,13 +481,36 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
 
         output.WriteLine("[bold]Installed[/]");
 
+        var stale = false;
+
         foreach (var (description, path, command) in installations)
         {
-            output.WriteLine(command is null
-                ? $"  [dim]not installed[/]  {description.EscapeMarkup()}"
-                : $"  [green]installed[/]      {description.EscapeMarkup()}");
+            var matches = command is null || expected is null || command == expected;
+
+            stale |= !matches;
+
+            output.WriteLine(command switch
+            {
+                null => $"  [dim]not installed[/]  {description.EscapeMarkup()}",
+                _ when !matches => $"  [yellow]needs repair[/]   {description.EscapeMarkup()}",
+                _ => $"  [green]installed[/]      {description.EscapeMarkup()}",
+            });
 
             output.WriteLine($"    [dim]{path.EscapeMarkup()}[/]");
+
+            // Both strings, because the difference is often a single character
+            // and describing it in prose would be worse than showing it.
+            if (!matches)
+            {
+                output.WriteLine($"    [dim]recorded {command!.EscapeMarkup()}[/]");
+                output.WriteLine($"    [dim]expected {expected!.EscapeMarkup()}[/]");
+            }
+        }
+
+        if (stale)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("[yellow]Repair it with loadout statusline install[/]");
         }
 
         if (installations.TrueForAll(i => i.Command is null))

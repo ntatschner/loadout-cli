@@ -229,4 +229,66 @@ public sealed class StatuslineTests
         StatuslineRenderer.Render(inputs, new StatuslineSettings { Colour = false })
             .Should().NotContain("\u001b[");
     }
+
+    /// <summary>
+    /// Strips backslash escapes the way a POSIX shell does outside quotes.
+    /// </summary>
+    /// <remarks>
+    /// Claude runs the installed command through a shell, and on Windows that
+    /// shell is Git Bash. This is the rule that destroyed the command: each
+    /// backslash is consumed and the character after it taken literally.
+    /// </remarks>
+    private static string AsUnquotedShellWord(string word)
+    {
+        var result = new System.Text.StringBuilder(word.Length);
+
+        for (var i = 0; i < word.Length; i++)
+        {
+            if (word[i] == '\\' && i + 1 < word.Length)
+            {
+                i++;
+            }
+
+            result.Append(word[i]);
+        }
+
+        return result.ToString();
+    }
+
+    [Theory]
+    // The per-user install path, which is the one that shipped broken: no
+    // space anywhere in it, so the old rule left it unquoted.
+    [InlineData(@"C:\Users\me\AppData\Local\Programs\loadout\bin\loadout.exe")]
+    // The machine-wide path, which has a space and was quoted all along.
+    [InlineData(@"C:\Program Files\loadout\bin\loadout.exe")]
+    [InlineData("/usr/local/bin/loadout")]
+    public void The_installed_command_survives_the_shell_that_runs_it(string executable)
+    {
+        var command = StatuslineInstaller.CommandFor(executable);
+
+        // The path has to reach the shell exactly as written. Quoting is how
+        // that is achieved, but the property held down here is the survival of
+        // the path, not the presence of quote characters.
+        command.Should().StartWith("\"" + executable + "\" ");
+        command.Should().EndWith(" statusline");
+    }
+
+    [Fact]
+    public void A_windows_path_without_spaces_is_still_quoted()
+    {
+        // The specific regression. Quoting was conditional on a space, so this
+        // path installed as a bare word, Git Bash ate every backslash, and the
+        // status line died with status 127 — silently, because the very same
+        // command run by hand works perfectly.
+        const string Executable = @"C:\Users\me\AppData\Local\Programs\loadout\bin\loadout.exe";
+
+        StatuslineInstaller.CommandFor(Executable)
+            .Should().Be("\"" + Executable + "\" statusline");
+
+        // What the shell was handed instead, kept here so the failure mode is
+        // legible: C:UsersmeAppDataLocalProgramsloadoutbinloadout.exe
+        AsUnquotedShellWord(Executable).Should().NotContain("\\");
+        AsUnquotedShellWord(Executable).Should().Be(
+            "C:UsersmeAppDataLocalProgramsloadoutbinloadout.exe");
+    }
 }

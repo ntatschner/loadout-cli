@@ -36,14 +36,30 @@ public static class StatuslineInstaller
 
     /// <summary>
     /// The command string to install: this launcher, invoked with the argument
-    /// that renders a line. Quoted because the default install path on Windows
-    /// sits under a directory with a space in it, and Claude hands the string
-    /// to a shell.
+    /// that renders a line.
+    /// <para>
+    /// Always quoted. Claude hands this string to a shell, and on Windows that
+    /// shell is Git Bash, which reads a backslash as an escape character. An
+    /// unquoted <c>C:\Users\me\AppData\Local\Programs\loadout\bin\loadout.exe</c>
+    /// therefore arrives as <c>C:UsersmeAppDataLocalProgramsloadoutbinloadout.exe</c>
+    /// and the status line dies with status 127, drawing nothing and reporting
+    /// nothing to the person who installed it.
+    /// </para>
+    /// <para>
+    /// Quoting used to be applied only when the path contained a space, on the
+    /// reasoning that the default install path sits under Program Files. The
+    /// per-user install path has no space in it, so the common case shipped
+    /// broken — and silently, because the command works perfectly when run by
+    /// hand and only fails through the shell.
+    /// </para>
+    /// <para>
+    /// The backslashes are kept rather than swapped for forward slashes: inside
+    /// double quotes bash leaves them alone, so the native path survives intact
+    /// and stays correct if the string is ever run through cmd instead.
+    /// </para>
     /// </summary>
     public static string CommandFor(string executablePath) =>
-        executablePath.Contains(' ', StringComparison.Ordinal)
-            ? "\"" + executablePath + "\" statusline"
-            : executablePath + " statusline";
+        "\"" + executablePath + "\" statusline";
 
     /// <summary>
     /// Writes the status line entry, creating the file and its directory when
