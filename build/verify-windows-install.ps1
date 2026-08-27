@@ -46,8 +46,68 @@ $logs = Join-Path ([System.IO.Path]::GetTempPath()) 'loadout-install-logs'
 
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 
+<#
+.SYNOPSIS
+    Announces a phase, with the time, so a log that stops tells you where.
+
+.DESCRIPTION
+    The 0.9.1 release hung in this script for thirty minutes and was cancelled
+    by the job timeout — and a cancelled job keeps no logs at all, so there was
+    nothing to read afterwards. That was the second release in a row to fail
+    here with no evidence, the first having been 0.8.0.
+
+    Bounding every wait was supposed to have fixed that and did not, because a
+    bound above the job timeout is not a bound. Two things follow: every wait
+    below is short enough that the whole script must finish well inside the job
+    timeout, so it throws and the step *fails* — a failed step keeps its log
+    where a cancelled one does not — and each phase announces itself, so even a
+    truncated log names the thing that never came back.
+#>
+function Step {
+    param([string] $Message)
+
+    Write-Host "[$([DateTime]::UtcNow.ToString('HH:mm:ss'))] $Message"
+}
+
+<#
+.SYNOPSIS
+    Runs an external tool with a deadline.
+
+.DESCRIPTION
+    Downloading the previous release was the one wait in this script with no
+    bound on it at all, which made it the only candidate that could hang for
+    longer than every bounded call put together.
+#>
+function Invoke-BoundedTool {
+    param([string] $Label, [string] $File, [string[]] $Arguments, [int] $TimeoutSeconds = 120)
+
+    $out = Join-Path $logs "$Label.out"
+    $err = Join-Path $logs "$Label.err"
+
+    $process = Start-Process $File -PassThru -NoNewWindow -ArgumentList $Arguments `
+        -RedirectStandardOutput $out -RedirectStandardError $err
+
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+        try { $process.Kill($true) } catch { }
+
+        throw "$Label did not finish within $TimeoutSeconds seconds. It is waiting on something. Output so far: $out"
+    }
+
+    if ($process.ExitCode -ne 0) {
+        Get-Content $err -ErrorAction SilentlyContinue |
+            Select-Object -First 10 |
+            ForEach-Object { Write-Host "    $_" }
+
+        throw "$Label failed with $($process.ExitCode)."
+    }
+}
+
 function Invoke-Msi {
-    param([string] $Label, [string[]] $Arguments, [int] $TimeoutSeconds = 300)
+    # Three minutes is far longer than any of these take, and short enough that
+    # every call this script makes still fits inside the job timeout with room
+    # to spare. That margin is the whole point: it is what turns a hang into a
+    # failure with a log.
+    param([string] $Label, [string[]] $Arguments, [int] $TimeoutSeconds = 180)
 
     $log = Join-Path $logs "$Label.log"
 
@@ -88,7 +148,7 @@ function Invoke-Msi {
     minutes is far longer than any of these take and far shorter than a job.
 #>
 function Invoke-Bounded {
-    param([string] $Label, [string[]] $Arguments, [int] $TimeoutSeconds = 120)
+    param([string] $Label, [string[]] $Arguments, [int] $TimeoutSeconds = 60)
 
     $out = Join-Path $logs "$Label.out"
     $err = Join-Path $logs "$Label.err"
@@ -180,14 +240,19 @@ if ($PreviousVersion) {
 
     $previous = Join-Path $logs "previous.msi"
 
-    & gh release download "v$PreviousVersion" --repo ntatschner/loadout-cli `
-        --pattern '*win-x64.msi' --output $previous --clobber
+    Step "Downloading v$PreviousVersion..."
 
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not download v$PreviousVersion to upgrade from."
-    }
+    Invoke-BoundedTool 'download-previous' 'gh' @(
+        'release', 'download', "v$PreviousVersion",
+        '--repo', 'ntatschner/loadout-cli',
+        '--pattern', '*win-x64.msi',
+        '--output', $previous,
+        '--clobber')
 
+    Step 'Installing the previous version...'
     Invoke-Msi 'install-previous' @('/i', $previous)
+
+    Step 'Checking the previous version runs...'
     Assert-Runs -Expected $PreviousVersion
 
     # Upgraded in place, which is the path that broke and shipped.
@@ -206,18 +271,19 @@ if ($PreviousVersion) {
     # presence and its position ahead of InstallValidate are checked by
     # build/verify-windows.ps1, which fails against the release that shipped
     # without them.
-    Write-Host 'Upgrading in place...'
+    Step 'Upgrading in place...'
 
     Invoke-Msi 'upgrade' @('/i', $Msi)
 }
 else {
-    Write-Host 'No previous version given; checking a fresh install only.'
+    Step 'No previous version given; checking a fresh install only.'
     Invoke-Msi 'install' @('/i', $Msi)
 }
 
+Step 'Checking the upgraded version runs...'
 Assert-Runs -Expected ''
 
-Write-Host 'Checking the install put loadout on PATH...'
+Step 'Checking the install put loadout on PATH...'
 
 $path = [Environment]::GetEnvironmentVariable('PATH', 'User')
 
@@ -225,7 +291,7 @@ if ($path -notlike '*loadout*') {
     throw 'The install did not add loadout to the user PATH, so nothing can find it by name.'
 }
 
-Write-Host 'Removing it...'
+Step 'Removing it...'
 
 $product = Get-InstalledProduct
 
