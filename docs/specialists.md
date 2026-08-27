@@ -121,7 +121,7 @@ loadout instructions explain "Why is this EF Core PostgreSQL query taking 12 sec
   --mode investigate
 ```
 
-```
+```text
 Effective agent instructions
 
 foundation

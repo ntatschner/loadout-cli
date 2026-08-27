@@ -25,7 +25,7 @@ anything: it moves content between layers whose prices differ.
 loadout rules budget <project>
 ```
 
-```
+```text
   Always loaded  67.9KB  0 rule(s) plus core instructions
   On demand      0B  0 scoped rule(s)
 
