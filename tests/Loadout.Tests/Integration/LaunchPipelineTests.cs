@@ -126,6 +126,11 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             git,
             new ContextCompiler(permissions, new RuleService(), new MemoryService(TimeProvider.System)),
             new HandoffService(workspace, TimeProvider.System),
+            new InstructionService(
+                new SpecialistLibrary(),
+                new SpecialistResolver(),
+                new RepositoryEvidenceReader(),
+                configuration),
             new PreflightService(git, new FakeSecretProvider()),
             new SecurityProfileService(workspace, yaml),
             new McpService(workspace));

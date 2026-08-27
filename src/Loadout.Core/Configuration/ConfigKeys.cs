@@ -57,6 +57,7 @@ public static class ConfigKeys
         public const string Secrets = "Secrets";
         public const string Updates = "Updates";
         public const string Statusline = "Agent status line";
+        public const string Instructions = "Agent instructions";
         public const string Telemetry = "Usage reporting";
         public const string Machine = "This machine";
 
@@ -64,7 +65,7 @@ public static class ConfigKeys
         public static IReadOnlyList<string> InOrder =>
         [
             Workspace, Agents, Editor, Syncing, Terminal, Secrets, Updates,
-            Statusline, Telemetry, Machine, General,
+            Statusline, Instructions, Telemetry, Machine, General,
         ];
     }
 
@@ -210,6 +211,22 @@ public static class ConfigKeys
             (c, _, v) => c.Statusline.Separator = v, false,
             Group: Groups.Statusline),
 
+        new("specialists", "Give launched agents specialist guidance chosen for the task",
+            (c, _) => Boolean(c.InstructionContext.Specialists),
+            (c, _, v) => c.InstructionContext.Specialists = Flag(v), false,
+            Group: Groups.Instructions,
+            IsFlag: true),
+
+        new("instruction-max-tokens", "Ceiling on specialist guidance, in estimated tokens. 0 removes it",
+            (c, _) => c.InstructionContext.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            (c, _, v) => c.InstructionContext.MaxTokens = Count(v), false,
+            Group: Groups.Instructions),
+
+        new("instruction-warn-percent", "Share of the instruction budget worth warning about",
+            (c, _) => c.InstructionContext.WarnAtPercent.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            (c, _, v) => c.InstructionContext.WarnAtPercent = Count(v), false,
+            Group: Groups.Instructions),
+
         new("telemetry", "Tell launched agents to report token usage to this machine",
             (c, _) => Boolean(c.Telemetry.Enabled),
             (c, _, v) => c.Telemetry.Enabled = Flag(v), false,
@@ -247,6 +264,23 @@ public static class ConfigKeys
 
     /// <summary>How a flag is shown, in the spelling the setter accepts back.</summary>
     private static string Boolean(bool value) => value ? "true" : "false";
+
+    /// <summary>
+    /// Reads a whole number that cannot sensibly be negative.
+    /// </summary>
+    /// <remarks>
+    /// Refused rather than clamped. A negative budget silently becoming zero
+    /// would turn a typo into "no ceiling at all", which is the opposite of
+    /// what somebody typing a budget wanted.
+    /// </remarks>
+    private static int Count(string value) =>
+        int.TryParse(
+            value.Trim(),
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var parsed) && parsed >= 0
+            ? parsed
+            : throw new FormatException($"'{value}' is not a whole number of zero or more.");
 
     /// <summary>
     /// Reads a flag generously. Somebody turning a segment off will type

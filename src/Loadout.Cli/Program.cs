@@ -386,6 +386,18 @@ public static class Program
         Top<ResumeCommand>(config, "resume");
         Top<UsageCommand>(config, "usage");
 
+        TopBranch(config, "instructions", instructions =>
+        {
+            instructions.Describe(
+                "Inspect the specialists an agent is given, and why.",
+                CommandCategory.AgentConfiguration,
+                "specialists skills expertise why these instructions explain postgresql security");
+            instructions.AddCommand<InstructionsListCommand>("list");
+            instructions.AddCommand<InstructionsShowCommand>("show");
+            instructions.AddCommand<InstructionsExplainCommand>("explain");
+            instructions.AddCommand<InstructionsValidateCommand>("validate");
+        });
+
         TopBranch(config, "telemetry", telemetry =>
         {
             telemetry.Describe(

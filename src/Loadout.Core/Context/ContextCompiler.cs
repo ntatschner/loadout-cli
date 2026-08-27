@@ -44,6 +44,7 @@ public sealed class ContextCompiler : IContextCompiler
         string agentName,
         string? profileName = null,
         string? handoffPath = null,
+        Models.Instructions.EffectiveInstructions? instructions = null,
         CancellationToken ct = default)
     {
         if (!Directory.Exists(runtimeDirectory))
@@ -81,6 +82,12 @@ public sealed class ContextCompiler : IContextCompiler
         var missing = new List<string>();
 
         WriteHeader(builder, manifest, agentName, profileName);
+
+        // Specialists come before the project's own material, because they are
+        // the more general half: the C# specialist says what C# code should
+        // look like, and the project says how this codebase departs from that.
+        // The narrower source has to be read last for its exceptions to land.
+        AppendSpecialists(builder, sources, instructions);
 
         foreach (var entry in plan)
         {
@@ -147,7 +154,76 @@ public sealed class ContextCompiler : IContextCompiler
         _permissions.RestrictToCurrentUser(outputPath);
 
         return OperationResult<CompiledContext>.Ok(
-            new CompiledContext(outputPath, sources, missing, profileName));
+            new CompiledContext(outputPath, sources, missing, profileName, instructions));
+    }
+
+    /// <summary>
+    /// Writes the resolved specialists, in composition order.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each carries the reason it was selected, written into the file itself.
+    /// That is not decoration: the compiled context is what somebody reads when
+    /// an agent has behaved oddly, and "why was this here" is the first
+    /// question. Putting the answer beside the guidance means it can be
+    /// answered without re-running anything.
+    /// </para>
+    /// <para>
+    /// Conflicts are written too, where a narrower specialist overrides a wider
+    /// one. An override that happened silently is indistinguishable from an
+    /// instruction that was never there.
+    /// </para>
+    /// </remarks>
+    private static void AppendSpecialists(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        Models.Instructions.EffectiveInstructions? instructions)
+    {
+        if (instructions is null || instructions.Selected.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var selection in instructions.Selected)
+        {
+            var specialist = selection.Specialist;
+
+            builder.AppendLine();
+            builder.AppendLine($"## {specialist.Title}");
+            builder.AppendLine();
+            builder.AppendLine(
+                $"<!-- specialist: {specialist.Id} ({selection.Reason}) -->");
+            builder.AppendLine();
+            builder.AppendLine(specialist.Body.TrimEnd());
+            builder.AppendLine();
+
+            sources.Add(new ContextSource(
+                $"specialists/{specialist.Id}",
+                specialist.Title,
+                specialist.Bytes));
+        }
+
+        if (instructions.Conflicts.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Where guidance overlaps");
+        builder.AppendLine();
+        builder.AppendLine(
+            "These specialists both cover a subject. The narrower one appears later "
+            + "and is what to follow where they differ.");
+        builder.AppendLine();
+
+        foreach (var conflict in instructions.Conflicts)
+        {
+            builder.AppendLine(
+                $"- {conflict.Subject}: follow `{conflict.WinnerId}` over "
+                + $"`{conflict.LoserId}` ({conflict.Reason}).");
+        }
+
+        builder.AppendLine();
     }
 
     /// <summary>

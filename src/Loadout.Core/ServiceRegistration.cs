@@ -70,6 +70,14 @@ public static class ServiceRegistration
         services.AddSingleton<Usage.ITelemetryStore, Usage.TelemetryStore>();
         services.AddSingleton<Usage.IPlanHeadroomReader, Usage.CodexPlanHeadroom>();
 
+        // The specialist layer: what an agent is told, and why. The library and
+        // resolver hold no state of their own, so a singleton each is enough.
+        services.AddSingleton<ISpecialistLibrary, SpecialistLibrary>();
+        services.AddSingleton<ISpecialistResolver, SpecialistResolver>();
+        services.AddSingleton<IRepositoryEvidenceReader, RepositoryEvidenceReader>();
+        services.AddSingleton<IInstructionService, InstructionService>();
+        services.AddSingleton<IDiagnosticContributor, SpecialistDiagnosticContributor>();
+
         // One client for the process, which is what HttpClient is designed for.
         // The update check is the only thing in the launcher that reaches the
         // network on its own behalf; everything else goes through git.

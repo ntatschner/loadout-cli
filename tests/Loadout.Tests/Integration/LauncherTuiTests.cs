@@ -99,7 +99,12 @@ public sealed class LauncherTuiTests : IAsyncLifetime
         var importer = new MemoryImporter(environment, memory);
         var policies = new PolicyService(workspace, git, paths, permissions, yaml);
 
-        var overviews = new ProjectOverviewService(git, workspace, rules, memory, importer, policies);
+        var overviews = new ProjectOverviewService(git, workspace, rules, memory, importer, policies,
+            new InstructionService(
+                new SpecialistLibrary(),
+                new SpecialistResolver(),
+                new RepositoryEvidenceReader(),
+                _configuration));
 
         var config = await _configuration.LoadConfigAsync().ConfigureAwait(false);
         var agents = new AgentRegistry(resolver, _processes, config.Value!);

@@ -18,11 +18,18 @@ public sealed record ContextSource(string WorkspaceRelativePath, string Heading,
 /// and the user should hear about it before the session rather than after.
 /// </param>
 /// <param name="ProfileName">Profile that was applied, or null for the base context.</param>
+/// <param name="Instructions">
+/// The specialists that were resolved for this launch and why, or null when the
+/// specialist layer was not in play. Carried on the result so that what an agent
+/// was given can be reported without resolving a second time and risking a
+/// different answer.
+/// </param>
 public sealed record CompiledContext(
     string FilePath,
     IReadOnlyList<ContextSource> Sources,
     IReadOnlyList<string> MissingSources,
-    string? ProfileName)
+    string? ProfileName,
+    Models.Instructions.EffectiveInstructions? Instructions = null)
 {
     public long TotalBytes => Sources.Sum(s => s.Bytes);
 }
@@ -49,6 +56,12 @@ public interface IContextCompiler
     /// <param name="agentName">Agent being launched, used to filter profiles.</param>
     /// <param name="profileName">Profile to apply, or null for the base context.</param>
     /// <param name="handoffPath">Optional handoff to append (spec section 69).</param>
+    /// <param name="instructions">
+    /// Specialists resolved for this task, or null when the specialist layer is
+    /// not in play. Resolved by the caller rather than here: what is relevant
+    /// depends on the task and the agent, and the compiler's job is to assemble
+    /// what it is given in the right order.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     Task<OperationResult<CompiledContext>> CompileAsync(
         ProjectManifest manifest,
@@ -57,6 +70,7 @@ public interface IContextCompiler
         string agentName,
         string? profileName = null,
         string? handoffPath = null,
+        Models.Instructions.EffectiveInstructions? instructions = null,
         CancellationToken ct = default);
 
     /// <summary>

@@ -58,6 +58,12 @@ public sealed class ProjectManifest
     public Dictionary<string, EnvironmentDefinition> Environments { get; set; } = [];
 
     public ProjectWorkspace Workspace { get; set; } = new();
+
+    /// <summary>
+    /// Which specialists this project expects to be relevant. A profile may
+    /// narrow or replace it; neither forces a specialist to load.
+    /// </summary>
+    public SpecialistPreferences Specialists { get; set; } = new();
 }
 
 /// <summary>Where the application source lives, described independently of any machine.</summary>

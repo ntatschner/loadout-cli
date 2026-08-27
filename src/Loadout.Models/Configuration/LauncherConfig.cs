@@ -28,6 +28,8 @@ public sealed class LauncherConfig
 
     public TelemetrySettings Telemetry { get; set; } = new();
 
+    public InstructionContextSettings InstructionContext { get; set; } = new();
+
     /// <summary>Explicit extra directories to search for agent executables (spec section 65).</summary>
     public List<string> AgentSearchPaths { get; set; } = [];
 
@@ -142,6 +144,50 @@ public sealed class TelemetrySettings
     /// unless they have deliberately chosen to send it somewhere.
     /// </remarks>
     public string Endpoint { get; set; } = "http://127.0.0.1:4318";
+}
+
+/// <summary>
+/// How much specialist guidance an agent may be given.
+/// </summary>
+/// <remarks>
+/// <para>
+/// More instructions are not better. Every specialist loaded is context the
+/// agent pays for before it has read a line of the code, and past a point the
+/// guidance crowds out the work. The ceiling makes that trade-off explicit
+/// rather than emergent.
+/// </para>
+/// <para>
+/// Counted in estimated tokens rather than bytes because that is the unit the
+/// constraint is really in, and reported as an estimate everywhere because no
+/// tokeniser here matches the providers'.
+/// </para>
+/// </remarks>
+public sealed class InstructionContextSettings
+{
+    /// <summary>
+    /// Whether launched agents are given specialist guidance at all.
+    /// </summary>
+    /// <remarks>
+    /// On by default, because a launcher whose whole purpose is assembling
+    /// agent context should assemble it. Off is offered because this changes
+    /// what every existing session is told, and somebody who has spent a year
+    /// tuning their own instructions is entitled to decline ours without
+    /// having to uninstall anything.
+    /// </remarks>
+    public bool Specialists { get; set; } = true;
+
+    /// <summary>
+    /// The ceiling on specialist guidance, in estimated tokens. Zero removes it.
+    /// </summary>
+    /// <remarks>
+    /// Generous by default. The point of a first ceiling is to catch the case
+    /// where something has gone wrong, not to make people tune a number before
+    /// the feature is usable.
+    /// </remarks>
+    public int MaxTokens { get; set; } = 12000;
+
+    /// <summary>Share of the ceiling above which it is worth saying so.</summary>
+    public int WarnAtPercent { get; set; } = 80;
 }
 
 /// <summary>Connection details for the central agent-workspaces repository (spec section 10).</summary>

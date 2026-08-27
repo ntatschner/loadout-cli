@@ -13,6 +13,15 @@
     <ProjectReference Include="..\Loadout.Platform\Loadout.Platform.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The built-in specialist library travels inside the assembly rather
+         than beside it. Content that is not on a disk cannot be edited in
+         place, cannot go missing from an install, and cannot be pointed
+         somewhere else — three classes of problem that simply do not arise.
+         Somebody who disagrees with a built-in specialist puts one of the same
+         id in their workspace, which is the supported way to override. -->
+    <EmbeddedResource Include="Specialists\**\*.md" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="Loadout.Tests" />
   </ItemGroup>
 </Project>

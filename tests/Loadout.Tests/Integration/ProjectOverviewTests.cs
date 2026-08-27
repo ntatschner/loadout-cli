@@ -82,6 +82,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
         _workspace = new WorkspaceManager(paths, _git, yaml, TimeProvider.System);
 
         var memory = new MemoryService(TimeProvider.System);
+        var configuration = new ConfigurationService(paths, environment, yaml);
 
         _overviews = new ProjectOverviewService(
             _git,
@@ -89,7 +90,12 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
             new RuleService(),
             memory,
             new MemoryImporter(environment, memory),
-            new PolicyService(_workspace, _git, paths, permissions, yaml));
+            new PolicyService(_workspace, _git, paths, permissions, yaml),
+            new InstructionService(
+                new SpecialistLibrary(),
+                new SpecialistResolver(),
+                new RepositoryEvidenceReader(),
+                configuration));
 
         _repository = await CreateRepositoryAsync().ConfigureAwait(false);
     }

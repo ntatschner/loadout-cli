@@ -2,6 +2,7 @@ using Loadout.Core.Configuration;
 using Loadout.Core.Context;
 using Loadout.Core.Diagnostics;
 using Loadout.Core.Git;
+using Loadout.Core.Instructions;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
 using Loadout.Core.Security;
@@ -10,6 +11,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
 using Loadout.Models.Diagnostics;
+using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
@@ -30,6 +32,18 @@ namespace Loadout.Agents;
 /// A previous conversation to pick up rather than starting a new one. Handed to
 /// the agent only when it advertises that it can resume (spec section 66).
 /// </param>
+/// <param name="Task">
+/// What the user says they are doing, used to choose specialists. The strongest
+/// signal available, because it is the only one that reflects intent.
+/// </param>
+/// <param name="Specialists">Specialists named explicitly, which are never dropped.</param>
+/// <param name="ExcludedSpecialists">Specialists ruled out for this launch.</param>
+/// <param name="Mode">Posture to take: advise, investigate, implement or review.</param>
+/// <param name="RepositoryPath">
+/// Where the code is, for gathering repository evidence. Supplied by the caller
+/// because the launcher resolves it once and the resolver should not resolve it
+/// again and possibly differently.
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -40,7 +54,12 @@ public sealed record LaunchRequest(
     bool IncludeHandoff = false,
     string? Environment = null,
     IReadOnlyList<string>? PassthroughArguments = null,
-    string? ResumeSessionId = null);
+    string? ResumeSessionId = null,
+    string? Task = null,
+    IReadOnlyList<string>? Specialists = null,
+    IReadOnlyList<string>? ExcludedSpecialists = null,
+    string? Mode = null,
+    string? RepositoryPath = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -91,6 +110,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly IGitManager _git;
     private readonly IContextCompiler _context;
     private readonly IHandoffService _handoffs;
+    private readonly IInstructionService _instructions;
     private readonly IPreflightService _preflight;
     private readonly Core.Mcp.IMcpService _mcp;
     private readonly ISecurityProfileService _security;
@@ -105,6 +125,7 @@ public sealed class AgentLauncher : IAgentLauncher
         IGitManager git,
         IContextCompiler context,
         IHandoffService handoffs,
+        IInstructionService instructions,
         IPreflightService preflight,
         ISecurityProfileService security,
         Core.Mcp.IMcpService mcp)
@@ -118,6 +139,7 @@ public sealed class AgentLauncher : IAgentLauncher
         _git = git;
         _context = context;
         _handoffs = handoffs;
+        _instructions = instructions;
         _preflight = preflight;
         _mcp = mcp;
         _security = security;
@@ -195,7 +217,8 @@ public sealed class AgentLauncher : IAgentLauncher
         try
         {
             var compiled = await CompileContextAsync(
-                manifest, runtimeDirectory, adapter.Name, request, warnings, ct).ConfigureAwait(false);
+                manifest, runtimeDirectory, adapter.Name, request, project.LocalPath, warnings, ct)
+                .ConfigureAwait(false);
 
             if (compiled.Failed)
             {
@@ -419,11 +442,65 @@ public sealed class AgentLauncher : IAgentLauncher
         return null;
     }
 
+    /// <summary>
+    /// Works out which specialists this launch should carry.
+    /// </summary>
+    /// <remarks>
+    /// Warns rather than fails when the library itself has problems. A broken
+    /// specialist somebody added to their workspace should be reported and
+    /// stepped over, not allowed to stop them starting work — the same
+    /// judgement the context compiler already makes about a missing file.
+    /// </remarks>
+    private async Task<OperationResult<EffectiveInstructions>> ResolveInstructionsAsync(
+        ProjectManifest manifest,
+        string agentName,
+        LaunchRequest request,
+        string? repositoryPath,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        var resolved = await _instructions.ResolveAsync(
+            new InstructionRequest(
+                manifest,
+                RepositoryPath: request.RepositoryPath ?? repositoryPath,
+                WorkspacePath: _workspace.LocalPath,
+                AgentName: agentName,
+                ProfileName: request.Profile,
+                Task: request.Task,
+                Explicit: request.Specialists,
+                Excluded: request.ExcludedSpecialists,
+                Mode: request.Mode),
+            ct).ConfigureAwait(false);
+
+        if (resolved.Failed)
+        {
+            return resolved;
+        }
+
+        var instructions = resolved.Value!;
+
+        if (instructions.Budget.IsOverBudget)
+        {
+            warnings.Add(
+                $"Specialist guidance came to about {instructions.Budget.EstimatedTokens:N0} "
+                + $"tokens against a budget of {instructions.Budget.TokenBudget:N0}; "
+                + "the least certain specialists were left out.");
+        }
+
+        foreach (var dropped in instructions.DroppedForBudget)
+        {
+            warnings.Add($"Left out {dropped.Specialist.Id}: {dropped.Reason}.");
+        }
+
+        return resolved;
+    }
+
     private async Task<OperationResult<CompiledContext?>> CompileContextAsync(
         ProjectManifest? manifest,
         string runtimeDirectory,
         string agentName,
         LaunchRequest request,
+        string? repositoryPath,
         List<string> warnings,
         CancellationToken ct)
     {
@@ -448,6 +525,21 @@ public sealed class AgentLauncher : IAgentLauncher
             }
         }
 
+        // Resolved here rather than inside the compiler, because what is
+        // relevant depends on the task and the agent, and the compiler's job is
+        // to assemble what it is given in the right order.
+        var instructions = await ResolveInstructionsAsync(
+            manifest, agentName, request, repositoryPath, warnings, ct).ConfigureAwait(false);
+
+        if (instructions.Failed)
+        {
+            // A specialist named that does not exist is the user's mistake and
+            // stops the launch. Starting anyway would hand somebody a session
+            // they believe has guidance it has not.
+            return OperationResult<CompiledContext?>.Fail(
+                instructions.Error!, instructions.ExitCode);
+        }
+
         var compiled = await _context.CompileAsync(
             manifest,
             _workspace.LocalPath,
@@ -455,6 +547,7 @@ public sealed class AgentLauncher : IAgentLauncher
             agentName,
             request.Profile,
             handoffPath,
+            instructions.Value,
             ct).ConfigureAwait(false);
 
         // A bad profile name is the user's mistake and must stop the launch:

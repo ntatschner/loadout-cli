@@ -129,6 +129,11 @@ public sealed class RealLaunchTests : IAsyncLifetime
             git,
             new ContextCompiler(permissions, rules, memory),
             new HandoffService(_workspace, TimeProvider.System),
+            new InstructionService(
+                new SpecialistLibrary(),
+                new SpecialistResolver(),
+                new RepositoryEvidenceReader(),
+                configuration),
             new PreflightService(git, new FakeSecretProvider()),
             new SecurityProfileService(_workspace, yaml),
             new McpService(_workspace));

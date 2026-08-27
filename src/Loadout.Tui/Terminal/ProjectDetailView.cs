@@ -27,6 +27,7 @@ internal sealed class ProjectDetailView : FrameView
     private readonly Label _context;
     private readonly Label _rules;
     private readonly Label _memory;
+    private readonly Label _specialists;
     private readonly ListView _warnings;
     private readonly FrameView _warningsFrame;
     private readonly Button _launch;
@@ -57,6 +58,7 @@ internal sealed class ProjectDetailView : FrameView
         _context = Field("Context", 3);
         _rules = Field("Rules", 4);
         _memory = Field("Memory", 5);
+        _specialists = Field("Uses", 6);
 
         _warnings = new ListView { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
 
@@ -127,6 +129,7 @@ internal sealed class ProjectDetailView : FrameView
         _context.Text = string.Empty;
         _rules.Text = string.Empty;
         _memory.Text = string.Empty;
+        _specialists.Text = string.Empty;
 
         _warningsFrame.Visible = false;
         _problems.Visible = false;
@@ -176,6 +179,11 @@ internal sealed class ProjectDetailView : FrameView
             ? "1 topic"
             : $"{overview.MemoryTopics} topics";
 
+        // Rendered, not worked out. What a project appears to use is decided
+        // by the same service the command line uses, so the screen and
+        // 'loadout instructions' cannot come to different conclusions.
+        _specialists.Text = Detected(overview);
+
         var warnings = Warnings(overview).ToList();
 
         _warningsFrame.Visible = warnings.Count > 0;
@@ -185,6 +193,33 @@ internal sealed class ProjectDetailView : FrameView
         {
             _warnings.SetSource(new ObservableCollection<string>(warnings.Select(w => $"! {w}")));
         }
+    }
+
+    /// <summary>
+    /// What the project appears to be built from, in one line.
+    /// </summary>
+    /// <remarks>
+    /// Names only, and only as many as fit. This says what the project uses, not
+    /// what a task would load: those are different questions, and running them
+    /// together on a project screen is how people come to expect every
+    /// technology in every prompt.
+    /// </remarks>
+    private static string Detected(ProjectOverview overview)
+    {
+        var detected = overview.DetectedSpecialists ?? [];
+
+        if (detected.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var names = detected.Select(d => d.Specialist.Title).ToList();
+
+        const int Most = 5;
+
+        return names.Count <= Most
+            ? string.Join(", ", names)
+            : string.Join(", ", names.Take(Most)) + $" and {names.Count - Most} more";
     }
 
     /// <summary>Clears the panel, for when there is no project to describe.</summary>
@@ -199,6 +234,7 @@ internal sealed class ProjectDetailView : FrameView
         _context.Text = string.Empty;
         _rules.Text = string.Empty;
         _memory.Text = string.Empty;
+        _specialists.Text = string.Empty;
         _warningsFrame.Visible = false;
         _problems.Visible = false;
 

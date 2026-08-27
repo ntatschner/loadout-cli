@@ -49,6 +49,22 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
         [CommandOption("--handoff")]
         [Description("Append the most recent handoff to the compiled context.")]
         public bool Handoff { get; init; }
+
+        [CommandOption("--task <TASK>")]
+        [Description("What you are about to do. Chooses the specialists the agent is given.")]
+        public string? Task { get; init; }
+
+        [CommandOption("--mode <MODE>")]
+        [Description("Posture: advise, investigate, implement or review.")]
+        public string? Mode { get; init; }
+
+        [CommandOption("--specialist <ID>")]
+        [Description("Load this specialist whatever the evidence says. Repeatable.")]
+        public string[] Specialist { get; init; } = [];
+
+        [CommandOption("--without <ID>")]
+        [Description("Never load this specialist for this launch. Repeatable.")]
+        public string[] Without { get; init; } = [];
     }
 
     /// <inheritdoc />
@@ -65,7 +81,11 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
             settings.Profile,
             settings.Handoff,
             settings.Environment,
-            _passthrough.Arguments);
+            _passthrough.Arguments,
+            Task: settings.Task,
+            Specialists: settings.Specialist,
+            ExcludedSpecialists: settings.Without,
+            Mode: settings.Mode);
 
         var result = await _launcher.LaunchAsync(request).ConfigureAwait(false);
         if (result.Failed)
@@ -139,6 +159,22 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
         [CommandOption("--handoff")]
         [Description("Append the most recent handoff to the compiled context.")]
         public bool Handoff { get; init; }
+
+        [CommandOption("--task <TASK>")]
+        [Description("What you are about to do. Chooses the specialists the agent is given.")]
+        public string? Task { get; init; }
+
+        [CommandOption("--mode <MODE>")]
+        [Description("Posture: advise, investigate, implement or review.")]
+        public string? Mode { get; init; }
+
+        [CommandOption("--specialist <ID>")]
+        [Description("Load this specialist whatever the evidence says. Repeatable.")]
+        public string[] Specialist { get; init; } = [];
+
+        [CommandOption("--without <ID>")]
+        [Description("Never load this specialist for this launch. Repeatable.")]
+        public string[] Without { get; init; } = [];
     }
 
     /// <inheritdoc />
@@ -166,7 +202,11 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
             settings.Profile,
             settings.Handoff,
             settings.Environment,
-            _passthrough.Arguments);
+            _passthrough.Arguments,
+            Task: settings.Task,
+            Specialists: settings.Specialist,
+            ExcludedSpecialists: settings.Without,
+            Mode: settings.Mode);
 
         var result = await _launcher.LaunchAsync(request).ConfigureAwait(false);
         if (result.Failed)

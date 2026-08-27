@@ -308,6 +308,12 @@ internal sealed class LauncherWindow : Window
                     Title = "Open in _file manager",
                     Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.FileManager, p))),
                 },
+                new MenuItem
+                {
+                    Title = "Explain _instructions",
+                    Action = () => WithSelected(p =>
+                        RunCommand($"{LauncherCommands.Instructions} --project {p.Entry.Slug}")),
+                },
                 new Line(),
                 new MenuItem
                 {

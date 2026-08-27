@@ -1,0 +1,640 @@
+using System.ComponentModel;
+using Loadout.Cli.Infrastructure;
+using Loadout.Core.Instructions;
+using Loadout.Core.Projects;
+using Loadout.Core.Workspace;
+using Loadout.Models;
+using Loadout.Models.Instructions;
+using Loadout.Models.Projects;
+using Spectre.Console;
+using Spectre.Console.Cli;
+using Loadout.Tui;
+
+namespace Loadout.Cli.Commands;
+
+/// <summary>Shared plumbing for the instruction commands.</summary>
+/// <remarks>
+/// The library layers built-in, workspace and project specialists, so every one
+/// of these needs the same two things resolved the same way: which workspace,
+/// and which project. Doing it once here is what keeps <c>list</c> and
+/// <c>explain</c> talking about the same library.
+/// </remarks>
+public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSettings>
+    where TSettings : GlobalSettings
+{
+    protected InstructionsCommandBase(
+        IInstructionService instructions,
+        IWorkspaceManager workspace,
+        IProjectService projects,
+        IAnsiConsole console)
+    {
+        Instructions = instructions;
+        Workspace = workspace;
+        Projects = projects;
+        Console = console;
+    }
+
+    protected IInstructionService Instructions { get; }
+
+    protected IWorkspaceManager Workspace { get; }
+
+    protected IProjectService Projects { get; }
+
+    protected IAnsiConsole Console { get; }
+
+    /// <summary>The workspace clone, or null when there is not one.</summary>
+    protected string? WorkspacePath => Workspace.IsAvailable() ? Workspace.LocalPath : null;
+
+    /// <summary>
+    /// The project in play: the one named, or the one the current directory is
+    /// in. Null is an ordinary answer — the built-in library still loads.
+    /// </summary>
+    protected async Task<ProjectResolution?> ProjectAsync(string? handle, CancellationToken ct = default)
+    {
+        var result = handle is { Length: > 0 }
+            ? await Projects.ResolveAsync(handle, ct).ConfigureAwait(false)
+            : await Projects.ResolveFromDirectoryAsync(
+                Directory.GetCurrentDirectory(), ct).ConfigureAwait(false);
+
+        return result.Succeeded ? result.Value : null;
+    }
+
+    /// <summary>Renders one specialist's identity the same way everywhere.</summary>
+    protected static string Origin(SpecialistOrigin origin) => origin switch
+    {
+        SpecialistOrigin.Workspace => "workspace",
+        SpecialistOrigin.Project => "project",
+        _ => "built-in",
+    };
+}
+
+/// <summary>Options for listing.</summary>
+public sealed class InstructionsListSettings : GlobalSettings
+{
+    [CommandArgument(0, "[PROJECT]")]
+    [Description("Project whose library to read. Defaults to the repository you are in.")]
+    public string? Project { get; init; }
+
+    [CommandOption("--kind <KIND>")]
+    [Description("Only one kind: foundation, mode, language, framework, database, platform, cloud, function or skill.")]
+    public string? Kind { get; init; }
+}
+
+/// <summary>
+/// Lists the specialists available.
+/// </summary>
+[Description("List the specialists and skills available to a project.")]
+[CommandMeta(CommandCategory.AgentConfiguration,
+    Intent = "specialists skills expertise available library postgresql security performance")]
+public sealed class InstructionsListCommand : InstructionsCommandBase<InstructionsListSettings>
+{
+    public InstructionsListCommand(
+        IInstructionService instructions,
+        IWorkspaceManager workspace,
+        IProjectService projects,
+        IAnsiConsole console)
+        : base(instructions, workspace, projects, console)
+    {
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, InstructionsListSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(Console, settings);
+
+        SpecialistKind? wanted = null;
+
+        if (settings.Kind is { Length: > 0 } named)
+        {
+            if (!Enum.TryParse<SpecialistKind>(named, ignoreCase: true, out var parsed))
+            {
+                var known = string.Join(
+                    ", ", Enum.GetNames<SpecialistKind>().Select(n => n.ToLowerInvariant()));
+
+                return output.Fail($"'{named}' is not a kind. Use one of: {known}.",
+                    ExitCode.InvalidArguments);
+            }
+
+            wanted = parsed;
+        }
+
+        var project = await ProjectAsync(settings.Project).ConfigureAwait(false);
+
+        var catalogue = await Instructions
+            .LibraryAsync(WorkspacePath, project?.Entry.Slug)
+            .ConfigureAwait(false);
+
+        var specialists = catalogue.All
+            .Where(s => wanted is null || s.Kind == wanted)
+            .OrderBy(s => (int)s.Kind)
+            .ThenBy(s => s.Id, StringComparer.Ordinal)
+            .ToList();
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                count = specialists.Count,
+                specialists = specialists.Select(s => new
+                {
+                    id = s.Id,
+                    kind = s.Kind.ToString().ToLowerInvariant(),
+                    title = s.Title,
+                    summary = s.Summary,
+                    origin = Origin(s.Origin),
+                    bytes = s.Bytes,
+                    estimatedTokens = s.EstimatedTokens,
+                    always = s.Activation.Always,
+                }),
+                findings = catalogue.Findings.Select(f => new
+                {
+                    specialist = f.Rule,
+                    severity = f.Severity.ToString().ToLowerInvariant(),
+                    kind = f.Kind,
+                    detail = f.Detail,
+                }),
+            });
+
+            return CommandOutput.Success();
+        }
+
+        if (specialists.Count == 0)
+        {
+            output.WriteLine("[dim]No specialists matched.[/]");
+
+            return CommandOutput.Success();
+        }
+
+        SpecialistKind? heading = null;
+
+        foreach (var specialist in specialists)
+        {
+            if (heading != specialist.Kind)
+            {
+                heading = specialist.Kind;
+
+                output.WriteBlankLine();
+                output.WriteLine($"[bold]{specialist.Kind.ToString().ToLowerInvariant()}[/]");
+            }
+
+            var origin = specialist.Origin == SpecialistOrigin.BuiltIn
+                ? string.Empty
+                : $" [dim]({Origin(specialist.Origin)})[/]";
+
+            output.WriteLine(
+                $"  [cyan]{specialist.Id.EscapeMarkup()}[/]{origin}  "
+                + $"[dim]{specialist.Summary.EscapeMarkup()}[/]");
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine(
+            $"[dim]{specialists.Count} available. "
+            + "Inspect one with loadout instructions show <id>.[/]");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Options for showing one specialist.</summary>
+public sealed class InstructionsShowSettings : GlobalSettings
+{
+    [CommandArgument(0, "<SPECIALIST>")]
+    [Description("Specialist id, for example database.postgresql.")]
+    public string Specialist { get; init; } = string.Empty;
+
+    [CommandOption("--project <PROJECT>")]
+    [Description("Project whose library to read. Defaults to the repository you are in.")]
+    public string? Project { get; init; }
+}
+
+/// <summary>Shows one specialist in full, including what activates it.</summary>
+[Description("Show one specialist: what it says, and what makes it relevant.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "specialist detail inspect guidance")]
+public sealed class InstructionsShowCommand : InstructionsCommandBase<InstructionsShowSettings>
+{
+    public InstructionsShowCommand(
+        IInstructionService instructions,
+        IWorkspaceManager workspace,
+        IProjectService projects,
+        IAnsiConsole console)
+        : base(instructions, workspace, projects, console)
+    {
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(CommandContext context, InstructionsShowSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(Console, settings);
+
+        var project = await ProjectAsync(settings.Project).ConfigureAwait(false);
+
+        var catalogue = await Instructions
+            .LibraryAsync(WorkspacePath, project?.Entry.Slug)
+            .ConfigureAwait(false);
+
+        if (catalogue.Find(settings.Specialist) is not { } specialist)
+        {
+            return output.Fail(
+                $"No specialist named '{settings.Specialist}'. "
+                + "Run 'loadout instructions list' to see what there is.",
+                ExitCode.ProjectNotFound);
+        }
+
+        var activation = specialist.Activation;
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                id = specialist.Id,
+                kind = specialist.Kind.ToString().ToLowerInvariant(),
+                title = specialist.Title,
+                summary = specialist.Summary,
+                origin = Origin(specialist.Origin),
+                path = specialist.Path,
+                bytes = specialist.Bytes,
+                estimatedTokens = specialist.EstimatedTokens,
+                activation = new
+                {
+                    always = activation.Always,
+                    globs = activation.GlobList,
+                    dependencies = activation.DependencyList,
+                    taskPhrases = activation.TaskPhraseList,
+                    requires = activation.RequiresList,
+                    capabilities = activation.CapabilityList,
+                    modes = activation.ModeList,
+                },
+                body = specialist.Body,
+            });
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine($"[bold]{specialist.Title.EscapeMarkup()}[/]  [dim]{specialist.Id}[/]");
+        output.WriteLine($"[dim]{Origin(specialist.Origin)}, about {specialist.EstimatedTokens:N0} tokens[/]");
+        output.WriteBlankLine();
+
+        output.WriteLine("[bold]Loads when[/]");
+
+        if (activation.Always)
+        {
+            output.WriteLine("  always");
+        }
+        else if (specialist.Kind == SpecialistKind.Mode)
+        {
+            // Modes are chosen rather than detected, so an empty section here
+            // reads as a specialist nothing can ever reach — which would be a
+            // fault, and is not what is happening.
+            output.WriteLine("  chosen with --mode " + specialist.Name);
+        }
+        else if (activation.TaskPhraseList.Count == 0
+            && activation.DependencyList.Count == 0
+            && activation.GlobList.Count == 0)
+        {
+            output.WriteLine("  only when named with --specialist");
+        }
+
+        Write(output, "  task mentions", activation.TaskPhraseList);
+        Write(output, "  dependency", activation.DependencyList);
+        Write(output, "  files match", activation.GlobList);
+        Write(output, "  requires", activation.RequiresList);
+        Write(output, "  only in mode", activation.ModeList);
+        Write(output, "  agent supports", activation.CapabilityList);
+
+        output.WriteBlankLine();
+        output.WriteLine(specialist.Body.EscapeMarkup());
+
+        return CommandOutput.Success();
+    }
+
+    private static void Write(CommandOutput output, string label, IReadOnlyList<string> values)
+    {
+        if (values.Count > 0)
+        {
+            output.WriteLine($"[dim]{label}:[/] {string.Join(", ", values).EscapeMarkup()}");
+        }
+    }
+}
+
+/// <summary>Options for explaining a resolution.</summary>
+public sealed class InstructionsExplainSettings : GlobalSettings
+{
+    [CommandArgument(0, "[TASK]")]
+    [Description("What you would be asking the agent to do. Drives most of the selection.")]
+    public string? Task { get; init; }
+
+    [CommandOption("--project <PROJECT>")]
+    [Description("Project to explain for. Defaults to the repository you are in.")]
+    public string? Project { get; init; }
+
+    [CommandOption("--mode <MODE>")]
+    [Description("Posture: advise, investigate, implement or review.")]
+    public string? Mode { get; init; }
+
+    [CommandOption("--specialist <ID>")]
+    [Description("Load this specialist whatever the evidence says. Repeatable.")]
+    public string[] Specialist { get; init; } = [];
+
+    [CommandOption("--without <ID>")]
+    [Description("Never load this specialist. Repeatable.")]
+    public string[] Without { get; init; } = [];
+}
+
+/// <summary>
+/// Answers the question the whole system exists to answer.
+/// </summary>
+/// <remarks>
+/// "Why did Loadout give this agent these instructions?" Resolution runs through
+/// the same service the launch path uses, so what this prints is what a launch
+/// would actually compose — an explanation produced by a second code path would
+/// eventually disagree with reality and be believed anyway.
+/// </remarks>
+[Description("Explain which specialists a task would load, and why.")]
+[CommandMeta(CommandCategory.AgentConfiguration,
+    Intent = "why these instructions explain specialists selection reason context budget")]
+public sealed class InstructionsExplainCommand : InstructionsCommandBase<InstructionsExplainSettings>
+{
+    public InstructionsExplainCommand(
+        IInstructionService instructions,
+        IWorkspaceManager workspace,
+        IProjectService projects,
+        IAnsiConsole console)
+        : base(instructions, workspace, projects, console)
+    {
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        InstructionsExplainSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(Console, settings);
+
+        var project = await ProjectAsync(settings.Project).ConfigureAwait(false);
+
+        var manifest = project is not null && WorkspacePath is not null
+            ? (await Workspace.ReadProjectAsync(project.Entry.Slug).ConfigureAwait(false)).Value
+            : null;
+
+        var resolved = await Instructions.ResolveAsync(new InstructionRequest(
+            manifest,
+            project?.LocalPath,
+            WorkspacePath,
+            settings.Agent ?? manifest?.Agents.Default ?? "claude",
+            ProfileName: settings.Profile,
+            Task: settings.Task,
+            Explicit: settings.Specialist,
+            Excluded: settings.Without,
+            Mode: settings.Mode)).ConfigureAwait(false);
+
+        if (resolved.Failed)
+        {
+            return output.Fail(resolved);
+        }
+
+        var effective = resolved.Value!;
+
+        if (output.IsJson)
+        {
+            output.WriteJson(Describe(effective, project?.Entry.Slug, settings.Task));
+
+            return CommandOutput.Success();
+        }
+
+        Render(output, effective, settings.Task);
+
+        return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// The machine-readable shape.
+    /// </summary>
+    /// <remarks>
+    /// Treated as a compatibility contract from here on. Anything reading this
+    /// should be able to keep reading it, so fields are added rather than
+    /// renamed.
+    /// </remarks>
+    internal static object Describe(
+        EffectiveInstructions effective,
+        string? slug,
+        string? task) => new
+        {
+            project = slug,
+            task,
+            mode = effective.Mode,
+            selected = effective.Selected.Select(Selection),
+            omitted = effective.Omitted.Select(Selection),
+            conflicts = effective.Conflicts.Select(c => new
+            {
+                subject = c.Subject,
+                winner = c.WinnerId,
+                loser = c.LoserId,
+                reason = c.Reason,
+            }),
+            context = new
+            {
+                bytes = effective.Budget.Bytes,
+                estimatedTokens = effective.Budget.EstimatedTokens,
+                tokenBudget = effective.Budget.TokenBudget,
+                usedFraction = effective.Budget.UsedFraction,
+                overBudget = effective.Budget.IsOverBudget,
+                nearBudget = effective.Budget.IsNearBudget,
+            },
+        };
+
+    private static object Selection(SpecialistSelection selection) => new
+    {
+        id = selection.Specialist.Id,
+        kind = selection.Specialist.Kind.ToString().ToLowerInvariant(),
+        title = selection.Specialist.Title,
+        trigger = selection.Trigger.ToString(),
+        reason = selection.Reason,
+        confidence = selection.Confidence,
+        origin = selection.Specialist.Origin.ToString().ToLowerInvariant(),
+        estimatedTokens = selection.Specialist.EstimatedTokens,
+    };
+
+    private static void Render(
+        CommandOutput output,
+        EffectiveInstructions effective,
+        string? task)
+    {
+        output.WriteLine("[bold]Effective agent instructions[/]");
+
+        if (task is { Length: > 0 })
+        {
+            output.WriteLine($"[dim]for: {task.EscapeMarkup()}[/]");
+        }
+
+        SpecialistKind? heading = null;
+
+        foreach (var selection in effective.Selected)
+        {
+            if (heading != selection.Specialist.Kind)
+            {
+                heading = selection.Specialist.Kind;
+
+                output.WriteBlankLine();
+                output.WriteLine($"[bold]{heading.ToString()!.ToLowerInvariant()}[/]");
+            }
+
+            output.WriteLine(
+                $"  [green]+[/] {selection.Specialist.Title.EscapeMarkup()} "
+                + $"[dim]{selection.Specialist.Id}[/]");
+            output.WriteLine($"      [dim]{selection.Reason.EscapeMarkup()}[/]");
+        }
+
+        if (effective.Omitted.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("[bold]Not loaded[/]");
+
+            foreach (var omitted in effective.Omitted)
+            {
+                output.WriteLine(
+                    $"  [dim]o {omitted.Specialist.Id.EscapeMarkup()} — "
+                    + $"{omitted.Reason.EscapeMarkup()}[/]");
+            }
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine("[bold]Context[/]");
+
+        var budget = effective.Budget;
+
+        output.WriteLine($"  Estimated instruction tokens: {budget.EstimatedTokens:N0}");
+
+        if (budget.TokenBudget > 0)
+        {
+            var colour = budget.IsOverBudget ? "red" : budget.IsNearBudget ? "yellow" : "green";
+
+            output.WriteLine($"  Budget: {budget.TokenBudget:N0}");
+            output.WriteLine(
+                $"  Usage: [{colour}]{budget.UsedFraction * 100:N0}%[/]");
+        }
+        else
+        {
+            output.WriteLine("  [dim]No budget set.[/]");
+        }
+
+        output.WriteBlankLine();
+
+        if (effective.Conflicts.Count == 0)
+        {
+            output.WriteLine("[dim]Conflicts: none[/]");
+
+            return;
+        }
+
+        output.WriteLine("[bold]Where guidance overlaps[/]");
+
+        foreach (var conflict in effective.Conflicts)
+        {
+            output.WriteLine(
+                $"  {conflict.Subject.EscapeMarkup()}: follow "
+                + $"[cyan]{conflict.WinnerId.EscapeMarkup()}[/] over "
+                + $"[dim]{conflict.LoserId.EscapeMarkup()}[/] ({conflict.Reason.EscapeMarkup()})");
+        }
+    }
+}
+
+/// <summary>Options for validating.</summary>
+public sealed class InstructionsValidateSettings : GlobalSettings
+{
+    [CommandArgument(0, "[PROJECT]")]
+    [Description("Project whose library to check. Defaults to the repository you are in.")]
+    public string? Project { get; init; }
+
+    [CommandOption("--strict")]
+    [Description("Exit non-zero on warnings as well as errors, for use in CI.")]
+    public bool Strict { get; init; }
+}
+
+/// <summary>Checks the specialist library for defects.</summary>
+[Description("Check the specialist library for defects.")]
+[CommandMeta(CommandCategory.Health, Intent = "validate specialists library broken check")]
+public sealed class InstructionsValidateCommand : InstructionsCommandBase<InstructionsValidateSettings>
+{
+    public InstructionsValidateCommand(
+        IInstructionService instructions,
+        IWorkspaceManager workspace,
+        IProjectService projects,
+        IAnsiConsole console)
+        : base(instructions, workspace, projects, console)
+    {
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        InstructionsValidateSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(Console, settings);
+
+        var project = await ProjectAsync(settings.Project).ConfigureAwait(false);
+
+        var catalogue = await Instructions
+            .LibraryAsync(WorkspacePath, project?.Entry.Slug)
+            .ConfigureAwait(false);
+
+        var errors = catalogue.Findings.Count(f => f.Severity == RuleFindingSeverity.Error);
+        var warnings = catalogue.Findings.Count(f => f.Severity == RuleFindingSeverity.Warning);
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                specialists = catalogue.Specialists.Count,
+                errors,
+                warnings,
+                findings = catalogue.Findings.Select(f => new
+                {
+                    specialist = f.Rule,
+                    severity = f.Severity.ToString().ToLowerInvariant(),
+                    kind = f.Kind,
+                    detail = f.Detail,
+                }),
+            });
+
+            return Verdict(errors, warnings, settings.Strict);
+        }
+
+        output.WriteLine($"[dim]{catalogue.Specialists.Count} specialists loaded.[/]");
+
+        foreach (var finding in catalogue.Findings
+            .OrderByDescending(f => f.Severity)
+            .ThenBy(f => f.Rule, StringComparer.Ordinal))
+        {
+            var colour = finding.Severity switch
+            {
+                RuleFindingSeverity.Error => "red",
+                RuleFindingSeverity.Warning => "yellow",
+                _ => "dim",
+            };
+
+            output.WriteLine(
+                $"[{colour}]{finding.Severity.ToString().ToLowerInvariant()}[/] "
+                + $"{finding.Detail.EscapeMarkup()}");
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine(errors == 0 && warnings == 0
+            ? "[green]The specialist library is sound.[/]"
+            : $"{errors} error(s), {warnings} warning(s).");
+
+        return Verdict(errors, warnings, settings.Strict);
+    }
+
+    private static int Verdict(int errors, int warnings, bool strict) =>
+        errors > 0 || (strict && warnings > 0)
+            ? (int)ExitCode.GeneralFailure
+            : CommandOutput.Success();
+}

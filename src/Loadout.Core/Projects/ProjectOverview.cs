@@ -2,6 +2,7 @@ using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Policies;
 using Loadout.Core.Workspace;
+using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
 
@@ -20,6 +21,12 @@ namespace Loadout.Core.Projects;
 /// <param name="Protected">Whether this clone has the pre-commit hook installed.</param>
 /// <param name="HookNeedsUpgrade">The hook is the launcher's own but was written by an older version.</param>
 /// <param name="TrackedAgentFiles">Agent files committed to the repository, which is a policy breach.</param>
+/// <param name="DetectedSpecialists">
+/// What the repository appears to be built from. A stable fact about the
+/// project, not a judgement about any one task: a project that uses PostgreSQL
+/// uses it whatever somebody is doing today, and the resolver decides
+/// separately whether that matters for the work in hand.
+/// </param>
 public sealed record ProjectOverview(
     ProjectResolution Project,
     string? Branch,
@@ -30,7 +37,8 @@ public sealed record ProjectOverview(
     int PendingImports,
     bool Protected,
     int TrackedAgentFiles,
-    bool HookNeedsUpgrade = false)
+    bool HookNeedsUpgrade = false,
+    IReadOnlyList<SpecialistSelection>? DetectedSpecialists = null)
 {
     /// <summary>
     /// The point past which the always-loaded instructions are worth a look.
@@ -74,6 +82,7 @@ public sealed class ProjectOverviewService : IProjectOverviewService
     private readonly IMemoryService _memory;
     private readonly IMemoryImporter _importer;
     private readonly IPolicyService _policies;
+    private readonly IInstructionService _instructions;
 
     public ProjectOverviewService(
         IGitManager git,
@@ -81,7 +90,8 @@ public sealed class ProjectOverviewService : IProjectOverviewService
         IRuleService rules,
         IMemoryService memory,
         IMemoryImporter importer,
-        IPolicyService policies)
+        IPolicyService policies,
+        IInstructionService instructions)
     {
         _git = git;
         _workspace = workspace;
@@ -89,6 +99,7 @@ public sealed class ProjectOverviewService : IProjectOverviewService
         _memory = memory;
         _importer = importer;
         _policies = policies;
+        _instructions = instructions;
     }
 
     /// <inheritdoc />
@@ -159,7 +170,10 @@ public sealed class ProjectOverviewService : IProjectOverviewService
             pending,
             isProtected,
             tracked,
-            hookNeedsUpgrade));
+            hookNeedsUpgrade,
+            await _instructions
+                .DetectAsync(path, _workspace.LocalPath, slug, ct)
+                .ConfigureAwait(false)));
     }
 
     /// <summary>
