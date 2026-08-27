@@ -26,6 +26,8 @@ public sealed class LauncherConfig
 
     public StatuslineSettings Statusline { get; set; } = new();
 
+    public TelemetrySettings Telemetry { get; set; } = new();
+
     /// <summary>Explicit extra directories to search for agent executables (spec section 65).</summary>
     public List<string> AgentSearchPaths { get; set; } = [];
 
@@ -106,6 +108,40 @@ public sealed class StatuslineSettings
 
     /// <summary>Separator drawn between segments.</summary>
     public string Separator { get; set; } = " | ";
+}
+
+/// <summary>
+/// Whether the agents report what they spend, and where they report it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The agents can both emit OpenTelemetry, and the launcher is the only thing
+/// placed to switch it on: it owns the environment every agent process starts
+/// in. Nobody has to edit an agent's own settings for this to work.
+/// </para>
+/// <para>
+/// Off unless asked for. Turning it on means something listens on a socket,
+/// which is a decision for the person whose machine it is rather than a default
+/// they discover later.
+/// </para>
+/// </remarks>
+public sealed class TelemetrySettings
+{
+    /// <summary>
+    /// Whether launched agents are told to report usage.
+    /// </summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Where they report it.
+    /// </summary>
+    /// <remarks>
+    /// A loopback address by default, and validated as one before it is ever
+    /// handed to an agent. Usage counts are not conversation content, but they
+    /// say when somebody works and on what, and that is nobody else's business
+    /// unless they have deliberately chosen to send it somewhere.
+    /// </remarks>
+    public string Endpoint { get; set; } = "http://127.0.0.1:4318";
 }
 
 /// <summary>Connection details for the central agent-workspaces repository (spec section 10).</summary>

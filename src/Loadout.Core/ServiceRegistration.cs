@@ -60,6 +60,16 @@ public static class ServiceRegistration
         services.AddSingleton<Sessions.ISessionHistory, Sessions.CodexSessionHistory>();
         services.AddSingleton<Sessions.ISessionHistoryService, Sessions.SessionHistoryService>();
 
+        // The same transcripts read again, for what they cost rather than what
+        // they were about. Separate readers from the session ones because the
+        // two want opposite behaviour from a malformed line: a listing skips it
+        // and carries on, whereas a total that skipped something has to say so.
+        services.AddSingleton<Usage.IUsageHistory, Usage.ClaudeUsageHistory>();
+        services.AddSingleton<Usage.IUsageHistory, Usage.CodexUsageHistory>();
+        services.AddSingleton<Usage.IUsageService, Usage.UsageService>();
+        services.AddSingleton<Usage.ITelemetryStore, Usage.TelemetryStore>();
+        services.AddSingleton<Usage.IPlanHeadroomReader, Usage.CodexPlanHeadroom>();
+
         // One client for the process, which is what HttpClient is designed for.
         // The update check is the only thing in the launcher that reaches the
         // network on its own behalf; everything else goes through git.

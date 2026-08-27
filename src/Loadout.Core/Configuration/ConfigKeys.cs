@@ -57,11 +57,15 @@ public static class ConfigKeys
         public const string Secrets = "Secrets";
         public const string Updates = "Updates";
         public const string Statusline = "Agent status line";
+        public const string Telemetry = "Usage reporting";
         public const string Machine = "This machine";
 
         /// <summary>In the order a screen should show them.</summary>
         public static IReadOnlyList<string> InOrder =>
-            [Workspace, Agents, Editor, Syncing, Terminal, Secrets, Updates, Statusline, Machine, General];
+        [
+            Workspace, Agents, Editor, Syncing, Terminal, Secrets, Updates,
+            Statusline, Telemetry, Machine, General,
+        ];
     }
 
     /// <summary>Renders the agent-to-profile map as one settable string.</summary>
@@ -205,6 +209,17 @@ public static class ConfigKeys
             (c, _) => c.Statusline.Separator,
             (c, _, v) => c.Statusline.Separator = v, false,
             Group: Groups.Statusline),
+
+        new("telemetry", "Tell launched agents to report token usage to this machine",
+            (c, _) => Boolean(c.Telemetry.Enabled),
+            (c, _, v) => c.Telemetry.Enabled = Flag(v), false,
+            Group: Groups.Telemetry,
+            IsFlag: true),
+
+        new("telemetry-endpoint", "Where they report it. Must be an address on this machine",
+            (c, _) => c.Telemetry.Endpoint,
+            (c, _, v) => c.Telemetry.Endpoint = v, false,
+            Group: Groups.Telemetry),
 
         // Machine-local from here down: these describe this machine's layout and
         // must never travel to another one (spec section 15).

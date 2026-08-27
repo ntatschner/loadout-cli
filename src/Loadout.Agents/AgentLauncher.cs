@@ -5,6 +5,7 @@ using Loadout.Core.Git;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
 using Loadout.Core.Security;
+using Loadout.Core.Usage;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
@@ -290,12 +291,22 @@ public sealed class AgentLauncher : IAgentLauncher
             // The agent inherits this process's terminal, so Ctrl+C, resize and
             // signals reach it directly and its exit code comes back unaltered
             // (spec sections 40 and 43).
+            // Switching usage reporting on belongs here rather than in an
+            // adapter: it is the same decision for every agent, and the agents
+            // read the same standard variables. Added last so that anything a
+            // project or profile deliberately set for itself wins — this is a
+            // default the launcher supplies, not an override it imposes.
+            if (TelemetryEnvironment.Describe(config.Telemetry) is { Length: > 0 } telemetryWarning)
+            {
+                warnings.Add(telemetryWarning);
+            }
+
             var runResult = await _processes.RunInteractiveAsync(
                 new ProcessRequest(
                     invocation.Executable,
                     invocation.Arguments,
                     context.WorkingDirectory,
-                    invocation.Environment),
+                    WithTelemetry(invocation.Environment, config.Telemetry)),
                 ct).ConfigureAwait(false);
 
             if (runResult.Failed)
@@ -324,6 +335,39 @@ public sealed class AgentLauncher : IAgentLauncher
         {
             CleanRuntimeDirectory(runtimeDirectory);
         }
+    }
+
+    /// <summary>
+    /// The agent's environment with usage reporting added, when it is on.
+    /// </summary>
+    /// <remarks>
+    /// A variable the invocation already set is left alone. Somebody who has
+    /// pointed an agent at their own collector has said something more specific
+    /// than the launcher's default, and quietly redirecting it would be the
+    /// launcher deciding it knew better.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, string> WithTelemetry(
+        IReadOnlyDictionary<string, string> environment,
+        TelemetrySettings? telemetry)
+    {
+        var added = TelemetryEnvironment.For(telemetry);
+
+        if (added.Count == 0)
+        {
+            return environment;
+        }
+
+        var combined = new Dictionary<string, string>(environment, StringComparer.Ordinal);
+
+        foreach (var (key, value) in added)
+        {
+            if (!combined.ContainsKey(key))
+            {
+                combined[key] = value;
+            }
+        }
+
+        return combined;
     }
 
     /// <summary>

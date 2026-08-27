@@ -384,6 +384,17 @@ public static class Program
         Top<CommandsCommand>(config, "commands");
         Top<SessionListCommand>(config, "sessions");
         Top<ResumeCommand>(config, "resume");
+        Top<UsageCommand>(config, "usage");
+
+        TopBranch(config, "telemetry", telemetry =>
+        {
+            telemetry.Describe(
+                "Collect what launched agents report about their own usage.",
+                CommandCategory.Administration,
+                "otel opentelemetry metrics collect cost tokens");
+            telemetry.AddCommand<TelemetryServeCommand>("serve");
+            telemetry.AddCommand<TelemetryStatusCommand>("status");
+        });
 
         TopBranch(config, "statusline", statusline =>
         {
