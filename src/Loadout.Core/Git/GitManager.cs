@@ -70,8 +70,20 @@ public sealed class GitManager : IGitManager
 
         var root = rootResult.Value!;
 
-        var branchResult = await RunAsync(root, ["rev-parse", "--abbrev-ref", "HEAD"], LocalOperationTimeout, ct)
-            .ConfigureAwait(false);
+        // Four questions of one repository, none of which depends on another's
+        // answer. Asked one after another they cost four process starts in
+        // series — about 140ms of the 180ms this method took, and it is called
+        // every time Claude redraws its status line. Spawning git is nearly all
+        // of the expense, so the fix is to overlap the waiting rather than to
+        // ask for less.
+        var branchTask = RunAsync(root, ["rev-parse", "--abbrev-ref", "HEAD"], LocalOperationTimeout, ct);
+        var remoteTask = RunAsync(root, ["remote", "get-url", "origin"], LocalOperationTimeout, ct);
+        var statusTask = RunAsync(root, ["status", "--porcelain"], LocalOperationTimeout, ct);
+        var headTask = RunAsync(root, ["rev-parse", "HEAD"], LocalOperationTimeout, ct);
+
+        await Task.WhenAll(branchTask, remoteTask, statusTask, headTask).ConfigureAwait(false);
+
+        var branchResult = await branchTask.ConfigureAwait(false);
 
         // "HEAD" is what git prints for a detached head, which is not a branch.
         var branch = branchResult.Succeeded ? branchResult.Value!.Trim() : null;
@@ -80,16 +92,13 @@ public sealed class GitManager : IGitManager
             branch = null;
         }
 
-        var remoteResult = await RunAsync(root, ["remote", "get-url", "origin"], LocalOperationTimeout, ct)
-            .ConfigureAwait(false);
+        var remoteResult = await remoteTask.ConfigureAwait(false);
         var remote = remoteResult.Succeeded ? remoteResult.Value!.Trim() : null;
 
-        var statusResult = await RunAsync(root, ["status", "--porcelain"], LocalOperationTimeout, ct)
-            .ConfigureAwait(false);
+        var statusResult = await statusTask.ConfigureAwait(false);
         var isClean = statusResult.Succeeded && statusResult.Value!.Trim().Length == 0;
 
-        var headResult = await RunAsync(root, ["rev-parse", "HEAD"], LocalOperationTimeout, ct)
-            .ConfigureAwait(false);
+        var headResult = await headTask.ConfigureAwait(false);
         var head = headResult.Succeeded ? headResult.Value!.Trim() : null;
 
         return OperationResult<GitRepositoryState>.Ok(
