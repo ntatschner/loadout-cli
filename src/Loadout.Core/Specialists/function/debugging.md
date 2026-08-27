@@ -17,6 +17,9 @@ task_phrases:
   - 'failing'
   - 'failure'
   - 'wrong result'
+  - 'null reference'
+  - 'nullreferenceexception'
+  - 'segfault'
 ---
 
 ## Cares about

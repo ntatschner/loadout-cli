@@ -115,16 +115,37 @@ public static class Program
     internal static IReadOnlyList<Loadout.Tui.CatalogueEntry> RegisteredCommands() =>
         Infrastructure.Catalogue.Commands;
 
-    internal static IReadOnlySet<string> CommandNames()
-    {
-        if (KnownCommands.Count == 0)
+    /// <summary>
+    /// Fills the command set once, however many callers ask at once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This used to be a bare "if it is empty, populate it", which is a race
+    /// with a shared mutable set on the other side of it. Two callers both saw
+    /// it empty, both ran the registration, and each read the set while the
+    /// other was still adding to it — so a command that is registered came back
+    /// as one that is not.
+    /// </para>
+    /// <para>
+    /// Nothing in the launcher itself hits that: one process handles one
+    /// command on one thread. The tests do, because they run in parallel, and
+    /// it cost two runs and a wrong diagnosis before the pattern was clear —
+    /// intermittent, only in the full suite, never in isolation, which is what
+    /// a race looks like from outside and also what a flaky harness looks like.
+    /// </para>
+    /// </remarks>
+    private static readonly Lazy<IReadOnlySet<string>> Names = new(
+        () =>
         {
             var app = new CommandApp(new TypeRegistrar(new ServiceCollection()));
-            app.Configure(config => Configure(config, showFullExceptions: false));
-        }
 
-        return KnownCommands;
-    }
+            app.Configure(config => Configure(config, showFullExceptions: false));
+
+            return KnownCommands;
+        },
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
+    internal static IReadOnlySet<string> CommandNames() => Names.Value;
 
     public static async Task<int> Main(string[] args)
     {

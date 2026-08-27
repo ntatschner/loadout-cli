@@ -200,6 +200,33 @@ public sealed class InstructionsContractTests
     }
 
     [BuiltCliFact]
+    public async Task Explain_reads_the_directory_it_was_run_in_when_nothing_is_registered()
+    {
+        using var loadout = new LoadoutProcess();
+
+        // Enough of one language to clear the threshold, and no registered
+        // project anywhere.
+        for (var i = 0; i < 5; i++)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(loadout.Home, $"module{i}.py"), "def main(): pass\n");
+        }
+
+        var run = await loadout.RunAsync("instructions", "explain", "tidy this up", "--json");
+
+        using var document = JsonDocument.Parse(run.StandardOutput);
+
+        var ids = document.RootElement.GetProperty("selected").EnumerateArray()
+            .Select(s => s.GetProperty("id").GetString())
+            .ToList();
+
+        // Requiring registration first was wrong. Standing in an obvious Python
+        // directory and being told nothing was detected reads as a broken
+        // feature, and it is the first thing anybody tries.
+        ids.Should().Contain("language.python");
+    }
+
+    [BuiltCliFact]
     public async Task Every_instruction_command_offers_json()
     {
         using var loadout = new LoadoutProcess();

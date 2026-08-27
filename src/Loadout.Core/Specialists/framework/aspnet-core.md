@@ -4,8 +4,9 @@ kind: framework
 title: ASP.NET Core
 summary: Middleware order, model binding and endpoint behaviour.
 globs:
-  - '**/Program.cs'
   - '**/Startup.cs'
+  - '**/appsettings.json'
+  - '**/Controllers/**'
 dependencies:
   - 'Microsoft.AspNetCore'
 task_phrases:

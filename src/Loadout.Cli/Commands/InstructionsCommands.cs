@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
@@ -26,11 +27,13 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
         IInstructionService instructions,
         IWorkspaceManager workspace,
         IProjectService projects,
+        IGitManager git,
         IAnsiConsole console)
     {
         Instructions = instructions;
         Workspace = workspace;
         Projects = projects;
+        Git = git;
         Console = console;
     }
 
@@ -39,6 +42,8 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
     protected IWorkspaceManager Workspace { get; }
 
     protected IProjectService Projects { get; }
+
+    protected IGitManager Git { get; }
 
     protected IAnsiConsole Console { get; }
 
@@ -57,6 +62,34 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
                 Directory.GetCurrentDirectory(), ct).ConfigureAwait(false);
 
         return result.Succeeded ? result.Value : null;
+    }
+
+    /// <summary>
+    /// The code to gather evidence from.
+    /// </summary>
+    /// <remarks>
+    /// A registered project's path when there is one, and otherwise wherever
+    /// you are. Requiring registration first was wrong: running this in an
+    /// obvious C# repository and being told nothing was detected reads as a
+    /// broken feature rather than an unregistered directory, and it is the
+    /// first thing anybody tries.
+    /// </remarks>
+    protected async Task<string?> RepositoryAsync(
+        ProjectResolution? project,
+        CancellationToken ct = default)
+    {
+        if (project?.LocalPath is { Length: > 0 } known)
+        {
+            return known;
+        }
+
+        var here = Directory.GetCurrentDirectory();
+
+        // The repository root rather than the subdirectory somebody happens to
+        // be standing in, so the answer does not change with where they ran it.
+        var root = await Git.FindRepositoryRootAsync(here, ct).ConfigureAwait(false);
+
+        return root.Succeeded && root.Value is { Length: > 0 } found ? found : here;
     }
 
     /// <summary>Renders one specialist's identity the same way everywhere.</summary>
@@ -92,8 +125,9 @@ public sealed class InstructionsListCommand : InstructionsCommandBase<Instructio
         IInstructionService instructions,
         IWorkspaceManager workspace,
         IProjectService projects,
+        IGitManager git,
         IAnsiConsole console)
-        : base(instructions, workspace, projects, console)
+        : base(instructions, workspace, projects, git, console)
     {
     }
 
@@ -218,8 +252,9 @@ public sealed class InstructionsShowCommand : InstructionsCommandBase<Instructio
         IInstructionService instructions,
         IWorkspaceManager workspace,
         IProjectService projects,
+        IGitManager git,
         IAnsiConsole console)
-        : base(instructions, workspace, projects, console)
+        : base(instructions, workspace, projects, git, console)
     {
     }
 
@@ -362,8 +397,9 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
         IInstructionService instructions,
         IWorkspaceManager workspace,
         IProjectService projects,
+        IGitManager git,
         IAnsiConsole console)
-        : base(instructions, workspace, projects, console)
+        : base(instructions, workspace, projects, git, console)
     {
     }
 
@@ -384,7 +420,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
 
         var resolved = await Instructions.ResolveAsync(new InstructionRequest(
             manifest,
-            project?.LocalPath,
+            await RepositoryAsync(project).ConfigureAwait(false),
             WorkspacePath,
             settings.Agent ?? manifest?.Agents.Default ?? "claude",
             ProfileName: settings.Profile,
@@ -577,8 +613,9 @@ public sealed class InstructionsValidateCommand : InstructionsCommandBase<Instru
         IInstructionService instructions,
         IWorkspaceManager workspace,
         IProjectService projects,
+        IGitManager git,
         IAnsiConsole console)
-        : base(instructions, workspace, projects, console)
+        : base(instructions, workspace, projects, git, console)
     {
     }
 
