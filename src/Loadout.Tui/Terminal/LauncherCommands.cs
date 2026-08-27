@@ -31,6 +31,9 @@ internal static class LauncherCommands
     /// <summary>Explains which specialists a project's next launch would load.</summary>
     internal const string Instructions = "instructions explain";
 
+    /// <summary>What the agents have spent, by project.</summary>
+    internal const string Usage = "usage";
+
     /// <summary>Every one of them, for the test that checks they are real.</summary>
-    internal static IReadOnlyList<string> All => [Editor, Resume, Clone, Instructions];
+    internal static IReadOnlyList<string> All => [Editor, Resume, Clone, Instructions, Usage];
 }

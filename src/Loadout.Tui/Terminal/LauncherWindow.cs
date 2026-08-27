@@ -310,6 +310,12 @@ internal sealed class LauncherWindow : Window
                 },
                 new MenuItem
                 {
+                    Title = "Token _usage for this project",
+                    Action = () => WithSelected(p =>
+                        RunCommand($"{LauncherCommands.Usage} --project {p.Entry.Slug} --by day")),
+                },
+                new MenuItem
+                {
                     Title = "Explain _instructions",
                     Action = () => WithSelected(p =>
                         RunCommand($"{LauncherCommands.Instructions} --project {p.Entry.Slug}")),
@@ -340,6 +346,11 @@ internal sealed class LauncherWindow : Window
                 {
                     Title = "Check this _machine",
                     Action = () => Close(new LauncherIntent(LauncherAction.MachineCheck)),
+                },
+                new MenuItem
+                {
+                    Title = "Token _usage",
+                    Action = () => RunCommand($"{LauncherCommands.Usage} --days 30"),
                 },
                 new MenuItem
                 {
