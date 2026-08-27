@@ -70,39 +70,90 @@ public sealed class GitManager : IGitManager
 
         var root = rootResult.Value!;
 
-        // Four questions of one repository, none of which depends on another's
-        // answer. Asked one after another they cost four process starts in
-        // series — about 140ms of the 180ms this method took, and it is called
-        // every time Claude redraws its status line. Spawning git is nearly all
-        // of the expense, so the fix is to overlap the waiting rather than to
-        // ask for less.
-        var branchTask = RunAsync(root, ["rev-parse", "--abbrev-ref", "HEAD"], LocalOperationTimeout, ct);
+        // Spawning git is nearly the whole cost of asking it anything, so the
+        // work is to start fewer processes rather than to ask smaller
+        // questions. The branch, the head commit and whether the tree is dirty
+        // all come out of one status in the version 2 format, which leaves two
+        // calls where there were four, and they do not depend on each other.
+        var statusTask = RunAsync(root, ["status", "--porcelain=v2", "--branch"], LocalOperationTimeout, ct);
         var remoteTask = RunAsync(root, ["remote", "get-url", "origin"], LocalOperationTimeout, ct);
-        var statusTask = RunAsync(root, ["status", "--porcelain"], LocalOperationTimeout, ct);
-        var headTask = RunAsync(root, ["rev-parse", "HEAD"], LocalOperationTimeout, ct);
 
-        await Task.WhenAll(branchTask, remoteTask, statusTask, headTask).ConfigureAwait(false);
-
-        var branchResult = await branchTask.ConfigureAwait(false);
-
-        // "HEAD" is what git prints for a detached head, which is not a branch.
-        var branch = branchResult.Succeeded ? branchResult.Value!.Trim() : null;
-        if (branch == "HEAD")
-        {
-            branch = null;
-        }
+        await Task.WhenAll(statusTask, remoteTask).ConfigureAwait(false);
 
         var remoteResult = await remoteTask.ConfigureAwait(false);
         var remote = remoteResult.Succeeded ? remoteResult.Value!.Trim() : null;
 
         var statusResult = await statusTask.ConfigureAwait(false);
-        var isClean = statusResult.Succeeded && statusResult.Value!.Trim().Length == 0;
 
-        var headResult = await headTask.ConfigureAwait(false);
-        var head = headResult.Succeeded ? headResult.Value!.Trim() : null;
+        // One failure now costs all three answers where it used to cost one.
+        // That trade is worth taking: status failing inside a directory git has
+        // already agreed is a repository means something is wrong that a branch
+        // name would not have made better.
+        var (branch, head, isClean) = statusResult.Succeeded
+            ? ReadStatus(statusResult.Value!)
+            : (null, null, false);
 
         return OperationResult<GitRepositoryState>.Ok(
             new GitRepositoryState(root, branch, remote, isClean, head));
+    }
+
+    /// <summary>
+    /// Reads the branch, the head commit and whether anything is changed out of
+    /// <c>status --porcelain=v2 --branch</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The format is documented as stable and is designed to be parsed, which
+    /// the version 1 format is not. Header lines begin with <c>#</c>; every
+    /// other line is a change. Changed entries are introduced by <c>1</c>,
+    /// <c>2</c>, <c>u</c>, <c>?</c> or <c>!</c>, never by <c>#</c>, so a file
+    /// whose name begins with a hash cannot be mistaken for a header.
+    /// </para>
+    /// <para>
+    /// Two placeholders stand where a value does not exist, and both were
+    /// confirmed against a real repository rather than taken from the
+    /// documentation: <c>(initial)</c> for the commit of a repository that has
+    /// none yet, and <c>(detached)</c> for the branch of a detached head.
+    /// Untracked files count as changes here exactly as they did before.
+    /// </para>
+    /// </remarks>
+    internal static (string? Branch, string? Head, bool IsClean) ReadStatus(string output)
+    {
+        const string BranchPrefix = "# branch.head ";
+        const string CommitPrefix = "# branch.oid ";
+
+        string? branch = null;
+        string? head = null;
+        var isClean = true;
+
+        foreach (var raw in output.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            if (line[0] != '#')
+            {
+                isClean = false;
+                continue;
+            }
+
+            if (line.StartsWith(BranchPrefix, StringComparison.Ordinal))
+            {
+                var value = line[BranchPrefix.Length..].Trim();
+                branch = value == "(detached)" ? null : value;
+            }
+            else if (line.StartsWith(CommitPrefix, StringComparison.Ordinal))
+            {
+                var value = line[CommitPrefix.Length..].Trim();
+                head = value == "(initial)" ? null : value;
+            }
+        }
+
+        return (branch, head, isClean);
     }
 
     /// <inheritdoc />
