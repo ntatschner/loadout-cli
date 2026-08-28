@@ -72,8 +72,14 @@ jobs:
         run: dotnet run --project src/Loadout.Cli -- doctor --json
         continue-on-error: true
 
+      # Locked mode fails if the resolved packages differ from
+      # packages.lock.json, which is what makes the lock file worth having: a
+      # dependency cannot change underneath a build without a commit to say so.
+      - name: Restore
+        run: dotnet restore --locked-mode
+
       - name: Build
-        run: dotnet build --configuration Release
+        run: dotnet build --configuration Release --no-restore
 
       # The contract tests run the built command line as a real process, and
       # skip themselves with a reason when it is absent. That is right for a

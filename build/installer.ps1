@@ -61,6 +61,7 @@ Write-Host "Publishing $Runtime..."
     -p:PublishSingleFile=true `
     --output $payload `
     -p:Version=$Version `
+    -p:RestoreLockedMode=true `
     --nologo `
     --verbosity quiet
 

@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.*" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.*" />
-    <PackageReference Include="YamlDotNet" Version="16.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
   <ItemGroup>
     <!-- Core references the platform ABSTRACTIONS only. It must never take a

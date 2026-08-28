@@ -20,6 +20,22 @@
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
+    <!-- Records the exact package versions a restore resolved, so a release
+         can be rebuilt from its commit rather than from whatever NuGet was
+         serving that day. Warnings are errors here, which means a floated
+         dependency could also break the build with no commit behind it; the
+         lock file is what stops that happening unannounced. See
+         Directory.Packages.props. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+
+    <!-- The six runtimes a release publishes, declared so the lock file covers
+         them. A lock file written without a runtime identifier does not
+         describe a self-contained publish, and restoring one in locked mode
+         fails with NU1004 the moment a release is built. Locking the ordinary
+         build while leaving the release build unlocked would have protected
+         the wrong one. -->
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
+
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
 
