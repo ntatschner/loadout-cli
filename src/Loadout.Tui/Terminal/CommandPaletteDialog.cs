@@ -81,7 +81,18 @@ internal sealed class CommandPaletteDialog : Dialog
 
         _list.ValueChanged += (_, _) => Explain();
 
-        _list.Accepted += (_, e) =>
+        // Accepting, not Accepted. On this screen Accepted was never raised at
+        // all: every command in the palette was inert, by Enter and by
+        // double-click, while the palette itself listed, filtered and
+        // explained them perfectly. Accepting is raised first and can be
+        // handled, and handling it here is what makes the choice stick.
+        //
+        // Accepted does fire for the same construction elsewhere — the project
+        // list and the choice dialog both use it and both work — so what
+        // differs is something about this screen rather than a rule about
+        // lists. All three are covered by tests now, which is the part worth
+        // relying on: the reason is not fully established, the behaviour is.
+        _list.Accepting += (_, e) =>
         {
             e.Handled = true;
 

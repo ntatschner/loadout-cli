@@ -1,10 +1,15 @@
 using System.Drawing;
 using Loadout.Models.Diagnostics;
+using Loadout.Models.Projects;
+using Loadout.Core.Projects;
 using Loadout.Tui;
 using Loadout.Tui.Terminal;
 using FluentAssertions;
 using Loadout.Core.Configuration;
 using Terminal.Gui.App;
+using Terminal.Gui.Input;
+using Terminal.Gui.Views;
+using Terminal.Gui.ViewBase;
 using Terminal.Gui.Drivers;
 using Xunit;
 
@@ -114,6 +119,35 @@ public sealed class ScreenConstructionTests
 
         // Listed with the reason rather than hidden, which is the whole point.
         screen.Should().Contain("terminal only");
+    }
+
+
+    [Fact]
+    public void Choosing_a_command_in_the_palette_returns_it()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var palette = new CommandPaletteDialog(
+            [new CatalogueEntry("doctor", "Check this machine", null)],
+            app);
+
+        app.Begin(palette);
+        app.LayoutAndDraw();
+
+        // The list, focused, exactly as somebody arrowing down to a command
+        // leaves it.
+        var list = palette.SubViews.OfType<ListView>().Single();
+        list.SetFocus();
+
+        list.NewKeyDownEvent(Key.Enter);
+
+        // The palette exists to hand a command back. Everything else about it
+        // working while this does not is indistinguishable, from the outside,
+        // from the launcher being broken.
+        palette.Chosen.Should().Be("doctor");
     }
 
     [Fact]
@@ -355,5 +389,109 @@ public sealed class ScreenConstructionTests
         // Null rather than the first option: dismissing is a real answer, and
         // silently picking one would start a session against the wrong context.
         choice.ChosenIndex.Should().BeNull();
+    }
+
+    [Fact]
+    public void Pressing_enter_on_a_choice_selects_it()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var choice = new ChoiceDialog("What are you working on?", ["database", "frontend"], app);
+
+        app.Begin(choice);
+        app.LayoutAndDraw();
+
+        var list = choice.SubViews.OfType<ListView>().Single();
+        list.SetFocus();
+        list.SelectedItem = 1;
+
+        list.NewKeyDownEvent(Key.Enter);
+
+        // Enter on the highlighted row is how anybody answers a list of
+        // options. Requiring them to tab to a button first is not the same
+        // thing, and neither is silently doing nothing.
+        choice.ChosenIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void Pressing_enter_on_a_project_launches_it()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var project = new ProjectResolution(
+            new ProjectRegistryEntry { Slug = "alpha", Name = "Alpha" },
+            Path.GetTempPath(), null, 0, false);
+
+        using var window = new LauncherWindow(
+            [project],
+            null,
+            "workspace ready",
+            ["claude"],
+            (_, _) => Task.FromResult<ProjectOverview?>(null),
+            _ => { },
+            [],
+            app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        var list = FindProjectList(window);
+        list.SetFocus();
+        list.SelectedItem = 0;
+
+        list.NewKeyDownEvent(Key.Enter);
+
+        // Enter on a project is the reason the launcher exists. It closes the
+        // screen with an intent to launch; doing nothing at all is
+        // indistinguishable from the key not having registered.
+        window.Intent.Should().NotBeNull();
+        window.Intent!.Action.Should().Be(LauncherAction.Launch);
+    }
+
+    /// <summary>The projects list, wherever it has been nested this week.</summary>
+    private static ListView FindProjectList(View root)
+    {
+        foreach (var child in root.SubViews)
+        {
+            if (child is KeyedListView keyed)
+            {
+                return keyed;
+            }
+
+            var found = FindProjectListOrNull(child);
+
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        throw new InvalidOperationException("No project list was found on the launcher window.");
+    }
+
+    private static ListView? FindProjectListOrNull(View root)
+    {
+        foreach (var child in root.SubViews)
+        {
+            if (child is KeyedListView keyed)
+            {
+                return keyed;
+            }
+
+            var found = FindProjectListOrNull(child);
+
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
     }
 }
