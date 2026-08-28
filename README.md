@@ -1,49 +1,40 @@
 # Loadout
 
-**Your core loadout for working with AI — in one place, not scattered through every repository.**
+**One place for everything your AI agents need, so none of it ends up in your repo.**
 
 [![CI](https://github.com/ntatschner/loadout-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ntatschner/loadout-cli/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ntatschner/loadout-cli)](https://github.com/ntatschner/loadout-cli/releases/latest)
 [![Licence](https://img.shields.io/github/license/ntatschner/loadout-cli)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](https://github.com/ntatschner/loadout-cli/releases/latest)
 
-`loadout` launches AI coding agents against your projects while keeping their
-configuration, instructions, memory and runtime state **out of the application
-repository** and in one central workspace you can take to any machine.
+Every coding agent wants to leave something in your repository. Instruction
+files, a rules directory, MCP config, session state, notes it wrote to itself.
+Each tool spells it differently, none of them clean up, and all of it turns up
+in someone else's diff eventually.
 
-Windows, Linux and macOS are all Tier-1: each runs the whole launcher natively,
-with no VM, container, remote host or compatibility layer standing in for
-another platform.
+Loadout keeps that stuff somewhere else. You get one workspace, a plain
+directory or a Git repo if you want it versioned, holding the config, memory
+and instructions for every project you work on. Your repository goes back to
+being code.
 
----
-
-## The problem
-
-Agents leave things behind. Instruction files, rules directories, MCP
-configuration, session state, notes to themselves — each tool in its own
-dialect, each one in your repository, each one arriving in someone else's diff.
-Move to another machine and none of it follows you. Publish the repository and
-it all goes out with the code.
-
-Loadout keeps that material in a central workspace — a plain directory, or a
-Git repository if you want it versioned and shared across machines — and leaves
-your project holding nothing but code.
+It runs natively on Windows, Linux and macOS. No VM, no container, no "works
+on Linux, should be fine elsewhere".
 
 ## Install
 
-Grab the archive for your platform from the
+Grab your platform's archive from the
 [latest release](https://github.com/ntatschner/loadout-cli/releases/latest).
 
 ### Linux and macOS
 
 ```sh
 tar -xzf loadout-0.9.2-linux-x64.tar.gz
-./install.sh          # installs to ~/.local/bin, no root required
+./install.sh          # goes to ~/.local/bin, no root
 loadout setup
 ```
 
-`install.sh` verifies the SHA-256 before extracting and refuses to install on a
-mismatch. There are `.deb` and `.rpm` packages too.
+`install.sh` checks the SHA-256 first and won't install if it doesn't match.
+There are `.deb` and `.rpm` packages if you'd rather.
 
 ### Windows
 
@@ -52,33 +43,34 @@ msiexec /i loadout-0.9.2-win-x64.msi    # per-user, no elevation
 loadout setup
 ```
 
-The MSI installs to `%LOCALAPPDATA%\Programs\loadout`, adds it to your `PATH`
-and creates a Start Menu entry. A plain `.zip` is published as well.
+That puts it in `%LOCALAPPDATA%\Programs\loadout`, adds it to your `PATH` and
+makes a Start Menu entry. There's a plain `.zip` too.
 
-See [Installing](docs/installing.md) for
-verification, system-wide installs, and the macOS Gatekeeper note.
+[Installing](docs/installing.md) covers verification, system-wide installs and
+the macOS Gatekeeper situation.
 
-## Quick start
+## Getting started
 
 ```sh
-loadout setup                  # configure the workspace on this machine
-loadout project add .          # register the repository you are standing in
-loadout protect                # keep AI tooling files out of it
-loadout                        # open the launcher, pick a project, go
+loadout setup                  # set up the workspace on this machine
+loadout project add .          # register the repo you're standing in
+loadout protect                # keep agent files out of it
+loadout                        # launcher opens, pick a project, go
 ```
 
-`loadout` on its own opens the terminal UI. `loadout here` launches the agent
-for the repository you are already in, and `loadout <project>` goes straight to
-a registered one.
+Run `loadout` with nothing after it and you get the terminal UI. `loadout here`
+launches the agent for whatever repo you're in. `loadout <project>` skips
+straight to a registered one.
 
-## What it does
+## What you get
 
-### Instructions composed for the task, not one permanent prompt
+### Instructions picked for the job
 
-71 specialists ship inside the binary — foundations, modes, languages,
-frameworks, databases, platforms, clouds, functional areas and skills. Loadout
-picks the ones a task actually needs, from the repository you are standing in
-and from the words of the request, and tells you why each is there:
+There are 71 specialists built into the binary: foundations, modes, languages,
+frameworks, databases, platforms, clouds, functional areas and skills. Instead
+of one enormous prompt that's mostly irrelevant, Loadout works out which ones
+your task needs from the repo you're in and the words you used, then tells you
+why it picked each one.
 
 ```console
 $ loadout instructions explain "why is this postgres query so slow" --mode investigate
@@ -102,59 +94,67 @@ Where guidance overlaps
   C#: follow framework.dotnet over language.csharp (narrower scope composes last)
 ```
 
-Every selection carries its reason, the whole set is costed in tokens before
-anything launches, and overlaps are reported rather than silently resolved.
-Nothing is a black box you have to accept.
+You can see the whole set, what it'll cost you in tokens, and where two
+specialists disagree, before anything launches. If it picked something daft you
+can rule it out with `--without`.
 
-### Project memory that stays small
+### Memory that doesn't grow forever
 
-`loadout memory` records the durable facts about a project — decisions,
-constraints, the things that are not derivable from the code. `memory compress`
-moves facts *out* of always-loaded instruction files into that store, so what
-every session pays for stays small while what it can look up stays complete.
-`memory audit` checks for secrets, duplicates, staleness and index rot.
+`loadout memory` keeps the durable facts about a project: decisions and why you
+made them, constraints, the traps that keep catching people. The useful bit is
+`memory compress`, which pulls facts out of always-loaded instruction files and
+into the memory store. What every session pays for gets smaller; what it can
+look up stays the same. `memory audit` goes looking for secrets, duplicates and
+stale entries.
 
-### Usage you can actually read
+### Where the tokens went
 
-`loadout usage` reports what your agents have spent, by project, day, model or
-agent, reading the transcripts the agents already write. Cached input is
-accounted at its real rate rather than counted as fresh, and when a total
-cannot be trusted it says so instead of quietly reporting a smaller number.
+```sh
+loadout usage --days 7 --by day
+```
 
-`loadout telemetry` additionally runs a **local** OpenTelemetry receiver for
-agents that emit OTLP. Nothing is sent anywhere: no cloud service, no account,
-no repository contents, prompts or conversations — only counts.
+No setup, no opt-in. It reads the transcripts your agents already write, so
+there's history from the day you install it, including sessions from before.
+Break it down by project, day, model or agent.
 
-### Repositories that stay clean
+Cache reads are counted at their real rate rather than as fresh input, which
+matters more than it sounds: on a long session the difference is most of the
+number. If a total is incomplete it says so instead of quietly showing you a
+smaller one.
 
-`loadout protect` installs the Git protections that keep AI tooling files out
-of a repository. `loadout migrate` moves what is already there into the central
-workspace, previewing every change first and taking a restorable snapshot
-before it touches anything. `loadout drift` shows where projects have wandered
-from their recorded configuration.
+There's also `loadout telemetry serve`, a local OTLP receiver for agents that
+emit OpenTelemetry. Optional, and local means local: no service, no account,
+nothing sent anywhere, counts only.
 
-### The rest
+### Repos that stay clean
 
-Agent sessions you can list and resume, cross-agent handoff documents, MCP
-server management per project, secrets in the platform credential store,
-context profiles, editor integration, a status line showing project, branch and
-context usage, and `loadout doctor` to check the lot.
+`loadout protect` sets up the Git protections. `loadout migrate` moves whatever
+is already scattered around into the workspace, showing you the changes first
+and taking a snapshot you can restore. `loadout drift` tells you when a project
+has wandered from what you configured.
 
-Everything works from the CLI and the TUI, every command speaks `--json`, and
-exit codes are stable.
+### Also in the box
+
+Session listing and resume across agents, cross-agent handoff documents, MCP
+servers managed per project, secrets in the OS credential store, context
+profiles, editor integration, and a status line with project, branch and
+context usage. `loadout doctor` checks the lot.
+
+Everything works from the CLI and the launcher, everything takes `--json`, and
+the exit codes don't move.
 
 ## Documentation
 
-Full documentation is in **[docs/](docs/README.md)**:
+The detail lives in **[docs/](docs/README.md)**:
 
-| Page | What is in it |
+| Page | What's in it |
 | --- | --- |
 | [Installing](docs/installing.md) | Packages, verification, building your own, updating |
 | [First run](docs/first-run.md) | Setup, `config.yaml`, environment and security profiles |
-| [Commands](docs/commands.md) | The command surface, editors, sessions, MCP servers |
+| [Commands](docs/commands.md) | The whole command surface, editors, sessions, MCP |
 | [The launcher](docs/launcher.md) | The terminal UI, keys and navigation |
-| [The context budget](docs/context-budget.md) | The layered model, and what each layer costs |
-| [Specialists and skills](docs/specialists.md) | How an instruction set is composed, and writing your own |
+| [The context budget](docs/context-budget.md) | What loads when, and what it costs |
+| [Specialists and skills](docs/specialists.md) | How instructions get composed, and writing your own |
 | [Memory](docs/memory.md) | Recording, compressing and auditing project facts |
 | [Usage and telemetry](docs/usage.md) | Token accounting, the OTLP receiver, the status line |
 | [Repository cleanliness](docs/repository-cleanliness.md) | Protection, migration, drift and undo |
@@ -162,15 +162,16 @@ Full documentation is in **[docs/](docs/README.md)**:
 
 ## Status
 
-Milestones 1 to 4 are implemented, less macOS signing and notarisation.
+Milestones 1 to 4 are done, apart from macOS signing and notarisation.
 
-CI runs the full suite on Windows, Ubuntu and macOS Apple Silicon and publishes
-all six runtime identifiers. The same test methods run on every platform; where
-a platform genuinely cannot do something it is reported as a capability rather
-than skipped in silence — `loadout doctor` prints the matrix.
+CI runs the full suite on Windows, Ubuntu and macOS Apple Silicon, and publishes
+all six runtime identifiers. The same tests run everywhere. Where a platform
+genuinely can't do something it gets reported as a missing capability rather
+than skipped quietly, and `loadout doctor` prints the matrix.
 
-`win-arm64` and `linux-arm64` are cross-compiled and **not** executed in CI,
-because no hosted runner offers them. They are built, not tested.
+`win-arm64` and `linux-arm64` are cross-compiled but never executed, because no
+hosted runner offers them. They're built, not tested, and I'd rather say so than
+imply otherwise.
 
 ## Building
 
@@ -179,12 +180,12 @@ dotnet build Loadout.slnx
 dotnet test tests/Loadout.Tests/Loadout.Tests.csproj
 ```
 
-.NET 10 SDK, no OS-specific target frameworks. See
-[Architecture](docs/architecture.md) for
-the layout and the rules that keep the platform seam intact.
+You need the .NET 10 SDK. No OS-specific target frameworks anywhere, and a test
+that fails the build if one appears. [Architecture](docs/architecture.md) has
+the layout and the rules that keep the platform seam honest.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE). Third-party notices are in
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md); `build/licences.ps1` checks
-that every dependency can be shipped under it.
+MIT, see [LICENSE](LICENSE). Third-party notices are in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and `build/licences.ps1`
+fails the build if a dependency turns up that can't ship under it.

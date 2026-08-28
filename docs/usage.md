@@ -1,7 +1,8 @@
 # Usage, telemetry and the status line
 
-Three related things: what the agents have already spent, what a running agent
-reports about itself, and what is on screen while you work.
+Three things that all answer "what is this costing me": what's already been
+spent, what a running agent says about itself, and what's on screen while you
+work.
 
 ## What the agents have spent
 
@@ -9,85 +10,85 @@ reports about itself, and what is on screen while you work.
 loadout usage                        # last 30 days, by project
 loadout usage --days 7 --by day      # by day instead
 loadout usage --by model             # or by model, or by agent
-loadout usage --project starstats    # one project only
+loadout usage --project starstats    # just the one project
 ```
 
-Nothing has to be switched on first. The figures are read from the transcripts
-the agents already write, so the history is there the moment you install the
-launcher — including for sessions that ran before it.
+There's nothing to switch on. The numbers come out of the transcripts your
+agents already write, so you have history from the moment you install Loadout,
+including sessions that ran before it existed.
 
 `--by` takes `project`, `day`, `model` or `agent`. `--days` counts back from
-today and defaults to 30. `--json` gives the same figures to a script.
+today, default 30. `--json` if something else needs to read it.
 
-### Cached input is not counted as fresh input
+### Cache reads aren't fresh input
 
-Reading from a prompt cache costs a fraction of sending the same tokens again,
-and writing to one costs more than sending them once. A total that ignores the
-difference is not slightly wrong — over a long session it is wrong by most of
-the number.
+Reading from a prompt cache costs a fraction of sending the same tokens again.
+Writing to one costs more than sending them once. Add those together as if a
+token is a token and you don't get a slightly wrong total, you get a wrong one:
+over a long session the cache reads *are* most of the number.
 
-So the columns are kept apart. Input, cache writes, cache reads and output are
-counted and reported separately, and a cost estimate applies each rate to the
-column it belongs to rather than treating every token alike.
+So the columns stay separate. Input, cache writes, cache reads and output are
+counted apart and shown apart, and cost estimates apply each rate to the column
+it belongs to.
 
-### It says when a total cannot be trusted
+### It'll tell you when a number is incomplete
 
-Every source of usage data has its own way of being incomplete: a transcript
-still being written, a file rotated away, an agent that records running totals
-rather than per-turn ones.
+Every source of usage data has its own way of being partial. A transcript
+that's still being written. A file that got rotated away. An agent that records
+running totals instead of per-turn ones.
 
-Where a total is partial the report says so, and says why, rather than
-presenting a smaller number as a complete one. A figure you cannot trust is
-worse than no figure, because it gets quoted.
+When a total is missing something, the report says so and says why. Showing you
+a smaller number and staying quiet about it would be worse, because you'd go
+and quote it.
 
 ## The telemetry receiver
 
-Some agents can emit OpenTelemetry metrics about their own usage. Loadout can
-receive them locally:
+Some agents can emit OpenTelemetry metrics about their own usage. Loadout will
+listen for them:
 
 ```bash
-loadout telemetry serve      # listen; stops on Ctrl+C
-loadout telemetry status     # what has been collected, including reported cost
+loadout telemetry serve      # listens, Ctrl+C to stop
+loadout telemetry status     # what's been collected, including reported cost
 ```
 
-This is optional and additive. `loadout usage` works without it. The receiver
-is for agents that report figures no transcript contains, and for watching a
-session as it runs rather than after it has finished.
+This is optional. `loadout usage` works fine without it. The receiver is there
+for agents that report figures no transcript contains, and for watching a
+session while it runs instead of after.
 
-**Nothing leaves the machine.** There is no cloud service, no account and no
-endpoint to configure. It listens locally, stores locally, and records counts
-only — never repository contents, prompts, conversations, file contents,
-secrets or argument values.
+Local means local. No service, no account, no endpoint to point it at. It
+listens on this machine, stores on this machine, and records counts only, never
+repository contents, prompts, conversations, file contents, secrets or argument
+values.
 
-## The agent's status line
+## The status line
 
-Claude Code renders a status line by running a command and printing what it
-writes. It hands that command the session's working directory, model and
-context window counts — but it does not know which registered project the
-repository is, and it does not report the branch.
+Claude Code draws its status line by running a command and printing whatever
+comes back. It hands that command the working directory, the model and the
+context window counts, but it has no idea which registered project you're in
+and it doesn't tell you the branch.
 
 ```text
 loadout | src/Loadout.Core | main* | Opus 5 | 42% ctx
 ```
 
 `loadout statusline install` writes the entry. `--global` applies it to every
-session on this machine including ones started by hand; naming a project
-instead writes into the workspace, so it travels to every machine that clones
-it and applies only when the launcher starts the session.
+session on this machine, including ones you start by hand. Name a project
+instead and it goes in the workspace, so it follows you to every machine that
+clones it, but only applies when the launcher starts the session.
 
-Each segment can be switched off with `loadout config set statusline-git false`
-and the rest keep working. A missing piece removes its own segment rather than
-the line, and an unreadable payload falls back to the working directory: an
-empty status line is indistinguishable from a broken one.
+Turn any segment off with `loadout config set statusline-git false` and the
+rest carry on. A missing piece drops its own segment rather than the whole
+line, and an unreadable payload falls back to the working directory, because a
+blank status line looks identical to a broken one.
 
-`loadout statusline show` previews the line and reports where it is installed.
-It says `needs repair` rather than `installed` when the recorded command is not
-the one an install would write today — which happens when the launcher moves,
-or when an older version wrote an entry a newer one would write differently. A
-status line command that cannot run draws nothing and reports nothing, so this
-check exists to make that state visible instead of silent.
+`loadout statusline show` previews the line and says where it's installed. It
+reports `needs repair` rather than `installed` when the recorded command isn't
+the one an install would write today, which happens if the launcher moves or an
+older version wrote something a newer one spells differently. A status line
+command that can't run draws nothing and reports nothing, so this check exists
+to make that visible.
 
-Codex has no equivalent mechanism, so the status line is Claude Code only.
+Codex has no equivalent, so the status line is Claude Code only.
 
 ## See also
 

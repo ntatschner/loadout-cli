@@ -1,27 +1,27 @@
 # Loadout documentation
 
-Start at the [project README](../README.md) for what Loadout is and how to
-install it. These pages are the detail.
+The [README](../README.md) covers what Loadout is and how to install it. This
+is the detail behind it.
 
 ## Getting going
 
 - [Installing](installing.md) — packages, verification, building your own, updating
 - [First run and configuration](first-run.md) — setup, `config.yaml`, environment and security profiles
-- [Commands](commands.md) — the command surface, editors, sessions, MCP servers
+- [Commands](commands.md) — the whole command surface, editors, sessions, MCP servers
 - [The launcher](launcher.md) — the terminal UI, keys and navigation
 
 ## Instructions and context
 
-- [The context budget](context-budget.md) — the layered model, and what each layer costs
-- [Context and instruction files](context.md) — project manifests, profiles, and path-scoped rules
-- [Specialists and skills](specialists.md) — how an instruction set is composed for a task
+- [The context budget](context-budget.md) — what loads when, and what each layer costs you
+- [Context and instruction files](context.md) — project manifests, profiles, path-scoped rules
+- [Specialists and skills](specialists.md) — how an instruction set gets composed for a task
 - [Memory](memory.md) — recording, compressing and auditing the durable facts
 
 ## Watching the cost
 
 - [Usage, telemetry and the status line](usage.md) — token accounting, the OTLP receiver, the status line
 
-## Keeping repositories clean
+## Keeping repos clean
 
 - [Repository cleanliness](repository-cleanliness.md) — protection, drift, undo and conflict recovery
 
