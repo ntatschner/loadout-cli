@@ -74,4 +74,22 @@ public sealed class LauncherCommandSeamTests
         // order of magnitude is.
         Catalogue.Commands.Should().HaveCountGreaterThan(20);
     }
+
+    [Fact]
+    public void Asking_for_the_command_names_is_what_fills_the_launcher_list()
+    {
+        // The launcher opens without the parser having been configured, so it
+        // calls this to fill its command list. If asking for the names ever
+        // stopped registering them, the palette would go empty again and the
+        // only sign would be a user saying no commands are listed.
+        //
+        // This does not prove the call is still on that path. Nothing can: the
+        // interactive path returns early when its output is redirected, which
+        // is the only way a test reaches it. It proves the mechanism the fix
+        // relies on.
+        Program.CommandNames().Should().NotBeEmpty();
+
+        Program.RegisteredCommands().Should().NotBeEmpty(
+            "asking for the names configures a parser, and configuring a parser records the catalogue");
+    }
 }
