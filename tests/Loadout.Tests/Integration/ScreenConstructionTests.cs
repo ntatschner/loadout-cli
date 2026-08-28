@@ -2,6 +2,7 @@ using System.Drawing;
 using Loadout.Models.Diagnostics;
 using Loadout.Models.Projects;
 using Loadout.Core.Projects;
+using Loadout.Core.Sessions;
 using Loadout.Tui;
 using Loadout.Tui.Terminal;
 using FluentAssertions;
@@ -493,5 +494,71 @@ public sealed class ScreenConstructionTests
         }
 
         return null;
+    }
+
+    [Fact]
+    public void Pressing_enter_on_a_recent_session_resumes_it()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var project = new ProjectResolution(
+            new ProjectRegistryEntry { Slug = "alpha", Name = "Alpha" },
+            Path.GetTempPath(), null, 0, false);
+
+        var session = new AgentSession(
+            "claude", "2b7c1d64", "Fix the upload path", Path.GetTempPath(),
+            "main", DateTimeOffset.UtcNow, Path.GetTempPath(), "alpha");
+
+        using var window = new LauncherWindow(
+            [project],
+            null,
+            "workspace ready",
+            ["claude"],
+            (_, _) => Task.FromResult<ProjectOverview?>(null),
+            _ => { },
+            [session],
+            app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        // The recent list is the second list on the window; the projects list
+        // is a KeyedListView and this one is not.
+        // Found by what it is showing rather than by its type, so the test
+        // cannot quietly pick the projects list and prove nothing.
+        var lists = AllViews(window).OfType<ListView>().ToList();
+
+        lists.Should().HaveCountGreaterThan(1, "the window should show projects and recent work");
+
+        var recent = lists.Single(view =>
+            (view.Source?.ToList()?.Cast<object?>() ?? [])
+                .Any(row => (row?.ToString() ?? string.Empty).Contains("Fix the upload path", StringComparison.Ordinal)));
+
+        recent.SetFocus();
+        recent.SelectedItem = 0;
+
+        recent.NewKeyDownEvent(Key.Enter);
+
+        // The last handler on a list still using Accepted. The palette's did
+        // not fire and every command in it was dead, so this one is worth
+        // holding down rather than assuming.
+        window.Intent.Should().NotBeNull();
+        window.Intent!.Action.Should().Be(LauncherAction.Resume);
+    }
+
+    private static IEnumerable<View> AllViews(View root)
+    {
+        foreach (var child in root.SubViews)
+        {
+            yield return child;
+
+            foreach (var descendant in AllViews(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 }
