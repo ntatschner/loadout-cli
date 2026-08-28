@@ -27,3 +27,18 @@ public sealed class BuiltCliFactAttribute : FactAttribute
         }
     }
 }
+
+/// <summary>
+/// The theory form of <see cref="BuiltCliFactAttribute"/>, skipping for the
+/// same reason and with the same instruction.
+/// </summary>
+public sealed class BuiltCliTheoryAttribute : TheoryAttribute
+{
+    public BuiltCliTheoryAttribute()
+    {
+        if (LoadoutProcess.Executable is null)
+        {
+            Skip = "The command line has not been built. Run: dotnet build src/Loadout.Cli";
+        }
+    }
+}

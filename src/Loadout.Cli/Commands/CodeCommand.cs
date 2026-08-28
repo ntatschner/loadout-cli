@@ -82,7 +82,7 @@ public sealed class CodeCommand : AsyncCommand<CodeCommand.Settings>
         var resolution = settings.Project is not null
             ? await _projects.ResolveAsync(settings.Project).ConfigureAwait(false)
             : await _projects
-                .ResolveFromDirectoryAsync(Directory.GetCurrentDirectory())
+                .ResolveFromDirectoryAsync(settings.Repo ?? Directory.GetCurrentDirectory())
                 .ConfigureAwait(false);
 
         if (resolution.Failed)

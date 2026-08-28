@@ -347,7 +347,22 @@ public sealed class TerminalLauncher : ILauncherTui
                 return null;
 
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
-                await _catalogue.RunAsync(path, [], ct).ConfigureAwait(false);
+                // Run against the project on screen. The launcher knew which
+                // one was selected and threw it away here, so a command that
+                // works out where it is from the working directory looked at
+                // wherever the launcher had been started from — for a Start
+                // Menu launch, the directory the launcher is installed in.
+                // Choosing "code" then reported that the install directory is
+                // not a Git repository, which is true and no help at all.
+                //
+                // --repo is a global option, so this is the one argument every
+                // command understands. Nothing is added when the project is not
+                // on this machine, because a path that is not there would be a
+                // worse answer than the working directory.
+                await _catalogue.RunAsync(
+                    path,
+                    intent.Project?.LocalPath is { Length: > 0 } local ? ["--repo", local] : [],
+                    ct).ConfigureAwait(false);
 
                 // Back to the launcher, having shown whatever the command
                 // printed. Somebody who ran "doctor" wants to read it and carry

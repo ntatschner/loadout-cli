@@ -54,12 +54,15 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
     /// The project in play: the one named, or the one the current directory is
     /// in. Null is an ordinary answer — the built-in library still loads.
     /// </summary>
-    protected async Task<ProjectResolution?> ProjectAsync(string? handle, CancellationToken ct = default)
+    protected async Task<ProjectResolution?> ProjectAsync(
+        string? handle,
+        string? repo = null,
+        CancellationToken ct = default)
     {
         var result = handle is { Length: > 0 }
             ? await Projects.ResolveAsync(handle, ct).ConfigureAwait(false)
             : await Projects.ResolveFromDirectoryAsync(
-                Directory.GetCurrentDirectory(), ct).ConfigureAwait(false);
+                repo ?? Directory.GetCurrentDirectory(), ct).ConfigureAwait(false);
 
         return result.Succeeded ? result.Value : null;
     }
@@ -76,6 +79,7 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
     /// </remarks>
     protected async Task<string?> RepositoryAsync(
         ProjectResolution? project,
+        string? repo = null,
         CancellationToken ct = default)
     {
         if (project?.LocalPath is { Length: > 0 } known)
@@ -83,7 +87,7 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
             return known;
         }
 
-        var here = Directory.GetCurrentDirectory();
+        var here = repo ?? Directory.GetCurrentDirectory();
 
         // The repository root rather than the subdirectory somebody happens to
         // be standing in, so the answer does not change with where they ran it.
@@ -154,7 +158,7 @@ public sealed class InstructionsListCommand : InstructionsCommandBase<Instructio
             wanted = parsed;
         }
 
-        var project = await ProjectAsync(settings.Project).ConfigureAwait(false);
+        var project = await ProjectAsync(settings.Project, settings.Repo).ConfigureAwait(false);
 
         var catalogue = await Instructions
             .LibraryAsync(WorkspacePath, project?.Entry.Slug)
@@ -265,7 +269,7 @@ public sealed class InstructionsShowCommand : InstructionsCommandBase<Instructio
 
         var output = new CommandOutput(Console, settings);
 
-        var project = await ProjectAsync(settings.Project).ConfigureAwait(false);
+        var project = await ProjectAsync(settings.Project, settings.Repo).ConfigureAwait(false);
 
         var catalogue = await Instructions
             .LibraryAsync(WorkspacePath, project?.Entry.Slug)
@@ -412,7 +416,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
 
         var output = new CommandOutput(Console, settings);
 
-        var project = await ProjectAsync(settings.Project).ConfigureAwait(false);
+        var project = await ProjectAsync(settings.Project, settings.Repo).ConfigureAwait(false);
 
         var manifest = project is not null && WorkspacePath is not null
             ? (await Workspace.ReadProjectAsync(project.Entry.Slug).ConfigureAwait(false)).Value
@@ -420,7 +424,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
 
         var resolved = await Instructions.ResolveAsync(new InstructionRequest(
             manifest,
-            await RepositoryAsync(project).ConfigureAwait(false),
+            await RepositoryAsync(project, settings.Repo).ConfigureAwait(false),
             WorkspacePath,
             settings.Agent ?? manifest?.Agents.Default ?? "claude",
             ProfileName: settings.Profile,
@@ -628,7 +632,7 @@ public sealed class InstructionsValidateCommand : InstructionsCommandBase<Instru
 
         var output = new CommandOutput(Console, settings);
 
-        var project = await ProjectAsync(settings.Project).ConfigureAwait(false);
+        var project = await ProjectAsync(settings.Project, settings.Repo).ConfigureAwait(false);
 
         var catalogue = await Instructions
             .LibraryAsync(WorkspacePath, project?.Entry.Slug)

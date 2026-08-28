@@ -93,7 +93,7 @@ public abstract class RulesCommandBase<TSettings> : AsyncCommand<TSettings>
         var resolution = settings.Project is not null
             ? await Projects.ResolveAsync(settings.Project).ConfigureAwait(false)
             : await Projects
-                .ResolveFromDirectoryAsync(Directory.GetCurrentDirectory())
+                .ResolveFromDirectoryAsync(settings.Repo ?? Directory.GetCurrentDirectory())
                 .ConfigureAwait(false);
 
         return resolution.Failed

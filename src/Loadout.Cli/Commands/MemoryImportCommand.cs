@@ -87,7 +87,7 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
         var resolution = settings.Project is not null
             ? await Projects.ResolveAsync(settings.Project).ConfigureAwait(false)
             : await Projects
-                .ResolveFromDirectoryAsync(Directory.GetCurrentDirectory())
+                .ResolveFromDirectoryAsync(settings.Repo ?? Directory.GetCurrentDirectory())
                 .ConfigureAwait(false);
 
         if (resolution.Failed)
