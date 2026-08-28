@@ -600,4 +600,48 @@ public sealed class ScreenConstructionTests
         window.Intent.Should().NotBeNull();
         window.Intent!.Action.Should().Be(LauncherAction.Launch);
     }
+
+    [Fact]
+    public void Applying_a_ticked_fix_returns_it_and_leaves_the_rest_alone()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var window = new ProblemsWindow(
+            "Alpha",
+            [DiagnosticCheck.Warn("Repository", "Protection", "no pre-commit hook in this clone")],
+            [
+                new OfferedRemedy(
+                    new Remedy(RemedyKind.InstallPreCommitHook, "Install the pre-commit hook"),
+                    "would write .git/hooks/pre-commit"),
+                new OfferedRemedy(
+                    new Remedy(RemedyKind.RepairGlobalExcludes, "Repair the global excludes"),
+                    "would write the global excludes file"),
+            ],
+            app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        // The window shows two lists and the findings one is built first, so
+        // picking by position marks the wrong thing and proves nothing. This is
+        // the one that offers fixes.
+        var remedies = AllViews(window).OfType<ListView>().Single(view => view.ShowMarks);
+
+        // Tick the second one only. Applying everything offered regardless of
+        // what was ticked would be the worst possible reading of this screen.
+        remedies.Source!.SetMark(1, true);
+
+        var apply = AllViews(window)
+            .OfType<Button>()
+            .Single(b => (b.Text ?? string.Empty).Contains("Apply", StringComparison.Ordinal));
+
+        apply.SetFocus();
+        apply.NewKeyDownEvent(Key.Enter);
+
+        window.Chosen.Should().ContainSingle()
+            .Which.Kind.Should().Be(RemedyKind.RepairGlobalExcludes);
+    }
 }
