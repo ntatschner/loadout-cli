@@ -6,6 +6,11 @@ using System.Runtime.Versioning;
 using FluentAssertions;
 using Xunit;
 
+// Contracts, not Architecture, though the folder is Architecture. The obvious
+// rename does not build: System.Runtime.InteropServices.Architecture is an enum
+// the platform tests use unqualified, and a Loadout.Tests.Architecture namespace
+// shadows it. Tried once, reverted once; this note is here so it is not tried a
+// third time.
 namespace Loadout.Tests.Contracts;
 
 /// <summary>
