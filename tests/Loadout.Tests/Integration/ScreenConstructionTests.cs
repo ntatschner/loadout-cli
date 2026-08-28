@@ -561,4 +561,43 @@ public sealed class ScreenConstructionTests
             }
         }
     }
+
+    [Fact]
+    public void The_launch_button_in_the_detail_pane_launches()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var project = new ProjectResolution(
+            new ProjectRegistryEntry { Slug = "alpha", Name = "Alpha" },
+            Path.GetTempPath(), null, 0, false);
+
+        using var window = new LauncherWindow(
+            [project],
+            null,
+            "workspace ready",
+            ["claude"],
+            (_, _) => Task.FromResult<ProjectOverview?>(null),
+            _ => { },
+            [],
+            app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        var launch = AllViews(window)
+            .OfType<Button>()
+            .Single(b => (b.Text ?? string.Empty).Contains("Launch", StringComparison.Ordinal));
+
+        launch.SetFocus();
+        launch.NewKeyDownEvent(Key.Enter);
+
+        // The detail pane had no test of any kind, and its four buttons are the
+        // launcher's primary actions. A button that looks enabled and does
+        // nothing is the defect the command palette already shipped once.
+        window.Intent.Should().NotBeNull();
+        window.Intent!.Action.Should().Be(LauncherAction.Launch);
+    }
 }
