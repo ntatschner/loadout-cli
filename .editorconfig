@@ -121,9 +121,16 @@ dotnet_naming_rule.interfaces_prefixed.severity = warning
 
 #### Async ####
 
-# Core is a library and awaits with ConfigureAwait(false) in most places
-# already. CA2007 makes the remainder visible instead of leaving it to whoever
-# notices.
+# Most awaits here already say ConfigureAwait(false) and about a quarter do not.
+# A suggestion rather than a warning, because the inconsistency is cosmetic in
+# this application and not worth a sweeping change: there is no synchronization
+# context to capture. A console host installs none, and Terminal.Gui 2.4
+# declares no SynchronizationContext and never sets one, which was checked
+# against the assembly rather than assumed. So ConfigureAwait(false) is a no-op
+# throughout, including where the launcher calls into Core.
+#
+# Worth writing down because the opposite is the obvious guess, and acting on it
+# would mean touching a couple of hundred lines to change nothing.
 dotnet_diagnostic.CA2007.severity = suggestion
 
 #### Space and wrapping ####
