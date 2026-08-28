@@ -17,7 +17,7 @@ public interface IDoctorService
 }
 
 /// <inheritdoc />
-public sealed class DoctorService : IDoctorService
+internal sealed class DoctorService : IDoctorService
 {
     private readonly IPlatformPaths _paths;
     private readonly IPlatformCapabilities _capabilities;

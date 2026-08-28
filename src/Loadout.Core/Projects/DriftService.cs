@@ -58,7 +58,7 @@ public interface IDriftService
 /// without one, deliberately.
 /// </para>
 /// </summary>
-public sealed class DriftService : IDriftService
+internal sealed class DriftService : IDriftService
 {
     private readonly IProjectService _projects;
     private readonly IProjectOverviewService _overviews;

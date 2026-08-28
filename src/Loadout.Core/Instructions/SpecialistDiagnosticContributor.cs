@@ -21,7 +21,7 @@ namespace Loadout.Core.Instructions;
 /// that did not run.
 /// </para>
 /// </remarks>
-public sealed class SpecialistDiagnosticContributor : IDiagnosticContributor
+internal sealed class SpecialistDiagnosticContributor : IDiagnosticContributor
 {
     private const string Category = "Instructions";
 

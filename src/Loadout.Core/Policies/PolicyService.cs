@@ -10,7 +10,7 @@ using Loadout.Platform.Abstractions;
 namespace Loadout.Core.Policies;
 
 /// <inheritdoc />
-public sealed class PolicyService : IPolicyService
+internal sealed class PolicyService : IPolicyService
 {
     private const string PolicyFileName = "forbidden-repository-files.yaml";
     private const string ExcludeFileName = "loadout-global-excludes";

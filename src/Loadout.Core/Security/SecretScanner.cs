@@ -19,7 +19,7 @@ namespace Loadout.Core.Security;
 /// exact disclosure it exists to prevent.
 /// </para>
 /// </summary>
-public static partial class SecretScanner
+internal static partial class SecretScanner
 {
     private static readonly (string Name, Func<Regex> Pattern)[] Patterns =
     [

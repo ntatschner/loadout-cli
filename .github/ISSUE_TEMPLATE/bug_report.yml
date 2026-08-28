@@ -1,0 +1,62 @@
+name: Bug report
+description: Something behaves differently from how it reads
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this is a security problem, please do not file it here. Use
+        [private reporting](https://github.com/ntatschner/loadout-cli/security/advisories/new)
+        on the Security tab instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: The commands you ran, in order. Exact text beats a summary.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `loadout doctor`
+      description: |
+        This reports the platform, the capability matrix and where everything
+        lives, which answers most of the follow-up questions in one go. It
+        does not print secret values. Redact anything you would rather not
+        share.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `loadout --version`.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows x64
+        - Windows arm64
+        - Linux x64
+        - Linux arm64
+        - macOS Apple Silicon
+        - macOS Intel
+    validations:
+      required: true

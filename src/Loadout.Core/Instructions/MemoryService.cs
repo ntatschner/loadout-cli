@@ -98,7 +98,7 @@ public interface IMemoryService
 }
 
 /// <inheritdoc />
-public sealed partial class MemoryService : IMemoryService
+internal sealed partial class MemoryService : IMemoryService
 {
     /// <summary>
     /// Written into every topic this service creates, and skipped when reading

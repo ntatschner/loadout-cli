@@ -53,7 +53,7 @@ public interface IRepositoryEvidenceReader
 /// an agent through this path.
 /// </para>
 /// </remarks>
-public sealed class RepositoryEvidenceReader : IRepositoryEvidenceReader
+internal sealed class RepositoryEvidenceReader : IRepositoryEvidenceReader
 {
     /// <summary>How many files to look at before deciding that is enough.</summary>
     private const int MostFiles = 4000;

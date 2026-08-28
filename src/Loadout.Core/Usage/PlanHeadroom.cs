@@ -68,7 +68,7 @@ public interface IPlanHeadroomReader
 /// somebody plans their afternoon around and should not.
 /// </para>
 /// </remarks>
-public sealed class CodexPlanHeadroom : IPlanHeadroomReader
+internal sealed class CodexPlanHeadroom : IPlanHeadroomReader
 {
     /// <summary>
     /// How many recent rollouts to look through.

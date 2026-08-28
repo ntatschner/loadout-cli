@@ -15,7 +15,7 @@ namespace Loadout.Core.Instructions;
 /// enough to crowd out the task.
 /// </para>
 /// </summary>
-public sealed class InstructionDiagnosticContributor : IDiagnosticContributor
+internal sealed class InstructionDiagnosticContributor : IDiagnosticContributor
 {
     private const string Category = "Instructions";
 

@@ -32,7 +32,7 @@ public interface ISessionHistoryService
 /// projects, which is how somebody actually thinks about what they were doing.
 /// </para>
 /// </summary>
-public sealed class SessionHistoryService : ISessionHistoryService
+internal sealed class SessionHistoryService : ISessionHistoryService
 {
     /// <summary>
     /// How many transcripts to consider before filtering. Read wide enough

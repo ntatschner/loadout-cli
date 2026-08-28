@@ -20,7 +20,7 @@ namespace Loadout.Core.Backups;
 /// possibly a log.
 /// </para>
 /// </summary>
-public static class StructuredShape
+internal static class StructuredShape
 {
     /// <summary>
     /// How deep to walk. Deep enough for any settings file, bounded so a

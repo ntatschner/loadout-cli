@@ -74,7 +74,7 @@ public interface IProjectOverviewService
 }
 
 /// <inheritdoc />
-public sealed class ProjectOverviewService : IProjectOverviewService
+internal sealed class ProjectOverviewService : IProjectOverviewService
 {
     private readonly IGitManager _git;
     private readonly IWorkspaceManager _workspace;

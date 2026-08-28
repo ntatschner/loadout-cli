@@ -59,7 +59,7 @@ public interface IPreflightService
 }
 
 /// <inheritdoc />
-public sealed class PreflightService : IPreflightService
+internal sealed class PreflightService : IPreflightService
 {
     private readonly IGitManager _git;
     private readonly ISecretProvider _secrets;

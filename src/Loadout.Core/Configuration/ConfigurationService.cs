@@ -6,7 +6,7 @@ using Loadout.Platform.Abstractions;
 namespace Loadout.Core.Configuration;
 
 /// <inheritdoc />
-public sealed class ConfigurationService : IConfigurationService
+internal sealed class ConfigurationService : IConfigurationService
 {
     private readonly IPlatformPaths _paths;
     private readonly IEnvironmentProvider _environment;

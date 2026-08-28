@@ -180,9 +180,16 @@ dotnet build Loadout.slnx
 dotnet test tests/Loadout.Tests/Loadout.Tests.csproj
 ```
 
-You need the .NET 10 SDK. No OS-specific target frameworks anywhere, and a test
-that fails the build if one appears. [Architecture](docs/architecture.md) has
-the layout and the rules that keep the platform seam honest.
+You need .NET SDK 10.0.303 exactly, which `global.json` pins. Package versions
+are pinned and locked too, so the same commit builds the same binaries.
+
+No OS-specific target frameworks anywhere, and a test that fails the build if
+one appears. [Architecture](docs/architecture.md) has the layout and the rules
+that keep the platform seam honest, and [CONTRIBUTING.md](CONTRIBUTING.md) has
+the ones that will get a change sent back.
+
+Found a security problem? [SECURITY.md](SECURITY.md) says how to report it
+privately.
 
 ## Licence
 

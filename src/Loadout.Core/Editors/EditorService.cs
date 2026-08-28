@@ -62,7 +62,7 @@ public interface IEditorService
 }
 
 /// <inheritdoc />
-public sealed class EditorService : IEditorService
+internal sealed class EditorService : IEditorService
 {
     /// <summary>
     /// Where VS Code records the profiles somebody has made.

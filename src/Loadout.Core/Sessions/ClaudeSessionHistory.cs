@@ -20,7 +20,7 @@ namespace Loadout.Core.Sessions;
 /// listing still returns everything else.
 /// </para>
 /// </summary>
-public sealed class ClaudeSessionHistory : ISessionHistory
+internal sealed class ClaudeSessionHistory : ISessionHistory
 {
     /// <summary>
     /// How far into a transcript to look for the metadata. The working

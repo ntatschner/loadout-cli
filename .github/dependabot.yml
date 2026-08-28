@@ -1,0 +1,37 @@
+version: 2
+
+# Package versions are pinned exactly and locked, which makes updates
+# deliberate rather than automatic. That is the point, but left alone it turns
+# into neglect, so Dependabot does the noticing.
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # These move together and are versioned together upstream. One pull
+      # request per package would be five reviews of the same decision.
+      microsoft-extensions:
+        patterns:
+          - Microsoft.Extensions.*
+      spectre:
+        patterns:
+          - Spectre.Console*
+      xunit:
+        patterns:
+          - xunit*
+          - Microsoft.NET.Test.Sdk
+    ignore:
+      # Apache-2.0 up to version 7 and a paid commercial licence from 8, which
+      # this project cannot ship under. build/licences.ps1 fails the build if
+      # it ever arrives, and a pull request proposing it would only ever be
+      # closed.
+      - dependency-name: FluentAssertions
+        versions:
+          - ">=8.0.0"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

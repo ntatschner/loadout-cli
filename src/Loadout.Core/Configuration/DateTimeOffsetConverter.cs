@@ -17,7 +17,7 @@ namespace Loadout.Core.Configuration;
 /// ordering had nothing to sort on.
 /// </para>
 /// </summary>
-public sealed class DateTimeOffsetConverter : IYamlTypeConverter
+internal sealed class DateTimeOffsetConverter : IYamlTypeConverter
 {
     /// <summary>
     /// Round-trip format. Keeps the offset, so a timestamp written in one time

@@ -19,7 +19,7 @@ namespace Loadout.Core.Sessions;
 /// best-effort and a file that cannot be understood is skipped.
 /// </para>
 /// </summary>
-public sealed class CodexSessionHistory : ISessionHistory
+internal sealed class CodexSessionHistory : ISessionHistory
 {
     private readonly IEnvironmentProvider _environment;
 

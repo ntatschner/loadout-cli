@@ -8,7 +8,7 @@ using Loadout.Platform.Abstractions;
 namespace Loadout.Core.Context;
 
 /// <inheritdoc />
-public sealed class ContextCompiler : IContextCompiler
+internal sealed class ContextCompiler : IContextCompiler
 {
     /// <summary>Name of the implicit profile that loads a project's base context.</summary>
     public const string DefaultProfileName = "default";

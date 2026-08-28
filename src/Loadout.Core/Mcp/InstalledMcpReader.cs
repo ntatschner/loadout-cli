@@ -34,7 +34,7 @@ public interface IInstalledMcpReader
 /// a warning, and a warning that cannot be produced must not stop a launch.
 /// </para>
 /// </summary>
-public sealed class InstalledMcpReader : IInstalledMcpReader
+internal sealed class InstalledMcpReader : IInstalledMcpReader
 {
     /// <summary>
     /// How long the agent may take to list its servers. It health-checks each

@@ -30,7 +30,7 @@ namespace Loadout.Core.Usage;
 /// agents' numbers mean the same thing.
 /// </para>
 /// </remarks>
-public sealed class CodexUsageHistory : IUsageHistory
+internal sealed class CodexUsageHistory : IUsageHistory
 {
     private readonly IEnvironmentProvider _environment;
 

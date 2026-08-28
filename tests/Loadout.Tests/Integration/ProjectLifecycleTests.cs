@@ -3,6 +3,7 @@ using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
+using Loadout.Models;
 using Loadout.Models.Platform;
 using Loadout.Platform.Abstractions;
 using Loadout.Platform.Common;
@@ -30,6 +31,7 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     private readonly string _repositories;
     private readonly ProcessLauncher _processes = new();
 
+    private IConfigurationService _configuration = null!;
     private IProjectService _projects = null!;
     private IGitManager _git = null!;
     private IWorkspaceManager _workspace = null!;
@@ -92,6 +94,7 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
 
         _workspace = new WorkspaceManager(paths, _git, yaml, TimeProvider.System);
 
+        _configuration = configuration;
         _projects = new ProjectService(configuration, _workspace, _git, new PathSemantics());
     }
 
@@ -354,6 +357,33 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
 
         (await File.ReadAllTextAsync(Path.Combine(destination, "existing.txt")))
             .Should().Be("mine");
+    }
+
+    [Fact]
+    public async Task Cloning_with_no_clone_root_says_so_instead_of_throwing()
+    {
+        var origin = await CreateBareRemoteAsync("rootless");
+        var seed = await CreateRepositoryAsync("rootless-seed", origin);
+
+        await RunGitAsync(seed, "push", "origin", "main");
+        await _projects.AddAsync(seed, "rootless");
+        await _projects.RemoveAsync("rootless", fromWorkspace: false);
+
+        // A machine that has never had one set, which is every machine on the
+        // day the launcher is installed.
+        var machine = (await _configuration.LoadMachineAsync()).Value!;
+        machine.DefaultCloneRoot = null;
+        await _configuration.SaveMachineAsync(machine);
+
+        var cloned = await _projects.CloneAsync("rootless");
+
+        // This used to throw InvalidOperationException from the middle of the
+        // method, so it surfaced as an unhandled error with a generic exit
+        // code, while every other refusal here names the fix.
+        cloned.Failed.Should().BeTrue();
+        cloned.ExitCode.Should().Be(ExitCode.InvalidArguments);
+        cloned.Error.Should().Contain("clone-root");
+        cloned.Error.Should().Contain("rootless");
     }
 
     [Fact]

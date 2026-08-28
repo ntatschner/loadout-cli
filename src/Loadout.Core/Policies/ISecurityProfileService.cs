@@ -45,7 +45,7 @@ public interface ISecurityProfileService
 }
 
 /// <inheritdoc />
-public sealed class SecurityProfileService : ISecurityProfileService
+internal sealed class SecurityProfileService : ISecurityProfileService
 {
     private const string ProfilesFileName = "security-profiles.yaml";
 

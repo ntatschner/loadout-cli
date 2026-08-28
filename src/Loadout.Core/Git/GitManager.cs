@@ -6,7 +6,7 @@ using Loadout.Platform.Abstractions;
 namespace Loadout.Core.Git;
 
 /// <inheritdoc />
-public sealed class GitManager : IGitManager
+internal sealed class GitManager : IGitManager
 {
     private static readonly TimeSpan LocalOperationTimeout = TimeSpan.FromSeconds(30);
 

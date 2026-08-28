@@ -37,7 +37,7 @@ public interface IMemoryImporter
 }
 
 /// <inheritdoc />
-public sealed class MemoryImporter : IMemoryImporter
+internal sealed class MemoryImporter : IMemoryImporter
 {
     private readonly IEnvironmentProvider _environment;
     private readonly IMemoryService _memory;

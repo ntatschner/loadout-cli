@@ -12,7 +12,7 @@ namespace Loadout.Core.Instructions;
 /// hundred-character one in the other, for the same document.
 /// </para>
 /// </summary>
-public static class HeadingName
+internal static class HeadingName
 {
     /// <summary>
     /// How long a derived name may get. It becomes a filename and an index

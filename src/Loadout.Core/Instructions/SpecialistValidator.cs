@@ -12,7 +12,7 @@ namespace Loadout.Core.Instructions;
 /// few dozen small records, and a library that is broken is broken at launch
 /// time, not at the moment somebody remembers to validate it.
 /// </remarks>
-public static class SpecialistValidator
+internal static class SpecialistValidator
 {
     /// <summary>Everything wrong with a library, worst first.</summary>
     public static IReadOnlyList<RuleFinding> Validate(

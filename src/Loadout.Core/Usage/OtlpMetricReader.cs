@@ -42,7 +42,7 @@ public sealed record TelemetrySample(
 /// or reported.
 /// </para>
 /// </remarks>
-public static class OtlpMetricReader
+internal static class OtlpMetricReader
 {
     /// <summary>OTLP's spelling of "this is a running total".</summary>
     private const int Cumulative = 2;

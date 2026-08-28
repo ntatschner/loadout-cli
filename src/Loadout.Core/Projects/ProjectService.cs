@@ -10,7 +10,7 @@ using Loadout.Platform.Abstractions;
 namespace Loadout.Core.Projects;
 
 /// <inheritdoc />
-public sealed class ProjectService : IProjectService
+internal sealed class ProjectService : IProjectService
 {
     /// <summary>
     /// How deep discovery descends below a configured root. Two levels covers
@@ -463,11 +463,23 @@ public sealed class ProjectService : IProjectService
                 machineResult.Error!, machineResult.ExitCode);
         }
 
-        var target = destination
-            ?? Path.Combine(
-                machineResult.Value!.DefaultCloneRoot
-                    ?? throw new InvalidOperationException("No clone root is configured."),
-                project.Entry.Slug);
+        // Every other way this method can fail says what went wrong and what to
+        // do about it. Throwing here made the one case a person is most likely
+        // to hit on a new machine — no clone root set yet — arrive as an
+        // unhandled exception with a generic exit code, which is the least
+        // useful of all of them.
+        var cloneRoot = machineResult.Value!.DefaultCloneRoot;
+
+        if (destination is null && string.IsNullOrWhiteSpace(cloneRoot))
+        {
+            return OperationResult<ProjectResolution>.Fail(
+                "No clone root is configured on this machine, so there is nowhere to put "
+                + $"'{project.Entry.Name}'. Set one with: loadout config set clone-root <path>, "
+                + $"or pass a destination: loadout project clone {project.Entry.Slug} <path>",
+                ExitCode.InvalidArguments);
+        }
+
+        var target = destination ?? Path.Combine(cloneRoot!, project.Entry.Slug);
 
         if (Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any())
         {

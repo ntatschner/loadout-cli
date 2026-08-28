@@ -45,7 +45,7 @@ public interface IRuleService
 }
 
 /// <inheritdoc />
-public sealed partial class RuleService : IRuleService
+internal sealed partial class RuleService : IRuleService
 {
     /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<RuleDocument>>> LoadAsync(

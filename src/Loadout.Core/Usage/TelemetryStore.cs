@@ -39,7 +39,7 @@ public interface ITelemetryStore
 /// the first place.
 /// </para>
 /// </remarks>
-public sealed class TelemetryStore : ITelemetryStore
+internal sealed class TelemetryStore : ITelemetryStore
 {
     private readonly IFilePermissions _permissions;
     private readonly SemaphoreSlim _lock = new(1, 1);

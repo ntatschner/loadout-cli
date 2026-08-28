@@ -15,7 +15,7 @@ namespace Loadout.Core.Policies;
 /// projection, in one place, is what stops the two answers drifting apart.
 /// </para>
 /// </summary>
-public static class PolicyDiagnostics
+internal static class PolicyDiagnostics
 {
     /// <summary>The category these findings are filed under.</summary>
     public const string Category = "Repository";

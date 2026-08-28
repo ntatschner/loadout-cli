@@ -73,7 +73,7 @@ public interface IInstructionService
 /// explanation, because it would be believed.
 /// </para>
 /// </remarks>
-public sealed class InstructionService : IInstructionService
+internal sealed class InstructionService : IInstructionService
 {
     private readonly ISpecialistLibrary _library;
     private readonly ISpecialistResolver _resolver;

@@ -66,7 +66,7 @@ public interface ISpecialistLibrary
 /// being a thing only its author can change.
 /// </para>
 /// </remarks>
-public sealed partial class SpecialistLibrary : ISpecialistLibrary
+internal sealed partial class SpecialistLibrary : ISpecialistLibrary
 {
     /// <summary>
     /// Refuses anything larger than this.

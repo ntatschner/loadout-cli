@@ -5,7 +5,7 @@ using Loadout.Models.Results;
 namespace Loadout.Core.Context;
 
 /// <inheritdoc />
-public sealed class HandoffService : IHandoffService
+internal sealed class HandoffService : IHandoffService
 {
     private readonly IWorkspaceManager _workspace;
     private readonly TimeProvider _time;

@@ -11,7 +11,7 @@ using Loadout.Platform.Abstractions;
 namespace Loadout.Core.Updates;
 
 /// <inheritdoc />
-public sealed class UpdateService : IUpdateService
+internal sealed class UpdateService : IUpdateService
 {
     private static readonly JsonSerializerOptions FeedOptions = new()
     {

@@ -7,7 +7,7 @@ using Loadout.Models.Results;
 namespace Loadout.Core.Policies;
 
 /// <inheritdoc />
-public sealed class MigrationService : IMigrationService
+internal sealed class MigrationService : IMigrationService
 {
     /// <summary>
     /// Where each well-known agent artefact belongs in the workspace.

@@ -20,7 +20,7 @@ namespace Loadout.Core.Editors;
 /// that name rather than refusing to open.
 /// </para>
 /// </summary>
-public sealed class EditorDiagnosticContributor : IDiagnosticContributor
+internal sealed class EditorDiagnosticContributor : IDiagnosticContributor
 {
     private const string Category = "Editor";
 

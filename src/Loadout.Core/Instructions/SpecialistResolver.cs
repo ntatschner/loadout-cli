@@ -55,7 +55,7 @@ public interface ISpecialistResolver
 /// tight budget, whereas what the user actually asked for does.
 /// </para>
 /// </remarks>
-public sealed class SpecialistResolver : ISpecialistResolver
+internal sealed class SpecialistResolver : ISpecialistResolver
 {
     /// <summary>The posture used when none is chosen.</summary>
     public const string DefaultMode = "implement";

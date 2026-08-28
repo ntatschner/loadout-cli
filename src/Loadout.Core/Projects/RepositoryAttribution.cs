@@ -88,7 +88,7 @@ public interface IRepositoryAttribution
 }
 
 /// <inheritdoc />
-public sealed class RepositoryAttribution : IRepositoryAttribution
+internal sealed class RepositoryAttribution : IRepositoryAttribution
 {
     private readonly IEnvironmentProvider _environment;
     private readonly IProjectService _projects;

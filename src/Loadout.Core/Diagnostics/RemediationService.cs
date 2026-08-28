@@ -42,7 +42,7 @@ public interface IRemediationService
 /// so those findings stay as advice.
 /// </para>
 /// </summary>
-public sealed class RemediationService : IRemediationService
+internal sealed class RemediationService : IRemediationService
 {
     private readonly IPolicyService _policies;
     private readonly IProjectService _projects;

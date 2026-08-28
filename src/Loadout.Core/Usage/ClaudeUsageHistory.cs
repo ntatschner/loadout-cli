@@ -25,7 +25,7 @@ namespace Loadout.Core.Usage;
 /// keyed on the message identifier, once, across the whole scan.
 /// </para>
 /// </remarks>
-public sealed class ClaudeUsageHistory : IUsageHistory
+internal sealed class ClaudeUsageHistory : IUsageHistory
 {
     private readonly IEnvironmentProvider _environment;
 

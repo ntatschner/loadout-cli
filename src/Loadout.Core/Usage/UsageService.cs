@@ -54,7 +54,7 @@ public interface IUsageService
 /// turns them into totals per project, which is the only form in which the
 /// question "what did this cost" can actually be asked.
 /// </remarks>
-public sealed class UsageService : IUsageService
+internal sealed class UsageService : IUsageService
 {
     private readonly IReadOnlyList<IUsageHistory> _histories;
     private readonly IProjectService _projects;

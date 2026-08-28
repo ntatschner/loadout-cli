@@ -8,7 +8,7 @@ using Loadout.Platform.Abstractions;
 namespace Loadout.Core.Backups;
 
 /// <inheritdoc />
-public sealed class BackupService : IBackupService
+internal sealed class BackupService : IBackupService
 {
     private const string ManifestFileName = "manifest.yaml";
     private const string PayloadDirectoryName = "files";
