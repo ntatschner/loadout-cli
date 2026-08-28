@@ -3,6 +3,10 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>loadout</AssemblyName>
     <RootNamespace>Loadout.Cli</RootNamespace>
+
+    <!-- Gives the executable itself an icon, which is what Explorer, the
+         taskbar and any shortcut somebody makes by hand all read. -->
+    <ApplicationIcon>../../build/icon/loadout.ico</ApplicationIcon>
     <!-- Trimming and NativeAOT stay off: YamlDotNet's reflection-based
          deserialisation does not survive them.
 

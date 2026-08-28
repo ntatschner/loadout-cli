@@ -40,6 +40,55 @@ public sealed class LinuxDesktopIntegration : IDesktopIntegration
         }
     }
 
+    /// <summary>
+    /// Where the hicolor theme expects a 256px application icon, so the entry
+    /// can name the icon rather than point at a path that breaks when the
+    /// launcher moves.
+    /// </summary>
+    private string IconDirectory
+    {
+        get
+        {
+            var dataHome = _environment.GetVariable("XDG_DATA_HOME");
+
+            var root = !string.IsNullOrWhiteSpace(dataHome) && Path.IsPathRooted(dataHome)
+                ? dataHome
+                : Path.Combine(_environment.HomeDirectory, ".local", "share");
+
+            return Path.Combine(root, "icons", "hicolor", "256x256", "apps");
+        }
+    }
+
+    private string IconPath => Path.Combine(IconDirectory, "loadout.png");
+
+    /// <summary>
+    /// Writes the icon out of the assembly. Best effort: an entry with a
+    /// missing icon still launches, and refusing to install a menu entry
+    /// because a picture could not be written would be the wrong trade.
+    /// </summary>
+    private async Task WriteIconAsync(CancellationToken ct)
+    {
+        try
+        {
+            await using var source = typeof(LinuxDesktopIntegration).Assembly
+                .GetManifestResourceStream("Loadout.Platform.loadout.png");
+
+            if (source is null)
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(IconDirectory);
+
+            await using var target = File.Create(IconPath);
+            await source.CopyToAsync(target, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The entry is still worth installing without it.
+        }
+    }
+
     /// <inheritdoc />
     public OperationResult<bool> IsInstalled()
     {
@@ -65,6 +114,8 @@ public sealed class LinuxDesktopIntegration : IDesktopIntegration
         {
             Directory.CreateDirectory(ApplicationsDirectory);
 
+            await WriteIconAsync(ct).ConfigureAwait(false);
+
             var content = new StringBuilder()
                 .AppendLine("[Desktop Entry]")
                 .AppendLine("Type=Application")
@@ -73,7 +124,11 @@ public sealed class LinuxDesktopIntegration : IDesktopIntegration
                 // Quoted so an install path containing spaces still parses,
                 // which the Desktop Entry specification requires.
                 .AppendLine($"Exec=\"{executablePath}\"")
-                .AppendLine("Icon=utilities-terminal")
+                // Named rather than a path, so it survives the launcher being
+                // moved, and resolved from the hicolor theme where the icon is
+                // written just above. This used to borrow a stock terminal
+                // icon from whatever theme happened to be installed.
+                .AppendLine("Icon=loadout")
                 // The launcher is a TUI, so the desktop must give it a
                 // terminal to run in rather than starting it detached.
                 .AppendLine("Terminal=true")
@@ -99,6 +154,14 @@ public sealed class LinuxDesktopIntegration : IDesktopIntegration
             if (File.Exists(EntryPath))
             {
                 File.Delete(EntryPath);
+            }
+
+            // Taken away with it. Leaving an icon behind for an entry that no
+            // longer exists is litter of exactly the kind this tool argues
+            // against.
+            if (File.Exists(IconPath))
+            {
+                File.Delete(IconPath);
             }
 
             return Task.FromResult(OperationResult.Ok());

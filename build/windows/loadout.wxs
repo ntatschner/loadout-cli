@@ -160,7 +160,8 @@
                 Name="loadout"
                 Description="Loadout"
                 Target="[BINFOLDER]loadout.exe"
-                WorkingDirectory="BINFOLDER" />
+                WorkingDirectory="BINFOLDER"
+                Icon="loadout.ico" />
 
       <RemoveFolder Id="RemoveProgramsFolder" On="uninstall" />
 
@@ -171,6 +172,12 @@
                      Value="1"
                      KeyPath="yes" />
     </Component>
+
+    <!-- The Start Menu shortcut and the Add/Remove Programs entry read this
+         rather than the executable, so without it both showed a generic icon
+         even once the binary had one of its own. -->
+    <Icon Id="loadout.ico" SourceFile="$(var.IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="loadout.ico" />
 
   </Package>
 </Wix>

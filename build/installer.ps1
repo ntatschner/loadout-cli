@@ -117,6 +117,7 @@ if ($Runtime.StartsWith('win-')) {
         -arch $platform `
         -define "Version=$Version" `
         -define "PublishDir=$payload" `
+        -define "IconPath=$(Join-Path $PSScriptRoot 'icon/loadout.ico')" `
         -out $msi
 
     if ($LASTEXITCODE -ne 0) { throw "wix build failed for $Runtime." }
