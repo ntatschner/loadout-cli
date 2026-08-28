@@ -302,6 +302,39 @@ jobs:
 
           ./build/verify-windows-install.ps1 -Msi $msi.FullName -PreviousVersion $previous
 
+      # Runs even when the step above was cancelled, which is the only way a
+      # stall there leaves anything behind. Four releases have stalled in it and
+      # not one produced a readable log, including the release where that step
+      # had its own timeout: the runner asks a stuck step to stop, whatever is
+      # stuck does not answer, and the job is cancelled with its logs discarded.
+      #
+      # The script writes each phase to a file as it reaches it. This reads the
+      # file back, so the next stall names the phase it never came out of.
+      - name: What the install check got through
+        if: always() && matrix.rid == 'win-x64'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $logs = Join-Path ([System.IO.Path]::GetTempPath()) 'loadout-install-logs'
+          $progress = Join-Path $logs 'progress.log'
+
+          if (Test-Path $progress) {
+              Write-Host '--- phases reached ---'
+              Get-Content $progress
+          }
+          else {
+              Write-Host 'No progress file, so the check stopped before its first phase.'
+          }
+
+          # The msiexec logs alongside it, tail only: they are verbose and the
+          # end is where a failure says what it was doing.
+          Get-ChildItem $logs -Filter '*.log' -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -ne 'progress.log' } |
+              ForEach-Object {
+                  Write-Host "--- $($_.Name), last 25 lines ---"
+                  Get-Content $_.FullName -Encoding Unicode -Tail 25 -ErrorAction SilentlyContinue
+              }
+
       - name: Check the package holds what it should
         shell: bash
         run: |

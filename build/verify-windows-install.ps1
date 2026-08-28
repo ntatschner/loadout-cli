@@ -66,7 +66,18 @@ New-Item -ItemType Directory -Force -Path $logs | Out-Null
 function Step {
     param([string] $Message)
 
-    Write-Host "[$([DateTime]::UtcNow.ToString('HH:mm:ss'))] $Message"
+    $line = "[$([DateTime]::UtcNow.ToString('HH:mm:ss'))] $Message"
+
+    Write-Host $line
+
+    # Also to a file, because Write-Host is not enough here. When this step
+    # stalls it does not end: the runner asks it to stop, whatever is stuck does
+    # not answer, and the job is cancelled — and a cancelled job uploads no logs
+    # at all. Four releases have stalled here and every one of them left nothing
+    # to read, including the one where the step had its own timeout.
+    #
+    # A file survives that, and a later step reads it back with if: always().
+    Add-Content -Path (Join-Path $logs 'progress.log') -Value $line -ErrorAction SilentlyContinue
 }
 
 <#
@@ -254,12 +265,16 @@ function Get-InstalledProduct {
 # already installed makes installing an older one a downgrade, which the
 # package refuses by design. Clearing the decks first is what lets this run
 # anywhere rather than only in CI.
+Step 'Asking Windows Installer what is already here...'
+
 $existing = Get-InstalledProduct
 
 if ($existing) {
-    Write-Host "Removing the $($existing.Version) already installed here..."
+    Step "Removing the $($existing.Version) already installed here..."
     Invoke-Msi 'remove-existing' @('/x', $existing.ProductCode)
 }
+
+Step 'Decks cleared.'
 
 if ($PreviousVersion) {
     Write-Host "Installing $PreviousVersion first, so the upgrade path is the one under test..."
@@ -318,6 +333,8 @@ if ($path -notlike '*loadout*') {
 }
 
 Step 'Removing it...'
+
+Step 'Asking Windows Installer for the product code...'
 
 $product = Get-InstalledProduct
 
