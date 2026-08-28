@@ -247,43 +247,90 @@ public static class Program
         return app.RunAsync(arguments);
     }
 
-    private static async Task<int> RunInteractiveAsync(ServiceProvider provider)
+    /// <summary>What running the launcher with no arguments should do.</summary>
+    internal enum LauncherEntry
     {
-        // A redirected stream means a pipe, a script or a CI job, where spec
-        // section 37 says no menu may appear. Printing usage is the honest
-        // alternative to hanging on a prompt nobody can answer.
-        if (Console.IsOutputRedirected || Console.IsInputRedirected)
-        {
-            Console.Error.WriteLine(
-                "loadout was run with no arguments and no interactive terminal. "
-                + "Run 'loadout --help' for the available commands.");
+        /// <summary>Nothing to draw on. Say where the help is and stop.</summary>
+        NoTerminal,
 
-            return (int)ExitCode.InvalidArguments;
+        /// <summary>Never configured, so the wizard rather than an empty list.</summary>
+        Setup,
+
+        /// <summary>The screen.</summary>
+        Launcher,
+    }
+
+    /// <summary>
+    /// Decides which of the three happens, and registers the commands on the
+    /// way to the screen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Separated from the doing so it can be tested. What it replaced could not
+    /// be: every branch of it either wrote to the console, ran a wizard or put a
+    /// full-screen application up, and the one branch a test could reach was the
+    /// one that returns immediately. That is how the launcher shipped opening
+    /// with an empty command list — the registration below was missing and
+    /// nothing could have noticed.
+    /// </para>
+    /// <para>
+    /// Registration is what fills the launcher's command list. Nothing else on
+    /// this path does it: the parser is configured only when there are arguments
+    /// to parse, and running "loadout" with none goes straight to the screen. It
+    /// is cheap — names are recorded, no service is resolved, and the catalogue
+    /// ignores a path it already holds.
+    /// </para>
+    /// <para>
+    /// Whether the machine is configured is asked for rather than passed,
+    /// because asking touches the disk and the redirected case must not pay for
+    /// an answer it will not use.
+    /// </para>
+    /// </remarks>
+    internal static LauncherEntry PrepareInteractive(bool interactive, Func<bool> configured)
+    {
+        ArgumentNullException.ThrowIfNull(configured);
+
+        // A redirected stream means a pipe, a script or a CI job, where spec
+        // section 37 says no menu may appear.
+        if (!interactive)
+        {
+            return LauncherEntry.NoTerminal;
         }
 
-        // Registers the commands, which is what fills the launcher's command
-        // list. Nothing else on this path does it: the parser is configured
-        // only when there are arguments to parse, and running "loadout" with
-        // none goes straight to the screen. So the palette opened holding
-        // nothing, said nothing about why, and left the launcher looking like a
-        // way into a tool with no commands.
-        //
-        // Cheap and safe to do here. Registration records names and resolves no
-        // services, and the catalogue ignores a path it already holds, so the
-        // parser configuring itself again later costs nothing.
         _ = CommandNames();
 
-        // A machine that has never been configured gets the wizard rather than
-        // an empty project list, which would leave a new user with nothing to
-        // do and no hint about what to do next (spec section 61).
+        return configured() ? LauncherEntry.Launcher : LauncherEntry.Setup;
+    }
+
+    private static async Task<int> RunInteractiveAsync(ServiceProvider provider)
+    {
         var wizard = provider.GetRequiredService<ISetupWizard>();
 
-        if (!wizard.IsConfigured())
-        {
-            return await wizard.RunAsync(new SetupRequest()).ConfigureAwait(false);
-        }
+        var entry = PrepareInteractive(
+            !Console.IsOutputRedirected && !Console.IsInputRedirected,
+            wizard.IsConfigured);
 
-        return await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
+        switch (entry)
+        {
+            case LauncherEntry.NoTerminal:
+                // Printing usage is the honest alternative to hanging on a
+                // prompt nobody can answer.
+                Console.Error.WriteLine(
+                    "loadout was run with no arguments and no interactive terminal. "
+                    + "Run 'loadout --help' for the available commands.");
+
+                return (int)ExitCode.InvalidArguments;
+
+            case LauncherEntry.Setup:
+                // A machine that has never been configured gets the wizard
+                // rather than an empty project list, which would leave a new
+                // user with nothing to do and no hint about what to do next
+                // (spec section 61).
+                return await wizard.RunAsync(new SetupRequest()).ConfigureAwait(false);
+
+            default:
+                return await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>
