@@ -476,6 +476,7 @@ public static class Program
             instructions.AddCommand<InstructionsShowCommand>("show");
             instructions.AddCommand<InstructionsExplainCommand>("explain");
             instructions.AddCommand<InstructionsValidateCommand>("validate");
+            instructions.AddCommand<InstructionsNewCommand>("new");
         });
 
         TopBranch(config, "telemetry", telemetry =>

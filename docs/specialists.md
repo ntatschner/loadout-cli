@@ -205,6 +205,22 @@ step.
 
 ## Writing one
 
+Start with a draft rather than a blank file:
+
+```bash
+loadout instructions new skill.deploy-checklist
+loadout instructions new language.rust --project starstats
+```
+
+It writes into the workspace library, or into one project's with `--project`,
+under the directory its layer keeps. The draft is valid when it lands, and only
+carries the activation its layer can use: a language is found by what is in the
+repository, a skill by the words of a task, and a foundation applies always and
+has nothing to decide. `--dry-run` prints it instead of writing it.
+
+The library is read back immediately afterwards, so a draft that does not load
+says so at the moment you made it rather than the next time something needed it.
+
 One markdown file that describes itself. There is no manifest: the library is
 what is on disk, which removes the possibility of a registry naming a file that
 is not there.

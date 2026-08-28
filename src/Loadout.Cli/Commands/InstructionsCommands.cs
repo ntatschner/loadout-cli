@@ -691,3 +691,197 @@ public sealed class InstructionsValidateCommand : InstructionsCommandBase<Instru
             ? (int)ExitCode.GeneralFailure
             : CommandOutput.Success();
 }
+
+/// <summary>Settings for drafting a specialist.</summary>
+public sealed class InstructionsNewSettings : GlobalSettings
+{
+    [CommandArgument(0, "<ID>")]
+    [Description("Identifier, naming its layer first: skill.deploy-checklist, language.rust.")]
+    public string Id { get; init; } = string.Empty;
+
+    [CommandOption("--project <SLUG>")]
+    [Description("Add it to one project's library rather than the workspace-wide one.")]
+    public string? Project { get; init; }
+
+    [CommandOption("--title <TITLE>")]
+    [Description("What it is called. Derived from the identifier when not given.")]
+    public string? Title { get; init; }
+
+    [CommandOption("--summary <SUMMARY>")]
+    [Description("One line saying what it is for.")]
+    public string? Summary { get; init; }
+
+    [CommandOption("--force")]
+    [Description("Overwrite a specialist of that name if one is already there.")]
+    public bool Force { get; init; }
+}
+
+/// <summary>
+/// Writes the first draft of a specialist into the workspace or a project.
+/// </summary>
+/// <remarks>
+/// The library has always been extensible and there was no way to extend it.
+/// Adding one meant knowing the frontmatter vocabulary, knowing which of it
+/// your layer uses, knowing the identifier and the kind have to agree, knowing
+/// which directory it belongs in, and finding out you were wrong afterwards.
+/// </remarks>
+[Description("Draft a new specialist or skill in the workspace or a project.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "new specialist skill create add author scaffold")]
+public sealed class InstructionsNewCommand : InstructionsCommandBase<InstructionsNewSettings>
+{
+    public InstructionsNewCommand(
+        IInstructionService instructions,
+        IWorkspaceManager workspace,
+        IProjectService projects,
+        IGitManager git,
+        IAnsiConsole console)
+        : base(instructions, workspace, projects, git, console)
+    {
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        InstructionsNewSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(Console, settings);
+
+        var drafted = SpecialistScaffold.Draft(settings.Id, settings.Title, settings.Summary);
+
+        if (drafted.Failed)
+        {
+            return output.Fail(drafted);
+        }
+
+        var draft = drafted.Value!;
+
+        if (WorkspacePath is not { Length: > 0 } workspace)
+        {
+            return output.Fail(
+                "There is no workspace on this machine, so there is nowhere to keep a specialist. "
+                + "Set one up with: loadout setup",
+                ExitCode.ConfigurationInvalid);
+        }
+
+        // Workspace-wide unless a project is named. The wider one is the
+        // default because guidance that is only true of one repository is the
+        // rarer thing to be writing.
+        string root;
+        string scope;
+
+        if (settings.Project is { Length: > 0 } handle)
+        {
+            var project = await Projects.ResolveAsync(handle).ConfigureAwait(false);
+
+            if (project.Failed)
+            {
+                return output.Fail(project.Error!, project.ExitCode);
+            }
+
+            root = Path.Combine(workspace, "projects", project.Value!.Entry.Slug, "specialists");
+            scope = project.Value!.Entry.Name;
+        }
+        else
+        {
+            root = Path.Combine(workspace, "global", "specialists");
+            scope = "the workspace";
+        }
+
+        var directory = Path.Combine(root, SpecialistScaffold.DirectoryFor(draft.Kind));
+        var path = Path.Combine(directory, draft.FileName);
+
+        if (File.Exists(path) && !settings.Force)
+        {
+            return output.Fail(
+                $"'{path}' already exists. Pass --force to overwrite it.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (settings.DryRun)
+        {
+            if (output.IsJson)
+            {
+                output.WriteJson(new { id = draft.Id, path, scope, wouldWrite = draft.Content });
+
+                return CommandOutput.Success();
+            }
+
+            output.WriteLine($"[yellow]Would write[/] {path.EscapeMarkup()}");
+            output.WriteBlankLine();
+            Console.WriteLine(draft.Content);
+
+            return CommandOutput.Success();
+        }
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            await File.WriteAllTextAsync(path, draft.Content).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return output.Fail($"Could not write '{path}': {ex.Message}", ExitCode.GeneralFailure);
+        }
+
+        // Read the library back rather than trusting the template. A draft that
+        // does not load is worse than no command at all, because it is found
+        // later and by somebody else.
+        var catalogue = await Instructions
+            .LibraryAsync(WorkspacePath, settings.Project)
+            .ConfigureAwait(false);
+
+        var loaded = catalogue.Specialists.ContainsKey(draft.Id);
+
+        var problems = catalogue.Findings
+            .Where(f => string.Equals(f.Rule, draft.Id, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                id = draft.Id,
+                kind = draft.Kind.ToString().ToLowerInvariant(),
+                path,
+                scope,
+                loaded,
+                findings = problems.Select(f => new
+                {
+                    severity = f.Severity.ToString().ToLowerInvariant(),
+                    detail = f.Detail,
+                }),
+            });
+
+            return loaded ? CommandOutput.Success() : (int)ExitCode.GeneralFailure;
+        }
+
+        output.WriteLine($"[green]Created[/] {draft.Id.EscapeMarkup()} in {scope.EscapeMarkup()}");
+        output.WriteLine($"  [dim]{path.EscapeMarkup()}[/]");
+        output.WriteBlankLine();
+
+        if (!loaded)
+        {
+            output.WriteLine("[red]It was written but the library did not load it.[/]");
+
+            foreach (var finding in problems)
+            {
+                output.WriteLine($"  [red]{finding.Detail.EscapeMarkup()}[/]");
+            }
+
+            return (int)ExitCode.GeneralFailure;
+        }
+
+        foreach (var finding in problems)
+        {
+            output.WriteLine($"  [yellow]{finding.Detail.EscapeMarkup()}[/]");
+        }
+
+        output.WriteLine("[dim]Write the guidance, then check it with:[/]");
+        output.WriteLine($"[dim]  loadout instructions show {draft.Id}[/]");
+        output.WriteLine("[dim]  loadout instructions validate[/]");
+
+        return CommandOutput.Success();
+    }
+}
