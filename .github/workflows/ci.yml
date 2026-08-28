@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}
           path: '**/results.trx'
@@ -148,7 +148,7 @@ jobs:
       # offers no hosted arm64 Windows or Linux runner. Release notes must say
       # so rather than implying tested parity on those architectures.
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: loadout-${{ matrix.rid }}
           path: artifacts/${{ matrix.rid }}
