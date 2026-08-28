@@ -281,6 +281,12 @@ jobs:
       # The runner is disposable, so this costs nothing but the minute it takes.
       - name: Install, upgrade and uninstall it
         if: matrix.rid == 'win-x64'
+        # Below the job's own timeout on purpose. A job that runs out of time is
+        # cancelled and keeps no logs, which is how two stalls here left nothing
+        # to read; a step that runs out of time fails, the job finishes, and the
+        # log is uploaded. The difference is the whole reason the last two
+        # failures were undiagnosable.
+        timeout-minutes: 20
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

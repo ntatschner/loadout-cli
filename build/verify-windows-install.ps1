@@ -209,19 +209,45 @@ $upgradeCode = '{B3CB085D-BC14-5901-AD7D-A4F6E3BAE121}'
     actually being asked.
 #>
 function Get-InstalledProduct {
-    $installer = New-Object -ComObject WindowsInstaller.Installer
+    param([int] $TimeoutSeconds = 60)
 
-    $related = $installer.GetType().InvokeMember(
-        'RelatedProducts', 'GetProperty', $null, $installer, @($upgradeCode))
+    # Asked in a job with a deadline, because this was the last wait in the
+    # script with no bound on it, and it is a plausible place to stop: the
+    # Windows Installer COM API blocks while another installation holds the
+    # _MSIExecute mutex, and this runs either side of four msiexec calls.
+    #
+    # Three releases have stalled in this step for half an hour. Bounding the
+    # msiexec calls did not stop it, which is what pointed here.
+    $job = Start-Job -ArgumentList $upgradeCode -ScriptBlock {
+        param($code)
 
-    foreach ($code in $related) {
-        $version = $installer.GetType().InvokeMember(
-            'ProductInfo', 'GetProperty', $null, $installer, @($code, 'VersionString'))
+        $installer = New-Object -ComObject WindowsInstaller.Installer
 
-        return [pscustomobject]@{ ProductCode = $code; Version = $version }
+        $related = $installer.GetType().InvokeMember(
+            'RelatedProducts', 'GetProperty', $null, $installer, @($code))
+
+        foreach ($product in $related) {
+            $version = $installer.GetType().InvokeMember(
+                'ProductInfo', 'GetProperty', $null, $installer, @($product, 'VersionString'))
+
+            return [pscustomobject]@{ ProductCode = $product; Version = $version }
+        }
+
+        return $null
     }
 
-    return $null
+    if (-not (Wait-Job $job -Timeout $TimeoutSeconds)) {
+        Stop-Job $job -ErrorAction SilentlyContinue
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+
+        throw "Asking Windows Installer what is installed did not answer within $TimeoutSeconds seconds. " +
+            'Something else is holding the installer mutex.'
+    }
+
+    $result = Receive-Job $job
+    Remove-Job $job -Force -ErrorAction SilentlyContinue
+
+    return $result
 }
 
 # A runner is clean; a developer's machine is not, and a newer version
