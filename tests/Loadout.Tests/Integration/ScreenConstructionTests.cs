@@ -644,4 +644,98 @@ public sealed class ScreenConstructionTests
         window.Chosen.Should().ContainSingle()
             .Which.Kind.Should().Be(RemedyKind.RepairGlobalExcludes);
     }
+
+    [Fact]
+    public void Ctrl_P_opens_the_palette_while_the_list_has_focus()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var project = new ProjectResolution(
+            new ProjectRegistryEntry { Slug = "alpha", Name = "Alpha" },
+            Path.GetTempPath(), null, 0, false);
+
+        var opened = 0;
+
+        using var window = new LauncherWindow(
+            [project],
+            null,
+            "workspace ready",
+            ["claude"],
+            (_, _) => Task.FromResult<ProjectOverview?>(null),
+            _ => opened++,
+            [],
+            app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        // Where the focus actually is when somebody presses it. A list claims
+        // Ctrl+P for extending a selection, and a window's bindings are not
+        // consulted while a child has the focus, so the key did nothing but
+        // nudge the highlight on a screen that advertises it as "all commands".
+        var list = AllViews(window).OfType<ListView>().First(v => v is KeyedListView);
+        list.SetFocus();
+
+        list.HasFocus.Should().BeTrue("the list is what has the focus on this screen");
+
+        // This does not prove the fix, and says so rather than implying it.
+        // Ctrl+P was reported as doing nothing in a real terminal, and it
+        // passes here whether the list keeps its own claim on Ctrl+P or not,
+        // and whether the window binds the key for itself or for the whole
+        // application. Raising a key at the application in a headless harness
+        // evidently dispatches differently from a console driver delivering one
+        // to a focused view.
+        //
+        // What it holds down is that the palette is reachable by that key at
+        // all, which is worth having. What it cannot tell you is whether it
+        // reaches it on somebody's machine.
+
+        // Raised at the application, which is where a real keystroke arrives.
+        // Raising it on the focused view instead only exercises that view's own
+        // bindings and the ones it bubbles to, and never reaches a binding held
+        // for the whole application — so the test would fail for a reason that
+        // has nothing to do with the key working.
+        app.Keyboard.RaiseKeyDownEvent(Key.P.WithCtrl);
+
+        opened.Should().Be(1, "Ctrl+P is on the status line, so it has to reach the palette");
+    }
+
+    [Fact]
+    public void Ctrl_N_adds_a_project_while_the_list_has_focus()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var project = new ProjectResolution(
+            new ProjectRegistryEntry { Slug = "alpha", Name = "Alpha" },
+            Path.GetTempPath(), null, 0, false);
+
+        using var window = new LauncherWindow(
+            [project],
+            null,
+            "workspace ready",
+            ["claude"],
+            (_, _) => Task.FromResult<ProjectOverview?>(null),
+            _ => { },
+            [],
+            app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        var list = AllViews(window).OfType<ListView>().First(v => v is KeyedListView);
+        list.SetFocus();
+
+        app.Keyboard.RaiseKeyDownEvent(Key.N.WithCtrl);
+
+        // The same fault as Ctrl+P and found with it: the list claimed this one
+        // too, for extending a selection downwards.
+        window.Intent.Should().NotBeNull();
+        window.Intent!.Action.Should().Be(LauncherAction.AddProject);
+    }
 }

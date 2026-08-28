@@ -262,17 +262,17 @@ internal sealed class LauncherWindow : Window
 
         Populate();
 
-        this.Bind(Key.Q.WithCtrl, Command.Quit);
+        this.BindEverywhere(Key.Q.WithCtrl, Command.Quit);
         AddCommand(Command.Quit, () => { Close(LauncherIntent.Quit); return true; });
 
-        this.Bind(Key.N.WithCtrl, Command.New);
+        this.BindEverywhere(Key.N.WithCtrl, Command.New);
         AddCommand(Command.New, () =>
         {
             Close(new LauncherIntent(LauncherAction.AddProject));
             return true;
         });
 
-        this.Bind(Key.P.WithCtrl, Command.Open);
+        this.BindEverywhere(Key.P.WithCtrl, Command.Open);
 
         BindTheKeyboard();
         AddCommand(Command.Open, () => { _showPalette(this); return true; });
@@ -407,7 +407,7 @@ internal sealed class LauncherWindow : Window
         // Ctrl+Q and the arrows and F10 all work. A key that passes its test
         // and fails on the machine is worse than no key, so this is F2, which
         // was pressed in a real console before being written down.
-        this.Bind(Key.F2, Command.Edit);
+        this.BindEverywhere(Key.F2, Command.Edit);
 
         AddCommand(Command.Edit, () =>
         {
@@ -430,6 +430,20 @@ internal sealed class LauncherWindow : Window
         // slash or a question mark in it.
         foreach (var list in new[] { _list, _recentList }.OfType<KeyedListView>())
         {
+            // A list claims Ctrl+P and Ctrl+N for extending a selection across
+            // a range, and the launcher advertises both on its own status line
+            // for the command palette and for adding a project. The list wins:
+            // a window's bindings are not consulted while a child has the
+            // focus, and the list always has it. So both keys did nothing but
+            // nudge the highlight, on a screen that says they do something
+            // else.
+            //
+            // Given away rather than worked around. These lists are
+            // single-select, so extending a range is not a thing they can do,
+            // and taking the bindings off is what lets the window see the keys.
+            list.KeyBindings.Remove(Key.P.WithCtrl);
+            list.KeyBindings.Remove(Key.N.WithCtrl);
+
             list.Bind(Key.J, Command.Down);
             list.Bind(Key.K, Command.Up);
 
