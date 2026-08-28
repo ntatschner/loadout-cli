@@ -3,6 +3,14 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- The six shipped runtimes are declared once in Directory.Build.props so
+         a release publish can restore in locked mode. Nothing publishes the
+         tests, so they are cleared again here and this project's lock file
+         holds one target instead of seven. -->
+    <RuntimeIdentifiers />
+    <RuntimeIdentifier />
+    <SelfContained>false</SelfContained>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
