@@ -150,13 +150,41 @@ internal sealed class EditorService : IEditorService
         // Opened even when the profile is missing. The editor makes a profile
         // of that name rather than refusing, and an editor that opens in the
         // wrong profile is a smaller problem than one that will not open.
+        //
+        // The new window is not decoration. A profile asked for without it
+        // opens an empty frame with no workbench in it and no error anywhere:
+        // the folder is simply dropped. Typing the same command by hand looks
+        // like it works, because a terminal inside the editor hands the folder
+        // to the instance already running rather than starting one, and the
+        // fault only appears when the editor is started fresh — which is what
+        // the launcher always does.
         List<string> arguments = profile is null
             ? [directory]
-            : ["--profile", profile, directory];
+            : ["-n", "--profile", profile, directory];
 
-        var result = await _processes.RunAsync(
-            new ProcessRequest(editor.Path, arguments, directory),
-            ct: ct).ConfigureAwait(false);
+        var result = _processes.StartDetached(
+            new ProcessRequest(
+                editor.Path,
+                arguments,
+
+                // No working directory. The folder is already an argument, so
+                // there is nothing to gain, and starting the editor *inside* the
+                // folder it is being asked to open is the one difference left
+                // between this call and the same call by hand that works.
+                WorkingDirectory: null,
+
+                // Opened from a terminal the editor owns, the editor hands us a
+                // copy of its own private environment, and passing that back to
+                // a new instance breaks it. VS Code sets ELECTRON_RUN_AS_NODE=1
+                // for its command line shim, so the copy we inherit makes the
+                // editor we start run as Node: it read the folder as a module
+                // path and answered "Cannot find module".
+                //
+                // Nothing about the arguments was ever wrong, which is what made
+                // this hard to see. Four explanations were tried and disproved by
+                // capturing what the shim actually received — the same three
+                // arguments every time.
+                RemoveEnvironmentPrefixes: ["VSCODE_", "ELECTRON_", "CHROME_"]));
 
         return result.Succeeded
             ? OperationResult.Ok()

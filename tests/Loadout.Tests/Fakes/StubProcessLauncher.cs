@@ -44,6 +44,18 @@ public sealed class StubProcessLauncher : IProcessLauncher
         CancellationToken ct = default) =>
         throw new NotSupportedException(
             "Nothing in these tests launches an interactive process.");
+
+    /// <summary>What was last started detached, for a test to inspect.</summary>
+    public ProcessRequest? Detached { get; private set; }
+
+    /// <inheritdoc />
+    public OperationResult StartDetached(ProcessRequest request)
+    {
+        Detached = request;
+        Requests.Add(request);
+
+        return OperationResult.Ok();
+    }
 }
 
 /// <summary>An executable resolver that answers with one fixed path, or with nothing.</summary>

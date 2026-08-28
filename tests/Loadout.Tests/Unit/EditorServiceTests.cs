@@ -115,6 +115,57 @@ public sealed class EditorServiceTests
         public IReadOnlyList<string> StandardSearchPaths => [];
     }
 
+
+    [Fact]
+    public async Task Opening_under_a_profile_forces_a_new_window()
+    {
+        var processes = new Loadout.Tests.Fakes.StubProcessLauncher(string.Empty);
+
+        var service = new Loadout.Core.Editors.EditorService(
+            new Loadout.Tests.Fakes.StubResolver("C:/fake/code"), processes);
+
+        await service.OpenAsync(Config(("claude", "Agents")), Project(), "C:/work/alpha");
+
+        var request = processes.Detached;
+
+        request.Should().NotBeNull("the editor is started detached, not run to completion");
+
+        // Every one of these was established by trying the alternative and
+        // watching it fail, so each is worth holding down.
+        request!.Arguments.Should().Equal("-n", "--profile", "Agents", "C:/work/alpha");
+
+        // A profile asked for without a new window opens an empty frame with no
+        // workbench and no error. It looks like it works when typed by hand,
+        // because a terminal inside the editor hands the folder to the running
+        // instance instead of starting one.
+        request.Arguments[0].Should().Be("-n");
+
+        // The editor's own variables are withheld. VS Code sets
+        // ELECTRON_RUN_AS_NODE for its shim, and a copy of that makes the editor
+        // we start run as Node and read the folder as a module path.
+        request.RemoveEnvironmentPrefixes.Should().Contain("ELECTRON_");
+        request.RemoveEnvironmentPrefixes.Should().Contain("VSCODE_");
+
+        // Not started inside the folder it is opening. The folder is already an
+        // argument, and there is nothing to gain from it.
+        request.WorkingDirectory.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Opening_without_a_profile_passes_only_the_folder()
+    {
+        var processes = new Loadout.Tests.Fakes.StubProcessLauncher(string.Empty);
+
+        var service = new Loadout.Core.Editors.EditorService(
+            new Loadout.Tests.Fakes.StubResolver("C:/fake/code"), processes);
+
+        await service.OpenAsync(Config(), Project(), "C:/work/alpha");
+
+        // No profile means no reason to force a window, so somebody who does not
+        // use profiles gets the editor they always get.
+        processes.Detached!.Arguments.Should().Equal("C:/work/alpha");
+    }
+
     private sealed class StubProcesses : Loadout.Platform.Abstractions.IProcessLauncher
     {
         public Task<Loadout.Models.Results.OperationResult<Loadout.Platform.Abstractions.ProcessOutcome>> RunAsync(
@@ -126,6 +177,10 @@ public sealed class EditorServiceTests
         public Task<Loadout.Models.Results.OperationResult<int>> RunInteractiveAsync(
             Loadout.Platform.Abstractions.ProcessRequest request,
             CancellationToken ct = default) =>
+            throw new NotSupportedException("These tests never start anything.");
+
+        public Loadout.Models.Results.OperationResult StartDetached(
+            Loadout.Platform.Abstractions.ProcessRequest request) =>
             throw new NotSupportedException("These tests never start anything.");
     }
 }

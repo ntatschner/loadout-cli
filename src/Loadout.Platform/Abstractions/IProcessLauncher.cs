@@ -22,6 +22,17 @@ public sealed record ProcessOutcome(int ExitCode, string StandardOutput, string 
 /// Variables added or overridden for the child only. Spec section 32 requires
 /// CODEX_HOME to reach the child without altering the launcher's own environment.
 /// </param>
+/// <param name="RemoveEnvironmentPrefixes">
+/// Variable names beginning with any of these are withheld from the child.
+/// <para>
+/// Launching an application from inside a terminal that application owns hands
+/// it a copy of its own private environment, and some of that is poison.
+/// VS Code sets ELECTRON_RUN_AS_NODE=1 for its command line shim, so a VS Code
+/// started from a VS Code terminal runs as Node, reads the folder it was asked
+/// to open as a module path, and comes up as a blank window with no workbench
+/// in it. The arguments were right the whole way down; the environment was not.
+/// </para>
+/// </param>
 /// <param name="StandardInput">
 /// Text piped to the child's stdin, then closed. This is how secret values
 /// reach a credential tool: passing one as a command-line argument would
@@ -34,7 +45,8 @@ public sealed record ProcessRequest(
     IReadOnlyList<string> Arguments,
     string? WorkingDirectory = null,
     IReadOnlyDictionary<string, string>? Environment = null,
-    string? StandardInput = null);
+    string? StandardInput = null,
+    IReadOnlyList<string>? RemoveEnvironmentPrefixes = null);
 
 /// <summary>Starts child processes (spec section 8).</summary>
 public interface IProcessLauncher
@@ -61,4 +73,21 @@ public interface IProcessLauncher
     Task<OperationResult<int>> RunInteractiveAsync(
         ProcessRequest request,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Starts a process and returns without waiting for it, giving it neither
+    /// a captured output stream nor a suppressed window. For opening a
+    /// graphical application.
+    /// </summary>
+    /// <remarks>
+    /// Opening an editor through <see cref="RunAsync"/> looked reasonable and
+    /// was not: that method captures output and suppresses the window, because
+    /// it exists for short questions like a git query. VS Code launched that
+    /// way came up as a blank frame with no workbench in it, and the same call
+    /// with no redirection and no suppressed window opened the folder.
+    ///
+    /// Waiting is wrong here too. An editor outlives the launcher that started
+    /// it, and there is no exit code worth having.
+    /// </remarks>
+    OperationResult StartDetached(ProcessRequest request);
 }

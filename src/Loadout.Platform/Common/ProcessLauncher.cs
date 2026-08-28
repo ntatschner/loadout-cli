@@ -135,6 +135,40 @@ public sealed class ProcessLauncher : IProcessLauncher
         return OperationResult<int>.Ok(process.ExitCode);
     }
 
+    /// <inheritdoc />
+    public OperationResult StartDetached(ProcessRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var startInfo = BuildStartInfo(request);
+
+        // Everything here is the opposite of RunAsync on purpose, and each part
+        // of it was established by trying the alternative: nothing redirected,
+        // no window suppressed, and no wait. An editor opened with its output
+        // captured and its window suppressed came up as an empty frame with no
+        // workbench in it.
+        startInfo.UseShellExecute = false;
+        startInfo.RedirectStandardOutput = false;
+        startInfo.RedirectStandardError = false;
+        startInfo.RedirectStandardInput = false;
+        startInfo.CreateNoWindow = false;
+
+        try
+        {
+            using var process = Process.Start(startInfo);
+
+            return process is null
+                ? OperationResult.Fail(
+                    $"'{request.Executable}' did not start.", ExitCode.GeneralFailure)
+                : OperationResult.Ok();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return OperationResult.Fail(
+                $"Could not start '{request.Executable}': {ex.Message}", ExitCode.GeneralFailure);
+        }
+    }
+
     private static ProcessStartInfo BuildStartInfo(ProcessRequest request)
     {
         var startInfo = new ProcessStartInfo
@@ -156,6 +190,23 @@ public sealed class ProcessLauncher : IProcessLauncher
             foreach (var (key, value) in request.Environment)
             {
                 startInfo.Environment[key] = value;
+            }
+        }
+
+        // Withheld before the additions above are applied would be wrong: a
+        // caller that removes a prefix and sets one variable under it means the
+        // one it set.
+        if (request.RemoveEnvironmentPrefixes is { Count: > 0 } prefixes)
+        {
+            var doomed = startInfo.Environment.Keys
+                .Where(key => prefixes.Any(
+                    prefix => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    && !(request.Environment?.ContainsKey(key) ?? false))
+                .ToList();
+
+            foreach (var key in doomed)
+            {
+                startInfo.Environment.Remove(key);
             }
         }
 
