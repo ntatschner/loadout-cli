@@ -35,7 +35,7 @@
     <PackageVersion Include="Spectre.Console" Version="0.51.1" />
     <PackageVersion Include="Spectre.Console.Cli" Version="0.51.1" />
     <PackageVersion Include="Terminal.Gui" Version="2.4.17" />
-    <PackageVersion Include="YamlDotNet" Version="16.3.0" />
+    <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
   <!-- Test-only. -->
