@@ -68,6 +68,11 @@ internal enum LauncherAction
 /// What to run, for <see cref="LauncherAction.Command"/>. The same string
 /// somebody would have typed, so the parser can take it unaltered.
 /// </param>
+/// <param name="Options">
+/// What a launch was asked to do beyond which project and which agent: the task
+/// it is for, the mode to work in, and whether to stay offline. Null means the
+/// defaults, which is what pressing Enter on a project gives.
+/// </param>
 /// <param name="SessionId">
 /// Which previous conversation to reopen, for
 /// <see cref="LauncherAction.Resume"/>. Null means "let the picker ask",
@@ -78,7 +83,8 @@ internal sealed record LauncherIntent(
     ProjectResolution? Project = null,
     string? Agent = null,
     string? CommandPath = null,
-    string? SessionId = null)
+    string? SessionId = null,
+    LaunchOptions? Options = null)
 {
     /// <summary>Closing the launcher without asking for anything.</summary>
     internal static readonly LauncherIntent Quit = new(LauncherAction.Quit);

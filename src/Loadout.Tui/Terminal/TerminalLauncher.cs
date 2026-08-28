@@ -296,7 +296,7 @@ public sealed class TerminalLauncher : ILauncherTui
                 return (int)ExitCode.Success;
 
             case LauncherAction.Launch when intent.Project is { } project:
-                return await LaunchAsync(project, intent.Agent, ct).ConfigureAwait(false);
+                return await LaunchAsync(project, intent.Agent, intent.Options, ct).ConfigureAwait(false);
 
             case LauncherAction.Shell when intent.Project?.LocalPath is { } path:
                 return await OpenShellAsync(path, ct).ConfigureAwait(false);
@@ -758,6 +758,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private async Task<int?> LaunchAsync(
         ProjectResolution project,
         string? agent,
+        LaunchOptions? options,
         CancellationToken ct)
     {
         var agentName = agent ?? project.Entry.DefaultAgent;
@@ -765,8 +766,18 @@ public sealed class TerminalLauncher : ILauncherTui
         var profile = await ChooseProfileAsync(project.Entry.Slug, agentName, ct)
             .ConfigureAwait(false);
 
+        // Everything the screen was asked for reaches the same request the
+        // command line builds. The task and the mode are the ones that matter:
+        // they are what the resolver reads to choose specialists.
         var result = await _launcher.LaunchAsync(
-            new LaunchRequest(project.Entry.Slug, agentName, Profile: profile),
+            new LaunchRequest(
+                project.Entry.Slug,
+                agentName,
+                Offline: options?.Offline ?? false,
+                NoSync: options?.NoSync ?? false,
+                Profile: profile,
+                Task: options?.Task,
+                Mode: options?.Mode),
             ct).ConfigureAwait(false);
 
         if (result.Failed)

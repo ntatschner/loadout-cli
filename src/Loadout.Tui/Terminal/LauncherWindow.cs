@@ -289,6 +289,14 @@ internal sealed class LauncherWindow : Window
                 new MenuItem { Title = "_Launch", Action = LaunchSelected },
                 new MenuItem
                 {
+                    // The options a launch can carry that Enter cannot. Task
+                    // and mode are what select the specialists, so this is the
+                    // only way from a screen to say what a session is for.
+                    Title = "Launch with _options...",
+                    Action = LaunchWithOptions,
+                },
+                new MenuItem
+                {
                     Title = "_Resume a session",
                     Action = () => WithSelected(p => Close(new LauncherIntent(LauncherAction.Resume, p))),
                 },
@@ -980,6 +988,48 @@ internal sealed class LauncherWindow : Window
 
         Close(new LauncherIntent(
             LauncherAction.Launch, project, project.Entry.DefaultAgent));
+    }
+
+    /// <summary>
+    /// Asks what the session is for, then launches with the answer.
+    /// </summary>
+    /// <remarks>
+    /// A launch carries fourteen things and Enter fills three. The task and the
+    /// mode are what choose the specialists an agent is given, so without this
+    /// the screen could start a session but never say what it was for, while
+    /// the command line could — which made the screen a subset of it.
+    /// </remarks>
+    private void LaunchWithOptions()
+    {
+        if (Selected is not { } project)
+        {
+            return;
+        }
+
+        if (!project.IsAvailableLocally)
+        {
+            Say($"{project.Entry.Name} is not on this machine. "
+                + "Registry ▸ Clone onto this machine.");
+
+            return;
+        }
+
+        using var dialog = new LaunchOptionsDialog(project.Entry.Name, _application);
+
+        _application.Run(dialog);
+
+        // Dismissed means dismissed. Launching with the defaults because a
+        // dialog was closed would start a session nobody asked for.
+        if (dialog.Chosen is not { } options)
+        {
+            return;
+        }
+
+        Close(new LauncherIntent(
+            LauncherAction.Launch,
+            project,
+            project.Entry.DefaultAgent,
+            Options: options));
     }
 
     /// <summary>

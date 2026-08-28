@@ -149,8 +149,14 @@ public static class SpecialistScaffold
                 break;
 
             case SpecialistKind.Mode:
-                text.AppendLine("modes:");
-                text.AppendLine(CultureInfo.InvariantCulture, $"  - {name.ToLowerInvariant()}");
+                // Nothing. A mode is reached by its own name — asking for
+                // 'review' loads 'mode.review' — so it needs no activation to
+                // be found.
+                //
+                // Not a 'modes:' list, which means the opposite: it restricts a
+                // specialist to the modes it applies in. Putting one here would
+                // scope the review mode to review mode, which is true, useless,
+                // and teaches the next person the wrong thing about the field.
                 break;
 
             case SpecialistKind.Language:
@@ -192,6 +198,19 @@ public static class SpecialistScaffold
             text.AppendLine("## When to stop");
             text.AppendLine();
             text.AppendLine("What finishing looks like, so the agent knows it is done.");
+
+            return;
+        }
+
+        if (kind is SpecialistKind.Mode)
+        {
+            text.AppendLine("## How to work");
+            text.AppendLine();
+            text.AppendLine("What this mode changes about the approach. Chosen by name, so a launch");
+            text.AppendLine("asking for this mode loads it and nothing else has to point at it.");
+            text.AppendLine();
+            text.AppendLine("Say what it rules out as well as what it asks for. A mode that only adds");
+            text.AppendLine("is one an agent can satisfy while doing what it was going to anyway.");
 
             return;
         }

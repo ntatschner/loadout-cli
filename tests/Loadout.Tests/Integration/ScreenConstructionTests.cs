@@ -738,4 +738,101 @@ public sealed class ScreenConstructionTests
         window.Intent.Should().NotBeNull();
         window.Intent!.Action.Should().Be(LauncherAction.AddProject);
     }
+
+    [Fact]
+    public void The_launch_options_dialog_can_be_built_and_drawn()
+    {
+        Drawn(app => new LaunchOptionsDialog("Alpha", app));
+    }
+
+    [Fact]
+    public void Launching_carries_the_task_and_the_mode_that_were_chosen()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var dialog = new LaunchOptionsDialog("Alpha", app);
+
+        app.Begin(dialog);
+        app.LayoutAndDraw();
+
+        var task = AllViews(dialog).OfType<TextField>().Single();
+        task.Text = "why is this query so slow";
+
+        // Index zero is "let the task decide", so this picks investigate.
+        var modes = AllViews(dialog).OfType<ListView>().Single();
+        modes.SelectedItem = 3;
+
+        var offline = AllViews(dialog).OfType<CheckBox>()
+            .Single(c => (c.Text ?? string.Empty).Contains("offline", StringComparison.OrdinalIgnoreCase));
+
+        offline.Value = CheckState.Checked;
+
+        var launch = AllViews(dialog).OfType<Button>()
+            .Single(b => (b.Text ?? string.Empty).Contains("Launch", StringComparison.Ordinal));
+
+        launch.SetFocus();
+        launch.NewKeyDownEvent(Key.Enter);
+
+        // These two are the point of the dialog: they are what the resolver
+        // reads to choose specialists, and neither could be reached from a
+        // screen before.
+        dialog.Chosen.Should().NotBeNull();
+        dialog.Chosen!.Task.Should().Be("why is this query so slow");
+        dialog.Chosen.Mode.Should().Be("investigate");
+        dialog.Chosen.Offline.Should().BeTrue();
+        dialog.Chosen.NoSync.Should().BeFalse();
+    }
+
+    [Fact]
+    public void An_empty_task_is_no_task_rather_than_an_empty_one()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var dialog = new LaunchOptionsDialog("Alpha", app);
+
+        app.Begin(dialog);
+        app.LayoutAndDraw();
+
+        var launch = AllViews(dialog).OfType<Button>()
+            .Single(b => (b.Text ?? string.Empty).Contains("Launch", StringComparison.Ordinal));
+
+        launch.SetFocus();
+        launch.NewKeyDownEvent(Key.Enter);
+
+        // An empty string would be a task, and the resolver would go looking
+        // for specialists matching nothing.
+        dialog.Chosen.Should().NotBeNull();
+        dialog.Chosen!.Task.Should().BeNull();
+        dialog.Chosen.Mode.Should().BeNull("index zero means no mode was chosen");
+    }
+
+    [Fact]
+    public void Dismissing_the_dialog_launches_nothing()
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        using var dialog = new LaunchOptionsDialog("Alpha", app);
+
+        app.Begin(dialog);
+        app.LayoutAndDraw();
+
+        var cancel = AllViews(dialog).OfType<Button>()
+            .Single(b => (b.Text ?? string.Empty).Contains("ance", StringComparison.Ordinal));
+
+        cancel.SetFocus();
+        cancel.NewKeyDownEvent(Key.Enter);
+
+        // Starting a session with the defaults because a dialog was closed
+        // would be starting one nobody asked for.
+        dialog.Chosen.Should().BeNull();
+    }
 }

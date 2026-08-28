@@ -161,3 +161,38 @@ public sealed class SpecialistScaffoldTests
         draft.FileName.Should().Be("deploy-checklist.md");
     }
 }
+
+/// <summary>
+/// The modes the launcher offers are modes the library answers to.
+/// </summary>
+/// <remarks>
+/// A screen offering "investigate" when nothing activates on it would be a
+/// choice that silently does nothing — the same shape as a command palette that
+/// lists commands and runs none of them, which this launcher shipped.
+/// </remarks>
+public sealed class LaunchModeSeamTests
+{
+    [Fact]
+    public async Task Every_mode_the_launcher_offers_is_one_a_specialist_answers_to()
+    {
+        var catalogue = await new SpecialistLibrary().LoadAsync(workspaceRoot: null);
+
+        // Matched by identifier rather than by an activation list. A 'modes:'
+        // list means the opposite — it restricts a specialist to the modes it
+        // applies in — and asking for a mode nothing answers to falls back to
+        // the default without saying so, which is why this is worth a test.
+        var known = catalogue.Specialists.Values
+            .Where(s => s.Kind == SpecialistKind.Mode)
+            .Select(s => s.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        known.Should().NotBeEmpty("the library ships modes");
+
+        // The first entry is "no mode", which is deliberately not one.
+        foreach (var mode in Loadout.Tui.Terminal.LaunchOptionsDialog.Modes.Skip(1))
+        {
+            known.Should().Contain($"mode.{mode}",
+                $"the launcher offers '{mode}', so 'mode.{mode}' has to exist");
+        }
+    }
+}
