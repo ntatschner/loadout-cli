@@ -261,6 +261,18 @@ public static class Program
             return (int)ExitCode.InvalidArguments;
         }
 
+        // Registers the commands, which is what fills the launcher's command
+        // list. Nothing else on this path does it: the parser is configured
+        // only when there are arguments to parse, and running "loadout" with
+        // none goes straight to the screen. So the palette opened holding
+        // nothing, said nothing about why, and left the launcher looking like a
+        // way into a tool with no commands.
+        //
+        // Cheap and safe to do here. Registration records names and resolves no
+        // services, and the catalogue ignores a path it already holds, so the
+        // parser configuring itself again later costs nothing.
+        _ = CommandNames();
+
         // A machine that has never been configured gets the wizard rather than
         // an empty project list, which would leave a new user with nothing to
         // do and no hint about what to do next (spec section 61).
