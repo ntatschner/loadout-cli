@@ -50,7 +50,7 @@
          open-source dependency for one this project cannot ship under.
          build/licences.ps1 fails the build if it ever does. This was the one
          package already pinned before the rest of them were. -->
-    <PackageVersion Include="FluentAssertions" Version="6.12.2" />
+    <PackageVersion Include="FluentAssertions" Version="7.2.2" />
   </ItemGroup>
 
 </Project>
