@@ -343,6 +343,11 @@ internal sealed class LauncherWindow : Window
             new MenuBarItem("_Registry", [
                 new MenuItem
                 {
+                    Title = "_New project…",
+                    Action = NewProject,
+                },
+                new MenuItem
+                {
                     Title = "_Add a project…",
                     Action = () => Close(new LauncherIntent(LauncherAction.AddProject)),
                 },
@@ -999,6 +1004,44 @@ internal sealed class LauncherWindow : Window
     /// the screen could start a session but never say what it was for, while
     /// the command line could — which made the screen a subset of it.
     /// </remarks>
+    /// <summary>
+    /// Asks what to create, then hands the answer to the command line.
+    /// </summary>
+    /// <remarks>
+    /// The dialog collects; the command creates. Nothing here initialises a
+    /// repository or writes a project definition, because a screen that did its
+    /// own version of that would be a second implementation to keep in step
+    /// with the one the command line runs.
+    /// </remarks>
+    private void NewProject()
+    {
+        var slugs = _projects.Select(p => p.Entry.Slug).ToList();
+
+        using var dialog = new NewProjectDialog(slugs, _application);
+
+        _application.Run(dialog);
+
+        if (dialog.Chosen is not { } request)
+        {
+            return;
+        }
+
+        // Quoted, because a display name is prose and usually has spaces in it.
+        var command = $"{LauncherCommands.NewProject} \"{request.Name}\"";
+
+        if (request.Template is { Length: > 0 } template)
+        {
+            command += $" --from {template}";
+        }
+
+        if (request.Path is { Length: > 0 } path)
+        {
+            command += $" --path \"{path}\"";
+        }
+
+        RunCommand(command);
+    }
+
     private void LaunchWithOptions()
     {
         if (Selected is not { } project)

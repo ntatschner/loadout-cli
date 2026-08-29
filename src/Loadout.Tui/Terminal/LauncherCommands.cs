@@ -28,6 +28,9 @@ internal static class LauncherCommands
     /// <summary>Fetches a registered project that is not on this machine yet.</summary>
     internal const string Clone = "project clone";
 
+    /// <summary>Creates a project that does not exist yet, optionally from a template.</summary>
+    internal const string NewProject = "project new";
+
     /// <summary>Explains which specialists a project's next launch would load.</summary>
     internal const string Instructions = "instructions explain";
 
@@ -35,5 +38,6 @@ internal static class LauncherCommands
     internal const string Usage = "usage";
 
     /// <summary>Every one of them, for the test that checks they are real.</summary>
-    internal static IReadOnlyList<string> All => [Editor, Resume, Clone, Instructions, Usage];
+    internal static IReadOnlyList<string> All =>
+        [Editor, Resume, Clone, NewProject, Instructions, Usage];
 }

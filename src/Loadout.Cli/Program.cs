@@ -534,6 +534,7 @@ public static class Program
                 CommandCategory.Projects,
                 "register add remove list repositories");
             project.AddCommand<ProjectListCommand>("list");
+            project.AddCommand<ProjectNewCommand>("new");
             project.AddCommand<ProjectAddCommand>("add");
             project.AddCommand<ProjectRemoveCommand>("remove");
             project.AddCommand<ProjectDiscoverCommand>("discover");
