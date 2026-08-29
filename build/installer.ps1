@@ -113,8 +113,11 @@ if ($Runtime.StartsWith('win-')) {
     # install on arm64, which is better than installing and then not running.
     $platform = if ($Runtime -eq 'win-arm64') { 'arm64' } else { 'x64' }
 
+    # The Util extension supplies WixQuietExec, which is how the launcher is
+    # closed without a console window appearing mid-install.
     & wix build (Join-Path $PSScriptRoot 'windows/loadout.wxs') `
         -arch $platform `
+        -ext WixToolset.Util.wixext `
         -define "Version=$Version" `
         -define "PublishDir=$payload" `
         -define "IconPath=$(Join-Path $PSScriptRoot 'icon/loadout.ico')" `

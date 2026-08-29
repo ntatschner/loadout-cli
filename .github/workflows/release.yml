@@ -232,9 +232,15 @@ jobs:
       # Source Maintenance Fee agreement, which is a decision for whoever owns
       # this project rather than something a build script should accept on
       # their behalf. Version 5 is MIT and asks for nothing.
+      # The Util extension is a separate install from the tool itself, and is
+      # pinned to the same version: WixQuietExec comes from it, and without it
+      # the package does not build at all rather than quietly building one that
+      # flashes a console window during install.
       - name: Install WiX
         if: startsWith(matrix.rid, 'win-')
-        run: dotnet tool install --global wix --version 5.0.2
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add --global WixToolset.Util.wixext/5.0.2
 
       - name: Install packaging tools
         if: startsWith(matrix.rid, 'linux-')

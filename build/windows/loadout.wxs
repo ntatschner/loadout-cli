@@ -78,9 +78,26 @@
     -->
     <StandardDirectory Id="System64Folder" />
 
+    <!--
+      Run through WixQuietExec rather than as a plain ExeCommand, which is
+      purely about what the person installing has to look at.
+
+      msiexec has no console of its own, so starting a console program from it
+      makes Windows create one, and taskkill is a console program: a black
+      window appears and disappears in the middle of the install. An upgrade
+      shows it twice, because the version being replaced runs its own copy of
+      this action on the way out. WixQuietExec starts the process with
+      CREATE_NO_WINDOW and captures its output into the MSI log instead, which
+      is the same work with nothing to see.
+    -->
+    <SetProperty Id="WixQuietExecCmdLine"
+                 Value="&quot;[System64Folder]taskkill.exe&quot; /F /IM loadout.exe"
+                 Before="CloseRunningLoadout"
+                 Sequence="execute" />
+
     <CustomAction Id="CloseRunningLoadout"
-                  Directory="System64Folder"
-                  ExeCommand="[System64Folder]taskkill.exe /F /IM loadout.exe"
+                  DllEntry="WixQuietExec"
+                  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
                   Execute="immediate"
                   Impersonate="yes"
                   Return="ignore" />
@@ -88,7 +105,9 @@
     <!--
       Return="ignore" because "no such process" is the ordinary case: taskkill
       exits 128 when the launcher was not running, and that must not fail an
-      install that had nothing to close.
+      install that had nothing to close. QuietExec turns a non-zero exit into a
+      failed action, so this attribute is doing more work here than it was
+      before, when the exit code was ignored anyway.
     -->
     <InstallExecuteSequence>
       <Custom Action="CloseRunningLoadout" Before="InstallValidate" />
