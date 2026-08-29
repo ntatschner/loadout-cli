@@ -126,14 +126,45 @@ public sealed class LoadoutProcess : IDisposable
                     .EnumerateFiles(cli, name, SearchOption.AllDirectories)
                     .ToList();
 
+                // Matching the runtime identifier is not enough on its own.
+                // Publishing leaves a RID directory behind whose assemblies
+                // differ from a plain build even when the source is identical,
+                // so once anybody has built an installer locally that copy is
+                // the one picked, EnsureCurrent compares it with the assembly
+                // beside these tests, finds two files that are not the same and
+                // declares the tree stale. It was never stale: it was a
+                // different build of the same code, and the whole suite failed
+                // on it twice in one afternoon.
+                //
+                // Choosing among the copies that match what these tests were
+                // compiled against makes the two agree by construction, and
+                // leaves the guard to catch what it was written for — a tree
+                // that genuinely has not been rebuilt, where nothing matches.
+                var mine = Path.Combine(AppContext.BaseDirectory, "loadout.dll");
+
+                var sameCode = File.Exists(mine)
+                    ? candidates.Where(path =>
+                        {
+                            var theirs = Path.Combine(
+                                Path.GetDirectoryName(path)!, "loadout.dll");
+
+                            return File.Exists(theirs) && Same(mine, theirs);
+                        }).ToList()
+                    : candidates;
+
+                // Falling back to everything when none match keeps the failure
+                // the guard's to report, with the path it looked at, rather
+                // than becoming "no command line found" here.
+                var preferred = sameCode.Count > 0 ? sameCode : candidates;
+
                 var current = System.Runtime.InteropServices.RuntimeInformation
                     .RuntimeIdentifier;
 
-                var matching = candidates.FirstOrDefault(path =>
+                var matching = preferred.FirstOrDefault(path =>
                     Path.GetFileName(Path.GetDirectoryName(path))
                         is { } rid && string.Equals(rid, current, StringComparison.OrdinalIgnoreCase));
 
-                var found = matching ?? candidates.FirstOrDefault();
+                var found = matching ?? preferred.FirstOrDefault();
 
                 if (found is not null)
                 {
