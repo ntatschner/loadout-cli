@@ -70,16 +70,37 @@ internal sealed class InstructionDiagnosticContributor : IDiagnosticContributor
 
             var rules = await _rules.LoadAsync(_workspace.LocalPath, slug, ct).ConfigureAwait(false);
 
-            if (rules.Succeeded)
-            {
-                var alwaysLoaded = rules.Value!
-                    .Where(r => r.AlwaysApply || r.IsUnscoped)
-                    .Sum(r => r.Bytes);
+            var alwaysLoaded = rules.Succeeded
+                ? rules.Value!.Where(r => r.AlwaysApply || r.IsUnscoped).Sum(r => r.Bytes)
+                : 0L;
 
-                if (alwaysLoaded > ComfortableAlwaysLoadedBytes)
-                {
-                    heavy.Add($"{slug} ({alwaysLoaded / 1024}KB)");
-                }
+            // The core files as well as the rules, which is the whole of what a
+            // session pays before it has done anything. Counting rules alone
+            // missed the larger half: an instructions.md grown to sixty
+            // kilobytes with no rules beside it reported a comfortable budget.
+            var manifest = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+            (string Path, long Bytes)? largest = null;
+
+            if (manifest.Succeeded)
+            {
+                largest = CoreInstructions.Largest(manifest.Value!, _workspace.LocalPath, slug);
+
+                alwaysLoaded += CoreInstructions
+                    .PathsFor(manifest.Value!, _workspace.LocalPath, slug)
+                    .Where(File.Exists)
+                    .Sum(path => new FileInfo(path).Length);
+            }
+
+            if (alwaysLoaded > ComfortableAlwaysLoadedBytes)
+            {
+                // Named down to the file. "Your instruction layer is large"
+                // leaves somebody to go and measure four files themselves to
+                // find which one it means.
+                heavy.Add(largest is { } biggest
+                    ? $"{slug} ({alwaysLoaded / 1024}KB, mostly "
+                        + $"{Path.GetFileName(biggest.Path)} at {biggest.Bytes / 1024}KB)"
+                    : $"{slug} ({alwaysLoaded / 1024}KB)");
             }
 
             var audit = await _memory.AuditAsync(_workspace.LocalPath, slug, ct: ct)
@@ -150,7 +171,10 @@ internal sealed class InstructionDiagnosticContributor : IDiagnosticContributor
                 Category,
                 "Instruction budget",
                 $"Loaded on every session regardless of the task: {string.Join(", ", heavy)}. "
-                + "Run: loadout rules budget <project>")
+                + "See what it is made of with: loadout rules budget <project>. Two things "
+                + "shrink it without losing anything: 'loadout rules split --from <file>' "
+                + "scopes sections to the paths they apply to, and 'loadout memory compress "
+                + "--file <file>' moves standing facts into memory, which loads by index.")
             : DiagnosticCheck.Ok(
                 Category, "Instruction budget", "No project loads an oversized instruction layer."));
 

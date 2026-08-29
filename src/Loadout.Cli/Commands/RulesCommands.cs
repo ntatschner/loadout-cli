@@ -59,34 +59,9 @@ public abstract class RulesCommandBase<TSettings> : AsyncCommand<TSettings>
             return [];
         }
 
-        var root = Workspace.LocalPath;
-        var projectRoot = Path.Combine(root, "projects", slug);
-
-        var paths = manifest.Value!.Context.Global
-            .Select(relative => Path.Combine(root, ToNative(relative)))
-            .Concat(manifest.Value.Context.Project
-                .Select(relative => Path.Combine(projectRoot, ToNative(relative))))
-            .ToList();
-
-        var agent = manifest.Value.Agents.Default;
-
-        if (!string.IsNullOrWhiteSpace(agent))
-        {
-            var agentInstructions = Path.Combine(projectRoot, "agents", agent, "instructions.md");
-
-            // Only when it exists. Most projects have none, and reporting its
-            // absence as a defect would be noise on every one of them.
-            if (File.Exists(agentInstructions))
-            {
-                paths.Add(agentInstructions);
-            }
-        }
-
-        return paths;
+        return Loadout.Core.Instructions.CoreInstructions.PathsFor(
+            manifest.Value!, Workspace.LocalPath, slug);
     }
-
-    private static string ToNative(string relative) =>
-        relative.Replace('/', Path.DirectorySeparatorChar);
 
     protected async Task<OperationResult<string>> ResolveSlugAsync(TSettings settings)
     {

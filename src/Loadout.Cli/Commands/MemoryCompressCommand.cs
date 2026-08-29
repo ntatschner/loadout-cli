@@ -24,6 +24,11 @@ public sealed class MemoryCompressSettings : GlobalSettings
     [Description("Fewest facts a heading must yield to become a topic. Defaults to 2.")]
     public int MinimumFacts { get; init; } = MemoryCompressor.MinimumFactsPerTopic;
 
+    [CommandOption("--file <FILE>")]
+    [Description(
+        "Instruction file to compress. Defaults to the project's agent instructions.")]
+    public string? File { get; init; }
+
     [CommandOption("--apply")]
     [Description("Write the topics and shorten the instruction file.")]
     public bool ApplyRequested { get; init; }
@@ -88,8 +93,16 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
         var slug = slugResult.Value!;
         var agent = settings.Agent is { Length: > 0 } named ? named : "claude";
 
-        var source = Path.Combine(
-            _workspace.LocalPath, "projects", slug, "agents", agent, "instructions.md");
+        // Any instruction file, not only the one this command was written for.
+        // The compressor never cared which file it read — it takes a path and
+        // always has — so the restriction lived here alone, and it left the
+        // largest always-loaded files in a workspace with no way to shrink
+        // them. Where the facts go is still decided by the project, because
+        // memory is per-project regardless of which file the facts came from.
+        var source = settings.File is { Length: > 0 } chosen
+            ? Path.GetFullPath(chosen)
+            : Path.Combine(
+                _workspace.LocalPath, "projects", slug, "agents", agent, "instructions.md");
 
         var planResult = settings.Apply
             ? await _compressor
