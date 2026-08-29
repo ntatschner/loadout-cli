@@ -35,7 +35,12 @@ param(
     [Parameter(Mandatory)]
     [string] $Msi,
 
-    [string] $PreviousVersion
+    [string] $PreviousVersion,
+
+    # Well inside both the step timeout and the job timeout, so this fires
+    # first and the step fails with a log rather than the job being cancelled
+    # without one.
+    [int] $WatchdogMinutes = 12
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,6 +50,53 @@ $installed = Join-Path $env:LOCALAPPDATA 'Programs\loadout\bin\loadout.exe'
 $logs = Join-Path ([System.IO.Path]::GetTempPath()) 'loadout-install-logs'
 
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
+
+# A deadline that does not depend on this script being able to act on it.
+#
+# Every wait below is bounded, and five releases have still stalled here with
+# nothing to read. Bounding a wait is not enough: when one expires the script
+# calls Kill and only then throws, and Kill blocks in turn when the process is
+# wedged inside the installer service, so the throw never arrives. The runner
+# then asks the step to stop, whatever is stuck does not answer, the job times
+# out, and a cancelled job uploads no logs at all.
+#
+# So the deadline is enforced from a second runspace. It shares the process but
+# not the blocked thread, which means it still runs when the main thread is
+# inside a native call nothing can interrupt, and Environment.Exit takes the
+# process down from under it. The step then fails, and a failed step keeps its
+# log — which is the whole thing that four previous investigations lacked.
+$watchdog = [powershell]::Create()
+$watchdog.Runspace = [runspacefactory]::CreateRunspace()
+$watchdog.Runspace.Open()
+$watchdog.Runspace.SessionStateProxy.SetVariable(
+    'deadline', [DateTime]::UtcNow.AddMinutes($WatchdogMinutes))
+$watchdog.Runspace.SessionStateProxy.SetVariable(
+    'progressPath', (Join-Path $logs 'progress.log'))
+$watchdog.Runspace.SessionStateProxy.SetVariable('allowed', $WatchdogMinutes)
+
+[void]$watchdog.AddScript({
+    while ([DateTime]::UtcNow -lt $deadline) {
+        Start-Sleep -Seconds 5
+    }
+
+    # Written straight to the console handle rather than through Write-Host,
+    # which belongs to the other runspace's host and would be lost here.
+    [Console]::Out.WriteLine(
+        "--- watchdog: the install check did not finish within $allowed minutes ---")
+
+    if (Test-Path $progressPath) {
+        [Console]::Out.WriteLine('--- phases reached ---')
+        [Console]::Out.WriteLine((Get-Content $progressPath -Raw))
+    }
+
+    [Console]::Out.WriteLine(
+        '--- the phase above is the one that never came back ---')
+    [Console]::Out.Flush()
+
+    [Environment]::Exit(2)
+})
+
+[void]$watchdog.BeginInvoke()
 
 <#
 .SYNOPSIS
