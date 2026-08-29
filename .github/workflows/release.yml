@@ -299,14 +299,15 @@ jobs:
         run: |
           $msi = Get-ChildItem artifacts/*win-x64.msi | Select-Object -First 1
 
-          # Upgraded over the last release rather than installed fresh, because
-          # a fresh install has never been the thing that broke.
-          $previous = (gh release list --repo ${{ github.repository }} --limit 5 --json tagName `
-            | ConvertFrom-Json |
-              Where-Object { $_.tagName -ne '${{ github.ref_name }}' } |
-              Select-Object -First 1).tagName -replace '^v', ''
-
-          ./build/verify-windows-install.ps1 -Msi $msi.FullName -PreviousVersion $previous
+          # Which release to upgrade from is worked out inside the script, not
+          # here. Asked for inline it was an unbounded network call sitting in
+          # front of everything the script bounds, and five releases stalled in
+          # it: the job timed out, was cancelled, uploaded no logs, and the
+          # phase file was empty because the script had never started.
+          ./build/verify-windows-install.ps1 `
+            -Msi $msi.FullName `
+            -Repository '${{ github.repository }}' `
+            -CurrentTag '${{ github.ref_name }}'
 
       # Runs even when the step above was cancelled, which is the only way a
       # stall there leaves anything behind. Four releases have stalled in it and

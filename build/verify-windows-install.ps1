@@ -37,6 +37,12 @@ param(
 
     [string] $PreviousVersion,
 
+    # Asked of GitHub through the bounded runner below when no version is
+    # given, because the caller asking inline is what hung.
+    [string] $Repository,
+
+    [string] $CurrentTag,
+
     # Well inside both the step timeout and the job timeout, so this fires
     # first and the step fails with a log rather than the job being cancelled
     # without one.
@@ -327,6 +333,35 @@ if ($existing) {
 }
 
 Step 'Decks cleared.'
+
+# Worked out here rather than by the workflow step that calls this.
+#
+# The step used to ask 'gh release list' for it inline, with no deadline on the
+# call, and that turned out to be where five releases stalled: the hang was
+# ahead of this script rather than inside it, which is why bounding every wait
+# below never helped and why the phase log was always empty. Asked for here, it
+# goes through the same bounded runner as every other tool call.
+if (-not $PreviousVersion -and $Repository) {
+    Step 'Asking which release to upgrade from...'
+
+    Invoke-BoundedTool 'previous-release' 'gh' @(
+        'release', 'list', '--repo', $Repository, '--limit', '5', '--json', 'tagName')
+
+    $listed = Get-Content (Join-Path $logs 'previous-release.out') -Raw -ErrorAction SilentlyContinue
+
+    if ($listed) {
+        $PreviousVersion = ($listed | ConvertFrom-Json |
+            Where-Object { $_.tagName -ne $CurrentTag } |
+            Select-Object -First 1).tagName -replace '^v', ''
+    }
+
+    if ($PreviousVersion) {
+        Step "Upgrading from $PreviousVersion."
+    }
+    else {
+        Step 'No earlier release to upgrade from; checking a fresh install only.'
+    }
+}
 
 if ($PreviousVersion) {
     Write-Host "Installing $PreviousVersion first, so the upgrade path is the one under test..."
