@@ -135,6 +135,12 @@ public sealed class ProcessLauncher : IProcessLauncher
         return OperationResult<int>.Ok(process.ExitCode);
     }
 
+    /// <summary>
+    /// How long to let a launcher shim finish handing over before going on.
+    /// Long enough for a slow disk, short enough not to be noticed.
+    /// </summary>
+    private const int HandoverTimeout = 15_000;
+
     /// <inheritdoc />
     public OperationResult StartDetached(ProcessRequest request)
     {
@@ -155,12 +161,28 @@ public sealed class ProcessLauncher : IProcessLauncher
 
         try
         {
-            using var process = Process.Start(startInfo);
+            var process = Process.Start(startInfo);
 
-            return process is null
-                ? OperationResult.Fail(
-                    $"'{request.Executable}' did not start.", ExitCode.GeneralFailure)
-                : OperationResult.Ok();
+            if (process is null)
+            {
+                return OperationResult.Fail(
+                    $"'{request.Executable}' did not start.", ExitCode.GeneralFailure);
+            }
+
+            // Waited for, despite the name. What is started here is usually a
+            // shim rather than the application: 'code' on Windows is a batch
+            // file that hands the folder to the editor and returns, and the
+            // editor outlives both. Letting the launcher exit while that
+            // handover is still in flight is the difference between the editor
+            // opening the folder and coming up as an empty frame.
+            //
+            // Bounded, because a command that does not return must not hold the
+            // launcher: the wait is abandoned rather than the process killed,
+            // since the thing being started is meant to outlive us.
+            process.WaitForExit(HandoverTimeout);
+            process.Dispose();
+
+            return OperationResult.Ok();
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {

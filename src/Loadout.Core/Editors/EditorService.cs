@@ -145,33 +145,48 @@ internal sealed class EditorService : IEditorService
                 ExitCode.GeneralFailure);
         }
 
-        var profile = ProfileFor(config, project, agent);
-
-        // Opened even when the profile is missing. The editor makes a profile
-        // of that name rather than refusing, and an editor that opens in the
-        // wrong profile is a smaller problem than one that will not open.
+        // The folder, and deliberately nothing else.
         //
-        // The new window is not decoration. A profile asked for without it
-        // opens an empty frame with no workbench in it and no error anywhere:
-        // the folder is simply dropped. Typing the same command by hand looks
-        // like it works, because a terminal inside the editor hands the folder
-        // to the instance already running rather than starting one, and the
-        // fault only appears when the editor is started fresh — which is what
-        // the launcher always does.
-        List<string> arguments = profile is null
-            ? [directory]
-            : ["-n", "--profile", profile, directory];
+        // Asking for a profile stops the folder opening at all: the editor
+        // comes up as a window with no folder and no workbench in it, and says
+        // nothing about why. It is not the handoff to a running instance, a
+        // second instance, the inherited environment, the working directory or
+        // the new-window flag — each of those was suspected, and each was
+        // cleared by testing it. It is --profile itself, and bisecting the
+        // command line separates it cleanly:
+        //
+        //     code --profile <name> <folder>      window, no folder
+        //     code -n --profile <name> <folder>   window, no folder
+        //     code <folder> --profile <name>      window, no folder
+        //     code <folder>                       opens
+        //     code -n <folder>                    opens
+        //
+        // Asked for on its own, 'code --profile <name>' opens that profile
+        // perfectly well, and the profile answers command line queries put to
+        // it, so the profile is not broken. The combination is.
+        //
+        // Opening in the default profile is a smaller problem than not opening
+        // at all, so the profile is left off — and the caller says so, because
+        // a downgrade nobody mentions is how this went unexplained for so long.
+        List<string> arguments = [directory];
 
         var result = _processes.StartDetached(
             new ProcessRequest(
                 editor.Path,
                 arguments,
 
-                // No working directory. The folder is already an argument, so
-                // there is nothing to gain, and starting the editor *inside* the
-                // folder it is being asked to open is the one difference left
-                // between this call and the same call by hand that works.
-                WorkingDirectory: null,
+                // Started inside the folder it is opening, and that is not
+                // incidental. Launched from the Start Menu the launcher's own
+                // working directory is the directory it is installed in, the
+                // editor inherited that, and it came up as an empty frame.
+                // Every invocation that has ever worked had a working directory
+                // that was a repository; every blank one had somewhere that was
+                // not.
+                //
+                // This was removed once, on the reasoning that the folder is
+                // already an argument so the directory could not matter. The
+                // probe showed otherwise.
+                directory,
 
                 // Opened from a terminal the editor owns, the editor hands us a
                 // copy of its own private environment, and passing that back to
@@ -180,10 +195,11 @@ internal sealed class EditorService : IEditorService
                 // editor we start run as Node: it read the folder as a module
                 // path and answered "Cannot find module".
                 //
-                // Nothing about the arguments was ever wrong, which is what made
-                // this hard to see. Four explanations were tried and disproved by
-                // capturing what the shim actually received — the same three
-                // arguments every time.
+                // The whole family goes, including VSCODE_IPC_HOOK_CLI. Keeping
+                // that one back was tried, on the theory that handing the folder
+                // to an instance already running was what made the difference.
+                // It was not: with every one of these withheld, the folder opens
+                // whether or not another editor is running.
                 RemoveEnvironmentPrefixes: ["VSCODE_", "ELECTRON_", "CHROME_"]));
 
         return result.Succeeded

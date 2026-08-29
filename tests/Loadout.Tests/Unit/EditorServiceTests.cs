@@ -117,7 +117,7 @@ public sealed class EditorServiceTests
 
 
     [Fact]
-    public async Task Opening_under_a_profile_forces_a_new_window()
+    public async Task A_configured_profile_is_still_left_off_the_command_line()
     {
         var processes = new Loadout.Tests.Fakes.StubProcessLauncher(string.Empty);
 
@@ -130,29 +130,19 @@ public sealed class EditorServiceTests
 
         request.Should().NotBeNull("the editor is started detached, not run to completion");
 
-        // Every one of these was established by trying the alternative and
-        // watching it fail, so each is worth holding down.
-        request!.Arguments.Should().Equal("-n", "--profile", "Agents", "C:/work/alpha");
-
-        // A profile asked for without a new window opens an empty frame with no
-        // workbench and no error. It looks like it works when typed by hand,
-        // because a terminal inside the editor hands the folder to the running
-        // instance instead of starting one.
-        request.Arguments[0].Should().Be("-n");
-
-        // The editor's own variables are withheld. VS Code sets
-        // ELECTRON_RUN_AS_NODE for its shim, and a copy of that makes the editor
-        // we start run as Node and read the folder as a module path.
-        request.RemoveEnvironmentPrefixes.Should().Contain("ELECTRON_");
-        request.RemoveEnvironmentPrefixes.Should().Contain("VSCODE_");
-
-        // Not started inside the folder it is opening. The folder is already an
-        // argument, and there is nothing to gain from it.
-        request.WorkingDirectory.Should().BeNull();
+        // The whole bug, in one assertion. Asked for a folder and a profile
+        // together the editor opens a window containing neither and reports
+        // nothing; asked for the folder alone it opens every time. Bisecting the
+        // command line put it on --profile and cleared -n, the environment, the
+        // working directory and the handoff to a running instance, all of which
+        // had been blamed first.
+        request!.Arguments.Should().Equal("C:/work/alpha");
+        request.Arguments.Should().NotContain("--profile");
+        request.Arguments.Should().NotContain("Agents");
     }
 
     [Fact]
-    public async Task Opening_without_a_profile_passes_only_the_folder()
+    public async Task Opening_passes_only_the_folder()
     {
         var processes = new Loadout.Tests.Fakes.StubProcessLauncher(string.Empty);
 
@@ -161,9 +151,20 @@ public sealed class EditorServiceTests
 
         await service.OpenAsync(Config(), Project(), "C:/work/alpha");
 
-        // No profile means no reason to force a window, so somebody who does not
-        // use profiles gets the editor they always get.
-        processes.Detached!.Arguments.Should().Equal("C:/work/alpha");
+        var request = processes.Detached!;
+
+        request.Arguments.Should().Equal("C:/work/alpha");
+
+        // The editor's own variables are withheld. VS Code sets
+        // ELECTRON_RUN_AS_NODE for its shim, and a copy of that makes the editor
+        // we start run as Node and read the folder as a module path.
+        request.RemoveEnvironmentPrefixes.Should().Contain("ELECTRON_");
+        request.RemoveEnvironmentPrefixes.Should().Contain("VSCODE_");
+
+        // Started inside the folder it is opening. Launched from the Start Menu
+        // the launcher's working directory is where it was installed, and the
+        // editor inherited that.
+        request.WorkingDirectory.Should().Be("C:/work/alpha");
     }
 
     private sealed class StubProcesses : Loadout.Platform.Abstractions.IProcessLauncher

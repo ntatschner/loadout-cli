@@ -291,7 +291,7 @@
       "loadout": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Tui": "[0.9.2, )",
+          "Loadout.Tui": "[0.9.8, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "Spectre.Console": "[0.51.1, )",
           "Spectre.Console.Cli": "[0.51.1, )"
@@ -300,7 +300,7 @@
       "loadout.agents": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Core": "[0.9.2, )",
+          "Loadout.Core": "[0.9.8, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )"
         }
@@ -308,8 +308,8 @@
       "loadout.core": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.9.2, )",
-          "Loadout.Platform": "[0.9.2, )",
+          "Loadout.Models": "[0.9.8, )",
+          "Loadout.Platform": "[0.9.8, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )",
           "YamlDotNet": "[16.3.0, )"
@@ -321,7 +321,7 @@
       "loadout.platform": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.9.2, )",
+          "Loadout.Models": "[0.9.8, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )"
         }
@@ -329,7 +329,7 @@
       "loadout.tui": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Agents": "[0.9.2, )",
+          "Loadout.Agents": "[0.9.8, )",
           "Spectre.Console": "[0.51.1, )",
           "Terminal.Gui": "[2.4.17, )"
         }

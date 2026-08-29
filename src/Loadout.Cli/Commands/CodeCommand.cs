@@ -115,16 +115,6 @@ public sealed class CodeCommand : AsyncCommand<CodeCommand.Settings>
         var editor = _editors.Describe(config);
         var profile = _editors.ProfileFor(config, entry, settings.Agent);
 
-        // Said before opening rather than after. The editor happily creates a
-        // profile of a name it does not know, so somebody who mistyped one
-        // finds out by looking at an empty window unless they are told here.
-        if (profile is { Length: > 0 } && editor.IsMissing(profile))
-        {
-            output.WriteLine(
-                $"[yellow]warning[/] {editor.Command} has no profile called "
-                + $"[bold]{Markup.Escape(profile)}[/]. Opening will create an empty one.");
-        }
-
         var opened = await _editors
             .OpenAsync(config, entry, project.LocalPath, settings.Agent)
             .ConfigureAwait(false);
@@ -134,10 +124,19 @@ public sealed class CodeCommand : AsyncCommand<CodeCommand.Settings>
             return output.Fail(opened);
         }
 
-        output.WriteLine(profile is null
-            ? $"Opened [bold]{Markup.Escape(project.Entry.Name)}[/] in {editor.Command}."
-            : $"Opened [bold]{Markup.Escape(project.Entry.Name)}[/] in {editor.Command} "
-                + $"using the [bold]{Markup.Escape(profile)}[/] profile.");
+        output.WriteLine(
+            $"Opened [bold]{Markup.Escape(project.Entry.Name)}[/] in {editor.Command}.");
+
+        // Told rather than left to be discovered. Asked for a folder and a
+        // profile in the same breath, the editor opens a window containing
+        // neither and reports nothing, so the profile is left off — and this is
+        // the only place that admits the setting was not honoured.
+        if (profile is { Length: > 0 })
+        {
+            output.WriteLine(
+                $"[yellow]note[/] the [bold]{Markup.Escape(profile)}[/] profile was not used: "
+                + $"{editor.Command} will not open a folder and a profile together.");
+        }
 
         return CommandOutput.Success();
     }
