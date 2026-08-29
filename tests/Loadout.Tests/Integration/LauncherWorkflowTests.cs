@@ -148,6 +148,57 @@ public sealed class LauncherWorkflowTests
     }
 
     [Fact]
+    public void A_ctrl_chord_nothing_is_bound_to_offers_the_keys()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        // The moment this exists for: somebody reaching for a key, guessing,
+        // and missing. The guess is a real keystroke on every platform and
+        // over SSH, which is what makes it a better signal than a timer —
+        // holding a modifier down sends nothing at all from a remote terminal.
+        session.Press(Key.B.WithCtrl);
+
+        var screen = session.Screen;
+
+        screen.Should().Contain("all commands", "the key list is what an unbound chord offers");
+        screen.Should().Contain("not bound", "it says what was pressed, not just what exists");
+    }
+
+    [Fact]
+    public void A_bound_chord_does_not_offer_the_keys()
+    {
+        var opened = false;
+
+        using var session = Launcher(
+            [Project("alpha", "Alpha")],
+            onPalette: _ => opened = true);
+
+        session.Press(Key.P.WithCtrl);
+
+        opened.Should().BeTrue();
+
+        // The offer is for a guess that missed. Putting the list up after a
+        // chord that worked would interrupt somebody who knew exactly what
+        // they were doing, which is the more common case by far.
+        session.Screen.Should().NotContain("not bound");
+    }
+
+    [Fact]
+    public void Holding_a_modifier_does_not_offer_the_keys_immediately()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        // Whether a modifier on its own ever arrives is the driver's business:
+        // the Windows console reports raw key events and a remote terminal
+        // sends nothing until a chord completes. So this pins the half that can
+        // be checked anywhere — that it is a delay and not an instant reaction,
+        // and that the key costs nothing where it never arrives.
+        session.Press(new Key(Terminal.Gui.Drivers.KeyCode.CtrlMask));
+
+        session.Screen.Should().NotContain("still holding");
+    }
+
+    [Fact]
     public void An_empty_registry_offers_the_way_forward_on_screen()
     {
         using var session = Launcher([]);

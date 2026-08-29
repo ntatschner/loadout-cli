@@ -276,6 +276,8 @@ internal sealed class LauncherWindow : Window
 
         BindTheKeyboard();
         AddCommand(Command.Open, () => { _showPalette(this); return true; });
+
+        WatchForHesitation();
     }
 
     /// <summary>
@@ -575,10 +577,128 @@ internal sealed class LauncherWindow : Window
     {
         _keys.Visible = !_keys.Visible;
 
+        if (!_keys.Visible)
+        {
+            _keys.Title = KeysTitle;
+        }
+
         // Added last and left there. Subviews draw in order, so the panel is
         // already on top; moving it to the start would draw it first, which
         // is to say underneath the screen it is meant to cover.
         SetNeedsDraw();
+    }
+
+    /// <summary>What the panel is called when nothing prompted it.</summary>
+    private const string KeysTitle = "Keys";
+
+    /// <summary>
+    /// How long somebody holds a modifier before it stops looking like the
+    /// start of a chord and starts looking like hesitation.
+    /// </summary>
+    private static readonly TimeSpan HesitationDelay = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary>The pending hesitation timer, or null when nothing is waiting.</summary>
+    private object? _hesitation;
+
+    /// <summary>
+    /// Puts the key list up, rather than toggling it, and says what prompted
+    /// it. Called when somebody appears to be looking for a key rather than
+    /// pressing one.
+    /// </summary>
+    private void OfferKeys(string? because = null)
+    {
+        // Already up is already the answer. Toggling here would take the list
+        // away from somebody in the middle of reading it, which is the exact
+        // opposite of what asking for it twice means.
+        if (_keys.Visible && because is null)
+        {
+            return;
+        }
+
+        _keys.Title = because is null ? KeysTitle : $"Keys — {because}";
+        _keys.Visible = true;
+
+        SetNeedsDraw();
+    }
+
+    /// <summary>
+    /// Watches for the two ways somebody signals they have lost the key they
+    /// were reaching for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The first is a guess that missed: a Ctrl chord nothing is bound to.
+    /// That is a real keystroke, it arrives on every platform and over SSH,
+    /// and it is a better signal than any timer because the person has already
+    /// told us what they were hoping for.
+    /// </para>
+    /// <para>
+    /// The second is holding the modifier while trying to remember. That one
+    /// cannot be relied on: a terminal sends nothing at all while Ctrl is held
+    /// down on its own, so the event only ever arrives from a driver that
+    /// reports raw key events — the Windows console does, a remote terminal
+    /// does not. It is wired up because where it works it is the kinder of the
+    /// two, and where it does not it costs nothing: the handler simply never
+    /// runs, and the chord above still catches them.
+    /// </para>
+    /// </remarks>
+    private void WatchForHesitation()
+    {
+        // Fires only when nothing else claimed the key, so a bound chord does
+        // its job and never reaches here.
+        KeyDownNotHandled += (_, key) =>
+        {
+            if (!key.IsCtrl || key.IsModifierOnly)
+            {
+                return;
+            }
+
+            OfferKeys($"{key} is not bound");
+
+            key.Handled = true;
+        };
+
+        _application.Keyboard.KeyDown += OnApplicationKeyDown;
+        _application.Keyboard.KeyUp += OnApplicationKeyUp;
+    }
+
+    private void OnApplicationKeyDown(object? sender, Key key)
+    {
+        // A modifier on its own, held. Auto-repeat sends it again and again,
+        // so a timer already waiting is left alone rather than restarted,
+        // which would push the moment further away the longer somebody held.
+        if (key.IsModifierOnly && key.IsCtrl)
+        {
+            _hesitation ??= _application.AddTimeout(HesitationDelay, () =>
+            {
+                OfferKeys("still holding Ctrl");
+                _hesitation = null;
+
+                // False: once is the point. A list that reappeared every one
+                // and a half seconds would be a nag rather than an offer.
+                return false;
+            });
+
+            return;
+        }
+
+        // Anything else means they found it, so the offer is withdrawn before
+        // it is ever made.
+        CancelHesitation();
+    }
+
+    private void OnApplicationKeyUp(object? sender, Key key) => CancelHesitation();
+
+    private void CancelHesitation()
+    {
+        if (_hesitation is not { } pending)
+        {
+            return;
+        }
+
+        _hesitation = null;
+
+        _application.RemoveTimeout(pending);
     }
 
     /// <summary>The key list, shown over the screen it describes.</summary>
@@ -1218,6 +1338,16 @@ internal sealed class LauncherWindow : Window
         if (disposing)
         {
             StopPulsing();
+
+            // These two are on the application rather than on this window, so
+            // they outlive it. The launcher is opened and closed repeatedly
+            // within one process — every command it runs comes back to a new
+            // window — and handlers left behind would pile up, each one
+            // holding a window that has been disposed.
+            _application.Keyboard.KeyDown -= OnApplicationKeyDown;
+            _application.Keyboard.KeyUp -= OnApplicationKeyUp;
+
+            CancelHesitation();
 
             _pending?.Cancel();
             _pending?.Dispose();
