@@ -150,6 +150,7 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
                 + "is worth moving to memory.[/]");
 
             Explain(output, plan);
+            SuggestSplitting(output, plan);
 
             return CommandOutput.Success();
         }
@@ -182,6 +183,76 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
         }
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Points at the other tool when this one cannot help.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// There are two ways to shrink an always-loaded file and they suit
+    /// different files. This one moves standing facts into memory, which needs
+    /// facts to move; splitting scopes sections to the paths they concern,
+    /// which needs sections. A file of prose under headings has the second and
+    /// not the first, and this command's answer for it was "nothing is worth
+    /// moving" — true, unhelpful, and silent about the tool that would have
+    /// worked.
+    /// </para>
+    /// <para>
+    /// Suggested only on the evidence in the file rather than always: headings
+    /// to split on, and a file large enough for the split to be worth the
+    /// trouble. A tool that recommends another tool every time it finds
+    /// nothing is a tool nobody reads the output of.
+    /// </para>
+    /// </remarks>
+    private static void SuggestSplitting(CommandOutput output, CompressionPlan plan)
+    {
+        if (SplittingSuggestion(plan.SourcePath, plan.BytesBefore) is not { } suggestion)
+        {
+            return;
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine($"[dim]{Markup.Escape(suggestion)}[/]");
+    }
+
+    /// <summary>
+    /// What to say about splitting this file, or null when there is nothing
+    /// worth saying.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the printing so the judgement can be tested against real
+    /// files rather than only seen once by eye.
+    /// </remarks>
+    internal static string? SplittingSuggestion(string path, long bytes)
+    {
+        // Small files are not the problem, whatever shape they are in.
+        if (bytes < 8 * 1024)
+        {
+            return null;
+        }
+
+        int headings;
+
+        try
+        {
+            headings = File.ReadLines(path)
+                .Count(line => line.StartsWith("## ", StringComparison.Ordinal));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Saying nothing is a fine answer. The file was read once already
+            // to get here, so this is only reachable if it changed underneath.
+            return null;
+        }
+
+        // Two headings is a document with a preamble; several is a document
+        // whose parts concern different things, which is what can be scoped.
+        return headings < 3
+            ? null
+            : $"It is {bytes / 1024}KB of prose under {headings} headings, which is the shape "
+                + "splitting suits: sections load only when the paths they concern are touched. "
+                + $"Try: loadout rules split --from {path}";
     }
 
     /// <summary>
