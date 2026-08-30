@@ -4,11 +4,11 @@
     "net10.0": {
       "FluentAssertions": {
         "type": "Direct",
-        "requested": "[6.12.2, )",
-        "resolved": "6.12.2",
-        "contentHash": "8YE+xJmT8wgzEpFuzJ4S62oFhEL/AKouMz1RWPEMEUhy9H11aRQlGIWcHurH5BEy7tbF6gb0CJrs0wOw/AtDcQ==",
+        "requested": "[7.2.2, )",
+        "resolved": "7.2.2",
+        "contentHash": "B6FJmtTadaqtLXH5qfn9hlYF5ruNOAdtjA9+1V3fuYp/MZzj7lB3Ys5cdgy72uv7w1GE5Y9PEX369UD3N1sfHg==",
         "dependencies": {
-          "System.Configuration.ConfigurationManager": "4.4.0"
+          "System.Configuration.ConfigurationManager": "6.0.0"
         }
       },
       "Microsoft.NET.ILLink.Tasks": {
@@ -173,6 +173,11 @@
           "Microsoft.TestPlatform.ObjectModel": "18.9.0"
         }
       },
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "hqTM5628jSsQiv+HGpiq3WKBl2c8v1KZfby2J6Pr7pEPlK9waPdgEO6b8A/+/xn/yZ9ulv8HuqK71ONy2tg67A=="
+      },
       "Onigwrap": {
         "type": "Transitive",
         "resolved": "1.0.11",
@@ -180,10 +185,19 @@
       },
       "System.Configuration.ConfigurationManager": {
         "type": "Transitive",
-        "resolved": "4.4.0",
-        "contentHash": "gWwQv/Ug1qWJmHCmN17nAbxJYmQBM/E94QxKLksvUiiKB1Ld3Sc/eK1lgmbSjDFxkQhVuayI/cGFZhpBSodLrg==",
+        "resolved": "6.0.0",
+        "contentHash": "7T+m0kDSlIPTHIkPMIu6m6tV6qsMqJpvQWW2jIc2qi7sn40qxFo0q+7mEQAhMPXZHMKnWrnv47ntGlM/ejvw3g==",
         "dependencies": {
-          "System.Security.Cryptography.ProtectedData": "4.4.0"
+          "System.Security.Cryptography.ProtectedData": "6.0.0",
+          "System.Security.Permissions": "6.0.0"
+        }
+      },
+      "System.Drawing.Common": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "NfuoKUiP2nUWwKZN6twGqXioIe1zVD0RIj2t976A+czLHr2nY454RwwXs6JU9Htc6mwqL6Dn/nEL3dpVf2jOhg==",
+        "dependencies": {
+          "Microsoft.Win32.SystemEvents": "6.0.0"
         }
       },
       "System.IO.Abstractions": {
@@ -197,8 +211,24 @@
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
-        "resolved": "4.4.0",
-        "contentHash": "cJV7ScGW7EhatRsjehfvvYVBvtiSMKgN8bOVI0bQhnF5bU7vnHVIsH49Kva7i7GWaWYvmEzkYVk1TC+gZYBEog=="
+        "resolved": "6.0.0",
+        "contentHash": "rp1gMNEZpvx9vP0JW0oHLxlf8oSiQgtno77Y4PLUBjSiDYoD77Y8uXHr1Ea5XG4/pIKhqAdxZ8v8OTUtqo9PeQ=="
+      },
+      "System.Security.Permissions": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "T/uuc7AklkDoxmcJ7LGkyX1CcSviZuLCa4jg3PekfJ7SU0niF0IVTXwUiNVP9DSpzou2PpxJ+eNY2IfDM90ZCg==",
+        "dependencies": {
+          "System.Windows.Extensions": "6.0.0"
+        }
+      },
+      "System.Windows.Extensions": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "IXoJOXIqc39AIe+CIR7koBtRGMiCt/LPM3lI+PELtDIy9XdyeSrwXFdWV9dzJ2Awl0paLWUaknLxFQ5HpHZUog==",
+        "dependencies": {
+          "System.Drawing.Common": "6.0.0"
+        }
       },
       "TestableIO.System.IO.Abstractions": {
         "type": "Transitive",
@@ -285,7 +315,7 @@
       "loadout": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Tui": "[0.9.8, )",
+          "Loadout.Tui": "[0.10.3, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "Spectre.Console": "[0.51.1, )",
           "Spectre.Console.Cli": "[0.51.1, )"
@@ -294,7 +324,7 @@
       "loadout.agents": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Core": "[0.9.8, )",
+          "Loadout.Core": "[0.10.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )"
         }
@@ -302,8 +332,8 @@
       "loadout.core": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.9.8, )",
-          "Loadout.Platform": "[0.9.8, )",
+          "Loadout.Models": "[0.10.3, )",
+          "Loadout.Platform": "[0.10.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )",
           "YamlDotNet": "[16.3.0, )"
@@ -315,7 +345,7 @@
       "loadout.platform": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.9.8, )",
+          "Loadout.Models": "[0.10.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.11, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.11, )"
         }
@@ -323,7 +353,7 @@
       "loadout.tui": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Agents": "[0.9.8, )",
+          "Loadout.Agents": "[0.10.3, )",
           "Spectre.Console": "[0.51.1, )",
           "Terminal.Gui": "[2.4.17, )"
         }

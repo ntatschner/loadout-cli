@@ -32,7 +32,7 @@ These are not part of a release.
 | Microsoft.CodeCoverage | MIT |
 | Microsoft.TestPlatform.ObjectModel, Microsoft.TestPlatform.TestHost | MIT |
 | Newtonsoft.Json | MIT |
-| [FluentAssertions](https://fluentassertions.com/) **6.12.2** | Apache-2.0 |
+| [FluentAssertions](https://fluentassertions.com/) **7.2.2** | Apache-2.0 |
 | System.Configuration.ConfigurationManager, System.Security.Cryptography.ProtectedData | MIT |
 
 ### Why FluentAssertions is pinned exactly
@@ -41,7 +41,7 @@ FluentAssertions is Apache-2.0 up to and including version 7. From version 8 it
 is distributed under the Xceed Community License, which is not an open-source
 licence and charges for commercial use.
 
-The reference is therefore pinned to `[6.12.2]` rather than floated. A routine
+The reference is therefore pinned to `[7.2.2]` rather than floated. A routine
 dependency bump would otherwise swap an open-source test library for one this
 project cannot ship under, without anything in the build noticing. The licence
 check exists to catch precisely that, and it fails on version 8.
