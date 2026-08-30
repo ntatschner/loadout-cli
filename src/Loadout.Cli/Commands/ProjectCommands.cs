@@ -169,7 +169,7 @@ public sealed class ProjectRemoveCommand : AsyncCommand<ProjectRemoveCommand.Set
         public string Project { get; init; } = string.Empty;
 
         [CommandOption("--from-workspace")]
-        [Description("Also remove the shared definition, affecting every machine.")]
+        [Description("Also remove it from the shared registry, affecting every machine.")]
         public bool FromWorkspace { get; init; }
     }
 
@@ -202,9 +202,24 @@ public sealed class ProjectRemoveCommand : AsyncCommand<ProjectRemoveCommand.Set
             return output.Fail(result);
         }
 
+        var removal = result.Value!;
+
         output.WriteLine(
             $"[green]Removed[/] {Markup.Escape(settings.Project)} "
             + "[dim](the repository itself was not touched)[/]");
+
+        // Said, because the option used to claim it removed the definition and
+        // it never has. The directory holds the project's instructions, rules
+        // and the memory an agent accumulated about the codebase — deleting
+        // that as a side effect of removing a registration would be a surprise
+        // there is no recovering from, so it stays and this says where.
+        if (removal.DefinitionPath is { Length: > 0 } definition)
+        {
+            output.WriteLine(
+                $"[dim]Its instructions, rules and memory remain in the workspace: "
+                + $"{removal.DefinitionFiles} file(s) under {Markup.Escape(definition)}. "
+                + "Delete that directory yourself if you meant to lose them.[/]");
+        }
 
         return CommandOutput.Success();
     }

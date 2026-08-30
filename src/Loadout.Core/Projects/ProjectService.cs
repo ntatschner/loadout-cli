@@ -281,7 +281,7 @@ internal sealed class ProjectService : IProjectService
     }
 
     /// <inheritdoc />
-    public async Task<OperationResult> RemoveAsync(
+    public async Task<OperationResult<ProjectRemoval>> RemoveAsync(
         string handle,
         bool fromWorkspace,
         CancellationToken ct = default)
@@ -289,7 +289,7 @@ internal sealed class ProjectService : IProjectService
         var resolveResult = await ResolveAsync(handle, ct).ConfigureAwait(false);
         if (resolveResult.Failed)
         {
-            return OperationResult.Fail(resolveResult.Error!, resolveResult.ExitCode);
+            return OperationResult<ProjectRemoval>.Fail(resolveResult.Error!, resolveResult.ExitCode);
         }
 
         var slug = resolveResult.Value!.Entry.Slug;
@@ -297,30 +297,69 @@ internal sealed class ProjectService : IProjectService
         var machineResult = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
         if (machineResult.Failed)
         {
-            return OperationResult.Fail(machineResult.Error!, machineResult.ExitCode);
+            return OperationResult<ProjectRemoval>.Fail(machineResult.Error!, machineResult.ExitCode);
         }
 
         var machine = machineResult.Value!;
         machine.Projects.Remove(slug);
 
         var saveResult = await _configuration.SaveMachineAsync(machine, ct).ConfigureAwait(false);
-        if (saveResult.Failed || !fromWorkspace)
+
+        if (saveResult.Failed)
         {
-            // The local mapping is gone either way. The source repository is
-            // untouched: removing a registration never deletes code.
-            return saveResult;
+            return OperationResult<ProjectRemoval>.Fail(saveResult.Error!, saveResult.ExitCode);
+        }
+
+        if (!fromWorkspace)
+        {
+            // The local mapping is gone. The source repository is untouched:
+            // removing a registration never deletes code.
+            return OperationResult<ProjectRemoval>.Ok(Describe(slug, fromWorkspace: false));
         }
 
         var registryResult = await _workspace.ReadRegistryAsync(ct).ConfigureAwait(false);
         if (registryResult.Failed)
         {
-            return OperationResult.Fail(registryResult.Error!, registryResult.ExitCode);
+            return OperationResult<ProjectRemoval>.Fail(registryResult.Error!, registryResult.ExitCode);
         }
 
         var registry = registryResult.Value!;
         registry.Projects.RemoveAll(p => string.Equals(p.Slug, slug, StringComparison.OrdinalIgnoreCase));
 
-        return await _workspace.WriteRegistryAsync(registry, ct).ConfigureAwait(false);
+        var written = await _workspace.WriteRegistryAsync(registry, ct).ConfigureAwait(false);
+
+        return written.Failed
+            ? OperationResult<ProjectRemoval>.Fail(written.Error!, written.ExitCode)
+            : OperationResult<ProjectRemoval>.Ok(Describe(slug, fromWorkspace: true));
+    }
+
+    /// <summary>
+    /// What is left in the workspace after the rows have gone.
+    /// </summary>
+    /// <remarks>
+    /// The registry row is removed; the directory holding the project's
+    /// instructions, rules and memory is not. That is deliberate — it is the
+    /// only copy of what an agent learned about a codebase — but it was also
+    /// not said, and the option's own description implied the definition went
+    /// with it. Reporting what remains is what makes the two agree.
+    /// </remarks>
+    private ProjectRemoval Describe(string slug, bool fromWorkspace)
+    {
+        if (!_workspace.IsAvailable())
+        {
+            return new ProjectRemoval(slug, fromWorkspace, null, 0);
+        }
+
+        var definition = Path.Combine(_workspace.LocalPath, "projects", slug);
+
+        if (!Directory.Exists(definition))
+        {
+            return new ProjectRemoval(slug, fromWorkspace, null, 0);
+        }
+
+        var files = Directory.EnumerateFiles(definition, "*", SearchOption.AllDirectories).Count();
+
+        return new ProjectRemoval(slug, fromWorkspace, definition, files);
     }
 
     /// <inheritdoc />

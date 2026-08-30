@@ -16,6 +16,23 @@ public sealed record DiscoveredRepository(
     bool IsRegistered,
     string? MatchedSlug);
 
+/// <summary>What removing a project registration did, and what it did not.</summary>
+/// <param name="Slug">The project that was removed.</param>
+/// <param name="FromWorkspace">Whether the shared registry row went too.</param>
+/// <param name="DefinitionPath">
+/// Where the project's definition still sits in the workspace, or null when
+/// there is none. It is never deleted: it holds instructions, rules and the
+/// memory an agent accumulated, and losing that to a command whose stated job
+/// is removing a registration would be the kind of surprise there is no
+/// recovering from.
+/// </param>
+/// <param name="DefinitionFiles">How many files remain there.</param>
+public sealed record ProjectRemoval(
+    string Slug,
+    bool FromWorkspace,
+    string? DefinitionPath,
+    int DefinitionFiles);
+
 /// <summary>
 /// Registers, resolves and lists projects (spec sections 29, 64, 70, 75).
 /// <para>
@@ -81,8 +98,17 @@ public interface IProjectService
     /// <summary>
     /// Removes a project registration. Never touches the source repository:
     /// spec section 75 requires deleting code to be a separate, explicit act.
+    /// <para>
+    /// Nor the project's definition in the workspace, which holds its
+    /// instructions, rules and memory. The result says what was left behind so
+    /// the caller can be honest about it rather than implying more was removed
+    /// than was.
+    /// </para>
     /// </summary>
-    Task<OperationResult> RemoveAsync(string handle, bool fromWorkspace, CancellationToken ct = default);
+    Task<OperationResult<ProjectRemoval>> RemoveAsync(
+        string handle,
+        bool fromWorkspace,
+        CancellationToken ct = default);
 
     /// <summary>Scans only the configured discovery roots (spec sections 64 and 85).</summary>
     Task<OperationResult<IReadOnlyList<DiscoveredRepository>>> DiscoverAsync(CancellationToken ct = default);

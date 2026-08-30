@@ -147,6 +147,36 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Removing_a_project_says_what_it_left_in_the_workspace()
+    {
+        var repository = await CreateRepositoryAsync("keeper", "ssh://git.internal/apps/keeper.git");
+
+        await _projects.AddAsync(repository);
+
+        var definition = Path.Combine(_workspace.LocalPath, "projects", "keeper");
+
+        Directory.CreateDirectory(Path.Combine(definition, "memory"));
+        await File.WriteAllTextAsync(
+            Path.Combine(definition, "memory", "architecture.md"), "what an agent learned");
+
+        var removed = await _projects.RemoveAsync("keeper", fromWorkspace: true);
+
+        removed.Succeeded.Should().BeTrue(removed.Error);
+
+        // Never deleted. It is the only copy of what an agent worked out about
+        // a codebase, and losing it to a command whose stated job is removing a
+        // registration is a surprise there is no recovering from.
+        File.Exists(Path.Combine(definition, "memory", "architecture.md"))
+            .Should().BeTrue("memory is not a registration");
+
+        // And said, because the option claimed to remove the definition and
+        // never has. Keeping it quietly is the half that was wrong.
+        removed.Value!.DefinitionPath.Should().NotBeNull();
+        removed.Value.DefinitionFiles.Should().BeGreaterThan(0);
+        removed.Value.FromWorkspace.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task The_shared_registry_holds_no_machine_specific_path()
     {
         var repository = await CreateRepositoryAsync("gateconquest", "ssh://git.internal/apps/gate.git");
