@@ -147,6 +147,12 @@ public static class Program
 
     internal static IReadOnlySet<string> CommandNames() => Names.Value;
 
+    /// <summary>
+    /// How long a command is given to notice it has been interrupted before it
+    /// is ended for it.
+    /// </summary>
+    private static readonly TimeSpan GraceAfterInterrupt = TimeSpan.FromSeconds(2);
+
     public static async Task<int> Main(string[] args)
     {
         // Split before the parser sees anything: spec section 36 forbids the
@@ -248,6 +254,24 @@ public static class Program
 
             e.Cancel = true;
             stopping.Cancel();
+
+            // And left promptly whether or not anything was listening.
+            //
+            // Cancelling alone was a regression the moment it shipped: no
+            // command watches its token yet, so the first Ctrl+C did nothing a
+            // person could see and it took two to get out of something one used
+            // to end. The grace period is the difference between asking and
+            // insisting — a command that honours the token exits inside it and
+            // this never fires, and one that does not is ended anyway rather
+            // than appearing to have hung.
+            //
+            // Two seconds because the work being interrupted may be a file
+            // write that keeps its own backups: long enough for a command to
+            // finish the one it is in, far shorter than somebody waits before
+            // pressing the key again.
+            _ = Task.Delay(GraceAfterInterrupt).ContinueWith(
+                _ => Environment.Exit((int)ExitCode.Interrupted),
+                TaskScheduler.Default);
         };
 
         Console.CancelKeyPress += onCancel;
