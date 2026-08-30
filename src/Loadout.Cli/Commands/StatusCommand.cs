@@ -40,7 +40,7 @@ public sealed class StatusCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

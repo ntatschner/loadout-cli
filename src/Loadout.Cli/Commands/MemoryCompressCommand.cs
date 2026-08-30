@@ -77,9 +77,10 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
-        MemoryCompressSettings settings)
+        MemoryCompressSettings settings,
+        CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

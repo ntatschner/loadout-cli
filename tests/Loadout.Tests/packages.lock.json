@@ -29,12 +29,11 @@
       },
       "Spectre.Console.Testing": {
         "type": "Direct",
-        "requested": "[0.51.1, )",
-        "resolved": "0.51.1",
-        "contentHash": "EKJjiFxVP4pkfZ0cSfDVr3iqY/kMyj2bx+n11JfsFw9HI5+RlP1WLQFQ01HZjwsfqkxu4a37bF4sA7gD0yaXmQ==",
+        "requested": "[0.57.2, )",
+        "resolved": "0.57.2",
+        "contentHash": "X9d6yEgamanA2F+OU28l8c00WZW36ZWeeIzHJLuCFFI1aK+uieG4O4KbYlGfGpnB4jPF+EsTTdEeTSk1ril0MA==",
         "dependencies": {
-          "Spectre.Console": "0.51.1",
-          "Spectre.Console.Cli": "0.51.1"
+          "Spectre.Console": "0.57.2"
         }
       },
       "xunit": {
@@ -183,6 +182,11 @@
         "resolved": "1.0.11",
         "contentHash": "5/WAxSYWfiiPzp1X13qqdqjFmYLKDD/U7Vh3WCkKxWG9BjqdrXnQE5fCKCFJX+xWvuYLTxwZIVWBwBWObViE8g=="
       },
+      "Spectre.Console.Ansi": {
+        "type": "Transitive",
+        "resolved": "0.57.2",
+        "contentHash": "Y1+u73shwP+JYHmrkdN6bSt2kaGBEAafhi2nrecczbXdFRey+k7J/WF9YPfcB0rqivv2S8fmif6FSBq9m/AFvw=="
+      },
       "System.Configuration.ConfigurationManager": {
         "type": "Transitive",
         "resolved": "6.0.0",
@@ -317,8 +321,8 @@
         "dependencies": {
           "Loadout.Tui": "[0.10.3, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
-          "Spectre.Console": "[0.51.1, )",
-          "Spectre.Console.Cli": "[0.51.1, )"
+          "Spectre.Console": "[0.57.2, )",
+          "Spectre.Console.Cli": "[0.55.0, )"
         }
       },
       "loadout.agents": {
@@ -354,7 +358,7 @@
         "type": "Project",
         "dependencies": {
           "Loadout.Agents": "[0.10.3, )",
-          "Spectre.Console": "[0.51.1, )",
+          "Spectre.Console": "[0.57.2, )",
           "Terminal.Gui": "[2.4.17, )"
         }
       },
@@ -384,17 +388,20 @@
       },
       "Spectre.Console": {
         "type": "CentralTransitive",
-        "requested": "[0.51.1, )",
-        "resolved": "0.51.1",
-        "contentHash": "84xNywgnaG8XgOypnZAL+EZUbhCGE0umj7fuMrSI6esdE74HYHRoeBioeMUJXPiCt7iBDKHLwiBcg0IliYIIxA=="
+        "requested": "[0.57.2, )",
+        "resolved": "0.57.2",
+        "contentHash": "wzsB+P9i6F9G+cFOJxRotCiQWNSzZVAMxi8YMiHlGXXU1JLMXGp7zSSqBMmROZS2bzpK5jk+Saa7Evp8HwqhKg==",
+        "dependencies": {
+          "Spectre.Console.Ansi": "0.57.2"
+        }
       },
       "Spectre.Console.Cli": {
         "type": "CentralTransitive",
-        "requested": "[0.51.1, )",
-        "resolved": "0.51.1",
-        "contentHash": "LqJjjug5f8ipFFzhwBaQHMXt8+uuJAxu3dsyAxF+Jyva9yHW0P3iP6s1NpwVqt0Yk11n6/f9qipyiEn0zBKBiQ==",
+        "requested": "[0.55.0, )",
+        "resolved": "0.55.0",
+        "contentHash": "cFJTB1te4eaAICd4Zp+8T/kiRn1ikQxgGqmoNarb1qoQ/7LzHAvVQ62x5U9GW3E0QI7sZLcXIIoq4CpqgTx42Q==",
         "dependencies": {
-          "Spectre.Console": "0.51.1"
+          "Spectre.Console": "0.55.0"
         }
       },
       "Terminal.Gui": {

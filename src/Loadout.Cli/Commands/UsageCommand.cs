@@ -66,7 +66,7 @@ public sealed class UsageCommand : AsyncCommand<UsageSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, UsageSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, UsageSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 

@@ -59,7 +59,7 @@ public sealed class ProjectNewCommand : AsyncCommand<ProjectNewCommand.Settings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

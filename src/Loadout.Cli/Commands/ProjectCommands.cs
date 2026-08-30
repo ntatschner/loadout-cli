@@ -24,7 +24,7 @@ public sealed class ProjectListCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -114,7 +114,7 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
         var path = settings.Path ?? settings.Repo ?? Directory.GetCurrentDirectory();
@@ -174,7 +174,7 @@ public sealed class ProjectRemoveCommand : AsyncCommand<ProjectRemoveCommand.Set
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -239,7 +239,7 @@ public sealed class ProjectDiscoverCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -318,7 +318,7 @@ public sealed class ProjectOpenCommand : AsyncCommand<ProjectOpenCommand.Setting
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

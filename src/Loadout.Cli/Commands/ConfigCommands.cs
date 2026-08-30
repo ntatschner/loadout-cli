@@ -29,7 +29,7 @@ public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -127,7 +127,7 @@ public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -223,7 +223,7 @@ public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -301,7 +301,7 @@ public sealed class ConfigEditCommand : AsyncCommand<ConfigEditCommand.Settings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

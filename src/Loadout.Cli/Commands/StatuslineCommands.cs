@@ -51,7 +51,7 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
     {
         using var deadline = new CancellationTokenSource(Deadline);
 
@@ -193,7 +193,7 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, StatuslineTargetSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, StatuslineTargetSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -277,7 +277,7 @@ public sealed class StatuslineUninstallCommand : AsyncCommand<StatuslineTargetSe
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, StatuslineTargetSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, StatuslineTargetSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -340,7 +340,7 @@ public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSetting
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, StatuslineTargetSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, StatuslineTargetSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

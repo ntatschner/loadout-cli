@@ -61,7 +61,7 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, DoctorSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, DoctorSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

@@ -136,7 +136,7 @@ public sealed class InstructionsListCommand : InstructionsCommandBase<Instructio
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, InstructionsListSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, InstructionsListSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -263,7 +263,7 @@ public sealed class InstructionsShowCommand : InstructionsCommandBase<Instructio
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, InstructionsShowSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, InstructionsShowSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -408,9 +408,10 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
-        InstructionsExplainSettings settings)
+        InstructionsExplainSettings settings,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -624,9 +625,10 @@ public sealed class InstructionsValidateCommand : InstructionsCommandBase<Instru
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
-        InstructionsValidateSettings settings)
+        InstructionsValidateSettings settings,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -740,9 +742,10 @@ public sealed class InstructionsNewCommand : InstructionsCommandBase<Instruction
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
-        InstructionsNewSettings settings)
+        InstructionsNewSettings settings,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 

@@ -53,7 +53,7 @@ public sealed class SessionListCommand : AsyncCommand<SessionSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, SessionSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, SessionSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -162,7 +162,7 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
     }
 
     /// <inheritdoc />
-    public override async Task<int> ExecuteAsync(CommandContext context, ResumeSettings settings)
+    protected override async Task<int> ExecuteAsync(CommandContext context, ResumeSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
