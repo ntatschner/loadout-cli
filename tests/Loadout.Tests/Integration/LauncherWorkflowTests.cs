@@ -198,6 +198,62 @@ public sealed class LauncherWorkflowTests
         session.Screen.Should().NotContain("still holding");
     }
 
+    /// <summary>Redraws until the screen stops showing something, or patience runs out.</summary>
+    private static bool Gone(TuiSession session, string text, int timeoutMilliseconds = 9000)
+    {
+        var deadline = System.Environment.TickCount64 + timeoutMilliseconds;
+
+        do
+        {
+            session.Application.TimedEvents?.RunTimers();
+            session.Application.RaiseIteration();
+            session.Application.LayoutAndDraw();
+
+            if (!session.Screen.Contains(text, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            Thread.Sleep(25);
+        }
+        while (System.Environment.TickCount64 < deadline);
+
+        return false;
+    }
+
+    [Fact]
+    public void An_offer_nobody_asked_for_takes_itself_away()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        session.Press(Key.B.WithCtrl);
+
+        session.Screen.Should().Contain("not bound");
+
+        // A mistyped chord should not cost more than the mistyped chord did.
+        // Leaving the list sitting over the projects until it was dismissed
+        // would make a slip into an interruption.
+        Gone(session, "not bound")
+            .Should().BeTrue("an overlay nobody asked for should take itself away");
+    }
+
+    [Fact]
+    public void A_list_asked_for_deliberately_stays()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")]);
+
+        session.Press(Key.CursorDown);
+        session.Press(new Key('?'));
+
+        session.Screen.Should().Contain("all commands");
+
+        // The timer belongs to the offer, not to the panel. Taking away a list
+        // somebody opened to read would be the launcher overruling them, and
+        // the two paths share enough code for that to be an easy mistake.
+        Gone(session, "all commands", timeoutMilliseconds: 7000)
+            .Should().BeFalse("a list opened on purpose stays until it is closed on purpose");
+    }
+
     [Fact]
     public void An_empty_registry_offers_the_way_forward_on_screen()
     {

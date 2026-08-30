@@ -575,6 +575,10 @@ internal sealed class LauncherWindow : Window
     /// </remarks>
     private void ShowKeys()
     {
+        // Asked for on purpose, so it stays until it is dismissed on purpose.
+        // Only the list nobody asked for takes itself away again.
+        CancelDismissal();
+
         _keys.Visible = !_keys.Visible;
 
         if (!_keys.Visible)
@@ -619,6 +623,51 @@ internal sealed class LauncherWindow : Window
         _keys.Visible = true;
 
         SetNeedsDraw();
+
+        // Takes itself away again, because nobody asked for it. An overlay that
+        // appeared on a mistyped chord and then sat over the list until it was
+        // dismissed would make the mistake cost more than the mistake did.
+        CancelDismissal();
+
+        _dismissal = _application.AddTimeout(OfferDuration, () =>
+        {
+            _dismissal = null;
+
+            // Not if it has since been asked for deliberately: ShowKeys cancels
+            // this timer, but the panel can also have been closed and reopened
+            // inside the five seconds, and taking it away then would be the
+            // launcher overruling somebody who had just pressed a key.
+            if (_keys.Visible && _keys.Title != KeysTitle)
+            {
+                _keys.Visible = false;
+                _keys.Title = KeysTitle;
+
+                SetNeedsDraw();
+            }
+
+            return false;
+        });
+    }
+
+    /// <summary>
+    /// How long an offer nobody asked for stays on the screen. Long enough to
+    /// find a key in a list of nine, short enough not to be in the way.
+    /// </summary>
+    private static readonly TimeSpan OfferDuration = TimeSpan.FromSeconds(5);
+
+    /// <summary>The pending dismissal, or null when nothing is waiting.</summary>
+    private object? _dismissal;
+
+    private void CancelDismissal()
+    {
+        if (_dismissal is not { } pending)
+        {
+            return;
+        }
+
+        _dismissal = null;
+
+        _application.RemoveTimeout(pending);
     }
 
     /// <summary>
@@ -1348,6 +1397,7 @@ internal sealed class LauncherWindow : Window
             _application.Keyboard.KeyUp -= OnApplicationKeyUp;
 
             CancelHesitation();
+            CancelDismissal();
 
             _pending?.Cancel();
             _pending?.Dispose();
