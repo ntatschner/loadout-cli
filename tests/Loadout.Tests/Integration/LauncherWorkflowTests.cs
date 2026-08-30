@@ -184,18 +184,20 @@ public sealed class LauncherWorkflowTests
     }
 
     [Fact]
-    public void Holding_a_modifier_does_not_offer_the_keys_immediately()
+    public void A_modifier_on_its_own_offers_nothing()
     {
         using var session = Launcher([Project("alpha", "Alpha")]);
 
-        // Whether a modifier on its own ever arrives is the driver's business:
-        // the Windows console reports raw key events and a remote terminal
-        // sends nothing until a chord completes. So this pins the half that can
-        // be checked anywhere — that it is a delay and not an instant reaction,
-        // and that the key costs nothing where it never arrives.
+        // Ctrl on its own is the start of a chord, not a missed one. Offering
+        // the list the moment somebody touched the modifier would fire on the
+        // way to every key they knew perfectly well.
+        //
+        // Holding it was tried as a second trigger and removed: a terminal
+        // sends nothing while a modifier is held alone, and the Windows console
+        // driver does not report it either, so the handler never once ran.
         session.Press(new Key(Terminal.Gui.Drivers.KeyCode.CtrlMask));
 
-        session.Screen.Should().NotContain("still holding");
+        session.Screen.Should().NotContain("not bound");
     }
 
     /// <summary>Redraws until the screen stops showing something, or patience runs out.</summary>

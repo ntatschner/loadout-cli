@@ -277,7 +277,7 @@ internal sealed class LauncherWindow : Window
         BindTheKeyboard();
         AddCommand(Command.Open, () => { _showPalette(this); return true; });
 
-        WatchForHesitation();
+        WatchForAMissedChord();
     }
 
     /// <summary>
@@ -596,15 +596,6 @@ internal sealed class LauncherWindow : Window
     private const string KeysTitle = "Keys";
 
     /// <summary>
-    /// How long somebody holds a modifier before it stops looking like the
-    /// start of a chord and starts looking like hesitation.
-    /// </summary>
-    private static readonly TimeSpan HesitationDelay = TimeSpan.FromMilliseconds(1500);
-
-    /// <summary>The pending hesitation timer, or null when nothing is waiting.</summary>
-    private object? _hesitation;
-
-    /// <summary>
     /// Puts the key list up, rather than toggling it, and says what prompted
     /// it. Called when somebody appears to be looking for a key rather than
     /// pressing one.
@@ -671,33 +662,40 @@ internal sealed class LauncherWindow : Window
     }
 
     /// <summary>
-    /// Watches for the two ways somebody signals they have lost the key they
-    /// were reaching for.
+    /// Watches for somebody signalling they have lost the key they were
+    /// reaching for.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The first is a guess that missed: a Ctrl chord nothing is bound to.
+    /// The signal is a guess that missed: a Ctrl chord nothing is bound to.
     /// That is a real keystroke, it arrives on every platform and over SSH,
-    /// and it is a better signal than any timer because the person has already
-    /// told us what they were hoping for.
+    /// and it beats any timer because the person has already told us what they
+    /// were hoping for.
     /// </para>
     /// <para>
-    /// The second is holding the modifier while trying to remember. That one
-    /// cannot be relied on: a terminal sends nothing at all while Ctrl is held
-    /// down on its own, so the event only ever arrives from a driver that
-    /// reports raw key events — the Windows console does, a remote terminal
-    /// does not. It is wired up because where it works it is the kinder of the
-    /// two, and where it does not it costs nothing: the handler simply never
-    /// runs, and the chord above still catches them.
+    /// Holding the modifier was the obvious alternative and it cannot be done.
+    /// A terminal sends nothing at all while Ctrl is held on its own, so the
+    /// event can only come from a driver reporting raw key events, and the
+    /// Windows console driver — the most likely candidate, selected here by
+    /// default — does not report them either. It was built, tried on a real
+    /// terminal, and never once fired. Terminal.Gui says as much of the
+    /// release half: not all drivers report key release.
     /// </para>
     /// </remarks>
-    private void WatchForHesitation()
+    private void WatchForAMissedChord()
     {
         // Fires only when nothing else claimed the key, so a bound chord does
         // its job and never reaches here.
         KeyDownNotHandled += (_, key) =>
         {
-            if (!key.IsCtrl || key.IsModifierOnly)
+            // A chord is Ctrl plus something. Asking IsModifierOnly is not
+            // enough on its own: a bare Ctrl arrived from the test harness with
+            // that false, and it was offered the key list as though it were a
+            // chord that missed. So the question asked is the one that matters
+            // — take the modifiers away and see whether any key is left.
+            if (!key.IsCtrl
+                || key.IsModifierOnly
+                || key.NoCtrl.NoAlt.NoShift.KeyCode == global::Terminal.Gui.Drivers.KeyCode.Null)
             {
                 return;
             }
@@ -706,48 +704,6 @@ internal sealed class LauncherWindow : Window
 
             key.Handled = true;
         };
-
-        _application.Keyboard.KeyDown += OnApplicationKeyDown;
-        _application.Keyboard.KeyUp += OnApplicationKeyUp;
-    }
-
-    private void OnApplicationKeyDown(object? sender, Key key)
-    {
-        // A modifier on its own, held. Auto-repeat sends it again and again,
-        // so a timer already waiting is left alone rather than restarted,
-        // which would push the moment further away the longer somebody held.
-        if (key.IsModifierOnly && key.IsCtrl)
-        {
-            _hesitation ??= _application.AddTimeout(HesitationDelay, () =>
-            {
-                OfferKeys("still holding Ctrl");
-                _hesitation = null;
-
-                // False: once is the point. A list that reappeared every one
-                // and a half seconds would be a nag rather than an offer.
-                return false;
-            });
-
-            return;
-        }
-
-        // Anything else means they found it, so the offer is withdrawn before
-        // it is ever made.
-        CancelHesitation();
-    }
-
-    private void OnApplicationKeyUp(object? sender, Key key) => CancelHesitation();
-
-    private void CancelHesitation()
-    {
-        if (_hesitation is not { } pending)
-        {
-            return;
-        }
-
-        _hesitation = null;
-
-        _application.RemoveTimeout(pending);
     }
 
     /// <summary>The key list, shown over the screen it describes.</summary>
@@ -1388,15 +1344,6 @@ internal sealed class LauncherWindow : Window
         {
             StopPulsing();
 
-            // These two are on the application rather than on this window, so
-            // they outlive it. The launcher is opened and closed repeatedly
-            // within one process — every command it runs comes back to a new
-            // window — and handlers left behind would pile up, each one
-            // holding a window that has been disposed.
-            _application.Keyboard.KeyDown -= OnApplicationKeyDown;
-            _application.Keyboard.KeyUp -= OnApplicationKeyUp;
-
-            CancelHesitation();
             CancelDismissal();
 
             _pending?.Cancel();
