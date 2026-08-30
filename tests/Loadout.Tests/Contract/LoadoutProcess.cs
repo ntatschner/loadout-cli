@@ -188,6 +188,30 @@ public sealed class LoadoutProcess : IDisposable
     /// </remarks>
     private const int ProcessInitialisationFailed = unchecked((int)0xC0000142);
 
+    /// <summary>
+    /// How many of these may be starting at once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// 0xC0000142 is Windows saying a process could not finish initialising,
+    /// and it is what comes back when too many are asked for at the same
+    /// moment. The retry below was written for a momentary version of that —
+    /// an executable being scanned just after a build — and it holds for one.
+    /// It does not hold for this: a run of the full suite failed thirty-nine
+    /// contract tests together, every one of them having exhausted all five
+    /// attempts, because the shortage lasted longer than the retries did.
+    /// </para>
+    /// <para>
+    /// So the number in flight is capped rather than the failures absorbed.
+    /// The tests still run in parallel and the suite is no slower in practice,
+    /// because the limit only binds when this many are already starting — and
+    /// past that point they were not really running in parallel anyway, they
+    /// were queueing inside Windows and sometimes losing.
+    /// </para>
+    /// </remarks>
+    private static readonly SemaphoreSlim Starting =
+        new(Math.Max(2, Environment.ProcessorCount / 2));
+
     /// <summary>Runs one command and captures everything it produced.</summary>
     public async Task<LoadoutRun> RunAsync(params string[] arguments)
     {
@@ -204,13 +228,30 @@ public sealed class LoadoutProcess : IDisposable
                 return run;
             }
 
-            // Give the resource a moment to come back rather than reporting a
-            // failure the command never had.
-            await Task.Delay(250).ConfigureAwait(false);
+            // Backing off further each time. A flat wait is right for an
+            // executable being scanned and wrong for a machine that is short of
+            // something: five attempts a quarter of a second apart is over in
+            // one second, and the shortage that failed thirty-nine tests at
+            // once lasted longer than that.
+            await Task.Delay(250 * (attempt + 1)).ConfigureAwait(false);
         }
     }
 
     private async Task<LoadoutRun> RunOnceAsync(string[] arguments)
+    {
+        await Starting.WaitAsync().ConfigureAwait(false);
+
+        try
+        {
+            return await RunOnceCoreAsync(arguments).ConfigureAwait(false);
+        }
+        finally
+        {
+            Starting.Release();
+        }
+    }
+
+    private async Task<LoadoutRun> RunOnceCoreAsync(string[] arguments)
     {
         var executable = Executable
             ?? throw new InvalidOperationException(
