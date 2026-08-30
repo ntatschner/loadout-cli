@@ -65,7 +65,7 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
     {
         var output = new CommandOutput(_console, settings);
 
-        var result = await _doctor.RunAsync().ConfigureAwait(false);
+        var result = await _doctor.RunAsync(cancellationToken).ConfigureAwait(false);
         if (result.Failed)
         {
             return output.Fail(result);
@@ -102,14 +102,14 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
 
         if (settings.Fix)
         {
-            var changed = await RemediateAsync(output, report, settings).ConfigureAwait(false);
+            var changed = await RemediateAsync(output, report, settings, cancellationToken).ConfigureAwait(false);
 
             if (changed)
             {
                 // Re-checked rather than assumed. A remedy that reported
                 // success without actually clearing the finding is exactly the
                 // failure a command like this exists to catch.
-                var recheck = await _doctor.RunAsync().ConfigureAwait(false);
+                var recheck = await _doctor.RunAsync(cancellationToken).ConfigureAwait(false);
 
                 if (recheck.Succeeded)
                 {
@@ -145,7 +145,8 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
     private async Task<bool> RemediateAsync(
         CommandOutput output,
         DiagnosticReport report,
-        DoctorSettings settings)
+        DoctorSettings settings,
+        CancellationToken cancellationToken)
     {
         var remedies = report.Remedies;
 
@@ -164,7 +165,7 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
 
         foreach (var remedy in remedies)
         {
-            var preview = await _remediation.PreviewAsync(remedy).ConfigureAwait(false);
+            var preview = await _remediation.PreviewAsync(remedy, cancellationToken).ConfigureAwait(false);
 
             if (preview.Failed)
             {
@@ -214,7 +215,7 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
 
         foreach (var preview in previews)
         {
-            var result = await _remediation.ApplyAsync(preview.Remedy).ConfigureAwait(false);
+            var result = await _remediation.ApplyAsync(preview.Remedy, cancellationToken).ConfigureAwait(false);
 
             if (result.Failed)
             {

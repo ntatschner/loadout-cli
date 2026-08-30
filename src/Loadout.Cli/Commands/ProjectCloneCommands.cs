@@ -44,7 +44,7 @@ public sealed class ProjectCloneCommand : AsyncCommand<ProjectCloneCommand.Setti
     {
         var output = new CommandOutput(_console, settings);
 
-        var result = await _projects.CloneAsync(settings.Project, settings.Destination)
+        var result = await _projects.CloneAsync(settings.Project, settings.Destination, cancellationToken)
             .ConfigureAwait(false);
 
         if (result.Failed)

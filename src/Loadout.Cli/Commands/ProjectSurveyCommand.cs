@@ -80,7 +80,7 @@ public sealed class ProjectSurveyCommand : AsyncCommand<ProjectSurveyCommand.Set
     {
         var output = new CommandOutput(_console, settings);
 
-        var surveyed = await _attribution.SurveyAsync().ConfigureAwait(false);
+        var surveyed = await _attribution.SurveyAsync(cancellationToken).ConfigureAwait(false);
         if (surveyed.Failed)
         {
             return output.Fail(surveyed);
