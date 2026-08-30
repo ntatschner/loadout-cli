@@ -226,7 +226,46 @@ public static class Program
         var app = new CommandApp(registrar);
         app.Configure(config => Configure(config, showFullExceptions));
 
-        return await app.RunAsync(Rewrite(launcherArgs)).ConfigureAwait(false);
+        // Commands are handed a token that Ctrl+C actually cancels. Without one
+        // supplied here they receive none at all, which is what the parameter
+        // added by Spectre 0.55 arrived as: present on every command and always
+        // uncancellable.
+        //
+        // The second press is deliberately left alone. A command that does not
+        // yet watch its token would otherwise swallow Ctrl+C and look like it
+        // had hung, which is worse than the abrupt exit it replaced — so the
+        // first press asks, and the second is the operating system's again.
+        using var stopping = new CancellationTokenSource();
+
+        ConsoleCancelEventHandler? onCancel = null;
+
+        onCancel = (_, e) =>
+        {
+            if (stopping.IsCancellationRequested)
+            {
+                return;
+            }
+
+            e.Cancel = true;
+            stopping.Cancel();
+        };
+
+        Console.CancelKeyPress += onCancel;
+
+        try
+        {
+            return await app.RunAsync(Rewrite(launcherArgs), stopping.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // Asked to stop and stopped. That is not a failure to report as
+            // one, but it is not success either.
+            return (int)ExitCode.Interrupted;
+        }
+        finally
+        {
+            Console.CancelKeyPress -= onCancel;
+        }
     }
 
     /// <summary>
