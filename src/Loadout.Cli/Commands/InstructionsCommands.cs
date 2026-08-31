@@ -659,6 +659,11 @@ public sealed class InstructionsValidateCommand : InstructionsCommandBase<Instru
         var errors = catalogue.Findings.Count(f => f.Severity == RuleFindingSeverity.Error);
         var warnings = catalogue.Findings.Count(f => f.Severity == RuleFindingSeverity.Warning);
 
+        // A copy that has fallen behind the built-in it replaces. Nothing else
+        // would ever say so: the copy wins by design, and it goes on winning
+        // after the original has been improved.
+        var stale = SpecialistOrigins.Stale(catalogue, Instructions.BuiltInText);
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -666,6 +671,12 @@ public sealed class InstructionsValidateCommand : InstructionsCommandBase<Instru
                 specialists = catalogue.Specialists.Count,
                 errors,
                 warnings,
+                stale = stale.Select(copy => new
+                {
+                    specialist = copy.Id,
+                    path = copy.Path,
+                    origin = copy.Origin.ToString().ToLowerInvariant(),
+                }),
                 findings = catalogue.Findings.Select(f => new
                 {
                     specialist = f.Rule,
@@ -696,10 +707,24 @@ public sealed class InstructionsValidateCommand : InstructionsCommandBase<Instru
                 + $"{finding.Detail.EscapeMarkup()}");
         }
 
+        foreach (var copy in stale)
+        {
+            output.WriteLine($"[yellow]stale[/] {SpecialistOrigins.Describe(copy).EscapeMarkup()}");
+        }
+
         output.WriteBlankLine();
+
+        // Staleness is not a defect and does not change the verdict: a copy
+        // that has fallen behind is still a valid specialist, deliberately
+        // chosen. It is said alongside rather than folded in, because "sound"
+        // printed directly under a warning reads as a contradiction.
+        var behind = stale.Count == 0
+            ? string.Empty
+            : $" {stale.Count} copy(s) behind the built-in they replace.";
+
         output.WriteLine(errors == 0 && warnings == 0
-            ? "[green]The specialist library is sound.[/]"
-            : $"{errors} error(s), {warnings} warning(s).");
+            ? $"[green]The specialist library is sound.[/][dim]{behind}[/]"
+            : $"{errors} error(s), {warnings} warning(s).{behind}");
 
         return Verdict(errors, warnings, settings.Strict);
     }

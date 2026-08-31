@@ -109,6 +109,87 @@ public sealed class SpecialistExportTests : IDisposable
     }
 
     [Fact]
+    public async Task A_copy_is_not_stale_the_moment_it_is_made()
+    {
+        var text = _library.BuiltInText("language.rust")!;
+
+        await WriteCopyAsync(text, SpecialistOrigins.Fingerprint(text));
+
+        var catalogue = await _library.LoadAsync(_root);
+
+        SpecialistOrigins.Stale(catalogue, _library.BuiltInText).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Editing_a_copy_does_not_make_it_stale()
+    {
+        var text = _library.BuiltInText("language.rust")!;
+
+        // Editing is the entire reason to copy one. If difference were the
+        // signal, every copy would be reported the moment it did its job.
+        await WriteCopyAsync(
+            text.Replace("Prefer iterators", "Prefer whatever we prefer", StringComparison.Ordinal),
+            SpecialistOrigins.Fingerprint(text));
+
+        var catalogue = await _library.LoadAsync(_root);
+
+        SpecialistOrigins.Stale(catalogue, _library.BuiltInText).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_copy_is_stale_when_the_built_in_has_moved_since()
+    {
+        var text = _library.BuiltInText("language.rust")!;
+
+        // The fingerprint of a built-in that is no longer what ships.
+        await WriteCopyAsync(text, SpecialistOrigins.Fingerprint(text + "something else"));
+
+        var catalogue = await _library.LoadAsync(_root);
+
+        var stale = SpecialistOrigins.Stale(catalogue, _library.BuiltInText);
+
+        stale.Should().ContainSingle().Which.Id.Should().Be("language.rust");
+    }
+
+    [Fact]
+    public async Task A_copy_that_records_nothing_is_left_alone()
+    {
+        var text = _library.BuiltInText("language.rust")!;
+
+        await WriteCopyAsync(text, fingerprint: null);
+
+        var catalogue = await _library.LoadAsync(_root);
+
+        // Written by hand rather than exported: there is no original it is
+        // falling behind, and a warning would be about nothing.
+        SpecialistOrigins.Stale(catalogue, _library.BuiltInText).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_fingerprint_ignores_line_endings()
+    {
+        // A copy taken on Windows and checked on Linux is the same specialist.
+        // A fingerprint that disagreed would call every copy stale on the other
+        // platform, and this suite runs on three.
+        SpecialistOrigins.Fingerprint("a\r\nb\r\n")
+            .Should().Be(SpecialistOrigins.Fingerprint("a\nb\n"));
+    }
+
+    private async Task WriteCopyAsync(string text, string? fingerprint)
+    {
+        var opening = text.IndexOf('\n', StringComparison.Ordinal);
+
+        var stamped = fingerprint is null
+            ? text
+            : text[..(opening + 1)]
+                + $"# {SpecialistOrigins.Marker}{fingerprint}" + Environment.NewLine
+                + text[(opening + 1)..];
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_root, "global", "specialists", "language", "rust.md"), stamped);
+    }
+
+    [Fact]
     public async Task A_stamp_above_the_frontmatter_is_refused()
     {
         var text = _library.BuiltInText("language.rust")!;

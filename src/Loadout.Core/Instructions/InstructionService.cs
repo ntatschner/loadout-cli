@@ -34,6 +34,12 @@ public sealed record InstructionRequest(
 public interface IInstructionService
 {
     /// <summary>Loads the library for a project, so it can be listed or inspected.</summary>
+    /// <summary>
+    /// The text of a built-in specialist as it ships, or null when there is no
+    /// built-in of that id. Used to tell a copy whether the original has moved.
+    /// </summary>
+    string? BuiltInText(string id);
+
     Task<SpecialistCatalogue> LibraryAsync(
         string? workspacePath,
         string? slug = null,
@@ -112,6 +118,9 @@ internal sealed class InstructionService : IInstructionService
     }
 
     /// <inheritdoc />
+    /// <inheritdoc />
+    public string? BuiltInText(string id) => _library.BuiltInText(id);
+
     public Task<SpecialistCatalogue> LibraryAsync(
         string? workspacePath,
         string? slug = null,

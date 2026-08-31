@@ -187,10 +187,16 @@ public sealed class InstructionsExportCommand : AsyncCommand<InstructionsExportS
             return text;
         }
 
+        // The fingerprint is what makes staleness answerable later. A copy
+        // differing from the built-in proves nothing — differing is the reason
+        // to make one. What matters is whether the built-in has moved since,
+        // and that can only be known by recording what it looked like then.
         var note =
             $"# Copied from the {version} built-in library. Edit freely: this file replaces"
             + Environment.NewLine
             + $"# the built-in {id} wherever it applies, including when the built-in improves."
+            + Environment.NewLine
+            + $"# {SpecialistOrigins.Marker}{SpecialistOrigins.Fingerprint(text)}"
             + Environment.NewLine;
 
         return text[..(after + 1)] + note + text[(after + 1)..];
