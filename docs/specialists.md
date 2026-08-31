@@ -160,6 +160,46 @@ Every line carries the reason it is there, and `--json` gives the same
 information as a document. The explanation runs through the same service the
 launch path uses, so it describes what would actually be composed.
 
+## Reading one
+
+`explain` says which specialists a task would load. To read what one of them
+actually says:
+
+```bash
+loadout instructions show language.rust
+```
+
+```text
+Rust  language.rust
+built-in, about 214 tokens
+
+Loads when
+  task mentions: rust, cargo, borrow checker
+  files match: **/*.rs, **/Cargo.toml
+
+## Cares about
+
+Lifetimes and ownership, and what the code does when something fails.
+...
+```
+
+The whole text, what triggers it, and what it costs. Worth reading before
+writing your own version of one: the shipped specialists are deliberately
+short, and a project specialist with the same id replaces rather than
+supplements the one it shadows.
+
+To see what there is at all:
+
+```bash
+loadout instructions list            # everything available to this project
+loadout instructions list --kind language
+```
+
+The library ships 71 specialists — 4 foundations, 4 modes, 10 languages, 8
+frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions and 11 skills.
+They are embedded in the binary rather than kept on disk, so the command is the
+way to read them; there is no directory to browse.
+
 ## The context budget
 
 More guidance is not better. The ceiling is in estimated tokens:

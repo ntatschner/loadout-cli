@@ -36,7 +36,8 @@
 | `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory |
 | `loadout sessions` | List recent agent sessions across every agent, newest first |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
-| `loadout instructions list\|show\|explain\|validate` | Inspect the specialists an agent is given, and why each one is there |
+| `loadout instructions list\|show\|explain` | Read the specialists, and see which ones a task would load |
+| `loadout instructions audit\|validate` | Check a project against what its specialists ask for, or check the library itself |
 | `loadout instructions new <id>` | Draft a specialist or skill in the workspace, or in one project |
 | `loadout usage [--days\|--by\|--project]` | What the agents have spent, by project, day, model or agent |
 | `loadout telemetry serve\|status` | Receive, locally, what launched agents report about their own usage |
