@@ -301,6 +301,8 @@ public sealed partial class InstructionSplitter
             }
         }
 
+        Consolidate(mentions);
+
         return [.. mentions
             .Where(mention => mention.Value >= 2)
             .OrderByDescending(mention => mention.Value)
@@ -308,6 +310,37 @@ public sealed partial class InstructionSplitter
             .Take(3)
             .Select(mention => GlobFor(mention.Key))
             .Distinct(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// Folds a bare file name into the full path of the same file, when the
+    /// section named both.
+    /// </summary>
+    /// <remarks>
+    /// Prose introduces a file once by its path and then refers to it by name:
+    /// ".github/workflows/release-images.yml runs on every push", and
+    /// thereafter "release-images.yml". Counted separately the short form wins,
+    /// and the glob that came out of it was the bare name — which matches a
+    /// file at the root of the repository and never the one the section is
+    /// about. That is the silent kind of wrong this whole suggestion is
+    /// supposed to avoid, and it happened on the first real file it was tried
+    /// against.
+    /// </remarks>
+    private static void Consolidate(Dictionary<string, int> mentions)
+    {
+        foreach (var name in mentions.Keys.Where(key => !key.Contains('/', StringComparison.Ordinal)).ToList())
+        {
+            var full = mentions.Keys.FirstOrDefault(
+                key => key.EndsWith('/' + name, StringComparison.Ordinal));
+
+            if (full is null)
+            {
+                continue;
+            }
+
+            mentions[full] += mentions[name];
+            mentions.Remove(name);
+        }
     }
 
     /// <summary>
@@ -371,9 +404,17 @@ public sealed partial class InstructionSplitter
         // to be a directory, which is how these headings are written.
         var name = trimmed[(trimmed.LastIndexOf('/') + 1)..];
 
-        return name.Contains('.', StringComparison.Ordinal)
+        if (!name.Contains('.', StringComparison.Ordinal))
+        {
+            return trimmed + "/**";
+        }
+
+        // A file named without any directory is matched wherever it lives. As
+        // written it would match only the root of the repository, which is
+        // almost never where the file being talked about actually is.
+        return trimmed.Contains('/', StringComparison.Ordinal)
             ? trimmed
-            : trimmed + "/**";
+            : "**/" + trimmed;
     }
 
     private sealed record Section(string Title, string Heading, List<string> Lines);

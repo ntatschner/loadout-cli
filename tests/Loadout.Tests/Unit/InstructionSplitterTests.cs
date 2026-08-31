@@ -354,6 +354,50 @@ This file says how to work on the project.
     }
 
     [Fact]
+    public async Task A_file_introduced_by_path_and_then_by_name_keeps_its_path()
+    {
+        var source = WriteSource("""
+# Project instructions
+
+## Deploy
+
+- `.github/workflows/release-images.yml` runs on every push.
+- `release-images.yml` pushes the images.
+- and `release-images.yml` runs to completion.
+""");
+
+        var map = await _splitter.SuggestMapAsync(source);
+
+        // Prose introduces a file by its path once and then calls it by name.
+        // Counted apart the short form wins, and the glob that came out was the
+        // bare name — which matches a file at the root of the repository and
+        // never the one the section is about. Found on the first real file this
+        // was tried against.
+        map.Value!.Rules.Single().Globs
+            .Should().Equal(".github/workflows/release-images.yml");
+    }
+
+    [Fact]
+    public async Task A_file_named_without_a_directory_is_matched_wherever_it_lives()
+    {
+        var source = WriteSource("""
+# Project instructions
+
+## Deploy
+
+- `release-images.yml` pushes the images.
+- and `release-images.yml` runs to completion.
+""");
+
+        var map = await _splitter.SuggestMapAsync(source);
+
+        // Nothing in the section says where it is, so the glob has to allow for
+        // it being anywhere. Matching only the root would be a rule that never
+        // loads.
+        map.Value!.Rules.Single().Globs.Should().Equal("**/release-images.yml");
+    }
+
+    [Fact]
     public async Task A_file_something_else_already_split_is_refused()
     {
         // The shape these projects arrive in: a short core that points at rule
