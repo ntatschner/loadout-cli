@@ -59,7 +59,20 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             // Looked for as a distinct capability because the two spellings
             // behave very differently: the file form has no length limit, the
             // inline form is bounded by the operating system's command line.
-            [SystemPromptFile] = ["--append-system-prompt-file"],
+            //
+            // Both spellings of the help are matched. Claude Code 2.1 documents
+            // this flag only inside another option's description, and only as
+            // "--append-system-prompt[-file]" — the brackets meaning the suffix
+            // is optional. There is no entry of its own to find, so looking for
+            // the plain form found nothing and the capability was recorded as
+            // absent on a build that has it.
+            //
+            // What followed was silent and total: the launcher fell back to
+            // passing the context inline, a 39KB context exceeded what a
+            // command line takes, and it attached nothing at all. The agent was
+            // started with no instructions, no specialists and no memory index,
+            // and only a warning said so.
+            [SystemPromptFile] = ["--append-system-prompt-file", "--append-system-prompt[-file]"],
 
             [AgentCapabilities.AdditionalDirectories] = ["--add-dir"],
             [AgentCapabilities.McpConfig] = ["--mcp-config"],
