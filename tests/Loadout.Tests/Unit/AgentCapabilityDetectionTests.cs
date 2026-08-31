@@ -1,6 +1,5 @@
 using FluentAssertions;
 using Loadout.Agents.Claude;
-using Loadout.Platform.Common;
 using Loadout.Tests.Fakes;
 using Xunit;
 
@@ -51,17 +50,13 @@ public sealed class AgentCapabilityDetectionTests
 
     private static async Task<bool> DetectsFileFlagAsync(string help)
     {
+        // A stub rather than the real resolver, which searches this machine's
+        // PATH. With Claude installed the detection ran and the tests passed;
+        // on a runner without it the resolver found nothing, detection never
+        // happened, and every capability came back false — so two tests failed
+        // and the third passed for entirely the wrong reason.
         var adapter = new ClaudeAdapter(
-            new ExecutableResolver(
-                new FakeEnvironmentProvider(Path.GetTempPath())
-                {
-                    PathDirectories = Environment.GetEnvironmentVariable("PATH")?
-                        .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries) ?? [],
-                    ExecutableExtensions = OperatingSystem.IsWindows()
-                        ? [".exe", ".cmd", ".bat"]
-                        : [string.Empty],
-                },
-                []),
+            new StubResolver(Path.Combine(Path.GetTempPath(), "claude")),
             new StubProcessLauncher(help),
             []);
 
