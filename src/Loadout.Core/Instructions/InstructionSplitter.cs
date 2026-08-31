@@ -304,13 +304,31 @@ public sealed partial class InstructionSplitter
         Consolidate(mentions);
 
         return [.. mentions
-            .Where(mention => mention.Value >= 2)
+            .Where(mention => mention.Value >= MentionsBeforeScoping)
             .OrderByDescending(mention => mention.Value)
             .ThenBy(mention => mention.Key, StringComparer.Ordinal)
             .Take(3)
             .Select(mention => GlobFor(mention.Key))
             .Distinct(StringComparer.Ordinal)];
     }
+
+    /// <summary>
+    /// How often a section has to name a path before it is taken to be what
+    /// the section is about.
+    /// </summary>
+    /// <remarks>
+    /// Two was the first guess and it was too low, on the first real file it
+    /// met. A section of code conventions defined one file in its opening
+    /// bullet and mentioned it again forty lines later, and two mentions in
+    /// fifty-seven lines about a dozen subjects was enough to scope the whole
+    /// section to that one file — which would have stopped the conventions
+    /// loading for every other file in the repository.
+    ///
+    /// Three is a section returning to something. Tuned against one document,
+    /// which is thin evidence, so it errs towards suggesting nothing: an empty
+    /// glob is refused and noticed, a wrong one is silent.
+    /// </remarks>
+    private const int MentionsBeforeScoping = 3;
 
     /// <summary>
     /// Folds a bare file name into the full path of the same file, when the

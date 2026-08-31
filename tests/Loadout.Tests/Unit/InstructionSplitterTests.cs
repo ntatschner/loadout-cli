@@ -258,6 +258,7 @@ This file says how to work on the project.
 
 - Components live under `src/Web/Components`.
 - Anything shared goes in `src/Web/Components` as well.
+- And tests for them sit beside `src/Web/Components`.
 """);
 
         var map = await _splitter.SuggestMapAsync(source);
@@ -302,8 +303,9 @@ This file says how to work on the project.
 
 ## Conventions
 
-- Written twice so frequency alone would let it through: `{candidate}`.
+- Written three times so frequency alone would let it through: `{candidate}`.
 - And again here: `{candidate}`.
+- And once more: `{candidate}`.
 """);
 
         var map = await _splitter.SuggestMapAsync(source);
@@ -323,6 +325,7 @@ This file says how to work on the project.
 
 - Components live under `src/Other/Place`.
 - And again in `src/Other/Place`.
+- And once more `src/Other/Place`.
 """);
 
         var map = await _splitter.SuggestMapAsync(source);
@@ -340,10 +343,10 @@ This file says how to work on the project.
 
 ## Everything
 
-- `src/a/x.cs` and `src/a/x.cs`
-- `src/b/y.cs` and `src/b/y.cs`
-- `src/c/z.cs` and `src/c/z.cs`
-- `src/d/w.cs` and `src/d/w.cs`
+- `src/a/x.cs` and `src/a/x.cs` and `src/a/x.cs`
+- `src/b/y.cs` and `src/b/y.cs` and `src/b/y.cs`
+- `src/c/z.cs` and `src/c/z.cs` and `src/c/z.cs`
+- `src/d/w.cs` and `src/d/w.cs` and `src/d/w.cs`
 """);
 
         var map = await _splitter.SuggestMapAsync(source);
@@ -378,6 +381,31 @@ This file says how to work on the project.
     }
 
     [Fact]
+    public async Task A_file_a_long_section_defines_once_and_mentions_later_is_not_its_subject()
+    {
+        var source = WriteSource("""
+# Project instructions
+
+## Code conventions
+
+- Panel (`server/src/panel.rs`): maud and htmx, with helpers and gates.
+- Prefer explicit names over short ones.
+- Errors say what to do about them.
+- Migrations are never edited once merged.
+- Routes go in `panel.rs` with a nav link and a docs entry.
+""");
+
+        var map = await _splitter.SuggestMapAsync(source);
+
+        // A definition in the opening bullet and one aside later is not a
+        // section about that file. Scoping conventions to it would stop them
+        // loading for every other file in the repository — found on a real
+        // document, where two mentions across fifty-seven lines about a dozen
+        // subjects was enough to do exactly that.
+        map.Value!.Rules.Single().Globs.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_file_named_without_a_directory_is_matched_wherever_it_lives()
     {
         var source = WriteSource("""
@@ -387,6 +415,7 @@ This file says how to work on the project.
 
 - `release-images.yml` pushes the images.
 - and `release-images.yml` runs to completion.
+- and `release-images.yml` is the only one.
 """);
 
         var map = await _splitter.SuggestMapAsync(source);
