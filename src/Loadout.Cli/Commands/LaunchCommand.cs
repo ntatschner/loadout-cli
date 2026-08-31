@@ -85,7 +85,8 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
             Task: settings.Task,
             Specialists: settings.Specialist,
             ExcludedSpecialists: settings.Without,
-            Mode: settings.Mode);
+            Mode: settings.Mode,
+            DryRun: settings.DryRun);
 
         var result = await _launcher.LaunchAsync(request, cancellationToken).ConfigureAwait(false);
         if (result.Failed)
@@ -206,7 +207,8 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
             Task: settings.Task,
             Specialists: settings.Specialist,
             ExcludedSpecialists: settings.Without,
-            Mode: settings.Mode);
+            Mode: settings.Mode,
+            DryRun: settings.DryRun);
 
         var result = await _launcher.LaunchAsync(request, cancellationToken).ConfigureAwait(false);
         if (result.Failed)

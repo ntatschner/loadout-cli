@@ -269,6 +269,26 @@ public sealed class RealLaunchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_dry_run_prepares_everything_and_starts_nothing()
+    {
+        var result = await _launcher.LaunchAsync(new LaunchRequest(Slug, "stub", DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error ?? string.Empty);
+
+        // The stub writes this the moment it runs. --dry-run is documented as
+        // changing nothing, and the launcher read it nowhere: asked what it
+        // would do, it started the agent — which on a real terminal is a
+        // session opening in front of somebody who asked for a description of
+        // one. The second command found doing this, after 'workspace save'.
+        File.Exists(_report).Should().BeFalse("a dry run must not start the agent");
+
+        // Everything ahead of the agent still happens, because all of it is
+        // preparation and none of it changes anything: the preflight, the
+        // compiled context, the specialists. Only the last step is skipped.
+        result.Value!.Warnings.Should().Contain(w => w.Contains("Dry run", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task The_agent_starts_in_the_repository()
     {
         await _launcher.LaunchAsync(new LaunchRequest(Slug, "stub"));

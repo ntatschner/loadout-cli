@@ -44,6 +44,12 @@ namespace Loadout.Agents;
 /// because the launcher resolves it once and the resolver should not resolve it
 /// again and possibly differently.
 /// </param>
+/// <param name="DryRun">
+/// Prepare everything and start nothing. Everything ahead of the agent
+/// starting is worth seeing — the preflight, the compiled context, the
+/// specialists chosen, the warnings — and none of it changes anything. Only
+/// the last step does, so only the last step is skipped.
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -59,7 +65,8 @@ public sealed record LaunchRequest(
     IReadOnlyList<string>? Specialists = null,
     IReadOnlyList<string>? ExcludedSpecialists = null,
     string? Mode = null,
-    string? RepositoryPath = null);
+    string? RepositoryPath = null,
+    bool DryRun = false);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -322,6 +329,21 @@ public sealed class AgentLauncher : IAgentLauncher
             if (TelemetryEnvironment.Describe(config.Telemetry) is { Length: > 0 } telemetryWarning)
             {
                 warnings.Add(telemetryWarning);
+            }
+
+            // Asked what it would do, and told. --dry-run reached this method
+            // and was never read: the launcher went on to start the agent, and
+            // on an interactive terminal that is a session opening in front of
+            // somebody who asked for a description of one.
+            if (request.DryRun)
+            {
+                warnings.Add(
+                    $"Dry run: {invocation.Executable} would be started with "
+                    + $"{invocation.Arguments.Count} argument(s). Nothing was launched.");
+
+                // No session ran, so there is nothing it could have changed.
+                return OperationResult<LaunchOutcome>.Ok(
+                    new LaunchOutcome(0, syncOutcome, warnings, preflight, null));
             }
 
             var runResult = await _processes.RunInteractiveAsync(
