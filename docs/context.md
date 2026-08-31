@@ -23,11 +23,30 @@ environment:
 ```
 
 At launch the compiler assembles those into one file, ordered from general to
-specific — organisation policy, then project, then the agent's own
-instructions, then the profile, then any handoff — so where two sources
-disagree the agent reads the narrower one last. The file lands in a per-launch
-runtime directory with owner-only permissions and is deleted when the agent
-exits.
+specific — the specialists the task resolved to, then organisation policy, then
+project, then the agent's own instructions, then the profile, then any handoff
+— so where two sources disagree the agent reads the narrower one last. The file
+lands in a per-launch runtime directory with owner-only permissions and is
+deleted when the agent exits.
+
+Specialists come first because they are the most general half of it: the Rust
+specialist says what Rust should look like, and the project says how this
+codebase departs from that. They are also the only part nobody writes per
+project — which language, framework and database specialists apply is worked out
+from the repository itself, so a project with three hundred `.rs` files gets the
+Rust specialist without anybody saying so. See [specialists.md](specialists.md),
+and `loadout instructions explain --project <slug>` to see what a launch would
+actually load and why.
+
+Two limits apply to everything in the list. A source file over 512KB is left out
+and reported rather than truncated, because half a document is worse than a
+clear note saying it was skipped. And a file named twice — by both the base
+context and a profile, say — is included once.
+
+The agent's own `agents/<agent>/instructions.md` is the one entry the compiler
+adds itself rather than reading from the manifest, and the only one whose
+absence is not reported: most projects have none, and warning about it every
+launch would train people to ignore the warning that matters.
 
 Only the launching agent's instructions are included, so a Claude session is
 never handed Codex's notes. Adapters differ only in delivery: Claude gets the

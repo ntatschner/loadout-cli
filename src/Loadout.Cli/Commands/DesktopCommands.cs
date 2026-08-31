@@ -166,6 +166,33 @@ public sealed class WorkspaceSaveCommand : AsyncCommand<WorkspaceSaveCommand.Set
             return CommandOutput.Success();
         }
 
+        // --dry-run means change nothing, and this went straight past it:
+        // asked what it would do, the command committed the workspace and
+        // pushed it. Every other mutating command here honours the flag; this
+        // one never read it, and the wording afterwards said "Saved and pushed"
+        // either way, so the only sign was in the repository.
+        if (settings.DryRun)
+        {
+            if (output.IsJson)
+            {
+                output.WriteJson(new
+                {
+                    committed = false,
+                    changes = pending.Value.Count,
+                    pushed = false,
+                    dryRun = true,
+                });
+            }
+            else
+            {
+                output.WriteLine(settings.Local
+                    ? $"[bold]Would save[/] {pending.Value.Count} change(s) locally."
+                    : $"[bold]Would save and push[/] {pending.Value.Count} change(s).");
+            }
+
+            return CommandOutput.Success();
+        }
+
         var result = await _workspace.SaveAsync(
             settings.Project ?? "workspace",
             "manual",
