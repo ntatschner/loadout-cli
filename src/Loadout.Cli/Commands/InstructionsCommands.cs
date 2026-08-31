@@ -359,6 +359,22 @@ public sealed class InstructionsShowCommand : InstructionsCommandBase<Instructio
     }
 }
 
+/// <summary>Options for auditing a project against its specialists.</summary>
+public sealed class InstructionsAuditSettings : GlobalSettings
+{
+    [CommandOption("--project <PROJECT>")]
+    [Description("Project to audit. Defaults to the repository you are in.")]
+    public string? Project { get; init; }
+
+    [CommandOption("--mode <MODE>")]
+    [Description("Posture: advise, investigate, implement or review.")]
+    public string? Mode { get; init; }
+
+    [CommandOption("--strict")]
+    [Description("Exit non-zero when anything is found, for use in CI.")]
+    public bool Strict { get; init; }
+}
+
 /// <summary>Options for explaining a resolution.</summary>
 public sealed class InstructionsExplainSettings : GlobalSettings
 {
@@ -886,5 +902,146 @@ public sealed class InstructionsNewCommand : InstructionsCommandBase<Instruction
         output.WriteLine("[dim]  loadout instructions validate[/]");
 
         return CommandOutput.Success();
+    }
+}
+
+/// <summary>
+/// Reports where a repository does something its own specialists advise
+/// against.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The specialists say how work here should be done, and nothing has ever
+/// checked whether it is. This counts a small number of measurable rules and
+/// reports what it finds, quoting the rule each time so the finding has a
+/// source rather than being the tool's own opinion.
+/// </para>
+/// <para>
+/// It reads and reports. It proposes no edit and makes none: what to do about a
+/// deviation is a judgement about a codebase, and putting the question in front
+/// of somebody is the whole job.
+/// </para>
+/// </remarks>
+[Description("Report where a project departs from what its specialists ask for.")]
+[CommandMeta(CommandCategory.AgentConfiguration,
+    Intent = "conventions audit deviations standards compliance check code")]
+public sealed class InstructionsAuditCommand : InstructionsCommandBase<InstructionsAuditSettings>
+{
+    public InstructionsAuditCommand(
+        IInstructionService instructions,
+        IWorkspaceManager workspace,
+        IProjectService projects,
+        IGitManager git,
+        IAnsiConsole console)
+        : base(instructions, workspace, projects, git, console)
+    {
+    }
+
+    /// <inheritdoc />
+    protected override async Task<int> ExecuteAsync(
+        CommandContext context,
+        InstructionsAuditSettings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(Console, settings);
+
+        var project = await ProjectAsync(settings.Project, settings.Repo).ConfigureAwait(false);
+        var repository = await RepositoryAsync(project, settings.Repo).ConfigureAwait(false);
+
+        if (repository is null)
+        {
+            return output.Fail(
+                "There is no repository here to audit. Name a project, or run this inside one.",
+                ExitCode.RepositoryUnavailable);
+        }
+
+        var manifest = project is not null && WorkspacePath is not null
+            ? (await Workspace.ReadProjectAsync(project.Entry.Slug, cancellationToken)
+                .ConfigureAwait(false)).Value
+            : null;
+
+        // Asked of the same resolver a launch uses. A check for a language the
+        // project is not written in is noise, and its specialist would not be
+        // loaded either — so what applies here is what would apply then.
+        var resolved = await Instructions.ResolveAsync(new InstructionRequest(
+            manifest,
+            repository,
+            WorkspacePath,
+            settings.Agent ?? manifest?.Agents.Default ?? "claude",
+            Mode: settings.Mode), cancellationToken).ConfigureAwait(false);
+
+        if (resolved.Failed)
+        {
+            return output.Fail(resolved);
+        }
+
+        var applicable = resolved.Value!.Selected
+            .Select(selection => selection.Specialist.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var findings = ConventionAuditor.Audit(
+            repository, applicable.Contains, cancellationToken);
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                project = project?.Entry.Slug,
+                repository,
+                checks = ConventionAuditor.Checks.Count,
+                applicable = applicable.Count,
+                findings = findings.Select(finding => new
+                {
+                    specialist = finding.Check.SpecialistId,
+                    rule = finding.Check.Rule,
+                    occurrences = finding.Occurrences,
+                    filesRead = finding.FilesRead,
+                    caveat = finding.Check.Caveat,
+                    files = finding.Files.Select(file => new { path = file.Path, count = file.Count }),
+                }),
+            });
+
+            return findings.Count > 0 && settings.Strict
+                ? (int)ExitCode.GeneralFailure
+                : CommandOutput.Success();
+        }
+
+        if (findings.Count == 0)
+        {
+            output.WriteLine(
+                "[green]Nothing to report.[/] "
+                + $"[dim]{ConventionAuditor.Checks.Count} check(s), of which the ones for this "
+                + "project's specialists found no departures.[/]");
+
+            return CommandOutput.Success();
+        }
+
+        foreach (var finding in findings)
+        {
+            output.WriteBlankLine();
+            output.WriteLine(
+                $"[yellow]{finding.Occurrences}[/] in {finding.FilesRead} file(s)  "
+                + $"[dim]{Markup.Escape(finding.Check.SpecialistId)}[/]");
+            output.WriteLine($"  [bold]{Markup.Escape(finding.Check.Rule)}[/]");
+
+            foreach (var (path, count) in finding.Files)
+            {
+                output.WriteLine($"    {count,4}  {Markup.Escape(path)}");
+            }
+
+            // Said with the finding rather than in a footnote. A count whose
+            // limits are not stated is one somebody either over-trusts once or
+            // stops reading entirely.
+            output.WriteLine($"  [dim]{Markup.Escape(finding.Check.Caveat)}[/]");
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine(
+            "[dim]Nothing was changed. These are counts, not verdicts: read them against what "
+            + "the code is for.[/]");
+
+        return settings.Strict ? (int)ExitCode.GeneralFailure : CommandOutput.Success();
     }
 }

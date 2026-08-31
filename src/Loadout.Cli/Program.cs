@@ -538,6 +538,7 @@ public static class Program
             instructions.AddCommand<InstructionsListCommand>("list");
             instructions.AddCommand<InstructionsShowCommand>("show");
             instructions.AddCommand<InstructionsExplainCommand>("explain");
+            instructions.AddCommand<InstructionsAuditCommand>("audit");
             instructions.AddCommand<InstructionsValidateCommand>("validate");
             instructions.AddCommand<InstructionsNewCommand>("new");
         });
