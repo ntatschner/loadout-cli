@@ -141,6 +141,19 @@ public sealed class SetupCommand : AsyncCommand<SetupCommand.Settings>
             return output.Fail(missing, ExitCode.InvalidArguments);
         }
 
+        if (settings.DryRun)
+        {
+            // The wizard clones a workspace, writes configuration and can
+            // register projects. Describing that is the most this can honestly
+            // do without running it, and running it is the thing --dry-run
+            // exists to prevent.
+            output.WriteLine(
+                "[bold]Would run setup[/]: clone or create the workspace, write this machine's "
+                + "configuration, and register what you asked for. Nothing was changed.");
+
+            return CommandOutput.Success();
+        }
+
         return await _wizard.RunAsync(request).ConfigureAwait(false);
     }
 }

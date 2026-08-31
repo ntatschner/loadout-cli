@@ -80,6 +80,20 @@ public sealed class ProjectLinkCommand : AsyncCommand<ProjectLinkCommand.Setting
             targets = [resolution.Value];
         }
 
+        if (settings.DryRun)
+        {
+            foreach (var project in targets)
+            {
+                output.WriteLine(
+                    $"[bold]Would mark[/] {Markup.Escape(project.LocalPath ?? "?")} as "
+                    + Markup.Escape(project.Entry.Slug));
+            }
+
+            output.WriteLine("[dim]Nothing was changed.[/]");
+
+            return CommandOutput.Success();
+        }
+
         var linked = 0;
 
         foreach (var project in targets)

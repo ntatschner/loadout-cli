@@ -127,6 +127,15 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
             }
         }
 
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would download and install[/] {Markup.Escape(check.AvailableVersion)}. "
+                + "Nothing was downloaded and nothing was changed.");
+
+            return CommandOutput.Success();
+        }
+
         output.WriteLine("[dim]Downloading and verifying...[/]");
 
         var applyResult = await _updates.ApplyAsync(check).ConfigureAwait(false);

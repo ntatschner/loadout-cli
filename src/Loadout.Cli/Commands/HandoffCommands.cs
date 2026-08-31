@@ -86,6 +86,14 @@ public sealed class HandoffCreateCommand : AsyncCommand<HandoffCreateCommand.Set
             return await ShowAsync(output, slug, settings).ConfigureAwait(false);
         }
 
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would write[/] a handoff for {Markup.Escape(slug)}. Nothing was changed.");
+
+            return CommandOutput.Success();
+        }
+
         var created = await _handoffs.CreateAsync(slug, settings.Name).ConfigureAwait(false);
         if (created.Failed)
         {

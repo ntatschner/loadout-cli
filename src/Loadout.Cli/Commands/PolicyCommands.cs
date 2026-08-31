@@ -245,6 +245,15 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
 
         if (settings.Global)
         {
+            if (settings.DryRun)
+            {
+                output.WriteLine(
+                    "[bold]Would configure[/] core.excludesFile to the launcher's global "
+                    + "exclude file. Nothing was changed.");
+
+                return CommandOutput.Success();
+            }
+
             var result = await _policies.InstallGlobalExcludesAsync().ConfigureAwait(false);
 
             if (result.Failed)
@@ -262,6 +271,21 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
         if (targets.Failed)
         {
             return output.Fail(targets);
+        }
+
+        if (settings.DryRun)
+        {
+            var verb = settings.Remove ? "remove" : "install";
+
+            foreach (var path in targets.Value!)
+            {
+                output.WriteLine(
+                    $"[bold]Would {verb}[/] the pre-commit hook in {Markup.Escape(path)}");
+            }
+
+            output.WriteLine("[dim]Nothing was changed.[/]");
+
+            return CommandOutput.Success();
         }
 
         foreach (var path in targets.Value!)
