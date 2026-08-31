@@ -119,6 +119,8 @@ public sealed class DesktopCommand : AsyncCommand<DesktopCommand.Settings>
 
 /// <summary>Commits and optionally pushes workspace changes (spec sections 45, 46, 76).</summary>
 [Description("Commit workspace changes, and push them.")]
+[CommandMeta(CommandCategory.Workspace,
+    Intent = "commit push share workspace changes save", Mutates = true, RequiresNetwork = true)]
 public sealed class WorkspaceSaveCommand : AsyncCommand<WorkspaceSaveCommand.Settings>
 {
     private readonly IWorkspaceManager _workspace;

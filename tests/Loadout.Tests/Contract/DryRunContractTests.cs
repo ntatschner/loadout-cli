@@ -23,19 +23,44 @@ namespace Loadout.Tests.Contract;
 public sealed class DryRunContractTests
 {
     /// <summary>
-    /// Commands that change files or configuration when told to.
+    /// Commands that change files or configuration when told to, taken from
+    /// what each one declares about itself.
     /// </summary>
-    public static TheoryData<string> Mutating =>
-    [
-        "doctor",
-        "drift",
-        "migrate",
-        "memory compress",
-        "rules split",
-        "project survey",
-        "backup restore",
-        "memory import",
-    ];
+    /// <remarks>
+    /// <para>
+    /// This was a list written by hand, and it drifted exactly as a hand-written
+    /// list does. It named eight commands; thirteen declare that they mutate,
+    /// and the two sets do not even contain one another. 'workspace save' was in
+    /// neither — it declared no metadata at all — and it went on to commit and
+    /// push a workspace when asked what it would do.
+    /// </para>
+    /// <para>
+    /// Network commands are left out because this runs them: setup and update
+    /// would reach for the network or a prompt, and a test that hangs is worse
+    /// than one that skips something.
+    /// </para>
+    /// </remarks>
+    public static TheoryData<string> Mutating
+    {
+        get
+        {
+            var data = new TheoryData<string>();
+
+            // Building the parser is the act that records everything, so the
+            // catalogue is empty until it has been asked for once.
+            Loadout.Cli.Program.CommandNames();
+
+            foreach (var entry in Loadout.Cli.Program.RegisteredCommands()
+                .Where(command => command.Mutates && !command.RequiresNetwork)
+                .Select(command => command.Path)
+                .OrderBy(path => path, StringComparer.Ordinal))
+            {
+                data.Add(entry);
+            }
+
+            return data;
+        }
+    }
 
     [Theory]
     [MemberData(nameof(Mutating))]

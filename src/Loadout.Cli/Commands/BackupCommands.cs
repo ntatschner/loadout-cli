@@ -5,6 +5,7 @@ using Loadout.Models;
 using Loadout.Models.Backups;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using Loadout.Tui;
 
 namespace Loadout.Cli.Commands;
 
@@ -89,6 +90,8 @@ public sealed class BackupListCommand : AsyncCommand<GlobalSettings>
 /// </para>
 /// </summary>
 [Description("Restore a backup set, undoing the operation that created it.")]
+[CommandMeta(CommandCategory.Safety,
+    Intent = "undo revert put back recover restore backup", Mutates = true)]
 public sealed class BackupRestoreCommand : AsyncCommand<BackupRestoreCommand.Settings>
 {
     private readonly IBackupService _backups;
