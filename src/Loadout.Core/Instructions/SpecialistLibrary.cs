@@ -45,6 +45,18 @@ public interface ISpecialistLibrary
         string? workspaceRoot,
         string? slug = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// The text of a built-in specialist, exactly as it ships, or null when
+    /// there is no built-in of that id.
+    /// </summary>
+    /// <remarks>
+    /// The parsed document is not enough to write a faithful copy: parsing
+    /// keeps what the launcher needs and discards the rest, and a copy that
+    /// came back subtly different from what it claims to be a copy of would be
+    /// the wrong thing to put under review.
+    /// </remarks>
+    string? BuiltInText(string id);
 }
 
 /// <summary>
@@ -133,6 +145,45 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
     /// specialist of the same id in their workspace, which is the supported way
     /// to disagree with a default.
     /// </remarks>
+    /// <inheritdoc />
+    public string? BuiltInText(string id)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+
+        var assembly = typeof(SpecialistLibrary).Assembly;
+
+        foreach (var resource in assembly.GetManifestResourceNames())
+        {
+            if (!resource.StartsWith(BuiltInPrefix, StringComparison.Ordinal)
+                || !resource.EndsWith(".md", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            using var stream = assembly.GetManifestResourceStream(resource);
+
+            if (stream is null)
+            {
+                continue;
+            }
+
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            var text = reader.ReadToEnd();
+
+            // Matched on the id the file declares rather than on the resource
+            // name. The two agree today and the id is what somebody asked for.
+            if (SpecialistLibrary.Parse(text, resource, SpecialistOrigin.BuiltIn) is
+                { Succeeded: true, Value: { } parsed }
+                && string.Equals(parsed.Id, id, StringComparison.OrdinalIgnoreCase))
+            {
+                return text;
+            }
+        }
+
+        return null;
+    }
+
     private static void LoadBuiltIn(
         Dictionary<string, SpecialistDocument> specialists,
         List<RuleFinding> findings)
