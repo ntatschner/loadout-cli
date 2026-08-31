@@ -234,17 +234,7 @@ public sealed partial class InstructionSplitter
             // the decision the tool cannot make.
             var name = HeadingName.Unique(Slug(section.Title), used);
 
-            // Globs are read out of the heading rather than invented. A heading
-            // that says (`crates/core/src/modules`) has already stated which
-            // paths its rule concerns, and re-typing that by hand is the step
-            // that makes people abandon scoping halfway. Anything the heading
-            // does not name is still left empty, and the splitter still refuses
-            // to apply a rule with no globs, so nothing is decided here that a
-            // person does not confirm.
-            var globs = HeadingName.PathsIn(section.Title)
-                .Select(GlobFor)
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
+            var globs = SuggestGlobs(section);
 
             map.Rules.Add(new RuleTarget
             {
@@ -256,6 +246,114 @@ public sealed partial class InstructionSplitter
         }
 
         return OperationResult<SplitMap>.Ok(map);
+    }
+
+    /// <summary>
+    /// The paths a section appears to concern, as globs.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The heading is asked first and believed absolutely. A heading that says
+    /// (`crates/core/src/modules`) has already stated what its rule is for, and
+    /// re-typing that by hand is the step that makes people abandon scoping
+    /// halfway.
+    /// </para>
+    /// <para>
+    /// Most headings say no such thing, and that was the whole difficulty: every
+    /// rule came out with no globs, the splitter refuses those, and the person
+    /// was left to invent nineteen of them from nothing. So when the heading
+    /// names nothing the body is read, where a section that concerns a part of
+    /// the repository almost always names it.
+    /// </para>
+    /// <para>
+    /// Twice, at least. A path mentioned once in passing is not what a section
+    /// is about, and the cost of a wrong glob is worse than the cost of an empty
+    /// one: an empty one is refused and noticed, a wrong one silently stops the
+    /// rule loading for the files it was written for. Three at most, for the
+    /// same reason — a rule scoped to everything a section happens to mention
+    /// is a rule that loads nearly always.
+    /// </para>
+    /// </remarks>
+    private static List<string> SuggestGlobs(Section section)
+    {
+        var fromHeading = HeadingName.PathsIn(section.Title)
+            .Select(GlobFor)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (fromHeading.Count > 0)
+        {
+            return fromHeading;
+        }
+
+        var mentions = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        foreach (var line in section.Lines)
+        {
+            foreach (var candidate in HeadingName.PathsIn(line))
+            {
+                if (!LooksLikeRepositoryPath(candidate))
+                {
+                    continue;
+                }
+
+                mentions[candidate] = mentions.GetValueOrDefault(candidate) + 1;
+            }
+        }
+
+        return [.. mentions
+            .Where(mention => mention.Value >= 2)
+            .OrderByDescending(mention => mention.Value)
+            .ThenBy(mention => mention.Key, StringComparer.Ordinal)
+            .Take(3)
+            .Select(mention => GlobFor(mention.Key))
+            .Distinct(StringComparer.Ordinal)];
+    }
+
+    /// <summary>
+    /// Whether a backticked span from a section body is a path in this
+    /// repository, as opposed to the many other things prose puts in backticks.
+    /// </summary>
+    /// <remarks>
+    /// Stricter than the test used on headings, and deliberately so. A heading
+    /// is a handful of words somebody chose; a body is paragraphs of prose and
+    /// code, where "contains a dot and no spaces" also matches every type name,
+    /// version number and method call in the file. Scoping a rule to
+    /// <c>System.Text.Json</c> would stop it loading at all.
+    /// </remarks>
+    private static bool LooksLikeRepositoryPath(string text)
+    {
+        // A URL is not a path in this repository, whatever it looks like.
+        if (text.Contains("://", StringComparison.Ordinal)
+            || text.Contains('(', StringComparison.Ordinal)
+            || text.Contains(')', StringComparison.Ordinal)
+            || text.StartsWith('-'))
+        {
+            return false;
+        }
+
+        // A separator is proof enough on its own.
+        if (text.Contains('/', StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var dot = text.LastIndexOf('.');
+
+        if (dot <= 0 || dot == text.Length - 1)
+        {
+            return false;
+        }
+
+        var extension = text[(dot + 1)..];
+
+        // Lowercase is what separates a file from a type: extensions are
+        // written lowercase by convention everywhere, and PascalCase after a
+        // dot is a namespace. Starting with a letter is what separates it from
+        // a version number.
+        return extension.Length <= 5
+            && char.IsLower(extension[0])
+            && extension.All(char.IsLetterOrDigit);
     }
 
     /// <summary>

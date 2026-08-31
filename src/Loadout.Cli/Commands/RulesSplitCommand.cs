@@ -235,11 +235,25 @@ public sealed class RulesSplitCommand : RulesCommandBase<RulesSplitCommand.Setti
             return output.Fail(saved);
         }
 
+        var rules = suggested.Value!.Rules;
+        var scoped = rules.Count(rule => rule.Globs.Count > 0);
+
         output.WriteLine($"[green]Wrote[/] {Markup.Escape(mapPath)}");
-        output.WriteLine(
-            $"[dim]It routes each of the {suggested.Value!.Rules.Count} section(s) into a rule of "
-            + "its own with no globs. Set the globs for the ones worth scoping, delete the entries "
-            + "for anything that should stay in the core, then run:[/]");
+
+        // Counted rather than asserted. This said every section came out with
+        // no globs, which stopped being true as soon as the suggestion learned
+        // to read paths out of a heading: against a real file fifteen of
+        // nineteen arrived already scoped, and the advice was to go and fill in
+        // what was in front of them.
+        output.WriteLine(scoped == 0
+            ? $"[dim]It routes each of the {rules.Count} section(s) into a rule of its own, none "
+                + "of which it could scope. Set the globs for the ones worth scoping, delete the "
+                + "entries for anything that should stay in the core, then run:[/]"
+            : $"[dim]It routes {rules.Count} section(s) into a rule each and suggests globs for "
+                + $"{scoped} of them, read from what those sections name. Check those, set the "
+                + "globs for any others worth scoping, delete the entries for anything that should "
+                + "stay in the core, then run:[/]");
+
         output.WriteLine("  loadout rules split");
 
         return CommandOutput.Success();

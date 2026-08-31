@@ -249,6 +249,111 @@ This file says how to work on the project.
     }
 
     [Fact]
+    public async Task A_path_a_section_keeps_returning_to_becomes_its_glob()
+    {
+        var source = WriteSource("""
+# Project instructions
+
+## Frontend
+
+- Components live under `src/Web/Components`.
+- Anything shared goes in `src/Web/Components` as well.
+""");
+
+        var map = await _splitter.SuggestMapAsync(source);
+
+        // Every rule came out with no globs before this, the splitter refuses
+        // those, and somebody staring at nineteen empty ones gives up. A
+        // section that keeps naming the same directory has said what it is for.
+        map.Value!.Rules.Single().Globs.Should().Equal("src/Web/Components/**");
+    }
+
+    [Fact]
+    public async Task A_path_mentioned_once_in_passing_is_not_what_a_section_is_about()
+    {
+        var source = WriteSource("""
+# Project instructions
+
+## Conventions
+
+- Use British spelling, as `docs/style.md` happens to mention.
+- Prefer explicit names over short ones.
+""");
+
+        var map = await _splitter.SuggestMapAsync(source);
+
+        // A wrong glob is worse than none: an empty one is refused and noticed,
+        // a wrong one silently stops the rule loading for the files it was
+        // written for.
+        map.Value!.Rules.Single().Globs.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("System.Text.Json", "a namespace, not a file")]
+    [InlineData("Loadout.Core.Instructions", "PascalCase after a dot is a namespace")]
+    [InlineData("0.10.3", "a version number")]
+    [InlineData("https://example.invalid/x.md", "a URL is not a path in this repository")]
+    [InlineData("--dry-run", "a flag")]
+    [InlineData("Parse(text)", "a call")]
+    public async Task What_prose_puts_in_backticks_is_not_all_a_path(string candidate, string why)
+    {
+        var source = WriteSource($"""
+# Project instructions
+
+## Conventions
+
+- Written twice so frequency alone would let it through: `{candidate}`.
+- And again here: `{candidate}`.
+""");
+
+        var map = await _splitter.SuggestMapAsync(source);
+
+        // A body is paragraphs of prose and code, where "contains a dot and no
+        // spaces" also matches every type name and version in the file.
+        map.Value!.Rules.Single().Globs.Should().BeEmpty(why);
+    }
+
+    [Fact]
+    public async Task The_heading_wins_when_it_names_a_path()
+    {
+        var source = WriteSource("""
+# Project instructions
+
+## Frontend (`src/Web`)
+
+- Components live under `src/Other/Place`.
+- And again in `src/Other/Place`.
+""");
+
+        var map = await _splitter.SuggestMapAsync(source);
+
+        // A heading that names a path has already stated what the rule is for,
+        // and it is a person's own words rather than an inference from prose.
+        map.Value!.Rules.Single().Globs.Should().Equal("src/Web/**");
+    }
+
+    [Fact]
+    public async Task A_section_that_names_everything_is_not_scoped_to_everything()
+    {
+        var source = WriteSource("""
+# Project instructions
+
+## Everything
+
+- `src/a/x.cs` and `src/a/x.cs`
+- `src/b/y.cs` and `src/b/y.cs`
+- `src/c/z.cs` and `src/c/z.cs`
+- `src/d/w.cs` and `src/d/w.cs`
+""");
+
+        var map = await _splitter.SuggestMapAsync(source);
+
+        // A rule scoped to everything a section happens to mention is a rule
+        // that loads nearly always, which is what splitting was meant to stop.
+        map.Value!.Rules.Single().Globs.Should().HaveCount(3);
+    }
+
+    [Fact]
     public async Task A_file_something_else_already_split_is_refused()
     {
         // The shape these projects arrive in: a short core that points at rule
