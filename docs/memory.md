@@ -149,7 +149,6 @@ merely say similar things — deciding which wording is the right one is the
 judgement a tool should not be making on somebody's behalf. A backup is taken
 first, and `--apply` is required to change anything.
 
-
 ## Filling a memory that is empty
 
 A project registered today has no memory at all, and nothing here writes one for
@@ -161,9 +160,26 @@ procedure in front of the agent along with the rule that findings are written
 down rather than left in the conversation:
 
 ```bash
-loadout launch starstats --task "review this codebase and record what you find"
+loadout launch starstats --mode investigate \
+  --task "review this codebase and record what you find"
 loadout memory list starstats                   # then see what it left behind
 ```
+
+The mode is not optional here, and leaving it out is the one way to get nothing.
+Modes are never inferred from what you typed — `--mode` defaults to `implement`,
+whose posture is that the what has already been decided and the job is to make
+the change. A reviewing skill is offered in the `investigate`, `advise` and
+`review` postures and withheld from that one, so a task reading "review the repo"
+in the default mode selects no skill at all and says so:
+
+```bash
+loadout instructions explain --project starstats "review the repo"
+loadout instructions explain --project starstats "review the repo" --mode investigate
+```
+
+Run both. The first lists no skill, the second lists Repository review and the
+phrase that reached it — which is the cheapest way to confirm a session will get
+the procedure before spending one finding out that it did not.
 
 The procedure starts by reading what is already known — `instructions explain`,
 `instructions audit`, `rules budget` and the existing memory — because
