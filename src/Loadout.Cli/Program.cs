@@ -520,6 +520,7 @@ public static class Program
             mcp.AddCommand<McpListCommand>("list");
             mcp.AddCommand<McpAddCommand>("add");
             mcp.AddCommand<McpRemoveCommand>("remove");
+            mcp.AddCommand<McpServeCommand>("serve");
         });
 
         Top<DriftCommand>(config, "drift");
