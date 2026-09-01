@@ -263,10 +263,38 @@ public sealed class TerminalLauncher : ILauncherTui
 
         application.Run(palette);
 
-        if (palette.Chosen is { Length: > 0 } chosen)
+        if (palette.Chosen is not { Length: > 0 } chosen)
         {
-            window.RunCommand(chosen);
+            return;
         }
+
+        // A command that cannot run without an argument is asked for one here
+        // rather than started and told off by the parser. Choosing 'export'
+        // from the palette used to do nothing but print that a specialist was
+        // missing, with no way from that screen to say which.
+        var entry = _catalogue.Commands.FirstOrDefault(
+            command => string.Equals(command.Path, chosen, StringComparison.Ordinal));
+
+        if (entry is { RequiredArgument.Length: > 0 })
+        {
+            using var ask = new CommandArgumentDialog(
+                chosen, entry.RequiredArgument, entry.Example, application);
+
+            application.Run(ask);
+
+            if (ask.Chosen is not { Length: > 0 } value)
+            {
+                return;
+            }
+
+            // Quoted, because the value is often prose — a task to explain, a
+            // name for a project.
+            window.RunCommand($"{chosen} \"{value}\"");
+
+            return;
+        }
+
+        window.RunCommand(chosen);
     }
 
     private async Task<ProjectOverview?> OverviewAsync(

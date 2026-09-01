@@ -67,6 +67,13 @@ public static class CommandCategory
 /// Words somebody might search for when they do not know the name. Nobody
 /// looking to undo a mistake searches for "backup restore".
 /// </param>
+/// <param name="RequiredArgument">
+/// The argument this command cannot run without, or empty when it can run bare.
+/// The launcher's palette starts a command with nothing after it, so one that
+/// requires an argument could only ever stop and say so — a palette entry that
+/// can never succeed is the same fault as a palette that lists commands and
+/// runs none of them, which this launcher has already had.
+/// </param>
 /// <param name="Mutates">Whether running it can change files or configuration.</param>
 /// <param name="RequiresNetwork">Whether running it contacts the network.</param>
 /// <param name="Example">One example of it in use, or empty.</param>
@@ -78,7 +85,8 @@ public sealed record CatalogueEntry(
     string Intent = "",
     bool Mutates = false,
     bool RequiresNetwork = false,
-    string Example = "")
+    string Example = "",
+    string RequiredArgument = "")
 {
     /// <summary>
     /// Whether this command matches what somebody typed, by name or by intent.

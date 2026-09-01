@@ -33,6 +33,41 @@ public sealed class CommandParityTests
     }
 
     [Fact]
+    public void A_command_that_needs_an_argument_says_which()
+    {
+        var catalogue = Catalogue();
+
+        var export = catalogue.Single(c => c.Path == "instructions export");
+
+        // The palette starts a command with nothing after it, so it has to know
+        // which ones cannot run that way. Choosing 'export' used to print that
+        // a specialist was missing, with no way from that screen to say which.
+        export.RequiredArgument.Should().Be("SPECIALIST");
+    }
+
+    [Fact]
+    public void A_command_that_runs_bare_claims_no_argument()
+    {
+        var catalogue = Catalogue();
+
+        // Most commands are these, and asking for something before running one
+        // would be a dialog in the way of the common case.
+        catalogue.Single(c => c.Path == "doctor").RequiredArgument.Should().BeEmpty();
+        catalogue.Single(c => c.Path == "status").RequiredArgument.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void An_optional_argument_is_not_demanded()
+    {
+        var catalogue = Catalogue();
+
+        // 'memory compress [PROJECT]' takes one and does not need one: it falls
+        // back to the repository you are in. Demanding it would turn a working
+        // command into a prompt.
+        catalogue.Single(c => c.Path == "memory compress").RequiredArgument.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Every_registered_command_is_in_the_catalogue()
     {
         var catalogue = Catalogue();

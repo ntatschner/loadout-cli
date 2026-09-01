@@ -98,6 +98,40 @@ internal static class Catalogue
     }
 
     /// <summary>
+    /// The argument a command cannot run without, or empty when it can run bare.
+    /// </summary>
+    /// <remarks>
+    /// Read off the settings type as the command is registered, so it cannot
+    /// disagree with what the parser will demand. Spectre writes a required
+    /// argument in angle brackets and an optional one in square brackets, and
+    /// the attribute says which it is outright.
+    /// </remarks>
+    private static string RequiredArgument(Type command)
+    {
+        var settings = command.BaseType?.GetGenericArguments().FirstOrDefault();
+
+        if (settings is null)
+        {
+            return string.Empty;
+        }
+
+        foreach (var property in settings.GetProperties())
+        {
+            var argument = property
+                .GetCustomAttributes(typeof(CommandArgumentAttribute), inherit: true)
+                .OfType<CommandArgumentAttribute>()
+                .FirstOrDefault();
+
+            if (argument is { IsRequired: true })
+            {
+                return argument.ValueName.Trim('<', '>', '[', ']');
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
     /// Notes one command. Called as it is registered with the parser, so the
     /// two cannot disagree.
     /// </summary>
@@ -137,7 +171,8 @@ internal static class Catalogue
                 meta?.Intent ?? string.Empty,
                 meta?.Mutates ?? false,
                 meta?.RequiresNetwork ?? false,
-                meta?.Example ?? string.Empty));
+                meta?.Example ?? string.Empty,
+                RequiredArgument(command)));
         }
     }
 }
