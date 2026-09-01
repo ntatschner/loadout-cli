@@ -208,6 +208,15 @@ public sealed class LoadoutProcess : IDisposable
     /// past that point they were not really running in parallel anyway, they
     /// were queueing inside Windows and sometimes losing.
     /// </para>
+    /// <para>
+    /// That did not hold either, and the reason is written up on
+    /// <see cref="ContractCollection"/>: this cap counts only the processes
+    /// started through here, while the shortage is made by the whole suite, most
+    /// of it Git spawned from integration tests running on other threads. The
+    /// runner is limited to two threads for that. This stays because it is the
+    /// only defence against load from outside the suite, which no setting here
+    /// can see.
+    /// </para>
     /// </remarks>
     private static readonly SemaphoreSlim Starting =
         new(Math.Max(2, Environment.ProcessorCount / 2));
