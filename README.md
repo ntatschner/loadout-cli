@@ -66,7 +66,7 @@ straight to a registered one.
 
 ### Instructions picked for the job
 
-There are 71 specialists built into the binary: foundations, modes, languages,
+There are 72 specialists built into the binary: foundations, modes, languages,
 frameworks, databases, platforms, clouds, functional areas and skills. Instead
 of one enormous prompt that's mostly irrelevant, Loadout works out which ones
 your task needs from the repo you're in and the words you used, then tells you

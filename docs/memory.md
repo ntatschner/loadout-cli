@@ -149,3 +149,34 @@ merely say similar things — deciding which wording is the right one is the
 judgement a tool should not be making on somebody's behalf. A backup is taken
 first, and `--apply` is required to change anything.
 
+
+## Filling a memory that is empty
+
+A project registered today has no memory at all, and nothing here writes one for
+you: the launcher measures, and judgement about what a codebase means belongs to
+whoever — or whatever — is reading it. What the library ships instead is a
+procedure. `skill.repository-review` activates on a task that says "review the
+repo", "learn this codebase", "onboard" or "get up to speed", and puts a review
+procedure in front of the agent along with the rule that findings are written
+down rather than left in the conversation:
+
+```bash
+loadout launch starstats --task "review this codebase and record what you find"
+loadout memory list starstats                   # then see what it left behind
+```
+
+The procedure starts by reading what is already known — `instructions explain`,
+`instructions audit`, `rules budget` and the existing memory — because
+re-deriving a fact somebody already wrote down is the commonest waste there is.
+It asks for one change traced end to end, and for every claim to be checked by
+running it rather than inferred from a name.
+
+It is equally clear about what not to record: anything that will be false next
+month, anything the code already says plainly, and anything the credential
+screen would refuse. A memory that is confidently wrong costs far more than a
+missing one, which is why the procedure asks for existing topics to be extended
+or deleted rather than added alongside.
+
+Agents launched with the launcher's own tools available can write findings as
+they go through `loadout_remember`, without leaving the session to run a
+command.
