@@ -58,6 +58,23 @@ Secret references resolve through the platform keystore during preflight and
 reach the child process only. The reference is what gets committed; the value
 never is, and it is never written to a log or a diagnostic report.
 
+## The agent can answer back
+
+The compiled context tells the agent that `loadout` is on PATH, and names the
+few commands worth running from inside a session: read a specialist in full,
+ask what this session was given and why, record a fact worth having next time,
+leave a handoff. Without that it was being told to change the source files in
+the workspace without being told there was a tool for reaching it.
+
+Anything that changes the machine or pushes to a remote is deliberately not
+named, and the context says as much rather than leaving the omission to be
+inferred.
+
+The same three read-and-remember operations are also offered as MCP tools, which
+every launch declares for itself — see
+[the launcher's own server](commands.md#the-launchers-own-server). A session can
+therefore call them rather than shell out and parse what comes back.
+
 ## Instructions that scale
 
 An instruction file that is loaded on every session is paid for on every turn,

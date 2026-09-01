@@ -19,6 +19,7 @@
 | `loadout update` | Check the release source and install a newer build |
 | `loadout secret set\|test\|remove` | Manage credentials in the OS keystore |
 | `loadout mcp list\|add\|remove` | Manage the MCP servers a project loads, and see what clashes |
+| `loadout mcp serve` | Serve the launcher's own tools to an agent. Started by the agent, not by you |
 | `loadout repo check` | Check a repository for tracked AI tooling files |
 | `loadout drift [project]` | Show where projects have drifted from their recorded configuration |
 | `loadout drift --fix` | Put right the drift the launcher can fix itself |
@@ -192,3 +193,39 @@ Only enabled plugins are counted. A plugin that is installed and switched off
 contributes nothing, and warning about its servers would describe something that
 is not happening.
 
+### The launcher's own server
+
+The handoff used to run one way: the launcher composed a context, started an
+agent and heard nothing more. Every launch now also declares Loadout itself as
+an MCP server, so a session can ask it things rather than parse console output
+written for a person.
+
+Three tools, each making the same call its command makes:
+
+| | |
+|---|---|
+| `loadout_specialist` | The full text of one specialist, as `instructions show` prints it |
+| `loadout_effective_instructions` | What this session was given, and what triggered each part |
+| `loadout_remember` | Record one durable fact about the project, screened for credentials |
+
+Nothing offered pushes to a remote, changes the machine or starts an agent. A
+tool an agent can call unprompted is a decision taken with nobody watching, so
+what is offered is the part of the launcher where that is safe — and a test
+asserts no tool is ever named for the rest.
+
+The declaration is written into the launch's runtime directory rather than the
+workspace, for the reason in the table above: it names the executable running
+right now, and an absolute path in a shared file is right on the machine that
+wrote it and wrong on every other one that clones the workspace. It goes when
+the session does.
+
+```bash
+loadout config set agent-tools false
+```
+
+turns it off. What it offers is reading plus one screened fact, so it is on by
+default — but preferring that an agent could not reach the workspace at all is a
+legitimate position, and the launcher does not overrule it.
+
+You would not normally run `loadout mcp serve` yourself: it speaks JSON-RPC on
+stdin and stdout, and the agent starts it.
