@@ -28,6 +28,8 @@ public sealed class LauncherConfig
 
     public TelemetrySettings Telemetry { get; set; } = new();
 
+    public AgentToolSettings AgentTools { get; set; } = new();
+
     public InstructionContextSettings InstructionContext { get; set; } = new();
 
     /// <summary>Explicit extra directories to search for agent executables (spec section 65).</summary>
@@ -127,6 +129,21 @@ public sealed class StatuslineSettings
 /// they discover later.
 /// </para>
 /// </remarks>
+/// <summary>
+/// Whether a launched agent can call back into the launcher.
+/// </summary>
+/// <remarks>
+/// On by default, because a channel that needs setting up is one nobody sets
+/// up, and what it offers is reading plus one screened fact. Off is for anybody
+/// who would rather an agent could not reach the workspace at all, which is a
+/// legitimate position and not one the launcher should overrule.
+/// </remarks>
+public sealed class AgentToolSettings
+{
+    /// <summary>Whether the launcher serves its own tools to the agent it starts.</summary>
+    public bool Enabled { get; set; } = true;
+}
+
 public sealed class TelemetrySettings
 {
     /// <summary>

@@ -301,8 +301,14 @@ public sealed class AgentLauncher : IAgentLauncher
 
                 // Declared in the workspace, so the same servers are there on
                 // every machine that clones it rather than on whichever one
-                // happened to have them configured.
-                _mcp.ConfigFiles(project.Entry.Slug));
+                // happened to have them configured — plus the launcher's own,
+                // written per launch because it names this machine's executable
+                // and an absolute path is the thing the workspace must not hold.
+                [
+                    .. _mcp.ConfigFiles(project.Entry.Slug),
+                    .. SelfServerConfig.Write(
+                        config.AgentTools.Enabled, project.Entry.Slug, runtimeDirectory, warnings),
+                ]);
 
             var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
             if (invocationResult.Failed)
@@ -757,4 +763,6 @@ public sealed class AgentLauncher : IAgentLauncher
             // it would be worse.
         }
     }
+
+
 }

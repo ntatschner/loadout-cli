@@ -170,6 +170,12 @@ public static class ConfigKeys
             (c, _, v) => c.Updates.Source = v, false,
             Group: Groups.Updates),
 
+        new("agent-tools", "Serve the launcher's own tools to the agent it starts",
+            (c, _) => Boolean(c.AgentTools.Enabled),
+            (c, _, v) => c.AgentTools.Enabled = Flag(v), false,
+            Group: Groups.Agents,
+            IsFlag: true),
+
         new("statusline-project", "Show the project slug in the agent status line",
             (c, _) => Boolean(c.Statusline.ShowProject),
             (c, _, v) => c.Statusline.ShowProject = Flag(v), false,
