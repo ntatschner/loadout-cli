@@ -312,6 +312,40 @@ public sealed class ContextCompilerTests : IDisposable
     }
 
     [Fact]
+    public async Task The_agent_is_told_the_launcher_is_also_a_command()
+    {
+        var result = await _compiler.CompileAsync(Manifest(), _workspace, _runtime, "claude");
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        var compiled = await File.ReadAllTextAsync(result.Value!.FilePath);
+
+        // The handoff was one way. The header told an agent to change the
+        // workspace rather than the compiled copy, without saying where the
+        // workspace was or that there was a tool for reaching it — and loadout
+        // is on PATH in every session the launcher starts.
+        compiled.Should().Contain("loadout instructions show");
+        compiled.Should().Contain("loadout memory write");
+    }
+
+    [Fact]
+    public async Task It_does_not_hand_the_agent_the_commands_that_change_the_machine()
+    {
+        var result = await _compiler.CompileAsync(Manifest(), _workspace, _runtime, "claude");
+
+        var compiled = await File.ReadAllTextAsync(result.Value!.FilePath);
+
+        // 'workspace save' pushes to somebody's remote, 'launch' would start an
+        // agent inside an agent, and update and setup change the machine. None
+        // is a decision an agent should reach for unprompted, and naming them
+        // in what it is handed is what would invite it.
+        compiled.Should().NotContain("loadout workspace save");
+        compiled.Should().NotContain("loadout launch");
+        compiled.Should().NotContain("loadout update");
+        compiled.Should().NotContain("loadout setup");
+    }
+
+    [Fact]
     public async Task An_unreadable_rules_directory_does_not_stop_a_launch()
     {
         // Rules live in a synced repository, so a half-finished sync or a

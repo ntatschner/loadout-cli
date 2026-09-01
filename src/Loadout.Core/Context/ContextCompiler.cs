@@ -82,6 +82,7 @@ internal sealed class ContextCompiler : IContextCompiler
         var missing = new List<string>();
 
         WriteHeader(builder, manifest, agentName, profileName);
+        WriteToolAccess(builder);
 
         // Specialists come before the project's own material, because they are
         // the more general half: the C# specialist says what C# code should
@@ -479,6 +480,54 @@ internal sealed class ContextCompiler : IContextCompiler
             builder.AppendLine($"- Repository: {manifest.Repository.Remote}");
         }
 
+        builder.AppendLine();
+    }
+
+    /// <summary>
+    /// Tells the agent that the launcher it was started by is also a command it
+    /// can run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The handoff was one way. The header told an agent to change the source
+    /// files in the workspace rather than the compiled copy, without saying
+    /// where the workspace was or that there was a tool for reaching it — and
+    /// the rules listing told it to read a rule when the work touched certain
+    /// paths, which it could only do by opening a file it had been given the
+    /// path to. Nothing said 'loadout' existed, though it is on PATH in every
+    /// session the launcher starts.
+    /// </para>
+    /// <para>
+    /// Four commands, not the whole surface. 'workspace save' pushes to
+    /// somebody's remote, 'launch' would start an agent inside an agent, and
+    /// 'update' and 'setup' change the machine — none of those are decisions an
+    /// agent should reach for on its own, and naming them here is what would
+    /// invite it. What is named reads, or writes one screened fact.
+    /// </para>
+    /// <para>
+    /// Short because it is paid for on every launch, whatever the task.
+    /// </para>
+    /// </remarks>
+    private static void WriteToolAccess(StringBuilder builder)
+    {
+        builder.AppendLine("## The launcher is also a command");
+        builder.AppendLine();
+        builder.AppendLine(
+            "`loadout` is on PATH in this session. Useful from inside it:");
+        builder.AppendLine();
+        builder.AppendLine(
+            "- `loadout instructions show <id>` - the full text of a specialist named above");
+        builder.AppendLine(
+            "- `loadout instructions explain --project <slug>` - what this session was given, and why");
+        builder.AppendLine(
+            "- `loadout memory write <project> <topic>` - record a fact worth having next time; "
+            + "it is screened for credentials and never takes a secret");
+        builder.AppendLine(
+            "- `loadout handoff create <project>` - leave the next session what this one worked out");
+        builder.AppendLine();
+        builder.AppendLine(
+            "Anything that changes the machine or pushes to a remote is deliberately not listed: "
+            + "ask rather than run it.");
         builder.AppendLine();
     }
 
