@@ -55,9 +55,26 @@ public sealed class DocumentationCommandTests
             {
                 var words = match.Groups[1].Value.Split(' ');
 
-                // Not a command at all: this is the project-name shorthand.
                 if (!roots.Contains(words[0]))
                 {
+                    // The project-name shorthand — 'loadout starstats' launches
+                    // a registered project — so an unknown first word is not by
+                    // itself wrong, and the documentation's example projects
+                    // exist on nobody's machine but the reader's.
+                    //
+                    // Unless a bare word follows it. Launching a project takes
+                    // options, never a second bare word, so 'loadout reppo
+                    // check' is a misspelt command rather than a project called
+                    // reppo — and skipping it on the shorthand's account is how
+                    // a typo would have gone out unnoticed.
+                    if (words.Length > 1)
+                    {
+                        wrong.Add(
+                            $"{Path.GetFileName(file)}: loadout {match.Groups[1].Value} "
+                            + $"— '{words[0]}' is not a command, and a project takes options "
+                            + "rather than a second bare word");
+                    }
+
                     continue;
                 }
 

@@ -29,6 +29,19 @@ project, then the agent's own instructions, then the profile, then any handoff
 lands in a per-launch runtime directory with owner-only permissions and is
 deleted when the agent exits.
 
+```mermaid
+flowchart LR
+    A["Specialists"] --> B["Global"] --> C["Project"] --> D["Agent"] --> E["Profile"] --> F["Handoff"] --> G["Rules"] --> H["Memory index"]
+```
+
+Look at what a launch would actually load, before spending one on it:
+
+```bash
+loadout instructions explain --project starstats
+loadout instructions explain --project starstats "why is this query slow"   --mode investigate
+loadout rules budget starstats        # what loads regardless of the task
+```
+
 Specialists come first because they are the most general half of it: the Rust
 specialist says what Rust should look like, and the project says how this
 codebase departs from that. They are also the only part nobody writes per
@@ -95,6 +108,12 @@ A rule with `alwaysApply: true` is inlined into every compiled context. A scoped
 rule is not: the context lists its name, scope and path, and the agent reads it
 when the work touches those paths. A project rule overrides a workspace rule of
 the same name, so a project can depart from the house style without editing it.
+
+```bash
+loadout rules budget starstats     # what every session pays for
+loadout rules audit starstats      # what costs tokens invisibly
+loadout rules split starstats      # scope prose to the paths it applies to
+```
 
 `loadout rules budget` reports what loads regardless of the task.
 `loadout rules audit` reports the defects that cost tokens invisibly — an

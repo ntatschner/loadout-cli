@@ -20,6 +20,21 @@ being code.
 It runs natively on Windows, Linux and macOS. No VM, no container, no "works
 on Linux, should be fine elsewhere".
 
+## What it does
+
+| | |
+| --- | --- |
+| **Keeps agent files out of your repo** | One workspace holds instructions, rules and memory for every project. `protect`, `drift` and `migrate` keep it that way. |
+| **Picks the instructions for the job** | 72 specialists built in. Loadout works out which apply from the repository and your task, and shows you why before anything launches. |
+| **Remembers across sessions** | Durable facts per project, inlined as an index rather than in full, with compression and an audit that refuses credentials. |
+| **A launcher, not just a CLI** | Full-screen terminal UI with a command palette reaching every command. Everything runs through the same parser you would have typed at. |
+| **Lets the agent ask back** | A launched session can read a specialist, ask what it was given, and record a fact — over MCP or the CLI. Nothing that changes your machine. |
+| **Counts what it cost** | Token accounting from the transcripts your agents already write, with cache reads priced properly. |
+| **Undo** | File-changing commands preview first, take a snapshot, and restore. |
+
+Every command takes `--json`, works from the CLI and the launcher, and the exit
+codes don't move.
+
 ## Install
 
 Grab your platform's archive from the
@@ -28,7 +43,7 @@ Grab your platform's archive from the
 ### Linux and macOS
 
 ```sh
-tar -xzf loadout-0.9.2-linux-x64.tar.gz
+tar -xzf loadout-0.14.0-linux-x64.tar.gz
 ./install.sh          # goes to ~/.local/bin, no root
 loadout setup
 ```
@@ -39,7 +54,7 @@ There are `.deb` and `.rpm` packages if you'd rather.
 ### Windows
 
 ```powershell
-msiexec /i loadout-0.9.2-win-x64.msi    # per-user, no elevation
+msiexec /i loadout-0.14.0-win-x64.msi    # per-user, no elevation
 loadout setup
 ```
 
@@ -61,6 +76,45 @@ loadout                        # launcher opens, pick a project, go
 Run `loadout` with nothing after it and you get the terminal UI. `loadout here`
 launches the agent for whatever repo you're in. `loadout <project>` skips
 straight to a registered one.
+
+## How it works
+
+```mermaid
+flowchart TB
+    CMD["loadout starstats --task &quot;fix the upload retry&quot;"]
+
+    CMD --> RESOLVE["Resolve the project"]
+
+    RESOLVE --> EVIDENCE["Scan the repository<br/>languages · frameworks · databases"]
+    RESOLVE --> WS[("Workspace<br/>instructions · rules · memory")]
+
+    EVIDENCE --> PICK["Pick the specialists<br/>from 72 built in"]
+    WS --> PICK
+
+    PICK --> COMPILE["Compile one context file<br/>general to specific"]
+    COMPILE --> AGENT["Agent session<br/>Claude or Codex"]
+
+    AGENT -->|"writes code"| REPO[("Your repository<br/>source, and nothing else")]
+    AGENT -->|"memory · handoff"| WS
+
+    REPO -.->|"evidence for next time"| EVIDENCE
+```
+
+Two repositories, and the split is the whole idea. Your repository holds source.
+The workspace holds everything the agent needs to work on it, so a teammate who
+has never installed Loadout sees a clean diff.
+
+The compiled context is assembled per launch into a directory only you can read,
+and deleted when the agent exits. What goes into it, in order:
+
+```mermaid
+flowchart LR
+    A["Specialists"] --> B["Global"] --> C["Project"] --> D["Agent"] --> E["Profile"] --> F["Handoff"] --> G["Rules"] --> H["Memory index"]
+```
+
+General first, narrowest last, so where two sources disagree the agent reads the
+specific one last. `loadout instructions explain` prints the whole set with the
+reason for each, before anything launches.
 
 ## What you get
 
@@ -133,15 +187,47 @@ is already scattered around into the workspace, showing you the changes first
 and taking a snapshot you can restore. `loadout drift` tells you when a project
 has wandered from what you configured.
 
+### A launcher, not just a command line
+
+![The launcher](docs/images/launcher.svg)
+
+Run `loadout` with nothing after it. Every row says whether you can work on that
+project, and the panel on the right says what a session would start with before
+you spend one. `Ctrl+P` opens a palette over every command the CLI has, found by
+what it is for: searching `undo` reaches `backup restore`, `broken` reaches
+`doctor`.
+
+The launcher never implements a command itself. Anything you pick runs through
+the same parser you would have typed at, which is asserted by a test rather than
+by intent.
+
+### The agent can ask back
+
+A launched session is told `loadout` is on PATH and offered the same operations
+as MCP tools: read a specialist in full, ask what this session was given and
+why, record one fact worth having next time.
+
+Nothing that changes the machine or pushes to a remote is offered, and the
+context says so rather than leaving the omission to be inferred. Ask an agent to
+review a repository and it has a procedure for it — `skill.repository-review` —
+and somewhere to put what it learns.
+
+### Undo
+
+Every file-changing command takes `--dry-run` and shows you the change first.
+Anything that did change is in a snapshot:
+
+```sh
+loadout backup list
+loadout backup restore 20260901-204044-fd3512
+```
+
 ### Also in the box
 
 Session listing and resume across agents, cross-agent handoff documents, MCP
 servers managed per project, secrets in the OS credential store, context
-profiles, editor integration, and a status line with project, branch and
-context usage. `loadout doctor` checks the lot.
-
-Everything works from the CLI and the launcher, everything takes `--json`, and
-the exit codes don't move.
+profiles, project templates, editor integration, and a status line with project,
+branch and context usage. `loadout doctor` checks the lot.
 
 ## Documentation
 
