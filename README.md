@@ -37,8 +37,8 @@ under the profile you've mapped to that agent, so opening a project for Claude
 and for Codex can give you different extensions and settings.
 
 **VS Code**, **VS Code Insiders**, **VSCodium** and **Cursor** are recognised by
-name. Any other editor works too — point `editor-command` at it — you just don't
-get the profile mapping.
+name. Any other editor works too — `loadout config set editor-command <command>` —
+you just don't get the profile mapping.
 
 More agents and editors are coming. The generic adapter means you don't have to
 wait for one: if it takes a directory and starts from a command, you can wire it
@@ -109,6 +109,7 @@ The detail lives in **[docs/](docs/README.md)**:
 | [What you get](docs/features.md) | Every part of it, with the commands and what they print |
 | [Recipes](docs/recipes.md) | Worked answers to the common jobs, with the commands |
 | [Installing](docs/installing.md) | Packages, verification, building your own, updating |
+| [What it needs](docs/dependencies.md) | The tools Loadout drives, and the libraries it ships with |
 | [First run](docs/first-run.md) | Setup, `config.yaml`, environment and security profiles |
 | [Commands](docs/commands.md) | The whole command surface, editors, sessions, MCP |
 | [The launcher](docs/launcher.md) | The terminal UI, keys and navigation |

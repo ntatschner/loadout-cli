@@ -8,6 +8,7 @@ is the detail behind it.
 - [What you get](features.md) — every part of Loadout, with the commands
 - [Recipes](recipes.md) — worked answers to the common jobs, with the commands to run
 - [Installing](installing.md) — packages, verification, building your own, updating
+- [What it needs](dependencies.md) — the tools Loadout drives, and the libraries it ships with
 - [First run and configuration](first-run.md) — setup, `config.yaml`, environment and security profiles
 - [Commands](commands.md) — the whole command surface, editors, sessions, MCP servers
 - [The launcher](launcher.md) — the terminal UI, keys and navigation
