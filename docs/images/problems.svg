@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="896" height="570" viewBox="0 0 896 570" role="img" aria-label="problems screen">
+<rect width="896" height="570" rx="8" fill="#12151b"/>
+<circle cx="24" cy="16" r="5" fill="#ff5f57"/>
+<circle cx="42" cy="16" r="5" fill="#febc2e"/>
+<circle cx="60" cy="16" r="5" fill="#28c840"/>
+<g font-family="Cascadia Mono,DejaVu Sans Mono,Consolas,Menlo,monospace" font-size="13" fill="#d7dae0" xml:space="preserve">
+<text x="16" y="44">╭┤starstats├───────────────────────────────────────────────────────────────────────────────────────────────╮</text>
+<text x="16" y="61">│┌┤Found├─────────────────────────────────────────────────────────────────────────────────────────────────┐│</text>
+<text x="16" y="78">││! Protection — no pre-commit hook in this clone                                                         ││</text>
+<text x="16" y="95">││! Budget — 18 KB loads on every session                                                                 ││</text>
+<text x="16" y="112">││                                                                                                        ││</text>
+<text x="16" y="129">││                                                                                                        ││</text>
+<text x="16" y="146">││                                                                                                        ││</text>
+<text x="16" y="163">││                                                                                                        ││</text>
+<text x="16" y="180">││                                                                                                        ││</text>
+<text x="16" y="197">││                                                                                                        ││</text>
+<text x="16" y="214">││                                                                                                        ││</text>
+<text x="16" y="231">││                                                                                                        ││</text>
+<text x="16" y="248">│└────────────────────────────────────────────────────────────────────────────────────────────────────────┘│</text>
+<text x="16" y="265">│┌┤Can be put right├─────────────────────────────────┐┌┤What it would change├─────────────────────────────┐│</text>
+<text x="16" y="282">││☐ Install the pre-commit hook                      ││would write .git/hooks/pre-commit                  ││</text>
+<text x="16" y="299">││                                                   ││                                                   ││</text>
+<text x="16" y="316">││                                                   ││                                                   ││</text>
+<text x="16" y="333">││                                                   ││                                                   ││</text>
+<text x="16" y="350">││                                                   ││                                                   ││</text>
+<text x="16" y="367">││                                                   ││                                                   ││</text>
+<text x="16" y="384">││                                                   ││                                                   ││</text>
+<text x="16" y="401">││                                                   ││                                                   ││</text>
+<text x="16" y="418">││                                                   ││                                                   ││</text>
+<text x="16" y="435">││                                                   ││                                                   ││</text>
+<text x="16" y="452">││                                                   ││                                                   ││</text>
+<text x="16" y="469">││                                                   ││                                                   ││</text>
+<text x="16" y="486">│└───────────────────────────────────────────────────┘└───────────────────────────────────────────────────┘│</text>
+<text x="16" y="503">│                                                                                                          │</text>
+<text x="16" y="520">│ ⟦ Apply ticked ⟧▖  ⟦ Close ⟧▖                                                                            │</text>
+<text x="16" y="537">╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯</text>
+</g>
+</svg>

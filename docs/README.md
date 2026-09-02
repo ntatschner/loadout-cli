@@ -5,6 +5,7 @@ is the detail behind it.
 
 ## Getting going
 
+- [Recipes](recipes.md) — worked answers to the common jobs, with the commands to run
 - [Installing](installing.md) — packages, verification, building your own, updating
 - [First run and configuration](first-run.md) — setup, `config.yaml`, environment and security profiles
 - [Commands](commands.md) — the whole command surface, editors, sessions, MCP servers

@@ -149,6 +149,7 @@ The detail lives in **[docs/](docs/README.md)**:
 
 | Page | What's in it |
 | --- | --- |
+| [Recipes](docs/recipes.md) | Worked answers to the common jobs, with the commands |
 | [Installing](docs/installing.md) | Packages, verification, building your own, updating |
 | [First run](docs/first-run.md) | Setup, `config.yaml`, environment and security profiles |
 | [Commands](docs/commands.md) | The whole command surface, editors, sessions, MCP |

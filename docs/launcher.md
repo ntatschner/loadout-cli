@@ -4,6 +4,23 @@ Running `loadout` with no arguments opens a full-screen launcher: the project
 list on the left, everything known about the selected project on the right, a
 filter you can type into, and a menu naming what the launcher can do.
 
+![The launcher: a project list on the left, the selected project's detail on the
+right](images/launcher.svg)
+
+```bash
+loadout                    # the launcher
+loadout starstats          # skip it and launch that project
+loadout here               # skip it and launch whatever repository you are in
+```
+
+The pictures on this page are drawn by the tests, through the same headless
+driver they assert on, so they are the real widgets rather than a drawing of
+them. Redraw them after a change with:
+
+```bash
+LOADOUT_DOCS_IMAGES=1 dotnet test --filter DocumentationImagesTests
+```
+
 Every row says whether you can work on that project, so the list answers the
 question without you selecting anything:
 
@@ -39,6 +56,9 @@ reopens that conversation rather than asking again which you meant.
 | `F9` | Menu |
 | `Ctrl+Q` | Quit |
 
+![The command palette, listing commands with the one that cannot run from a menu
+marked "terminal only"](images/command-palette.svg)
+
 **Ctrl+P reaches everything, and finds it by what it is for.** Searching `undo`
 reaches `backup restore`; `broken` reaches `doctor`; `vscode` reaches `code`.
 Nobody wanting to undo a mistake searches for the words "backup restore", and a
@@ -54,6 +74,9 @@ The few that cannot work from a menu — `completion` writes a script to be pipe
 somewhere, `statusline` is run by the agent several times a minute — are listed
 with the reason rather than hidden. Something you cannot find is
 indistinguishable from something that does not exist.
+
+![The problems screen: what was found above, what can be put right and what each
+fix would change below](images/problems.svg)
 
 **Problems** is a screen of its own: what was found, what can be put right, and
 what each fix says it would change, ticked rather than applied as you move
