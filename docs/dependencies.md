@@ -24,6 +24,20 @@ runtime to install**, no VM, no container and no background service.
 | **`secret-tool`** (Linux only) | Reaching the login keyring for stored secrets. Install `libsecret-tools` on Debian and Ubuntu, or `libsecret` on Fedora and RHEL. Without it, use a different secret provider. |
 | **PowerShell** (Windows only) | Creating the Start Menu shortcut, nothing else. |
 
+## What it reads from the agent's own tooling
+
+Loadout doesn't only start agents — it reads the state they keep, so adopting it
+doesn't mean starting from nothing on the projects you've done the most work on.
+
+| | |
+| --- | --- |
+| **Claude Code's memory** | `~/.claude/projects/<derived>/memory`, or `$CLAUDE_CONFIG_DIR` when you've moved it. `loadout project survey` finds it, `loadout memory import` brings it into the workspace. The directory name is derived the way Claude Code derives it — separators, colons and dots become hyphens — because it has to match exactly what the other tool already wrote. |
+| **Agent transcripts** | Where `loadout usage` gets its token accounting. Nothing to switch on, and you have history from before you installed Loadout. |
+| **`.claude/rules/`** | `loadout migrate` moves these into `projects/<slug>/rules/` in the workspace, because which instructions apply to which paths is true whichever agent reads them. |
+
+Nothing here is written by Loadout in place. Memory is copied rather than moved,
+so a bad import loses nothing, and removing the old copy is left to you.
+
 ## Platform features it uses directly
 
 Nothing to install for these — they're part of the operating system.

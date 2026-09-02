@@ -66,10 +66,7 @@ internal sealed class MemoryImporter : IMemoryImporter
     /// The agent's own configuration directory, honouring the override it reads
     /// so a machine that has moved it is still found.
     /// </summary>
-    private string ClaudeHome() =>
-        _environment.GetVariable("CLAUDE_CONFIG_DIR") is { Length: > 0 } configured
-            ? configured
-            : Path.Combine(_environment.HomeDirectory, ".claude");
+    private string ClaudeHome() => Agents.AgentHome.Claude(_environment);
 
     /// <summary>
     /// Reproduces how the agent names a project directory from a repository

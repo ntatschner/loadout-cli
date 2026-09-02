@@ -172,8 +172,8 @@ internal sealed class InstalledMcpReader : IInstalledMcpReader
     /// </summary>
     private IReadOnlyList<McpEntry> ReadEnabledPlugins()
     {
-        var root = Path.Combine(_environment.HomeDirectory, ".claude", "plugins");
-        var settings = Path.Combine(_environment.HomeDirectory, ".claude", "settings.json");
+        var root = Path.Combine(Agents.AgentHome.Claude(_environment), "plugins");
+        var settings = Agents.AgentHome.ClaudeSettings(_environment);
 
         if (!Directory.Exists(root) || !File.Exists(settings))
         {

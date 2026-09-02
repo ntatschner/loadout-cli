@@ -37,7 +37,7 @@ internal sealed class ClaudeUsageHistory : IUsageHistory
     /// <inheritdoc />
     public bool IsAvailable => Directory.Exists(Root);
 
-    private string Root => Path.Combine(_environment.HomeDirectory, ".claude", "projects");
+    private string Root => Agents.AgentHome.ClaudeProjects(_environment);
 
     /// <inheritdoc />
     public async Task<OperationResult<UsageScan>> ScanAsync(

@@ -294,8 +294,5 @@ internal sealed class RepositoryAttribution : IRepositoryAttribution
         return null;
     }
 
-    private string ClaudeHome() =>
-        _environment.GetVariable("CLAUDE_CONFIG_DIR") is { Length: > 0 } configured
-            ? configured
-            : Path.Combine(_environment.HomeDirectory, ".claude");
+    private string ClaudeHome() => Agents.AgentHome.Claude(_environment);
 }

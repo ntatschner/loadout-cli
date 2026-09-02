@@ -48,7 +48,7 @@ public sealed class StatuslineTargets
     /// the machine, whoever started it.
     /// </summary>
     public string GlobalSettingsPath() =>
-        Path.Combine(_environment.HomeDirectory, ".claude", "settings.json");
+        Loadout.Core.Agents.AgentHome.ClaudeSettings(_environment);
 
     /// <summary>
     /// The settings file the launcher hands Claude for a project, which is the
