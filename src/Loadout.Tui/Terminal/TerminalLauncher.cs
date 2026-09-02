@@ -108,7 +108,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (configResult.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(configResult.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(configResult.Error!)}[/]");
             return (int)configResult.ExitCode;
         }
 
@@ -227,7 +227,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (projects.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(projects.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(projects.Error!)}[/]");
             return null;
         }
 
@@ -419,7 +419,7 @@ public sealed class TerminalLauncher : ILauncherTui
         if (inspected.Failed || inspected.Value is not { Count: > 0 } reports)
         {
             _console.MarkupLine(
-                $"[red]{Markup.Escape(inspected.Error ?? "Nothing could be inspected.")}[/]");
+                $"[red]{Shown.Safely(inspected.Error ?? "Nothing could be inspected.")}[/]");
 
             Pause();
             return;
@@ -446,7 +446,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (report.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(report.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(report.Error!)}[/]");
             Pause();
             return;
         }
@@ -472,7 +472,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (inspected.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(inspected.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(inspected.Error!)}[/]");
             Pause();
             return;
         }
@@ -540,7 +540,7 @@ public sealed class TerminalLauncher : ILauncherTui
             var applied = await _remediation.ApplyAsync(remedy, ct).ConfigureAwait(false);
 
             _console.MarkupLine(applied.Failed
-                ? $"[red]{Markup.Escape(remedy.Description)}: {Markup.Escape(applied.Error!)}[/]"
+                ? $"[red]{Markup.Escape(remedy.Description)}: {Shown.Safely(applied.Error!)}[/]"
                 : $"[green]done[/] {Markup.Escape(remedy.Description)}");
         }
 
@@ -595,7 +595,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (loaded.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(loaded.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(loaded.Error!)}[/]");
             Pause();
             return;
         }
@@ -606,7 +606,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (loadedMachine.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(loadedMachine.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(loadedMachine.Error!)}[/]");
             Pause();
             return;
         }
@@ -735,7 +735,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (saved.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(saved.Error!)}[/]");
             Pause();
             return;
         }
@@ -746,7 +746,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (savedMachine.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(savedMachine.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(savedMachine.Error!)}[/]");
             Pause();
             return;
         }
@@ -810,7 +810,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (result.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(result.Error!)}[/]");
             return (int)result.ExitCode;
         }
 
@@ -873,7 +873,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         if (shell.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(shell.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(shell.Error!)}[/]");
             return (int)ExitCode.GeneralFailure;
         }
 

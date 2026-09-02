@@ -171,7 +171,7 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
             {
                 output.WriteLine(
                     $"  [yellow]![/] {Markup.Escape(remedy.Description)} "
-                    + $"[dim]cannot be previewed: {Markup.Escape(preview.Error!)}[/]");
+                    + $"[dim]cannot be previewed: {Loadout.Tui.Shown.Safely(preview.Error!)}[/]");
 
                 continue;
             }
@@ -224,7 +224,7 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
                 // explicable state of all.
                 output.WriteLine(
                     $"  [red]x[/] {Markup.Escape(preview.Remedy.Description)} "
-                    + $"[dim]{Markup.Escape(result.Error!)}[/]");
+                    + $"[dim]{Loadout.Tui.Shown.Safely(result.Error!)}[/]");
 
                 continue;
             }

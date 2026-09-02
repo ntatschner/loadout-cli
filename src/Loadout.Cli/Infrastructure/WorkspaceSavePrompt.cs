@@ -109,7 +109,7 @@ public sealed class WorkspaceSavePrompt
 
         if (result.Failed)
         {
-            _console.MarkupLine($"[yellow]{Markup.Escape(result.Error!)}[/]");
+            _console.MarkupLine($"[yellow]{Loadout.Tui.Shown.Safely(result.Error!)}[/]");
             return;
         }
 

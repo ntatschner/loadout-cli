@@ -291,6 +291,37 @@ public sealed class LauncherTuiTests : IAsyncLifetime
         Output.Should().Contain("work");
     }
 
+    /// <summary>A fake, in the shape the scanner recognises inside a URL.</summary>
+    private const string Sentinel = "ghp_000LOADOUTTESTSENTINEL0000000000";
+
+    [Fact]
+    public async Task The_settings_screen_does_not_show_the_credential_in_the_remote()
+    {
+        var config = await _configuration.LoadConfigAsync();
+
+        config.Value!.Workspace.Remote =
+            $"https://loadout:{Sentinel}@example.invalid/workspace.git";
+
+        (await _configuration.SaveConfigAsync(config.Value)).Succeeded.Should().BeTrue();
+
+        await _projects.AddAsync(_repository);
+
+        Choose(SettingsEntry);
+        Choose(BackFromSettings);
+        Choose(Last); // Quit
+
+        await _tui.RunAsync();
+
+        // The command line has always redacted this; the launcher printed it
+        // intact, which is the same disclosure from the other surface. Anyone
+        // reading over a shoulder, or a recorded terminal, got the token.
+        Output.Should().NotContain(Sentinel);
+
+        // And the row is still there saying something, rather than the leak
+        // having been fixed by removing the information.
+        Output.Should().Contain("[redacted]");
+    }
+
     [Fact]
     public async Task Backing_out_of_a_project_returns_to_the_list_rather_than_quitting()
     {

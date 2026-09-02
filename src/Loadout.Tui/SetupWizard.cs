@@ -106,7 +106,7 @@ public sealed class SetupWizard : ISetupWizard
 
         if (gitVersion.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(gitVersion.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(gitVersion.Error!)}[/]");
             _console.MarkupLine("[dim]Install Git, then run: loadout setup[/]");
 
             return (int)ExitCode.ConfigurationInvalid;
@@ -150,7 +150,7 @@ public sealed class SetupWizard : ISetupWizard
 
         if (outcome.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(outcome.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(outcome.Error!)}[/]");
             return (int)outcome.ExitCode;
         }
 
@@ -159,7 +159,7 @@ public sealed class SetupWizard : ISetupWizard
         var save = await _configuration.SaveConfigAsync(config, ct).ConfigureAwait(false);
         if (save.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(save.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(save.Error!)}[/]");
             return (int)save.ExitCode;
         }
 
@@ -400,7 +400,7 @@ public sealed class SetupWizard : ISetupWizard
         config.Workspace.Remote = remote.Value ?? string.Empty;
 
         _console.MarkupLine(
-            $"[green]+[/] Created and pushed  [dim]{Markup.Escape(config.Workspace.Remote)}[/]");
+            $"[green]+[/] Created and pushed  [dim]{Shown.Safely(config.Workspace.Remote)}[/]");
 
         return OperationResult.Ok();
     }
@@ -426,7 +426,7 @@ public sealed class SetupWizard : ISetupWizard
             // lost; only the push needs retrying. Failing setup outright here
             // would throw away everything it just built.
             _console.MarkupLine(
-                $"[yellow]The workspace could not be pushed:[/] {Markup.Escape(pushResult.Error!)}");
+                $"[yellow]The workspace could not be pushed:[/] {Shown.Safely(pushResult.Error!)}");
 
             _console.MarkupLine("[dim]It is committed locally. Retry with:[/] loadout workspace save");
 
@@ -558,7 +558,7 @@ public sealed class SetupWizard : ISetupWizard
         // treats as normal rather than broken, so the environment provider is
         // offered instead of the setup simply failing.
         _console.MarkupLine(
-            $"[yellow]The native secret store is unavailable:[/] {Markup.Escape(availability.Error!)}");
+            $"[yellow]The native secret store is unavailable:[/] {Shown.Safely(availability.Error!)}");
 
         config.Secrets.Provider = _console.Prompt(
             new SelectionPrompt<string>()
@@ -640,7 +640,7 @@ public sealed class SetupWizard : ISetupWizard
 
         _console.MarkupLine(result.Succeeded
             ? $"[green]+[/] Global Git excludes  [dim]{Markup.Escape(result.Value!)}[/]"
-            : $"[yellow]![/] {Markup.Escape(result.Error!)}");
+            : $"[yellow]![/] {Shown.Safely(result.Error!)}");
     }
 
     private async Task ShowDetectedAgentsAsync(CancellationToken ct)

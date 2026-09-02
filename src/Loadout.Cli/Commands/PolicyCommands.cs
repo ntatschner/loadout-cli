@@ -299,7 +299,7 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
                 // A refusal here is usually "somebody else's hook is already
                 // there", which must not stop the remaining repositories.
                 output.WriteLine($"[yellow]skipped[/] {Markup.Escape(path)}  "
-                    + $"[dim]{Markup.Escape(result.Error!)}[/]");
+                    + $"[dim]{Loadout.Tui.Shown.Safely(result.Error!)}[/]");
 
                 continue;
             }

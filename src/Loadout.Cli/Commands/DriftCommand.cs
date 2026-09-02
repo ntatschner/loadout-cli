@@ -196,7 +196,7 @@ public sealed class DriftCommand : AsyncCommand<DriftSettings>
             {
                 output.WriteLine(
                     $"  [yellow]![/] {Markup.Escape(remedy.Description)} "
-                    + $"[dim]cannot be previewed: {Markup.Escape(preview.Error!)}[/]");
+                    + $"[dim]cannot be previewed: {Loadout.Tui.Shown.Safely(preview.Error!)}[/]");
 
                 continue;
             }
@@ -243,7 +243,7 @@ public sealed class DriftCommand : AsyncCommand<DriftSettings>
             // stopping halfway leaves the least explicable state of all.
             output.WriteLine(applied.Failed
                 ? $"  [red]x[/] {Markup.Escape(preview.Remedy.Description)} "
-                    + $"[dim]{Markup.Escape(applied.Error!)}[/]"
+                    + $"[dim]{Loadout.Tui.Shown.Safely(applied.Error!)}[/]"
                 : $"  [green]+[/] {Markup.Escape(applied.Value!.Detail)}");
         }
     }

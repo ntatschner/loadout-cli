@@ -20,7 +20,13 @@ namespace Loadout.Cli.Infrastructure;
 /// </summary>
 public sealed class CommandOutput
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    /// <summary>
+    /// Shared with <c>Program</c>'s exception handler, which answers the
+    /// failures that happen before a command — and therefore before one of
+    /// these — exists. One definition rather than two, because the casing is
+    /// part of the contract: a script reads <c>exitCode</c>, not <c>ExitCode</c>.
+    /// </summary>
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

@@ -262,7 +262,7 @@ public sealed class ProjectSurveyCommand : AsyncCommand<ProjectSurveyCommand.Set
                 {
                     output.WriteLine(
                         $"  [red]could not register[/] {Markup.Escape(item.SubjectPath)}  "
-                        + $"[dim]{Markup.Escape(added.Error ?? string.Empty)}[/]");
+                        + $"[dim]{Loadout.Tui.Shown.Safely(added.Error ?? string.Empty)}[/]");
 
                     continue;
                 }
@@ -297,7 +297,7 @@ public sealed class ProjectSurveyCommand : AsyncCommand<ProjectSurveyCommand.Set
         if (preview.Failed)
         {
             output.WriteLine($"  [red]could not read the memory[/]  "
-                + $"[dim]{Markup.Escape(preview.Error ?? string.Empty)}[/]");
+                + $"[dim]{Loadout.Tui.Shown.Safely(preview.Error ?? string.Empty)}[/]");
 
             return false;
         }
@@ -326,7 +326,7 @@ public sealed class ProjectSurveyCommand : AsyncCommand<ProjectSurveyCommand.Set
         {
             output.WriteLine(
                 "  [red]no backup could be taken, so nothing was imported[/]  "
-                + $"[dim]{Markup.Escape(captured.Error ?? string.Empty)}[/]");
+                + $"[dim]{Loadout.Tui.Shown.Safely(captured.Error ?? string.Empty)}[/]");
 
             return false;
         }
@@ -338,7 +338,7 @@ public sealed class ProjectSurveyCommand : AsyncCommand<ProjectSurveyCommand.Set
         if (applied.Failed)
         {
             output.WriteLine($"  [red]import failed[/]  "
-                + $"[dim]{Markup.Escape(applied.Error ?? string.Empty)}[/]");
+                + $"[dim]{Loadout.Tui.Shown.Safely(applied.Error ?? string.Empty)}[/]");
 
             return false;
         }

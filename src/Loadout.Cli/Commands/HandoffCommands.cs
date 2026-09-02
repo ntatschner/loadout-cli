@@ -164,7 +164,7 @@ public sealed class HandoffCreateCommand : AsyncCommand<HandoffCreateCommand.Set
             {
                 // The clipboard is optional (spec section 74), so a headless
                 // machine falls back to printing rather than failing.
-                output.WriteLine($"[yellow]Clipboard unavailable:[/] {Markup.Escape(copied.Error!)}");
+                output.WriteLine($"[yellow]Clipboard unavailable:[/] {Loadout.Tui.Shown.Safely(copied.Error!)}");
                 Console.Out.WriteLine(result.Value);
 
                 return CommandOutput.Success();

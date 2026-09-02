@@ -91,7 +91,7 @@ public sealed class WorkspaceStatusCommand : AsyncCommand<GlobalSettings>
         {
             // Cloned, but not a workspace. Almost always a mistyped remote, and
             // saying so beats an empty project list that looks like success.
-            output.WriteLine($"[yellow]Schema[/]     {Markup.Escape(manifestResult.Error!)}");
+            output.WriteLine($"[yellow]Schema[/]     {Loadout.Tui.Shown.Safely(manifestResult.Error!)}");
         }
 
         if (registry is not null)

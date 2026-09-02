@@ -146,7 +146,7 @@ public sealed class ProjectLinkCommand : AsyncCommand<ProjectLinkCommand.Setting
             {
                 output.WriteLine(
                     $"  [red]failed[/]  {Markup.Escape(project.Entry.Slug)}  "
-                    + $"[dim]{Markup.Escape(written.Error ?? string.Empty)}[/]");
+                    + $"[dim]{Loadout.Tui.Shown.Safely(written.Error ?? string.Empty)}[/]");
 
                 continue;
             }

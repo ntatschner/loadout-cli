@@ -202,6 +202,33 @@ public sealed class JsonContractTests
     }
 
     [BuiltCliFact]
+    public async Task A_failure_before_the_command_runs_is_still_a_document()
+    {
+        using var loadout = new LoadoutProcess();
+
+        // 'profile list' requires a project. The argument binder rejects this
+        // before any command exists, so it is answered by the parser's own
+        // exception handler rather than by CommandOutput — a different path to
+        // the same promise, and the one that used to write a sentence to stderr
+        // and leave stdout empty. A script asking for JSON then had nothing at
+        // all to read, and no way to tell that from a command that printed
+        // nothing successfully.
+        var run = await loadout.RunAsync("profile", "list", "--json");
+
+        run.ExitCode.Should().NotBe(0);
+
+        var json = run.Json();
+
+        ShouldHave(json, "error", "exitCode");
+
+        json.GetProperty("exitCode").GetInt32().Should().Be(run.ExitCode);
+
+        // The reason, not just a shape: "it failed" in a well-formed document
+        // is no more useful than the empty stdout it replaced.
+        json.GetProperty("error").GetString().Should().Contain("project");
+    }
+
+    [BuiltCliFact]
     public async Task Version_is_reported_without_a_workspace()
     {
         using var loadout = new LoadoutProcess();

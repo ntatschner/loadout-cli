@@ -121,6 +121,49 @@ public sealed class SecretLeakageTests
     }
 
     [BuiltCliFact]
+    public async Task No_command_prints_the_credential()
+    {
+        using var loadout = await WithCredentialInConfigAsync();
+
+        // The tests above name five commands. There are more than fifty, and
+        // naming them is how the launcher's own screens came to print the
+        // remote unredacted for as long as they did: the guard covered the
+        // surface somebody remembered, not the surface that exists. The
+        // dry-run contract already takes its list from the catalogue for the
+        // same reason.
+        Loadout.Cli.Program.CommandNames();
+
+        var leaked = new List<string>();
+        var exercised = 0;
+
+        foreach (var entry in Loadout.Cli.Program.RegisteredCommands()
+            .Where(command => !command.RequiresNetwork)
+            .OrderBy(command => command.Path, StringComparer.Ordinal))
+        {
+            // Nothing is registered in a throwaway home, so most of these fail
+            // — which is the point. A failure is where a remote gets quoted
+            // back, and it is the path that leaked.
+            string[] arguments = entry.Mutates
+                ? [.. entry.Path.Split(' '), "--dry-run"]
+                : [.. entry.Path.Split(' ')];
+
+            var run = await loadout.RunAsync(arguments);
+
+            exercised++;
+
+            if (run.StandardOutput.Contains(Sentinel, StringComparison.Ordinal)
+                || run.StandardError.Contains(Sentinel, StringComparison.Ordinal))
+            {
+                leaked.Add(entry.Path);
+            }
+        }
+
+        exercised.Should().BeGreaterThan(20, "the catalogue has to be filled for this to check anything");
+
+        leaked.Should().BeEmpty("a credential must not come back out of any command");
+    }
+
+    [BuiltCliFact]
     public async Task The_sentinel_would_be_found_if_it_were_printed()
     {
         using var loadout = new LoadoutProcess();

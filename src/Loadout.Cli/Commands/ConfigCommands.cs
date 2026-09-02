@@ -334,7 +334,7 @@ public sealed class ConfigEditCommand : AsyncCommand<ConfigEditCommand.Settings>
         {
             // Falling back to printing the path keeps the command useful on a
             // headless machine, where there is nothing to open it with.
-            output.WriteLine($"[yellow]Could not open an editor:[/] {Markup.Escape(result.Error!)}");
+            output.WriteLine($"[yellow]Could not open an editor:[/] {Loadout.Tui.Shown.Safely(result.Error!)}");
             Console.Out.WriteLine(path);
         }
 

@@ -230,7 +230,10 @@ public static class Program
         var showFullExceptions = launcherArgs.Contains("--debug", StringComparer.Ordinal);
 
         var app = new CommandApp(registrar);
-        app.Configure(config => Configure(config, showFullExceptions));
+        app.Configure(config => Configure(
+            config,
+            showFullExceptions,
+            json: launcherArgs.Contains("--json", StringComparer.Ordinal)));
 
         // Commands are handed a token that Ctrl+C actually cancels. Without one
         // supplied here they receive none at all, which is what the parameter
@@ -423,7 +426,7 @@ public static class Program
         return ["launch", .. args];
     }
 
-    private static void Configure(IConfigurator config, bool showFullExceptions)
+    private static void Configure(IConfigurator config, bool showFullExceptions, bool json = false)
     {
         config.SetApplicationName("loadout");
 
@@ -440,8 +443,25 @@ public static class Program
         // exactly what is needed when the failure is a defect.
         config.SetExceptionHandler((ex, _) =>
         {
-            Console.Error.WriteLine(Core.Security.SecretRedactor.Redact(
-                showFullExceptions ? ex.ToString() : ex.Message));
+            var message = Core.Security.SecretRedactor.Redact(
+                showFullExceptions ? ex.ToString() : ex.Message);
+
+            // A command that fails answers --json with a document, and a
+            // command that could not be built has to answer the same way. This
+            // handler takes the failures that happen before any command exists
+            // — a missing required argument, an unparseable option — and
+            // without this it wrote a sentence to stderr and left stdout empty,
+            // so a script asking for JSON got nothing at all to read.
+            if (json)
+            {
+                Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                    new { error = message, exitCode = (int)ExitCode.GeneralFailure },
+                    Infrastructure.CommandOutput.JsonOptions));
+
+                return (int)ExitCode.GeneralFailure;
+            }
+
+            Console.Error.WriteLine(message);
 
             if (!showFullExceptions)
             {

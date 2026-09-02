@@ -152,7 +152,9 @@ internal sealed class ProjectDetailView : FrameView
 
         if (failure is { Length: > 0 })
         {
-            _branch.Text = failure;
+            // Whatever went wrong is usually Git's, and Git quotes the remote
+            // it could not reach.
+            _branch.Text = Shown.Plainly(failure);
             return;
         }
 

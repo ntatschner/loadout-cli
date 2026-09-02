@@ -36,17 +36,36 @@ public sealed class LauncherCommandSeamTests
     [Fact]
     public void Every_command_the_launcher_hard_codes_is_one_the_parser_knows()
     {
-        var known = Program.CommandNames();
+        var roots = Program.CommandNames();
 
-        known.Should().NotBeEmpty("the parser has to have registered something");
+        roots.Should().NotBeEmpty("the parser has to have registered something");
+
+        // The whole path, not the first word of it. Checking only the root let
+        // 'project new' be misspelt as 'project noooo' and still pass, because
+        // 'project' is real — which is exactly the menu entry that fails only
+        // when somebody picks it, the thing this test was written to stop.
+        var paths = Program.RegisteredCommands()
+            .Select(entry => entry.Path)
+            .ToHashSet(StringComparer.Ordinal);
+
+        paths.Should().NotBeEmpty("the catalogue has to have been filled");
 
         foreach (var path in LauncherCommands.All)
         {
             // A menu entry naming a command that does not exist fails only when
             // somebody picks it, which is the point at which it is most
             // annoying and least explicable.
-            known.Should().Contain(RootOf(path),
-                $"the launcher offers '{path}', so the parser must have a '{RootOf(path)}' command");
+            if (!path.Contains(' '))
+            {
+                roots.Should().Contain(path,
+                    $"the launcher offers '{path}', so the parser must have it");
+
+                continue;
+            }
+
+            paths.Should().Contain(path,
+                $"the launcher offers '{path}', so the parser must have that exact command "
+                + "— a real branch with an unreal sub-command is the case this misses otherwise");
         }
     }
 

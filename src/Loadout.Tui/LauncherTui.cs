@@ -141,7 +141,7 @@ public sealed class LauncherTui : ILauncherTui
         var configResult = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
         if (configResult.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(configResult.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(configResult.Error!)}[/]");
             return (int)configResult.ExitCode;
         }
 
@@ -161,7 +161,7 @@ public sealed class LauncherTui : ILauncherTui
             var projectsResult = await _projects.ListAsync(ct).ConfigureAwait(false);
             if (projectsResult.Failed)
             {
-                _console.MarkupLine($"[red]{Markup.Escape(projectsResult.Error!)}[/]");
+                _console.MarkupLine($"[red]{Shown.Safely(projectsResult.Error!)}[/]");
                 return (int)projectsResult.ExitCode;
             }
 
@@ -366,7 +366,7 @@ public sealed class LauncherTui : ILauncherTui
 
         table.AddRow("[dim]Workspace repository[/]", string.IsNullOrWhiteSpace(config.Workspace.Remote)
             ? "[yellow]not set[/]"
-            : Markup.Escape(config.Workspace.Remote));
+            : Shown.Safely(config.Workspace.Remote));
 
         table.AddRow("[dim]Branch[/]", Markup.Escape(config.Workspace.Branch));
 
@@ -454,7 +454,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (saved.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(saved.Error!)}[/]");
 
             return false;
         }
@@ -514,7 +514,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (saved.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(saved.Error!)}[/]");
 
             return false;
         }
@@ -535,7 +535,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (machine.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(machine.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(machine.Error!)}[/]");
 
             return false;
         }
@@ -569,7 +569,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (saved.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(saved.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(saved.Error!)}[/]");
 
             return false;
         }
@@ -859,7 +859,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (result.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(result.Error!)}[/]");
             return (int)result.ExitCode;
         }
 
@@ -926,7 +926,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (listed.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(listed.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(listed.Error!)}[/]");
 
             return null;
         }
@@ -974,7 +974,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (result.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(result.Error!)}[/]");
 
             return (int)result.ExitCode;
         }
@@ -1006,7 +1006,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (result.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(result.Error!)}[/]");
 
             return;
         }
@@ -1053,7 +1053,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (inspected.Failed || inspected.Value is not { Count: > 0 } reports)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(inspected.Error ?? "Nothing could be inspected.")}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(inspected.Error ?? "Nothing could be inspected.")}[/]");
 
             return;
         }
@@ -1114,7 +1114,7 @@ public sealed class LauncherTui : ILauncherTui
             {
                 _console.MarkupLine(
                     $"  [yellow]![/] {Markup.Escape(remedy.Description)} "
-                    + $"[dim]{Markup.Escape(preview.Error!)}[/]");
+                    + $"[dim]{Shown.Safely(preview.Error!)}[/]");
 
                 continue;
             }
@@ -1142,7 +1142,7 @@ public sealed class LauncherTui : ILauncherTui
             // One failing must not stop the others: they are independent, and
             // stopping halfway leaves the least explicable state of all.
             _console.MarkupLine(applied.Failed
-                ? $"  [red]x[/] {Markup.Escape(preview.Remedy.Description)} [dim]{Markup.Escape(applied.Error!)}[/]"
+                ? $"  [red]x[/] {Markup.Escape(preview.Remedy.Description)} [dim]{Shown.Safely(applied.Error!)}[/]"
                 : $"  [green]+[/] {Markup.Escape(applied.Value!.Detail)}");
         }
 
@@ -1160,7 +1160,7 @@ public sealed class LauncherTui : ILauncherTui
     private async Task<int?> OfferCloneAsync(ProjectResolution project, CancellationToken ct)
     {
         _console.MarkupLine("[yellow]This repository is not on this machine.[/]");
-        _console.MarkupLine($"[dim]{Markup.Escape(project.Entry.Remote)}[/]");
+        _console.MarkupLine($"[dim]{Shown.Safely(project.Entry.Remote)}[/]");
         _console.WriteLine();
 
         if (!_console.Confirm("Clone it now?", defaultValue: false))
@@ -1172,7 +1172,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (result.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(result.Error!)}[/]");
 
             return null;
         }
@@ -1230,7 +1230,7 @@ public sealed class LauncherTui : ILauncherTui
 
         if (shellResult.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(shellResult.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(shellResult.Error!)}[/]");
             return (int)ExitCode.GeneralFailure;
         }
 

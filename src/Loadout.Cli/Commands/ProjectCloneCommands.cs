@@ -199,7 +199,7 @@ public sealed class ProjectShowCommand : AsyncCommand<ProjectShowCommand.Setting
         output.WriteBlankLine();
         output.WriteLine($"Slug       {Markup.Escape(project.Entry.Slug)}");
         output.WriteLine($"Id         {Markup.Escape(project.Entry.Id)}");
-        output.WriteLine($"Remote     {Markup.Escape(project.Entry.Remote)}");
+        output.WriteLine($"Remote     {Loadout.Tui.Shown.Safely(project.Entry.Remote)}");
         output.WriteLine($"Agent      {Markup.Escape(project.Entry.DefaultAgent)}");
 
         output.WriteLine(project.LocalPath is null

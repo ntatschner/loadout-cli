@@ -76,7 +76,7 @@ public sealed class DesktopCommand : AsyncCommand<DesktopCommand.Settings>
         {
             // On macOS this is the deferred bundle, which is a known gap rather
             // than a fault, so it reads as information rather than an error.
-            output.WriteLine($"[yellow]Not installed:[/] {Markup.Escape(result.Error!)}");
+            output.WriteLine($"[yellow]Not installed:[/] {Loadout.Tui.Shown.Safely(result.Error!)}");
 
             return CommandOutput.Success();
         }

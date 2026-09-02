@@ -69,7 +69,7 @@ public sealed class ProjectOnboarding : IProjectOnboarding
 
         if (discovered.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(discovered.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(discovered.Error!)}[/]");
 
             return [];
         }
@@ -132,7 +132,7 @@ public sealed class ProjectOnboarding : IProjectOnboarding
             else
             {
                 _console.MarkupLine(
-                    $"[yellow]![/] {Markup.Escape(path)}  [dim]{Markup.Escape(result.Error!)}[/]");
+                    $"[yellow]![/] {Markup.Escape(path)}  [dim]{Shown.Safely(result.Error!)}[/]");
             }
         }
 
@@ -160,7 +160,7 @@ public sealed class ProjectOnboarding : IProjectOnboarding
 
         if (result.Failed)
         {
-            _console.MarkupLine($"[red]{Markup.Escape(result.Error!)}[/]");
+            _console.MarkupLine($"[red]{Shown.Safely(result.Error!)}[/]");
 
             return null;
         }
@@ -279,7 +279,7 @@ public sealed class ProjectOnboarding : IProjectOnboarding
             if (applied.Failed)
             {
                 _console.MarkupLine(
-                    $"[yellow]![/] {Markup.Escape(plan.Slug)}  {Markup.Escape(applied.Error!)}");
+                    $"[yellow]![/] {Markup.Escape(plan.Slug)}  {Shown.Safely(applied.Error!)}");
 
                 continue;
             }
