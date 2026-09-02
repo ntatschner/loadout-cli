@@ -13,9 +13,9 @@ loadout starstats          # skip it and launch that project
 loadout here               # skip it and launch whatever repository you are in
 ```
 
-The pictures on this page are drawn by the tests, through the same headless
-driver they assert on, so they are the real widgets rather than a drawing of
-them. Redraw them after a change with:
+The pictures here are drawn by the tests, using the same headless driver they
+assert on, so they're the real widgets rather than someone's drawing of them.
+Redraw them after a change with:
 
 ```bash
 LOADOUT_DOCS_IMAGES=1 dotnet test --filter DocumentationImagesTests

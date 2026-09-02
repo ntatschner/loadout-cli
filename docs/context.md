@@ -34,7 +34,7 @@ flowchart LR
     A["Specialists"] --> B["Global"] --> C["Project"] --> D["Agent"] --> E["Profile"] --> F["Handoff"] --> G["Rules"] --> H["Memory index"]
 ```
 
-Look at what a launch would actually load, before spending one on it:
+See what a launch would actually load, before you spend one:
 
 ```bash
 loadout instructions explain --project starstats

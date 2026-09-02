@@ -20,9 +20,9 @@ being code.
 It runs natively on Windows, Linux and macOS. No VM, no container, no "works
 on Linux, should be fine elsewhere".
 
-![What you get: your repo stays yours, the right instructions, it remembers, a
-launcher rather than a flag soup, the agent can ask back, and you see the
-bill](docs/images/features.svg)
+![Your repository feeds Loadout, which holds instructions, memory, token
+accounting, repo hygiene, sessions and the launcher, and starts your
+agent](docs/images/features.svg)
 
 ## Install
 
@@ -68,35 +68,17 @@ straight to a registered one.
 
 ## How it works
 
-```mermaid
-flowchart TB
-    CMD["loadout starstats --task &quot;fix the upload retry&quot;"]
+Two repositories instead of one. Yours holds source. The workspace holds
+everything your agent needs to work on it, so a teammate who's never installed
+Loadout sees a clean diff.
 
-    CMD --> RESOLVE["Resolve the project"]
+When you launch, Loadout reads your repo to see what it's made of, works out
+which instructions apply, and builds one context file for that session. The file
+goes in a directory only you can read and is deleted when the agent exits.
 
-    RESOLVE --> EVIDENCE["Scan the repository<br/>languages · frameworks · databases"]
-    RESOLVE --> WS[("Workspace<br/>instructions · rules · memory")]
-
-    EVIDENCE --> PICK["Pick the specialists<br/>from 72 built in"]
-    WS --> PICK
-
-    PICK --> COMPILE["Compile one context file<br/>general to specific"]
-    COMPILE --> AGENT["Agent session<br/>Claude or Codex"]
-
-    AGENT -->|"writes code"| REPO[("Your repository<br/>source, and nothing else")]
-    AGENT -->|"memory · handoff"| WS
-
-    REPO -.->|"evidence for next time"| EVIDENCE
-```
-
-Two repositories, and the split is the whole idea. Your repository holds source.
-The workspace holds everything the agent needs to work on it, so a teammate who
-has never installed Loadout sees a clean diff.
-
-The compiled context is assembled per launch into a directory only you can read,
-and deleted when the agent exits. `loadout instructions explain` prints the whole
-set, with the reason for each, before anything is spent — see
-**[what you get](docs/features.md)** for the rest.
+Nothing is guessed silently. `loadout instructions explain` shows you the whole
+set and why each part was picked, before you spend anything on it. The rest is
+in **[what you get](docs/features.md)**.
 
 ## Documentation
 

@@ -149,50 +149,47 @@ merely say similar things — deciding which wording is the right one is the
 judgement a tool should not be making on somebody's behalf. A backup is taken
 first, and `--apply` is required to change anything.
 
-## Filling a memory that is empty
+## Filling a memory that's empty
 
-A project registered today has no memory at all, and nothing here writes one for
-you: the launcher measures, and judgement about what a codebase means belongs to
-whoever — or whatever — is reading it. What the library ships instead is a
-procedure. `skill.repository-review` activates on a task that says "review the
-repo", "learn this codebase", "onboard" or "get up to speed", and puts a review
-procedure in front of the agent along with the rule that findings are written
-down rather than left in the conversation:
+A project you registered today has no memory, and nothing here writes one for
+you. Loadout measures things; deciding what a codebase means is a job for
+whoever — or whatever — is reading it.
+
+What the library does ship is the procedure. `skill.repository-review` activates
+on a task like "review the repo", "learn this codebase", "onboard" or "get up to
+speed", and tells the agent to write down what it finds instead of leaving it in
+the conversation:
 
 ```bash
-loadout launch starstats --mode investigate \
-  --task "review this codebase and record what you find"
+loadout launch starstats --mode investigate   --task "review this codebase and record what you find"
 loadout memory list starstats                   # then see what it left behind
 ```
 
-The mode is not optional here, and leaving it out is the one way to get nothing.
-Modes are never inferred from what you typed — `--mode` defaults to `implement`,
-whose posture is that the what has already been decided and the job is to make
-the change. A reviewing skill is offered in the `investigate`, `advise` and
-`review` postures and withheld from that one, so a task reading "review the repo"
-in the default mode selects no skill at all and says so:
+You need the mode, and leaving it off is the one way to get nothing. Modes
+aren't guessed from what you typed. `--mode` defaults to `implement`, which
+assumes you've already decided what to do, so review skills don't load. Check
+before you spend a session on it:
 
 ```bash
 loadout instructions explain --project starstats "review the repo"
 loadout instructions explain --project starstats "review the repo" --mode investigate
 ```
 
-Run both. The first lists no skill, the second lists Repository review and the
-phrase that reached it — which is the cheapest way to confirm a session will get
-the procedure before spending one finding out that it did not.
+Run both. The first lists no skill. The second lists Repository review and the
+phrase that reached it.
 
-The procedure starts by reading what is already known — `instructions explain`,
+The procedure starts by reading what's already known — `instructions explain`,
 `instructions audit`, `rules budget` and the existing memory — because
 re-deriving a fact somebody already wrote down is the commonest waste there is.
 It asks for one change traced end to end, and for every claim to be checked by
-running it rather than inferred from a name.
+running it rather than guessed from a name.
 
-It is equally clear about what not to record: anything that will be false next
+It's just as clear about what not to record: anything that'll be false next
 month, anything the code already says plainly, and anything the credential
-screen would refuse. A memory that is confidently wrong costs far more than a
-missing one, which is why the procedure asks for existing topics to be extended
-or deleted rather than added alongside.
+screen would refuse. A confidently wrong memory costs far more than a missing
+one, so it asks you to extend or delete an existing topic rather than add a
+second one next to it.
 
-Agents launched with the launcher's own tools available can write findings as
-they go through `loadout_remember`, without leaving the session to run a
-command.
+Agents launched with the launcher's own tools can write findings as they go with
+`loadout_remember`, without leaving the session.
+

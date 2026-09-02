@@ -76,31 +76,33 @@ has wandered from what you configured.
 
 ![The launcher](images/launcher.svg)
 
-Run `loadout` with nothing after it. Every row says whether you can work on that
-project, and the panel on the right says what a session would start with before
-you spend one. `Ctrl+P` opens a palette over every command the CLI has, found by
-what it is for: searching `undo` reaches `backup restore`, `broken` reaches
-`doctor`.
+Run `loadout` on its own. Every row tells you whether you can work on that
+project, and the panel on the right shows what a session would start with, so
+you know before you spend one.
 
-The launcher never implements a command itself. Anything you pick runs through
-the same parser you would have typed at, which is asserted by a test rather than
-by intent.
+`Ctrl+P` opens a palette over every command the CLI has, and it finds them by
+what they're for. Search `undo` and you get `backup restore`. Search `broken`
+and you get `doctor`. Nobody looking to undo a mistake searches for the words
+"backup restore".
+
+The launcher doesn't implement any command itself. Whatever you pick runs
+through the same parser you'd have typed at, and a test checks that.
 
 ### The agent can ask back
 
-A launched session is told `loadout` is on PATH and offered the same operations
-as MCP tools: read a specialist in full, ask what this session was given and
-why, record one fact worth having next time.
+The session you launch is told `loadout` is on PATH, and gets the same few
+operations as MCP tools: read a specialist in full, ask what it was given and
+why, write down one fact worth having next time.
 
-Nothing that changes the machine or pushes to a remote is offered, and the
-context says so rather than leaving the omission to be inferred. Ask an agent to
-review a repository and it has a procedure for it — `skill.repository-review` —
-and somewhere to put what it learns.
+It isn't offered anything that changes your machine or pushes to a remote, and
+the context says so rather than leaving it to be worked out. Ask an agent to
+review a repository and it has a procedure to follow — `skill.repository-review`
+— and somewhere to put what it finds.
 
 ### Undo
 
-Every file-changing command takes `--dry-run` and shows you the change first.
-Anything that did change is in a snapshot:
+Every command that changes a file takes `--dry-run` and shows you the change
+first. Anything that did change is in a snapshot you can put back:
 
 ```sh
 loadout backup list
