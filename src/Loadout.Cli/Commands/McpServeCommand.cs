@@ -237,6 +237,86 @@ public sealed class LoadoutTools
             : written.Error ?? "It could not be recorded.";
     }
 
+    [McpServerTool(Name = "loadout_mode")]
+    [Description(
+        "Switch the posture for the rest of this session, and get what that changes. A mode is "
+        + "a session-wide directive, not a per-message one: adopt what this returns and keep to "
+        + "it until the work changes shape again. Use it when what you are doing stops matching "
+        + "how the session started - asked to look into a bug and now writing the fix, or the "
+        + "other way round.")]
+    public async Task<string> ModeAsync(
+        [Description("advise, investigate, implement or review.")] string mode,
+        [Description("What you are about to do, so task-triggered specialists are chosen for it.")]
+        string? task = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(mode);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        var catalogue = await _instructions
+            .LibraryAsync(_workspace.LocalPath, slug, ct)
+            .ConfigureAwait(false);
+
+        var asked = mode.Trim().ToLowerInvariant();
+
+        var known = catalogue
+            .OfKind(SpecialistKind.Mode)
+            .Select(m => m.Id.StartsWith("mode.", StringComparison.Ordinal) ? m.Id[5..] : m.Id)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        // The resolver falls back to the default for a name it does not know,
+        // which is right for a command line and wrong here: an agent told
+        // nothing would carry on believing it had switched.
+        if (!known.Contains(asked, StringComparer.Ordinal))
+        {
+            return $"There is no '{asked}' mode. The modes are: {string.Join(", ", known)}.";
+        }
+
+        var posture = _instructions.BuiltInText($"mode.{asked}");
+
+        if (slug is null)
+        {
+            return posture ?? $"The {asked} mode has no text.";
+        }
+
+        var manifest = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+        var resolved = await _instructions.ResolveAsync(
+            new InstructionRequest(
+                manifest.Value,
+                RepositoryPath: null,
+                _workspace.LocalPath,
+                manifest.Value?.Agents.Default ?? "claude",
+                Task: task,
+                Mode: asked),
+            ct).ConfigureAwait(false);
+
+        if (resolved.Failed)
+        {
+            return resolved.Error ?? "The instructions could not be resolved.";
+        }
+
+        var applying = string.Join(
+            Environment.NewLine,
+            resolved.Value!.Selected.Select(s => $"  {s.Specialist.Id} - {s.Reason}"));
+
+        return $"""
+            Now in {asked} mode for the rest of this session.
+
+            {posture}
+
+            What applies now:
+            {applying}
+
+            The language and framework specialists come from the repository, so they do not
+            change with the mode. What changes is the posture above, and the skills a mode
+            allows: a reviewing skill is offered in investigate, advise and review, and
+            withheld from implement.
+            """;
+    }
+
     private async Task<string?> SlugAsync(CancellationToken ct)
     {
         if (_scope.Project is { Length: > 0 } named)

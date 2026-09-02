@@ -5,7 +5,7 @@ the commands.
 
 ### Instructions picked for the job
 
-There are 72 specialists built into the binary: foundations, modes, languages,
+There are 73 specialists built into the binary: foundations, modes, languages,
 frameworks, databases, platforms, clouds, functional areas and skills. Instead
 of one enormous prompt that's mostly irrelevant, Loadout works out which ones
 your task needs from the repo you're in and the words you used, then tells you
@@ -92,7 +92,8 @@ through the same parser you'd have typed at, and a test checks that.
 
 The session you launch is told `loadout` is on PATH, and gets the same few
 operations as MCP tools: read a specialist in full, ask what it was given and
-why, write down one fact worth having next time.
+why, write down one fact worth having next time, and change its own mode when
+the work changes shape.
 
 It isn't offered anything that changes your machine or pushes to a remote, and
 the context says so rather than leaving it to be worked out. Ask an agent to

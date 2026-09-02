@@ -87,7 +87,18 @@ public sealed class SpecialistCountTests
 
         var found = 0;
 
-        foreach (var relative in new[] { "README.md", Path.Combine("docs", "specialists.md") })
+        // Named rather than scanned, because docs/specialists-architecture.md
+        // says "52 specialists" and is right to: it is the survey of the
+        // external bundle this library was written instead of, not a claim
+        // about what ships. A blanket scan would fail on a historical figure.
+        string[] pages =
+        [
+            "README.md",
+            Path.Combine("docs", "features.md"),
+            Path.Combine("docs", "specialists.md"),
+        ];
+
+        foreach (var relative in pages)
         {
             var path = Path.Combine(root!.FullName, relative);
 
@@ -99,6 +110,6 @@ public sealed class SpecialistCountTests
             }
         }
 
-        found.Should().Be(2, "both documents have to be found for this to check anything");
+        found.Should().Be(pages.Length, "every page stating a count has to be found");
     }
 }

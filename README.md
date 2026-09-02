@@ -22,7 +22,27 @@ on Linux, should be fine elsewhere".
 
 ![Your repository feeds Loadout, which holds instructions, memory, token
 accounting, repo hygiene, sessions and the launcher, and starts your
-agent](docs/images/features.svg)
+agent](docs/images/features.jpg)
+
+## Agents and editors
+
+| Agent | What you get |
+| --- | --- |
+| **Claude Code** | The compiled context as a system prompt, session listing and resume, MCP servers per project, and a status line with project, branch and context usage |
+| **Codex** | The compiled context as `AGENTS.md` in an ephemeral `CODEX_HOME`, session listing and resume. No status line, because Codex has no equivalent |
+| **Anything else** | Define it under `custom_agents` in `config.yaml` — executable, arguments and environment. No code change needed, and no wait for us |
+
+Editor handoff is `loadout code <project>`, which opens the repo in the editor
+under the profile you've mapped to that agent, so opening a project for Claude
+and for Codex can give you different extensions and settings.
+
+**VS Code**, **VS Code Insiders**, **VSCodium** and **Cursor** are recognised by
+name. Any other editor works too — point `editor-command` at it — you just don't
+get the profile mapping.
+
+More agents and editors are coming. The generic adapter means you don't have to
+wait for one: if it takes a directory and starts from a command, you can wire it
+up today.
 
 ## Install
 

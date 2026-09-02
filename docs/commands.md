@@ -200,13 +200,21 @@ agent and heard nothing more. Every launch now also declares Loadout itself as
 an MCP server, so a session can ask it things rather than parse console output
 written for a person.
 
-Three tools, each making the same call its command makes:
+Four tools, each making the same call its command makes:
 
 | | |
 |---|---|
 | `loadout_specialist` | The full text of one specialist, as `instructions show` prints it |
 | `loadout_effective_instructions` | What this session was given, and what triggered each part |
 | `loadout_remember` | Record one durable fact about the project, screened for credentials |
+| `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
+
+`loadout_mode` is there because a mode is a session-wide directive and work
+changes shape: a session that started out investigating a bug ends up fixing it.
+The agent asks for the new posture and adopts it, rather than drifting into it
+without saying so. A mode it doesn't recognise is refused with the list of real
+ones instead of being treated as the default. `skill.mode-switch` tells it when
+the switch is worth making.
 
 Nothing offered pushes to a remote, changes the machine or starts an agent. A
 tool an agent can call unprompted is a decision taken with nobody watching, so

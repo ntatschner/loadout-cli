@@ -58,6 +58,48 @@ Modes combine with specialists rather than duplicating them. `performance` with
 `investigate` means measure and isolate before editing; `performance` with
 `implement` means apply an optimisation that has already been justified.
 
+### A mode lasts the whole session
+
+A mode is a directive for the session, not for a message. You set it at launch
+with `--mode`, and it holds until something changes it. It's never guessed from
+what you typed, so a session started in `implement` stays there even if your
+next message is a question. That's deliberate: a posture that flipped on the
+wording of one message wouldn't be a posture.
+
+### Changing it part way through
+
+Work changes shape. You ask an agent to look into a bug, it finds the cause, and
+now you want the fix — that's `investigate` becoming `implement`. The agent can
+make that switch itself:
+
+```text
+loadout_mode(mode: "implement", task: "add the retry to the upload step")
+```
+
+or, without the launcher's own tools:
+
+```bash
+loadout instructions explain --mode implement --project starstats "add the retry"
+```
+
+Either gives back the posture to adopt and what now applies. `skill.mode-switch`
+tells the agent when this is worth doing and when it isn't — one question inside
+a piece of implementation work is not a mode change.
+
+An unrecognised mode is refused rather than quietly treated as the default,
+because an agent told nothing would carry on believing it had switched.
+
+### What a mode change doesn't touch
+
+Only two things move: the posture, and which skills are on offer. A reviewing
+skill is available in `investigate`, `advise` and `review` and withheld from
+`implement`.
+
+Everything else keeps working. Language, framework, database and platform
+specialists come from what's actually in the repository, so they apply whatever
+the mode is. Specialists triggered by task phrases keep triggering on the words
+in the new task. Nothing already in the context is taken away.
+
 ## How a specialist gets loaded
 
 Four ways, in descending order of authority.
@@ -195,8 +237,8 @@ loadout instructions list            # everything available to this project
 loadout instructions list --kind language
 ```
 
-The library ships 72 specialists — 4 foundations, 4 modes, 10 languages, 8
-frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions and 12 skills.
+The library ships 73 specialists — 4 foundations, 4 modes, 10 languages, 8
+frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions and 13 skills.
 They are embedded in the binary rather than kept on disk, so the command is the
 way to read them; there is no directory to browse.
 

@@ -127,6 +127,48 @@ public sealed class McpServerContractTests
         tools.Should().Contain("loadout_specialist");
         tools.Should().Contain("loadout_effective_instructions");
         tools.Should().Contain("loadout_remember");
+        tools.Should().Contain("loadout_mode");
+    }
+
+    [BuiltCliFact]
+    public void A_mode_can_be_changed_and_answers_with_the_posture()
+    {
+        using var session = Start();
+
+        var answer = session.Request("tools/call", new
+        {
+            name = "loadout_mode",
+            arguments = new { mode = "investigate" },
+        });
+
+        var text = answer.GetProperty("result").GetProperty("content")[0]
+            .GetProperty("text").GetString() ?? string.Empty;
+
+        // The posture itself, not a note saying it was changed. An agent that
+        // is told "you are now investigating" and nothing else has been given
+        // a label rather than a direction.
+        text.Should().Contain("Reproduce first");
+    }
+
+    [BuiltCliFact]
+    public void A_mode_that_does_not_exist_is_refused_rather_than_quietly_defaulted()
+    {
+        using var session = Start();
+
+        var answer = session.Request("tools/call", new
+        {
+            name = "loadout_mode",
+            arguments = new { mode = "yolo" },
+        });
+
+        var text = answer.GetProperty("result").GetProperty("content")[0]
+            .GetProperty("text").GetString() ?? string.Empty;
+
+        // The resolver falls back to the default for a name it does not know,
+        // which is right when a person typed it and wrong here: an agent told
+        // nothing would carry on believing it had switched.
+        text.Should().Contain("no 'yolo' mode");
+        text.Should().Contain("investigate");
     }
 
     [BuiltCliFact]

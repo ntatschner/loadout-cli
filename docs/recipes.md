@@ -23,8 +23,20 @@ loadout starstats --task "the upload retries twice then gives up" \
   --mode investigate
 ```
 
-`--mode` defaults to `implement`, and it's never guessed from what you typed.
-See [Specialists](specialists.md).
+`--mode` defaults to `implement`, and it's never guessed from what you typed. It
+holds for the whole session, not one message.
+
+If the work changes shape part way through — you asked for a look at a bug and
+now you want the fix — the agent can switch it itself with the `loadout_mode`
+tool, or you can see what a different posture would give you:
+
+```bash
+loadout instructions explain --mode implement --project starstats "add the retry"
+```
+
+The language and framework specialists don't change with the mode; they come
+from what's in the repo. What changes is the posture and which skills are on
+offer. See [Specialists](specialists.md).
 
 ## Check what a session gets, before you spend one
 
@@ -173,8 +185,9 @@ loadout mcp list                   # servers this project would get
 ```
 
 A launched agent gets the launcher's own tools: read a specialist, ask what its
-instructions are, record one fact. It doesn't get anything that changes your
-machine or pushes to a remote. See [Commands](commands.md).
+instructions are, record one fact, and change its mode when the work changes
+shape. It doesn't get anything that changes your machine or pushes to a remote.
+See [Commands](commands.md).
 
 ## See also
 
