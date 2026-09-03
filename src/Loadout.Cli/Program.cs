@@ -500,6 +500,7 @@ public static class Program
                 CommandCategory.AgentConfiguration,
                 "facts remember notes knowledge");
             memory.AddCommand<MemoryListCommand>("list");
+            memory.AddCommand<MemoryFindCommand>("find");
             memory.AddCommand<MemoryWriteCommand>("write");
             memory.AddCommand<MemoryAuditCommand>("audit");
             memory.AddCommand<MemoryReindexCommand>("reindex");

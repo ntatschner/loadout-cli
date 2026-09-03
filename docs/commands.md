@@ -34,6 +34,7 @@
 | `loadout memory list\|write\|audit\|reindex <project>` | Record and check durable project facts |
 | `loadout memory import <project>` | Bring in memory an agent recorded outside the workspace |
 | `loadout memory audit --clean <project>` | Remove empty topics, exact repeats and dead index lines |
+| `loadout memory find <query>` | Find the topics that answer a question, rather than reading the index |
 | `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory |
 | `loadout sessions` | List recent agent sessions across every agent, newest first |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
@@ -201,14 +202,21 @@ agent and heard nothing more. Every launch now also declares Loadout itself as
 an MCP server, so a session can ask it things rather than parse console output
 written for a person.
 
-Four tools, each making the same call its command makes:
+Five tools, each making the same call its command makes:
 
 | | |
 |---|---|
 | `loadout_specialist` | The full text of one specialist, as `instructions show` prints it |
 | `loadout_effective_instructions` | What this session was given, and what triggered each part |
+| `loadout_recall` | Search what the project already knows, as `memory find` does |
 | `loadout_remember` | Record one durable fact about the project, screened for credentials |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
+
+`loadout_recall` exists because only the memory index reaches the context — one
+line per topic — and a session deciding from that alone either opens six files
+or opens none. It searches inside them. It matches words rather than meanings,
+which it says when it finds nothing, so an agent doesn't conclude a fact is
+unrecorded when it is recorded in other words.
 
 `loadout_mode` is there because a mode is a session-wide directive and work
 changes shape: a session that started out investigating a bug ends up fixing it.

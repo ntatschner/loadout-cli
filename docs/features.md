@@ -92,8 +92,9 @@ through the same parser you'd have typed at, and a test checks that.
 
 The session you launch is told `loadout` is on PATH, and gets the same few
 operations as MCP tools: read a specialist in full, ask what it was given and
-why, write down one fact worth having next time, and change its own mode when
-the work changes shape.
+why, search what the project already knows before working it out again, write
+down one fact worth having next time, and change its own mode when the work
+changes shape.
 
 It isn't offered anything that changes your machine or pushes to a remote, and
 the context says so rather than leaving it to be worked out. Ask an agent to
