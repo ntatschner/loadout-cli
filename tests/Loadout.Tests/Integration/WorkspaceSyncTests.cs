@@ -1,3 +1,4 @@
+using Loadout.Models;
 using Loadout.Core.Configuration;
 using Loadout.Core.Git;
 using Loadout.Core.Workspace;
@@ -301,6 +302,37 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
         result.Succeeded.Should().BeTrue(result.Error);
         result.Value.Should().BeFalse();
 
+        (await RunGitAsync(_workspace.LocalPath, "rev-parse", "HEAD")).Trim().Should().Be(before);
+    }
+
+    [Fact]
+    public async Task Saving_refuses_a_change_that_looks_like_a_credential()
+    {
+        await _workspace.SyncAsync(Config());
+        await ConfigureIdentityAsync();
+
+        var before = (await RunGitAsync(_workspace.LocalPath, "rev-parse", "HEAD")).Trim();
+
+        // A handoff is the route: the agent writes what it worked out, and the
+        // exit policy commits it — under sync_exit "always", and pushes it,
+        // without anybody being asked. The value is the synthetic one the
+        // scanner's own tests use.
+        await File.WriteAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "handoff.md"),
+            "The deploy token is ghp_abcdefghijklmnopqrstuvwxyz0123 and it works.");
+
+        var result = await _workspace.SaveAsync("StarStats", "claude", push: false);
+
+        result.Failed.Should().BeTrue("the workspace is a Git repository that gets pushed");
+        result.ExitCode.Should().Be(ExitCode.PolicyViolation);
+
+        // Named, never quoted. A refusal that printed the credential to explain
+        // itself would put it in the console and the scrollback.
+        result.Error.Should().Contain("handoff.md").And.Contain("GitHub token");
+        result.Error.Should().NotContain("ghp_abcdefghijklmnopqrstuvwxyz0123");
+
+        // And nothing was committed, which is the whole point: an audit finding
+        // after the fact does not undo a disclosure.
         (await RunGitAsync(_workspace.LocalPath, "rev-parse", "HEAD")).Trim().Should().Be(before);
     }
 

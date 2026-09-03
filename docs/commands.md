@@ -135,6 +135,28 @@ handoffs. When the agent exits, the launcher applies the exit policy from
 | `always` | Commits and pushes without asking |
 | `never` | Leaves the changes alone |
 
+Whatever the policy, the changes are screened before anything is committed. The
+workspace is a Git repository that gets pushed — under `always`, without anybody
+being asked — so a credential reaching it is a credential disclosed, and an audit
+finding afterwards doesn't undo that. A change that looks like it carries one
+refuses the save and names the file and the pattern, never the value:
+
+```text
+The workspace was not saved. These changes look like they carry credentials,
+and the workspace is a Git repository that gets pushed:
+  projects/starstats/handoffs/2026-02-01.md — GitHub token
+Take the value out and put it in the credential store with 'loadout secret set',
+then save again.
+```
+
+Memory has been screened at the point of writing since it existed. This is the
+same answer applied to everything else the policy commits — handoffs, project
+instructions, context notes, profiles, MCP definitions — and to anything an agent
+wrote into the workspace directly, which no check at the point of writing can
+see. Binary files are left alone; a file that can't be read is reported rather
+than passed, because "clean" is the one thing a scan must not say about
+something it never opened.
+
 Commits follow the format in spec section 46, so a workspace history reads as a
 record of which machine did what:
 
