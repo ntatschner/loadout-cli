@@ -3,6 +3,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Models;
+using Loadout.Models.Instructions;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -35,11 +36,19 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
     private static readonly string[] DefaultRoots = ["docs", "."];
 
     private readonly IProjectService _projects;
+    private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
+    private readonly Loadout.Core.Configuration.YamlStore _yaml;
     private readonly IAnsiConsole _console;
 
-    public DocsAuditCommand(IProjectService projects, IAnsiConsole console)
+    public DocsAuditCommand(
+        IProjectService projects,
+        Loadout.Core.Workspace.IWorkspaceManager workspace,
+        Loadout.Core.Configuration.YamlStore yaml,
+        IAnsiConsole console)
     {
         _projects = projects;
+        _workspace = workspace;
+        _yaml = yaml;
         _console = console;
     }
 
@@ -85,7 +94,14 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
             return CommandOutput.Success();
         }
 
-        var findings = DocsAuditor.Audit(repository, documents, cancellationToken);
+        // From the workspace rather than the repository, so a project keeps its
+        // source and the rules about its source in different places. A project
+        // with no policy still gets every check that needs no configuration.
+        var policy = resolution.Succeeded
+            ? await PolicyAsync(resolution.Value!.Entry.Slug, cancellationToken).ConfigureAwait(false)
+            : null;
+
+        var findings = DocsAuditor.Audit(repository, documents, policy, cancellationToken);
 
         if (output.IsJson)
         {
@@ -124,6 +140,33 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
         // Reported, not failed. A stale reference is worth knowing about and is
         // not a reason for a command to exit non-zero in somebody's pipeline.
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// The project's documentation policy, or null when it has none.
+    /// </summary>
+    /// <remarks>
+    /// A missing file is the ordinary case and reads as no policy rather than a
+    /// failure: most projects have nothing that needs counting, and the checks
+    /// that need no configuration are the ones most projects want.
+    /// </remarks>
+    private async Task<DocsPolicy?> PolicyAsync(string slug, CancellationToken ct)
+    {
+        if (!_workspace.IsAvailable())
+        {
+            return null;
+        }
+
+        var path = Path.Combine(_workspace.LocalPath, "projects", slug, "docs.yaml");
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var loaded = await _yaml.LoadAsync(path, () => new DocsPolicy(), ct).ConfigureAwait(false);
+
+        return loaded.Succeeded ? loaded.Value : null;
     }
 
     /// <summary>

@@ -52,14 +52,42 @@ public static partial class DocsAuditor
     private static partial Regex CodePath();
 
     /// <summary>
+    /// A claim of the form "73 specialists", with the number and what it counts.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Digits and the small words, because prose writes both — "there are 73
+    /// specialists" and "all six runtime identifiers" are the same claim and
+    /// only one of them is a numeral.
+    /// </para>
+    /// <para>
+    /// One is left out, and it has to be. "The full text of one specialist" is a
+    /// quantity in a sentence rather than a claim about a total, and prose is
+    /// full of them; a total that genuinely is one is rare and hardly worth
+    /// checking. Missing that is cheaper than being wrong about every "one
+    /// specialist" on the page.
+    /// </para>
+    /// </remarks>
+    [GeneratedRegex(
+        @"\b([2-9]|[1-9]\d{1,3}|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+([a-z][a-z\-]{2,30})\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+    private static partial Regex Claim();
+
+    /// <summary>
     /// Audits a set of documents against the repository holding them.
     /// </summary>
     /// <param name="repositoryRoot">The repository the paths are relative to.</param>
     /// <param name="documents">Documents to read, relative to the root.</param>
+    /// <param name="policy">
+    /// What the project says its prose can be checked against, or null when it
+    /// has said nothing. Without one the reference checks still run: they need
+    /// no configuration, because a link either resolves or it does not.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     public static IReadOnlyList<DocsFinding> Audit(
         string repositoryRoot,
         IReadOnlyList<string> documents,
+        Models.Instructions.DocsPolicy? policy = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(documents);
@@ -71,6 +99,11 @@ public static partial class DocsAuditor
         var linked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var roots = TopLevelDirectories(repositoryRoot);
+
+        // Counted once for the whole audit rather than per page. A glob over a
+        // repository is not free, and every page asking "how many specialists"
+        // has to get the same answer or the report contradicts itself.
+        var counts = Counted(repositoryRoot, policy, ct);
 
         foreach (var document in documents)
         {
@@ -91,9 +124,14 @@ public static partial class DocsAuditor
                 continue;
             }
 
+            // A page the policy has set aside is still checked for references —
+            // its links either resolve or they do not, whatever its numbers are
+            // about — and only its numbers are left alone.
+            var countable = IsCountable(document, policy) ? counts : Nothing;
+
             for (var index = 0; index < lines.Length; index++)
             {
-                Check(repositoryRoot, roots, document, lines[index], index + 1, findings, linked);
+                Check(repositoryRoot, roots, countable, document, lines[index], index + 1, findings, linked);
             }
         }
 
@@ -105,6 +143,7 @@ public static partial class DocsAuditor
     private static void Check(
         string root,
         IReadOnlySet<string> roots,
+        IReadOnlyDictionary<string, int> counts,
         string document,
         string line,
         int number,
@@ -161,7 +200,128 @@ public static partial class DocsAuditor
                 "missing-path",
                 $"names '{path}', which is not in the repository."));
         }
+
+        if (counts.Count == 0)
+        {
+            return;
+        }
+
+        foreach (Match match in Claim().Matches(line))
+        {
+            var noun = Singular(match.Groups[2].Value.ToLowerInvariant());
+
+            if (!counts.TryGetValue(noun, out var actual)
+                || Number(match.Groups[1].Value) is not { } claimed
+                || claimed == actual)
+            {
+                continue;
+            }
+
+            findings.Add(new DocsFinding(
+                document,
+                number,
+                "wrong-count",
+                $"says {match.Groups[1].Value} {match.Groups[2].Value}, and there are {actual}."));
+        }
     }
+
+    /// <summary>No counts at all, for a page whose numbers are somebody else's.</summary>
+    private static readonly IReadOnlyDictionary<string, int> Nothing =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether this page's numbers are about this repository.</summary>
+    private static bool IsCountable(string document, Models.Instructions.DocsPolicy? policy) =>
+        policy is not { CountsExclude.Count: > 0 }
+        || !policy.CountsExclude.Any(excluded =>
+            document.EndsWith(excluded.Replace('\\', '/').TrimStart('/'), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// What each counted noun actually comes to, worked out once.
+    /// </summary>
+    /// <remarks>
+    /// Counted against the repository the documentation is in, using the same
+    /// glob matcher scoped rules use, so a pattern written in a policy means the
+    /// same thing as one written in a rule.
+    /// </remarks>
+    private static IReadOnlyDictionary<string, int> Counted(
+        string root,
+        Models.Instructions.DocsPolicy? policy,
+        CancellationToken ct)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        if (policy is not { Counts.Count: > 0 })
+        {
+            return counts;
+        }
+
+        List<string> files;
+
+        try
+        {
+            files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+                .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/'))
+                // Build output and other people's code are not what a count in
+                // prose is ever about, and a bin directory would swamp any of
+                // these patterns.
+                .Where(file => !file.Contains("/bin/", StringComparison.Ordinal)
+                    && !file.Contains("/obj/", StringComparison.Ordinal)
+                    && !file.StartsWith(".git/", StringComparison.Ordinal)
+                    && !file.Contains("/node_modules/", StringComparison.Ordinal))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Nothing countable means nothing claimed about, which reports
+            // nothing rather than reporting every number as wrong.
+            return counts;
+        }
+
+        foreach (var (noun, glob) in policy.Counts)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            counts[Singular(noun.ToLowerInvariant())] =
+                files.Count(file => RuleService.Matches(glob, file));
+        }
+
+        return counts;
+    }
+
+    /// <summary>
+    /// A noun reduced to the form the policy is keyed by.
+    /// </summary>
+    /// <remarks>
+    /// Crude on purpose. A policy names the singular and prose writes the
+    /// plural, and stripping a trailing "s" covers what documentation actually
+    /// says. Anything cleverer is a stemmer, and a stemmer that is wrong about
+    /// one word in fifty is a report that is wrong about one line in fifty.
+    /// </remarks>
+    private static string Singular(string noun) =>
+        noun.Length > 3 && noun.EndsWith('s') && !noun.EndsWith("ss", StringComparison.Ordinal)
+            ? noun[..^1]
+            : noun;
+
+    /// <summary>A claimed quantity, whether it was written as digits or a word.</summary>
+    private static int? Number(string text) =>
+        int.TryParse(text, out var value)
+            ? value
+            : text.ToLowerInvariant() switch
+            {
+                "one" => 1,
+                "two" => 2,
+                "three" => 3,
+                "four" => 4,
+                "five" => 5,
+                "six" => 6,
+                "seven" => 7,
+                "eight" => 8,
+                "nine" => 9,
+                "ten" => 10,
+                "eleven" => 11,
+                "twelve" => 12,
+                _ => null,
+            };
 
     /// <summary>
     /// Documents nothing else points at.

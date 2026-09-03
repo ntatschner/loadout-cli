@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Loadout.Core.Instructions;
+using Loadout.Models.Instructions;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -174,11 +175,120 @@ public sealed class DocsAuditorTests : IDisposable
             .ContainSingle(finding => finding.Kind == "unreadable");
     }
 
-    private IReadOnlyList<DocsFinding> Audit(IReadOnlyList<string>? documents = null) =>
-        DocsAuditor.Audit(_root, documents ?? Documents());
+    [Fact]
+    public void A_number_that_no_longer_matches_what_it_counts_is_reported()
+    {
+        // The drift this exists for, and the one that already happened here: a
+        // count left at 71 while the library grew. The sentence still reads
+        // perfectly, which is why nothing else catches it.
+        Specialists(3);
+        Write("docs/README.md", "There are 2 specialists built into the binary.");
+
+        Audit(policy: Counting()).Should().ContainSingle(finding => finding.Kind == "wrong-count")
+            .Which.Detail.Should().Contain("there are 3");
+    }
+
+    [Fact]
+    public void A_number_that_still_matches_is_silent()
+    {
+        Specialists(3);
+        Write("docs/README.md", "There are 3 specialists built into the binary.");
+
+        Audit(policy: Counting()).Should().NotContain(finding => finding.Kind == "wrong-count");
+    }
+
+    [Fact]
+    public void A_number_written_as_a_word_is_checked_too()
+    {
+        // Documentation writes both, and "all six runtime identifiers" is the
+        // same claim as "all 6".
+        Specialists(3);
+        Write("docs/README.md", "All five specialists are built in.");
+
+        Audit(policy: Counting()).Should().ContainSingle(finding => finding.Kind == "wrong-count");
+    }
+
+    [Fact]
+    public void One_of_something_is_never_read_as_a_total()
+    {
+        // The real false positive: "the full text of one specialist" is a
+        // quantity in a sentence, not a claim about how many there are. Prose is
+        // full of them.
+        Specialists(3);
+        Write("docs/README.md", "Prints the full text of one specialist.");
+
+        Audit(policy: Counting()).Should().NotContain(finding => finding.Kind == "wrong-count");
+    }
+
+    [Fact]
+    public void A_policy_names_the_singular_and_the_prose_writes_the_plural()
+    {
+        Specialists(3);
+        Write("docs/README.md", "There are 2 specialists here.");
+
+        Audit(policy: Counting()).Should().ContainSingle(finding => finding.Kind == "wrong-count");
+    }
+
+    [Fact]
+    public void A_number_about_something_nobody_asked_to_count_is_left_alone()
+    {
+        Specialists(3);
+        Write("docs/README.md", "It took 40 minutes and 12 attempts.");
+
+        Audit(policy: Counting()).Should().NotContain(finding => finding.Kind == "wrong-count");
+    }
+
+    [Fact]
+    public void A_page_set_aside_keeps_its_numbers_and_still_has_its_links_checked()
+    {
+        // The other real false positive: a survey of somebody else's library,
+        // written before implementation, whose numbers are about that library.
+        // Counted against this repository every one of them is wrong and none is
+        // stale — but its links are still links.
+        Specialists(3);
+        Write("docs/README.md", "index");
+        Write("docs/survey.md", "All 52 specialists there carry [a block](gone.md).");
+
+        var policy = Counting();
+        policy.CountsExclude.Add("survey.md");
+
+        var findings = Audit(policy: policy);
+
+        findings.Should().NotContain(finding => finding.Kind == "wrong-count");
+        findings.Should().ContainSingle(finding => finding.Kind == "broken-link");
+    }
+
+    [Fact]
+    public void Without_a_policy_no_number_is_judged_at_all()
+    {
+        Specialists(3);
+        Write("docs/README.md", "There are 2 specialists built into the binary.");
+
+        Audit().Should().NotContain(finding => finding.Kind == "wrong-count");
+    }
+
+    private DocsPolicy Counting() => new()
+    {
+        Counts = { ["specialist"] = "spec/**/*.md" },
+    };
+
+    /// <summary>Files for a count to be about, somewhere the audit will not read.</summary>
+    private void Specialists(int howMany)
+    {
+        for (var i = 0; i < howMany; i++)
+        {
+            Write($"spec/one/{i}.md", "a specialist");
+        }
+    }
+
+    private IReadOnlyList<DocsFinding> Audit(
+        IReadOnlyList<string>? documents = null,
+        DocsPolicy? policy = null) =>
+        DocsAuditor.Audit(_root, documents ?? Documents(), policy);
 
     private IReadOnlyList<string> Documents() =>
-        Directory.EnumerateFiles(_root, "*.md", SearchOption.AllDirectories)
+        Directory.EnumerateFiles(Path.Combine(_root, "docs"), "*.md", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(_root, "*.md", SearchOption.TopDirectoryOnly))
             .Select(file => Path.GetRelativePath(_root, file).Replace('\\', '/'))
             .Order(StringComparer.Ordinal)
             .ToList();

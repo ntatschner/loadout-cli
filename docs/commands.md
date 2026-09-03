@@ -152,6 +152,36 @@ deriving globs, and a table addressing real files relative to `src/<project>`
 rather than the root. A check that's wrong about seven good references and right
 about none is one you turn off.
 
+### Numbers in prose
+
+A project can also say which of its numbers have a right answer. The policy
+lives in the workspace, at `projects/<slug>/docs.yaml`, so the repository keeps
+holding source and the rules about it live elsewhere:
+
+```yaml
+root: docs
+counts:
+  specialist: "src/Loadout.Core/Specialists/**/*.md"
+counts_exclude:
+  # A survey of a proposed external bundle, written before implementation.
+  # Its numbers are about that bundle, not about this repository.
+  - specialists-architecture.md
+```
+
+This is the drift that rots invisibly, because the sentence still reads
+perfectly. "There are 73 specialists" sat at 71 while the library grew, and
+nothing about the page looked wrong. Keyed by the singular; the plural is
+derived, because writing both out is configuration nobody keeps in step. The
+number one is never read as a total — "the full text of one specialist" is a
+quantity in a sentence, and prose is full of them.
+
+`counts_exclude` is there because counting assumes a noun means the same thing on
+every page, and sometimes it doesn't. Without it, this project's own
+`specialists-architecture.md` reports as stale on every number it contains: it's
+a survey of somebody else's library, and every one of those numbers is correct
+about that library. A project with no policy still gets all the checks above,
+which need nothing configured.
+
 ## Saving what a session produced
 
 Agents change workspace files during a session — context notes, decisions,
