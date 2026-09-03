@@ -121,6 +121,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly IPreflightService _preflight;
     private readonly Core.Mcp.IMcpService _mcp;
     private readonly ISecurityProfileService _security;
+    private readonly Core.Sessions.ILaunchLedger _ledger;
 
     public AgentLauncher(
         IProjectService projects,
@@ -135,8 +136,10 @@ public sealed class AgentLauncher : IAgentLauncher
         IInstructionService instructions,
         IPreflightService preflight,
         ISecurityProfileService security,
-        Core.Mcp.IMcpService mcp)
+        Core.Mcp.IMcpService mcp,
+        Core.Sessions.ILaunchLedger ledger)
     {
+        _ledger = ledger;
         _projects = projects;
         _workspace = workspace;
         _configuration = configuration;
@@ -352,12 +355,35 @@ public sealed class AgentLauncher : IAgentLauncher
                     new LaunchOutcome(0, syncOutcome, warnings, preflight, null));
             }
 
+            // Written before the agent starts rather than after it exits. A
+            // session that is killed, or that takes the terminal down with it,
+            // is exactly the one worth having a record of, and after the fact
+            // there is nothing left to write one from. The dry run returned
+            // above, so nothing here records a launch that did not happen.
+            var launchId = await _ledger.RecordStartAsync(
+                new Core.Sessions.NewLaunch(
+                    project.Entry.Slug,
+                    project.Entry.Name,
+                    adapter.Name,
+                    request.Task,
+                    request.Profile,
+                    request.Worktree,
+                    compiled.Value?.Instructions),
+                ct).ConfigureAwait(false);
+
             var runResult = await _processes.RunInteractiveAsync(
                 new ProcessRequest(
                     invocation.Executable,
                     invocation.Arguments,
                     context.WorkingDirectory,
                     WithTelemetry(invocation.Environment, config.Telemetry)),
+                ct).ConfigureAwait(false);
+
+            // Closed either way, and the record says which happened: an ending
+            // with no exit code is an agent that never ran.
+            await _ledger.RecordEndAsync(
+                launchId,
+                runResult.Succeeded ? runResult.Value : (int?)null,
                 ct).ConfigureAwait(false);
 
             if (runResult.Failed)

@@ -61,6 +61,11 @@ public static class ServiceRegistration
         services.AddSingleton<Sessions.ISessionHistory, Sessions.CodexSessionHistory>();
         services.AddSingleton<Sessions.ISessionHistoryService, Sessions.SessionHistoryService>();
 
+        // What the launcher gave a session, which the transcripts cannot say.
+        // Written by the launcher rather than reconstructed afterwards, because
+        // a launch nobody recorded cannot be recovered later.
+        services.AddSingleton<Sessions.ILaunchLedger, Sessions.LaunchLedger>();
+
         // The same transcripts read again, for what they cost rather than what
         // they were about. Separate readers from the session ones because the
         // two want opposite behaviour from a malformed line: a listing skips it
