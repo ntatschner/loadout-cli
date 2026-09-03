@@ -24,6 +24,7 @@
 | `loadout drift [project]` | Show where projects have drifted from their recorded configuration |
 | `loadout drift --fix` | Put right the drift the launcher can fix itself |
 | `loadout doctor --fix` | Put right the findings the doctor can fix itself |
+| `loadout docs audit [project]` | Report where the documentation has come adrift from the repository |
 | `loadout protect` | Install a pre-commit hook, or `--global` Git excludes |
 | `loadout migrate` | Move existing AI tooling files into the workspace |
 | `loadout project worktrees <project>` | List a project's working trees |
@@ -122,6 +123,34 @@ reopened. The interactive launcher offers the same picker per project.
 Neither storage format is a published contract, so both readers are
 best-effort by construction: a transcript that cannot be understood costs that
 one session and never the listing.
+
+## Documentation that still describes the code
+
+Loadout has checked its own documentation for a while, by hand, three times
+over: a test that every command the docs name exists, one that the install
+examples name the version that ships, one that the specialist count is the
+count. Each was written after the drift it now catches — a table left naming the
+old sub-commands, a count left at 71, a download link left at 0.9.2 through five
+releases. `loadout docs audit` is that habit offered to any repository.
+
+```console
+$ loadout docs audit
++ 20 document(s), every reference resolves.
+```
+
+It reads `docs/` and the Markdown beside the root README, and reports three
+things: a link that goes nowhere, a named file that isn't in the repository, and
+a page nothing links to. It reports and changes nothing — what to do about a
+stale page is a judgement about a codebase.
+
+What it deliberately stays quiet about is the more interesting half. A URL, an
+anchor, a home-relative path and anything holding a `<placeholder>` are all left
+alone. So is a backticked path that doesn't start at a directory the repository
+actually has: pointed at this project first time round it produced seven
+findings and every one was wrong — an invented Rust path inside a paragraph about
+deriving globs, and a table addressing real files relative to `src/<project>`
+rather than the root. A check that's wrong about seven good references and right
+about none is one you turn off.
 
 ## Saving what a session produced
 

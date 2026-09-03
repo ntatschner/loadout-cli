@@ -567,6 +567,15 @@ public static class Program
             instructions.AddCommand<InstructionsNewCommand>("new");
         });
 
+        TopBranch(config, "docs", docs =>
+        {
+            docs.Describe(
+                "Whether the documentation still describes the repository.",
+                CommandCategory.Health,
+                "docs documentation stale links broken references audit");
+            docs.AddCommand<DocsAuditCommand>("audit");
+        });
+
         TopBranch(config, "telemetry", telemetry =>
         {
             telemetry.Describe(
