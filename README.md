@@ -129,9 +129,11 @@ all six runtime identifiers. The same tests run everywhere. Where a platform
 genuinely can't do something it gets reported as a missing capability rather
 than skipped quietly, and `loadout doctor` prints the matrix.
 
-`win-arm64` and `linux-arm64` are cross-compiled but never executed, because no
-hosted runner offers them. They're built, not tested, and I'd rather say so than
-imply otherwise.
+`win-arm64` and `linux-arm64` went untested for as long as there was nowhere
+hosted to run them. There is now — GitHub's arm64 runners became generally
+available for public repositories in August 2025 — and CI asks for both. Until a
+run has come back green on them, treat those two as built rather than tested;
+this paragraph gets shorter when it has.
 
 ## Building
 
