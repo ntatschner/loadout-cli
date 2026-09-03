@@ -23,4 +23,15 @@ public sealed class GenericAgentDefinition
 
     /// <summary>Environment variables set on the child process only.</summary>
     public Dictionary<string, string> Environment { get; set; } = [];
+
+    /// <summary>
+    /// How this agent's transcripts are laid out, when it writes any.
+    /// </summary>
+    /// <remarks>
+    /// Optional, and an agent without it still launches — it simply never
+    /// appears in a session listing, because nothing knows where to look. This
+    /// is the difference between an agent that can be started and one that is
+    /// first-class.
+    /// </remarks>
+    public TranscriptFormat? Transcripts { get; set; }
 }

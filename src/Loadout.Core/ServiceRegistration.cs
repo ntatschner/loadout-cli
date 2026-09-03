@@ -59,6 +59,22 @@ public static class ServiceRegistration
         // simply lists fewer sessions rather than failing.
         services.AddSingleton<Sessions.ISessionHistory, Sessions.ClaudeSessionHistory>();
         services.AddSingleton<Sessions.ISessionHistory, Sessions.CodexSessionHistory>();
+        // Readers for agents nobody compiled in. How many there are is only
+        // known once configuration has been read, and the container is built
+        // before that, so this is resolved rather than registered N times.
+        // Blocking on the read is the same trade the agent registry makes for
+        // the same reason: one small local file, in a short-lived process.
+        services.AddSingleton<Sessions.IDeclaredSessionHistories>(provider =>
+        {
+            var loaded = provider.GetRequiredService<IConfigurationService>()
+                .LoadConfigAsync().GetAwaiter().GetResult();
+
+            // A broken config must not cost somebody their session listing.
+            return new Sessions.DeclaredSessionHistories(
+                loaded.Value ?? new Models.Configuration.LauncherConfig(),
+                provider.GetRequiredService<Loadout.Platform.Abstractions.IEnvironmentProvider>());
+        });
+
         services.AddSingleton<Sessions.ISessionHistoryService, Sessions.SessionHistoryService>();
 
         // What the launcher gave a session, which the transcripts cannot say.

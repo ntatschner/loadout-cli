@@ -49,6 +49,57 @@ matters: installing the excludes first would make the very files migration
 exists to move become ignored, so setup would protect the repository and then
 report nothing to migrate. Clean up first, then stop it happening again.
 
+## Adding an agent nobody compiled in
+
+An agent under `custom_agents` needs an executable, arguments and environment to
+launch. To also appear in `loadout sessions` it has to say where it writes its
+transcripts:
+
+```yaml
+custom_agents:
+  scribe:
+    display_name: Scribe
+    executable: scribe
+    arguments: ["--context", "${COMPILED_CONTEXT_FILE}"]
+    transcripts:
+      root: "~/.scribe/sessions"
+      files: "*.jsonl"
+      recursive: true
+      session:
+        id: "sessionId"
+        directory: "cwd"
+        title: "meta.title"      # optional
+        first_line_only: false
+```
+
+Paths are dotted and name properties inside the JSON object on one line. That's
+the whole language: every transcript format seen so far puts what's wanted at a
+fixed place, and a query language nobody asked for is one that has to be
+documented, tested and kept.
+
+The field names above are an example of the *shape*, not a description of any
+real agent. Nothing ships describing an agent's format on its behalf, because a
+guess at somebody else's undocumented file would be wrong in a way that looks
+right. To write your own: find a transcript, look at one line of it, and name
+the properties holding the session's identifier and its working directory.
+
+`first_line_only` matters more than it looks. Codex opens each rollout with a
+metadata entry, so reading stops after one line; other agents repeat the working
+directory throughout, so it has to read until it has what it needs. Reading a
+whole conversation to put a name in a menu is the difference between a listing
+that's instant and one that isn't.
+
+A described agent taking the name of a built-in one **replaces** it. That's the
+point rather than an accident: these formats aren't published and change without
+notice, so when one breaks you can correct it here the same afternoon instead of
+waiting for a release.
+
+Two limits, said rather than discovered. A title kept in a separate index file —
+as Codex does — can't be expressed, because there's no way to say "join these two
+files on an identifier"; those sessions list by directory instead. And this
+describes sessions only: token accounting still needs a reader compiled in, so a
+described agent appears in `loadout sessions` and not yet in `loadout usage`.
+
 ## Environments and security profiles
 
 A project can define environments, and selecting one changes both which
