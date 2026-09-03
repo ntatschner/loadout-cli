@@ -70,6 +70,16 @@ custom_agents:
         directory: "cwd"
         title: "meta.title"      # optional
         first_line_only: false
+      usage:                     # optional; without it the agent is listed but not counted
+        timestamp: "timestamp"
+        directory: "cwd"
+        model: "message.model"
+        id: "message.id"
+        input: "message.usage.input_tokens"
+        output: "message.usage.output_tokens"
+        cache_read: "message.usage.cache_read_input_tokens"
+        cache_write_5m: "message.usage.cache_creation.ephemeral_5m_input_tokens"
+        cache_write_1h: "message.usage.cache_creation.ephemeral_1h_input_tokens"
 ```
 
 Paths are dotted and name properties inside the JSON object on one line. That's
@@ -94,11 +104,25 @@ point rather than an accident: these formats aren't published and change without
 notice, so when one breaks you can correct it here the same afternoon instead of
 waiting for a release.
 
+`id` under `usage` is worth setting even though it's optional. Agents copy
+earlier accounting into the transcript of a resumed conversation, and without
+something to tell one record from another there's no way to see a repeat, so
+they're all counted. That's the easiest way to produce a number that's wrong and
+looks right.
+
 Two limits, said rather than discovered. A title kept in a separate index file —
 as Codex does — can't be expressed, because there's no way to say "join these two
-files on an identifier"; those sessions list by directory instead. And this
-describes sessions only: token accounting still needs a reader compiled in, so a
-described agent appears in `loadout sessions` and not yet in `loadout usage`.
+files on an identifier"; those sessions list by directory instead. And there's
+one path per field with no alternatives: Claude's own reader has a fallback for a
+cache figure that's sometimes a nested object and sometimes a flat number, and
+that can't be said here. An agent whose format needs one has earned a reader
+written by hand.
+
+What the description misses is reported rather than absorbed. A record carrying
+an identifier but no number these paths can find is counted as unrecognised, and
+`loadout usage` says the totals are incomplete — because a reader that meets a
+renamed field doesn't fail, it counts zero and returns a total that looks
+entirely reasonable.
 
 ## Environments and security profiles
 

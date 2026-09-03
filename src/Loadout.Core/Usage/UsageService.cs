@@ -59,9 +59,28 @@ internal sealed class UsageService : IUsageService
     private readonly IReadOnlyList<IUsageHistory> _histories;
     private readonly IProjectService _projects;
 
-    public UsageService(IEnumerable<IUsageHistory> histories, IProjectService projects)
+    public UsageService(
+        IEnumerable<IUsageHistory> histories,
+        IDeclaredUsageHistories declared,
+        IProjectService projects)
     {
-        _histories = histories.ToList();
+        ArgumentNullException.ThrowIfNull(declared);
+
+        // Described readers first, and a compiled-in one of the same name
+        // dropped. Somebody who has described where an agent keeps its numbers
+        // has done so because the built-in reader stopped finding them, and two
+        // readers over one history would count everything twice — which is the
+        // one failure this whole layer exists to make visible.
+        var replaced = declared.All
+            .Select(history => history.Agent)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _histories =
+        [
+            .. declared.All,
+            .. histories.Where(history => !replaced.Contains(history.Agent)),
+        ];
+
         _projects = projects;
     }
 

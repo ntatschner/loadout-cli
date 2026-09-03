@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Loadout.Core.Transcripts;
 using Loadout.Models.Agents;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
@@ -45,7 +46,7 @@ internal sealed class DeclaredSessionHistory : ISessionHistory
     /// <inheritdoc />
     public bool IsAvailable => _format.IsUsable && Directory.Exists(Root);
 
-    private string Root => Expand(_format.Root);
+    private string Root => TranscriptPaths.Expand(_format.Root, _environment);
 
     /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<AgentSession>>> ListAsync(
@@ -165,64 +166,10 @@ internal sealed class DeclaredSessionHistory : ISessionHistory
 
         using (document)
         {
-            id ??= Value(document.RootElement, _format.Session.Id);
-            directory ??= Value(document.RootElement, _format.Session.Directory);
-            title ??= Value(document.RootElement, _format.Session.Title);
-            branch ??= Value(document.RootElement, _format.Session.Branch);
+            id ??= TranscriptPaths.String(document.RootElement, _format.Session.Id);
+            directory ??= TranscriptPaths.String(document.RootElement, _format.Session.Directory);
+            title ??= TranscriptPaths.String(document.RootElement, _format.Session.Title);
+            branch ??= TranscriptPaths.String(document.RootElement, _format.Session.Branch);
         }
-    }
-
-    /// <summary>
-    /// Walks a dotted path and returns the string at the end of it.
-    /// </summary>
-    /// <remarks>
-    /// Only strings. A session identifier that arrived as a number would be a
-    /// format nobody has, and accepting anything would mean deciding how to
-    /// render it — which is a decision about somebody else's data made without
-    /// being asked.
-    /// </remarks>
-    private static string? Value(JsonElement root, string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return null;
-        }
-
-        var element = root;
-
-        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (element.ValueKind != JsonValueKind.Object
-                || !element.TryGetProperty(segment, out element))
-            {
-                return null;
-            }
-        }
-
-        return element.ValueKind == JsonValueKind.String
-            && element.GetString() is { Length: > 0 } value
-            ? value
-            : null;
-    }
-
-    /// <summary>
-    /// A configured path with the home directory filled in.
-    /// </summary>
-    /// <remarks>
-    /// Through the environment provider rather than <c>Environment</c> directly,
-    /// so a test can point a described agent at a temporary tree and so the
-    /// platform seam stays where it is: core code holds no literal home path.
-    /// </remarks>
-    private string Expand(string path)
-    {
-        if (path.StartsWith("~/", StringComparison.Ordinal)
-            || path.StartsWith("~\\", StringComparison.Ordinal))
-        {
-            return Path.Combine(_environment.HomeDirectory, path[2..]);
-        }
-
-        return path
-            .Replace("${HOME}", _environment.HomeDirectory, StringComparison.Ordinal)
-            .Replace("$HOME", _environment.HomeDirectory, StringComparison.Ordinal);
     }
 }

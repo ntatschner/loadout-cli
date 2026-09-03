@@ -94,6 +94,18 @@ public static class ServiceRegistration
         // and carries on, whereas a total that skipped something has to say so.
         services.AddSingleton<Usage.IUsageHistory, Usage.ClaudeUsageHistory>();
         services.AddSingleton<Usage.IUsageHistory, Usage.CodexUsageHistory>();
+        // The counting counterpart of the described session readers, resolved
+        // the same way and for the same reason.
+        services.AddSingleton<Usage.IDeclaredUsageHistories>(provider =>
+        {
+            var loaded = provider.GetRequiredService<IConfigurationService>()
+                .LoadConfigAsync().GetAwaiter().GetResult();
+
+            return new Usage.DeclaredUsageHistories(
+                loaded.Value ?? new Models.Configuration.LauncherConfig(),
+                provider.GetRequiredService<Loadout.Platform.Abstractions.IEnvironmentProvider>());
+        });
+
         services.AddSingleton<Usage.IUsageService, Usage.UsageService>();
         services.AddSingleton<Usage.ITelemetryStore, Usage.TelemetryStore>();
         services.AddSingleton<Usage.IPlanHeadroomReader, Usage.CodexPlanHeadroom>();

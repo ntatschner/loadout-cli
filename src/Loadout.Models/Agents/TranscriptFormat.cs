@@ -35,6 +35,60 @@ public sealed class TranscriptSessionFormat
     public bool FirstLineOnly { get; set; } = true;
 }
 
+/// <summary>Where an accounting record keeps its numbers.</summary>
+/// <remarks>
+/// <para>
+/// One path per field, and no fallbacks. Claude's own reader has one — a cache
+/// figure that is sometimes a nested object and sometimes a flat number — and
+/// that cannot be said here. A description language that grew alternatives would
+/// be on its way to being a programming language, and an agent whose format
+/// needs one is an agent that has earned a reader written by hand.
+/// </para>
+/// <para>
+/// Everything except the token counts is optional. Without a timestamp the day
+/// is taken from the file; without a model the counts are filed under "unknown";
+/// without an identifier nothing can be told apart from a repeat, so repeats are
+/// counted twice — which is worth configuring away, because agents do write the
+/// same accounting more than once.
+/// </para>
+/// </remarks>
+public sealed class TranscriptUsageFormat
+{
+    /// <summary>Path to the moment the record was written.</summary>
+    public string? Timestamp { get; set; }
+
+    /// <summary>Path to the directory the session was working in.</summary>
+    public string? Directory { get; set; }
+
+    /// <summary>Path to the model that answered.</summary>
+    public string? Model { get; set; }
+
+    /// <summary>Path to something that identifies the record, so a repeat can be seen.</summary>
+    public string? Id { get; set; }
+
+    /// <summary>Path to ordinary input tokens.</summary>
+    public string? Input { get; set; }
+
+    /// <summary>Path to tokens the model produced.</summary>
+    public string? Output { get; set; }
+
+    /// <summary>Path to input tokens served from cache.</summary>
+    public string? CacheRead { get; set; }
+
+    /// <summary>Path to input tokens written to the five-minute cache.</summary>
+    public string? CacheWrite5m { get; set; }
+
+    /// <summary>Path to input tokens written to the one-hour cache.</summary>
+    public string? CacheWrite1h { get; set; }
+
+    /// <summary>Path to the part of the output spent on extended thinking.</summary>
+    public string? Thinking { get; set; }
+
+    /// <summary>Whether enough is described to count anything.</summary>
+    public bool IsUsable =>
+        !string.IsNullOrWhiteSpace(Input) || !string.IsNullOrWhiteSpace(Output);
+}
+
 /// <summary>
 /// How to read one agent's transcripts, described rather than compiled in.
 /// </summary>
@@ -72,10 +126,25 @@ public sealed class TranscriptFormat
     /// <summary>Where a session's identity is written.</summary>
     public TranscriptSessionFormat Session { get; set; } = new();
 
-    /// <summary>Whether enough is described to read anything at all.</summary>
+    /// <summary>
+    /// Where the token counts are, when the agent records any.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the session block because the two are separately useful. An
+    /// agent can be listed without being counted, and describing only what is
+    /// true of it beats describing what is convenient.
+    /// </remarks>
+    public TranscriptUsageFormat? Usage { get; set; }
+
+    /// <summary>Whether the files can be found at all.</summary>
+    private bool HasFiles => Root.Length > 0 && Files.Length > 0;
+
+    /// <summary>Whether enough is described to list sessions.</summary>
     public bool IsUsable =>
-        Root.Length > 0
-        && Files.Length > 0
+        HasFiles
         && Session.Id.Length > 0
         && Session.Directory.Length > 0;
+
+    /// <summary>Whether enough is described to count tokens.</summary>
+    public bool CanCount => HasFiles && Usage is { } usage && usage.IsUsable;
 }
