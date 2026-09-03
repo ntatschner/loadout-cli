@@ -209,7 +209,7 @@ Five tools, each making the same call its command makes:
 | `loadout_specialist` | The full text of one specialist, as `instructions show` prints it |
 | `loadout_effective_instructions` | What this session was given, and what triggered each part |
 | `loadout_recall` | Search what the project already knows, as `memory find` does |
-| `loadout_remember` | Record one durable fact about the project, screened for credentials |
+| `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
 
 `loadout_recall` exists because only the memory index reaches the context — one

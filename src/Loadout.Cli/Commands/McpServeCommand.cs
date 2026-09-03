@@ -262,10 +262,16 @@ public sealed class LoadoutTools
         [Description("Short topic name, such as 'deploy' or 'schema'.")] string topic,
         [Description("The fact, in a sentence or two. Say what is true, not what you just did.")]
         string fact,
+        [Description(
+            "One line saying what question this topic answers, such as 'why installers fail with "
+            + "1603 over a running app'. It is the only thing a later session sees before "
+            + "deciding whether to open the topic, so it has to be worth reading on its own.")]
+        string description,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
         ArgumentException.ThrowIfNullOrWhiteSpace(fact);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
         var slug = await SlugAsync(ct).ConfigureAwait(false);
 
@@ -282,7 +288,12 @@ public sealed class LoadoutTools
                 _workspace.LocalPath,
                 slug,
                 topic,
-                $"Recorded by an agent working on {slug}.",
+
+                // Asked for rather than generated. What was written here before
+                // said an agent had recorded something, which is the one thing a
+                // later session can already see; the index line it produced was
+                // paid for on every launch and could not be chosen from.
+                description,
                 MemoryKind.Lesson,
                 [fact],
                 ct)

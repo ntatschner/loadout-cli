@@ -394,6 +394,20 @@ internal sealed partial class MemoryService : IMemoryService
                     $"is {topic.Bytes / 1024}KB. Consider splitting it by subject."));
             }
 
+            // A description that cannot be decided from is nearly as costly as
+            // none: the index line is paid for on every launch either way, and
+            // the topic goes unopened either way. Reported separately from the
+            // missing case because the fix is different — one is writing a line,
+            // the other is rewriting one somebody thought was fine.
+            if (!string.IsNullOrWhiteSpace(topic.Description)
+                && MemoryDescriptionClassifier.Classify(topic.Name, topic.Description)
+                    is var indexLine and not DescriptionVerdict.Decidable)
+            {
+                findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Info, "vague-description",
+                    $"cannot be chosen from its index line: "
+                    + $"{MemoryDescriptionClassifier.Explain(indexLine)}."));
+            }
+
             if (string.IsNullOrWhiteSpace(topic.Description))
             {
                 findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Info, "no-description",
@@ -507,6 +521,11 @@ internal sealed partial class MemoryService : IMemoryService
         // Refuses to write a credential rather than writing it and flagging it
         // afterwards. Once it is on disk and committed it is disclosed, and an
         // audit finding does not undo that.
+        //
+        // First of the two refusals, and the order matters: a write carrying
+        // both a credential and a weak description has to be turned away for the
+        // credential. Told to fix its description instead, the caller fixes it
+        // and writes the credential on the second attempt.
         foreach (var fact in facts)
         {
             var patterns = SecretScanner.Match(fact);
@@ -518,6 +537,22 @@ internal sealed partial class MemoryService : IMemoryService
                     + "Memory is committed to the workspace repository, so it will not be written.",
                     ExitCode.PolicyViolation);
             }
+        }
+
+        // Only the index reaches a compiled context, so this one line is all a
+        // session has to decide whether the topic is worth opening. Refused
+        // here, where whoever is writing it still has the subject in mind:
+        // afterwards it is a chore nobody comes back for, and the topic goes
+        // unread rather than being found to be wrong.
+        var indexLine = MemoryDescriptionClassifier.Classify(safeName, description);
+
+        if (indexLine != DescriptionVerdict.Decidable)
+        {
+            return OperationResult<MemoryTopic>.Fail(
+                $"That description will not do: {MemoryDescriptionClassifier.Explain(indexLine)}. "
+                + "Only this line reaches a session's context, so say what question the topic "
+                + "answers, as in \"why installers fail with 1603 over a running app\".",
+                ExitCode.InvalidArguments);
         }
 
         var directory = DirectoryFor(workspaceRoot, slug);
