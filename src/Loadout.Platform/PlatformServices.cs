@@ -44,6 +44,7 @@ public static class PlatformServices
         services.AddSingleton(host);
         services.AddSingleton<IEnvironmentProvider>(environment);
         services.AddSingleton<IProcessLauncher>(processes);
+        services.AddSingleton<IProcessInspector>(new ProcessInspector());
         services.AddSingleton<IFilePermissions>(permissions);
         services.AddSingleton<IExecutableResolver>(resolver);
         services.AddSingleton<IPlatformPaths>(paths);

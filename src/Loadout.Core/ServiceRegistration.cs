@@ -66,6 +66,12 @@ public static class ServiceRegistration
         // a launch nobody recorded cannot be recovered later.
         services.AddSingleton<Sessions.ILaunchLedger, Sessions.LaunchLedger>();
 
+        // And which of them are still going. Separate from the ledger because
+        // the questions differ: one is a history that is only ever added to,
+        // the other is a claim about right now that has to be checked against
+        // the process that made it.
+        services.AddSingleton<Sessions.ISessionRegistry, Sessions.SessionRegistry>();
+
         // The same transcripts read again, for what they cost rather than what
         // they were about. Separate readers from the session ones because the
         // two want opposite behaviour from a malformed line: a listing skips it

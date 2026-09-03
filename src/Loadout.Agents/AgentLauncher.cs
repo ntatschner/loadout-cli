@@ -122,6 +122,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly Core.Mcp.IMcpService _mcp;
     private readonly ISecurityProfileService _security;
     private readonly Core.Sessions.ILaunchLedger _ledger;
+    private readonly Core.Sessions.ISessionRegistry _running;
 
     public AgentLauncher(
         IProjectService projects,
@@ -137,9 +138,11 @@ public sealed class AgentLauncher : IAgentLauncher
         IPreflightService preflight,
         ISecurityProfileService security,
         Core.Mcp.IMcpService mcp,
-        Core.Sessions.ILaunchLedger ledger)
+        Core.Sessions.ILaunchLedger ledger,
+        Core.Sessions.ISessionRegistry running)
     {
         _ledger = ledger;
+        _running = running;
         _projects = projects;
         _workspace = workspace;
         _configuration = configuration;
@@ -223,6 +226,10 @@ public sealed class AgentLauncher : IAgentLauncher
 
         var adapter = adapterResult.Value!;
         var runtimeDirectory = _paths.CreateRuntimeDirectory();
+
+        // Held out here so the entry is given up however the launch unwinds,
+        // not only when the agent exits tidily.
+        string? launchId = null;
 
         try
         {
@@ -360,7 +367,7 @@ public sealed class AgentLauncher : IAgentLauncher
             // is exactly the one worth having a record of, and after the fact
             // there is nothing left to write one from. The dry run returned
             // above, so nothing here records a launch that did not happen.
-            var launchId = await _ledger.RecordStartAsync(
+            launchId = await _ledger.RecordStartAsync(
                 new Core.Sessions.NewLaunch(
                     project.Entry.Slug,
                     project.Entry.Name,
@@ -369,6 +376,18 @@ public sealed class AgentLauncher : IAgentLauncher
                     request.Profile,
                     request.Worktree,
                     compiled.Value?.Instructions),
+                ct).ConfigureAwait(false);
+
+            // The ledger says what happened; this says what is happening. Filed
+            // under the same identifier so the two can be read together.
+            await _running.RegisterAsync(
+                new Core.Sessions.NewSession(
+                    launchId,
+                    project.Entry.Slug,
+                    project.Entry.Name,
+                    adapter.Name,
+                    request.Worktree,
+                    context.WorkingDirectory),
                 ct).ConfigureAwait(false);
 
             var runResult = await _processes.RunInteractiveAsync(
@@ -410,6 +429,11 @@ public sealed class AgentLauncher : IAgentLauncher
         }
         finally
         {
+            if (launchId is not null)
+            {
+                await _running.ReleaseAsync(launchId).ConfigureAwait(false);
+            }
+
             CleanRuntimeDirectory(runtimeDirectory);
         }
     }
