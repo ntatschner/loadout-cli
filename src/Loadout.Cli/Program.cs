@@ -560,6 +560,7 @@ public static class Program
             instructions.AddCommand<InstructionsShowCommand>("show");
             instructions.AddCommand<InstructionsExplainCommand>("explain");
             instructions.AddCommand<InstructionsAuditCommand>("audit");
+            instructions.AddCommand<InstructionsStatsCommand>("stats");
             instructions.AddCommand<InstructionsExportCommand>("export");
             instructions.AddCommand<InstructionsValidateCommand>("validate");
             instructions.AddCommand<InstructionsNewCommand>("new");
