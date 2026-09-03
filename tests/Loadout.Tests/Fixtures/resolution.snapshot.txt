@@ -1,0 +1,80 @@
+# dotnet-api
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.verification
+mode.implement
+language.csharp
+framework.dotnet
+function.distributed-systems
+
+# django-app
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.verification
+mode.implement
+language.python
+framework.django
+
+# rust-cli
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.verification
+mode.implement
+language.rust
+function.performance
+
+# go-service
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.verification
+mode.review
+language.go
+function.code-review
+
+# typescript-frontend
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.verification
+mode.implement
+language.typescript
+framework.node
+framework.react
+
+# terraform-infra
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.verification
+mode.advise
+language.terraform
+
+# mixed-monorepo
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.verification
+mode.investigate
+language.csharp
+language.typescript
+framework.dotnet
+framework.node
+framework.react
+database.postgresql
+function.database
+function.debugging
+function.performance
+
+# documentation-only
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.verification
+mode.implement
+function.refactoring
+function.ux
+
