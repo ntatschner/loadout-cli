@@ -141,6 +141,15 @@ Two checks keep memory worth loading:
   tense forever; a fact dated to the day it was written ("the highest migration
   is 0052") misleads within weeks. `loadout memory audit` reports those along
   with duplicates, oversize topics, stale entries and index rot.
+- **A second topic on the same ground is stopped, and the first one named.** This
+  is how memory comes to contradict itself: nothing is overwritten, both are
+  indexed, and a later session gets two answers with nothing to choose between
+  them. Contradictions arrive one fact at a time, at the moment something could
+  have been shown — so that's when it's shown. Add the fact to the topic named
+  back to you, or pass `--separate` when it really is a different subject.
+  Writing to a topic that already exists is never questioned: extending is the
+  thing this exists to encourage. Two shared words are needed, not one, because
+  a check that interrupts every write is one whose override becomes a habit.
 - **A description that can't be chosen from is refused.** Only the index reaches
   a session's context — one name and one line per topic — so that line is the
   whole basis for deciding whether to open the topic. "notes", or the topic's

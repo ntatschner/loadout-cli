@@ -267,6 +267,12 @@ public sealed class LoadoutTools
             + "1603 over a running app'. It is the only thing a later session sees before "
             + "deciding whether to open the topic, so it has to be worth reading on its own.")]
         string description,
+        [Description(
+            "Only after being told existing topics already cover this ground, and having decided "
+            + "this really is a separate subject. Prefer recording the fact under one of the "
+            + "topics named back to you: a second topic beside the first is how memory comes to "
+            + "hold two answers with nothing to choose between them.")]
+        bool separate = false,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
@@ -296,6 +302,7 @@ public sealed class LoadoutTools
                 description,
                 MemoryKind.Lesson,
                 [fact],
+                separate,
                 ct)
             .ConfigureAwait(false);
 

@@ -10,12 +10,22 @@ namespace Loadout.Core.Instructions;
 /// Comparable within one result set and meaningless outside it, so it is never
 /// shown as a quantity.
 /// </param>
+/// <param name="Terms">
+/// How many distinct words of the query this topic carried. The score says how
+/// well it answers relative to the others in the same search; this says how much
+/// of the question it touched at all, which is the difference between a topic
+/// about the same subject and one that shares a common word.
+/// </param>
 /// <param name="Matched">
 /// The facts that carried query terms, so the reader can see what was matched
 /// rather than take the ranking on trust. Empty when the match was on the name
 /// or description alone, which is an ordinary and often better match.
 /// </param>
-public sealed record MemoryMatch(MemoryTopic Topic, double Score, IReadOnlyList<string> Matched);
+public sealed record MemoryMatch(
+    MemoryTopic Topic,
+    double Score,
+    IReadOnlyList<string> Matched,
+    int Terms);
 
 /// <summary>
 /// Finds the topics that answer a question, without asking anything.
@@ -100,6 +110,7 @@ public static class MemorySearch
         foreach (var document in documents)
         {
             var score = 0.0;
+            var hits = 0;
 
             foreach (var term in terms)
             {
@@ -110,6 +121,7 @@ public static class MemorySearch
                     continue;
                 }
 
+                hits++;
                 score += Saturate(weight) * Rarity(term, documents);
             }
 
@@ -123,7 +135,8 @@ public static class MemorySearch
                 score,
                 document.Topic.Facts
                     .Where(fact => terms.Any(term => Terms(fact).Contains(term, StringComparer.Ordinal)))
-                    .ToList()));
+                    .ToList(),
+                hits));
         }
 
         return matches

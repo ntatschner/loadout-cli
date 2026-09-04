@@ -401,6 +401,7 @@ internal sealed class RefusingMemoryService : StubMemoryService
         string description,
         MemoryKind kind,
         IReadOnlyList<string> facts,
+        bool acknowledgedSimilar = false,
         CancellationToken ct = default) =>
         Task.FromResult(OperationResult<MemoryTopic>.Fail("the disk is full"));
 }
@@ -415,6 +416,7 @@ internal sealed class ForgetfulMemoryService : StubMemoryService
         string description,
         MemoryKind kind,
         IReadOnlyList<string> facts,
+        bool acknowledgedSimilar = false,
         CancellationToken ct = default) =>
         Task.FromResult(OperationResult<MemoryTopic>.Ok(new MemoryTopic(
             name, "path", description, kind, [], [], 0, DateTimeOffset.UtcNow)));
@@ -437,6 +439,7 @@ internal abstract class StubMemoryService : IMemoryService
         string description,
         MemoryKind kind,
         IReadOnlyList<string> facts,
+        bool acknowledgedSimilar = false,
         CancellationToken ct = default) =>
         throw new NotSupportedException();
 

@@ -36,6 +36,7 @@
 | `loadout memory import <project>` | Bring in memory an agent recorded outside the workspace |
 | `loadout memory audit --clean <project>` | Remove empty topics, exact repeats and dead index lines |
 | `loadout memory find <query>` | Find the topics that answer a question, rather than reading the index |
+| `loadout memory write --separate` | Start a new topic even though existing ones cover similar ground |
 | `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory |
 | `loadout sessions` | List recent agent sessions across every agent, newest first |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
