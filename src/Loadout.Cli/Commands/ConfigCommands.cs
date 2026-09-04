@@ -366,6 +366,17 @@ public sealed class ConfigEditCommand : AsyncCommand<ConfigEditCommand.Settings>
                 ExitCode.ConfigurationInvalid);
         }
 
+        if (!output.CanOpenAWindow)
+        {
+            // Nobody is watching, so the path is the whole of the useful
+            // answer. Handing the file to the desktop here is how a suite run
+            // put a "choose an application" dialog in front of somebody
+            // several times a day.
+            Console.Out.WriteLine(path);
+
+            return CommandOutput.Success();
+        }
+
         var result = await _launcher.OpenInFileManagerAsync(path).ConfigureAwait(false);
 
         if (result.Failed)

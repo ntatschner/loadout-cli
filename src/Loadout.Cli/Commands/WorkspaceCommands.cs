@@ -223,6 +223,16 @@ public sealed class WorkspaceOpenCommand : AsyncCommand<GlobalSettings>
                 ExitCode.ConfigurationInvalid);
         }
 
+        if (!output.CanOpenAWindow)
+        {
+            // Nobody is watching. The path is the useful half of the answer,
+            // and a file manager opening behind a pipe is a window somebody
+            // did not ask for.
+            Console.Out.WriteLine(_workspace.LocalPath);
+
+            return CommandOutput.Success();
+        }
+
         var result = await _launcher.OpenInFileManagerAsync(_workspace.LocalPath).ConfigureAwait(false);
 
         return result.Succeeded ? CommandOutput.Success() : output.Fail(result);

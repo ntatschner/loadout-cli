@@ -412,6 +412,16 @@ public sealed class ProjectOpenCommand : AsyncCommand<ProjectOpenCommand.Setting
                 ExitCode.RepositoryUnavailable);
         }
 
+        if (!output.CanOpenAWindow)
+        {
+            // Nobody is watching. The path is the useful half of the answer,
+            // and a file manager opening behind a pipe is a window somebody
+            // did not ask for.
+            Console.Out.WriteLine(project.LocalPath);
+
+            return CommandOutput.Success();
+        }
+
         var openResult = await _launcher.OpenInFileManagerAsync(project.LocalPath).ConfigureAwait(false);
 
         return openResult.Succeeded
