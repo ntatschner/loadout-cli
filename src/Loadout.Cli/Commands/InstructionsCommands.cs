@@ -397,6 +397,36 @@ public sealed class InstructionsExplainSettings : GlobalSettings
     [CommandOption("--without <ID>")]
     [Description("Never load this specialist. Repeatable.")]
     public string[] Without { get; init; } = [];
+
+    [CommandOption("--against-mode <MODE>")]
+    [Description("Compare against this mode instead, and show only what changes.")]
+    public string? AgainstMode { get; init; }
+
+    [CommandOption("--against-task <TEXT>")]
+    [Description("Compare against this wording of the task instead.")]
+    public string? AgainstTask { get; init; }
+
+    [CommandOption("--against-profile <NAME>")]
+    [Description("Compare against this context profile instead.")]
+    public string? AgainstProfile { get; init; }
+
+    [CommandOption("--against-without <ID>")]
+    [Description("Compare against a run that also excludes this specialist. Repeatable.")]
+    public string[] AgainstWithout { get; init; } = [];
+
+    /// <summary>
+    /// Whether a second configuration was described at all.
+    /// </summary>
+    /// <remarks>
+    /// Separate options rather than one <c>--against</c> taking a little
+    /// language of its own. Four obvious flags beat a syntax that has to be
+    /// documented, parsed and explained when somebody spells it wrong.
+    /// </remarks>
+    public bool HasComparison =>
+        AgainstMode is not null
+        || AgainstTask is not null
+        || AgainstProfile is not null
+        || AgainstWithout.Length > 0;
 }
 
 /// <summary>
@@ -457,6 +487,43 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
 
         var effective = resolved.Value!;
 
+        if (settings.HasComparison)
+        {
+            var against = await Instructions.ResolveAsync(new InstructionRequest(
+                manifest,
+                await RepositoryAsync(project, settings.Repo).ConfigureAwait(false),
+                WorkspacePath,
+                settings.Agent ?? manifest?.Agents.Default ?? "claude",
+                ProfileName: settings.AgainstProfile ?? settings.Profile,
+                Task: settings.AgainstTask ?? settings.Task,
+                Explicit: settings.Specialist,
+
+                // Added to the exclusions rather than replacing them: the second
+                // configuration is the first with a change made to it, and
+                // silently dropping what the first was told to leave out would
+                // make the difference include changes nobody asked for.
+                Excluded: [.. settings.Without, .. settings.AgainstWithout],
+                Mode: settings.AgainstMode ?? settings.Mode)).ConfigureAwait(false);
+
+            if (against.Failed)
+            {
+                return output.Fail(against);
+            }
+
+            var diff = InstructionDiff.Between(effective, against.Value!);
+
+            if (output.IsJson)
+            {
+                output.WriteJson(diff);
+
+                return CommandOutput.Success();
+            }
+
+            RenderDiff(output, diff);
+
+            return CommandOutput.Success();
+        }
+
         if (output.IsJson)
         {
             output.WriteJson(Describe(effective, project?.Entry.Slug, settings.Task));
@@ -467,6 +534,41 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
         Render(output, effective, settings.Task);
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Only what differs.
+    /// </summary>
+    /// <remarks>
+    /// The point of asking for a comparison is that the forty lines both sides
+    /// share are not the question. They are counted and not listed.
+    /// </remarks>
+    private static void RenderDiff(CommandOutput output, InstructionDiff diff)
+    {
+        if (diff.IsSame)
+        {
+            output.WriteLine("[green]+[/] Both compose the same specialists.");
+        }
+
+        foreach (var change in diff.Removed)
+        {
+            output.WriteLine(
+                $"[red]-[/] {Markup.Escape(change.Id),-34} "
+                + $"[dim]{change.EstimatedTokens,6:N0}  {Markup.Escape(change.Reason)}[/]");
+        }
+
+        foreach (var change in diff.Added)
+        {
+            output.WriteLine(
+                $"[green]+[/] {Markup.Escape(change.Id),-34} "
+                + $"[dim]{change.EstimatedTokens,6:N0}  {Markup.Escape(change.Reason)}[/]");
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine($"  [dim]Unchanged[/]  {diff.Kept}");
+        output.WriteLine(
+            $"  [dim]Estimated[/]  {diff.TokensBefore:N0} to {diff.TokensAfter:N0} "
+            + $"({(diff.TokenDelta >= 0 ? "+" : string.Empty)}{diff.TokenDelta:N0})");
     }
 
     /// <summary>

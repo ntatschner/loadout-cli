@@ -8,7 +8,8 @@
 | `loadout here` | Launch the agent for the current repository |
 | `loadout doctor` | Platform, Git, workspace, secret and agent diagnostics |
 | `loadout status` | Summary of workspace, projects and agents |
-| `loadout project add\|list\|show\|remove\|discover\|open` | Manage project registration |
+| `loadout project add\|list\|| `loadout instructions list|show|explain` | Read the specialists, and see which ones a task would load |
+| `loadout instructions explain --against-mode|--against-task` | Show only what changes between two ways of asking ||remove\|discover\|open` | Manage project registration |
 | `loadout project clone\|relocate <project>` | Get a registered project onto this machine |
 | `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `loadout project link [project]` | Record inside a repository which project it belongs to |

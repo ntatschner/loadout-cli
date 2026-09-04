@@ -34,7 +34,26 @@ Where guidance overlaps
 ```
 
 You can see the whole set, what it'll cost you in tokens, and where two
-specialists disagree, before anything launches. If it picked something daft you
+specialists disagree, before anything launches. Add an `--against-`
+option and it shows only what changes:
+
+```console
+$ loadout instructions explain "why is this postgres query so slow" \
+    --mode investigate --against-task "add a retry to the upload step"
+
+- database.postgresql                   297  task mentions "postgres"
+- function.database                     223  task mentions "query"
+- function.performance                  217  task mentions "slow"
+- function.debugging                    183  task mentions "why is"
++ function.distributed-systems          172  task mentions "retry"
+
+  Unchanged  7
+  Estimated  2,403 to 1,655 (-748)
+```
+
+The lines both sides share are counted rather than listed — they are not the
+question — and the costliest change comes first, because somebody comparing
+configurations is usually trying to get under a budget. If it picked something daft you
 can rule it out with `--without`.
 
 ### Memory that doesn't grow forever
