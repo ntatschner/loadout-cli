@@ -53,14 +53,14 @@ public sealed class McpServerContractTests
         /// How long a request may go unanswered before the test gives up.
         /// </summary>
         /// <remarks>
-        /// Generously above what the work actually takes. A mode change resolves
-        /// the whole library and scans the repository, and was measured at
-        /// thirty-one seconds on the machine this was written on — so thirty
-        /// seconds failed a passing test and looked exactly like a hang. The
-        /// number is not a performance budget; it is the line past which
-        /// waiting has stopped being useful.
+        /// A hang guard, not a performance budget. It sits above the thirty
+        /// seconds the process launcher gives a child, so a single timed-out
+        /// child still produces an answer this can assert on rather than
+        /// racing the test's own deadline. Every tool here answers in well
+        /// under a second; a call that reaches this bound is broken, and the
+        /// point of the bound is that it says so instead of waiting forever.
         /// </remarks>
-        private static readonly TimeSpan Answer = TimeSpan.FromSeconds(120);
+        private static readonly TimeSpan Answer = TimeSpan.FromSeconds(60);
 
         internal JsonElement Request(string method, object? parameters = null)
         {
@@ -271,5 +271,36 @@ public sealed class McpServerContractTests
         // An error frame would end the agent's turn; a sentence lets it carry
         // on and ask for something that exists.
         text.Should().Contain("no specialist");
+    }
+
+    [BuiltCliFact]
+    public void A_tool_that_has_to_find_the_repository_answers_without_waiting_on_a_child()
+    {
+        using var session = Start();
+
+        var clock = Stopwatch.StartNew();
+
+        var answer = session.Request("tools/call", new
+        {
+            name = "loadout_effective_instructions",
+            arguments = new { },
+        });
+
+        clock.Stop();
+
+        answer.TryGetProperty("result", out _).Should().BeTrue("the tool has to answer");
+
+        // Whether a project is registered on this machine is not this test's
+        // business — how long the answer takes is. Working out which project
+        // this is means asking Git where the repository root is, and that is
+        // the one thing the tools do that nothing else here does. The server
+        // is spawned with its standard input held open by the client, and a
+        // child that inherited that pipe never exited: the launcher killed it
+        // at its thirty-second bound and every tool then answered as though
+        // the project did not exist — correct-looking prose, no error, and an
+        // agent told it had no instructions. Ten seconds is nowhere near the
+        // two hundred milliseconds this takes and nowhere near thirty, so it
+        // separates the two without standing in for a performance budget.
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10));
     }
 }
