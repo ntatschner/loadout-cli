@@ -123,6 +123,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly ISecurityProfileService _security;
     private readonly Core.Sessions.ILaunchLedger _ledger;
     private readonly Core.Sessions.ISessionRegistry _running;
+    private readonly IPolicyService _policies;
 
     public AgentLauncher(
         IProjectService projects,
@@ -139,10 +140,12 @@ public sealed class AgentLauncher : IAgentLauncher
         ISecurityProfileService security,
         Core.Mcp.IMcpService mcp,
         Core.Sessions.ILaunchLedger ledger,
-        Core.Sessions.ISessionRegistry running)
+        Core.Sessions.ISessionRegistry running,
+        IPolicyService policies)
     {
         _ledger = ledger;
         _running = running;
+        _policies = policies;
         _projects = projects;
         _workspace = workspace;
         _configuration = configuration;
@@ -272,7 +275,14 @@ public sealed class AgentLauncher : IAgentLauncher
                     descriptor,
                     compiled.Value,
                     syncOutcome,
-                    environment),
+                    environment,
+
+                    // Hooks live in .git/hooks, which is per-clone and never
+                    // travels, so a fresh clone or a new worktree is
+                    // unprotected until somebody notices. Doctor has always
+                    // said so; this says it on the way into a session that is
+                    // about to write, which is while it can still be acted on.
+                    _policies.InspectHook(directoryResult.Value!)),
                 ct).ConfigureAwait(false);
 
             if (preflightResult.Failed)

@@ -21,6 +21,13 @@ namespace Loadout.Core.Diagnostics;
 /// The resolved environment and security profile (spec sections 57 and 58), or
 /// null when the project defines none.
 /// </param>
+/// <param name="Hook">
+/// Whether this clone still has the pre-commit hook, or null when that cannot
+/// be told from here. Resolved by the caller rather than looked up here: the
+/// rest of preflight is a function of what it was given, and a check that went
+/// and read the disk for itself would be the one part of it a test could not
+/// arrange.
+/// </param>
 public sealed record PreflightContext(
     ProjectResolution Project,
     ProjectManifest? Manifest,
@@ -28,7 +35,8 @@ public sealed record PreflightContext(
     AgentDescriptor Agent,
     CompiledContext? CompiledContext,
     WorkspaceSyncOutcome SyncOutcome,
-    Policies.ResolvedEnvironment? Environment = null);
+    Policies.ResolvedEnvironment? Environment = null,
+    Policies.HookState? Hook = null);
 
 /// <summary>Preflight findings and the resolved environment for the launch.</summary>
 /// <param name="Checks">Everything that was verified, including what passed.</param>
@@ -78,6 +86,7 @@ internal sealed class PreflightService : IPreflightService
         var checks = new List<DiagnosticCheck>();
 
         CheckRepository(checks, context);
+        CheckProtection(checks, context);
         CheckAgent(checks, context);
         CheckWorkspace(checks, context);
         CheckContext(checks, context);
@@ -98,6 +107,38 @@ internal sealed class PreflightService : IPreflightService
         }
 
         checks.Add(DiagnosticCheck.Ok("Repository", "Working directory", context.WorkingDirectory));
+    }
+
+    /// <summary>
+    /// Whether this clone still keeps agent files out of itself.
+    /// </summary>
+    /// <remarks>
+    /// Hooks live in .git/hooks, which is per-clone and never travels, so a
+    /// repository cloned onto a second machine is unprotected until somebody
+    /// notices. Doctor has always said so; this says it at the moment it
+    /// matters, which is on the way into a session that is about to write.
+    /// </remarks>
+    private static void CheckProtection(List<DiagnosticCheck> checks, PreflightContext context)
+    {
+        if (context.Hook is not { } hook)
+        {
+            return;
+        }
+
+        checks.Add(hook switch
+        {
+            { Installed: true, NeedsUpgrade: false } =>
+                DiagnosticCheck.Ok("Repository", "Pre-commit protection", "installed"),
+            { Installed: true } => DiagnosticCheck.Warn(
+                "Repository",
+                "Pre-commit protection",
+                "installed, but written by an older version. Replace it with: loadout protect"),
+            _ => DiagnosticCheck.Warn(
+                "Repository",
+                "Pre-commit protection",
+                "not installed in this clone; hooks are per-clone and never travel. "
+                + "Install it with: loadout protect"),
+        });
     }
 
     private static void CheckAgent(List<DiagnosticCheck> checks, PreflightContext context)

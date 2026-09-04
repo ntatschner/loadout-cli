@@ -136,7 +136,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             new SecurityProfileService(workspace, yaml),
             new McpService(workspace),
             new LaunchLedger(_paths, permissions, TimeProvider.System),
-            new SessionRegistry(_paths, permissions, new ProcessInspector(), TimeProvider.System));
+            new SessionRegistry(_paths, permissions, new ProcessInspector(), TimeProvider.System),
+            new PolicyService(workspace, git, _paths, permissions, yaml));
     }
 
     public Task DisposeAsync()

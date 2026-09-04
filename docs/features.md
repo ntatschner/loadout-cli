@@ -67,7 +67,13 @@ nothing sent anywhere, counts only.
 
 ### Repos that stay clean
 
-`loadout protect` sets up the Git protections. `loadout migrate` moves whatever
+`loadout protect` sets up the Git protections. Because hooks live in
+`.git/hooks` and never travel, a fresh clone is unprotected until somebody
+notices — so a launch says so on the way in, while it can still be acted on. It
+warns and never blocks: an unprotected repository is still one you may have good
+reason to work in. A working tree keeps its hooks in the repository it was made
+from, and there the launcher says nothing rather than reporting a problem you do
+not have. `loadout migrate` moves whatever
 is already scattered around into the workspace, showing you the changes first
 and taking a snapshot you can restore. `loadout drift` tells you when a project
 has wandered from what you configured.
