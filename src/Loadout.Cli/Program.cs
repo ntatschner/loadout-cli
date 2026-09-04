@@ -550,6 +550,7 @@ public static class Program
         Top<SessionListCommand>(config, "sessions");
         Top<ResumeCommand>(config, "resume");
         Top<UsageCommand>(config, "usage");
+        Top<LaunchesCommand>(config, "launches");
 
         TopBranch(config, "instructions", instructions =>
         {

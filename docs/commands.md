@@ -39,6 +39,7 @@
 | `loadout memory write --separate` | Start a new topic even though existing ones cover similar ground |
 | `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory |
 | `loadout sessions` | List recent agent sessions across every agent, newest first |
+| `loadout launches [project]` | What this machine launched, and what each launch was given |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
 | `loadout instructions list\|show\|explain` | Read the specialists, and see which ones a task would load |
 | `loadout instructions audit\|validate` | Check a project against what its specialists ask for, or check the library itself |
@@ -124,6 +125,43 @@ reopened. The interactive launcher offers the same picker per project.
 Neither storage format is a published contract, so both readers are
 best-effort by construction: a transcript that cannot be understood costs that
 one session and never the listing.
+
+## Launches, which are not sessions
+
+`loadout sessions` reads the transcripts the agents write and says what a
+conversation was about. `loadout launches` reads what this launcher recorded as
+it started one, and says what it was told to be — the mode, the profile, the task
+and every specialist composed into it.
+
+```console
+$ loadout launches --show aa11
+StarStats  aa11bb22
+
+  Started       2026-09-04 00:31:42Z
+  Agent         claude
+  Mode          implement
+  Outcome       ok
+  Ran for       31 minutes
+  Task          fix the upload path
+  Instructions  2,400 estimated token(s) against a budget of 12,000
+
+Composed  3
+  foundation.change-safety
+  foundation.verification
+  language.csharp
+```
+
+They are separate lists on purpose, and neither can be turned into the other: an
+agent picks its own session identifier and the launcher never learns it. Nor
+does this say what a launch spent — token counts are aggregated by directory and
+day, so attributing them to one of three launches that day would be arithmetic
+dressed as fact. The tokens shown are the instruction tokens the launcher
+estimated and recorded, which really are per launch.
+
+A launch has three outcomes rather than two. `unclosed` means no ending was
+recorded — killed, terminal closed, or still going — and `never ran` means it
+ended without the agent starting. Calling either a failure would invent a result
+neither has.
 
 ## Documentation that still describes the code
 
