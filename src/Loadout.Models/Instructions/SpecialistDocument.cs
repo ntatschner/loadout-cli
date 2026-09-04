@@ -55,6 +55,18 @@ public enum SpecialistOrigin
     /// <summary>Shipped inside the launcher.</summary>
     BuiltIn,
 
+    /// <summary>
+    /// From a specialist pack fetched from a Git remote and approved here.
+    /// </summary>
+    /// <remarks>
+    /// Between the built-ins and the workspace on purpose. A pack is house
+    /// standards from elsewhere, and the workspace and the project are this
+    /// team's and this project's own — whatever they say has to win, or
+    /// adopting a pack would quietly overrule decisions somebody made
+    /// deliberately.
+    /// </remarks>
+    Pack,
+
     /// <summary>Written in the central workspace, shared across machines.</summary>
     Workspace,
 

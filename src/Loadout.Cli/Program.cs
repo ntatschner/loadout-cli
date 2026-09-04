@@ -493,6 +493,19 @@ public static class Program
             backup.AddCommand<BackupRestoreCommand>("restore");
         });
 
+        TopBranch(config, "pack", pack =>
+        {
+            pack.Describe(
+                "Specialist packs fetched from a Git remote, approved per machine.",
+                CommandCategory.AgentConfiguration,
+                "packs house standards shared specialists trust approve");
+            pack.AddCommand<PackListCommand>("list");
+            pack.AddCommand<PackAddCommand>("add");
+            pack.AddCommand<PackApproveCommand>("approve");
+            pack.AddCommand<PackUpdateCommand>("update");
+            pack.AddCommand<PackRemoveCommand>("remove");
+        });
+
         TopBranch(config, "task", task =>
         {
             task.Describe(

@@ -371,6 +371,42 @@ takes about half a second, and half a second per keystroke is not a status line.
 A session started outside the launcher has nothing written, so the segment is
 absent rather than claiming zero.
 
+## Specialist packs
+
+House standards fetched from a Git remote, resolving alongside the built-ins:
+
+```
+loadout pack add house https://example.com/house-standards.git
+loadout pack list
+loadout pack approve house      # after reading it
+loadout pack update house       # moves the pin, and costs the approval
+loadout pack remove house
+```
+
+**Fetching is not approving, and that split is the whole feature.** A pack's
+content becomes instructions an agent follows, and the declaration lives in a
+workspace anybody on your team can edit. So the declaration *proposes* and your
+machine *decides* — the same rule command policy uses, guarding the same
+failure: a change reaching your machine because it reached somebody else's
+repository.
+
+**Approval is of a commit, never of a pack.** Approving "the standards pack"
+would mean approving whatever it says next week. Move the pin and it stops
+loading until somebody reads the change and approves again — that is arithmetic
+in the gate, not bookkeeping anyone can forget.
+
+A pack pinned to no commit loads nothing at all. It would otherwise load
+whatever its branch says today, which is the unpinned dependency this refuses.
+
+Packs layer **over the built-ins and under the workspace**. A pack is standards
+from elsewhere; your workspace and your project are yours, so whatever they say
+wins — adopting a pack must not quietly overrule a decision somebody made
+deliberately. `loadout instructions show` says `pack` for anything that came
+from one.
+
+The approvals live on this machine and are never committed. Nobody can take
+responsibility for what your agent is told on your behalf.
+
 ## Onboarding defaults
 
 Registering a project asks the questions it currently makes you answer later —

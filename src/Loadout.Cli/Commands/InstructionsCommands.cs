@@ -101,6 +101,11 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
     {
         SpecialistOrigin.Workspace => "workspace",
         SpecialistOrigin.Project => "project",
+
+        // Named, because where a specialist came from is the whole question a
+        // reader has about one that arrived from somebody else's repository.
+        // Falling through to "built-in" said the opposite of the truth.
+        SpecialistOrigin.Pack => "pack",
         _ => "built-in",
     };
 }
