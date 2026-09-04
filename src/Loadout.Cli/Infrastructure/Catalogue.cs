@@ -34,6 +34,11 @@ internal static class Catalogue
             "writes a shell completion script to standard output, which has to be piped "
             + "into a file or sourced by a shell",
 
+        ["mcp serve"] =
+            "is the MCP server itself, speaking a protocol over standard input and output. "
+            + "An agent starts it; a person choosing it from a menu would be left looking at "
+            + "a command that never returns",
+
         ["statusline"] =
             "renders the status line. The agent runs this itself, several times a minute",
 

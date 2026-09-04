@@ -272,6 +272,15 @@ public sealed class LoadoutProcess : IDisposable
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+
+            // Redirected so it can be closed. Left alone, the child inherits
+            // this test host's standard input, and one of the commands these
+            // tests run is a server that reads it until end of file: it never
+            // came, so the run sat there for as long as anything would wait,
+            // holding a loadout process nobody could account for. Whether the
+            // inherited handle happened to be at end of file already is what
+            // made it intermittent.
+            RedirectStandardInput = true,
             UseShellExecute = false,
             WorkingDirectory = _home,
         };
@@ -284,6 +293,11 @@ public sealed class LoadoutProcess : IDisposable
         Isolate(start);
 
         using var process = StartWithRetry(start);
+
+        // Nothing is ever written to it, so it is closed at once. A command
+        // waiting on input it will never get is indistinguishable from a
+        // command that has hung.
+        process.StandardInput.Close();
 
         // Read both streams before waiting. A process that fills a redirected
         // pipe blocks writing to it, and waiting first would deadlock against

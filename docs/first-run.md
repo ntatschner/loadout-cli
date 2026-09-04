@@ -124,6 +124,36 @@ an identifier but no number these paths can find is counted as unrecognised, and
 renamed field doesn't fail, it counts zero and returns a total that looks
 entirely reasonable.
 
+## What is running now
+
+```
+loadout running
+loadout running --idle-after 15
+loadout running --json
+```
+
+Each line is a session the launcher started, how long it's been going, and
+whether it's said anything lately. Quiet times come from each agent's own
+transcript — its last write — joined to the registry on the directory the
+session runs in, because that's the one thing both sides record.
+
+**It is passive, and that is the point.** Nothing here attaches to a console,
+reads another process, or drives a terminal. Doing that on this machine once
+took out every live session on it, and a monitor that can break what it watches
+isn't one worth having.
+
+A session whose transcript can't be found reads as **unseen**, not idle. Neither
+agent publishes its transcript format, so a session this can't see is one it
+can't judge — and "idle" would tell you your agent had stopped when it may be
+working perfectly well. Idle is a description and never a verdict: nothing is
+stopped, and a session quiet for an hour is working again the moment it writes.
+
+Not built: the desktop notification when a session goes idle or ends. That needs
+a notification seam on three platforms and can't be verified headlessly — the
+kind of thing that ships looking finished and isn't. The reading half is here
+and honest; the notification is worth doing deliberately rather than as a
+footnote.
+
 ## Checkpoints
 
 A checkpoint is a named marker binding four things that were already there

@@ -561,6 +561,7 @@ public static class Program
         Top<CodeCommand>(config, "code");
         Top<CommandsCommand>(config, "commands");
         Top<SessionListCommand>(config, "sessions");
+        Top<SessionRunningCommand>(config, "running");
         Top<ResumeCommand>(config, "resume");
         Top<UsageCommand>(config, "usage");
         Top<LaunchesCommand>(config, "launches");
