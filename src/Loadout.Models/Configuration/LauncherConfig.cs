@@ -56,6 +56,12 @@ public sealed class LauncherConfig
     /// how that command takes a profile was not, and the profile is the point.
     /// </remarks>
     public Dictionary<string, Editors.EditorDefinition> CustomEditors { get; set; } = [];
+
+    /// <summary>
+    /// Commands pre-approved on this machine, per project. Never shared: this
+    /// file is not in the workspace and is not committed.
+    /// </summary>
+    public Policies.CommandPolicySettings Commands { get; set; } = new();
 }
 
 /// <summary>

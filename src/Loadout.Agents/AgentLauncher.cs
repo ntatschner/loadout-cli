@@ -307,6 +307,20 @@ public sealed class AgentLauncher : IAgentLauncher
                     ChooseFailureCode(preflight));
             }
 
+            var commandPolicy = Core.Policies.CommandPolicy.Resolve(
+                environment?.Profile?.DeniedCommands,
+                config.Commands.PreApproved.TryGetValue(project.Entry.Slug, out var approved)
+                    ? approved
+                    : null);
+
+            foreach (var dropped in commandPolicy.Overruled)
+            {
+                warnings.Add(
+                    $"'{dropped}' is pre-approved on this machine but denied by the project's "
+                    + "security profile, so it was not pre-approved. A profile may only tighten, "
+                    + "and local configuration cannot put back what it takes away.");
+            }
+
             var context = new AgentLaunchContext(
                 project,
                 directoryResult.Value!,
@@ -328,7 +342,16 @@ public sealed class AgentLauncher : IAgentLauncher
                     .. _mcp.ConfigFiles(project.Entry.Slug),
                     .. SelfServerConfig.Write(
                         config.AgentTools.Enabled, project.Entry.Slug, runtimeDirectory, warnings),
-                ]);
+                ],
+
+                // Resolved here rather than in the adapter, because the two
+                // halves come from different places on purpose: the denials
+                // travel with the project and the pre-approvals never leave
+                // this machine. Anything the project denied is already gone,
+                // and a pre-approval that was dropped that way is said out
+                // loud — somebody who set one and never sees it work is owed
+                // the reason.
+                commandPolicy.PreApproved);
 
             var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
             if (invocationResult.Failed)

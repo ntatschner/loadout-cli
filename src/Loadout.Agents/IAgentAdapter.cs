@@ -37,6 +37,13 @@ namespace Loadout.Agents;
 /// The session to resume, or null to start fresh. Each adapter places it where
 /// its own agent expects it, which is not the same place twice.
 /// </param>
+/// <param name="PreApprovedCommands">
+/// Commands this machine has pre-approved for the project, already with
+/// anything the project denied taken out. Handed in rather than read here,
+/// because it comes from machine-local configuration and an adapter that
+/// reached for that itself could be given a different answer than the launcher
+/// resolved.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -48,7 +55,8 @@ public sealed record AgentLaunchContext(
     IReadOnlyDictionary<string, string>? ResolvedEnvironment = null,
     Models.Policies.SecurityProfile? Security = null,
     string? ResumeSessionId = null,
-    IReadOnlyList<string>? McpConfigFiles = null);
+    IReadOnlyList<string>? McpConfigFiles = null,
+    IReadOnlyList<string>? PreApprovedCommands = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

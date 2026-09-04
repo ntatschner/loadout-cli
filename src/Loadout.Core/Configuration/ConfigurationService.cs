@@ -35,6 +35,18 @@ internal sealed class ConfigurationService : IConfigurationService
     public Task<OperationResult> SaveMachineAsync(MachineConfig machine, CancellationToken ct = default) =>
         _yaml.SaveAsync(_paths.Paths.MachinesFile, machine, restrictPermissions: true, ct);
 
+    /// <inheritdoc />
+    public Task<OperationResult<LauncherConfig>> UpdateConfigAsync(
+        Action<LauncherConfig> change, CancellationToken ct = default) =>
+        _yaml.UpdateAsync(
+            _paths.Paths.ConfigFile, () => new LauncherConfig(), change, true, ct);
+
+    /// <inheritdoc />
+    public Task<OperationResult<MachineConfig>> UpdateMachineAsync(
+        Action<MachineConfig> change, CancellationToken ct = default) =>
+        _yaml.UpdateAsync(
+            _paths.Paths.MachinesFile, CreateDefaultMachine, change, true, ct);
+
     private MachineConfig CreateDefaultMachine() => new()
     {
         MachineName = _environment.MachineName,

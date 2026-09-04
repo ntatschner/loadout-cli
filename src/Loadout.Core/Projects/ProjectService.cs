@@ -294,16 +294,14 @@ internal sealed class ProjectService : IProjectService
 
         var slug = resolveResult.Value!.Entry.Slug;
 
-        var machineResult = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
-        if (machineResult.Failed)
-        {
-            return OperationResult<ProjectRemoval>.Fail(machineResult.Error!, machineResult.ExitCode);
-        }
-
-        var machine = machineResult.Value!;
-        machine.Projects.Remove(slug);
-
-        var saveResult = await _configuration.SaveMachineAsync(machine, ct).ConfigureAwait(false);
+        // Read and written under one lock. Loading, changing and saving
+        // separately means another launcher that registered a project in the
+        // meantime has its registration removed by this write — the file stays
+        // valid and nothing reports a problem, which is what makes it worth
+        // guarding against rather than noticing later.
+        var saveResult = await _configuration
+            .UpdateMachineAsync(machine => machine.Projects.Remove(slug), ct)
+            .ConfigureAwait(false);
 
         if (saveResult.Failed)
         {
@@ -420,25 +418,37 @@ internal sealed class ProjectService : IProjectService
         string agent,
         CancellationToken ct = default)
     {
-        var machineResult = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
-        if (machineResult.Failed)
+        // The most contended write there is: it happens on every launch, and
+        // launching two projects at once is ordinary. Read separately from the
+        // write, two launches read the same count, both write one more than it,
+        // and the count goes up by one instead of two.
+        var mapped = false;
+
+        var saved = await _configuration.UpdateMachineAsync(
+            machine =>
+            {
+                if (!machine.Projects.TryGetValue(slug, out var entry))
+                {
+                    return;
+                }
+
+                mapped = true;
+
+                entry.LastLaunchedUtc = DateTimeOffset.UtcNow;
+                entry.LaunchCount++;
+                entry.LastAgent = agent;
+            },
+            ct).ConfigureAwait(false);
+
+        if (saved.Failed)
         {
-            return OperationResult.Fail(machineResult.Error!, machineResult.ExitCode);
+            return OperationResult.Fail(saved.Error!, saved.ExitCode);
         }
 
-        var machine = machineResult.Value!;
-
-        if (!machine.Projects.TryGetValue(slug, out var entry))
-        {
-            return OperationResult.Fail(
+        return mapped
+            ? OperationResult.Ok()
+            : OperationResult.Fail(
                 $"'{slug}' is not mapped on this machine.", ExitCode.ProjectNotFound);
-        }
-
-        entry.LastLaunchedUtc = DateTimeOffset.UtcNow;
-        entry.LaunchCount++;
-        entry.LastAgent = agent;
-
-        return await _configuration.SaveMachineAsync(machine, ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -554,31 +564,29 @@ internal sealed class ProjectService : IProjectService
         string localPath,
         CancellationToken ct)
     {
-        var machineResult = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
-        if (machineResult.Failed)
-        {
-            return OperationResult.Fail(machineResult.Error!, machineResult.ExitCode);
-        }
-
-        var machine = machineResult.Value!;
-
-        if (machine.Projects.TryGetValue(entry.Slug, out var existing))
-        {
-            // Launch history is preserved across a relocation: the project is
-            // the same one, it just moved.
-            existing.Id = entry.Id;
-            existing.Path = localPath;
-        }
-        else
-        {
-            machine.Projects[entry.Slug] = new MachineProjectEntry
+        // Registration is where losing a write costs the most: the setup that
+        // ran alongside this one registered a project, and a save built on a
+        // copy read before it would drop that project with nothing to say so.
+        var saved = await _configuration.UpdateMachineAsync(
+            machine =>
             {
-                Id = entry.Id,
-                Path = localPath,
-            };
-        }
-
-        var saved = await _configuration.SaveMachineAsync(machine, ct).ConfigureAwait(false);
+                if (machine.Projects.TryGetValue(entry.Slug, out var existing))
+                {
+                    // Launch history is preserved across a relocation: the
+                    // project is the same one, it just moved.
+                    existing.Id = entry.Id;
+                    existing.Path = localPath;
+                }
+                else
+                {
+                    machine.Projects[entry.Slug] = new MachineProjectEntry
+                    {
+                        Id = entry.Id,
+                        Path = localPath,
+                    };
+                }
+            },
+            ct).ConfigureAwait(false);
 
         if (saved.Succeeded)
         {
