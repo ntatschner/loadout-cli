@@ -144,6 +144,16 @@ command says so again on the way out. Generating it from symbols would produce
 something that reads like documentation, teaches nobody anything, and — worst of
 the three — looks finished enough that nobody writes the real thing.
 
+The **technical guide** carries the decisions, not just the summaries: under each
+type it prints the opening paragraph of its `<remarks>`, which is where this
+codebase puts the reasoning. Only the opening paragraph — what follows is the
+evidence and the history, and that belongs where somebody changing the code will
+meet it rather than in a guide read end to end.
+
+The **machine index** opens with a digest of the modules and what each holds, so
+a session can pick a file to open instead of reading the tree, and follows it
+with one tab-separated line per symbol.
+
 The scan is **lexical, not a parse**. It reads declarations the way you would
 skimming, which gets the overwhelming majority right and will miss a declaration
 split across lines. The alternative is Roslyn: a large dependency for a

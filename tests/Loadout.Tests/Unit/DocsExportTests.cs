@@ -39,6 +39,46 @@ public sealed class DocsExportTests
         "}",
     ];
 
+    /// <summary>A type whose remarks carry the decision, as most here do.</summary>
+    private static readonly string[] WithReasoning =
+    [
+        "/// <summary>Holds a doodad.</summary>",
+        "/// <remarks>",
+        "/// <para>",
+        "/// Kept <em>separate</em> from the widget because <c>Widget</c> is shared,",
+        "/// and see <see cref=\"T:Demo.Gadget\"/> for the other half,",
+        "/// unlike <paramref name=\"thing\"/> which nothing converts.",
+        "/// </para>",
+        "/// <para>",
+        "/// This second paragraph is the evidence and belongs in the file.",
+        "/// </para>",
+        "/// </remarks>",
+        "public sealed class Doodad",
+        "{",
+        "}",
+    ];
+
+    /// <summary>Prose after a closed paragraph, which this repository never writes.</summary>
+    /// <remarks>
+    /// The export runs on other people's code, whose comment style is not this
+    /// one. Here the paragraph closes and loose prose follows it, which is the
+    /// only shape that tells the closing tag apart from the tag that opens the
+    /// next paragraph.
+    /// </remarks>
+    private static readonly string[] LooseAfterPara =
+    [
+        "/// <summary>Holds a sprocket.</summary>",
+        "/// <remarks>",
+        "/// <para>",
+        "/// The decision itself.",
+        "/// </para>",
+        "/// Loose prose that is not part of that paragraph.",
+        "/// </remarks>",
+        "public sealed class Sprocket",
+        "{",
+        "}",
+    ];
+
     /// <summary>The shape most of this codebase actually uses.</summary>
     private static readonly string[] WithPara =
     [
@@ -133,6 +173,105 @@ public sealed class DocsExportTests
             ["public sealed class Bare", "{", "}"], "src/Bare.cs").ToList();
 
         symbols.Single(s => s.Name == "Bare").Summary.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Only_the_first_paragraph_of_the_reasoning_is_taken()
+    {
+        var doodad = SymbolScan.InFile(WithReasoning, "src/Demo/Doodad.cs")
+            .Single(symbol => symbol.Name == "Doodad");
+
+        doodad.Reasoning.Should().Contain("Kept");
+
+        // What follows the first paragraph is the evidence and the history,
+        // which belong where somebody changing the code will meet them rather
+        // than in a guide read end to end.
+        doodad.Reasoning.Should().NotContain("belongs in the file");
+    }
+
+    [Fact]
+    public void The_markup_of_a_doc_comment_becomes_the_prose_it_meant()
+    {
+        var doodad = SymbolScan.InFile(WithReasoning, "src/Demo/Doodad.cs")
+            .Single(symbol => symbol.Name == "Doodad");
+
+        // An unconverted tag comes out as angle brackets mid-sentence, which
+        // reads as a fault in the generator rather than as emphasis.
+        doodad.Reasoning.Should().Contain("*separate*");
+        doodad.Reasoning.Should().Contain("`Widget`");
+        doodad.Reasoning.Should().NotContain("<");
+        doodad.Reasoning.Should().NotContain("cref");
+    }
+
+    [Fact]
+    public void A_paragraph_ends_where_it_is_closed()
+    {
+        var sprocket = SymbolScan.InFile(LooseAfterPara, "src/Demo/Sprocket.cs")
+            .Single(symbol => symbol.Name == "Sprocket");
+
+        // This repository always follows a closed paragraph with another tag,
+        // so the closing tag never has to do the stopping here. It does on
+        // somebody else's codebase, and this runs on those.
+        sprocket.Reasoning.Should().Be("The decision itself.");
+        sprocket.Reasoning.Should().NotContain("Loose prose");
+    }
+
+    [Fact]
+    public void A_tag_nothing_converts_is_dropped_rather_than_shown()
+    {
+        var doodad = SymbolScan.InFile(WithReasoning, "src/Demo/Doodad.cs")
+            .Single(symbol => symbol.Name == "Doodad");
+
+        // Only the tags this codebase uses in prose have conversions. Anything
+        // else is dropped rather than guessed at, because a wrong conversion is
+        // harder to spot than a missing one — but it must not come through as
+        // angle brackets either.
+        doodad.Reasoning.Should().NotContain("paramref");
+        doodad.Reasoning.Should().Contain("which nothing converts");
+    }
+
+    [Fact]
+    public void The_technical_guide_carries_the_decision_under_the_summary()
+    {
+        var written = DocsExport.Write(
+            DocsExportType.Technical,
+            [.. SymbolScan.InFile(WithReasoning, "src/Demo/Doodad.cs")],
+            "Demo");
+
+        written.Should().Contain("Holds a doodad.");
+        written.Should().Contain("Kept");
+    }
+
+    [Fact]
+    public void The_machine_index_opens_with_a_map_of_the_modules()
+    {
+        var written = DocsExport.Write(DocsExportType.MachineIndex, Scanned(), "Demo");
+
+        // The digest half of what a machine-readable index is for: a session
+        // picks a file to open from this instead of reading the tree.
+        written.Should().Contain("## Modules");
+        written.Should().Contain("src/Demo");
+        written.Should().Contain("## Index");
+    }
+
+    [Fact]
+    public void A_repeated_nested_type_is_named_once_in_the_digest()
+    {
+        var symbols = new List<Symbol>
+        {
+            new(SymbolKind.Type, "AlphaCommand", "class AlphaCommand", "src/Cmd/A.cs", 1, ""),
+            new(SymbolKind.Type, "Settings", "class Settings", "src/Cmd/A.cs", 2, ""),
+            new(SymbolKind.Type, "BetaCommand", "class BetaCommand", "src/Cmd/B.cs", 1, ""),
+            new(SymbolKind.Type, "Settings", "class Settings", "src/Cmd/B.cs", 2, ""),
+        };
+
+        var written = DocsExport.Write(DocsExportType.MachineIndex, symbols, "Demo");
+        var modules = written[..written.IndexOf("## Index", StringComparison.Ordinal)];
+
+        // Every command here carries its own Settings, so a raw list reads
+        // "Settings, AlphaCommand, Settings, BetaCommand" — repetition that
+        // says nothing and costs the tokens this digest exists to save.
+        modules.Split("Settings").Length.Should().Be(2);
     }
 
     [Fact]

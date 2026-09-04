@@ -95,7 +95,8 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
                 new SpecialistLibrary(),
                 new SpecialistResolver(),
                 new RepositoryEvidenceReader(),
-                configuration));
+                configuration),
+            new Loadout.Tests.Fakes.QuietSessionRegistry());
 
         _repository = await CreateRepositoryAsync().ConfigureAwait(false);
     }

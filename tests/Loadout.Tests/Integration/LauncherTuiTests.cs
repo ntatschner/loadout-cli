@@ -105,7 +105,8 @@ public sealed class LauncherTuiTests : IAsyncLifetime
                 new SpecialistLibrary(),
                 new SpecialistResolver(),
                 new RepositoryEvidenceReader(),
-                _configuration));
+                _configuration),
+            new Loadout.Tests.Fakes.QuietSessionRegistry());
 
         var config = await _configuration.LoadConfigAsync().ConfigureAwait(false);
         var agents = new AgentRegistry(resolver, _processes, config.Value!);

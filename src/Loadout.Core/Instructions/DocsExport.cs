@@ -97,9 +97,12 @@ public static class DocsExport
             .AppendLine($"# {name}: how it is put together")
             .AppendLine()
             .AppendLine(
-                "The module map is derived; the sentences under each type are the ones already "
-                + "written in its doc comment. Nothing here was composed for this document, so "
-                + "where a type explains itself badly, it explains itself badly here too.")
+                "The module map is derived. Every sentence under a type is one already written "
+                + "in its doc comment: the summary, then the opening paragraph of its remarks, "
+                + "which is where this codebase puts the decision. What follows that paragraph "
+                + "in the source is the evidence and the history, and it stays there. Nothing "
+                + "here was composed for this document, so where a type explains itself badly, "
+                + "it explains itself badly here too.")
             .AppendLine();
 
         foreach (var module in Modules(symbols))
@@ -122,10 +125,18 @@ public static class DocsExport
 
             foreach (var symbol in described)
             {
-                text.AppendLine($"- **{symbol.Name}** — {symbol.Summary}");
-            }
+                text.AppendLine($"### {symbol.Name}").AppendLine();
+                text.AppendLine(symbol.Summary).AppendLine();
 
-            text.AppendLine();
+                if (symbol.Reasoning.Length > 0)
+                {
+                    // The opening paragraph of the remarks, which is where the
+                    // decision is. What follows it in the source is the
+                    // evidence and the history, which belong where somebody
+                    // changing the code will meet them.
+                    text.AppendLine(symbol.Reasoning).AppendLine();
+                }
+            }
         }
 
         return text.ToString();
@@ -175,9 +186,27 @@ public static class DocsExport
             .AppendLine($"# {name}")
             .AppendLine()
             .AppendLine(
-                "> A symbol index for finding the right file without reading the tree. "
-                + "One line per symbol: name, kind, file, line.")
+                "> A map of this codebase for a reader that is not a person. The digest below "
+                + "says where things are; the index after it says where each name is.")
             .AppendLine();
+
+        // The digest half, in the shape llms.txt asks for: what the modules are
+        // and what each holds, so a session can pick a file to open instead of
+        // reading the tree. Written first because it is the part worth reading
+        // when the index is too long to spend tokens on.
+        text.AppendLine("## Modules").AppendLine();
+
+        foreach (var module in Modules(symbols))
+        {
+            var types = module.Where(symbol => symbol.Kind == SymbolKind.Type).ToList();
+
+            text.AppendLine(
+                $"- `{module.Key}` — {types.Count} type(s): "
+                + string.Join(", ", Named(types).Take(12))
+                + (Named(types).Count > 12 ? ", and more" : string.Empty));
+        }
+
+        text.AppendLine().AppendLine("## Index").AppendLine();
 
         // Deliberately flat and uniform. This one is not read by a person, so
         // the grouping and prose that help elsewhere are only tokens here.
@@ -190,6 +219,22 @@ public static class DocsExport
 
         return text.ToString();
     }
+
+    /// <summary>
+    /// Distinct type names in a module, in order.
+    /// </summary>
+    /// <remarks>
+    /// Nested types repeat: every command in this codebase carries its own
+    /// Settings, so a raw list reads "Settings, ThingCommand, Settings,
+    /// OtherCommand, Settings". The repetition says nothing and costs the
+    /// tokens this digest exists to save.
+    /// </remarks>
+    private static List<string> Named(IEnumerable<Symbol> types) =>
+    [
+        .. types
+            .Select(symbol => symbol.Name)
+            .Distinct(StringComparer.Ordinal),
+    ];
 
     /// <summary>
     /// Symbols grouped by the directory that holds them.

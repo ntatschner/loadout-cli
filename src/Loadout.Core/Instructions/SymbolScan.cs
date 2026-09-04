@@ -16,13 +16,19 @@ public enum SymbolKind
 /// <param name="File">Path relative to the repository root.</param>
 /// <param name="Line">One-based line number.</param>
 /// <param name="Summary">The first line of its doc comment, when it had one.</param>
+/// <param name="Reasoning">
+/// The opening paragraph of its remarks, which in this codebase is where the
+/// decision lives. Only the first: what follows is usually the worked examples
+/// and the history, which belong in the file.
+/// </param>
 public sealed record Symbol(
     SymbolKind Kind,
     string Name,
     string Signature,
     string File,
     int Line,
-    string Summary);
+    string Summary,
+    string Reasoning = "");
 
 /// <summary>
 /// Finds the public surface of a C# codebase by reading it, not by parsing it.
@@ -138,7 +144,8 @@ public static partial class SymbolScan
                     line.Trim().TrimEnd('{').TrimEnd(),
                     file,
                     i + 1,
-                    SummaryAbove(lines, i));
+                    SummaryAbove(lines, i),
+                    ReasoningAbove(lines, i));
 
                 continue;
             }
@@ -238,15 +245,141 @@ public static partial class SymbolScan
                 text.Append(' ').Append(piece);
             }
 
-            return text
+            return Prose(text
                 .Replace("</summary>", string.Empty)
                 .ToString()
-                .Replace("  ", " ", StringComparison.Ordinal)
-                .Trim();
+                .Replace("  ", " ", StringComparison.Ordinal));
         }
 
         return string.Empty;
     }
+
+    /// <summary>
+    /// The opening paragraph of the remarks above a declaration.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the first paragraph. In this codebase the remarks open with the
+    /// decision and then go on to the evidence, the alternatives tried and what
+    /// went wrong last time — all of which belongs where somebody changing the
+    /// code will meet it, and none of which belongs in a guide read end to end.
+    /// </para>
+    /// <para>
+    /// Read forward from the remarks tag rather than upward, because unlike a
+    /// summary the remarks always follow it.
+    /// </para>
+    /// </remarks>
+    internal static string ReasoningAbove(IReadOnlyList<string> lines, int declaration)
+    {
+        var opened = -1;
+
+        for (var i = declaration - 1; i >= 0 && declaration - i < 200; i--)
+        {
+            var trimmed = lines[i].Trim();
+
+            if (trimmed.StartsWith("/// <remarks>", StringComparison.Ordinal))
+            {
+                opened = i;
+                break;
+            }
+
+            if (trimmed.Length > 0
+                && !trimmed.StartsWith("///", StringComparison.Ordinal)
+                && !trimmed.StartsWith('['))
+            {
+                return string.Empty;
+            }
+        }
+
+        if (opened < 0)
+        {
+            return string.Empty;
+        }
+
+        var text = new System.Text.StringBuilder();
+        var started = false;
+
+        for (var i = opened + 1; i < lines.Count && i - opened < 60; i++)
+        {
+            var line = DocLine().Match(lines[i]);
+
+            if (!line.Success)
+            {
+                break;
+            }
+
+            var piece = line.Groups["text"].Value.Trim();
+
+            if (piece is "<para>" or "</remarks>")
+            {
+                // The opening <para> starts the paragraph; the closing remarks
+                // tag ends it when there was only one.
+                if (piece == "</remarks>")
+                {
+                    break;
+                }
+
+                if (started)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            // Any tag ends the paragraph, closing or opening. A separate check
+            // for "</para>" stood here and was removed: it is subsumed by this
+            // one, and a mutation deleting it failed nothing because every
+            // closing tag reaches this line anyway.
+            if (piece.StartsWith('<'))
+            {
+                break;
+            }
+
+            started = true;
+            text.Append(text.Length == 0 ? string.Empty : " ").Append(piece);
+        }
+
+        return Prose(text.ToString());
+    }
+
+    /// <summary>
+    /// Turns the markup of a doc comment into the prose it meant.
+    /// </summary>
+    /// <remarks>
+    /// A doc comment is XML, and the tags in it mean something a Markdown
+    /// reader will not get: an unconverted &lt;em&gt; comes out as angle
+    /// brackets in the middle of a sentence, which reads as a fault in the
+    /// generator rather than as emphasis. Only the tags this codebase actually
+    /// uses inside prose are converted; anything else is dropped rather than
+    /// guessed at, because a wrong conversion is harder to spot than a missing
+    /// one.
+    /// </remarks>
+    internal static string Prose(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var converted = text
+            .Replace("<c>", "`", StringComparison.Ordinal)
+            .Replace("</c>", "`", StringComparison.Ordinal)
+            .Replace("<em>", "*", StringComparison.Ordinal)
+            .Replace("</em>", "*", StringComparison.Ordinal);
+
+        // A cref names a type; the name is the useful half and the attribute
+        // syntax is not.
+        converted = CrefTag().Replace(converted, "`${name}`");
+
+        return AnyTag().Replace(converted, string.Empty).Trim();
+    }
+
+    [GeneratedRegex(@"<see\s+cref=""(?:[A-Za-z]:)?(?<name>[^""]+)""\s*/?>", RegexOptions.Compiled)]
+    private static partial Regex CrefTag();
+
+    [GeneratedRegex(@"</?[A-Za-z][^>]*>", RegexOptions.Compiled)]
+    private static partial Regex AnyTag();
 
     private static IEnumerable<string> Walk(string root, CancellationToken ct)
     {
