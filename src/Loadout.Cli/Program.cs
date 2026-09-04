@@ -493,6 +493,16 @@ public static class Program
             backup.AddCommand<BackupRestoreCommand>("restore");
         });
 
+        TopBranch(config, "share", share =>
+        {
+            share.Describe(
+                "Find guidance that belongs to everybody, and move it deliberately.",
+                CommandCategory.Workspace,
+                "share promote team worthy global guidance");
+            share.AddCommand<ShareCandidatesCommand>("candidates");
+            share.AddCommand<SharePromoteCommand>("promote");
+        });
+
         TopBranch(config, "pack", pack =>
         {
             pack.Describe(

@@ -371,6 +371,33 @@ takes about half a second, and half a second per keystroke is not a status line.
 A session started outside the launcher has nothing written, so the segment is
 absent rather than claiming zero.
 
+## Sharing what belongs to everybody
+
+```
+loadout share candidates
+loadout share promote projects/demo/specialists/style.md          # previews
+loadout share promote projects/demo/specialists/style.md --apply  # moves it
+```
+
+`share candidates` looks for guidance filed under a project that never mentions
+that project — often something general somebody put in the nearest folder. It's
+a **weak signal, stated as one**: the reason is printed with every candidate so
+you can dismiss it at a glance. Nothing is moved, and nothing is decided.
+
+It exists because "publish deliberately" becomes "publish never" if nobody is
+ever prompted. A rule that depends on remembering is a rule that decays.
+
+**The private half of a workspace is never searched.** Handoffs, memory and
+state are why a workspace is created private — publishing them is an
+irreversible disclosure. Those directories are excluded twice over: the search
+uses an allow list rather than a deny list, *and* they are refused by name if you
+type one directly. Widening one must not quietly widen the other.
+
+`share promote` previews by default, scans for credentials before anything
+moves, and refuses on a finding — naming the pattern, never the value. It
+**writes locally and never pushes**: `loadout workspace save` is what shares it,
+and that scans again on the way out.
+
 ## Specialist packs
 
 House standards fetched from a Git remote, resolving alongside the built-ins:
