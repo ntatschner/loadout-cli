@@ -184,4 +184,24 @@ public sealed class SettingsScreenTests
 
         unseen.Should().BeEmpty($"every setting must be reachable at {width}x{height}");
     }
+
+    [Fact]
+    public void No_setting_is_named_too_widely_to_be_drawn()
+    {
+        // The settings screen writes the key in a column twenty-four wide, so a
+        // longer name is clipped and the setting becomes unreachable there
+        // while working perfectly from the command line. The reachability test
+        // above catches it, but reports it as "unseen", which is a long way
+        // from "the name is one character too long" — this says so directly.
+        const int LabelWidth = 24;
+
+        var tooWide = ConfigKeys.All
+            .Select(entry => entry.Key)
+            .Where(key => key.Length > LabelWidth)
+            .ToList();
+
+        tooWide.Should().BeEmpty(
+            $"a key wider than {LabelWidth} characters is clipped in the settings screen "
+            + "and cannot be found or changed there");
+    }
 }

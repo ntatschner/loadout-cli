@@ -65,6 +65,9 @@ public sealed class LauncherConfig
 
     /// <summary>Token thresholds that produce a warning, and never a refusal.</summary>
     public SpendSettings Spend { get; set; } = new();
+
+    /// <summary>What a newly registered project is given, unless it says otherwise.</summary>
+    public OnboardingSettings Onboarding { get; set; } = new();
 }
 
 /// <summary>
@@ -353,4 +356,41 @@ public sealed class SpendSettings
     /// plenty of room left.
     /// </remarks>
     public double PlanWarnAt { get; set; }
+}
+
+/// <summary>
+/// What a new project is set up with, so the answers are given once.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Every one of these is a question registering a project currently makes you
+/// answer later, usually after something has surprised you. None of it is new
+/// behaviour; it is the same settings, filled in at the moment the project
+/// exists rather than the third time it matters.
+/// </para>
+/// <para>
+/// Blanks only. A project that names its own agent chose that, and a
+/// machine-wide preference is not grounds to reconsider it — so nothing here
+/// overwrites a value that is already there, and what does get filled in is
+/// reported rather than applied quietly.
+/// </para>
+/// <para>
+/// Deliberately absent: anything that reaches off this machine. The rule
+/// everywhere else here is that outward-facing things are confirmed rather than
+/// switched on for somebody, and a default is the opposite of confirming.
+/// </para>
+/// </remarks>
+public sealed class OnboardingSettings
+{
+    /// <summary>Agent a new project launches. Empty leaves the built-in default.</summary>
+    public string Agent { get; set; } = string.Empty;
+
+    /// <summary>Model a new project pins, spelled as its agent spells it.</summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>Model per mode, for the modes worth distinguishing.</summary>
+    public Dictionary<string, string> ModelByMode { get; set; } = [];
+
+    /// <summary>Editor profile a new project opens under.</summary>
+    public string EditorProfile { get; set; } = string.Empty;
 }

@@ -307,6 +307,40 @@ takes about half a second, and half a second per keystroke is not a status line.
 A session started outside the launcher has nothing written, so the segment is
 absent rather than claiming zero.
 
+## Onboarding defaults
+
+Registering a project asks the questions it currently makes you answer later —
+usually after the third time something surprises you:
+
+```
+loadout config set onboarding-agent codex
+loadout config set onboarding-model big-model
+loadout config set onboarding-models "review=small-model;implement=big-model"
+loadout config set onboarding-editor Agents
+```
+
+`loadout project add` then fills those in and **says what it filled**:
+
+```
+Registered Demo (demo)
+  agent: codex (from your defaults)
+  model for review: small-model (from your defaults)
+```
+
+**Blanks only.** A project that names its own agent chose that, and a
+machine-wide preference is not grounds to reconsider it. The one exception is
+`claude` as the agent: that's the built-in default rather than a choice anybody
+made, so a configured preference replaces it.
+
+Filling is per setting, not per section — a project that pins a model for
+`review` but not `implement` gets `implement` filled in and `review` left alone.
+
+**Two things are deliberately absent.** Nothing that reaches off this machine
+has a default: the rule everywhere else here is that outward-facing things are
+confirmed rather than switched on for you, and a default is the opposite of
+confirming. And remote control isn't here at all — it doesn't exist in Loadout
+yet, so a setting to enable it automatically would be a setting for nothing.
+
 ## Pinning a model
 
 Loadout never chose a model, so the choice was retyped after `--` every session
