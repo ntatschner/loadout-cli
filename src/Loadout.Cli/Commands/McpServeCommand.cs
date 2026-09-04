@@ -4,6 +4,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
+using Loadout.Core.Git;
 using Loadout.Models.Instructions;
 using Loadout.Tui;
 using System.Reflection;
@@ -135,6 +136,9 @@ public sealed class LoadoutTools
     private readonly IMemoryService _memory;
     private readonly IWorkspaceManager _workspace;
     private readonly IProjectService _projects;
+    private readonly Core.Tasks.ITaskService _tasks;
+    private readonly IGitManager _git;
+    private readonly TimeProvider _time;
     private readonly LoadoutToolScope _scope;
 
     public LoadoutTools(
@@ -142,12 +146,18 @@ public sealed class LoadoutTools
         IMemoryService memory,
         IWorkspaceManager workspace,
         IProjectService projects,
+        Core.Tasks.ITaskService tasks,
+        IGitManager git,
+        TimeProvider time,
         LoadoutToolScope scope)
     {
         _instructions = instructions;
         _memory = memory;
         _workspace = workspace;
         _projects = projects;
+        _tasks = tasks;
+        _git = git;
+        _time = time;
         _scope = scope;
     }
 
@@ -322,6 +332,127 @@ public sealed class LoadoutTools
         Enum.TryParse<MemoryScope>(name, ignoreCase: true, out var parsed)
             ? parsed
             : MemoryScope.Project;
+
+    [McpServerTool(Name = "loadout_tasks")]
+    [Description(
+        "What this project is working on: every open task, who said so and when, plus anything "
+        + "the repository does not back up. Use it to answer \"where were we\" from the record "
+        + "rather than from the last thing in context.")]
+    public async Task<string> TasksAsync(CancellationToken ct = default)
+    {
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var listed = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return listed.Error ?? "The tasks could not be read.";
+        }
+
+        if (listed.Value!.Count == 0)
+        {
+            return $"Nothing is recorded for {slug}.";
+        }
+
+        var now = _time.GetUtcNow();
+        var lines = new List<string>();
+
+        foreach (var item in listed.Value!
+            .OrderBy(item => item.State)
+            .ThenBy(item => item.Id, StringComparer.Ordinal))
+        {
+            lines.Add(
+                $"{item.Id} [{item.State.ToString().ToLowerInvariant()}] {item.Title}"
+                + $" - said by {(item.DeclaredBy.Length > 0 ? item.DeclaredBy : "nobody named")}"
+                + $" on {item.DeclaredUtc:yyyy-MM-dd}");
+        }
+
+        // The disagreements travel with the answer rather than being available
+        // separately. A session handed its own claim back as fact is the thing
+        // this exists to prevent: it is the one reader that cannot tell the
+        // difference, because it is usually the one that made the claim.
+        foreach (var disagreement in await CheckAsync(slug, listed.Value!, now, ct).ConfigureAwait(false))
+        {
+            lines.Add($"  unsupported: {disagreement.TaskId} {disagreement.Detail}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    [McpServerTool(Name = "loadout_task_declare")]
+    [Description(
+        "Record where a task stands: open, doing, done, blocked or dropped. Adds it when the id "
+        + "is new. This records a claim, attributed and dated; it does not make the claim true.")]
+    public async Task<string> DeclareTaskAsync(
+        [Description("Short identifier for the task.")] string id,
+        [Description("open, doing, done, blocked or dropped.")] string state,
+        [Description("What the work is. Leave out to keep what is there.")] string? title = null,
+        [Description("Anything worth adding.")] string? note = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state);
+
+        if (!Enum.TryParse<Models.Tasks.TaskState>(state, ignoreCase: true, out var parsed))
+        {
+            return $"There is no '{state}' state. The states are: open, doing, done, blocked, dropped.";
+        }
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var declared = await _tasks
+            .DeclareAsync(slug, id, parsed, "agent", title, note, ct)
+            .ConfigureAwait(false);
+
+        return declared.Succeeded
+            ? $"Recorded {declared.Value!.Id} as {parsed.ToString().ToLowerInvariant()}, "
+                + "attributed to this session and dated now."
+            : declared.Error ?? "The task could not be recorded.";
+    }
+
+    /// <summary>What the repository has to say about the claims.</summary>
+    /// <remarks>
+    /// A repository that cannot be read returns nothing rather than an empty
+    /// history: with no commits, "nothing committed since" would fire on every
+    /// task at once, which is a confidently wrong answer where none was needed.
+    /// </remarks>
+    private async Task<IReadOnlyList<Core.Tasks.TaskDisagreement>> CheckAsync(
+        string slug,
+        IReadOnlyList<Models.Tasks.TaskItem> tasks,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var resolved = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+        if (resolved.Failed
+            || resolved.Value!.LocalPath is not { Length: > 0 } path
+            || !Directory.Exists(path))
+        {
+            return [];
+        }
+
+        var oldest = tasks
+            .Where(item => item.State is Models.Tasks.TaskState.Done or Models.Tasks.TaskState.Doing)
+            .Select(item => item.DeclaredUtc)
+            .DefaultIfEmpty(now)
+            .Min();
+
+        var commits = await _git.ListCommitsAsync(path, oldest, ct).ConfigureAwait(false);
+
+        return commits.Succeeded
+            ? Core.Tasks.TaskCorroboration.Check(tasks, commits.Value!, now)
+            : [];
+    }
 
     [McpServerTool(Name = "loadout_mode")]
     [Description(

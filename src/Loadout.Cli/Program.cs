@@ -493,6 +493,17 @@ public static class Program
             backup.AddCommand<BackupRestoreCommand>("restore");
         });
 
+        TopBranch(config, "task", task =>
+        {
+            task.Describe(
+                "Record what is being worked on, and check it against the repository.",
+                CommandCategory.Workspace,
+                "tasks backlog todo status where were we open work");
+            task.AddCommand<TaskListCommand>("list");
+            task.AddCommand<TaskDeclareCommand>("declare");
+            task.AddCommand<TaskRemoveCommand>("remove");
+        });
+
         TopBranch(config, "spend", spend =>
         {
             spend.Describe(

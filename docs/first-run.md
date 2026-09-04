@@ -124,6 +124,50 @@ an identifier but no number these paths can find is counted as unrecognised, and
 renamed field doesn't fail, it counts zero and returns a total that looks
 entirely reasonable.
 
+## Tasks and the backlog
+
+```
+loadout task declare add-the-widget doing --title "the widget nobody has added"
+loadout task list
+loadout task list --all
+loadout task remove add-the-widget
+```
+
+Kept apart from memory because the two answer different questions. A memory is
+something that **stays** true — how this machine behaves, what broke last time.
+A task is true today and stops being true. Mixing them fills the durable store
+with things that expire.
+
+Every state carries who said it and when, which is what makes it checkable.
+`task list` then asks the repository whether the record backs the claim up, and
+reports what it doesn't:
+
+```
+What the record does not back up
+  probe-b called done, and nothing has been committed since it was said.
+          That may be right - work does not always leave a commit.
+```
+
+**These are observations, not verdicts.** Corroboration can say a claim is
+unsupported; it can never say a claim is wrong. Two consequences follow, and
+both are deliberate:
+
+- Nothing is matched on commit messages. "Committed under a message that never
+  named the item" is the overwhelmingly common case, not a problem — flagging it
+  would make the report mostly noise, and a report that's mostly noise stops
+  being read.
+- A repository that can't be read reports **nothing** rather than an empty
+  history. With no commits, "nothing committed since" would fire on every task
+  at once — a confidently wrong answer where none was needed.
+
+Agents get the same thing over MCP: `loadout_tasks` answers "where were we" from
+the record, carrying the disagreements with it so a session is told *"you said
+this was done and nothing was committed"* rather than being handed its own claim
+back as fact. `loadout_task_declare` records a state and nothing else — it never
+launches, pushes or changes the machine, and what it writes is screened for
+credentials the way memory already is. That screening lives in the store, so
+every caller gets it rather than the one somebody remembered.
+
 ## What is running now
 
 ```

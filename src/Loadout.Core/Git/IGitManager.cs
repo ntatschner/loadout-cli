@@ -135,6 +135,19 @@ public interface IGitManager
     Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default);
 
     /// <summary>Lists the main working tree and any linked worktrees (spec section 71).</summary>
+    /// <summary>
+    /// Commits authored on or after a moment, newest first.
+    /// </summary>
+    /// <remarks>
+    /// Bounded by a date rather than a count, because the question it answers
+    /// is "has anything happened since", and a count would answer a different
+    /// one on a busy repository than on a quiet one.
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<Tasks.CommitSummary>>> ListCommitsAsync(
+        string repositoryPath,
+        DateTimeOffset since,
+        CancellationToken ct = default);
+
     Task<OperationResult<IReadOnlyList<GitWorktree>>> ListWorktreesAsync(
         string repositoryPath,
         CancellationToken ct = default);
