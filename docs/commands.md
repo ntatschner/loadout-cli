@@ -37,6 +37,7 @@
 | `loadout memory list\|write\|audit\|reindex <project>` | Record and check durable project facts |
 | `loadout memory import <project>` | Bring in memory an agent recorded outside the workspace |
 | `loadout memory audit --clean <project>` | Remove empty topics, exact repeats and dead index lines |
+| `loadout memory review [project]` | Walk the topics nobody has revisited, and keep or expire each |
 | `loadout memory find <query>` | Find the topics that answer a question, rather than reading the index |
 | `loadout memory write --separate` | Start a new topic even though existing ones cover similar ground |
 | `loadout memory write --scope user|machine` | Record a fact true of your work, or of this computer only |

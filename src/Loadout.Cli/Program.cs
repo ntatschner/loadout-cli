@@ -501,6 +501,7 @@ public static class Program
                 "facts remember notes knowledge");
             memory.AddCommand<MemoryListCommand>("list");
             memory.AddCommand<MemoryFindCommand>("find");
+            memory.AddCommand<MemoryReviewCommand>("review");
             memory.AddCommand<MemoryWriteCommand>("write");
             memory.AddCommand<MemoryAuditCommand>("audit");
             memory.AddCommand<MemoryReindexCommand>("reindex");
