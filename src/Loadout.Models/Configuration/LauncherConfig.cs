@@ -125,6 +125,17 @@ public sealed class StatuslineSettings
     public bool ShowContext { get; set; } = true;
 
     /// <summary>
+    /// Whether a crossed spending threshold is flagged here.
+    /// </summary>
+    /// <remarks>
+    /// Off unless somebody set a threshold, in the sense that it has nothing to
+    /// show until then. What it draws is the answer worked out at launch and
+    /// refreshed in the background, never a scan on the prompt's own time: that
+    /// takes seconds, and this line is redrawn several times a minute.
+    /// </remarks>
+    public bool ShowSpend { get; set; } = true;
+
+    /// <summary>
     /// Colour via ANSI escapes. Off produces a plain line, which is what a
     /// terminal that mangles escapes — or a test — wants.
     /// </summary>

@@ -34,17 +34,20 @@ internal sealed class SpendWatch : ISpendWatch
     private readonly IConfigurationService _configuration;
     private readonly IUsageService _usage;
     private readonly IPlanHeadroomReader _headroom;
+    private readonly ISpendNoticeStore _notices;
     private readonly TimeProvider _time;
 
     public SpendWatch(
         IConfigurationService configuration,
         IUsageService usage,
         IPlanHeadroomReader headroom,
+        ISpendNoticeStore notices,
         TimeProvider time)
     {
         _configuration = configuration;
         _usage = usage;
         _headroom = headroom;
+        _notices = notices;
         _time = time;
     }
 
@@ -105,6 +108,18 @@ internal sealed class SpendWatch : ISpendWatch
             said.Add(
                 $"{plan.Reading.Agent} reported {plan.Reading.UsedFraction:P0} of its "
                 + $"{plan.Reading.WindowName} used, as of {Ago(age)}.");
+        }
+
+        // Written down for whoever cannot afford to work it out. The status
+        // line runs on every prompt and this scan takes seconds, so it reads
+        // the answer rather than asking the question.
+        //
+        // Recorded even when there is nothing to say: an empty answer is a
+        // real answer, and leaving the previous one in place would keep
+        // showing a threshold that is no longer crossed.
+        if (projectSlug is { Length: > 0 } recorded)
+        {
+            await _notices.WriteAsync(recorded, said, ct).ConfigureAwait(false);
         }
 
         return said;

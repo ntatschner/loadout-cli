@@ -10,11 +10,17 @@ namespace Loadout.Core.Statusline;
 /// <param name="ProjectSlug">Registered slug for the repository, or null when it is not one of ours.</param>
 /// <param name="ProjectRoot">Repository root, used to shorten the directory.</param>
 /// <param name="Git">Branch and cleanliness, or null when git could not be asked.</param>
+/// <param name="Spend">
+/// The last answer the spending thresholds gave, read from disk rather than
+/// worked out here. Null when nothing has been computed, which is the state
+/// until somebody sets a threshold.
+/// </param>
 public sealed record StatuslineInputs(
     StatuslinePayload? Payload,
     string? ProjectSlug,
     string? ProjectRoot,
-    GitRepositoryState? Git);
+    GitRepositoryState? Git,
+    Usage.SpendNotice? Spend = null);
 
 /// <summary>
 /// Turns what the launcher knows into the one line Claude prints at the bottom
@@ -83,6 +89,15 @@ public static class StatuslineRenderer
                 percentage.ToString(CultureInfo.InvariantCulture) + "% ctx",
                 colour,
                 settings));
+        }
+
+        // Last, because it is the only segment that is not about this session.
+        // Everything to its left describes where you are; this describes what
+        // has been spent, and it is the thing to glance at rather than read.
+        if (settings.ShowSpend && inputs.Spend is { Lines.Count: > 0 })
+        {
+            segments.Add(Colour(
+                $"spend! ({inputs.Spend.Lines.Count})", Yellow, settings));
         }
 
         var separator = string.IsNullOrEmpty(settings.Separator) ? " | " : settings.Separator;

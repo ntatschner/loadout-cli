@@ -212,11 +212,18 @@ so a reading may simply not be there. That's reported as no answer, never as
 plenty of room left, and it always carries how old it is — an hours-old
 percentage shown as a live gauge is worse than no gauge.
 
-One thing this deliberately doesn't do: appear in the status line. That runs on
-every prompt, and a two-second transcript scan there would be felt on every
-keystroke. Warnings show at launch, where the cost is paid once. Putting it in
-the status line would mean caching the answer at launch and labelling it as of
-session start, which is a different feature from the one asked for.
+It does appear in the status line, without ever scanning there. The answer is
+written down whenever something works it out — at launch, or by
+`loadout spend refresh` — and the line reads that file in microseconds. When the
+figure goes stale the line starts a refresh **detached** and draws immediately;
+the number catches up a moment later rather than holding up the prompt.
+
+Exactly one caller gets to start that refresh. The line is redrawn several times
+a minute, and without a claim every one of those would see the same stale file
+and launch its own two-second scan.
+
+`loadout spend refresh` is worth running by hand after changing a threshold —
+otherwise you'd wait a quarter of an hour to find out whether you're over it.
 
 ## Pinning a model
 

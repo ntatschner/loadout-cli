@@ -493,6 +493,15 @@ public static class Program
             backup.AddCommand<BackupRestoreCommand>("restore");
         });
 
+        TopBranch(config, "spend", spend =>
+        {
+            spend.Describe(
+                "See and refresh where spending stands against your thresholds.",
+                CommandCategory.Integration,
+                "spend budget threshold tokens cost warning");
+            spend.AddCommand<SpendRefreshCommand>("refresh");
+        });
+
         TopBranch(config, "checkpoint", checkpoint =>
         {
             checkpoint.Describe(

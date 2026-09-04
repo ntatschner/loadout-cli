@@ -4,6 +4,7 @@ using Loadout.Core.Configuration;
 using Loadout.Core.Git;
 using Loadout.Core.Projects;
 using Loadout.Core.Statusline;
+using Loadout.Core.Usage;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Platform.Abstractions;
@@ -36,18 +37,37 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
     /// </summary>
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// How stale the spending figure may get before a refresh is started.
+    /// </summary>
+    /// <remarks>
+    /// Nothing like a live gauge, and it does not need to be: the number moves
+    /// over a working day, not over a prompt. The scan behind it takes seconds,
+    /// so it happens out of the way rather than on the line's own time.
+    /// </remarks>
+    private static readonly TimeSpan SpendStaleAfter = TimeSpan.FromMinutes(15);
+
     private readonly IConfigurationService _configuration;
     private readonly IProjectService _projects;
     private readonly IGitManager _git;
+    private readonly ISpendNoticeStore _spend;
+    private readonly IExecutableResolver _executables;
+    private readonly IProcessLauncher _processes;
 
     public StatuslineRenderCommand(
         IConfigurationService configuration,
         IProjectService projects,
-        IGitManager git)
+        IGitManager git,
+        ISpendNoticeStore spend,
+        IExecutableResolver executables,
+        IProcessLauncher processes)
     {
         _configuration = configuration;
         _projects = projects;
         _git = git;
+        _spend = spend;
+        _executables = executables;
+        _processes = processes;
     }
 
     /// <inheritdoc />
@@ -109,13 +129,74 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
             // print what is known. There is nowhere to report it to.
         }
 
+        SpendNotice? spend = null;
+
+        if (options.ShowSpend && slug is { Length: > 0 })
+        {
+            try
+            {
+                spend = await _spend.ReadAsync(slug, deadline.Token).ConfigureAwait(false);
+
+                StartRefreshIfDue(slug, spend);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
+            {
+                // A cache that cannot be read drops the segment. Nothing about
+                // spending is worth a prompt failing to draw.
+            }
+        }
+
         var line = StatuslineRenderer.Render(
-            new StatuslineInputs(payload, slug, root, git),
+            new StatuslineInputs(payload, slug, root, git, spend),
             options);
 
         Console.Out.WriteLine(line);
 
         return (int)ExitCode.Success;
+    }
+
+    /// <summary>
+    /// Starts a refresh of the spending figure, out of the way, when it is due.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Detached and not waited for. The whole point is that the line draws now
+    /// and the number catches up; waiting would put the two-second scan back on
+    /// the prompt, which is what the cache exists to avoid.
+    /// </para>
+    /// <para>
+    /// Claiming the refresh is what stops a stampede. This runs several times a
+    /// minute, and without the claim every one of those would see the same
+    /// stale file and start its own scan.
+    /// </para>
+    /// </remarks>
+    private void StartRefreshIfDue(string slug, SpendNotice? notice)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        if (notice is not null && now - notice.ComputedUtc < SpendStaleAfter)
+        {
+            return;
+        }
+
+        if (!_spend.ClaimRefresh(slug, now, SpendStaleAfter))
+        {
+            return;
+        }
+
+        if (Environment.ProcessPath is not { Length: > 0 } self
+            && _executables.Resolve("loadout") is not { Length: > 0 })
+        {
+            return;
+        }
+
+        var executable = Environment.ProcessPath is { Length: > 0 } path
+            ? path
+            : _executables.Resolve("loadout")!;
+
+        _processes.StartDetached(new ProcessRequest(
+            executable,
+            ["spend", "refresh", "--project", slug]));
     }
 
     /// <summary>The working directory, or null on the rare systems that refuse to say.</summary>
