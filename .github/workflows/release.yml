@@ -500,9 +500,10 @@ jobs:
           Archives work anywhere; the `.msi`, `.deb` and `.rpm` install
           `loadout` onto `PATH` for the current user or machine.
 
-          Tested on Windows x64, Linux x64 and macOS Apple Silicon. The
-          `win-arm64` and `linux-arm64` builds are cross-compiled and not
-          executed in CI, and macOS packages are not signed or notarised.
+          Tested on Windows x64, Linux x64, macOS Apple Silicon, Windows arm64
+          and Linux arm64. The arm64 binaries are cross-compiled from x64,
+          though the suite is executed on arm64 runners. macOS packages are not
+          signed or notarised.
 
           Verify a download against `SHA256SUMS`, then see the README for
           installation.
