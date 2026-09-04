@@ -49,13 +49,50 @@ public sealed class McpServerContractTests
             _process.Start();
         }
 
+        /// <summary>
+        /// How long a request may go unanswered before the test gives up.
+        /// </summary>
+        /// <remarks>
+        /// Generously above what the work actually takes. A mode change resolves
+        /// the whole library and scans the repository, and was measured at
+        /// thirty-one seconds on the machine this was written on — so thirty
+        /// seconds failed a passing test and looked exactly like a hang. The
+        /// number is not a performance budget; it is the line past which
+        /// waiting has stopped being useful.
+        /// </remarks>
+        private static readonly TimeSpan Answer = TimeSpan.FromSeconds(120);
+
         internal JsonElement Request(string method, object? parameters = null)
         {
             var id = ++_id;
 
             Send(new { jsonrpc = "2.0", id, method, @params = parameters ?? new { } });
 
-            var line = _process.StandardOutput.ReadLine();
+            string? line;
+
+            try
+            {
+                // Bounded, because an unbounded read here does not fail — it
+                // waits. A request that went unanswered once left this reading
+                // for ninety-three minutes: the test never reached its own
+                // disposal, so the server it started was never killed, and the
+                // whole run sat behind it with no output to say why. A hang
+                // with no log is the worst failure a suite can have, and it is
+                // worse than a wrong answer because nothing points at it.
+                using var cts = new CancellationTokenSource(Answer);
+
+                line = _process.StandardOutput
+                    .ReadLineAsync(cts.Token)
+                    .AsTask()
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException(
+                    $"'{method}' did not answer within {Answer.TotalSeconds:N0} seconds. The "
+                    + "server is still running and will be killed when this session is disposed.");
+            }
 
             line.Should().NotBeNullOrWhiteSpace($"'{method}' has to answer");
 
