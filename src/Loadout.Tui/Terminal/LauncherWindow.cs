@@ -326,6 +326,12 @@ internal sealed class LauncherWindow : Window
                 },
                 new MenuItem
                 {
+                    Title = "Launch _history and posture",
+                    Action = () => WithSelected(p =>
+                        RunCommand($"{LauncherCommands.Launches} --project {p.Entry.Slug}")),
+                },
+                new MenuItem
+                {
                     Title = "Explain _instructions",
                     Action = () => WithSelected(p =>
                         RunCommand($"{LauncherCommands.Instructions} --project {p.Entry.Slug}")),
@@ -422,6 +428,28 @@ internal sealed class LauncherWindow : Window
         // Ctrl+Q and the arrows and F10 all work. A key that passes its test
         // and fails on the machine is worse than no key, so this is F2, which
         // was pressed in a real console before being written down.
+        // Cost, history and standing sit behind a key rather than on the
+        // panel, which stays a page where every line answers a question you
+        // would otherwise type a command for. What the key runs is the ledger's
+        // own command: a screen never implements command behaviour, or there
+        // are two implementations and one of them drifts.
+        //
+        // F3, beside the F2 below, because that one was pressed in a real
+        // console before being written down and the function keys are the
+        // family that survived. This one has NOT been pressed on a real
+        // console by whoever added it — a key that passes its test and does
+        // nothing on the machine is worse than no key, so the menu item above
+        // reaches the same command without one.
+        this.BindEverywhere(Key.F3, Command.Context);
+
+        AddCommand(Command.Context, () =>
+        {
+            WithSelected(p => RunCommand(
+                $"{LauncherCommands.Launches} --project {p.Entry.Slug}"));
+
+            return true;
+        });
+
         this.BindEverywhere(Key.F2, Command.Edit);
 
         AddCommand(Command.Edit, () =>

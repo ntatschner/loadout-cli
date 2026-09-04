@@ -105,3 +105,37 @@ that reports back what was actually drawn, so the assertions are about what
 somebody would be looking at rather than about text that happened to be
 printed.
 
+## Sessions already running
+
+The panel's detail pane says so when something is already open against the
+selected project — "a session is running here". It's the one line there that
+changes what you'd do next rather than describing how things stand: launching a
+second agent into a repository you're already working in is the mistake it
+exists to prevent.
+
+It is **not** filed under "needs attention". A session running is a fact about
+right now, not a problem with the project, and putting it there would train you
+to skim that list.
+
+Nothing is said when nothing is running. A line reading "0 sessions" would cost
+attention on every project, every time.
+
+## Cost, history and standing
+
+These live behind a key rather than on the panel, which stays a page where every
+line answers a question you'd otherwise type a command for.
+
+- **F3**, or *Launch history and posture* in the menu, runs `loadout launches`
+  for the selected project: what was launched, in which posture, and how much
+  context each was given.
+- *Token usage for this project* runs `loadout usage`.
+
+What the key runs is the command itself, not a copy of it. A screen never
+implements command behaviour here, or there are two implementations and one of
+them drifts.
+
+**F3 has not been pressed on a real console.** F2 next to it was, before being
+written down, and the function keys are the family that survived — but a key
+that passes its test and does nothing on the machine is worse than no key, so
+the menu item reaches the same command without one. Worth trying once and
+telling me if it does nothing.
