@@ -115,6 +115,7 @@ public static class ServiceRegistration
         services.AddSingleton<Usage.IUsageService, Usage.UsageService>();
         services.AddSingleton<Usage.ITelemetryStore, Usage.TelemetryStore>();
         services.AddSingleton<Usage.IPlanHeadroomReader, Usage.CodexPlanHeadroom>();
+        services.AddSingleton<Usage.ISpendWatch, Usage.SpendWatch>();
 
         // The specialist layer: what an agent is told, and why. The library and
         // resolver hold no state of their own, so a singleton each is enough.

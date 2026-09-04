@@ -124,6 +124,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly Core.Sessions.ILaunchLedger _ledger;
     private readonly Core.Sessions.ISessionRegistry _running;
     private readonly IPolicyService _policies;
+    private readonly Core.Usage.ISpendWatch _spend;
 
     public AgentLauncher(
         IProjectService projects,
@@ -141,8 +142,10 @@ public sealed class AgentLauncher : IAgentLauncher
         Core.Mcp.IMcpService mcp,
         Core.Sessions.ILaunchLedger ledger,
         Core.Sessions.ISessionRegistry running,
-        IPolicyService policies)
+        IPolicyService policies,
+        Core.Usage.ISpendWatch spend)
     {
+        _spend = spend;
         _ledger = ledger;
         _running = running;
         _policies = policies;
@@ -370,6 +373,15 @@ public sealed class AgentLauncher : IAgentLauncher
             if (invocation.Warnings is not null)
             {
                 warnings.AddRange(invocation.Warnings);
+            }
+
+            // Where you stand, never a refusal, and nothing at all unless a
+            // threshold was set — the scan behind this reads the agents'
+            // transcripts and takes seconds.
+            foreach (var notice in await _spend
+                .WarningsAsync(project.Entry.Slug, ct).ConfigureAwait(false))
+            {
+                warnings.Add(notice);
             }
 
             // The agent inherits this process's terminal, so Ctrl+C, resize and

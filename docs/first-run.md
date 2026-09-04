@@ -124,6 +124,43 @@ an identifier but no number these paths can find is counted as unrecognised, and
 renamed field doesn't fail, it counts zero and returns a total that looks
 entirely reasonable.
 
+## Spend thresholds
+
+Thresholds tell you where you stand. They stop nothing, and that isn't a
+limitation to be fixed later — Loadout starts an agent and is then out of the
+loop, so a limit enforced at the door would be crossed by the very session it
+let in and nothing here would see it. Refusing to launch was considered and
+declined: a threshold that blocks work is one you set high enough never to fire.
+
+```yaml
+spend:
+  daily_tokens: 20000000
+  project_daily_tokens:
+    loadout-cli: 5000000
+  plan_warn_at: 0.8
+```
+
+`daily_tokens` is everything today, `project_daily_tokens` is one project today,
+and `plan_warn_at` is the share of a plan's rate window — on a subscription that
+is the number that actually constrains the work, because money isn't what runs
+out, the window is.
+
+**Nothing is read unless something is set.** Working out what's been spent means
+reading the agents' transcripts, measured at about two seconds on this machine,
+and that isn't a cost to put on everybody who never asked for a threshold. Zero
+means off rather than a limit the first token of the day crosses.
+
+Only Codex writes its standing in the rate window to disk, and only sometimes,
+so a reading may simply not be there. That's reported as no answer, never as
+plenty of room left, and it always carries how old it is — an hours-old
+percentage shown as a live gauge is worse than no gauge.
+
+One thing this deliberately doesn't do: appear in the status line. That runs on
+every prompt, and a two-second transcript scan there would be felt on every
+keystroke. Warnings show at launch, where the cost is paid once. Putting it in
+the status line would mean caching the answer at launch and labelling it as of
+session start, which is a different feature from the one asked for.
+
 ## Pinning a model
 
 Loadout never chose a model, so the choice was retyped after `--` every session

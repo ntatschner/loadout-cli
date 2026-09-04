@@ -62,6 +62,9 @@ public sealed class LauncherConfig
     /// file is not in the workspace and is not committed.
     /// </summary>
     public Policies.CommandPolicySettings Commands { get; set; } = new();
+
+    /// <summary>Token thresholds that produce a warning, and never a refusal.</summary>
+    public SpendSettings Spend { get; set; } = new();
 }
 
 /// <summary>
@@ -286,4 +289,47 @@ public sealed class UpdateSettings
 
     /// <summary>Release feed URL. May point at an internal, self-hosted location.</summary>
     public string? Source { get; set; }
+}
+
+/// <summary>
+/// Thresholds that say where you stand, and stop nothing.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Loadout starts an agent and is then out of the loop. It can tell you where
+/// you stand and it could refuse to start; it cannot stop a session that is
+/// already running. Offering a hard limit would be a promise the architecture
+/// cannot keep — the number would be crossed mid-session by the very work the
+/// limit was meant to bound, and nothing here would notice. So these warn, and
+/// refusing to launch was considered and declined: a threshold that blocks work
+/// is one people set high enough never to fire, which is the same as not having
+/// it.
+/// </para>
+/// <para>
+/// Nothing is checked unless something is set. Working out what has been spent
+/// means reading the agents' transcripts, which takes seconds rather than
+/// milliseconds, and that is not a cost to put on everybody who never asked for
+/// a threshold.
+/// </para>
+/// </remarks>
+public sealed class SpendSettings
+{
+    /// <summary>Tokens across everything in one day. Zero is no threshold.</summary>
+    public long DailyTokens { get; set; }
+
+    /// <summary>Tokens in one day for a named project. Zero or absent is no threshold.</summary>
+    public Dictionary<string, long> ProjectDailyTokens { get; set; } = [];
+
+    /// <summary>
+    /// The share of a plan's window, from 0 to 1, past which to say so. Zero is
+    /// no threshold.
+    /// </summary>
+    /// <remarks>
+    /// On a subscription this is the number that actually constrains the work:
+    /// money is not what runs out, the rate window is. Only Codex writes its
+    /// standing in that window to disk, and only sometimes, so a reading may
+    /// simply not be there — which is reported as no answer rather than as
+    /// plenty of room left.
+    /// </remarks>
+    public double PlanWarnAt { get; set; }
 }
