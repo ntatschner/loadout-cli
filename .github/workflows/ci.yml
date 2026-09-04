@@ -56,6 +56,16 @@ jobs:
             os: ubuntu-latest
           - name: macOS Apple Silicon
             os: macos-latest
+          # arm64 was cross-compiled and never executed for as long as GitHub
+          # offered nowhere to execute it. It has since: these labels went
+          # generally available for public repositories in August 2025 and
+          # reached private ones in January 2026. Running the suite here is what
+          # turns two of the six runtime identifiers from shipped-untested into
+          # shipped-tested, and it costs two matrix entries.
+          - name: Windows arm64
+            os: windows-11-arm
+          - name: Ubuntu arm64
+            os: ubuntu-24.04-arm
 
     steps:
       - uses: actions/checkout@v7
@@ -116,6 +126,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Still cross-compiled from x64, deliberately. A self-contained
+          # publish is a deterministic cross-compile and this path works; the
+          # gap worth closing was that nothing ever ran the result, and the test
+          # matrix above is where that is closed. Moving the release build onto
+          # a newer runner would put a working path at risk for nothing.
           - rid: win-x64
             os: windows-latest
           - rid: win-arm64
@@ -144,9 +159,6 @@ jobs:
           --self-contained true
           --output artifacts/${{ matrix.rid }}
 
-      # The arm64 binaries are cross-compiled and never executed here: GitHub
-      # offers no hosted arm64 Windows or Linux runner. Release notes must say
-      # so rather than implying tested parity on those architectures.
       - name: Upload binary
         uses: actions/upload-artifact@v7
         with:

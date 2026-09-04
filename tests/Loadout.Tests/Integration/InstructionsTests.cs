@@ -237,7 +237,13 @@ public sealed class InstructionsTests : IAsyncLifetime
     [Fact]
     public async Task The_index_is_not_treated_as_a_topic()
     {
-        await _memory.WriteAsync(_workspace.LocalPath, Slug, "one", "first", MemoryKind.Project, ["A fact about the build."]);
+        await _memory.WriteAsync(
+            _workspace.LocalPath,
+            Slug,
+            "one",
+            "what the build does on a clean checkout",
+            MemoryKind.Project,
+            ["A fact about the build."]);
 
         var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
 

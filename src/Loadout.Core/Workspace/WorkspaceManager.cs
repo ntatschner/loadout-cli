@@ -1,4 +1,5 @@
 using Loadout.Core.Configuration;
+using Loadout.Core.Security;
 using Loadout.Core.Git;
 using Loadout.Models;
 using Loadout.Models.Configuration;
@@ -378,6 +379,26 @@ public sealed class WorkspaceManager : IWorkspaceManager
         if (!IsCloned())
         {
             return OperationResult<bool>.Ok(false);
+        }
+
+        // The last place everything passes through before it is committed and,
+        // under an exit policy of "always", pushed without anybody being asked.
+        // Memory has been screened at the point of writing since it existed, on
+        // the reasoning that a credential committed is a credential disclosed;
+        // handoffs, instructions, notes, profiles and MCP definitions were not,
+        // and neither was anything an agent wrote into the workspace directly.
+        // Refused rather than redacted, which is the same answer memory gives.
+        var pending = await GetPendingChangesAsync(ct).ConfigureAwait(false);
+
+        if (pending.Succeeded && pending.Value is { Count: > 0 } changed)
+        {
+            var findings = WorkspaceSecrets.Scan(LocalPath, changed, ct);
+
+            if (findings.Count > 0)
+            {
+                return OperationResult<bool>.Fail(
+                    WorkspaceSecrets.Explain(findings), ExitCode.PolicyViolation);
+            }
         }
 
         // The format of spec section 46, so a workspace history reads as a

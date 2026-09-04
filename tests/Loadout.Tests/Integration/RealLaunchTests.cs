@@ -8,6 +8,7 @@ using Loadout.Core.Mcp;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
+using Loadout.Core.Sessions;
 using Loadout.Models.Agents;
 using Loadout.Models.Platform;
 using Loadout.Platform;
@@ -136,7 +137,10 @@ public sealed class RealLaunchTests : IAsyncLifetime
                 configuration),
             new PreflightService(git, new FakeSecretProvider()),
             new SecurityProfileService(_workspace, yaml),
-            new McpService(_workspace));
+            new McpService(_workspace),
+            new LaunchLedger(paths, permissions, TimeProvider.System),
+            new SessionRegistry(paths, permissions, new ProcessInspector(), TimeProvider.System),
+            new PolicyService(_workspace, git, paths, permissions, yaml));
 
         _repository = await CreateRepositoryAsync().ConfigureAwait(false);
 

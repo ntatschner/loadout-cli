@@ -27,6 +27,23 @@ public sealed class UsageSettings : GlobalSettings
     [CommandOption("--by <GROUPING>")]
     [Description("Break down by project, day, model or agent. Defaults to project.")]
     public string By { get; init; } = "project";
+
+    [CommandOption("--format <FORMAT>")]
+    [Description("markdown or csv, for a report to send somebody rather than read here.")]
+    public string? Format { get; init; }
+}
+
+/// <summary>How a usage report is written out.</summary>
+public enum UsageFormat
+{
+    /// <summary>A table for the terminal it was run in.</summary>
+    Terminal,
+
+    /// <summary>Prose and a table, to paste into a message or an issue.</summary>
+    Markdown,
+
+    /// <summary>Rows for a spreadsheet.</summary>
+    Csv,
 }
 
 /// <summary>
@@ -131,6 +148,29 @@ public sealed class UsageCommand : AsyncCommand<UsageSettings>
                     recordsUnrecognised = report.Integrity.RecordsUnrecognised,
                 },
             });
+
+            return CommandOutput.Success();
+        }
+
+        if (settings.Format is { Length: > 0 } named)
+        {
+            if (!Enum.TryParse<UsageFormat>(named, ignoreCase: true, out var format)
+                || format == UsageFormat.Terminal)
+            {
+                return output.Fail(
+                    $"'{named}' is not a format. Use markdown or csv.",
+                    Models.ExitCode.InvalidArguments);
+            }
+
+            // Written with the console's markup switched off. A report meant to
+            // be pasted somewhere else must not carry this terminal's colours
+            // into it.
+            foreach (var line in format == UsageFormat.Csv
+                ? Csv(report, rows, grouping)
+                : Markdown(report, rows, grouping))
+            {
+                output.WriteLine(Markup.Escape(line));
+            }
 
             return CommandOutput.Success();
         }
@@ -270,6 +310,103 @@ public sealed class UsageCommand : AsyncCommand<UsageSettings>
             "agent" or "agents" => "agent",
             _ => null,
         };
+
+    /// <summary>
+    /// The report as prose and a table, for somebody who is not at this
+    /// terminal.
+    /// </summary>
+    /// <remarks>
+    /// The caveat is written first rather than last. In a terminal it sits
+    /// under the table where the eye finishes; pasted into a message it would
+    /// end up below the fold, and a total nobody knows is incomplete is worse
+    /// than one nobody reads.
+    /// </remarks>
+    internal static IEnumerable<string> Markdown(
+        UsageReport report,
+        IReadOnlyList<UsageGroup> rows,
+        string grouping)
+    {
+        yield return $"## Agent usage since {report.Since:yyyy-MM-dd}";
+        yield return string.Empty;
+
+        if (report.Integrity.Caveat is { Length: > 0 } caveat)
+        {
+            yield return $"> {caveat}";
+            yield return string.Empty;
+        }
+
+        if (rows.Count == 0)
+        {
+            yield return "Nothing was recorded in this window.";
+
+            yield break;
+        }
+
+        yield return $"{report.Totals.Total:N0} tokens in total, "
+            + $"{report.Totals.Output:N0} of them output.";
+        yield return string.Empty;
+
+        yield return $"| By {grouping} | Total | Output | Cached |";
+        yield return "|---|---:|---:|---:|";
+
+        foreach (var row in rows)
+        {
+            yield return $"| {row.Name} | {row.Totals.Total:N0} | {row.Totals.Output:N0} | "
+                + $"{Share(row.Totals)} |";
+        }
+    }
+
+    /// <summary>
+    /// The rows, for a spreadsheet.
+    /// </summary>
+    /// <remarks>
+    /// Every figure and no prose. A caveat has nowhere to live in a CSV that
+    /// would not also break whatever reads it, so an incomplete report is left
+    /// to the other two formats to say so — and this is the format somebody
+    /// reaches for when they are going to do their own arithmetic anyway.
+    /// </remarks>
+    internal static IEnumerable<string> Csv(
+        UsageReport report,
+        IReadOnlyList<UsageGroup> rows,
+        string grouping)
+    {
+        yield return $"{grouping},registered,input,cache_read,cache_write,output,thinking,total";
+
+        foreach (var row in rows)
+        {
+            var totals = row.Totals;
+
+            yield return string.Join(',',
+                Field(row.Name),
+                row.IsRegistered ? "yes" : "no",
+                totals.Input,
+                totals.CacheRead,
+                totals.CacheWrite,
+                totals.Output,
+                totals.Thinking,
+                totals.Total);
+        }
+    }
+
+    /// <summary>
+    /// One CSV field, quoted when it has to be.
+    /// </summary>
+    /// <remarks>
+    /// A project name is somebody's own text and a directory path can hold a
+    /// comma. Writing it raw produces a file that parses into the wrong number
+    /// of columns, which is worse than failing.
+    /// </remarks>
+    private static string Field(string value) =>
+        value.Contains(',', StringComparison.Ordinal)
+        || value.Contains('"', StringComparison.Ordinal)
+        || value.Contains('\n', StringComparison.Ordinal)
+            ? "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\""
+            : value;
+
+    private static string Share(UsageTotals totals) =>
+        totals.Total > 0
+            ? $"{totals.CacheRead * 100.0 / totals.Total:N1}%"
+            : "0%";
 
     private static IReadOnlyList<UsageGroup> Rows(UsageReport report, string grouping) =>
         grouping switch

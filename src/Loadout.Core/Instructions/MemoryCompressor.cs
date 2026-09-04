@@ -196,8 +196,22 @@ public sealed class MemoryCompressor
     {
         foreach (var topic in topics)
         {
+            // Compression is not the case the similarity check exists for. It
+            // moves facts somebody already wrote, in bulk, from a preview they
+            // have already seen and approved; every topic it creates is grouped
+            // by the heading its facts sat under, so of course they resemble
+            // each other. Stopping here would ask a question about a decision
+            // already made.
             var write = await _memory
-                .WriteAsync(workspaceRoot, slug, topic.Name, topic.Description, topic.Kind, topic.Facts, ct)
+                .WriteAsync(
+                    workspaceRoot,
+                    slug,
+                    topic.Name,
+                    topic.Description,
+                    topic.Kind,
+                    topic.Facts,
+                    acknowledgedSimilar: true,
+                    ct)
                 .ConfigureAwait(false);
 
             if (write.Failed)

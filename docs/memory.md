@@ -141,6 +141,23 @@ Two checks keep memory worth loading:
   tense forever; a fact dated to the day it was written ("the highest migration
   is 0052") misleads within weeks. `loadout memory audit` reports those along
   with duplicates, oversize topics, stale entries and index rot.
+- **A second topic on the same ground is stopped, and the first one named.** This
+  is how memory comes to contradict itself: nothing is overwritten, both are
+  indexed, and a later session gets two answers with nothing to choose between
+  them. Contradictions arrive one fact at a time, at the moment something could
+  have been shown — so that's when it's shown. Add the fact to the topic named
+  back to you, or pass `--separate` when it really is a different subject.
+  Writing to a topic that already exists is never questioned: extending is the
+  thing this exists to encourage. Two shared words are needed, not one, because
+  a check that interrupts every write is one whose override becomes a habit.
+- **A description that can't be chosen from is refused.** Only the index reaches
+  a session's context — one name and one line per topic — so that line is the
+  whole basis for deciding whether to open the topic. "notes", or the topic's
+  own name said back, costs a session's attention on every launch and tells it
+  nothing, and the topic goes unread whatever is in it. `memory write` refuses
+  one before it is written and the audit reports the ones already there. What it
+  never judges is whether the description is *true*: that isn't checkable, and a
+  regular expression claiming to do it would be guessing with a straight face.
 
 `loadout memory audit --clean` removes what can be removed without judgement:
 topics holding no facts, facts repeated word for word, and index lines pointing
@@ -191,5 +208,7 @@ one, so it asks you to extend or delete an existing topic rather than add a
 second one next to it.
 
 Agents launched with the launcher's own tools can write findings as they go with
-`loadout_remember`, without leaving the session.
+`loadout_remember`, without leaving the session. It asks for the description
+rather than inventing one: what it generated before said that an agent had
+recorded something, which is the one thing a later session can already see.
 

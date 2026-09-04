@@ -220,6 +220,10 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
         [CommandOption("--kind <KIND>")]
         [Description("project, decision, lesson or reference. Defaults to project.")]
         public string? Kind { get; init; }
+
+        [CommandOption("--separate")]
+        [Description("Start a new topic even though existing ones cover similar ground.")]
+        public bool Separate { get; init; }
     }
 
     /// <inheritdoc />
@@ -276,7 +280,8 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
             settings.Topic,
             settings.Description ?? string.Empty,
             kind.Value,
-            settings.Facts).ConfigureAwait(false);
+            settings.Facts,
+            settings.Separate).ConfigureAwait(false);
 
         if (written.Failed)
         {

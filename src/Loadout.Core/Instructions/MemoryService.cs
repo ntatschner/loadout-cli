@@ -43,6 +43,26 @@ public interface IMemoryService
         CancellationToken ct = default);
 
     /// <summary>Creates or replaces a topic and refreshes the index.</summary>
+    /// <param name="workspaceRoot">Root of the workspace to write into.</param>
+    /// <param name="slug">Project the topic belongs to.</param>
+    /// <param name="name">Topic name, which is also the file name.</param>
+    /// <param name="description">The one line that reaches a session's context.</param>
+    /// <param name="kind">What sort of fact this is.</param>
+    /// <param name="facts">The facts themselves.</param>
+    /// <param name="acknowledgedSimilar">
+    /// That the writer has seen the topics already covering this ground and
+    /// meant to start a new one anyway.
+    /// <para>
+    /// A new topic beside an existing one on the same subject is how memory
+    /// comes to contradict itself: nothing is overwritten, both are indexed, and
+    /// a later session is given two answers with nothing to choose between them.
+    /// Contradictions arrive one fact at a time, at the moment something could
+    /// have been shown, so this is where the showing happens. Writing to a name
+    /// that already exists never asks — that is the extending this exists to
+    /// encourage.
+    /// </para>
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
     Task<OperationResult<MemoryTopic>> WriteAsync(
         string workspaceRoot,
         string slug,
@@ -50,6 +70,7 @@ public interface IMemoryService
         string description,
         MemoryKind kind,
         IReadOnlyList<string> facts,
+        bool acknowledgedSimilar = false,
         CancellationToken ct = default);
 
     /// <summary>
@@ -394,6 +415,20 @@ internal sealed partial class MemoryService : IMemoryService
                     $"is {topic.Bytes / 1024}KB. Consider splitting it by subject."));
             }
 
+            // A description that cannot be decided from is nearly as costly as
+            // none: the index line is paid for on every launch either way, and
+            // the topic goes unopened either way. Reported separately from the
+            // missing case because the fix is different — one is writing a line,
+            // the other is rewriting one somebody thought was fine.
+            if (!string.IsNullOrWhiteSpace(topic.Description)
+                && MemoryDescriptionClassifier.Classify(topic.Name, topic.Description)
+                    is var indexLine and not DescriptionVerdict.Decidable)
+            {
+                findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Info, "vague-description",
+                    $"cannot be chosen from its index line: "
+                    + $"{MemoryDescriptionClassifier.Explain(indexLine)}."));
+            }
+
             if (string.IsNullOrWhiteSpace(topic.Description))
             {
                 findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Info, "no-description",
@@ -486,6 +521,43 @@ internal sealed partial class MemoryService : IMemoryService
         }
     }
 
+    /// <summary>
+    /// How much of a new topic has to land on an existing one before it is
+    /// worth stopping for.
+    /// </summary>
+    /// <remarks>
+    /// Two distinct words rather than one. One is "build", or "the launcher",
+    /// which half a store has in common and which would stop every write; two is
+    /// the point at which the topics are plausibly about the same thing. A check
+    /// that interrupts every write is one whose override becomes a habit.
+    /// </remarks>
+    private const int SharedWordsWorthAsking = 2;
+
+    /// <summary>Existing topics that look like they already cover this ground.</summary>
+    private async Task<IReadOnlyList<MemoryMatch>> NeighboursAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        IReadOnlyList<string> facts,
+        CancellationToken ct)
+    {
+        var existing = await ListAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
+
+        if (existing.Failed || existing.Value is not { Count: > 0 } topics)
+        {
+            return [];
+        }
+
+        // The name and the facts together, because either alone misses a case:
+        // a topic named for its subject with facts that never repeat the word,
+        // and a topic whose name says little.
+        var query = name.Replace('-', ' ') + " " + string.Join(' ', facts);
+
+        return MemorySearch.Rank(topics, query, limit: 3)
+            .Where(match => match.Terms >= SharedWordsWorthAsking)
+            .ToList();
+    }
+
     /// <inheritdoc />
     public async Task<OperationResult<MemoryTopic>> WriteAsync(
         string workspaceRoot,
@@ -494,6 +566,7 @@ internal sealed partial class MemoryService : IMemoryService
         string description,
         MemoryKind kind,
         IReadOnlyList<string> facts,
+        bool acknowledgedSimilar = false,
         CancellationToken ct = default)
     {
         var safeName = Slugify(name);
@@ -507,6 +580,11 @@ internal sealed partial class MemoryService : IMemoryService
         // Refuses to write a credential rather than writing it and flagging it
         // afterwards. Once it is on disk and committed it is disclosed, and an
         // audit finding does not undo that.
+        //
+        // First of the two refusals, and the order matters: a write carrying
+        // both a credential and a weak description has to be turned away for the
+        // credential. Told to fix its description instead, the caller fixes it
+        // and writes the credential on the second attempt.
         foreach (var fact in facts)
         {
             var patterns = SecretScanner.Match(fact);
@@ -520,8 +598,47 @@ internal sealed partial class MemoryService : IMemoryService
             }
         }
 
+        // Only the index reaches a compiled context, so this one line is all a
+        // session has to decide whether the topic is worth opening. Refused
+        // here, where whoever is writing it still has the subject in mind:
+        // afterwards it is a chore nobody comes back for, and the topic goes
+        // unread rather than being found to be wrong.
+        var indexLine = MemoryDescriptionClassifier.Classify(safeName, description);
+
+        if (indexLine != DescriptionVerdict.Decidable)
+        {
+            return OperationResult<MemoryTopic>.Fail(
+                $"That description will not do: {MemoryDescriptionClassifier.Explain(indexLine)}. "
+                + "Only this line reaches a session's context, so say what question the topic "
+                + "answers, as in \"why installers fail with 1603 over a running app\".",
+                ExitCode.InvalidArguments);
+        }
+
         var directory = DirectoryFor(workspaceRoot, slug);
         var path = Path.Combine(directory, safeName + ".md");
+
+        // Only when a new topic is being started. Writing to a name that
+        // already exists is the extending this exists to encourage, and asking
+        // about it would train people to pass the flag every time.
+        if (!acknowledgedSimilar && !File.Exists(path))
+        {
+            var near = await NeighboursAsync(workspaceRoot, slug, safeName, facts, ct)
+                .ConfigureAwait(false);
+
+            if (near.Count > 0)
+            {
+                return OperationResult<MemoryTopic>.Fail(
+                    $"'{safeName}' would be a new topic beside ones already covering this:"
+                    + Environment.NewLine
+                    + string.Join(
+                        Environment.NewLine,
+                        near.Select(match => $"  {match.Topic.Name} — {match.Topic.Description}"))
+                    + Environment.NewLine
+                    + "Add the fact to one of those instead, or write it again saying this is "
+                    + "genuinely separate.",
+                    ExitCode.InvalidArguments);
+            }
+        }
 
         var builder = new StringBuilder()
             .AppendLine("---")

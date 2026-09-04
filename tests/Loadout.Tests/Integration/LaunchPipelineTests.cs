@@ -8,6 +8,7 @@ using Loadout.Core.Git;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
+using Loadout.Core.Sessions;
 using Loadout.Models.Agents;
 using Loadout.Models.Configuration;
 using Loadout.Models.Platform;
@@ -133,7 +134,10 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
                 configuration),
             new PreflightService(git, new FakeSecretProvider()),
             new SecurityProfileService(workspace, yaml),
-            new McpService(workspace));
+            new McpService(workspace),
+            new LaunchLedger(_paths, permissions, TimeProvider.System),
+            new SessionRegistry(_paths, permissions, new ProcessInspector(), TimeProvider.System),
+            new PolicyService(workspace, git, _paths, permissions, yaml));
     }
 
     public Task DisposeAsync()

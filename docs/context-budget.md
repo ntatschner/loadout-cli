@@ -32,6 +32,27 @@ loadout rules budget <project>
 Over the 20KB comfortable budget.
 ```
 
+`loadout instructions explain` adds the three layers together, in one unit, so
+there is a single figure for what a session costs before it starts:
+
+```text
+Context
+  Specialists                2,403
+  Instructions and rules         0
+  Memory index                 474
+  Every launch               2,877
+
+  Budget (specialists)      12,000
+  Usage                        20%
+```
+
+The ceiling is named for what it governs. It is enforced against the specialist
+layer and nothing else — that is the one the resolver negotiates down — so
+calling it the budget for the whole context would be a promise the launcher does
+not keep. Scoped rules are counted apart from the rest, because the whole reason
+the layers exist is that their prices differ and a total that added them would
+hide it.
+
 The 20 KB threshold is advisory and prompts a question rather than stopping a
 launch. It exists because an instruction layer that has grown for a year is
 rarely 20 KB of things every session needs; it is usually 20 KB of things some

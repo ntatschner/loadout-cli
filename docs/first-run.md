@@ -49,6 +49,81 @@ matters: installing the excludes first would make the very files migration
 exists to move become ignored, so setup would protect the repository and then
 report nothing to migrate. Clean up first, then stop it happening again.
 
+## Adding an agent nobody compiled in
+
+An agent under `custom_agents` needs an executable, arguments and environment to
+launch. To also appear in `loadout sessions` it has to say where it writes its
+transcripts:
+
+```yaml
+custom_agents:
+  scribe:
+    display_name: Scribe
+    executable: scribe
+    arguments: ["--context", "${COMPILED_CONTEXT_FILE}"]
+    transcripts:
+      root: "~/.scribe/sessions"
+      files: "*.jsonl"
+      recursive: true
+      session:
+        id: "sessionId"
+        directory: "cwd"
+        title: "meta.title"      # optional
+        first_line_only: false
+      usage:                     # optional; without it the agent is listed but not counted
+        timestamp: "timestamp"
+        directory: "cwd"
+        model: "message.model"
+        id: "message.id"
+        input: "message.usage.input_tokens"
+        output: "message.usage.output_tokens"
+        cache_read: "message.usage.cache_read_input_tokens"
+        cache_write_5m: "message.usage.cache_creation.ephemeral_5m_input_tokens"
+        cache_write_1h: "message.usage.cache_creation.ephemeral_1h_input_tokens"
+```
+
+Paths are dotted and name properties inside the JSON object on one line. That's
+the whole language: every transcript format seen so far puts what's wanted at a
+fixed place, and a query language nobody asked for is one that has to be
+documented, tested and kept.
+
+The field names above are an example of the *shape*, not a description of any
+real agent. Nothing ships describing an agent's format on its behalf, because a
+guess at somebody else's undocumented file would be wrong in a way that looks
+right. To write your own: find a transcript, look at one line of it, and name
+the properties holding the session's identifier and its working directory.
+
+`first_line_only` matters more than it looks. Codex opens each rollout with a
+metadata entry, so reading stops after one line; other agents repeat the working
+directory throughout, so it has to read until it has what it needs. Reading a
+whole conversation to put a name in a menu is the difference between a listing
+that's instant and one that isn't.
+
+A described agent taking the name of a built-in one **replaces** it. That's the
+point rather than an accident: these formats aren't published and change without
+notice, so when one breaks you can correct it here the same afternoon instead of
+waiting for a release.
+
+`id` under `usage` is worth setting even though it's optional. Agents copy
+earlier accounting into the transcript of a resumed conversation, and without
+something to tell one record from another there's no way to see a repeat, so
+they're all counted. That's the easiest way to produce a number that's wrong and
+looks right.
+
+Two limits, said rather than discovered. A title kept in a separate index file —
+as Codex does — can't be expressed, because there's no way to say "join these two
+files on an identifier"; those sessions list by directory instead. And there's
+one path per field with no alternatives: Claude's own reader has a fallback for a
+cache figure that's sometimes a nested object and sometimes a flat number, and
+that can't be said here. An agent whose format needs one has earned a reader
+written by hand.
+
+What the description misses is reported rather than absorbed. A record carrying
+an identifier but no number these paths can find is counted as unrecognised, and
+`loadout usage` says the totals are incomplete — because a reader that meets a
+renamed field doesn't fail, it counts zero and returns a total that looks
+entirely reasonable.
+
 ## Environments and security profiles
 
 A project can define environments, and selecting one changes both which

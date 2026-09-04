@@ -1,3 +1,4 @@
+using Loadout.Models.Configuration;
 using Loadout.Agents;
 using Loadout.Core.Configuration;
 using Loadout.Core.Context;
@@ -136,6 +137,7 @@ public sealed class LauncherTuiTests : IAsyncLifetime
                     new BackupService(paths, permissions, yaml, TimeProvider.System))),
             new SessionHistoryService(
                 [new ClaudeSessionHistory(environment), new CodexSessionHistory(environment)],
+                new DeclaredSessionHistories(new LauncherConfig(), environment),
                 _projects),
             new EmptyCatalogue(),
             new DriftService(_projects, overviews, git),

@@ -500,6 +500,7 @@ public static class Program
                 CommandCategory.AgentConfiguration,
                 "facts remember notes knowledge");
             memory.AddCommand<MemoryListCommand>("list");
+            memory.AddCommand<MemoryFindCommand>("find");
             memory.AddCommand<MemoryWriteCommand>("write");
             memory.AddCommand<MemoryAuditCommand>("audit");
             memory.AddCommand<MemoryReindexCommand>("reindex");
@@ -549,6 +550,7 @@ public static class Program
         Top<SessionListCommand>(config, "sessions");
         Top<ResumeCommand>(config, "resume");
         Top<UsageCommand>(config, "usage");
+        Top<LaunchesCommand>(config, "launches");
 
         TopBranch(config, "instructions", instructions =>
         {
@@ -560,9 +562,19 @@ public static class Program
             instructions.AddCommand<InstructionsShowCommand>("show");
             instructions.AddCommand<InstructionsExplainCommand>("explain");
             instructions.AddCommand<InstructionsAuditCommand>("audit");
+            instructions.AddCommand<InstructionsStatsCommand>("stats");
             instructions.AddCommand<InstructionsExportCommand>("export");
             instructions.AddCommand<InstructionsValidateCommand>("validate");
             instructions.AddCommand<InstructionsNewCommand>("new");
+        });
+
+        TopBranch(config, "docs", docs =>
+        {
+            docs.Describe(
+                "Whether the documentation still describes the repository.",
+                CommandCategory.Health,
+                "docs documentation stale links broken references audit");
+            docs.AddCommand<DocsAuditCommand>("audit");
         });
 
         TopBranch(config, "telemetry", telemetry =>

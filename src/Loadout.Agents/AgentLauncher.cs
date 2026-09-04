@@ -121,6 +121,9 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly IPreflightService _preflight;
     private readonly Core.Mcp.IMcpService _mcp;
     private readonly ISecurityProfileService _security;
+    private readonly Core.Sessions.ILaunchLedger _ledger;
+    private readonly Core.Sessions.ISessionRegistry _running;
+    private readonly IPolicyService _policies;
 
     public AgentLauncher(
         IProjectService projects,
@@ -135,8 +138,14 @@ public sealed class AgentLauncher : IAgentLauncher
         IInstructionService instructions,
         IPreflightService preflight,
         ISecurityProfileService security,
-        Core.Mcp.IMcpService mcp)
+        Core.Mcp.IMcpService mcp,
+        Core.Sessions.ILaunchLedger ledger,
+        Core.Sessions.ISessionRegistry running,
+        IPolicyService policies)
     {
+        _ledger = ledger;
+        _running = running;
+        _policies = policies;
         _projects = projects;
         _workspace = workspace;
         _configuration = configuration;
@@ -221,6 +230,10 @@ public sealed class AgentLauncher : IAgentLauncher
         var adapter = adapterResult.Value!;
         var runtimeDirectory = _paths.CreateRuntimeDirectory();
 
+        // Held out here so the entry is given up however the launch unwinds,
+        // not only when the agent exits tidily.
+        string? launchId = null;
+
         try
         {
             var compiled = await CompileContextAsync(
@@ -262,7 +275,14 @@ public sealed class AgentLauncher : IAgentLauncher
                     descriptor,
                     compiled.Value,
                     syncOutcome,
-                    environment),
+                    environment,
+
+                    // Hooks live in .git/hooks, which is per-clone and never
+                    // travels, so a fresh clone or a new worktree is
+                    // unprotected until somebody notices. Doctor has always
+                    // said so; this says it on the way into a session that is
+                    // about to write, which is while it can still be acted on.
+                    _policies.InspectHook(directoryResult.Value!)),
                 ct).ConfigureAwait(false);
 
             if (preflightResult.Failed)
@@ -352,12 +372,49 @@ public sealed class AgentLauncher : IAgentLauncher
                     new LaunchOutcome(0, syncOutcome, warnings, preflight, null));
             }
 
+            // Written before the agent starts rather than after it exits. A
+            // session that is killed, or that takes the terminal down with it,
+            // is exactly the one worth having a record of, and after the fact
+            // there is nothing left to write one from. The dry run returned
+            // above, so nothing here records a launch that did not happen.
+            var startedAt = DateTimeOffset.UtcNow;
+
+            launchId = await _ledger.RecordStartAsync(
+                new Core.Sessions.NewLaunch(
+                    project.Entry.Slug,
+                    project.Entry.Name,
+                    adapter.Name,
+                    request.Task,
+                    request.Profile,
+                    request.Worktree,
+                    compiled.Value?.Instructions),
+                ct).ConfigureAwait(false);
+
+            // The ledger says what happened; this says what is happening. Filed
+            // under the same identifier so the two can be read together.
+            await _running.RegisterAsync(
+                new Core.Sessions.NewSession(
+                    launchId,
+                    project.Entry.Slug,
+                    project.Entry.Name,
+                    adapter.Name,
+                    request.Worktree,
+                    context.WorkingDirectory),
+                ct).ConfigureAwait(false);
+
             var runResult = await _processes.RunInteractiveAsync(
                 new ProcessRequest(
                     invocation.Executable,
                     invocation.Arguments,
                     context.WorkingDirectory,
                     WithTelemetry(invocation.Environment, config.Telemetry)),
+                ct).ConfigureAwait(false);
+
+            // Closed either way, and the record says which happened: an ending
+            // with no exit code is an agent that never ran.
+            await _ledger.RecordEndAsync(
+                launchId,
+                runResult.Succeeded ? runResult.Value : (int?)null,
                 ct).ConfigureAwait(false);
 
             if (runResult.Failed)
@@ -368,6 +425,9 @@ public sealed class AgentLauncher : IAgentLauncher
             // Recorded after the agent exits so a failed launch does not
             // pollute the recent-projects ordering.
             await _projects.RecordLaunchAsync(project.Entry.Slug, adapter.Name, ct).ConfigureAwait(false);
+
+            await NoteMissingHandoffAsync(project.Entry.Slug, startedAt, warnings, ct)
+                .ConfigureAwait(false);
 
             var pending = await HandleExitPolicyAsync(
                 config, project.Entry.Name, adapter.Name, warnings, ct).ConfigureAwait(false);
@@ -384,6 +444,11 @@ public sealed class AgentLauncher : IAgentLauncher
         }
         finally
         {
+            if (launchId is not null)
+            {
+                await _running.ReleaseAsync(launchId).ConfigureAwait(false);
+            }
+
             CleanRuntimeDirectory(runtimeDirectory);
         }
     }
@@ -584,6 +649,79 @@ public sealed class AgentLauncher : IAgentLauncher
             ? OperationResult<CompiledContext?>.Fail(compiled.Error!, compiled.ExitCode)
             : OperationResult<CompiledContext?>.Ok(compiled.Value);
     }
+
+    /// <summary>
+    /// Says when a session ended without leaving anything for the next one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The consuming half of a handoff has always worked: one is compiled into
+    /// the next session's context, second to last in the plan. The producing
+    /// half depends on somebody thinking of it at the end of a session, which is
+    /// the moment the work is finished and nobody wants admin — and the exit
+    /// policy will then commit and push that absence without comment.
+    /// </para>
+    /// <para>
+    /// Said rather than done. Writing one automatically would produce a document
+    /// with nothing in it, which is worse than none: the next session is given a
+    /// handoff that says nothing and believes it has been handed over to.
+    /// </para>
+    /// <para>
+    /// Only when the session actually ran long enough to have worked something
+    /// out. A launch somebody closed after ten seconds has nothing to hand over,
+    /// and a nag after every one of those is a nag nobody reads.
+    /// </para>
+    /// </remarks>
+    private async Task NoteMissingHandoffAsync(
+        string slug,
+        DateTimeOffset startedAt,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        var latest = await _handoffs.GetLatestAsync(slug, ct).ConfigureAwait(false);
+
+        if (MissingHandoffWarning(slug, startedAt, DateTimeOffset.UtcNow, latest.Value) is { } warning)
+        {
+            warnings.Add(warning);
+        }
+    }
+
+    /// <summary>
+    /// The warning to give, or null when there is nothing worth saying.
+    /// </summary>
+    /// <remarks>
+    /// Separated from the fetching so every branch can be exercised. A session
+    /// long enough to be worth handing over is one no test can sit through, and
+    /// a rule nothing checks is a rule that drifts.
+    /// </remarks>
+    internal static string? MissingHandoffWarning(
+        string slug,
+        DateTimeOffset startedAt,
+        DateTimeOffset now,
+        HandoffDocument? latest)
+    {
+        if (now - startedAt < ShortestSessionWorthHandingOver)
+        {
+            return null;
+        }
+
+        // A handoff from a previous session is not this one's. It is already in
+        // the context this session was given, so treating it as sufficient
+        // would mean the reminder stops the first time anybody writes one and
+        // never comes back.
+        if (latest is { } handoff && handoff.WrittenUtc >= startedAt)
+        {
+            return null;
+        }
+
+        return "This session left no handoff. If the work is unfinished, write down what the next "
+            + $"one should know: loadout handoff create {slug}";
+    }
+
+    /// <summary>
+    /// Below this a session has nothing to hand over, so nothing is said.
+    /// </summary>
+    private static readonly TimeSpan ShortestSessionWorthHandingOver = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// Applies the exit policy of spec section 45 to whatever the session

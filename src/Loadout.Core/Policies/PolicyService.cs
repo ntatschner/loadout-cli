@@ -146,6 +146,24 @@ internal sealed class PolicyService : IPolicyService
     }
 
     /// <inheritdoc />
+    public HookState? InspectHook(string repositoryPath)
+    {
+        // A working tree keeps a .git file pointing elsewhere rather than a
+        // .git directory, and its hooks belong to the repository it was made
+        // from. Looking for them here would find nothing and report a clone as
+        // unprotected when it is not, which is a warning somebody would act on
+        // and be wrong about.
+        if (!Directory.Exists(Path.Combine(repositoryPath, ".git")))
+        {
+            return null;
+        }
+
+        var managed = HasManagedHook(repositoryPath);
+
+        return new HookState(managed, managed && !HasCurrentHook(repositoryPath));
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<string>> InstallGlobalExcludesAsync(CancellationToken ct = default)
     {
         var policyResult = await LoadPolicyAsync(ct).ConfigureAwait(false);

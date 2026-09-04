@@ -1,3 +1,4 @@
+using Loadout.Core.Policies;
 using Loadout.Core.Context;
 using Loadout.Core.Diagnostics;
 using Loadout.Core.Git;
@@ -36,6 +37,47 @@ public sealed class PreflightTests
         var result = await Service().RunAsync(Context());
 
         result.Value!.CanLaunch.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task An_unprotected_clone_is_said_before_the_session_starts_but_never_blocks_it()
+    {
+        // Hooks live in .git/hooks, which is per-clone and never travels, so a
+        // fresh clone is unprotected until somebody notices. Saying so on the
+        // way in is the moment it can still be acted on — and it is a warning,
+        // because an unprotected repository is a repository somebody may still
+        // have perfectly good reasons to work in.
+        var context = Context() with { Hook = new HookState(Installed: false, NeedsUpgrade: false) };
+
+        var result = await Service().RunAsync(context);
+
+        result.Value!.CanLaunch.Should().BeTrue();
+        result.Value.Checks.Should().Contain(check =>
+            check.Name == "Pre-commit protection" && check.Detail.Contains("loadout protect"));
+    }
+
+    [Fact]
+    public async Task A_hook_from_an_older_version_is_said_differently_from_a_missing_one()
+    {
+        // Protected in practice and still worth replacing. Telling somebody it
+        // is missing would send them looking for a problem they do not have.
+        var context = Context() with { Hook = new HookState(Installed: true, NeedsUpgrade: true) };
+
+        var result = await Service().RunAsync(context);
+
+        result.Value!.Checks.Should().Contain(check =>
+            check.Name == "Pre-commit protection" && check.Detail.Contains("older version"));
+    }
+
+    [Fact]
+    public async Task Nothing_is_said_when_protection_cannot_be_told_from_here()
+    {
+        // A working tree keeps its hooks in the repository it was made from.
+        // Reporting it as unprotected would be a warning somebody would act on
+        // and be wrong about, so the launcher passes null and this says nothing.
+        var result = await Service().RunAsync(Context() with { Hook = null });
+
+        result.Value!.Checks.Should().NotContain(check => check.Name == "Pre-commit protection");
     }
 
     [Fact]

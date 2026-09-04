@@ -1,3 +1,4 @@
+using System.Text;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Instructions;
@@ -37,11 +38,11 @@ public sealed class McpServeSettings : GlobalSettings
 /// </para>
 /// <para>
 /// Deliberately a small surface, and the same one the compiled context names:
-/// reading what this session was given, reading a specialist in full, and
-/// writing one fact to memory. Nothing here pushes to a remote, changes the
-/// machine, or starts an agent. A tool an agent can call unprompted is a
-/// decision made without anybody watching, so the set is the part of the
-/// launcher where that is safe.
+/// reading what this session was given, reading a specialist in full, searching
+/// what the project already knows, and writing one fact to memory. Nothing here
+/// pushes to a remote, changes the machine, or starts an agent. A tool an agent
+/// can call unprompted is a decision made without anybody watching, so the set
+/// is the part of the launcher where that is safe.
 /// </para>
 /// <para>
 /// Speaks JSON-RPC over stdin and stdout, so nothing it writes may go to
@@ -197,6 +198,61 @@ public sealed class LoadoutTools
             resolved.Value!.Selected.Select(s => $"{s.Specialist.Id} - {s.Reason}"));
     }
 
+    [McpServerTool(Name = "loadout_recall")]
+    [Description(
+        "Look for what this project already knows about something, before working it out again. "
+        + "The context carries only a one-line index of memory topics; this searches what is "
+        + "inside them. Matches words rather than meanings, so try the words the project would "
+        + "use. Ask before recording a fact, so an existing topic is extended rather than "
+        + "contradicted by a second one beside it.")]
+    public async Task<string> RecallAsync(
+        [Description("What you want to know, in your own words.")] string query,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here, so there is no memory to search.";
+        }
+
+        var listed = await _memory.ListAsync(_workspace.LocalPath, slug, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return listed.Error ?? "The memory store could not be read.";
+        }
+
+        var matches = MemorySearch.Rank(listed.Value!, query);
+
+        if (matches.Count == 0)
+        {
+            // Said plainly, because an agent told "nothing found" will otherwise
+            // record what it has just worked out as though it were new.
+            return "Nothing matched those words. It searches words rather than meanings, so "
+                + "the project may hold this under different ones.";
+        }
+
+        var answer = new StringBuilder();
+
+        foreach (var match in matches)
+        {
+            answer.AppendLine($"{match.Topic.Name} - {match.Topic.Description}");
+
+            // The facts themselves, not a summary of them. Nothing here reworks
+            // what somebody wrote down; a summarised memory is a memory that can
+            // say something its source did not.
+            foreach (var fact in match.Matched.Count > 0 ? match.Matched : match.Topic.Facts)
+            {
+                answer.AppendLine($"  - {fact}");
+            }
+        }
+
+        return answer.ToString().TrimEnd();
+    }
+
     [McpServerTool(Name = "loadout_remember")]
     [Description(
         "Record one durable fact about this project, so the next session starts with it. "
@@ -206,10 +262,22 @@ public sealed class LoadoutTools
         [Description("Short topic name, such as 'deploy' or 'schema'.")] string topic,
         [Description("The fact, in a sentence or two. Say what is true, not what you just did.")]
         string fact,
+        [Description(
+            "One line saying what question this topic answers, such as 'why installers fail with "
+            + "1603 over a running app'. It is the only thing a later session sees before "
+            + "deciding whether to open the topic, so it has to be worth reading on its own.")]
+        string description,
+        [Description(
+            "Only after being told existing topics already cover this ground, and having decided "
+            + "this really is a separate subject. Prefer recording the fact under one of the "
+            + "topics named back to you: a second topic beside the first is how memory comes to "
+            + "hold two answers with nothing to choose between them.")]
+        bool separate = false,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
         ArgumentException.ThrowIfNullOrWhiteSpace(fact);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
         var slug = await SlugAsync(ct).ConfigureAwait(false);
 
@@ -226,9 +294,15 @@ public sealed class LoadoutTools
                 _workspace.LocalPath,
                 slug,
                 topic,
-                $"Recorded by an agent working on {slug}.",
+
+                // Asked for rather than generated. What was written here before
+                // said an agent had recorded something, which is the one thing a
+                // later session can already see; the index line it produced was
+                // paid for on every launch and could not be chosen from.
+                description,
                 MemoryKind.Lesson,
                 [fact],
+                separate,
                 ct)
             .ConfigureAwait(false);
 

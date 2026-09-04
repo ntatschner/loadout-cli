@@ -124,14 +124,15 @@ The detail lives in **[docs/](docs/README.md)**:
 
 Milestones 1 to 4 are done, apart from macOS signing and notarisation.
 
-CI runs the full suite on Windows, Ubuntu and macOS Apple Silicon, and publishes
-all six runtime identifiers. The same tests run everywhere. Where a platform
-genuinely can't do something it gets reported as a missing capability rather
-than skipped quietly, and `loadout doctor` prints the matrix.
+CI runs the full suite on Windows x64, Ubuntu x64, macOS Apple Silicon, Windows
+arm64 and Ubuntu arm64, and publishes all six runtime identifiers. The same
+tests run everywhere. Where a platform genuinely can't do something it gets
+reported as a missing capability rather than skipped quietly, and
+`loadout doctor` prints the matrix.
 
-`win-arm64` and `linux-arm64` are cross-compiled but never executed, because no
-hosted runner offers them. They're built, not tested, and I'd rather say so than
-imply otherwise.
+The arm64 binaries are still cross-compiled from x64, which is a deterministic
+build and a path that works. What changed is that the code in them is now run:
+the suite executes on real arm64 runners on both Windows and Linux.
 
 ## Building
 
