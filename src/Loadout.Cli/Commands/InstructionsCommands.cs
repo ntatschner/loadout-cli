@@ -443,14 +443,60 @@ public sealed class InstructionsExplainSettings : GlobalSettings
     Intent = "why these instructions explain specialists selection reason context budget")]
 public sealed class InstructionsExplainCommand : InstructionsCommandBase<InstructionsExplainSettings>
 {
+    private readonly IRuleService _rules;
+    private readonly IMemoryService _memory;
+
     public InstructionsExplainCommand(
         IInstructionService instructions,
         IWorkspaceManager workspace,
         IProjectService projects,
         IGitManager git,
+        IRuleService rules,
+        IMemoryService memory,
         IAnsiConsole console)
         : base(instructions, workspace, projects, git, console)
     {
+        _rules = rules;
+        _memory = memory;
+    }
+
+    /// <summary>
+    /// What the other two layers cost, so the report can add all three.
+    /// </summary>
+    /// <remarks>
+    /// Read here rather than by the resolver, which has no business knowing
+    /// about rules or memory. Absent for a project with no workspace, and a
+    /// missing layer counts as nothing rather than as unknown: a session with no
+    /// memory really is paying nothing for it.
+    /// </remarks>
+    private async Task<(long Always, long Scoped, long MemoryIndex)> LayersAsync(
+        string? slug,
+        CancellationToken ct)
+    {
+        if (slug is null || WorkspacePath is null)
+        {
+            return (0, 0, 0);
+        }
+
+        var always = 0L;
+        var scoped = 0L;
+
+        var rules = await _rules.LoadAsync(WorkspacePath, slug, ct).ConfigureAwait(false);
+
+        if (rules.Succeeded)
+        {
+            always = rules.Value!
+                .Where(rule => rule.AlwaysApply || rule.IsUnscoped)
+                .Sum(rule => rule.Bytes);
+
+            scoped = rules.Value!
+                .Where(rule => !rule.AlwaysApply && !rule.IsUnscoped)
+                .Sum(rule => rule.Bytes);
+        }
+
+        var index = await _memory.ReadIndexAsync(WorkspacePath, slug, ct).ConfigureAwait(false);
+
+        return (always, scoped, index.Value?.Length ?? 0);
     }
 
     /// <inheritdoc />
@@ -531,7 +577,13 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             return CommandOutput.Success();
         }
 
-        Render(output, effective, settings.Task);
+        var counted = await LayersAsync(project?.Entry.Slug, cancellationToken).ConfigureAwait(false);
+
+        Render(
+            output,
+            effective,
+            settings.Task,
+            ContextBudget.From(effective, counted.Always, counted.Scoped, counted.MemoryIndex));
 
         return CommandOutput.Success();
     }
@@ -623,7 +675,8 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     private static void Render(
         CommandOutput output,
         EffectiveInstructions effective,
-        string? task)
+        string? task,
+        ContextBudget? layers)
     {
         output.WriteLine("[bold]Effective agent instructions[/]");
 
@@ -668,15 +721,47 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
 
         var budget = effective.Budget;
 
-        output.WriteLine($"  Estimated instruction tokens: {budget.EstimatedTokens:N0}");
+        if (layers is { } context)
+        {
+            // Every layer, in one unit, so the figure at the bottom means what
+            // it says. They have been counted separately and in different units
+            // until now — tokens for specialists, bytes for rules, nothing at
+            // all for the memory index — so there was no answer to what a
+            // session here costs.
+            foreach (var layer in context.Layers.Where(layer => layer.EveryLaunch))
+            {
+                output.WriteLine(
+                    $"  {layer.Name,-24} {layer.EstimatedTokens,7:N0}");
+            }
+
+            output.WriteLine($"  [bold]{"Every launch",-24} {context.EveryLaunchTokens,7:N0}[/]");
+
+            if (context.OnDemandTokens > 0)
+            {
+                output.WriteLine(
+                    $"  [dim]{"On demand",-24} {context.OnDemandTokens,7:N0}  "
+                    + "scoped rules, loaded only when the work touches them[/]");
+            }
+
+            output.WriteBlankLine();
+        }
+        else
+        {
+            output.WriteLine($"  {"Specialists",-24} {budget.EstimatedTokens,7:N0}");
+            output.WriteBlankLine();
+        }
 
         if (budget.TokenBudget > 0)
         {
             var colour = budget.IsOverBudget ? "red" : budget.IsNearBudget ? "yellow" : "green";
 
-            output.WriteLine($"  Budget: {budget.TokenBudget:N0}");
+            // Named for what it governs. The ceiling is enforced against the
+            // specialist layer and nothing else — it is what the resolver
+            // negotiates down to — so labelling it as the budget for the whole
+            // context would be a promise the launcher does not keep.
+            output.WriteLine($"  {"Budget (specialists)",-24} {budget.TokenBudget,7:N0}");
             output.WriteLine(
-                $"  Usage: [{colour}]{budget.UsedFraction * 100:N0}%[/]");
+                $"  {"Usage",-24} [{colour}]{budget.UsedFraction * 100,6:N0}%[/]");
         }
         else
         {
