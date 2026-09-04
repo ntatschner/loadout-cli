@@ -493,6 +493,18 @@ public static class Program
             backup.AddCommand<BackupRestoreCommand>("restore");
         });
 
+        TopBranch(config, "checkpoint", checkpoint =>
+        {
+            checkpoint.Describe(
+                "Mark where a project stands, under a name you can return to.",
+                CommandCategory.Workspace,
+                "checkpoint mark milestone save point before refactor return");
+            checkpoint.AddCommand<CheckpointCreateCommand>("create");
+            checkpoint.AddCommand<CheckpointListCommand>("list");
+            checkpoint.AddCommand<CheckpointRestoreCommand>("restore");
+            checkpoint.AddCommand<CheckpointRemoveCommand>("remove");
+        });
+
         TopBranch(config, "memory", memory =>
         {
             memory.Describe(

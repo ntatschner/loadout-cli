@@ -124,6 +124,33 @@ an identifier but no number these paths can find is counted as unrecognised, and
 renamed field doesn't fail, it counts zero and returns a total that looks
 entirely reasonable.
 
+## Checkpoints
+
+A checkpoint is a named marker binding four things that were already there
+separately: the project's workspace files as they were, the commit the
+repository was on, the handoff current at the time, and the session it was taken
+during. Nothing here is new except the record that they belong together.
+
+```
+loadout checkpoint create before-the-refactor --because "works, before I break it"
+loadout checkpoint list
+loadout checkpoint restore before-the-refactor          # previews
+loadout checkpoint restore before-the-refactor --apply  # writes
+loadout checkpoint remove before-the-refactor
+```
+
+**It never moves your repository.** Restoring puts the workspace files back and
+*tells you* the commit — checking one out can discard work nobody asked to lose,
+and doing that because you typed a checkpoint name is exactly the surprise
+preview-before-mutation exists to prevent. Running `git checkout` is yours.
+
+A checkpoint taken on a dirty tree says so, at the time and again on the way
+back: the commit it recorded doesn't describe everything that was on disk.
+
+Creating one never overwrites an existing name. A checkpoint exists to be
+returned to, and quietly replacing one is the single way this could destroy the
+thing it was built to protect — `remove` first if that's what you meant.
+
 ## Spend thresholds
 
 Thresholds tell you where you stand. They stop nothing, and that isn't a
