@@ -273,6 +273,11 @@ public sealed class LoadoutTools
             + "topics named back to you: a second topic beside the first is how memory comes to "
             + "hold two answers with nothing to choose between them.")]
         bool separate = false,
+        [Description(
+            "project (the default), user for something true of your work whatever the project, "
+            + "or machine for something true only of this computer. A machine fact recorded as "
+            + "a project one is a fact that syncs to machines it is false on.")]
+        string scope = "project",
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
@@ -303,6 +308,7 @@ public sealed class LoadoutTools
                 MemoryKind.Lesson,
                 [fact],
                 separate,
+                Scope(scope),
                 ct)
             .ConfigureAwait(false);
 
@@ -310,6 +316,12 @@ public sealed class LoadoutTools
             ? $"Recorded under '{topic}'."
             : written.Error ?? "It could not be recorded.";
     }
+
+    /// <summary>A named scope, defaulting to the project when it is not one we know.</summary>
+    private static MemoryScope Scope(string? name) =>
+        Enum.TryParse<MemoryScope>(name, ignoreCase: true, out var parsed)
+            ? parsed
+            : MemoryScope.Project;
 
     [McpServerTool(Name = "loadout_mode")]
     [Description(

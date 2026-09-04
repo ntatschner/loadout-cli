@@ -62,6 +62,11 @@ public interface IMemoryService
     /// encourage.
     /// </para>
     /// </param>
+    /// <param name="scope">
+    /// Who the fact is true for, which decides where it is kept. A fact about
+    /// this machine written under the project scope is a fact that syncs to
+    /// machines it is false on, which is the failure the scopes exist to stop.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     Task<OperationResult<MemoryTopic>> WriteAsync(
         string workspaceRoot,
@@ -71,6 +76,7 @@ public interface IMemoryService
         MemoryKind kind,
         IReadOnlyList<string> facts,
         bool acknowledgedSimilar = false,
+        MemoryScope scope = MemoryScope.Project,
         CancellationToken ct = default);
 
     /// <summary>
@@ -144,8 +150,20 @@ internal sealed partial class MemoryService : IMemoryService
     private const int MinimumComparableLength = 25;
 
     private readonly TimeProvider _time;
+    private readonly string? _machineRoot;
 
-    public MemoryService(TimeProvider time) => _time = time;
+    /// <param name="time">The clock, for judging staleness.</param>
+    /// <param name="machineRoot">
+    /// Where this machine keeps what is only true of it, which is outside the
+    /// workspace on purpose. Null where there is no machine-local store — the
+    /// scope is then reported as unavailable rather than quietly falling back to
+    /// the workspace, which would sync the one thing it exists to keep local.
+    /// </param>
+    public MemoryService(TimeProvider time, string? machineRoot = null)
+    {
+        _time = time;
+        _machineRoot = machineRoot;
+    }
 
     private static string DirectoryFor(string workspaceRoot, string slug) =>
         Path.Combine(workspaceRoot, "projects", slug, "memory");
@@ -153,15 +171,80 @@ internal sealed partial class MemoryService : IMemoryService
     private static string IndexFor(string workspaceRoot, string slug) =>
         Path.Combine(DirectoryFor(workspaceRoot, slug), "MEMORY.md");
 
+    /// <summary>
+    /// Where a scope's topics live.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The project scope sits under the project, as it always has. The user
+    /// scope sits at the top of the workspace, because it is about the person
+    /// rather than any one project and is as true on the next machine as on this
+    /// one — so it should travel with the workspace exactly as project memory
+    /// does.
+    /// </para>
+    /// <para>
+    /// The machine scope sits outside the workspace altogether. That is the
+    /// whole reason it is a separate scope: the workspace is a Git repository
+    /// that syncs, and "the Restart Manager is disabled here" is false on the
+    /// next machine. A fact that cannot travel must live somewhere that cannot
+    /// carry it.
+    /// </para>
+    /// </remarks>
+    private string? DirectoryFor(string workspaceRoot, string slug, MemoryScope scope) => scope switch
+    {
+        MemoryScope.Project => DirectoryFor(workspaceRoot, slug),
+        MemoryScope.User => Path.Combine(workspaceRoot, "memory"),
+
+        // Null rather than a guess. Without somewhere machine-local to write,
+        // the honest answer is that this scope is unavailable, not that it lives
+        // in the workspace after all — which would sync the one thing it exists
+        // to keep local.
+        _ => _machineRoot is { Length: > 0 } root ? Path.Combine(root, "memory") : null,
+    };
+
+    private string? IndexFor(string workspaceRoot, string slug, MemoryScope scope) =>
+        DirectoryFor(workspaceRoot, slug, scope) is { } directory
+            ? Path.Combine(directory, "MEMORY.md")
+            : null;
+
     /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<MemoryTopic>>> ListAsync(
         string workspaceRoot,
         string slug,
         CancellationToken ct = default)
     {
-        var directory = DirectoryFor(workspaceRoot, slug);
+        // Every scope, because a session working on this project is subject to
+        // all three: what is true of the project, what is true of this person's
+        // work, and what is true of this machine. Listing only one would be
+        // listing a third of what the session is actually given.
+        var all = new List<MemoryTopic>();
 
-        if (!Directory.Exists(directory))
+        foreach (var scope in Enum.GetValues<MemoryScope>())
+        {
+            var scoped = await ListAsync(workspaceRoot, slug, scope, ct).ConfigureAwait(false);
+
+            if (scoped.Succeeded)
+            {
+                all.AddRange(scoped.Value!);
+            }
+        }
+
+        return OperationResult<IReadOnlyList<MemoryTopic>>.Ok(
+            all.OrderBy(topic => topic.Scope)
+                .ThenBy(topic => topic.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList());
+    }
+
+    /// <summary>Topics in one scope.</summary>
+    private async Task<OperationResult<IReadOnlyList<MemoryTopic>>> ListAsync(
+        string workspaceRoot,
+        string slug,
+        MemoryScope scope,
+        CancellationToken ct)
+    {
+        var directory = DirectoryFor(workspaceRoot, slug, scope);
+
+        if (directory is null || !Directory.Exists(directory))
         {
             return OperationResult<IReadOnlyList<MemoryTopic>>.Ok([]);
         }
@@ -183,7 +266,10 @@ internal sealed partial class MemoryService : IMemoryService
 
             if (parsed.Succeeded)
             {
-                topics.Add(parsed.Value!);
+                // Stamped here rather than read from the file. Which scope a
+                // topic belongs to is decided by where it is, and a scope
+                // written into the frontmatter could disagree with that.
+                topics.Add(parsed.Value! with { Scope = scope });
             }
         }
 
@@ -567,6 +653,7 @@ internal sealed partial class MemoryService : IMemoryService
         MemoryKind kind,
         IReadOnlyList<string> facts,
         bool acknowledgedSimilar = false,
+        MemoryScope scope = MemoryScope.Project,
         CancellationToken ct = default)
     {
         var safeName = Slugify(name);
@@ -614,7 +701,14 @@ internal sealed partial class MemoryService : IMemoryService
                 ExitCode.InvalidArguments);
         }
 
-        var directory = DirectoryFor(workspaceRoot, slug);
+        if (DirectoryFor(workspaceRoot, slug, scope) is not { } directory)
+        {
+            return OperationResult<MemoryTopic>.Fail(
+                "There is no machine-local store on this machine, so a machine-scoped fact has "
+                + "nowhere to go that would not be committed to the workspace.",
+                ExitCode.ConfigurationInvalid);
+        }
+
         var path = Path.Combine(directory, safeName + ".md");
 
         // Only when a new topic is being started. Writing to a name that
@@ -682,7 +776,37 @@ internal sealed partial class MemoryService : IMemoryService
         string slug,
         CancellationToken ct = default)
     {
-        var listed = await ListAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
+        // Each scope keeps its own index beside its own topics. One index over
+        // all three would have to live somewhere, and wherever that was would
+        // be either synced when it should not be or absent when it should not
+        // be.
+        foreach (var scope in Enum.GetValues<MemoryScope>())
+        {
+            var rebuilt = await RebuildIndexAsync(workspaceRoot, slug, scope, ct)
+                .ConfigureAwait(false);
+
+            if (rebuilt.Failed)
+            {
+                return rebuilt;
+            }
+        }
+
+        return OperationResult.Ok();
+    }
+
+    /// <summary>Rewrites one scope's index from the topics it actually holds.</summary>
+    private async Task<OperationResult> RebuildIndexAsync(
+        string workspaceRoot,
+        string slug,
+        MemoryScope scope,
+        CancellationToken ct)
+    {
+        if (IndexFor(workspaceRoot, slug, scope) is not { } indexPath)
+        {
+            return OperationResult.Ok();
+        }
+
+        var listed = await ListAsync(workspaceRoot, slug, scope, ct).ConfigureAwait(false);
 
         if (listed.Failed)
         {
@@ -697,9 +821,21 @@ internal sealed partial class MemoryService : IMemoryService
         }
 
         var builder = new StringBuilder()
-            .AppendLine("# Project memory index")
+            .AppendLine(scope switch
+            {
+                MemoryScope.User => "# What is true of this person's work",
+                MemoryScope.Machine => "# What is true of this machine",
+                _ => "# Project memory index",
+            })
             .AppendLine()
-            .AppendLine("Durable facts about this project. Each line links to one topic.")
+            .AppendLine(scope switch
+            {
+                MemoryScope.User => "Durable facts that hold whatever the project.",
+                MemoryScope.Machine =>
+                    "Durable facts about this computer. Not committed anywhere, because they "
+                    + "are false on any other.",
+                _ => "Durable facts about this project. Each line links to one topic.",
+            })
             .AppendLine();
 
         foreach (var topic in topics)
@@ -714,7 +850,7 @@ internal sealed partial class MemoryService : IMemoryService
         try
         {
             await File
-                .WriteAllTextAsync(IndexFor(workspaceRoot, slug), builder.ToString(), ct)
+                .WriteAllTextAsync(indexPath, builder.ToString(), ct)
                 .ConfigureAwait(false);
             return OperationResult.Ok();
         }
@@ -926,23 +1062,55 @@ internal sealed partial class MemoryService : IMemoryService
         string slug,
         CancellationToken ct = default)
     {
-        var path = IndexFor(workspaceRoot, slug);
+        // All three indexes, one after another, because a session working on
+        // this project is subject to all three. Given only the project's, it
+        // would go on rediscovering what this person and this machine already
+        // know — which is the whole reason the other two scopes exist.
+        var parts = new List<string>();
 
-        if (!File.Exists(path))
+        foreach (var scope in Enum.GetValues<MemoryScope>())
         {
-            return OperationResult<string?>.Ok(null);
+            if (IndexFor(workspaceRoot, slug, scope) is not { } path || !File.Exists(path))
+            {
+                continue;
+            }
+
+            try
+            {
+                var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
+
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    parts.Add(scope == MemoryScope.Project
+                        ? text.TrimEnd()
+                        : $"{Heading(scope)}{Environment.NewLine}{Environment.NewLine}{text.TrimEnd()}");
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return OperationResult<string?>.Fail($"Could not read '{path}': {ex.Message}");
+            }
         }
 
-        try
-        {
-            return OperationResult<string?>.Ok(
-                await File.ReadAllTextAsync(path, ct).ConfigureAwait(false));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return OperationResult<string?>.Fail($"Could not read '{path}': {ex.Message}");
-        }
+        return OperationResult<string?>.Ok(parts.Count == 0
+            ? null
+            : string.Join(Environment.NewLine + Environment.NewLine, parts));
     }
+
+    /// <summary>
+    /// What to call a scope in the compiled index.
+    /// </summary>
+    /// <remarks>
+    /// The project's own index keeps no heading, so a project with nothing else
+    /// looks exactly as it always has. The other two are labelled, because a
+    /// session told "the Restart Manager is disabled" needs to know that is a
+    /// claim about the machine rather than about the code it is reading.
+    /// </remarks>
+    private static string Heading(MemoryScope scope) => scope switch
+    {
+        MemoryScope.User => "## Also true of this person's work, whatever the project",
+        _ => "## Also true of this machine only, and not of any other",
+    };
 
     private static string Truncate(string value) =>
         value.Length <= 70 ? value : value[..70] + "...";

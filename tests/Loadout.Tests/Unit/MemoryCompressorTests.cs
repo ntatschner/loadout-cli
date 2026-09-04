@@ -402,6 +402,7 @@ internal sealed class RefusingMemoryService : StubMemoryService
         MemoryKind kind,
         IReadOnlyList<string> facts,
         bool acknowledgedSimilar = false,
+        MemoryScope scope = MemoryScope.Project,
         CancellationToken ct = default) =>
         Task.FromResult(OperationResult<MemoryTopic>.Fail("the disk is full"));
 }
@@ -417,6 +418,7 @@ internal sealed class ForgetfulMemoryService : StubMemoryService
         MemoryKind kind,
         IReadOnlyList<string> facts,
         bool acknowledgedSimilar = false,
+        MemoryScope scope = MemoryScope.Project,
         CancellationToken ct = default) =>
         Task.FromResult(OperationResult<MemoryTopic>.Ok(new MemoryTopic(
             name, "path", description, kind, [], [], 0, DateTimeOffset.UtcNow)));
@@ -440,6 +442,7 @@ internal abstract class StubMemoryService : IMemoryService
         MemoryKind kind,
         IReadOnlyList<string> facts,
         bool acknowledgedSimilar = false,
+        MemoryScope scope = MemoryScope.Project,
         CancellationToken ct = default) =>
         throw new NotSupportedException();
 

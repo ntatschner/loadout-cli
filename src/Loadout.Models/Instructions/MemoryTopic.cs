@@ -1,5 +1,43 @@
 namespace Loadout.Models.Instructions;
 
+/// <summary>
+/// Who a memory topic is true for, which decides where it is kept.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Memory began with one scope, and a store written under it accumulates facts
+/// that are not about the project at all. This project's own memory holds
+/// "Restart Manager is disabled by policy", "spawned terminals inherit session
+/// markers" and "driving consoles kills live sessions", all filed under
+/// loadout-cli and not one of them about loadout-cli. Open another project and
+/// an agent rediscovers them the expensive way.
+/// </para>
+/// <para>
+/// Two extra scopes rather than one global tier, and the difference is the
+/// point. The workspace syncs between machines, so a fact that is true here and
+/// false on the next machine cannot live in it: "Restart Manager is off" is
+/// exactly that, and a single global scope would propagate it as though it were
+/// universal.
+/// </para>
+/// </remarks>
+public enum MemoryScope
+{
+    /// <summary>About this project. Lives with it and travels with the workspace.</summary>
+    Project,
+
+    /// <summary>
+    /// True of this person's work whatever the project. Travels with the
+    /// workspace, because it is as true on the next machine as on this one.
+    /// </summary>
+    User,
+
+    /// <summary>
+    /// True of this machine and no other. Kept outside the workspace so it is
+    /// never committed and never claims elsewhere what only holds here.
+    /// </summary>
+    Machine,
+}
+
 /// <summary>What a memory entry is about, which decides how it is treated.</summary>
 public enum MemoryKind
 {
@@ -40,6 +78,12 @@ public enum MemoryKind
 /// <param name="Links">Names this topic references with wiki-style links.</param>
 /// <param name="Bytes">Size on disk.</param>
 /// <param name="WrittenUtc">Last write time, used to spot topics nobody has revisited.</param>
+/// <param name="Scope">
+/// Who the topic is true for, decided by where the file is rather than by
+/// anything written inside it. A scope declared in frontmatter could disagree
+/// with the directory holding it, and then two answers would exist for a
+/// question with one.
+/// </param>
 public sealed record MemoryTopic(
     string Name,
     string Path,
@@ -48,7 +92,8 @@ public sealed record MemoryTopic(
     IReadOnlyList<string> Facts,
     IReadOnlyList<string> Links,
     long Bytes,
-    DateTimeOffset WrittenUtc);
+    DateTimeOffset WrittenUtc,
+    MemoryScope Scope = MemoryScope.Project);
 
 /// <summary>How serious a memory finding is.</summary>
 public enum MemoryFindingSeverity

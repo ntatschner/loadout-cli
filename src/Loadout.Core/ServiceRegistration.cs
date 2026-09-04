@@ -35,7 +35,13 @@ public static class ServiceRegistration
         services.AddSingleton<IPreflightService, PreflightService>();
         services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<IRuleService, RuleService>();
-        services.AddSingleton<IMemoryService, MemoryService>();
+        // The machine root comes from the platform rather than the workspace,
+        // because the whole point of the machine scope is that it is somewhere
+        // the workspace cannot carry away.
+        services.AddSingleton<IMemoryService>(provider => new MemoryService(
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>()
+                .Paths.State));
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<Instructions.MemoryCompressor>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();

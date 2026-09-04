@@ -221,6 +221,10 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
         [Description("project, decision, lesson or reference. Defaults to project.")]
         public string? Kind { get; init; }
 
+        [CommandOption("--scope <SCOPE>")]
+        [Description("project (the default), user, or machine for what is only true here.")]
+        public string? Scope { get; init; }
+
         [CommandOption("--separate")]
         [Description("Start a new topic even though existing ones cover similar ground.")]
         public bool Separate { get; init; }
@@ -253,6 +257,19 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
                 ExitCode.InvalidArguments);
         }
 
+        var scope = settings.Scope is null or ""
+            ? MemoryScope.Project
+            : Enum.TryParse<MemoryScope>(settings.Scope, ignoreCase: true, out var parsedScope)
+                ? parsedScope
+                : (MemoryScope?)null;
+
+        if (scope is null)
+        {
+            return output.Fail(
+                $"'{settings.Scope}' is not a scope. Use project, user or machine.",
+                ExitCode.InvalidArguments);
+        }
+
         var slug = await ResolveSlugAsync(settings).ConfigureAwait(false);
         if (slug.Failed)
         {
@@ -281,7 +298,8 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
             settings.Description ?? string.Empty,
             kind.Value,
             settings.Facts,
-            settings.Separate).ConfigureAwait(false);
+            settings.Separate,
+            scope.Value).ConfigureAwait(false);
 
         if (written.Failed)
         {
