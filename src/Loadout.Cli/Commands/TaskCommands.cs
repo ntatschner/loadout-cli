@@ -110,6 +110,8 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     item.Note,
                 }),
                 unsupported = disagreements.Select(d => new { task = d.TaskId, d.Detail }),
+                suggested = Suggestions.Compose(shown, disagreements)
+                    .Select(s => new { s.Text, source = s.Source.ToString().ToLowerInvariant() }),
             });
 
             return CommandOutput.Success();
@@ -154,6 +156,19 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             output.WriteLine(
                 "[dim]These are observations, not verdicts. Corroboration can say a claim is "
                 + "unsupported; it can never say one is wrong.[/]");
+        }
+
+        var suggested = Suggestions.Compose(shown, disagreements);
+
+        if (suggested.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("[bold]Next[/]  [dim]composed from the record above[/]");
+
+            foreach (var suggestion in suggested)
+            {
+                output.WriteLine($"  {Markup.Escape(suggestion.Text)}");
+            }
         }
 
         return CommandOutput.Success();

@@ -376,9 +376,33 @@ public sealed class LoadoutTools
         // separately. A session handed its own claim back as fact is the thing
         // this exists to prevent: it is the one reader that cannot tell the
         // difference, because it is usually the one that made the claim.
-        foreach (var disagreement in await CheckAsync(slug, listed.Value!, now, ct).ConfigureAwait(false))
+        var unsupported = await CheckAsync(slug, listed.Value!, now, ct).ConfigureAwait(false);
+
+        foreach (var disagreement in unsupported)
         {
             lines.Add($"  unsupported: {disagreement.TaskId} {disagreement.Detail}");
+        }
+
+        var composed = Core.Tasks.Suggestions.Compose(listed.Value!, unsupported);
+
+        if (composed.Count > 0)
+        {
+            // Labelled as composed, and kept apart from anything the session
+            // writes itself. These were assembled out of the states above, so
+            // they cannot be wrong about what they name; a reply the agent
+            // drafts can be confidently wrong about the same thing, and the
+            // only defence is that the two never arrive as one list.
+            lines.Add(string.Empty);
+            lines.Add("Composed from the record above - these cannot be wrong about what they name:");
+
+            foreach (var suggestion in composed)
+            {
+                lines.Add($"  {suggestion.Text}");
+            }
+
+            lines.Add(
+                "Anything you suggest beyond these is your own draft. Say so when you offer it, "
+                + "and offer it - none of this is done for you.");
         }
 
         return string.Join(Environment.NewLine, lines);

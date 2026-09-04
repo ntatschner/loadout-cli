@@ -168,6 +168,38 @@ launches, pushes or changes the machine, and what it writes is screened for
 credentials the way memory already is. That screening lives in the store, so
 every caller gets it rather than the one somebody remembered.
 
+## Suggested replies
+
+`task list` ends with a few short replies you can accept instead of composing:
+
+```
+Next  composed from the record above
+  continue widget
+  why is parser blocked
+  start docs
+```
+
+Offered in the order you'd act in — underway, then stuck, then what the record
+doesn't back up, then not started. A list opening with the untouched backlog
+would be answering a question nobody asked mid-session.
+
+**Composed and drafted are never blended, and that is the whole safety of it.**
+A composed reply can't be wrong about the state it names, because it was
+assembled *out of* that state. A reply an agent drafts can be confidently wrong
+about exactly the same thing, in exactly the same shape. The only defence anyone
+has is being told which they're looking at, and merging the two lists for
+tidiness would take that away.
+
+Over MCP the composed ones arrive labelled, with the session told plainly that
+anything further is its own draft and should say so.
+
+Note the wording: **check**, never **fix**. The record not backing a claim up
+isn't the same as the claim being wrong, and a suggestion saying "fix" would
+settle that question on nobody's authority.
+
+Nothing is ever taken automatically. Offering an action and performing it are
+different features, and only the first one is here.
+
 ## What is running now
 
 ```
