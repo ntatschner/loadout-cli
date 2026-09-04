@@ -377,6 +377,8 @@ public sealed class AgentLauncher : IAgentLauncher
             // is exactly the one worth having a record of, and after the fact
             // there is nothing left to write one from. The dry run returned
             // above, so nothing here records a launch that did not happen.
+            var startedAt = DateTimeOffset.UtcNow;
+
             launchId = await _ledger.RecordStartAsync(
                 new Core.Sessions.NewLaunch(
                     project.Entry.Slug,
@@ -423,6 +425,9 @@ public sealed class AgentLauncher : IAgentLauncher
             // Recorded after the agent exits so a failed launch does not
             // pollute the recent-projects ordering.
             await _projects.RecordLaunchAsync(project.Entry.Slug, adapter.Name, ct).ConfigureAwait(false);
+
+            await NoteMissingHandoffAsync(project.Entry.Slug, startedAt, warnings, ct)
+                .ConfigureAwait(false);
 
             var pending = await HandleExitPolicyAsync(
                 config, project.Entry.Name, adapter.Name, warnings, ct).ConfigureAwait(false);
@@ -644,6 +649,79 @@ public sealed class AgentLauncher : IAgentLauncher
             ? OperationResult<CompiledContext?>.Fail(compiled.Error!, compiled.ExitCode)
             : OperationResult<CompiledContext?>.Ok(compiled.Value);
     }
+
+    /// <summary>
+    /// Says when a session ended without leaving anything for the next one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The consuming half of a handoff has always worked: one is compiled into
+    /// the next session's context, second to last in the plan. The producing
+    /// half depends on somebody thinking of it at the end of a session, which is
+    /// the moment the work is finished and nobody wants admin — and the exit
+    /// policy will then commit and push that absence without comment.
+    /// </para>
+    /// <para>
+    /// Said rather than done. Writing one automatically would produce a document
+    /// with nothing in it, which is worse than none: the next session is given a
+    /// handoff that says nothing and believes it has been handed over to.
+    /// </para>
+    /// <para>
+    /// Only when the session actually ran long enough to have worked something
+    /// out. A launch somebody closed after ten seconds has nothing to hand over,
+    /// and a nag after every one of those is a nag nobody reads.
+    /// </para>
+    /// </remarks>
+    private async Task NoteMissingHandoffAsync(
+        string slug,
+        DateTimeOffset startedAt,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        var latest = await _handoffs.GetLatestAsync(slug, ct).ConfigureAwait(false);
+
+        if (MissingHandoffWarning(slug, startedAt, DateTimeOffset.UtcNow, latest.Value) is { } warning)
+        {
+            warnings.Add(warning);
+        }
+    }
+
+    /// <summary>
+    /// The warning to give, or null when there is nothing worth saying.
+    /// </summary>
+    /// <remarks>
+    /// Separated from the fetching so every branch can be exercised. A session
+    /// long enough to be worth handing over is one no test can sit through, and
+    /// a rule nothing checks is a rule that drifts.
+    /// </remarks>
+    internal static string? MissingHandoffWarning(
+        string slug,
+        DateTimeOffset startedAt,
+        DateTimeOffset now,
+        HandoffDocument? latest)
+    {
+        if (now - startedAt < ShortestSessionWorthHandingOver)
+        {
+            return null;
+        }
+
+        // A handoff from a previous session is not this one's. It is already in
+        // the context this session was given, so treating it as sufficient
+        // would mean the reminder stops the first time anybody writes one and
+        // never comes back.
+        if (latest is { } handoff && handoff.WrittenUtc >= startedAt)
+        {
+            return null;
+        }
+
+        return "This session left no handoff. If the work is unfinished, write down what the next "
+            + $"one should know: loadout handoff create {slug}";
+    }
+
+    /// <summary>
+    /// Below this a session has nothing to hand over, so nothing is said.
+    /// </summary>
+    private static readonly TimeSpan ShortestSessionWorthHandingOver = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// Applies the exit policy of spec section 45 to whatever the session

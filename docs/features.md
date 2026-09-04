@@ -138,6 +138,11 @@ loadout backup restore 20260901-204044-fd3512
 
 ### Also in the box
 
+A session that ran for a while and left no handoff is told so on the way out,
+with the command to write one. Said rather than done: a handoff written
+automatically would be a document with nothing in it, and the next session would
+be handed something that says nothing and believe it had been handed over to.
+
 Session listing and resume across agents, cross-agent handoff documents, MCP
 servers managed per project, secrets in the OS credential store, context
 profiles, project templates, editor integration, and a status line with project,

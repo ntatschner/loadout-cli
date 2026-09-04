@@ -526,7 +526,9 @@ internal sealed class ContextCompiler : IContextCompiler
             "- `loadout memory write <project> <topic>` - record a fact worth having next time; "
             + "it is screened for credentials and never takes a secret");
         builder.AppendLine(
-            "- `loadout handoff create <project>` - leave the next session what this one worked out");
+            "- `loadout handoff create <project>` - leave the next session what this one worked "
+            + "out. Worth doing before you finish whenever the work is unfinished: you know now "
+            + "what the next session will have to rediscover, and afterwards nobody does");
         builder.AppendLine();
         builder.AppendLine(
             "Anything that changes the machine or pushes to a remote is deliberately not listed: "
