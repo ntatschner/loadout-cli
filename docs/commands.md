@@ -46,7 +46,8 @@
 | `loadout instructions audit\|validate` | Check a project against what its specialists ask for, or check the library itself |
 | `loadout instructions new <id>` | Draft a specialist or skill in the workspace, or in one project |
 | `loadout instructions stats` | Say which specialists launches actually reached, and which none did |
-| `loadout usage [--days\|--by\|--project]` | What the agents have spent, by project, day, model or agent |
+| `loadout usage [--days|--by|--project]` | What the agents have spent, by project, day, model or agent |
+| `loadout usage --format markdown|csv` | The same report written to send somebody, or to open in a spreadsheet ||--by\|--project]` | What the agents have spent, by project, day, model or agent |
 | `loadout telemetry serve\|status` | Receive, locally, what launched agents report about their own usage |
 | `loadout statusline install\|uninstall\|show` | Put the project, branch and context spent in the agent's status line |
 | `loadout backup list\|restore` | Undo an operation that changed files |
