@@ -124,6 +124,33 @@ an identifier but no number these paths can find is counted as unrecognised, and
 renamed field doesn't fail, it counts zero and returns a total that looks
 entirely reasonable.
 
+## Exporting documentation
+
+```
+loadout docs export --type reference     --out docs/reference.md
+loadout docs export --type technical     --out docs/architecture.md
+loadout docs export --type machine-index --out docs/index.txt
+loadout docs export --type user-guide    --out docs/guide.md
+```
+
+**The four are not equally derivable, and the output says which is which.** The
+reference and machine index fall out of the code — always true, always dull,
+never need a person. The technical guide is the prose already sitting in your
+doc comments, arranged by module. The user guide is barely derivable at all,
+because what somebody wants to *do* isn't in the source.
+
+So the user guide is emitted as a **scaffold that says it is one**, and the
+command says so again on the way out. Generating it from symbols would produce
+something that reads like documentation, teaches nobody anything, and — worst of
+the three — looks finished enough that nobody writes the real thing.
+
+The scan is **lexical, not a parse**. It reads declarations the way you would
+skimming, which gets the overwhelming majority right and will miss a declaration
+split across lines. The alternative is Roslyn: a large dependency for a
+launcher, to produce a document nobody compiles. Where the scan is wrong it
+omits rather than invents, which is the failure worth having — so the reference
+calls itself an index rather than an authority.
+
 ## Tasks and the backlog
 
 ```

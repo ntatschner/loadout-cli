@@ -609,6 +609,7 @@ public static class Program
                 CommandCategory.Health,
                 "docs documentation stale links broken references audit");
             docs.AddCommand<DocsAuditCommand>("audit");
+            docs.AddCommand<DocsExportCommand>("export");
         });
 
         TopBranch(config, "telemetry", telemetry =>
