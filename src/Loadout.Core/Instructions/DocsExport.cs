@@ -43,13 +43,63 @@ public static class DocsExport
     /// <param name="type">Which document.</param>
     /// <param name="symbols">What the scan found.</param>
     /// <param name="projectName">What to call the thing being documented.</param>
+    /// <param name="frontMatter">
+    /// Whether to prefix the YAML header a static site generator reads.
+    /// </param>
     public static string Write(
+        DocsExportType type,
+        IReadOnlyList<Symbol> symbols,
+        string projectName,
+        bool frontMatter = false)
+    {
+        ArgumentNullException.ThrowIfNull(symbols);
+
+        var document = Body(type, symbols, projectName);
+
+        return frontMatter ? FrontMatter(type, projectName) + document : document;
+    }
+
+    /// <summary>
+    /// The header a static site generator reads before the Markdown.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Docusaurus and MkDocs both take plain Markdown, so this is the only
+    /// thing standing between the export and dropping straight into either.
+    /// Title and sidebar position and nothing else: every field beyond those
+    /// is a generator's own, and guessing at them is how a file works in one
+    /// tool and breaks in the next.
+    /// </para>
+    /// <para>
+    /// The title is quoted because a project can be called anything, and a
+    /// name with a colon in it turns a YAML document into a parse error at the
+    /// other end.
+    /// </para>
+    /// </remarks>
+    internal static string FrontMatter(DocsExportType type, string projectName)
+    {
+        var (title, position) = type switch
+        {
+            DocsExportType.Reference => ($"{projectName} reference", 3),
+            DocsExportType.Technical => ($"How {projectName} is put together", 2),
+            DocsExportType.UserGuide => ($"{projectName}: a guide", 1),
+            _ => ($"{projectName} symbol index", 4),
+        };
+
+        return new StringBuilder()
+            .AppendLine("---")
+            .AppendLine($"title: \"{title.Replace("\"", "'", StringComparison.Ordinal)}\"")
+            .AppendLine($"sidebar_position: {position}")
+            .AppendLine("---")
+            .AppendLine()
+            .ToString();
+    }
+
+    private static string Body(
         DocsExportType type,
         IReadOnlyList<Symbol> symbols,
         string projectName)
     {
-        ArgumentNullException.ThrowIfNull(symbols);
-
         return type switch
         {
             DocsExportType.Reference => Reference(symbols, projectName),

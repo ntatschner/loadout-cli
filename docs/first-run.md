@@ -154,6 +154,33 @@ The **machine index** opens with a digest of the modules and what each holds, so
 a session can pick a file to open instead of reading the tree, and follows it
 with one tab-separated line per symbol.
 
+### Publishing it
+
+`--front-matter` adds the YAML header Docusaurus and MkDocs read, so the files
+drop into either unchanged. Both consume plain Markdown otherwise, so there is
+no conversion step and no new dependency.
+
+`loadout docs ci` writes a GitHub Actions workflow that regenerates the
+documents. It says in its own first line that it is a starting point, and it
+means it: action versions move and runner images change, and neither is
+Loadout's to keep up with. It also assumes Loadout is on `PATH` and the project
+registered, and it **writes nothing back** — no commit, no pull request, no
+publish. Each of those writes somewhere, and where is a decision about your
+repository rather than a default worth guessing.
+
+**The user guide is excluded from the pipeline by default.** It is a scaffold,
+and a pipeline that regenerated and published it nightly would undo the entire
+reason for marking it as one. `--include-user-guide` overrides that, once you
+have read it.
+
+`llms.txt` never gets front matter, even when the flag is on. It is read by a
+model rather than rendered by a site, and a YAML preamble is noise in the one
+file whose purpose is to say where things are in as few tokens as possible.
+
+For CI this cannot write, `skill.publish-documentation` covers adapting the
+commands to whatever a repository already uses, and what to check before wiring
+any of it up.
+
 The scan is **lexical, not a parse**. It reads declarations the way you would
 skimming, which gets the overwhelming majority right and will miss a declaration
 split across lines. The alternative is Roslyn: a large dependency for a

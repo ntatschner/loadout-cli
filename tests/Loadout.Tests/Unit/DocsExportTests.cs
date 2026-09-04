@@ -346,4 +346,94 @@ public sealed class DocsExportTests
         Loadout.Cli.Commands.DocsExportCommand.TryReadType("nonsense", out _)
             .Should().BeFalse();
     }
+
+    [Fact]
+    public void The_header_a_site_generator_reads_is_off_unless_asked_for()
+    {
+        var plain = DocsExport.Write(DocsExportType.Reference, Scanned(), "Demo");
+        var withHeader = DocsExport.Write(DocsExportType.Reference, Scanned(), "Demo", frontMatter: true);
+
+        plain.Should().StartWith("# ");
+        withHeader.Should().StartWith("---");
+        withHeader.Should().Contain("sidebar_position:");
+    }
+
+    [Fact]
+    public void A_project_name_with_a_colon_does_not_break_the_header()
+    {
+        var header = DocsExport.FrontMatter(DocsExportType.UserGuide, "Thing: the sequel");
+
+        // A project can be called anything, and an unquoted colon turns the
+        // YAML into a parse error at the other end rather than here.
+        header.Should().Contain("title: \"Thing: the sequel: a guide\"");
+    }
+
+    [Fact]
+    public void The_guide_is_ordered_before_the_reference_in_a_sidebar()
+    {
+        // Somebody arriving at a documentation site wants the guide, not the
+        // symbol list. The order is the one useful opinion front matter can
+        // carry.
+        DocsExport.FrontMatter(DocsExportType.UserGuide, "Demo")
+            .Should().Contain("sidebar_position: 1");
+
+        DocsExport.FrontMatter(DocsExportType.Reference, "Demo")
+            .Should().Contain("sidebar_position: 3");
+    }
+
+    [Fact]
+    public void The_generated_workflow_leaves_the_scaffold_out()
+    {
+        var workflow = DocsWorkflow.GitHubActions("demo");
+
+        // The whole point of marking the guide as a scaffold is undone by a
+        // pipeline that publishes it nightly without anybody reading it.
+        workflow.Should().NotContain("--type user-guide");
+        workflow.Should().Contain("--type reference");
+        workflow.Should().Contain("scaffold");
+    }
+
+    [Fact]
+    public void The_scaffold_is_published_only_when_somebody_asks()
+    {
+        DocsWorkflow.GitHubActions("demo", includeUserGuide: true)
+            .Should().Contain("--type user-guide");
+    }
+
+    [Fact]
+    public void The_machine_index_never_gets_a_site_generator_header()
+    {
+        var lines = DocsWorkflow.GitHubActions("demo", frontMatter: true)
+            .Split('\n')
+            .Where(line => line.Contains("machine-index", StringComparison.Ordinal))
+            .ToList();
+
+        // Read by a model, not rendered by a site. A YAML preamble is noise in
+        // the one file whose whole purpose is to spend as few tokens as
+        // possible saying where things are.
+        lines.Should().ContainSingle().Which.Should().NotContain("--front-matter");
+    }
+
+    [Fact]
+    public void The_workflow_says_it_is_a_starting_point_in_its_first_line()
+    {
+        var workflow = DocsWorkflow.GitHubActions("demo");
+
+        // Action versions move and runner images change, and neither is this
+        // project's to track. A generated file that did not say so would be
+        // treated as a fixture and regenerated over whatever was adapted.
+        workflow.Split('\n')[0].Should().Contain("starting point");
+    }
+
+    [Fact]
+    public void The_workflow_writes_nothing_back_on_its_own()
+    {
+        var workflow = DocsWorkflow.GitHubActions("demo");
+
+        // Committing, opening a pull request and publishing all write
+        // somewhere, and where is a decision about somebody's repository
+        // rather than a default worth guessing.
+        workflow.Should().NotContain("git commit");
+        workflow.Should().NotContain("git push");
+    }
 }
