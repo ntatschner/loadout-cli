@@ -124,6 +124,48 @@ an identifier but no number these paths can find is counted as unrecognised, and
 renamed field doesn't fail, it counts zero and returns a total that looks
 entirely reasonable.
 
+## Adding an editor nobody compiled in
+
+Naming a different editor was always possible with `editor-command`. What it
+couldn't say is how that editor takes a **profile**, and that's the part worth
+having — it's what lets opening a project for Claude and for Codex give you
+different extensions and settings. Editors differ in kind here, not in spelling:
+
+```yaml
+custom_editors:
+  helix:
+    executable: hx
+    arguments: ["${DIRECTORY}"]
+    terminal: true
+    profile_environment: HELIX_RUNTIME
+```
+
+`${DIRECTORY}` is the folder being opened and `${PROFILE}` the profile chosen
+for it; both expand in arguments and in environment values, and an unset profile
+expands to nothing rather than to the literal text.
+
+A profile reaches the editor one of two ways. `profile_arguments` are added to
+the command line only when a profile was chosen, and `profile_environment` names
+a variable to set instead. Neovim is recognised by name and uses the second:
+`NVIM_APPNAME` names the configuration directory it loads, so a profile is a
+directory beside your `nvim` one and switching is nothing more than starting the
+editor.
+
+`terminal: true` says the editor draws on the terminal it was started from, so
+Loadout waits for it. A windowed editor is let go instead, because it outlives
+the launcher and there's no exit code worth having.
+
+The VS Code family is recognised by name and deliberately declares **no**
+`profile_arguments`. Asked for a folder and a profile together it opens a window
+containing neither and reports nothing; asked for the folder alone it opens every
+time. `loadout code` says the profile wasn't used rather than leaving you to
+find out. As with agents, a described editor taking the name of a built-in one
+replaces it — so if that's ever fixed, you can say so without waiting for us.
+
+An editor nothing knows about is never reported as having ignored a profile.
+"I can't check" and "it isn't there" are different answers, and only one of them
+sends somebody looking for a problem they don't have.
+
 ## Environments and security profiles
 
 A project can define environments, and selecting one changes both which

@@ -127,15 +127,24 @@ public sealed class CodeCommand : AsyncCommand<CodeCommand.Settings>
         output.WriteLine(
             $"Opened [bold]{Markup.Escape(project.Entry.Name)}[/] in {editor.Command}.");
 
-        // Told rather than left to be discovered. Asked for a folder and a
-        // profile in the same breath, the editor opens a window containing
-        // neither and reports nothing, so the profile is left off — and this is
-        // the only place that admits the setting was not honoured.
-        if (profile is { Length: > 0 })
+        if (profile is not { Length: > 0 })
+        {
+            return CommandOutput.Success();
+        }
+
+        // Said either way, because both answers are worth having and only one
+        // of them used to be possible. An editor that can be told a profile is
+        // confirmed to have been; one that cannot says so here, and this is the
+        // only place that admits the setting was not honoured.
+        if (editor.CanOpenAProfile)
+        {
+            output.WriteLine($"Under the [bold]{Markup.Escape(profile)}[/] profile.");
+        }
+        else
         {
             output.WriteLine(
                 $"[yellow]note[/] the [bold]{Markup.Escape(profile)}[/] profile was not used: "
-                + $"{editor.Command} will not open a folder and a profile together.");
+                + $"{editor.Command} {editor.Definition?.ProfileNote ?? "has no profile this can set."}");
         }
 
         return CommandOutput.Success();

@@ -45,6 +45,17 @@ public sealed class LauncherConfig
     /// has changed since this launcher was built.
     /// </summary>
     public Dictionary<string, Agents.GenericAgentDefinition> CustomAgents { get; set; } = [];
+
+    /// <summary>
+    /// User-defined editors, keyed by the name given to <c>editor-command</c>.
+    /// An entry whose key matches one this launcher already knows replaces it.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to <see cref="CustomAgents"/>, and worth having for the
+    /// same reason: naming a different command was always possible, but saying
+    /// how that command takes a profile was not, and the profile is the point.
+    /// </remarks>
+    public Dictionary<string, Editors.EditorDefinition> CustomEditors { get; set; } = [];
 }
 
 /// <summary>
