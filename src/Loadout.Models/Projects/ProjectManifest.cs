@@ -84,6 +84,29 @@ public sealed class ProjectAgents
     public List<string> Enabled { get; set; } = [];
 
     /// <summary>
+    /// The model this project's agent should use. Empty leaves the agent on
+    /// whatever it would have chosen.
+    /// </summary>
+    /// <remarks>
+    /// Written as the agent spells it, because the launcher translates the flag
+    /// and not the name: there is no shared vocabulary of models across agents,
+    /// and inventing one would mean maintaining a mapping that is wrong the
+    /// week either of them ships something new.
+    /// </remarks>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>Model per mode, overriding <see cref="Model"/> for that mode.</summary>
+    /// <remarks>
+    /// The whole reason this is worth pinning at all. Reviewing and
+    /// investigating are cheaper work than implementing, and the choice is
+    /// currently retyped after <c>--</c> every session or, more often,
+    /// forgotten. Nothing here infers anything: a mode named in the manifest
+    /// gets the model somebody chose for it, and a mode with no entry falls
+    /// back to the project's own.
+    /// </remarks>
+    public Dictionary<string, string> ModelByMode { get; set; } = [];
+
+    /// <summary>
     /// Per-agent settings keyed by agent name. Kept as a loose map rather than
     /// typed properties so a new adapter can be added without changing the
     /// schema — the adapter owns the shape of its own section (spec section 30:

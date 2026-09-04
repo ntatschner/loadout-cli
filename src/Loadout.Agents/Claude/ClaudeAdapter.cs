@@ -79,6 +79,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             [AgentCapabilities.SessionResume] = ["--resume", "--continue"],
             [PermissionMode] = ["--permission-mode"],
             [ToolRestrictions] = ["--allowed-tools", "--disallowed-tools"],
+            [ModelSelection] = ["--model"],
         };
 
     /// <summary>Capability key for the permission-mode option.</summary>
@@ -86,6 +87,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
     /// <summary>Capability key for the tool allow and deny options.</summary>
     private const string ToolRestrictions = "tool_restrictions";
+
+    /// <summary>Capability key for choosing the model.</summary>
+    private const string ModelSelection = "model_selection";
 
     /// <inheritdoc />
     public override async Task<OperationResult<AgentInvocation>> BuildInvocationAsync(
@@ -109,6 +113,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
         AddSecurityProfile(context, descriptor, arguments, warnings);
+        AddModel(context, descriptor, arguments, warnings);
 
         // Everything after a bare -- belongs to the agent untouched
         // (spec section 36), so it is appended last and never inspected.
@@ -433,6 +438,41 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// reach prompts and skills that were deliberately kept out of the
     /// application repository.
     /// </summary>
+
+    /// <summary>
+    /// Asks for the model the project pinned, where the agent can be told.
+    /// </summary>
+    /// <remarks>
+    /// Added before the passthrough arguments, so somebody who still types a
+    /// model after <c>--</c> gets the one they typed: the manifest ends the
+    /// retyping, it does not take the choice away. A build that cannot be told
+    /// says so rather than starting on a different model than the project asked
+    /// for, which is the kind of gap spec section 5 refuses to let disappear.
+    /// </remarks>
+    private static void AddModel(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Model is not { Length: > 0 } model)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(ModelSelection))
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise a model option, so the project's "
+                + $"model ({model}) was not applied.");
+
+            return;
+        }
+
+        arguments.Add("--model");
+        arguments.Add(model);
+    }
+
     private static void AddWorkspaceDirectory(
         AgentLaunchContext context,
         AgentDescriptor descriptor,

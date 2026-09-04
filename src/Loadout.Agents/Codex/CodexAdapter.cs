@@ -52,6 +52,7 @@ public sealed class CodexAdapter : AgentAdapterBase
             [AgentCapabilities.ExternalHome] = [CodexHomeVariable, "--config"],
             [AgentCapabilities.Sandboxing] = ["--sandbox"],
             [AgentCapabilities.SessionResume] = ["resume"],
+            [ModelSelection] = ["--model"],
         };
 
     /// <inheritdoc />
@@ -100,6 +101,7 @@ public sealed class CodexAdapter : AgentAdapterBase
         }
 
         AddSecurityProfile(context, descriptor, arguments, warnings);
+        AddModel(context, descriptor, arguments, warnings);
 
         arguments.AddRange(context.PassthroughArguments);
 
@@ -117,6 +119,44 @@ public sealed class CodexAdapter : AgentAdapterBase
     /// somebody else's machine.
     /// </para>
     /// </summary>
+
+    /// <summary>Capability key for choosing the model.</summary>
+    private const string ModelSelection = "model_selection";
+
+    /// <summary>
+    /// Asks for the model the project pinned, where the agent can be told.
+    /// </summary>
+    /// <remarks>
+    /// Added before the passthrough arguments, so somebody who still types a
+    /// model after <c>--</c> gets the one they typed. Whether this build takes
+    /// the option is asked rather than assumed: the marker is looked for in the
+    /// agent's own help, so a Codex that spells it differently reports the gap
+    /// instead of being handed a flag it does not have.
+    /// </remarks>
+    private static void AddModel(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Model is not { Length: > 0 } model)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(ModelSelection))
+        {
+            warnings.Add(
+                "This build of Codex does not advertise a model option, so the project's "
+                + $"model ({model}) was not applied.");
+
+            return;
+        }
+
+        arguments.Add("--model");
+        arguments.Add(model);
+    }
+
     private static void AddSecurityProfile(
         AgentLaunchContext context,
         AgentDescriptor descriptor,

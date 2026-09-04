@@ -351,7 +351,12 @@ public sealed class AgentLauncher : IAgentLauncher
                 // and a pre-approval that was dropped that way is said out
                 // loud — somebody who set one and never sees it work is owed
                 // the reason.
-                commandPolicy.PreApproved);
+                commandPolicy.PreApproved,
+
+                // Carried out, never inferred. This is a choice somebody wrote
+                // in the manifest; working one out from how hard the task looks
+                // would be a guess wearing a metric's clothes.
+                Core.Agents.ModelPolicy.For(manifest, request.Mode));
 
             var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
             if (invocationResult.Failed)

@@ -124,6 +124,43 @@ an identifier but no number these paths can find is counted as unrecognised, and
 renamed field doesn't fail, it counts zero and returns a total that looks
 entirely reasonable.
 
+## Pinning a model
+
+Loadout never chose a model, so the choice was retyped after `--` every session
+or, more often, forgotten. A project can pin one, and pin a different one per
+mode:
+
+```yaml
+agents:
+  default: claude
+  model: big-model
+  model_by_mode:
+    review: small-model
+    advise: small-model
+```
+
+Names are written the way the agent spells them. Loadout translates the *flag*,
+not the name — there's no shared vocabulary of models across agents, and
+inventing one would mean maintaining a mapping that's wrong the week either of
+them ships something new.
+
+The mode's entry wins over the project's; a project with no `model` at all
+leaves the agent on its own default, which is the common case. A build that
+doesn't advertise a model option is told about rather than quietly started on
+something else. And a model you still type after `--` wins over both: the
+manifest ends the retyping, it doesn't take the choice away.
+
+Nothing here infers anything. Choosing a model from how hard the work looks
+would mean reading difficulty out of token counts, which is a guess wearing a
+metric's clothes.
+
+`loadout launches` breaks launches down by posture, with the context size each
+was given. That is **not** spend, and it is deliberately not in `loadout usage`:
+what the agents record is per day, per directory and per model, so a day in
+which you reviewed and then implemented can't be split between the two. A mode
+column in a spend report would be a number you'd act on and nothing could
+support. For spend by model, `loadout usage --by model` already answers that.
+
 ## Adding an editor nobody compiled in
 
 Naming a different editor was always possible with `editor-command`. What it

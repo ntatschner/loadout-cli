@@ -147,6 +147,25 @@ public sealed class LaunchesCommand : AsyncCommand<LaunchesCommand.Settings>
                 + $"[dim]{Markup.Escape(Label(launch))}[/]");
         }
 
+        var modes = Loadout.Core.Sessions.LaunchStatistics
+            .From(launches, new Dictionary<string, int>()).Modes ?? [];
+
+        if (modes.Count > 1)
+        {
+            // Only worth the lines when there is a comparison to make. One
+            // mode is not a breakdown, it is the same number twice.
+            output.WriteBlankLine();
+            output.WriteLine("[bold]By posture[/]  [dim]context put in front of the agent, not spend[/]");
+
+            foreach (var mode in modes)
+            {
+                output.WriteLine(
+                    $"  {Markup.Escape(mode.Mode),-11} "
+                    + $"{mode.Launches,4} launch(es)  "
+                    + $"[dim]{mode.EstimatedTokens:N0} tokens composed[/]");
+            }
+        }
+
         output.WriteBlankLine();
         output.WriteLine(
             $"[dim]{launches.Count} launch(es). One in full: "

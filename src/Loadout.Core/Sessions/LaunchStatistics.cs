@@ -14,6 +14,22 @@ namespace Loadout.Core.Sessions;
 /// </param>
 public sealed record SpecialistUsage(string Id, int Launches, int TokensNow);
 
+/// <summary>What was launched in one mode.</summary>
+/// <param name="Mode">The mode, or "none" for launches that named none.</param>
+/// <param name="Launches">How many launches took that posture.</param>
+/// <param name="EstimatedTokens">
+/// The context Loadout put in front of the agent, added up.
+/// </param>
+/// <remarks>
+/// Not spend, and the distinction is the whole reason this is separate from
+/// 'usage'. What the agents record is per day, per directory and per model, so
+/// a day in which somebody reviewed and then implemented cannot be split
+/// between the two — and a mode column in a spend report would be a number
+/// somebody would act on and nothing could support. This counts what the
+/// launcher itself decided, which it knows exactly.
+/// </remarks>
+public sealed record ModeUsage(string Mode, int Launches, long EstimatedTokens);
+
 /// <summary>
 /// What the ledger says about the specialist library.
 /// </summary>
@@ -40,16 +56,21 @@ public sealed record SpecialistUsage(string Id, int Launches, int TokensNow);
 /// <param name="Loaded">Specialists that were composed, most often first.</param>
 /// <param name="NeverLoaded">Specialists in the library that no launch reached.</param>
 /// <param name="LibrarySize">How many specialists the library holds.</param>
+/// <param name="Modes">
+/// Launches grouped by the posture they took, with the context each was given.
+/// Never spend: see <see cref="ModeUsage"/>.
+/// </param>
 public sealed record LaunchStatistics(
     int Launches,
     int NeverClosed,
     long EstimatedTokens,
     IReadOnlyList<SpecialistUsage> Loaded,
     IReadOnlyList<string> NeverLoaded,
-    int LibrarySize)
+    int LibrarySize,
+    IReadOnlyList<ModeUsage>? Modes = null)
 {
     /// <summary>Nothing recorded yet, which is the state on the day this ships.</summary>
-    public static readonly LaunchStatistics Empty = new(0, 0, 0, [], [], 0);
+    public static readonly LaunchStatistics Empty = new(0, 0, 0, [], [], 0, []);
 
     /// <summary>
     /// Adds up a window of launches against the library as it stands.
@@ -97,6 +118,26 @@ public sealed record LaunchStatistics(
             records.Sum(record => (long)record.EstimatedTokens),
             loaded,
             neverLoaded,
-            library.Count);
+            library.Count,
+            ByMode(records));
     }
+
+    /// <summary>Launches grouped by the posture they were started in.</summary>
+    /// <remarks>
+    /// Ordered by how much was launched rather than alphabetically, because the
+    /// question this answers is which posture the work is actually done in, and
+    /// the answer should be the first line.
+    /// </remarks>
+    private static IReadOnlyList<ModeUsage> ByMode(IReadOnlyList<LaunchRecord> records) =>
+    [
+        .. records
+            .GroupBy(record => record.Mode is { Length: > 0 } mode ? mode : "none",
+                StringComparer.Ordinal)
+            .Select(group => new ModeUsage(
+                group.Key,
+                group.Count(),
+                group.Sum(record => (long)record.EstimatedTokens)))
+            .OrderByDescending(mode => mode.Launches)
+            .ThenBy(mode => mode.Mode, StringComparer.Ordinal),
+    ];
 }

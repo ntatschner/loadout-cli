@@ -44,6 +44,11 @@ namespace Loadout.Agents;
 /// reached for that itself could be given a different answer than the launcher
 /// resolved.
 /// </param>
+/// <param name="Model">
+/// The model the project pinned for this launch, or null to leave the agent on
+/// its own default. Named as the agent spells it: the launcher translates the
+/// flag, not the name.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -56,7 +61,8 @@ public sealed record AgentLaunchContext(
     Models.Policies.SecurityProfile? Security = null,
     string? ResumeSessionId = null,
     IReadOnlyList<string>? McpConfigFiles = null,
-    IReadOnlyList<string>? PreApprovedCommands = null);
+    IReadOnlyList<string>? PreApprovedCommands = null,
+    string? Model = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>
