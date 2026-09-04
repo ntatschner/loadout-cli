@@ -15,12 +15,17 @@ namespace Loadout.Core.Statusline;
 /// worked out here. Null when nothing has been computed, which is the state
 /// until somebody sets a threshold.
 /// </param>
+/// <param name="Specialists">
+/// What the last launch composed, read from disk. Null when nothing has
+/// launched, which is the state in a session started outside the launcher.
+/// </param>
 public sealed record StatuslineInputs(
     StatuslinePayload? Payload,
     string? ProjectSlug,
     string? ProjectRoot,
     GitRepositoryState? Git,
-    Usage.SpendNotice? Spend = null);
+    Usage.SpendNotice? Spend = null,
+    LoadedSpecialists? Specialists = null);
 
 /// <summary>
 /// Turns what the launcher knows into the one line Claude prints at the bottom
@@ -88,6 +93,19 @@ public static class StatuslineRenderer
             segments.Add(Colour(
                 percentage.ToString(CultureInfo.InvariantCulture) + "% ctx",
                 colour,
+                settings));
+        }
+
+        if (settings.ShowSpecialists && inputs.Specialists is { Ids.Count: > 0 } loaded)
+        {
+            // A count, not a list. Seventy-odd ids will not fit on a line
+            // somebody is trying to read past, and the number is the part that
+            // changes: it says the composition is what you think it is.
+            segments.Add(Colour(
+                loaded.Mode is { Length: > 0 } mode
+                    ? $"{loaded.Ids.Count} spec/{mode}"
+                    : $"{loaded.Ids.Count} spec",
+                Dim,
                 settings));
         }
 

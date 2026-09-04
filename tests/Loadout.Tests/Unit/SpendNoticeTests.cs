@@ -22,6 +22,13 @@ public sealed class SpendNoticeTests
 
     private static (SpendNoticeStore Store, string Home) Fresh()
     {
+        var (store, home, _) = FreshPaths();
+
+        return (store, home);
+    }
+
+    private static (SpendNoticeStore Store, string Home, Loadout.Platform.Abstractions.IPlatformPaths Paths) FreshPaths()
+    {
         var home = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
 
         Directory.CreateDirectory(home);
@@ -50,7 +57,7 @@ public sealed class SpendNoticeTests
 
         paths.EnsureDirectoriesExist();
 
-        return (new SpendNoticeStore(paths, new YamlStore(permissions)), home);
+        return (new SpendNoticeStore(paths, new YamlStore(permissions)), home, paths);
     }
 
     [Fact]
@@ -234,5 +241,102 @@ public sealed class SpendNoticeTests
             new StatuslineSettings { Colour = false, ShowSpend = false });
 
         line.Should().NotContain("spend");
+    }
+
+    [Fact]
+    public void The_specialist_count_appears_only_once_a_launch_has_written_one()
+    {
+        var settings = new StatuslineSettings { Colour = false };
+
+        string Render(LoadedSpecialists? loaded) =>
+            StatuslineRenderer.Render(
+                new StatuslineInputs(null, "demo", null, null, null, loaded), settings);
+
+        // Nothing has launched, so there is nothing to say. A session started
+        // outside the launcher is in exactly this state and must not be told
+        // it composed zero specialists.
+        Render(null).Should().NotContain("spec");
+        Render(new LoadedSpecialists { LoadedUtc = Now }).Should().NotContain("spec");
+
+        Render(new LoadedSpecialists { LoadedUtc = Now, Ids = ["a", "b", "c"] })
+            .Should().Contain("3 spec");
+    }
+
+    [Fact]
+    public void The_mode_is_shown_beside_the_count_when_there_was_one()
+    {
+        var line = StatuslineRenderer.Render(
+            new StatuslineInputs(
+                null, "demo", null, null, null,
+                new LoadedSpecialists { LoadedUtc = Now, Ids = ["a"], Mode = "review" }),
+            new StatuslineSettings { Colour = false });
+
+        line.Should().Contain("1 spec/review");
+    }
+
+    [Fact]
+    public void The_specialist_count_can_be_turned_off()
+    {
+        StatuslineRenderer.Render(
+            new StatuslineInputs(
+                null, "demo", null, null, null,
+                new LoadedSpecialists { LoadedUtc = Now, Ids = ["a"] }),
+            new StatuslineSettings { Colour = false, ShowSpecialists = false })
+            .Should().NotContain("spec");
+    }
+
+    [Fact]
+    public async Task What_a_launch_composed_comes_back_with_when_it_launched()
+    {
+        var (_, home, paths) = FreshPaths();
+
+        try
+        {
+            var store = new LoadedSpecialistStore(
+                paths, new YamlStore(new NoOpFilePermissions()), TimeProvider.System);
+
+            (await store.ReadAsync("demo")).Should().BeNull();
+
+            await store.WriteAsync("demo", ["language.csharp", "mode.review"], "review");
+
+            var read = await store.ReadAsync("demo");
+
+            read!.Ids.Should().Equal("language.csharp", "mode.review");
+            read.Mode.Should().Be("review");
+            read.LoadedUtc.Should().NotBe(default);
+        }
+        finally
+        {
+            Directory.Delete(home, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_composed_set_with_no_time_on_it_is_no_answer()
+    {
+        var (_, home, paths) = FreshPaths();
+
+        try
+        {
+            var store = new LoadedSpecialistStore(
+                paths, new YamlStore(new NoOpFilePermissions()), TimeProvider.System);
+
+            await store.WriteAsync("demo", ["language.csharp"], null);
+
+            var file = Directory
+                .EnumerateFiles(home, "demo.yaml", SearchOption.AllDirectories)
+                .Single(path => path.Contains("specialists", StringComparison.Ordinal));
+
+            await File.WriteAllTextAsync(file, "schema_version: 1" + Environment.NewLine
+                + "ids:" + Environment.NewLine + "  - language.csharp" + Environment.NewLine);
+
+            // Same rule as the spending figure: a record without a time comes
+            // back stamped in the year one, which is worse than no record.
+            (await store.ReadAsync("demo")).Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(home, recursive: true);
+        }
     }
 }

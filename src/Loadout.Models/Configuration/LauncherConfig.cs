@@ -136,6 +136,16 @@ public sealed class StatuslineSettings
     public bool ShowSpend { get; set; } = true;
 
     /// <summary>
+    /// Whether the number of specialists composed into this session is shown.
+    /// </summary>
+    /// <remarks>
+    /// Read from what the launch wrote down, never resolved here: working the
+    /// set out takes about half a second, and this line is redrawn on every
+    /// prompt.
+    /// </remarks>
+    public bool ShowSpecialists { get; set; } = true;
+
+    /// <summary>
     /// Colour via ANSI escapes. Off produces a plain line, which is what a
     /// terminal that mangles escapes — or a test — wants.
     /// </summary>

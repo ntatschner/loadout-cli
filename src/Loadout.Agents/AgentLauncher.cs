@@ -125,6 +125,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly Core.Sessions.ISessionRegistry _running;
     private readonly IPolicyService _policies;
     private readonly Core.Usage.ISpendWatch _spend;
+    private readonly Core.Statusline.ILoadedSpecialistStore _loaded;
 
     public AgentLauncher(
         IProjectService projects,
@@ -143,9 +144,11 @@ public sealed class AgentLauncher : IAgentLauncher
         Core.Sessions.ILaunchLedger ledger,
         Core.Sessions.ISessionRegistry running,
         IPolicyService policies,
-        Core.Usage.ISpendWatch spend)
+        Core.Usage.ISpendWatch spend,
+        Core.Statusline.ILoadedSpecialistStore loaded)
     {
         _spend = spend;
+        _loaded = loaded;
         _ledger = ledger;
         _running = running;
         _policies = policies;
@@ -429,6 +432,18 @@ public sealed class AgentLauncher : IAgentLauncher
                     request.Worktree,
                     compiled.Value?.Instructions),
                 ct).ConfigureAwait(false);
+
+            // Written down so the status line can say what was composed
+            // without resolving the library on every prompt — that takes about
+            // half a second, and the line is redrawn as fast as somebody types.
+            if (compiled.Value?.Instructions is { } effective)
+            {
+                await _loaded.WriteAsync(
+                    project.Entry.Slug,
+                    [.. effective.Selected.Select(selection => selection.Specialist.Id)],
+                    request.Mode,
+                    ct).ConfigureAwait(false);
+            }
 
             // The ledger says what happened; this says what is happening. Filed
             // under the same identifier so the two can be read together.

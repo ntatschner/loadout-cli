@@ -51,6 +51,7 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
     private readonly IProjectService _projects;
     private readonly IGitManager _git;
     private readonly ISpendNoticeStore _spend;
+    private readonly ILoadedSpecialistStore _loaded;
     private readonly IExecutableResolver _executables;
     private readonly IProcessLauncher _processes;
 
@@ -59,6 +60,7 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
         IProjectService projects,
         IGitManager git,
         ISpendNoticeStore spend,
+        ILoadedSpecialistStore loaded,
         IExecutableResolver executables,
         IProcessLauncher processes)
     {
@@ -66,6 +68,7 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
         _projects = projects;
         _git = git;
         _spend = spend;
+        _loaded = loaded;
         _executables = executables;
         _processes = processes;
     }
@@ -146,8 +149,22 @@ public sealed class StatuslineRenderCommand : AsyncCommand<GlobalSettings>
             }
         }
 
+        LoadedSpecialists? loaded = null;
+
+        if (options.ShowSpecialists && slug is { Length: > 0 })
+        {
+            try
+            {
+                loaded = await _loaded.ReadAsync(slug, deadline.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || deadline.IsCancellationRequested)
+            {
+                // Drops the segment. Nothing here is worth a prompt not drawing.
+            }
+        }
+
         var line = StatuslineRenderer.Render(
-            new StatuslineInputs(payload, slug, root, git, spend),
+            new StatuslineInputs(payload, slug, root, git, spend, loaded),
             options);
 
         Console.Out.WriteLine(line);

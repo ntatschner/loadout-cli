@@ -269,6 +269,12 @@ and launch its own two-second scan.
 `loadout spend refresh` is worth running by hand after changing a threshold —
 otherwise you'd wait a quarter of an hour to find out whether you're over it.
 
+The status line shows the composed specialist count the same way — `12 spec` or
+`12 spec/review` — read from what the launch wrote down. Resolving the library
+takes about half a second, and half a second per keystroke is not a status line.
+A session started outside the launcher has nothing written, so the segment is
+absent rather than claiming zero.
+
 ## Pinning a model
 
 Loadout never chose a model, so the choice was retyped after `--` every session

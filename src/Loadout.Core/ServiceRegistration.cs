@@ -118,6 +118,7 @@ public static class ServiceRegistration
         services.AddSingleton<Usage.ISpendWatch, Usage.SpendWatch>();
         services.AddSingleton<Usage.ISpendNoticeStore, Usage.SpendNoticeStore>();
         services.AddSingleton<Tasks.ITaskService, Tasks.TaskService>();
+        services.AddSingleton<Statusline.ILoadedSpecialistStore, Statusline.LoadedSpecialistStore>();
         services.AddSingleton<Checkpoints.ICheckpointService, Checkpoints.CheckpointService>();
 
         // The specialist layer: what an agent is told, and why. The library and
