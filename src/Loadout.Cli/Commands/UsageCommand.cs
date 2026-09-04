@@ -99,6 +99,15 @@ public sealed class UsageCommand : AsyncCommand<UsageSettings>
                 ExitCode.InvalidArguments);
         }
 
+        // Said before the wait, not after it. Reading every agent's
+        // transcripts takes about a second per ten days of history on a busy
+        // machine, and this command was reported as stalling with a blinking
+        // cursor — which is what seventeen silent seconds looks like from the
+        // outside.
+        output.Meanwhile(
+            $"[dim]Reading what the agents recorded over the last {settings.Days} day(s). "
+            + "This can take a few seconds.[/]");
+
         var result = await _usage.ReportAsync(new UsageQuery(
             settings.Days,
             settings.Project,
@@ -196,10 +205,16 @@ public sealed class UsageCommand : AsyncCommand<UsageSettings>
 
         foreach (var row in rows)
         {
+            // Marked with a glyph as well as a colour. Colour was the only
+            // thing distinguishing a registered project from a directory name
+            // scraped out of a transcript, and it does not survive a pipe, a
+            // log or a redirect — so every row under a column headed "project"
+            // looked like a project. That is exactly how this came to be
+            // reported as picking up repositories nobody had registered.
             table.AddRow(
                 row.IsRegistered
                     ? $"[cyan]{row.Name.EscapeMarkup()}[/]"
-                    : $"[dim]{row.Name.EscapeMarkup()}[/]",
+                    : $"[dim]?  {row.Name.EscapeMarkup()}[/]",
                 Short(row.Totals.Total),
                 Short(row.Totals.Output),
                 Percentage(row.Totals.CacheHitFraction));
@@ -216,6 +231,18 @@ public sealed class UsageCommand : AsyncCommand<UsageSettings>
         output.WriteBlankLine();
         output.Write(table);
         output.WriteBlankLine();
+
+        if (rows.Any(row => !row.IsRegistered))
+        {
+            // Said once, under the table it qualifies. A directory an agent
+            // worked in is not a project this launcher knows about, and a
+            // column headed "project" implies otherwise unless something says
+            // so in words.
+            output.WriteLine(
+                "[dim]?  a directory an agent worked in, not a registered project. "
+                + "'loadout project add' registers one.[/]");
+            output.WriteBlankLine();
+        }
 
         if (report.Totals.SavedFraction is { } saved)
         {
@@ -351,8 +378,20 @@ public sealed class UsageCommand : AsyncCommand<UsageSettings>
 
         foreach (var row in rows)
         {
-            yield return $"| {row.Name} | {row.Totals.Total:N0} | {row.Totals.Output:N0} | "
+            // Marked here as well. This is the format somebody sends to
+            // a colleague, where a directory an agent happened to work in
+            // sitting under a column headed "project" is a claim the sender
+            // did not mean to make.
+            var name = row.IsRegistered ? row.Name : $"{row.Name} ?";
+
+            yield return $"| {name} | {row.Totals.Total:N0} | {row.Totals.Output:N0} | "
                 + $"{Share(row.Totals)} |";
+        }
+
+        if (rows.Any(row => !row.IsRegistered))
+        {
+            yield return string.Empty;
+            yield return "`?` a directory an agent worked in, not a registered project.";
         }
     }
 

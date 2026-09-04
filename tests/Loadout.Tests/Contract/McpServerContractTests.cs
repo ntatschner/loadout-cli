@@ -28,6 +28,7 @@ public sealed class McpServerContractTests
     private sealed class Session : IDisposable
     {
         private readonly Process _process;
+        private readonly System.Text.StringBuilder _errors = new();
         private int _id;
 
         internal Session(string executable)
@@ -47,21 +48,92 @@ public sealed class McpServerContractTests
             _process.StartInfo.ArgumentList.Add("serve");
 
             _process.Start();
+
+            _process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data is not null)
+                {
+                    lock (_errors)
+                    {
+                        _errors.AppendLine(e.Data);
+                    }
+                }
+            };
+
+            _process.BeginErrorReadLine();
         }
 
-        internal JsonElement Request(string method, object? parameters = null)
+        /// <summary>
+        /// How long a request may go unanswered before the test gives up.
+        /// </summary>
+        /// <remarks>
+        /// A hang guard, not a performance budget. It sits above the thirty
+        /// seconds the process launcher gives a child, so a single timed-out
+        /// child still produces an answer this can assert on rather than
+        /// racing the test's own deadline. Every tool here answers in well
+        /// under a second; a call that reaches this bound is broken, and the
+        /// point of the bound is that it says so instead of waiting forever.
+        /// </remarks>
+        private static readonly TimeSpan Answer = TimeSpan.FromSeconds(60);
+
+        internal async Task<JsonElement> RequestAsync(string method, object? parameters = null)
         {
             var id = ++_id;
 
             Send(new { jsonrpc = "2.0", id, method, @params = parameters ?? new { } });
 
-            var line = _process.StandardOutput.ReadLine();
+            string? line;
+
+            try
+            {
+                // Bounded, because an unbounded read here does not fail — it
+                // waits. A request that went unanswered once left this reading
+                // for ninety-three minutes: the test never reached its own
+                // disposal, so the server it started was never killed, and the
+                // whole run sat behind it with no output to say why. A hang
+                // with no log is the worst failure a suite can have, and it is
+                // worse than a wrong answer because nothing points at it.
+                //
+                // Awaited rather than blocked on. This read the answer with
+                // GetAwaiter().GetResult(), which xUnit's own analyzer refuses
+                // in a test method and did not see here because it sat in a
+                // helper. Blocking a pool thread while the run has two of them
+                // and other tests are spawning processes is how the bound above
+                // stops helping: the token's own callback needs a pool thread
+                // to fire, and if none is free the deadline passes unnoticed.
+                using var cts = new CancellationTokenSource(Answer);
+
+                line = await _process.StandardOutput.ReadLineAsync(cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException(
+                    $"'{method}' did not answer within {Answer.TotalSeconds:N0} seconds. "
+                    + $"Standard error so far: {Errors()}");
+            }
 
             line.Should().NotBeNullOrWhiteSpace($"'{method}' has to answer");
 
             return JsonDocument.Parse(line!).RootElement.Clone();
         }
 
+        /// <summary>What the server has said on standard error.</summary>
+        /// <remarks>
+        /// Drained continuously, not read at the end. Nothing was reading it at
+        /// all, and a redirected pipe nobody empties is one the writer blocks on
+        /// once it fills — so a server that became chatty would stop answering
+        /// and look exactly like a hang. Keeping it also means a timeout can
+        /// say what the server was complaining about instead of nothing.
+        /// </remarks>
+        private string Errors()
+        {
+            lock (_errors)
+            {
+                return _errors.Length == 0 ? "(nothing)" : _errors.ToString();
+            }
+        }
+
+        /// <summary>A message with no reply expected, as the protocol defines it.</summary>
         internal void Notify(string method) =>
             Send(new { jsonrpc = "2.0", method });
 
@@ -89,7 +161,7 @@ public sealed class McpServerContractTests
         }
     }
 
-    private static Session Start()
+    private static async Task<Session> StartAsync()
     {
         var executable = LoadoutProcess.Executable;
 
@@ -97,7 +169,7 @@ public sealed class McpServerContractTests
 
         var session = new Session(executable!);
 
-        var initialize = session.Request("initialize", new
+        var initialize = await session.RequestAsync("initialize", new
         {
             protocolVersion = "2024-11-05",
             capabilities = new { },
@@ -114,11 +186,11 @@ public sealed class McpServerContractTests
     }
 
     [BuiltCliFact]
-    public void It_speaks_the_protocol_and_names_its_tools()
+    public async Task It_speaks_the_protocol_and_names_its_tools()
     {
-        using var session = Start();
+        using var session = await StartAsync();
 
-        var tools = session.Request("tools/list")
+        var tools = (await session.RequestAsync("tools/list"))
             .GetProperty("result").GetProperty("tools")
             .EnumerateArray()
             .Select(t => t.GetProperty("name").GetString())
@@ -132,11 +204,11 @@ public sealed class McpServerContractTests
     }
 
     [BuiltCliFact]
-    public void A_mode_can_be_changed_and_answers_with_the_posture()
+    public async Task A_mode_can_be_changed_and_answers_with_the_posture()
     {
-        using var session = Start();
+        using var session = await StartAsync();
 
-        var answer = session.Request("tools/call", new
+        var answer = await session.RequestAsync("tools/call", new
         {
             name = "loadout_mode",
             arguments = new { mode = "investigate" },
@@ -152,11 +224,11 @@ public sealed class McpServerContractTests
     }
 
     [BuiltCliFact]
-    public void A_mode_that_does_not_exist_is_refused_rather_than_quietly_defaulted()
+    public async Task A_mode_that_does_not_exist_is_refused_rather_than_quietly_defaulted()
     {
-        using var session = Start();
+        using var session = await StartAsync();
 
-        var answer = session.Request("tools/call", new
+        var answer = await session.RequestAsync("tools/call", new
         {
             name = "loadout_mode",
             arguments = new { mode = "yolo" },
@@ -173,11 +245,11 @@ public sealed class McpServerContractTests
     }
 
     [BuiltCliFact]
-    public void It_hands_over_nothing_that_changes_the_machine()
+    public async Task It_hands_over_nothing_that_changes_the_machine()
     {
-        using var session = Start();
+        using var session = await StartAsync();
 
-        var tools = session.Request("tools/list")
+        var tools = (await session.RequestAsync("tools/list"))
             .GetProperty("result").GetProperty("tools")
             .EnumerateArray()
             .Select(t => t.GetProperty("name").GetString() ?? string.Empty)
@@ -197,11 +269,11 @@ public sealed class McpServerContractTests
     }
 
     [BuiltCliFact]
-    public void A_tool_answers_with_what_the_command_would_say()
+    public async Task A_tool_answers_with_what_the_command_would_say()
     {
-        using var session = Start();
+        using var session = await StartAsync();
 
-        var answer = session.Request("tools/call", new
+        var answer = await session.RequestAsync("tools/call", new
         {
             name = "loadout_specialist",
             arguments = new { id = "language.rust" },
@@ -218,11 +290,11 @@ public sealed class McpServerContractTests
     }
 
     [BuiltCliFact]
-    public void Asking_for_something_that_is_not_there_is_answered_rather_than_thrown()
+    public async Task Asking_for_something_that_is_not_there_is_answered_rather_than_thrown()
     {
-        using var session = Start();
+        using var session = await StartAsync();
 
-        var answer = session.Request("tools/call", new
+        var answer = await session.RequestAsync("tools/call", new
         {
             name = "loadout_specialist",
             arguments = new { id = "language.cobol" },
@@ -234,5 +306,36 @@ public sealed class McpServerContractTests
         // An error frame would end the agent's turn; a sentence lets it carry
         // on and ask for something that exists.
         text.Should().Contain("no specialist");
+    }
+
+    [BuiltCliFact]
+    public async Task A_tool_that_has_to_find_the_repository_answers_without_waiting_on_a_child()
+    {
+        using var session = await StartAsync();
+
+        var clock = Stopwatch.StartNew();
+
+        var answer = await session.RequestAsync("tools/call", new
+        {
+            name = "loadout_effective_instructions",
+            arguments = new { },
+        });
+
+        clock.Stop();
+
+        answer.TryGetProperty("result", out _).Should().BeTrue("the tool has to answer");
+
+        // Whether a project is registered on this machine is not this test's
+        // business — how long the answer takes is. Working out which project
+        // this is means asking Git where the repository root is, and that is
+        // the one thing the tools do that nothing else here does. The server
+        // is spawned with its standard input held open by the client, and a
+        // child that inherited that pipe never exited: the launcher killed it
+        // at its thirty-second bound and every tool then answered as though
+        // the project did not exist — correct-looking prose, no error, and an
+        // agent told it had no instructions. Ten seconds is nowhere near the
+        // two hundred milliseconds this takes and nowhere near thirty, so it
+        // separates the two without standing in for a performance budget.
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10));
     }
 }

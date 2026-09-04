@@ -79,6 +79,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             [AgentCapabilities.SessionResume] = ["--resume", "--continue"],
             [PermissionMode] = ["--permission-mode"],
             [ToolRestrictions] = ["--allowed-tools", "--disallowed-tools"],
+            [ModelSelection] = ["--model"],
         };
 
     /// <summary>Capability key for the permission-mode option.</summary>
@@ -86,6 +87,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
     /// <summary>Capability key for the tool allow and deny options.</summary>
     private const string ToolRestrictions = "tool_restrictions";
+
+    /// <summary>Capability key for choosing the model.</summary>
+    private const string ModelSelection = "model_selection";
 
     /// <inheritdoc />
     public override async Task<OperationResult<AgentInvocation>> BuildInvocationAsync(
@@ -109,6 +113,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
         AddSecurityProfile(context, descriptor, arguments, warnings);
+        AddModel(context, descriptor, arguments, warnings);
 
         // Everything after a bare -- belongs to the agent untouched
         // (spec section 36), so it is appended last and never inspected.
@@ -348,7 +353,24 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             }
         }
 
-        if (security.AllowedTools.Count == 0 && security.DisallowedTools.Count == 0)
+        // Said, not dropped. --allowed-tools pre-approves rather than
+        // restricts, so honouring it from a profile would let a file in a
+        // shared workspace switch off the approval prompts of everyone who
+        // clones it. That is the one thing SecurityProfile's own doc comment
+        // rules out, and it was doing it.
+        if (security.AllowedTools.Count > 0)
+        {
+            warnings.Add(
+                "The security profile's allowed_tools was not applied: it pre-approves tools "
+                + "rather than restricting them, and a shared profile may only tighten. Put "
+                + "pre-approvals in commands.pre_approved in config.yaml, which stays on this "
+                + "machine.");
+        }
+
+        var preApproved = Specifiers(context.PreApprovedCommands);
+        var denied = Denials(security);
+
+        if (preApproved.Count == 0 && denied.Count == 0)
         {
             return;
         }
@@ -356,23 +378,59 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         if (!descriptor.Supports(ToolRestrictions))
         {
             warnings.Add(
-                "This build of Claude Code does not advertise tool restrictions, so the security "
-                + "profile's allowed and disallowed tool lists were not applied.");
+                "This build of Claude Code does not advertise tool restrictions, so the "
+                + "command policy was not applied.");
 
             return;
         }
 
-        if (security.AllowedTools.Count > 0)
+        if (preApproved.Count > 0)
         {
             arguments.Add("--allowed-tools");
-            arguments.Add(string.Join(",", security.AllowedTools));
+            arguments.Add(string.Join(",", preApproved));
         }
 
-        if (security.DisallowedTools.Count > 0)
+        if (denied.Count > 0)
         {
             arguments.Add("--disallowed-tools");
-            arguments.Add(string.Join(",", security.DisallowedTools));
+            arguments.Add(string.Join(",", denied));
         }
+    }
+
+    /// <summary>Everything the profile forbids, as Claude's own specifiers.</summary>
+    private static List<string> Denials(Models.Policies.SecurityProfile security) =>
+    [
+        .. security.DisallowedTools,
+        .. Specifiers(security.DeniedCommands),
+    ];
+
+    /// <summary>
+    /// Turns commands into the tool specifiers Claude understands.
+    /// </summary>
+    /// <remarks>
+    /// <c>git push</c> becomes <c>Bash(git push:*)</c>, so the denial covers the
+    /// command and its arguments rather than only the bare word. An entry that
+    /// already carries a bracket is passed through untouched: somebody who has
+    /// written a specifier by hand meant it, and wrapping it again would produce
+    /// something that matches nothing at all — which fails open for a denial,
+    /// and is the worst way for this to be wrong.
+    /// </remarks>
+    internal static List<string> Specifiers(IReadOnlyList<string>? commands)
+    {
+        if (commands is null)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. commands
+                .Select(command => command.Trim())
+                .Where(command => command.Length > 0)
+                .Select(command => command.Contains('(', StringComparison.Ordinal)
+                    ? command
+                    : $"Bash({command}:*)"),
+        ];
     }
 
     /// <summary>
@@ -380,6 +438,41 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// reach prompts and skills that were deliberately kept out of the
     /// application repository.
     /// </summary>
+
+    /// <summary>
+    /// Asks for the model the project pinned, where the agent can be told.
+    /// </summary>
+    /// <remarks>
+    /// Added before the passthrough arguments, so somebody who still types a
+    /// model after <c>--</c> gets the one they typed: the manifest ends the
+    /// retyping, it does not take the choice away. A build that cannot be told
+    /// says so rather than starting on a different model than the project asked
+    /// for, which is the kind of gap spec section 5 refuses to let disappear.
+    /// </remarks>
+    private static void AddModel(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Model is not { Length: > 0 } model)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(ModelSelection))
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise a model option, so the project's "
+                + $"model ({model}) was not applied.");
+
+            return;
+        }
+
+        arguments.Add("--model");
+        arguments.Add(model);
+    }
+
     private static void AddWorkspaceDirectory(
         AgentLaunchContext context,
         AgentDescriptor descriptor,

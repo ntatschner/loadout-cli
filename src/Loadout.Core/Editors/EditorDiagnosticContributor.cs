@@ -81,6 +81,19 @@ internal sealed class EditorDiagnosticContributor : IDiagnosticContributor
                     ? "none beyond the default"
                     : string.Join(", ", editor.Profiles)));
 
+        // A mapping this editor has no way of applying is worth one line, not
+        // one per entry: the setting is not wrong, it simply cannot be carried
+        // out here, and somebody who has configured several is being told the
+        // same thing several times.
+        if (!editor.CanOpenAProfile && config.Editor.Profiles.Count > 0)
+        {
+            checks.Add(DiagnosticCheck.Warn(
+                Category,
+                "Profiles",
+                $"configured per agent, but {editor.Command} "
+                + (editor.Definition?.ProfileNote ?? "has no profile this can set.")));
+        }
+
         // Only worth checking when the profiles could actually be read. Where
         // they could not, every name below would look missing.
         if (editor.Profiles is null)
@@ -96,7 +109,8 @@ internal sealed class EditorDiagnosticContributor : IDiagnosticContributor
                     Category,
                     $"Profile for {name}",
                     $"'{profile}' is configured for {name} but no profile of that name exists "
-                    + $"in {editor.Command}. Opening a project will create an empty one."));
+                    + $"in {editor.Command}. Opening a project under it starts the editor "
+                    + "without that configuration."));
             }
         }
 

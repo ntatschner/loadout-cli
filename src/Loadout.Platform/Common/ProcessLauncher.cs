@@ -23,7 +23,7 @@ public sealed class ProcessLauncher : IProcessLauncher
         var startInfo = BuildStartInfo(request);
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
-        startInfo.RedirectStandardInput = request.StandardInput is not null;
+        startInfo.RedirectStandardInput = true;
         startInfo.UseShellExecute = false;
         startInfo.CreateNoWindow = true;
 
@@ -55,12 +55,25 @@ public sealed class ProcessLauncher : IProcessLauncher
 
         if (request.StandardInput is not null)
         {
-            // Written and closed immediately: credential tools such as
-            // secret-tool and security read until EOF, so leaving the pipe open
-            // would hang the launcher.
             await process.StandardInput.WriteAsync(request.StandardInput).ConfigureAwait(false);
-            process.StandardInput.Close();
         }
+
+        // Always redirected and always closed, whether or not there was
+        // anything to write. Two separate hangs come from getting this wrong.
+        // Credential tools such as secret-tool and security read until EOF, so
+        // leaving the pipe open after writing wedges the launcher. And a child
+        // whose standard input is not redirected inherits the caller's, which
+        // is fine from a terminal and fatal under 'mcp serve': the client holds
+        // that pipe open and reads it, and 'git rev-parse' spawned there never
+        // exited. It was killed at the timeout below, so working out which
+        // project the caller was in failed, and every tool answered as though
+        // the project did not exist — thirty seconds spent to say so, with no
+        // error anywhere to suggest the answer was wrong.
+        //
+        // Nothing started here is interactive by construction: its output is
+        // captured, so it has no terminal to read from either way.
+
+        process.StandardInput.Close();
 
         // A timeout is its own cancellation source so that a hung child does
         // not wedge the launcher. Section 45 puts process work in front of

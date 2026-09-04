@@ -37,8 +37,14 @@ under the profile you've mapped to that agent, so opening a project for Claude
 and for Codex can give you different extensions and settings.
 
 **VS Code**, **VS Code Insiders**, **VSCodium** and **Cursor** are recognised by
-name. Any other editor works too — `loadout config set editor-command <command>` —
-you just don't get the profile mapping.
+name, but open in their default profile: they won't open a folder and a profile
+in the same launch, and `loadout code` tells you so rather than leaving you to
+work out why nothing changed. **Neovim** is recognised too, and its profiles do
+apply — `NVIM_APPNAME` names the configuration directory it loads, so the
+mapping works end to end.
+
+Any other editor works — `loadout config set editor-command <command>` — and if
+it takes a profile, say how under `custom_editors` in `config.yaml`.
 
 More agents and editors are coming. The generic adapter means you don't have to
 wait for one: if it takes a directory and starts from a command, you can wire it
@@ -52,7 +58,7 @@ Grab your platform's archive from the
 ### Linux and macOS
 
 ```sh
-tar -xzf loadout-0.15.0-linux-x64.tar.gz
+tar -xzf loadout-0.16.0-linux-x64.tar.gz
 ./install.sh          # goes to ~/.local/bin, no root
 loadout setup
 ```
@@ -63,7 +69,7 @@ There are `.deb` and `.rpm` packages if you'd rather.
 ### Windows
 
 ```powershell
-msiexec /i loadout-0.15.0-win-x64.msi    # per-user, no elevation
+msiexec /i loadout-0.16.0-win-x64.msi    # per-user, no elevation
 loadout setup
 ```
 

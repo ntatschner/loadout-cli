@@ -23,6 +23,7 @@ internal sealed class ProjectDetailView : FrameView
     private const int LabelWidth = 12;
 
     private readonly Label _path;
+    private readonly Label _running;
     private readonly Label _branch;
     private readonly Label _context;
     private readonly Label _rules;
@@ -53,6 +54,12 @@ internal sealed class ProjectDetailView : FrameView
         BorderStyle = LineStyle.Rounded;
 
         _path = new Label { X = 1, Y = 0, Width = Dim.Fill(1) };
+
+        // Directly under the path, above every fact about the project,
+        // because this is the only line here that changes what somebody does
+        // next rather than describing how things stand. Empty when nothing is
+        // running, which is the ordinary case and should cost no attention.
+        _running = new Label { X = 1, Y = 1, Width = Dim.Fill(1) };
 
         _branch = Field("Branch", 2);
         _context = Field("Context", 3);
@@ -94,7 +101,7 @@ internal sealed class ProjectDetailView : FrameView
         _shell.Accepting += (_, e) => { e.Handled = true; Shell?.Invoke(this, EventArgs.Empty); };
         _problems.Accepting += (_, e) => { e.Handled = true; Problems?.Invoke(this, EventArgs.Empty); };
 
-        Add(_path, _warningsFrame, _launch, _resume, _shell, _problems);
+        Add(_path, _running, _warningsFrame, _launch, _resume, _shell, _problems);
     }
 
     /// <summary>The agent the launch button would start.</summary>
@@ -163,6 +170,8 @@ internal sealed class ProjectDetailView : FrameView
             _branch.Text = project.IsAvailableLocally ? "no details available" : string.Empty;
             return;
         }
+
+        _running.Text = RunningNote(overview);
 
         _branch.Text = $"{overview.Branch ?? "detached"}   " +
             (overview.IsClean ? "clean" : "uncommitted changes");
@@ -253,6 +262,28 @@ internal sealed class ProjectDetailView : FrameView
     /// <summary>
     /// Things worth saying before a launch, in the order they matter.
     /// </summary>
+    /// <summary>
+    /// What to say about sessions already open against this project.
+    /// </summary>
+    /// <remarks>
+    /// Not a warning, and deliberately not in the list of them: a session
+    /// running is not a problem with the project. It is a fact about right now,
+    /// and the reason it is worth a line is that launching a second agent into
+    /// a repository somebody is already working in is a mistake nothing else
+    /// here would catch.
+    /// </remarks>
+    internal static string RunningNote(ProjectOverview overview)
+    {
+        ArgumentNullException.ThrowIfNull(overview);
+
+        return overview.RunningSessions switch
+        {
+            <= 0 => string.Empty,
+            1 => "a session is running here",
+            var many => $"{many} sessions are running here",
+        };
+    }
+
     internal static IEnumerable<string> Warnings(ProjectOverview overview)
     {
         ArgumentNullException.ThrowIfNull(overview);

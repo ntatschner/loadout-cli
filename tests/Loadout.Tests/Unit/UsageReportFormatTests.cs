@@ -108,4 +108,40 @@ public sealed class UsageReportFormatTests
                 new UsageTotals(row.Total, 0, 0, row.Total / 2, 100, 0),
                 IsRegistered: true))
             .ToList();
+
+    private static IReadOnlyList<UsageGroup> Unregistered(string name) =>
+        [new UsageGroup(name, new UsageTotals(1000, 0, 0, 500, 100, 0), IsRegistered: false)];
+
+    [Fact]
+    public void A_directory_that_is_not_a_project_is_marked_in_the_markdown()
+    {
+        var lines = UsageCommand
+            .Markdown(Report(), Unregistered("Roblox_Cat_Game"), "project")
+            .ToList();
+
+        // This is the format somebody sends to a colleague. A directory an
+        // agent happened to work in, sitting under a column headed "project",
+        // is a claim the sender did not mean to make — and it was reported as
+        // exactly that: usage "picking up repos not registered as projects".
+        lines.Should().Contain(line => line.Contains("Roblox_Cat_Game ?", StringComparison.Ordinal));
+        lines.Should().Contain(line => line.Contains("not a registered project", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_registered_project_carries_no_marker()
+    {
+        var lines = UsageCommand.Markdown(Report(), Rows(("starstats", 1000)), "project").ToList();
+
+        lines.Should().NotContain(line => line.Contains("starstats ?", StringComparison.Ordinal));
+        lines.Should().NotContain(line => line.Contains("not a registered project", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_csv_says_which_are_registered_in_a_column_of_its_own()
+    {
+        // The one format that already got this right, and the reason the
+        // others needed fixing rather than the rule needing inventing.
+        UsageCommand.Csv(Report(), Unregistered("Roblox_Cat_Game"), "project")
+            .Skip(1).First().Should().Contain(",no");
+    }
 }

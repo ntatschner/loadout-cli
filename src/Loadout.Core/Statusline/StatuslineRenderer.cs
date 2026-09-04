@@ -10,11 +10,22 @@ namespace Loadout.Core.Statusline;
 /// <param name="ProjectSlug">Registered slug for the repository, or null when it is not one of ours.</param>
 /// <param name="ProjectRoot">Repository root, used to shorten the directory.</param>
 /// <param name="Git">Branch and cleanliness, or null when git could not be asked.</param>
+/// <param name="Spend">
+/// The last answer the spending thresholds gave, read from disk rather than
+/// worked out here. Null when nothing has been computed, which is the state
+/// until somebody sets a threshold.
+/// </param>
+/// <param name="Specialists">
+/// What the last launch composed, read from disk. Null when nothing has
+/// launched, which is the state in a session started outside the launcher.
+/// </param>
 public sealed record StatuslineInputs(
     StatuslinePayload? Payload,
     string? ProjectSlug,
     string? ProjectRoot,
-    GitRepositoryState? Git);
+    GitRepositoryState? Git,
+    Usage.SpendNotice? Spend = null,
+    LoadedSpecialists? Specialists = null);
 
 /// <summary>
 /// Turns what the launcher knows into the one line Claude prints at the bottom
@@ -83,6 +94,28 @@ public static class StatuslineRenderer
                 percentage.ToString(CultureInfo.InvariantCulture) + "% ctx",
                 colour,
                 settings));
+        }
+
+        if (settings.ShowSpecialists && inputs.Specialists is { Ids.Count: > 0 } loaded)
+        {
+            // A count, not a list. Seventy-odd ids will not fit on a line
+            // somebody is trying to read past, and the number is the part that
+            // changes: it says the composition is what you think it is.
+            segments.Add(Colour(
+                loaded.Mode is { Length: > 0 } mode
+                    ? $"{loaded.Ids.Count} spec/{mode}"
+                    : $"{loaded.Ids.Count} spec",
+                Dim,
+                settings));
+        }
+
+        // Last, because it is the only segment that is not about this session.
+        // Everything to its left describes where you are; this describes what
+        // has been spent, and it is the thing to glance at rather than read.
+        if (settings.ShowSpend && inputs.Spend is { Lines.Count: > 0 })
+        {
+            segments.Add(Colour(
+                $"spend! ({inputs.Spend.Lines.Count})", Yellow, settings));
         }
 
         var separator = string.IsNullOrEmpty(settings.Separator) ? " | " : settings.Separator;

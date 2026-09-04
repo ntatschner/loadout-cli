@@ -81,6 +81,21 @@ public interface ISpecialistLibrary
 internal sealed partial class SpecialistLibrary : ISpecialistLibrary
 {
     /// <summary>
+    /// Where the specialists of approved packs live, asked for at load time.
+    /// </summary>
+    /// <remarks>
+    /// A delegate rather than the pack service itself, so the library keeps
+    /// knowing nothing about remotes, approvals or Git — and so every existing
+    /// caller that wants only the built-ins can carry on saying
+    /// <c>new SpecialistLibrary()</c> and get exactly that.
+    /// </remarks>
+    private readonly Func<CancellationToken, Task<IReadOnlyList<string>>> _packs;
+
+    public SpecialistLibrary(
+        Func<CancellationToken, Task<IReadOnlyList<string>>>? packs = null) =>
+        _packs = packs ?? (_ => Task.FromResult<IReadOnlyList<string>>([]));
+
+    /// <summary>
     /// Refuses anything larger than this.
     /// </summary>
     /// <remarks>
@@ -108,6 +123,20 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
         var findings = new List<RuleFinding>();
 
         LoadBuiltIn(specialists, findings);
+
+        // Packs layer over the built-ins and under the workspace. Only the ones
+        // this machine has approved at the commit they are pinned to reach
+        // here: the gate decides that, and a pack that is merely declared
+        // arrives as a proposal rather than as instructions.
+        foreach (var directory in await _packs(ct).ConfigureAwait(false))
+        {
+            await LoadDirectoryAsync(
+                directory,
+                SpecialistOrigin.Pack,
+                specialists,
+                findings,
+                ct).ConfigureAwait(false);
+        }
 
         if (workspaceRoot is { Length: > 0 })
         {

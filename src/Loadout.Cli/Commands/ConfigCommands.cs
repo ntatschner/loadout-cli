@@ -234,30 +234,68 @@ public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
                 ConfigGetCommand.UnknownKeyMessage(settings.Key), ExitCode.InvalidArguments);
         }
 
-        var config = await _configuration.LoadConfigAsync().ConfigureAwait(false);
-        var machine = await _configuration.LoadMachineAsync().ConfigureAwait(false);
+        // Read and written under one lock rather than loaded, changed and
+        // saved. Two of these running at once — a person at a prompt while a
+        // session writes its own setting — would otherwise each read the same
+        // starting file and write their change over the other's, leaving a
+        // valid file, two successful commands and one setting silently gone.
+        //
+        // The other side of the pair is still loaded plainly, because it is
+        // only read: a key writes to the machine file or the launcher file,
+        // never both.
+        FormatException? invalid = null;
 
-        if (config.Failed || machine.Failed)
+        // Carried out rather than thrown through the store: a write that throws
+        // inside the lock is a failure nobody gets to name. Only the numeric
+        // settings can fail here, and naming the setting is more use than a
+        // bare parse error.
+        void Apply(Action write)
         {
-            return output.Fail(config.Failed ? config : machine);
+            try
+            {
+                write();
+            }
+            catch (FormatException ex)
+            {
+                invalid = ex;
+            }
         }
 
-        try
+        Loadout.Models.Results.OperationResult save;
+
+        if (entry.IsMachineLocal)
         {
-            entry.Write(config.Value!, machine.Value!, settings.Value);
+            var other = await _configuration.LoadConfigAsync().ConfigureAwait(false);
+
+            if (other.Failed)
+            {
+                return output.Fail(other);
+            }
+
+            save = await _configuration.UpdateMachineAsync(
+                machine => Apply(() => entry.Write(other.Value!, machine, settings.Value)))
+                .ConfigureAwait(false);
         }
-        catch (FormatException)
+        else
         {
-            // Only the numeric settings can fail here, and naming the setting
-            // is more use than a bare parse error.
+            var other = await _configuration.LoadMachineAsync().ConfigureAwait(false);
+
+            if (other.Failed)
+            {
+                return output.Fail(other);
+            }
+
+            save = await _configuration.UpdateConfigAsync(
+                config => Apply(() => entry.Write(config, other.Value!, settings.Value)))
+                .ConfigureAwait(false);
+        }
+
+        if (invalid is not null)
+        {
             return output.Fail(
                 $"'{settings.Value}' is not valid for {entry.Key}. {entry.Description}.",
                 ExitCode.InvalidArguments);
         }
-
-        var save = entry.IsMachineLocal
-            ? await _configuration.SaveMachineAsync(machine.Value!).ConfigureAwait(false)
-            : await _configuration.SaveConfigAsync(config.Value!).ConfigureAwait(false);
 
         if (save.Failed)
         {
@@ -326,6 +364,17 @@ public sealed class ConfigEditCommand : AsyncCommand<ConfigEditCommand.Settings>
             return output.Fail(
                 $"'{path}' does not exist yet. Run: loadout setup",
                 ExitCode.ConfigurationInvalid);
+        }
+
+        if (!output.CanOpenAWindow)
+        {
+            // Nobody is watching, so the path is the whole of the useful
+            // answer. Handing the file to the desktop here is how a suite run
+            // put a "choose an application" dialog in front of somebody
+            // several times a day.
+            Console.Out.WriteLine(path);
+
+            return CommandOutput.Success();
         }
 
         var result = await _launcher.OpenInFileManagerAsync(path).ConfigureAwait(false);

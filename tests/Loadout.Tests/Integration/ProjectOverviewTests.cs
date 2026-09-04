@@ -30,6 +30,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
     private readonly ProcessLauncher _processes = new();
 
     private IProjectOverviewService _overviews = null!;
+    private readonly Loadout.Tests.Fakes.QuietSessionRegistry _running = new();
     private IWorkspaceManager _workspace = null!;
     private IGitManager _git = null!;
     private string _repository = null!;
@@ -95,7 +96,8 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
                 new SpecialistLibrary(),
                 new SpecialistResolver(),
                 new RepositoryEvidenceReader(),
-                configuration));
+                configuration),
+            _running);
 
         _repository = await CreateRepositoryAsync().ConfigureAwait(false);
     }
@@ -264,4 +266,88 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
         LauncherTui.Order([first, second], null)
             .Select(p => p.Entry.Slug).Should().Equal("alpha", "omega");
     }
+
+    [Fact]
+    public async Task A_project_nobody_is_working_in_says_nothing_about_sessions()
+    {
+        var overview = await _overviews.DescribeAsync(Project());
+
+        // The ordinary case, and it should cost no attention at all. A line
+        // saying "0 sessions" would be noise on every project every time.
+        overview.Value!.RunningSessions.Should().Be(0);
+        Loadout.Tui.Terminal.ProjectDetailView.RunningNote(overview.Value).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_session_open_against_the_project_is_said_plainly()
+    {
+        var one = Overview(running: 1);
+        var several = Overview(running: 3);
+
+        // The only line on the panel that changes what somebody does next
+        // rather than describing how things stand: launching a second agent
+        // into a repository somebody is already working in is the mistake it
+        // exists to prevent.
+        Loadout.Tui.Terminal.ProjectDetailView.RunningNote(one).Should().Be("a session is running here");
+        Loadout.Tui.Terminal.ProjectDetailView.RunningNote(several).Should().Be("3 sessions are running here");
+    }
+
+    [Fact]
+    public void A_running_session_is_not_filed_as_something_wrong()
+    {
+        // Not in the warnings, deliberately. A session running is a fact about
+        // right now, not a problem with the project, and putting it under
+        // "needs attention" would train somebody to ignore that list.
+        // Both surfaces, because there are two Warnings methods — the plain
+        // listing's and the panel's — and a rule enforced in one of them is
+        // enforced nowhere in particular.
+        LauncherTui.Warnings(Overview(running: 2))
+            .Should().NotContain(w => w.Contains("running", StringComparison.OrdinalIgnoreCase));
+
+        Loadout.Tui.Terminal.ProjectDetailView.Warnings(Overview(running: 2))
+            .Should().NotContain(w => w.Contains("running", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static ProjectOverview Overview(int running) =>
+        new(
+            new ProjectResolution(
+                new ProjectRegistryEntry { Slug = Slug, Name = "StarStats" }, null, null, 0, false),
+            "main",
+            true,
+            100,
+            0,
+            0,
+            0,
+            true,
+            0,
+            false,
+            null,
+            running);
+
+    [Fact]
+    public async Task Sessions_open_against_this_project_are_counted_and_others_are_not()
+    {
+        _running.Running.Add(Session(Slug));
+        _running.Running.Add(Session(Slug));
+        _running.Running.Add(Session("something-else"));
+
+        var overview = await _overviews.DescribeAsync(Project());
+
+        // Counted from the registry rather than handed in, and filtered to
+        // this project: a panel that showed every session on the machine
+        // would say the same thing whichever project was selected.
+        overview.Value!.RunningSessions.Should().Be(2);
+    }
+
+    private static Loadout.Core.Sessions.RunningSession Session(string slug) =>
+        new(
+            Guid.NewGuid().ToString("N"),
+            slug,
+            slug,
+            "claude",
+            null,
+            "C:/work/" + slug,
+            1234,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow);
 }

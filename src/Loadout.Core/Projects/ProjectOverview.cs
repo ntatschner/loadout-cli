@@ -27,6 +27,16 @@ namespace Loadout.Core.Projects;
 /// uses it whatever somebody is doing today, and the resolver decides
 /// separately whether that matters for the work in hand.
 /// </param>
+/// <param name="RunningSessions">
+/// How many sessions are running against this project right now.
+/// </param>
+/// <remarks>
+/// The one line here that changes what somebody does next rather than telling
+/// them how things stand. Everything else on the panel is a fact about the
+/// project; this is a fact about the moment, and launching a second session
+/// into a repository somebody is already working in is the mistake it exists
+/// to prevent.
+/// </remarks>
 public sealed record ProjectOverview(
     ProjectResolution Project,
     string? Branch,
@@ -38,7 +48,8 @@ public sealed record ProjectOverview(
     bool Protected,
     int TrackedAgentFiles,
     bool HookNeedsUpgrade = false,
-    IReadOnlyList<SpecialistSelection>? DetectedSpecialists = null)
+    IReadOnlyList<SpecialistSelection>? DetectedSpecialists = null,
+    int RunningSessions = 0)
 {
     /// <summary>
     /// The point past which the always-loaded instructions are worth a look.
@@ -83,6 +94,7 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
     private readonly IMemoryImporter _importer;
     private readonly IPolicyService _policies;
     private readonly IInstructionService _instructions;
+    private readonly Sessions.ISessionRegistry _running;
 
     public ProjectOverviewService(
         IGitManager git,
@@ -91,7 +103,8 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
         IMemoryService memory,
         IMemoryImporter importer,
         IPolicyService policies,
-        IInstructionService instructions)
+        IInstructionService instructions,
+        Sessions.ISessionRegistry running)
     {
         _git = git;
         _workspace = workspace;
@@ -100,6 +113,7 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
         _importer = importer;
         _policies = policies;
         _instructions = instructions;
+        _running = running;
     }
 
     /// <inheritdoc />
@@ -173,7 +187,31 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
             hookNeedsUpgrade,
             await _instructions
                 .DetectAsync(path, _workspace.LocalPath, slug, ct)
-                .ConfigureAwait(false)));
+                .ConfigureAwait(false),
+            await RunningAsync(slug, ct).ConfigureAwait(false)));
+    }
+
+    /// <summary>How many sessions are open against a project.</summary>
+    /// <remarks>
+    /// Never a reason to fail the overview. The registry verifies each entry
+    /// against a live process, so this is cheap, but a panel that would not
+    /// draw because it could not count sessions would be worse than one that
+    /// says nothing about them.
+    /// </remarks>
+    private async Task<int> RunningAsync(string slug, CancellationToken ct)
+    {
+        try
+        {
+            var running = await _running.ListAsync(ct).ConfigureAwait(false);
+
+            return running.Count(session =>
+                string.Equals(session.ProjectSlug, slug, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+            return 0;
+        }
     }
 
     /// <summary>

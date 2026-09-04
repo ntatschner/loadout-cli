@@ -493,6 +493,61 @@ public static class Program
             backup.AddCommand<BackupRestoreCommand>("restore");
         });
 
+        TopBranch(config, "share", share =>
+        {
+            share.Describe(
+                "Find guidance that belongs to everybody, and move it deliberately.",
+                CommandCategory.Workspace,
+                "share promote team worthy global guidance");
+            share.AddCommand<ShareCandidatesCommand>("candidates");
+            share.AddCommand<SharePromoteCommand>("promote");
+        });
+
+        TopBranch(config, "pack", pack =>
+        {
+            pack.Describe(
+                "Specialist packs fetched from a Git remote, approved per machine.",
+                CommandCategory.AgentConfiguration,
+                "packs house standards shared specialists trust approve");
+            pack.AddCommand<PackListCommand>("list");
+            pack.AddCommand<PackAddCommand>("add");
+            pack.AddCommand<PackApproveCommand>("approve");
+            pack.AddCommand<PackUpdateCommand>("update");
+            pack.AddCommand<PackRemoveCommand>("remove");
+        });
+
+        TopBranch(config, "task", task =>
+        {
+            task.Describe(
+                "Record what is being worked on, and check it against the repository.",
+                CommandCategory.Workspace,
+                "tasks backlog todo status where were we open work");
+            task.AddCommand<TaskListCommand>("list");
+            task.AddCommand<TaskDeclareCommand>("declare");
+            task.AddCommand<TaskRemoveCommand>("remove");
+        });
+
+        TopBranch(config, "spend", spend =>
+        {
+            spend.Describe(
+                "See and refresh where spending stands against your thresholds.",
+                CommandCategory.Integration,
+                "spend budget threshold tokens cost warning");
+            spend.AddCommand<SpendRefreshCommand>("refresh");
+        });
+
+        TopBranch(config, "checkpoint", checkpoint =>
+        {
+            checkpoint.Describe(
+                "Mark where a project stands, under a name you can return to.",
+                CommandCategory.Workspace,
+                "checkpoint mark milestone save point before refactor return");
+            checkpoint.AddCommand<CheckpointCreateCommand>("create");
+            checkpoint.AddCommand<CheckpointListCommand>("list");
+            checkpoint.AddCommand<CheckpointRestoreCommand>("restore");
+            checkpoint.AddCommand<CheckpointRemoveCommand>("remove");
+        });
+
         TopBranch(config, "memory", memory =>
         {
             memory.Describe(
@@ -501,6 +556,7 @@ public static class Program
                 "facts remember notes knowledge");
             memory.AddCommand<MemoryListCommand>("list");
             memory.AddCommand<MemoryFindCommand>("find");
+            memory.AddCommand<MemoryReviewCommand>("review");
             memory.AddCommand<MemoryWriteCommand>("write");
             memory.AddCommand<MemoryAuditCommand>("audit");
             memory.AddCommand<MemoryReindexCommand>("reindex");
@@ -548,6 +604,7 @@ public static class Program
         Top<CodeCommand>(config, "code");
         Top<CommandsCommand>(config, "commands");
         Top<SessionListCommand>(config, "sessions");
+        Top<SessionRunningCommand>(config, "running");
         Top<ResumeCommand>(config, "resume");
         Top<UsageCommand>(config, "usage");
         Top<LaunchesCommand>(config, "launches");
@@ -575,6 +632,8 @@ public static class Program
                 CommandCategory.Health,
                 "docs documentation stale links broken references audit");
             docs.AddCommand<DocsAuditCommand>("audit");
+            docs.AddCommand<DocsExportCommand>("export");
+            docs.AddCommand<DocsCiCommand>("ci");
         });
 
         TopBranch(config, "telemetry", telemetry =>

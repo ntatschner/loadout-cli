@@ -101,6 +101,11 @@ public abstract class InstructionsCommandBase<TSettings> : AsyncCommand<TSetting
     {
         SpecialistOrigin.Workspace => "workspace",
         SpecialistOrigin.Project => "project",
+
+        // Named, because where a specialist came from is the whole question a
+        // reader has about one that arrived from somebody else's repository.
+        // Falling through to "built-in" said the opposite of the truth.
+        SpecialistOrigin.Pack => "pack",
         _ => "built-in",
     };
 }
@@ -979,7 +984,22 @@ public sealed class InstructionsNewCommand : InstructionsCommandBase<Instruction
 
         var output = new CommandOutput(Console, settings);
 
-        var drafted = SpecialistScaffold.Draft(settings.Id, settings.Title, settings.Summary);
+        // Measured only when the draft is going to sit beside a repository. A
+        // language or a framework specialist is about the language, not about
+        // whoever happens to be drafting it here, and filling one with this
+        // project's habits would be the opposite of what the layer is for.
+        var here = await ProjectAsync(settings.Project, settings.Repo, cancellationToken)
+            .ConfigureAwait(false);
+
+        var measured = settings.Project is { Length: > 0 }
+            ? ProjectConventions.Detect(
+                await RepositoryAsync(here, settings.Repo, cancellationToken).ConfigureAwait(false)
+                    ?? Directory.GetCurrentDirectory(),
+                cancellationToken)
+            : null;
+
+        var drafted = SpecialistScaffold.Draft(
+            settings.Id, settings.Title, settings.Summary, measured);
 
         if (drafted.Failed)
         {

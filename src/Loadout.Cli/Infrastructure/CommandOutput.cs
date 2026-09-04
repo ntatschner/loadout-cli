@@ -47,6 +47,49 @@ public sealed class CommandOutput
     /// <summary>Whether the caller asked for extra detail.</summary>
     public bool IsVerbose => _settings.Verbose || _settings.Debug;
 
+    /// <summary>
+    /// Whether opening a window on this machine would be seen by anybody.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same rule as never prompting where nobody can answer, applied to the
+    /// other direction: a command that hands a file to the desktop when its
+    /// output is going down a pipe opens a window nobody asked for, in front of
+    /// somebody who is not watching.
+    /// </para>
+    /// <para>
+    /// This is not hypothetical. The contract test that runs every registered
+    /// command was calling 'config edit' on each pass, which handed config.yaml
+    /// to Windows, which has no default application for .yaml — so it asked
+    /// which one to use. Every full run of the suite put that dialog in front
+    /// of whoever owned the machine, and the suite runs many times a day.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Says something only to a person watching, and nothing into a pipe.
+    /// </summary>
+    /// <remarks>
+    /// For work that takes long enough to look like a hang. Silence for
+    /// seventeen seconds is indistinguishable from a stall, and this was
+    /// reported as one — but a progress line written into a redirect corrupts
+    /// whatever is reading it, so the notice goes only where somebody is
+    /// waiting for it.
+    /// </remarks>
+    public void Meanwhile(string markup)
+    {
+        if (_settings.Json || _settings.Quiet || Console.IsOutputRedirected)
+        {
+            return;
+        }
+
+        _console.MarkupLine(markup);
+    }
+
+    public bool CanOpenAWindow =>
+        !_settings.NonInteractive
+        && !_settings.Json
+        && !Console.IsOutputRedirected;
+
     /// <summary>Writes a line only when extra detail was asked for.</summary>
     public void WriteVerbose(string markup)
     {

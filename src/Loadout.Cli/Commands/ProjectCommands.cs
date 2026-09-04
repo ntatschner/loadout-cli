@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Configuration;
+using Loadout.Core.Workspace;
 using Loadout.Core.Projects;
 using Loadout.Models;
 using Loadout.Platform.Abstractions;
@@ -94,11 +96,19 @@ public sealed class ProjectListCommand : AsyncCommand<GlobalSettings>
 public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
 {
     private readonly IProjectService _projects;
+    private readonly IWorkspaceManager _workspace;
+    private readonly IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
 
-    public ProjectAddCommand(IProjectService projects, IAnsiConsole console)
+    public ProjectAddCommand(
+        IProjectService projects,
+        IWorkspaceManager workspace,
+        IConfigurationService configuration,
+        IAnsiConsole console)
     {
         _projects = projects;
+        _workspace = workspace;
+        _configuration = configuration;
         _console = console;
     }
 
@@ -127,6 +137,8 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
 
         var project = result.Value!;
 
+        var applied = await ApplyDefaultsAsync(project, cancellationToken).ConfigureAwait(false);
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -143,9 +155,72 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
             output.WriteLine(
                 $"[green]Registered[/] {Markup.Escape(project.Entry.Name)} "
                 + $"[dim]({Markup.Escape(project.Entry.Slug)})[/]");
+
+            foreach (var choice in applied)
+            {
+                // Said, not applied quietly. A setting that arrives without
+                // being mentioned is one somebody later finds and cannot
+                // account for.
+                output.WriteLine(
+                    $"  [dim]{Markup.Escape(choice.Setting)}: "
+                    + $"{Markup.Escape(choice.Value)} (from your defaults)[/]");
+            }
         }
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Fills the new project in with what this machine already prefers.
+    /// </summary>
+    /// <remarks>
+    /// Best effort. A project is registered whether or not its defaults could
+    /// be written: failing the registration over a preference would turn a
+    /// convenience into a way of not being able to add a project at all.
+    /// </remarks>
+    private async Task<IReadOnlyList<OnboardingChoice>> ApplyDefaultsAsync(
+        Models.Projects.ProjectResolution project,
+        CancellationToken ct)
+    {
+        var config = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
+
+        if (config.Failed)
+        {
+            return [];
+        }
+
+        var manifest = await _workspace.ReadProjectAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
+        var applied = OnboardingDefaults.Apply(
+            project.Entry, manifest.Value, config.Value!.Onboarding);
+
+        if (applied.Count == 0)
+        {
+            return applied;
+        }
+
+        if (manifest.Succeeded)
+        {
+            await _workspace.WriteProjectAsync(manifest.Value!, ct).ConfigureAwait(false);
+        }
+
+        var registry = await _workspace.ReadRegistryAsync(ct).ConfigureAwait(false);
+
+        if (registry.Succeeded)
+        {
+            var entry = registry.Value!.Projects.FirstOrDefault(
+                p => string.Equals(p.Slug, project.Entry.Slug, StringComparison.OrdinalIgnoreCase));
+
+            if (entry is not null)
+            {
+                entry.DefaultAgent = project.Entry.DefaultAgent;
+                entry.EditorProfile = project.Entry.EditorProfile;
+
+                await _workspace.WriteRegistryAsync(registry.Value!, ct).ConfigureAwait(false);
+            }
+        }
+
+        return applied;
     }
 }
 
@@ -335,6 +410,16 @@ public sealed class ProjectOpenCommand : AsyncCommand<ProjectOpenCommand.Setting
             return output.Fail(
                 $"'{project.Entry.Name}' is not present on this machine.",
                 ExitCode.RepositoryUnavailable);
+        }
+
+        if (!output.CanOpenAWindow)
+        {
+            // Nobody is watching. The path is the useful half of the answer,
+            // and a file manager opening behind a pipe is a window somebody
+            // did not ask for.
+            Console.Out.WriteLine(project.LocalPath);
+
+            return CommandOutput.Success();
         }
 
         var openResult = await _launcher.OpenInFileManagerAsync(project.LocalPath).ConfigureAwait(false);

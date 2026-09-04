@@ -16,6 +16,41 @@ Only the index reaches the compiled context. Topics stay on disk with their
 paths listed, because a project accumulates memory for years and inlining all of
 it would make every session pay for every fact anyone ever recorded.
 
+## Who a fact is true for
+
+Memory began with one scope, and a store written under it fills up with facts
+that are not about the project. This project's own memory holds "Restart Manager
+is disabled by policy", "spawned terminals inherit session markers" and "driving
+consoles kills live sessions" — all filed under `loadout-cli`, and not one of
+them about `loadout-cli`. Open another project and an agent rediscovers them the
+expensive way.
+
+```bash
+loadout memory write starstats upload-retries --scope project   # the default
+loadout memory write starstats review-habits --scope user
+loadout memory write starstats restart-manager --scope machine
+```
+
+| Scope | Where it lives | Who it is true for |
+|---|---|---|
+| `project` | `projects/<slug>/memory/` | This project. Travels with the workspace |
+| `user` | `memory/` at the workspace root | Your work, whatever the project. Travels too |
+| `machine` | The machine-local state directory | This computer only. Never committed |
+
+Two extra scopes rather than one global tier, and the difference is the point.
+The workspace syncs between machines, so a fact that is true here and false on
+the next machine cannot live in it — "the Restart Manager is disabled" is exactly
+that, and a single global scope would propagate it as though it were universal.
+Where there's no machine-local store, a machine fact is refused rather than
+written to the workspace instead: falling back would sync the one thing the
+scope exists to keep local.
+
+A session is subject to all three, so all three reach its index, and the two
+that aren't about the project are labelled — an agent told "the Restart Manager
+is disabled" needs to know that's a claim about the machine rather than about
+the code it's reading. A project using only its own memory reads exactly as it
+always has.
+
 ## Which project is this?
 
 Every registered repository records its project in its own Git config, under

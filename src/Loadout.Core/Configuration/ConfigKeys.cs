@@ -116,6 +116,32 @@ public static class ConfigKeys
             (c, _, v) => c.DefaultAgent = v, false,
             Group: Groups.Agents),
 
+        // The onboarding defaults, so the answers can be changed after the
+        // first project rather than only before it. One key per setting except
+        // the per-mode models, which are a set for the same reason the editor
+        // profiles are: the modes are not fixed, and a key list that has to be
+        // regenerated when somebody adds one is a key list that will be wrong.
+        new("onboarding-agent", "Agent a newly registered project launches",
+            (c, _) => c.Onboarding.Agent,
+            (c, _, v) => c.Onboarding.Agent = v, false,
+            Group: Groups.Agents),
+
+        new("onboarding-model", "Model a newly registered project pins",
+            (c, _) => c.Onboarding.Model,
+            (c, _, v) => c.Onboarding.Model = v, false,
+            Group: Groups.Agents),
+
+        new("onboarding-models", "Model per mode for a new project, as review=small;implement=big",
+            (c, _) => FormatProfiles(c.Onboarding.ModelByMode),
+            (c, _, v) => WriteProfiles(c.Onboarding.ModelByMode, v), false,
+            Sample: "review=small-model;implement=big-model",
+            Group: Groups.Agents),
+
+        new("onboarding-editor", "Editor profile a newly registered project opens under",
+            (c, _) => c.Onboarding.EditorProfile,
+            (c, _, v) => c.Onboarding.EditorProfile = v, false,
+            Group: Groups.Editor),
+
         new("editor-command", "Editor opened by 'loadout code': code, code-insiders, codium, cursor",
             (c, _) => c.Editor.Command,
             (c, _, v) => c.Editor.Command = v, false,

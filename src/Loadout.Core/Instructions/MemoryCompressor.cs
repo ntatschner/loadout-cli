@@ -211,6 +211,10 @@ public sealed class MemoryCompressor
                     topic.Kind,
                     topic.Facts,
                     acknowledgedSimilar: true,
+
+                    // Compression moves facts out of a project's own
+                    // instructions, so they belong to that project.
+                    MemoryScope.Project,
                     ct)
                 .ConfigureAwait(false);
 

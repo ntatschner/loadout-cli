@@ -124,6 +124,8 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly Core.Sessions.ILaunchLedger _ledger;
     private readonly Core.Sessions.ISessionRegistry _running;
     private readonly IPolicyService _policies;
+    private readonly Core.Usage.ISpendWatch _spend;
+    private readonly Core.Statusline.ILoadedSpecialistStore _loaded;
 
     public AgentLauncher(
         IProjectService projects,
@@ -141,8 +143,12 @@ public sealed class AgentLauncher : IAgentLauncher
         Core.Mcp.IMcpService mcp,
         Core.Sessions.ILaunchLedger ledger,
         Core.Sessions.ISessionRegistry running,
-        IPolicyService policies)
+        IPolicyService policies,
+        Core.Usage.ISpendWatch spend,
+        Core.Statusline.ILoadedSpecialistStore loaded)
     {
+        _spend = spend;
+        _loaded = loaded;
         _ledger = ledger;
         _running = running;
         _policies = policies;
@@ -307,6 +313,20 @@ public sealed class AgentLauncher : IAgentLauncher
                     ChooseFailureCode(preflight));
             }
 
+            var commandPolicy = Core.Policies.CommandPolicy.Resolve(
+                environment?.Profile?.DeniedCommands,
+                config.Commands.PreApproved.TryGetValue(project.Entry.Slug, out var approved)
+                    ? approved
+                    : null);
+
+            foreach (var dropped in commandPolicy.Overruled)
+            {
+                warnings.Add(
+                    $"'{dropped}' is pre-approved on this machine but denied by the project's "
+                    + "security profile, so it was not pre-approved. A profile may only tighten, "
+                    + "and local configuration cannot put back what it takes away.");
+            }
+
             var context = new AgentLaunchContext(
                 project,
                 directoryResult.Value!,
@@ -328,7 +348,21 @@ public sealed class AgentLauncher : IAgentLauncher
                     .. _mcp.ConfigFiles(project.Entry.Slug),
                     .. SelfServerConfig.Write(
                         config.AgentTools.Enabled, project.Entry.Slug, runtimeDirectory, warnings),
-                ]);
+                ],
+
+                // Resolved here rather than in the adapter, because the two
+                // halves come from different places on purpose: the denials
+                // travel with the project and the pre-approvals never leave
+                // this machine. Anything the project denied is already gone,
+                // and a pre-approval that was dropped that way is said out
+                // loud — somebody who set one and never sees it work is owed
+                // the reason.
+                commandPolicy.PreApproved,
+
+                // Carried out, never inferred. This is a choice somebody wrote
+                // in the manifest; working one out from how hard the task looks
+                // would be a guess wearing a metric's clothes.
+                Core.Agents.ModelPolicy.For(manifest, request.Mode));
 
             var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
             if (invocationResult.Failed)
@@ -342,6 +376,15 @@ public sealed class AgentLauncher : IAgentLauncher
             if (invocation.Warnings is not null)
             {
                 warnings.AddRange(invocation.Warnings);
+            }
+
+            // Where you stand, never a refusal, and nothing at all unless a
+            // threshold was set — the scan behind this reads the agents'
+            // transcripts and takes seconds.
+            foreach (var notice in await _spend
+                .WarningsAsync(project.Entry.Slug, ct).ConfigureAwait(false))
+            {
+                warnings.Add(notice);
             }
 
             // The agent inherits this process's terminal, so Ctrl+C, resize and
@@ -389,6 +432,18 @@ public sealed class AgentLauncher : IAgentLauncher
                     request.Worktree,
                     compiled.Value?.Instructions),
                 ct).ConfigureAwait(false);
+
+            // Written down so the status line can say what was composed
+            // without resolving the library on every prompt — that takes about
+            // half a second, and the line is redrawn as fast as somebody types.
+            if (compiled.Value?.Instructions is { } effective)
+            {
+                await _loaded.WriteAsync(
+                    project.Entry.Slug,
+                    [.. effective.Selected.Select(selection => selection.Specialist.Id)],
+                    request.Mode,
+                    ct).ConfigureAwait(false);
+            }
 
             // The ledger says what happened; this says what is happening. Filed
             // under the same identifier so the two can be read together.

@@ -38,12 +38,23 @@ public sealed class StubProcessLauncher : IProcessLauncher
             new ProcessOutcome(_exitCode, _standardOutput, string.Empty)));
     }
 
+    /// <summary>What was last run in the terminal, for a test to inspect.</summary>
+    /// <remarks>
+    /// Recorded rather than refused. A terminal editor is started this way and
+    /// a windowed one is not, and which of the two happened is the assertion.
+    /// </remarks>
+    public ProcessRequest? Interactive { get; private set; }
+
     /// <inheritdoc />
     public Task<OperationResult<int>> RunInteractiveAsync(
         ProcessRequest request,
-        CancellationToken ct = default) =>
-        throw new NotSupportedException(
-            "Nothing in these tests launches an interactive process.");
+        CancellationToken ct = default)
+    {
+        Interactive = request;
+        Requests.Add(request);
+
+        return Task.FromResult(OperationResult<int>.Ok(_exitCode));
+    }
 
     /// <summary>What was last started detached, for a test to inspect.</summary>
     public ProcessRequest? Detached { get; private set; }

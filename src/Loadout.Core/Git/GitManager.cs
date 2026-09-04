@@ -157,6 +157,59 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<Tasks.CommitSummary>>> ListCommitsAsync(
+        string repositoryPath,
+        DateTimeOffset since,
+        CancellationToken ct = default)
+    {
+        // Fields separated by NUL, because a commit subject can contain
+        // anything a person can type — including whichever character looked
+        // safe enough to separate on.
+        var result = await RunAsync(
+            repositoryPath,
+            [
+                "log",
+                "--since=" + since.UtcDateTime.ToString(
+                    "O", System.Globalization.CultureInfo.InvariantCulture),
+                "--format=%H%x00%aI%x00%s",
+            ],
+            LocalOperationTimeout,
+            ct).ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            return OperationResult<IReadOnlyList<Tasks.CommitSummary>>.Fail(
+                result.Error!, ExitCode.RepositoryUnavailable);
+        }
+
+        var commits = new List<Tasks.CommitSummary>();
+
+        foreach (var raw in result.Value!.Split(
+            '\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = raw.Split('\0');
+
+            if (parts.Length != 3
+                || !DateTimeOffset.TryParse(
+                    parts[1],
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.RoundtripKind,
+                    out var when))
+            {
+                // A line that does not parse is left out rather than guessed
+                // at. This feeds a report about what the record shows, and
+                // inventing a date is the one way to make such a report worse
+                // than not having it.
+                continue;
+            }
+
+            commits.Add(new Tasks.CommitSummary(parts[0], when, parts[2]));
+        }
+
+        return OperationResult<IReadOnlyList<Tasks.CommitSummary>>.Ok(commits);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> InitAsync(
         string path,
         string defaultBranch = "main",

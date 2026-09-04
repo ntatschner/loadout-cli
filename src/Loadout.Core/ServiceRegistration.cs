@@ -35,7 +35,13 @@ public static class ServiceRegistration
         services.AddSingleton<IPreflightService, PreflightService>();
         services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<IRuleService, RuleService>();
-        services.AddSingleton<IMemoryService, MemoryService>();
+        // The machine root comes from the platform rather than the workspace,
+        // because the whole point of the machine scope is that it is somewhere
+        // the workspace cannot carry away.
+        services.AddSingleton<IMemoryService>(provider => new MemoryService(
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>()
+                .Paths.State));
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<Instructions.MemoryCompressor>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();
@@ -109,10 +115,42 @@ public static class ServiceRegistration
         services.AddSingleton<Usage.IUsageService, Usage.UsageService>();
         services.AddSingleton<Usage.ITelemetryStore, Usage.TelemetryStore>();
         services.AddSingleton<Usage.IPlanHeadroomReader, Usage.CodexPlanHeadroom>();
+        services.AddSingleton<Usage.ISpendWatch, Usage.SpendWatch>();
+        services.AddSingleton<Usage.ISpendNoticeStore, Usage.SpendNoticeStore>();
+        services.AddSingleton<Tasks.ITaskService, Tasks.TaskService>();
+        services.AddSingleton<Packs.IPackService, Packs.PackService>();
+        services.AddSingleton<Statusline.ILoadedSpecialistStore, Statusline.LoadedSpecialistStore>();
+        services.AddSingleton<Checkpoints.ICheckpointService, Checkpoints.CheckpointService>();
 
         // The specialist layer: what an agent is told, and why. The library and
         // resolver hold no state of their own, so a singleton each is enough.
-        services.AddSingleton<ISpecialistLibrary, SpecialistLibrary>();
+        // The library asks for the packs this machine has approved, and gets
+        // them through a delegate so it stays free of remotes, approvals and
+        // Git. A pack that is declared but unapproved never reaches it: the
+        // gate decides that, and its content becomes instructions an agent
+        // follows.
+        services.AddSingleton<Instructions.ISpecialistLibrary>(provider =>
+            new Instructions.SpecialistLibrary(async ct =>
+            {
+                var packs = provider.GetRequiredService<Packs.IPackService>();
+                var standing = await packs.StandingAsync(ct).ConfigureAwait(false);
+
+                if (standing.Failed)
+                {
+                    // No packs rather than a failure. A workspace that cannot
+                    // be read must not stop the built-in library loading.
+                    return [];
+                }
+
+                return
+                [
+                    .. standing.Value!
+                        .Where(entry => entry.IsActive)
+                        .Select(entry => packs.DirectoryFor(entry.Pack.Name))
+                        .Where(directory => directory is { Length: > 0 })
+                        .Select(directory => System.IO.Path.Combine(directory!, "specialists")),
+                ];
+            }));
         services.AddSingleton<ISpecialistResolver, SpecialistResolver>();
         services.AddSingleton<IRepositoryEvidenceReader, RepositoryEvidenceReader>();
         services.AddSingleton<IInstructionService, InstructionService>();

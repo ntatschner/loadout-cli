@@ -45,6 +45,29 @@ public sealed class LauncherConfig
     /// has changed since this launcher was built.
     /// </summary>
     public Dictionary<string, Agents.GenericAgentDefinition> CustomAgents { get; set; } = [];
+
+    /// <summary>
+    /// User-defined editors, keyed by the name given to <c>editor-command</c>.
+    /// An entry whose key matches one this launcher already knows replaces it.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to <see cref="CustomAgents"/>, and worth having for the
+    /// same reason: naming a different command was always possible, but saying
+    /// how that command takes a profile was not, and the profile is the point.
+    /// </remarks>
+    public Dictionary<string, Editors.EditorDefinition> CustomEditors { get; set; } = [];
+
+    /// <summary>
+    /// Commands pre-approved on this machine, per project. Never shared: this
+    /// file is not in the workspace and is not committed.
+    /// </summary>
+    public Policies.CommandPolicySettings Commands { get; set; } = new();
+
+    /// <summary>Token thresholds that produce a warning, and never a refusal.</summary>
+    public SpendSettings Spend { get; set; } = new();
+
+    /// <summary>What a newly registered project is given, unless it says otherwise.</summary>
+    public OnboardingSettings Onboarding { get; set; } = new();
 }
 
 /// <summary>
@@ -103,6 +126,27 @@ public sealed class StatuslineSettings
 
     /// <summary>How much of the context window is spent, which is the whole point of the tool.</summary>
     public bool ShowContext { get; set; } = true;
+
+    /// <summary>
+    /// Whether a crossed spending threshold is flagged here.
+    /// </summary>
+    /// <remarks>
+    /// Off unless somebody set a threshold, in the sense that it has nothing to
+    /// show until then. What it draws is the answer worked out at launch and
+    /// refreshed in the background, never a scan on the prompt's own time: that
+    /// takes seconds, and this line is redrawn several times a minute.
+    /// </remarks>
+    public bool ShowSpend { get; set; } = true;
+
+    /// <summary>
+    /// Whether the number of specialists composed into this session is shown.
+    /// </summary>
+    /// <remarks>
+    /// Read from what the launch wrote down, never resolved here: working the
+    /// set out takes about half a second, and this line is redrawn on every
+    /// prompt.
+    /// </remarks>
+    public bool ShowSpecialists { get; set; } = true;
 
     /// <summary>
     /// Colour via ANSI escapes. Off produces a plain line, which is what a
@@ -269,4 +313,84 @@ public sealed class UpdateSettings
 
     /// <summary>Release feed URL. May point at an internal, self-hosted location.</summary>
     public string? Source { get; set; }
+}
+
+/// <summary>
+/// Thresholds that say where you stand, and stop nothing.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Loadout starts an agent and is then out of the loop. It can tell you where
+/// you stand and it could refuse to start; it cannot stop a session that is
+/// already running. Offering a hard limit would be a promise the architecture
+/// cannot keep — the number would be crossed mid-session by the very work the
+/// limit was meant to bound, and nothing here would notice. So these warn, and
+/// refusing to launch was considered and declined: a threshold that blocks work
+/// is one people set high enough never to fire, which is the same as not having
+/// it.
+/// </para>
+/// <para>
+/// Nothing is checked unless something is set. Working out what has been spent
+/// means reading the agents' transcripts, which takes seconds rather than
+/// milliseconds, and that is not a cost to put on everybody who never asked for
+/// a threshold.
+/// </para>
+/// </remarks>
+public sealed class SpendSettings
+{
+    /// <summary>Tokens across everything in one day. Zero is no threshold.</summary>
+    public long DailyTokens { get; set; }
+
+    /// <summary>Tokens in one day for a named project. Zero or absent is no threshold.</summary>
+    public Dictionary<string, long> ProjectDailyTokens { get; set; } = [];
+
+    /// <summary>
+    /// The share of a plan's window, from 0 to 1, past which to say so. Zero is
+    /// no threshold.
+    /// </summary>
+    /// <remarks>
+    /// On a subscription this is the number that actually constrains the work:
+    /// money is not what runs out, the rate window is. Only Codex writes its
+    /// standing in that window to disk, and only sometimes, so a reading may
+    /// simply not be there — which is reported as no answer rather than as
+    /// plenty of room left.
+    /// </remarks>
+    public double PlanWarnAt { get; set; }
+}
+
+/// <summary>
+/// What a new project is set up with, so the answers are given once.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Every one of these is a question registering a project currently makes you
+/// answer later, usually after something has surprised you. None of it is new
+/// behaviour; it is the same settings, filled in at the moment the project
+/// exists rather than the third time it matters.
+/// </para>
+/// <para>
+/// Blanks only. A project that names its own agent chose that, and a
+/// machine-wide preference is not grounds to reconsider it — so nothing here
+/// overwrites a value that is already there, and what does get filled in is
+/// reported rather than applied quietly.
+/// </para>
+/// <para>
+/// Deliberately absent: anything that reaches off this machine. The rule
+/// everywhere else here is that outward-facing things are confirmed rather than
+/// switched on for somebody, and a default is the opposite of confirming.
+/// </para>
+/// </remarks>
+public sealed class OnboardingSettings
+{
+    /// <summary>Agent a new project launches. Empty leaves the built-in default.</summary>
+    public string Agent { get; set; } = string.Empty;
+
+    /// <summary>Model a new project pins, spelled as its agent spells it.</summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>Model per mode, for the modes worth distinguishing.</summary>
+    public Dictionary<string, string> ModelByMode { get; set; } = [];
+
+    /// <summary>Editor profile a new project opens under.</summary>
+    public string EditorProfile { get; set; } = string.Empty;
 }

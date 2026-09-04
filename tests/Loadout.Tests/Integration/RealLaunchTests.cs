@@ -140,7 +140,11 @@ public sealed class RealLaunchTests : IAsyncLifetime
             new McpService(_workspace),
             new LaunchLedger(paths, permissions, TimeProvider.System),
             new SessionRegistry(paths, permissions, new ProcessInspector(), TimeProvider.System),
-            new PolicyService(_workspace, git, paths, permissions, yaml));
+            new PolicyService(_workspace, git, paths, permissions, yaml),
+            new Loadout.Tests.Fakes.QuietSpendWatch(),
+            new Loadout.Core.Statusline.LoadedSpecialistStore(
+                paths, new Loadout.Core.Configuration.YamlStore(new Loadout.Tests.Fakes.NoOpFilePermissions()),
+                TimeProvider.System));
 
         _repository = await CreateRepositoryAsync().ConfigureAwait(false);
 

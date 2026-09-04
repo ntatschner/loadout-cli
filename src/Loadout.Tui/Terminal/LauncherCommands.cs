@@ -37,7 +37,18 @@ internal static class LauncherCommands
     /// <summary>What the agents have spent, by project.</summary>
     internal const string Usage = "usage";
 
+    /// <summary>
+    /// What has been launched, and in which posture.
+    /// </summary>
+    /// <remarks>
+    /// The ledger's own command, run rather than reimplemented. Everything a
+    /// screen starts goes through the same parser and execution path as the
+    /// command line, or there are two implementations of it and one of them
+    /// will drift.
+    /// </remarks>
+    internal const string Launches = "launches";
+
     /// <summary>Every one of them, for the test that checks they are real.</summary>
     internal static IReadOnlyList<string> All =>
-        [Editor, Resume, Clone, NewProject, Instructions, Usage];
+        [Editor, Resume, Clone, NewProject, Instructions, Usage, Launches];
 }

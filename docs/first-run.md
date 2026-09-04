@@ -124,6 +124,429 @@ an identifier but no number these paths can find is counted as unrecognised, and
 renamed field doesn't fail, it counts zero and returns a total that looks
 entirely reasonable.
 
+## Exporting documentation
+
+```
+loadout docs export --type reference     --out docs/reference.md
+loadout docs export --type technical     --out docs/architecture.md
+loadout docs export --type machine-index --out docs/index.txt
+loadout docs export --type user-guide    --out docs/guide.md
+```
+
+**The four are not equally derivable, and the output says which is which.** The
+reference and machine index fall out of the code — always true, always dull,
+never need a person. The technical guide is the prose already sitting in your
+doc comments, arranged by module. The user guide is barely derivable at all,
+because what somebody wants to *do* isn't in the source.
+
+So the user guide is emitted as a **scaffold that says it is one**, and the
+command says so again on the way out. Generating it from symbols would produce
+something that reads like documentation, teaches nobody anything, and — worst of
+the three — looks finished enough that nobody writes the real thing.
+
+The **technical guide** carries the decisions, not just the summaries: under each
+type it prints the opening paragraph of its `<remarks>`, which is where this
+codebase puts the reasoning. Only the opening paragraph — what follows is the
+evidence and the history, and that belongs where somebody changing the code will
+meet it rather than in a guide read end to end.
+
+The **machine index** opens with a digest of the modules and what each holds, so
+a session can pick a file to open instead of reading the tree, and follows it
+with one tab-separated line per symbol.
+
+### Publishing it
+
+`--front-matter` adds the YAML header Docusaurus and MkDocs read, so the files
+drop into either unchanged. Both consume plain Markdown otherwise, so there is
+no conversion step and no new dependency.
+
+`loadout docs ci` writes a GitHub Actions workflow that regenerates the
+documents. It says in its own first line that it is a starting point, and it
+means it: action versions move and runner images change, and neither is
+Loadout's to keep up with. It also assumes Loadout is on `PATH` and the project
+registered, and it **writes nothing back** — no commit, no pull request, no
+publish. Each of those writes somewhere, and where is a decision about your
+repository rather than a default worth guessing.
+
+**The user guide is excluded from the pipeline by default.** It is a scaffold,
+and a pipeline that regenerated and published it nightly would undo the entire
+reason for marking it as one. `--include-user-guide` overrides that, once you
+have read it.
+
+`llms.txt` never gets front matter, even when the flag is on. It is read by a
+model rather than rendered by a site, and a YAML preamble is noise in the one
+file whose purpose is to say where things are in as few tokens as possible.
+
+For CI this cannot write, `skill.publish-documentation` covers adapting the
+commands to whatever a repository already uses, and what to check before wiring
+any of it up.
+
+The scan is **lexical, not a parse**. It reads declarations the way you would
+skimming, which gets the overwhelming majority right and will miss a declaration
+split across lines. The alternative is Roslyn: a large dependency for a
+launcher, to produce a document nobody compiles. Where the scan is wrong it
+omits rather than invents, which is the failure worth having — so the reference
+calls itself an index rather than an authority.
+
+## Tasks and the backlog
+
+```
+loadout task declare add-the-widget doing --title "the widget nobody has added"
+loadout task list
+loadout task list --all
+loadout task remove add-the-widget
+```
+
+Kept apart from memory because the two answer different questions. A memory is
+something that **stays** true — how this machine behaves, what broke last time.
+A task is true today and stops being true. Mixing them fills the durable store
+with things that expire.
+
+Every state carries who said it and when, which is what makes it checkable.
+`task list` then asks the repository whether the record backs the claim up, and
+reports what it doesn't:
+
+```
+What the record does not back up
+  probe-b called done, and nothing has been committed since it was said.
+          That may be right - work does not always leave a commit.
+```
+
+**These are observations, not verdicts.** Corroboration can say a claim is
+unsupported; it can never say a claim is wrong. Two consequences follow, and
+both are deliberate:
+
+- Nothing is matched on commit messages. "Committed under a message that never
+  named the item" is the overwhelmingly common case, not a problem — flagging it
+  would make the report mostly noise, and a report that's mostly noise stops
+  being read.
+- A repository that can't be read reports **nothing** rather than an empty
+  history. With no commits, "nothing committed since" would fire on every task
+  at once — a confidently wrong answer where none was needed.
+
+Agents get the same thing over MCP: `loadout_tasks` answers "where were we" from
+the record, carrying the disagreements with it so a session is told *"you said
+this was done and nothing was committed"* rather than being handed its own claim
+back as fact. `loadout_task_declare` records a state and nothing else — it never
+launches, pushes or changes the machine, and what it writes is screened for
+credentials the way memory already is. That screening lives in the store, so
+every caller gets it rather than the one somebody remembered.
+
+## Suggested replies
+
+`task list` ends with a few short replies you can accept instead of composing:
+
+```
+Next  composed from the record above
+  continue widget
+  why is parser blocked
+  start docs
+```
+
+Offered in the order you'd act in — underway, then stuck, then what the record
+doesn't back up, then not started. A list opening with the untouched backlog
+would be answering a question nobody asked mid-session.
+
+**Composed and drafted are never blended, and that is the whole safety of it.**
+A composed reply can't be wrong about the state it names, because it was
+assembled *out of* that state. A reply an agent drafts can be confidently wrong
+about exactly the same thing, in exactly the same shape. The only defence anyone
+has is being told which they're looking at, and merging the two lists for
+tidiness would take that away.
+
+Over MCP the composed ones arrive labelled, with the session told plainly that
+anything further is its own draft and should say so.
+
+Note the wording: **check**, never **fix**. The record not backing a claim up
+isn't the same as the claim being wrong, and a suggestion saying "fix" would
+settle that question on nobody's authority.
+
+Nothing is ever taken automatically. Offering an action and performing it are
+different features, and only the first one is here.
+
+## What is running now
+
+```
+loadout running
+loadout running --idle-after 15
+loadout running --json
+```
+
+Each line is a session the launcher started, how long it's been going, and
+whether it's said anything lately. Quiet times come from each agent's own
+transcript — its last write — joined to the registry on the directory the
+session runs in, because that's the one thing both sides record.
+
+**It is passive, and that is the point.** Nothing here attaches to a console,
+reads another process, or drives a terminal. Doing that on this machine once
+took out every live session on it, and a monitor that can break what it watches
+isn't one worth having.
+
+A session whose transcript can't be found reads as **unseen**, not idle. Neither
+agent publishes its transcript format, so a session this can't see is one it
+can't judge — and "idle" would tell you your agent had stopped when it may be
+working perfectly well. Idle is a description and never a verdict: nothing is
+stopped, and a session quiet for an hour is working again the moment it writes.
+
+Not built: the desktop notification when a session goes idle or ends. That needs
+a notification seam on three platforms and can't be verified headlessly — the
+kind of thing that ships looking finished and isn't. The reading half is here
+and honest; the notification is worth doing deliberately rather than as a
+footnote.
+
+## Checkpoints
+
+A checkpoint is a named marker binding four things that were already there
+separately: the project's workspace files as they were, the commit the
+repository was on, the handoff current at the time, and the session it was taken
+during. Nothing here is new except the record that they belong together.
+
+```
+loadout checkpoint create before-the-refactor --because "works, before I break it"
+loadout checkpoint list
+loadout checkpoint restore before-the-refactor          # previews
+loadout checkpoint restore before-the-refactor --apply  # writes
+loadout checkpoint remove before-the-refactor
+```
+
+**It never moves your repository.** Restoring puts the workspace files back and
+*tells you* the commit — checking one out can discard work nobody asked to lose,
+and doing that because you typed a checkpoint name is exactly the surprise
+preview-before-mutation exists to prevent. Running `git checkout` is yours.
+
+A checkpoint taken on a dirty tree says so, at the time and again on the way
+back: the commit it recorded doesn't describe everything that was on disk.
+
+Creating one never overwrites an existing name. A checkpoint exists to be
+returned to, and quietly replacing one is the single way this could destroy the
+thing it was built to protect — `remove` first if that's what you meant.
+
+## Spend thresholds
+
+Thresholds tell you where you stand. They stop nothing, and that isn't a
+limitation to be fixed later — Loadout starts an agent and is then out of the
+loop, so a limit enforced at the door would be crossed by the very session it
+let in and nothing here would see it. Refusing to launch was considered and
+declined: a threshold that blocks work is one you set high enough never to fire.
+
+```yaml
+spend:
+  daily_tokens: 20000000
+  project_daily_tokens:
+    loadout-cli: 5000000
+  plan_warn_at: 0.8
+```
+
+`daily_tokens` is everything today, `project_daily_tokens` is one project today,
+and `plan_warn_at` is the share of a plan's rate window — on a subscription that
+is the number that actually constrains the work, because money isn't what runs
+out, the window is.
+
+**Nothing is read unless something is set.** Working out what's been spent means
+reading the agents' transcripts, measured at about two seconds on this machine,
+and that isn't a cost to put on everybody who never asked for a threshold. Zero
+means off rather than a limit the first token of the day crosses.
+
+Only Codex writes its standing in the rate window to disk, and only sometimes,
+so a reading may simply not be there. That's reported as no answer, never as
+plenty of room left, and it always carries how old it is — an hours-old
+percentage shown as a live gauge is worse than no gauge.
+
+It does appear in the status line, without ever scanning there. The answer is
+written down whenever something works it out — at launch, or by
+`loadout spend refresh` — and the line reads that file in microseconds. When the
+figure goes stale the line starts a refresh **detached** and draws immediately;
+the number catches up a moment later rather than holding up the prompt.
+
+Exactly one caller gets to start that refresh. The line is redrawn several times
+a minute, and without a claim every one of those would see the same stale file
+and launch its own two-second scan.
+
+`loadout spend refresh` is worth running by hand after changing a threshold —
+otherwise you'd wait a quarter of an hour to find out whether you're over it.
+
+The status line shows the composed specialist count the same way — `12 spec` or
+`12 spec/review` — read from what the launch wrote down. Resolving the library
+takes about half a second, and half a second per keystroke is not a status line.
+A session started outside the launcher has nothing written, so the segment is
+absent rather than claiming zero.
+
+## Sharing what belongs to everybody
+
+```
+loadout share candidates
+loadout share promote projects/demo/specialists/style.md          # previews
+loadout share promote projects/demo/specialists/style.md --apply  # moves it
+```
+
+`share candidates` looks for guidance filed under a project that never mentions
+that project — often something general somebody put in the nearest folder. It's
+a **weak signal, stated as one**: the reason is printed with every candidate so
+you can dismiss it at a glance. Nothing is moved, and nothing is decided.
+
+It exists because "publish deliberately" becomes "publish never" if nobody is
+ever prompted. A rule that depends on remembering is a rule that decays.
+
+**The private half of a workspace is never searched.** Handoffs, memory and
+state are why a workspace is created private — publishing them is an
+irreversible disclosure. Those directories are excluded twice over: the search
+uses an allow list rather than a deny list, *and* they are refused by name if you
+type one directly. Widening one must not quietly widen the other.
+
+`share promote` previews by default, scans for credentials before anything
+moves, and refuses on a finding — naming the pattern, never the value. It
+**writes locally and never pushes**: `loadout workspace save` is what shares it,
+and that scans again on the way out.
+
+## Specialist packs
+
+House standards fetched from a Git remote, resolving alongside the built-ins:
+
+```
+loadout pack add house https://example.com/house-standards.git
+loadout pack list
+loadout pack approve house      # after reading it
+loadout pack update house       # moves the pin, and costs the approval
+loadout pack remove house
+```
+
+**Fetching is not approving, and that split is the whole feature.** A pack's
+content becomes instructions an agent follows, and the declaration lives in a
+workspace anybody on your team can edit. So the declaration *proposes* and your
+machine *decides* — the same rule command policy uses, guarding the same
+failure: a change reaching your machine because it reached somebody else's
+repository.
+
+**Approval is of a commit, never of a pack.** Approving "the standards pack"
+would mean approving whatever it says next week. Move the pin and it stops
+loading until somebody reads the change and approves again — that is arithmetic
+in the gate, not bookkeeping anyone can forget.
+
+A pack pinned to no commit loads nothing at all. It would otherwise load
+whatever its branch says today, which is the unpinned dependency this refuses.
+
+Packs layer **over the built-ins and under the workspace**. A pack is standards
+from elsewhere; your workspace and your project are yours, so whatever they say
+wins — adopting a pack must not quietly overrule a decision somebody made
+deliberately. `loadout instructions show` says `pack` for anything that came
+from one.
+
+The approvals live on this machine and are never committed. Nobody can take
+responsibility for what your agent is told on your behalf.
+
+## Onboarding defaults
+
+Registering a project asks the questions it currently makes you answer later —
+usually after the third time something surprises you:
+
+```
+loadout config set onboarding-agent codex
+loadout config set onboarding-model big-model
+loadout config set onboarding-models "review=small-model;implement=big-model"
+loadout config set onboarding-editor Agents
+```
+
+`loadout project add` then fills those in and **says what it filled**:
+
+```
+Registered Demo (demo)
+  agent: codex (from your defaults)
+  model for review: small-model (from your defaults)
+```
+
+**Blanks only.** A project that names its own agent chose that, and a
+machine-wide preference is not grounds to reconsider it. The one exception is
+`claude` as the agent: that's the built-in default rather than a choice anybody
+made, so a configured preference replaces it.
+
+Filling is per setting, not per section — a project that pins a model for
+`review` but not `implement` gets `implement` filled in and `review` left alone.
+
+**Two things are deliberately absent.** Nothing that reaches off this machine
+has a default: the rule everywhere else here is that outward-facing things are
+confirmed rather than switched on for you, and a default is the opposite of
+confirming. And remote control isn't here at all — it doesn't exist in Loadout
+yet, so a setting to enable it automatically would be a setting for nothing.
+
+## Pinning a model
+
+Loadout never chose a model, so the choice was retyped after `--` every session
+or, more often, forgotten. A project can pin one, and pin a different one per
+mode:
+
+```yaml
+agents:
+  default: claude
+  model: big-model
+  model_by_mode:
+    review: small-model
+    advise: small-model
+```
+
+Names are written the way the agent spells them. Loadout translates the *flag*,
+not the name — there's no shared vocabulary of models across agents, and
+inventing one would mean maintaining a mapping that's wrong the week either of
+them ships something new.
+
+The mode's entry wins over the project's; a project with no `model` at all
+leaves the agent on its own default, which is the common case. A build that
+doesn't advertise a model option is told about rather than quietly started on
+something else. And a model you still type after `--` wins over both: the
+manifest ends the retyping, it doesn't take the choice away.
+
+Nothing here infers anything. Choosing a model from how hard the work looks
+would mean reading difficulty out of token counts, which is a guess wearing a
+metric's clothes.
+
+`loadout launches` breaks launches down by posture, with the context size each
+was given. That is **not** spend, and it is deliberately not in `loadout usage`:
+what the agents record is per day, per directory and per model, so a day in
+which you reviewed and then implemented can't be split between the two. A mode
+column in a spend report would be a number you'd act on and nothing could
+support. For spend by model, `loadout usage --by model` already answers that.
+
+## Adding an editor nobody compiled in
+
+Naming a different editor was always possible with `editor-command`. What it
+couldn't say is how that editor takes a **profile**, and that's the part worth
+having — it's what lets opening a project for Claude and for Codex give you
+different extensions and settings. Editors differ in kind here, not in spelling:
+
+```yaml
+custom_editors:
+  helix:
+    executable: hx
+    arguments: ["${DIRECTORY}"]
+    terminal: true
+    profile_environment: HELIX_RUNTIME
+```
+
+`${DIRECTORY}` is the folder being opened and `${PROFILE}` the profile chosen
+for it; both expand in arguments and in environment values, and an unset profile
+expands to nothing rather than to the literal text.
+
+A profile reaches the editor one of two ways. `profile_arguments` are added to
+the command line only when a profile was chosen, and `profile_environment` names
+a variable to set instead. Neovim is recognised by name and uses the second:
+`NVIM_APPNAME` names the configuration directory it loads, so a profile is a
+directory beside your `nvim` one and switching is nothing more than starting the
+editor.
+
+`terminal: true` says the editor draws on the terminal it was started from, so
+Loadout waits for it. A windowed editor is let go instead, because it outlives
+the launcher and there's no exit code worth having.
+
+The VS Code family is recognised by name and deliberately declares **no**
+`profile_arguments`. Asked for a folder and a profile together it opens a window
+containing neither and reports nothing; asked for the folder alone it opens every
+time. `loadout code` says the profile wasn't used rather than leaving you to
+find out. As with agents, a described editor taking the name of a built-in one
+replaces it — so if that's ever fixed, you can say so without waiting for us.
+
+An editor nothing knows about is never reported as having ignored a profile.
+"I can't check" and "it isn't there" are different answers, and only one of them
+sends somebody looking for a problem they don't have.
+
 ## Environments and security profiles
 
 A project can define environments, and selecting one changes both which

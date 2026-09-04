@@ -44,10 +44,19 @@ public static class SpecialistScaffold
     /// <summary>
     /// Drafts a specialist from an identifier of the form <c>kind.name</c>.
     /// </summary>
+    /// <param name="id">The identifier, which names the layer first.</param>
+    /// <param name="title">What to call it, or null to make one from the name.</param>
+    /// <param name="summary">What it is for, or null for the layer's own wording.</param>
+    /// <param name="measured">
+    /// What the repository was seen to do, written into the draft as fact. Empty
+    /// when nothing was counted, which is the ordinary case for every layer
+    /// except a project's own.
+    /// </param>
     public static OperationResult<SpecialistDraft> Draft(
         string id,
         string? title = null,
-        string? summary = null)
+        string? summary = null,
+        IReadOnlyList<ProjectConvention>? measured = null)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -94,7 +103,8 @@ public static class SpecialistScaffold
             kind,
             name,
             string.IsNullOrWhiteSpace(title) ? Humanise(name) : title.Trim(),
-            string.IsNullOrWhiteSpace(summary) ? SummaryFor(kind) : summary.Trim());
+            string.IsNullOrWhiteSpace(summary) ? SummaryFor(kind) : summary.Trim(),
+            measured);
 
         return OperationResult<SpecialistDraft>.Ok(
             new SpecialistDraft(canonical, kind, $"{name.ToLowerInvariant()}.md", content));
@@ -115,7 +125,8 @@ public static class SpecialistScaffold
         SpecialistKind kind,
         string name,
         string title,
-        string summary)
+        string summary,
+        IReadOnlyList<ProjectConvention>? measured)
     {
         var text = new StringBuilder();
 
@@ -130,9 +141,52 @@ public static class SpecialistScaffold
         text.AppendLine("---");
         text.AppendLine();
 
+        AppendMeasured(text, measured);
+
         AppendBody(text, kind, title);
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// What the repository was seen to do, written above the sections somebody
+    /// still has to fill in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Above rather than below, because these are the only lines in the draft
+    /// that are already true. Everything under them is a prompt.
+    /// </para>
+    /// <para>
+    /// Each finding carries what it was counted from. A reader who disagrees
+    /// with "returns a result type nine times as often as it throws" can go and
+    /// check, which is not something an assertion offers — and a scaffold that
+    /// stated it flatly would be inviting an author to keep a claim they never
+    /// tested.
+    /// </para>
+    /// </remarks>
+    private static void AppendMeasured(StringBuilder text, IReadOnlyList<ProjectConvention>? measured)
+    {
+        if (measured is not { Count: > 0 })
+        {
+            return;
+        }
+
+        text.AppendLine("## What this repository already does");
+        text.AppendLine();
+        text.AppendLine(
+            "Counted from the code, not decided. Check anything that looks wrong, and delete "
+            + "what is true but not worth a session's attention.");
+        text.AppendLine();
+
+        foreach (var convention in measured)
+        {
+            text.AppendLine(CultureInfo.InvariantCulture,
+                $"- **{convention.Subject}:** {convention.Finding} "
+                + $"*(from {convention.Evidence} file(s))*");
+        }
+
+        text.AppendLine();
     }
 
     /// <summary>

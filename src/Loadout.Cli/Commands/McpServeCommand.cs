@@ -4,6 +4,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
+using Loadout.Core.Git;
 using Loadout.Models.Instructions;
 using Loadout.Tui;
 using System.Reflection;
@@ -135,6 +136,9 @@ public sealed class LoadoutTools
     private readonly IMemoryService _memory;
     private readonly IWorkspaceManager _workspace;
     private readonly IProjectService _projects;
+    private readonly Core.Tasks.ITaskService _tasks;
+    private readonly IGitManager _git;
+    private readonly TimeProvider _time;
     private readonly LoadoutToolScope _scope;
 
     public LoadoutTools(
@@ -142,12 +146,18 @@ public sealed class LoadoutTools
         IMemoryService memory,
         IWorkspaceManager workspace,
         IProjectService projects,
+        Core.Tasks.ITaskService tasks,
+        IGitManager git,
+        TimeProvider time,
         LoadoutToolScope scope)
     {
         _instructions = instructions;
         _memory = memory;
         _workspace = workspace;
         _projects = projects;
+        _tasks = tasks;
+        _git = git;
+        _time = time;
         _scope = scope;
     }
 
@@ -273,6 +283,11 @@ public sealed class LoadoutTools
             + "topics named back to you: a second topic beside the first is how memory comes to "
             + "hold two answers with nothing to choose between them.")]
         bool separate = false,
+        [Description(
+            "project (the default), user for something true of your work whatever the project, "
+            + "or machine for something true only of this computer. A machine fact recorded as "
+            + "a project one is a fact that syncs to machines it is false on.")]
+        string scope = "project",
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(topic);
@@ -303,12 +318,164 @@ public sealed class LoadoutTools
                 MemoryKind.Lesson,
                 [fact],
                 separate,
+                Scope(scope),
                 ct)
             .ConfigureAwait(false);
 
         return written.Succeeded
             ? $"Recorded under '{topic}'."
             : written.Error ?? "It could not be recorded.";
+    }
+
+    /// <summary>A named scope, defaulting to the project when it is not one we know.</summary>
+    private static MemoryScope Scope(string? name) =>
+        Enum.TryParse<MemoryScope>(name, ignoreCase: true, out var parsed)
+            ? parsed
+            : MemoryScope.Project;
+
+    [McpServerTool(Name = "loadout_tasks")]
+    [Description(
+        "What this project is working on: every open task, who said so and when, plus anything "
+        + "the repository does not back up. Use it to answer \"where were we\" from the record "
+        + "rather than from the last thing in context.")]
+    public async Task<string> TasksAsync(CancellationToken ct = default)
+    {
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var listed = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return listed.Error ?? "The tasks could not be read.";
+        }
+
+        if (listed.Value!.Count == 0)
+        {
+            return $"Nothing is recorded for {slug}.";
+        }
+
+        var now = _time.GetUtcNow();
+        var lines = new List<string>();
+
+        foreach (var item in listed.Value!
+            .OrderBy(item => item.State)
+            .ThenBy(item => item.Id, StringComparer.Ordinal))
+        {
+            lines.Add(
+                $"{item.Id} [{item.State.ToString().ToLowerInvariant()}] {item.Title}"
+                + $" - said by {(item.DeclaredBy.Length > 0 ? item.DeclaredBy : "nobody named")}"
+                + $" on {item.DeclaredUtc:yyyy-MM-dd}");
+        }
+
+        // The disagreements travel with the answer rather than being available
+        // separately. A session handed its own claim back as fact is the thing
+        // this exists to prevent: it is the one reader that cannot tell the
+        // difference, because it is usually the one that made the claim.
+        var unsupported = await CheckAsync(slug, listed.Value!, now, ct).ConfigureAwait(false);
+
+        foreach (var disagreement in unsupported)
+        {
+            lines.Add($"  unsupported: {disagreement.TaskId} {disagreement.Detail}");
+        }
+
+        var composed = Core.Tasks.Suggestions.Compose(listed.Value!, unsupported);
+
+        if (composed.Count > 0)
+        {
+            // Labelled as composed, and kept apart from anything the session
+            // writes itself. These were assembled out of the states above, so
+            // they cannot be wrong about what they name; a reply the agent
+            // drafts can be confidently wrong about the same thing, and the
+            // only defence is that the two never arrive as one list.
+            lines.Add(string.Empty);
+            lines.Add("Composed from the record above - these cannot be wrong about what they name:");
+
+            foreach (var suggestion in composed)
+            {
+                lines.Add($"  {suggestion.Text}");
+            }
+
+            lines.Add(
+                "Anything you suggest beyond these is your own draft. Say so when you offer it, "
+                + "and offer it - none of this is done for you.");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    [McpServerTool(Name = "loadout_task_declare")]
+    [Description(
+        "Record where a task stands: open, doing, done, blocked or dropped. Adds it when the id "
+        + "is new. This records a claim, attributed and dated; it does not make the claim true.")]
+    public async Task<string> DeclareTaskAsync(
+        [Description("Short identifier for the task.")] string id,
+        [Description("open, doing, done, blocked or dropped.")] string state,
+        [Description("What the work is. Leave out to keep what is there.")] string? title = null,
+        [Description("Anything worth adding.")] string? note = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentException.ThrowIfNullOrWhiteSpace(state);
+
+        if (!Enum.TryParse<Models.Tasks.TaskState>(state, ignoreCase: true, out var parsed))
+        {
+            return $"There is no '{state}' state. The states are: open, doing, done, blocked, dropped.";
+        }
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var declared = await _tasks
+            .DeclareAsync(slug, id, parsed, "agent", title, note, ct)
+            .ConfigureAwait(false);
+
+        return declared.Succeeded
+            ? $"Recorded {declared.Value!.Id} as {parsed.ToString().ToLowerInvariant()}, "
+                + "attributed to this session and dated now."
+            : declared.Error ?? "The task could not be recorded.";
+    }
+
+    /// <summary>What the repository has to say about the claims.</summary>
+    /// <remarks>
+    /// A repository that cannot be read returns nothing rather than an empty
+    /// history: with no commits, "nothing committed since" would fire on every
+    /// task at once, which is a confidently wrong answer where none was needed.
+    /// </remarks>
+    private async Task<IReadOnlyList<Core.Tasks.TaskDisagreement>> CheckAsync(
+        string slug,
+        IReadOnlyList<Models.Tasks.TaskItem> tasks,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var resolved = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+        if (resolved.Failed
+            || resolved.Value!.LocalPath is not { Length: > 0 } path
+            || !Directory.Exists(path))
+        {
+            return [];
+        }
+
+        var oldest = tasks
+            .Where(item => item.State is Models.Tasks.TaskState.Done or Models.Tasks.TaskState.Doing)
+            .Select(item => item.DeclaredUtc)
+            .DefaultIfEmpty(now)
+            .Min();
+
+        var commits = await _git.ListCommitsAsync(path, oldest, ct).ConfigureAwait(false);
+
+        return commits.Succeeded
+            ? Core.Tasks.TaskCorroboration.Check(tasks, commits.Value!, now)
+            : [];
     }
 
     [McpServerTool(Name = "loadout_mode")]

@@ -146,6 +146,9 @@ public sealed class LaunchStatisticsTests
         statistics.NeverLoaded.Should().HaveCount(4);
     }
 
+    private static LaunchRecord Moded(string id, string? mode, int tokens) =>
+        Record(id, [], tokens) with { Mode = mode };
+
     private static LaunchRecord Record(
         string id,
         string[] specialists,
@@ -167,4 +170,41 @@ public sealed class LaunchStatisticsTests
             12000,
             exitCode is null ? null : new DateTimeOffset(2026, 2, 1, 10, 0, 0, TimeSpan.Zero),
             exitCode);
+
+    [Fact]
+    public void Launches_are_grouped_by_the_posture_they_took()
+    {
+        var statistics = LaunchStatistics.From(
+            [
+                Moded("a", "review", 200),
+                Moded("b", "implement", 1000),
+                Moded("c", "review", 300),
+                Moded("d", "implement", 3000),
+                Moded("e", "review", 500),
+            ],
+            new Dictionary<string, int>());
+
+        // Ordered by how much was launched, because the question this answers
+        // is which posture the work is actually done in — and the fixture has
+        // to be able to tell that apart from alphabetical order, which it could
+        // not when the busiest mode also sorted first.
+        statistics.Modes.Should().NotBeNull();
+        statistics.Modes!.Select(m => m.Mode).Should().Equal("review", "implement");
+        statistics.Modes[0].Launches.Should().Be(3);
+        statistics.Modes[0].EstimatedTokens.Should().Be(1000);
+        statistics.Modes[1].EstimatedTokens.Should().Be(4000);
+    }
+
+    [Fact]
+    public void A_launch_that_named_no_posture_is_still_counted()
+    {
+        var statistics = LaunchStatistics.From(
+            [Moded("a", null, 500), Moded("b", "", 500)],
+            new Dictionary<string, int>());
+
+        // Dropping them would make the launch counts here disagree with the
+        // list above, which is how a report stops being trusted.
+        statistics.Modes!.Should().ContainSingle()
+            .Which.Should().BeEquivalentTo(new { Mode = "none", Launches = 2 });
+    }
 }
