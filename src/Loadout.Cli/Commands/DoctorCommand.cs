@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Diagnostics;
 using Loadout.Models;
+using Loadout.Platform.Abstractions;
 using Loadout.Models.Diagnostics;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -30,6 +31,10 @@ public sealed class DoctorSettings : GlobalSettings
     [CommandOption("--yes")]
     [Description("With --fix, apply without asking first.")]
     public bool Yes { get; init; }
+
+    [CommandOption("--bundle [PATH]")]
+    [Description("Write the findings to one file to send somebody. Defaults to this directory.")]
+    public Spectre.Console.Cli.FlagValue<string> Bundle { get; init; } = new();
 }
 
 /// <summary>
@@ -50,14 +55,75 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
     private readonly IRemediationService _remediation;
     private readonly IAnsiConsole _console;
 
+    private readonly IPlatformPaths _paths;
+
     public DoctorCommand(
         IDoctorService doctor,
         IRemediationService remediation,
+        IPlatformPaths paths,
         IAnsiConsole console)
     {
         _doctor = doctor;
         _remediation = remediation;
+        _paths = paths;
         _console = console;
+    }
+
+    /// <summary>
+    /// Writes the findings to one file, or refuses to.
+    /// </summary>
+    /// <remarks>
+    /// The bundle exists to leave this machine, so it is screened before it is
+    /// written rather than after: a file that has been created and then reported
+    /// as unsafe is a file somebody may already have attached to something.
+    /// </remarks>
+    private async Task<int> WriteBundleAsync(
+        CommandOutput output,
+        DiagnosticReport report,
+        DoctorSettings settings,
+        CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        var built = DiagnosticBundle.Build(
+            report,
+            _paths.Host,
+            typeof(DoctorCommand).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+            now);
+
+        if (built.Failed)
+        {
+            return output.Fail(built);
+        }
+
+        var path = settings.Bundle.Value is { Length: > 0 } given
+            ? Directory.Exists(given)
+                ? Path.Combine(given, DiagnosticBundle.FileName(now))
+                : given
+            : Path.Combine(Directory.GetCurrentDirectory(), DiagnosticBundle.FileName(now));
+
+        if (settings.DryRun)
+        {
+            output.WriteLine($"[dim]Would write[/] {Markup.Escape(path)}");
+
+            return CommandOutput.Success();
+        }
+
+        try
+        {
+            await File.WriteAllTextAsync(path, built.Value!, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return output.Fail($"Could not write '{path}': {ex.Message}");
+        }
+
+        output.WriteLine($"[green]+[/] {Markup.Escape(path)}");
+        output.WriteLine(
+            "[dim]Read it before sending it. It names paths and secret references, never "
+            + "credential values, and the machine name is left out.[/]");
+
+        return CommandOutput.Success();
     }
 
     /// <inheritdoc />
@@ -72,6 +138,12 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
         }
 
         var report = result.Value!;
+
+        if (settings.Bundle.IsSet)
+        {
+            return await WriteBundleAsync(output, report, settings, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         if (output.IsJson)
         {

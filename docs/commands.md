@@ -25,6 +25,7 @@
 | `loadout drift [project]` | Show where projects have drifted from their recorded configuration |
 | `loadout drift --fix` | Put right the drift the launcher can fix itself |
 | `loadout doctor --fix` | Put right the findings the doctor can fix itself |
+| `loadout doctor --bundle [path]` | Write the findings to one file to send somebody, screened first |
 | `loadout docs audit [project]` | Report where the documentation has come adrift from the repository |
 | `loadout protect` | Install a pre-commit hook, or `--global` Git excludes |
 | `loadout migrate` | Move existing AI tooling files into the workspace |
