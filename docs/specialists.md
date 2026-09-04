@@ -237,8 +237,8 @@ loadout instructions list            # everything available to this project
 loadout instructions list --kind language
 ```
 
-The library ships 73 specialists — 4 foundations, 4 modes, 10 languages, 8
-frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions and 13 skills.
+The library ships 74 specialists — 4 foundations, 4 modes, 10 languages, 8
+frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions and 14 skills.
 They are embedded in the binary rather than kept on disk, so the command is the
 way to read them; there is no directory to browse.
 
@@ -302,6 +302,35 @@ has nothing to decide. `--dry-run` prints it instead of writing it.
 
 The library is read back immediately afterwards, so a draft that does not load
 says so at the moment you made it rather than the next time something needed it.
+
+With `--project`, the draft arrives with what the repository can be *seen* to
+do already filled in:
+
+```text
+## What this repository already does
+
+Counted from the code, not decided. Check anything that looks wrong, and delete
+what is true but not worth a session's attention.
+
+- **Test framework:** xUnit *(from 9 file(s))*
+- **Nullable reference types:** enabled *(from 9 file(s))*
+- **Errors:** returns a result type 15.4 times as often as it throws (494 against 32) *(from 381 file(s))*
+- **Comments:** 100% of files carry doc comments, so explanation goes above the member *(from 381 file(s))*
+```
+
+Only what can be counted, and every line says what it was counted from, so a
+reader who disagrees can go and check. Failure is reported as the ratio it is
+rather than as a rule — "never throws" is a claim counting cannot support, and
+somebody would have to disprove it later. A subject nothing could be found for
+is left out rather than written as "none found": a draft listing what it failed
+to detect reads as a list of problems, and the author deletes lines instead of
+writing them.
+
+Everything under those lines is a prompt. `skill.write-project-specialist`
+activates on a task like "write the conventions" and tells an agent how to fill
+them in — read a dozen files before writing anything, check the counted lines
+rather than trusting them, write instructions rather than description, and leave
+out whatever the language specialist already says.
 
 One markdown file that describes itself. There is no manifest: the library is
 what is on disk, which removes the possibility of a registry naming a file that
