@@ -99,6 +99,15 @@ public sealed class UsageCommand : AsyncCommand<UsageSettings>
                 ExitCode.InvalidArguments);
         }
 
+        // Said before the wait, not after it. Reading every agent's
+        // transcripts takes about a second per ten days of history on a busy
+        // machine, and this command was reported as stalling with a blinking
+        // cursor — which is what seventeen silent seconds looks like from the
+        // outside.
+        output.Meanwhile(
+            $"[dim]Reading what the agents recorded over the last {settings.Days} day(s). "
+            + "This can take a few seconds.[/]");
+
         var result = await _usage.ReportAsync(new UsageQuery(
             settings.Days,
             settings.Project,
