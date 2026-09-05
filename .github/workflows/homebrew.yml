@@ -10,8 +10,27 @@
 name: Homebrew
 
 on:
+  # Called by release.yml once the release exists. It cannot listen for the
+  # release itself: that release is created by a workflow using GITHUB_TOKEN,
+  # and GitHub deliberately raises no new workflow runs from events that token
+  # causes, to stop a workflow triggering itself forever. A `release:
+  # published` trigger here looked right, was merged, and did nothing at all
+  # for 0.17.0 — the tap stayed a version behind with every job green.
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag to publish, for example v0.17.0
+        required: true
+        type: string
+    secrets:
+      HOMEBREW_TAP_TOKEN:
+        required: true
+
+  # Still listens for a release somebody publishes by hand in the UI, which is
+  # a person's action and does raise the event.
   release:
     types: [published]
+
   workflow_dispatch:
     inputs:
       tag:
@@ -28,9 +47,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
-    # A prerelease is published like any other release and would otherwise
+    # Only a release event can be a prerelease, and only a prerelease is
+    # refused — it is published like any other release and would otherwise
     # become what `brew install loadout` hands people.
-    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+    #
+    # Written the other way round, as "dispatch or not a prerelease", this job
+    # skipped every time release.yml called it: under workflow_call the event
+    # is the caller's tag push, there is no release object to read, and the
+    # comparison quietly came out false.
+    if: github.event_name != 'release' || github.event.release.prerelease == false
 
     steps:
       - name: Work out the release
