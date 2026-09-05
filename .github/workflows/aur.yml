@@ -1,0 +1,255 @@
+# Publishes the AUR package for a release.
+#
+# Called by release.yml rather than listening for `release: published`. That
+# release is created by a workflow using GITHUB_TOKEN, and GitHub raises no
+# workflow runs from events that token causes — the Homebrew job listened for
+# it, never ran once, and the tap sat a version behind with every job green.
+#
+# The AUR authenticates pushes by SSH key alone; there is no password. So the
+# key is the account, and AUR_SSH_PRIVATE_KEY is the most sensitive credential
+# in this repository: it is push access to a package other people install.
+name: AUR
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag to publish, for example v0.17.0
+        required: true
+        type: string
+    # Not required. A release must not go red because a channel nobody has
+    # set up yet has no credentials: the job below checks and skips instead.
+    secrets:
+      AUR_SSH_PRIVATE_KEY:
+        required: false
+      AUR_USERNAME:
+        required: false
+      AUR_EMAIL:
+        required: false
+
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag to publish, for example v0.17.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # A job of its own because a secret cannot be read in a job-level `if`, and
+  # skipping is the answer that reads correctly on the release: not configured
+  # is not a failure. Publishing was written before an account could be
+  # registered — AUR registration was closed — so this had to be able to sit
+  # dormant and start working the day the secrets appear, with nothing to
+  # remember to switch on.
+  configured:
+    name: Is AUR publishing set up?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          WHO: ${{ secrets.AUR_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${KEY:-}" ] || [ -z "${WHO:-}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AUR publishing is not configured (AUR_SSH_PRIVATE_KEY and AUR_USERNAME); skipping."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  package:
+    name: Update the AUR package
+    needs: configured
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Only a release event can be a prerelease, and only a prerelease is
+    # refused. Written as "dispatch or not a prerelease" this skips every
+    # workflow_call: the event is then the caller's tag push, there is no
+    # release object, and the comparison quietly comes out false.
+    if: >-
+      needs.configured.outputs.ready == 'true'
+      && (github.event_name != 'release' || github.event.release.prerelease == false)
+
+    # base-devel carries makepkg, which is the only thing that can be trusted
+    # to write .SRCINFO. Generating that file by hand is how it drifts from the
+    # PKGBUILD beside it, and the AUR rejects a push where the two disagree.
+    container:
+      image: archlinux:base-devel
+
+    steps:
+      - name: Work out the release
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          version="${TAG#v}"
+
+          if [ -z "$version" ]; then
+            echo "No tag to publish." >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install what the container does not ship
+        run: pacman -Sy --noconfirm --needed git openssh curl
+
+      - name: Take the checksums from the release
+        id: sums
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          # The release publishes one SHA256SUMS covering every artefact, so
+          # the package is built from what shipped rather than from archives
+          # downloaded and hashed again here.
+          curl -fsSL -o SHA256SUMS \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/SHA256SUMS"
+
+          for pair in "x86_64:linux-x64" "aarch64:linux-arm64"; do
+            arch="${pair%%:*}"
+            rid="${pair##*:}"
+            name="loadout-${VERSION}-${rid}.tar.gz"
+            sum=$(awk -v n="$name" '$2 == n { print $1 }' SHA256SUMS)
+
+            if ! printf '%s' "$sum" | grep -Eq '^[0-9a-f]{64}$'; then
+              echo "SHA256SUMS has no usable entry for $name." >&2
+              exit 1
+            fi
+
+            echo "$arch=$sum" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Fetch the package repository
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          # Written with a restrictive umask and never echoed. The key is the
+          # AUR account, and a job that printed it would put push access to a
+          # published package into a log anybody with read access can see.
+          mkdir -p ~/.ssh
+          umask 077
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+
+          ssh-keyscan -t rsa,ecdsa,ed25519 aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+
+          git config --global core.sshCommand "ssh -i ~/.ssh/aur -o IdentitiesOnly=yes"
+          git config --global --add safe.directory '*'
+
+          git clone ssh://aur@aur.archlinux.org/loadout-bin.git package
+
+      - name: Write the PKGBUILD
+        working-directory: package
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
+          X86_64: ${{ steps.sums.outputs.x86_64 }}
+          AARCH64: ${{ steps.sums.outputs.aarch64 }}
+        run: |
+          set -euo pipefail
+
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+
+          cat > PKGBUILD <<PKG
+          # Generated by the loadout-cli release workflow. Edits here are
+          # overwritten on the next release: change .github/workflows/aur.yml
+          # in that repository.
+          # Maintainer: ${{ secrets.AUR_USERNAME }} <${{ secrets.AUR_EMAIL }}>
+          pkgname=loadout-bin
+          pkgver=$VERSION
+          pkgrel=1
+          pkgdesc="Agent launcher that composes project context from a central workspace"
+          arch=('x86_64' 'aarch64')
+          url="https://github.com/$GITHUB_REPOSITORY"
+          license=('MIT')
+          provides=('loadout')
+          conflicts=('loadout')
+          options=('!strip')
+
+          source_x86_64=("\$pkgname-\$pkgver-x86_64.tar.gz::$base/loadout-$VERSION-linux-x64.tar.gz")
+          source_aarch64=("\$pkgname-\$pkgver-aarch64.tar.gz::$base/loadout-$VERSION-linux-arm64.tar.gz")
+          sha256sums_x86_64=('$X86_64')
+          sha256sums_aarch64=('$AARCH64')
+
+          package() {
+            # The archive is not a bare binary: libonigwrap.so sits beside it,
+            # and .NET resolves a native library from the directory of the
+            # executable. So the payload goes to /opt and /usr/bin gets a
+            # symlink — on Linux the runtime reads /proc/self/exe, which
+            # resolves the symlink to the real path, so the library is found.
+            # Installing the binary into /usr/bin on its own would leave the
+            # library behind and fail on first run.
+            install -Dm755 "\$srcdir/loadout" "\$pkgdir/opt/loadout/loadout"
+            install -Dm644 "\$srcdir/libonigwrap.so" "\$pkgdir/opt/loadout/libonigwrap.so"
+            install -Dm644 "\$srcdir/LICENSE" "\$pkgdir/usr/share/licenses/\$pkgname/LICENSE"
+
+            install -dm755 "\$pkgdir/usr/bin"
+            ln -s /opt/loadout/loadout "\$pkgdir/usr/bin/loadout"
+          }
+          PKG
+
+          # The heredoc is indented to read properly inside the step; the file
+          # must not be.
+          sed -i 's/^          //' PKGBUILD
+
+          cat PKGBUILD
+
+      - name: Write .SRCINFO with makepkg
+        working-directory: package
+        run: |
+          set -euo pipefail
+
+          # makepkg refuses to run as root, and the container is root. A build
+          # user is the documented way round it; --printsrcinfo builds nothing,
+          # it only restates the PKGBUILD in the form the AUR indexes.
+          useradd -m builder
+          chown -R builder .
+
+          su builder -c "makepkg --printsrcinfo" > .SRCINFO
+
+          # A push whose .SRCINFO disagrees with its PKGBUILD is refused by a
+          # hook on the server, and an empty one is the way that happens.
+          grep -q '^pkgbase = loadout-bin' .SRCINFO
+          grep -q "pkgver = ${{ steps.release.outputs.version }}" .SRCINFO
+
+          cat .SRCINFO
+
+      - name: Push it
+        working-directory: package
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet; then
+            echo "The package already describes $VERSION; nothing to push."
+            exit 0
+          fi
+
+          git config user.name "${{ secrets.AUR_USERNAME }}"
+          git config user.email "${{ secrets.AUR_EMAIL }}"
+
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to $VERSION"
+          git push
