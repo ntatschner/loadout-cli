@@ -3,6 +3,7 @@ using Loadout.Core.Configuration;
 using Loadout.Core.Context;
 using Loadout.Core.Diagnostics;
 using Loadout.Core.Editors;
+using Loadout.Core.Manager;
 using Loadout.Core.Projects;
 using Loadout.Core.Sessions;
 using Loadout.Core.Workspace;
@@ -58,6 +59,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IPlatformPaths _paths;
     private readonly IEditorService _editors;
     private readonly ISessionHistoryService _sessions;
+    private readonly IManagerInventory _manager;
 
     public TerminalLauncher(
         IAnsiConsole console,
@@ -78,7 +80,8 @@ public sealed class TerminalLauncher : ILauncherTui
         IDoctorService doctor,
         IPlatformPaths paths,
         IEditorService editors,
-        ISessionHistoryService sessions)
+        ISessionHistoryService sessions,
+        IManagerInventory manager)
     {
         _console = console;
         _projects = projects;
@@ -99,6 +102,7 @@ public sealed class TerminalLauncher : ILauncherTui
         _paths = paths;
         _editors = editors;
         _sessions = sessions;
+        _manager = manager;
     }
 
     /// <inheritdoc />
@@ -374,6 +378,10 @@ public sealed class TerminalLauncher : ILauncherTui
                 await CheckDriftAsync(ct).ConfigureAwait(false);
                 return null;
 
+            case LauncherAction.Manager when intent.Project is { } managed:
+                await ShowManagerAsync(managed, ct).ConfigureAwait(false);
+                return null;
+
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
                 // Run against the project on screen. The launcher knew which
                 // one was selected and threw it away here, so a command that
@@ -589,6 +597,52 @@ public sealed class TerminalLauncher : ILauncherTui
     /// <summary>
     /// Shows the settings and writes back only what actually changed.
     /// </summary>
+    /// <summary>
+    /// Shows what is loaded for a project, and runs whatever was chosen there.
+    /// </summary>
+    /// <remarks>
+    /// The screen returns a command line rather than doing anything, and it is
+    /// run through the same catalogue every other command goes through. That is
+    /// the rule the launcher keeps everywhere: a screen never implements
+    /// command behaviour, or the trust boundary has two implementations and one
+    /// of them drifts.
+    /// </remarks>
+    private async Task ShowManagerAsync(ProjectResolution project, CancellationToken ct)
+    {
+        var read = await _manager
+            .ReadAsync(project.Entry.Slug, project.LocalPath ?? string.Empty, ct)
+            .ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            _console.MarkupLine($"[red]{Shown.Safely(read.Error!)}[/]");
+            return;
+        }
+
+        string? chosen;
+
+        using (IApplication application = Application.Create())
+        {
+            application.InitLegibly();
+
+            using var window = new ManagerWindow(project.Entry.Slug, read.Value!, application);
+
+            await application.RunAsync(window, ct).ConfigureAwait(false);
+
+            chosen = window.Chosen;
+        }
+
+        if (chosen is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        await _catalogue.RunAsync(
+            path,
+            project.LocalPath is { Length: > 0 } local ? ["--repo", local] : [],
+            ct).ConfigureAwait(false);
+    }
+
     private async Task ShowSettingsAsync(CancellationToken ct)
     {
         var loaded = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);

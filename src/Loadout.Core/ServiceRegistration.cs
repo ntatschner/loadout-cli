@@ -119,6 +119,8 @@ public static class ServiceRegistration
         services.AddSingleton<Usage.ISpendNoticeStore, Usage.SpendNoticeStore>();
         services.AddSingleton<Tasks.ITaskService, Tasks.TaskService>();
         services.AddSingleton<Packs.IPackService, Packs.PackService>();
+        services.AddSingleton<Manager.IInstalledPluginReader, Manager.InstalledPluginReader>();
+        services.AddSingleton<Manager.IManagerInventory, Manager.ManagerInventory>();
         services.AddSingleton<Statusline.ILoadedSpecialistStore, Statusline.LoadedSpecialistStore>();
         services.AddSingleton<Checkpoints.ICheckpointService, Checkpoints.CheckpointService>();
 

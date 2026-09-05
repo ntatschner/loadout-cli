@@ -436,10 +436,11 @@ internal sealed class LauncherWindow : Window
         //
         // F3, beside the F2 below, because that one was pressed in a real
         // console before being written down and the function keys are the
-        // family that survived. This one has NOT been pressed on a real
-        // console by whoever added it — a key that passes its test and does
-        // nothing on the machine is worse than no key, so the menu item above
-        // reaches the same command without one.
+        // family that survived. This one shipped unverified with a note saying
+        // so; it has since been pressed in a real Windows console and returned
+        // the project's launch history, so the note is gone. The menu item
+        // above still reaches the same command for anyone whose terminal eats
+        // function keys.
         this.BindEverywhere(Key.F3, Command.Context);
 
         AddCommand(Command.Context, () =>
@@ -447,6 +448,16 @@ internal sealed class LauncherWindow : Window
             WithSelected(p => RunCommand(
                 $"{LauncherCommands.Launches} {p.Entry.Slug}"));
 
+            return true;
+        });
+
+        // F4, beside F2 and F3. The function keys are the family that
+        // survived a real Windows console, where Ctrl+comma did nothing at all.
+        this.BindEverywhere(Key.F4, Command.Activate);
+
+        AddCommand(Command.Activate, () =>
+        {
+            Close(new LauncherIntent(LauncherAction.Manager, Selected));
             return true;
         });
 
