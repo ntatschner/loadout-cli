@@ -58,7 +58,7 @@ Grab your platform's archive from the
 ### Linux and macOS
 
 ```sh
-tar -xzf loadout-0.16.2-linux-x64.tar.gz
+tar -xzf loadout-0.16.3-linux-x64.tar.gz
 ./install.sh          # goes to ~/.local/bin, no root
 loadout setup
 ```
@@ -69,7 +69,7 @@ There are `.deb` and `.rpm` packages if you'd rather.
 ### Windows
 
 ```powershell
-msiexec /i loadout-0.16.2-win-x64.msi    # per-user, no elevation
+msiexec /i loadout-0.16.3-win-x64.msi    # per-user, no elevation
 loadout setup
 ```
 
