@@ -529,3 +529,17 @@ jobs:
           # offers no hosted runner for either, and that is said there rather
           # than implying a level of testing that did not happen.
           body_path: notes.md
+
+  # Called rather than triggered. The release above is published with
+  # GITHUB_TOKEN, and GitHub raises no workflow runs from events that token
+  # causes — so a `release: published` trigger in homebrew.yml never fires for
+  # a release this pipeline makes, and the tap silently stays behind.
+  homebrew:
+    name: Homebrew
+    needs: release
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/homebrew.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
