@@ -56,6 +56,17 @@ internal enum LauncherAction
 
     /// <summary>Show where projects have drifted from their recorded configuration.</summary>
     Drift,
+
+    /// <summary>
+    /// Show what is loaded — packs, skills and MCP servers — in one place.
+    /// </summary>
+    /// <remarks>
+    /// A screen rather than a dialog, for the reason Problems is: reading the
+    /// pack standing, the specialist library and the resolved servers means
+    /// three round trips to disk and a Git remote, and doing that while still
+    /// drawing the launcher freezes it.
+    /// </remarks>
+    Manager,
 }
 
 /// <summary>

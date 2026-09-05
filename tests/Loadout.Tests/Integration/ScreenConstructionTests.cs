@@ -1,3 +1,4 @@
+using Loadout.Core.Manager;
 using System.Drawing;
 using Loadout.Models.Diagnostics;
 using Loadout.Models.Projects;
@@ -149,6 +150,228 @@ public sealed class ScreenConstructionTests
         // working while this does not is indistinguishable, from the outside,
         // from the launcher being broken.
         palette.Chosen.Should().Be("doctor");
+    }
+
+    [Fact]
+    public void The_manager_screen_can_be_built_and_drawn()
+    {
+        Drawn(app => new ManagerWindow("alpha", Loaded(), app));
+    }
+
+    [Fact]
+    public void The_manager_screen_lists_every_family_under_its_own_heading()
+    {
+        using var window = Built();
+
+        var rows = Rows(window);
+
+        // Headings for all three, whatever is in them. A family that vanished
+        // when empty would make "nothing declared" and "could not be read"
+        // look identical on screen.
+        rows.Should().Contain(line => line.StartsWith("SPECIALIST PACKS", StringComparison.Ordinal));
+        rows.Should().Contain(line => line.StartsWith("MCP SERVERS", StringComparison.Ordinal));
+        rows.Should().Contain(line => line.StartsWith("SKILLS", StringComparison.Ordinal));
+        rows.Should().Contain(line => line.StartsWith("PLUGINS", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_manager_screen_marks_what_is_waiting_on_a_decision()
+    {
+        using var window = Built();
+
+        // The unapproved pack is the row somebody opened this to find.
+        Rows(window).Should().Contain(line => line.Contains("! fresh", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_family_with_nothing_in_it_says_so()
+    {
+        using var window = Drawn2(app => new ManagerWindow(
+            "alpha", new ManagerView([], []), app));
+
+        Rows(window).Should().Contain(line => line.Trim() == "none");
+    }
+
+    [Fact]
+    public void The_manager_screen_asks_for_nothing_until_a_key_is_pressed()
+    {
+        using var window = Built();
+
+        // Built and drawn is not a request. A screen that arrived with a
+        // command already chosen would run it the moment it closed.
+        window.Chosen.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(0, "a", "pack approve house")]
+    [InlineData(0, "u", "pack update house")]
+    [InlineData(0, "r", "pack remove house")]
+    public void A_key_on_a_pack_runs_that_pack_s_command(int row, string key, string expected)
+    {
+        using var window = Built();
+
+        Select(window, ManagedKind.Pack, "house");
+
+        Press(window, key);
+
+        // Each key gets its own command slot. Bound to one slot they share, the
+        // last handler registered answers for all three and approve removes.
+        window.Chosen.Should().Be(expected, $"'{key}' is the {expected.Split(' ')[1]} key");
+        _ = row;
+    }
+
+    [Fact]
+    public void Removing_a_declared_server_names_the_project_it_is_declared_for()
+    {
+        using var window = Built();
+
+        Select(window, ManagedKind.Server, "github");
+
+        Press(window, "r");
+
+        window.Chosen.Should().Be("mcp remove github --project alpha");
+    }
+
+    [Fact]
+    public void A_key_that_does_not_apply_to_the_row_does_nothing()
+    {
+        using var window = Built();
+
+        Select(window, ManagedKind.Skill, "bug-investigation");
+
+        Press(window, "a");
+        Press(window, "u");
+        Press(window, "r");
+
+        // A skill is not approved, updated or removed from here. Pressing the
+        // pack keys on one is a mis-aim, and running some other row's command
+        // because this one had none would be the worst answer available.
+        window.Chosen.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Runs what a key is bound to on this screen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not NewKeyDownEvent. These are bound everywhere — app-scoped, so the key
+    /// works whatever has focus — and an app-scoped binding is dispatched by a
+    /// running Application, which a screen built for a test does not have. A
+    /// key press here would return false having done nothing, and the test
+    /// would pass for the wrong reason.
+    /// </para>
+    /// <para>
+    /// So this asserts the key is bound, then invokes what it is bound to.
+    /// Between them those catch the mistake worth catching: three keys sharing
+    /// one command slot, where the last handler registered answers for all
+    /// three and approve removes. What this cannot show is whether the key
+    /// arrives at all in a real Windows console — F2 was pressed there before
+    /// being written down, and these have not been.
+    /// </para>
+    /// </remarks>
+    private static void Press(ManagerWindow window, string key)
+    {
+        var pressed = key switch
+        {
+            "a" => Key.A,
+            "u" => Key.U,
+            _ => Key.R,
+        };
+
+        window.KeyBindings.TryGet(pressed, out var binding)
+            .Should().BeTrue($"'{key}' has to be bound on the manager screen");
+
+        foreach (var command in binding.Commands)
+        {
+            window.InvokeCommand(command);
+        }
+    }
+
+    /// <summary>Puts the cursor on a named row, by finding it rather than counting.</summary>
+    private static void Select(ManagerWindow window, ManagedKind kind, string name)
+    {
+        var list = Named<Terminal.Gui.Views.ListView>(window, "manager-rows")!;
+        var rows = Rows(window);
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].Contains(name, StringComparison.Ordinal)
+                && !rows[i].StartsWith("SPECIALIST", StringComparison.Ordinal))
+            {
+                list.SelectedItem = i;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException($"No {kind} row named {name} was drawn.");
+    }
+
+    /// <summary>The rows the screen drew, found by the list's name rather than its place.</summary>
+    private static IReadOnlyList<string> Rows(ManagerWindow window)
+    {
+        var list = Named<Terminal.Gui.Views.ListView>(window, "manager-rows")
+            ?? throw new InvalidOperationException("The manager screen has no row list.");
+
+        return [.. Enumerable.Range(0, list.Source!.Count)
+            .Select(i => list.Source.ToList()[i]?.ToString() ?? string.Empty)];
+    }
+
+    private static T? Named<T>(View root, string id) where T : View
+    {
+        foreach (var child in root.SubViews)
+        {
+            if (child is T match && string.Equals(child.Id, id, StringComparison.Ordinal))
+            {
+                return match;
+            }
+
+            if (Named<T>(child, id) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    private static ManagerView Loaded() =>
+        new(
+            [
+                new ManagedItem(ManagedKind.Pack, "house", "git@example.com:std.git",
+                    "machine", "active", false),
+                new ManagedItem(ManagedKind.Pack, "fresh", "git@example.com:new.git",
+                    "machine", "never approved here", true),
+                new ManagedItem(ManagedKind.Server, "github", "http",
+                    "project", "active", false),
+                new ManagedItem(ManagedKind.Skill, "bug-investigation", "built-in",
+                    "workspace", "loaded when asked for", false),
+                new ManagedItem(ManagedKind.Plugin, "rust-analyzer-lsp",
+                    "claude-plugins-official 1.0.0", "user", "enabled", false),
+            ],
+            []);
+
+    private static ManagerWindow Built() => Drawn2(app => new ManagerWindow("alpha", Loaded(), app));
+
+    /// <summary>
+    /// Builds and draws a screen, and hands it back so its state can be read.
+    /// </summary>
+    /// <remarks>
+    /// The application is disposed here while the window outlives it, which is
+    /// fine for reading what was drawn and is why this is separate from Drawn.
+    /// </remarks>
+    private static ManagerWindow Drawn2(Func<IApplication, ManagerWindow> build)
+    {
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var window = build(app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        return window;
     }
 
     [Fact]
