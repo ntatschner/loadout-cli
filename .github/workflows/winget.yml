@@ -17,9 +17,11 @@ on:
         description: The release tag to publish, for example v0.17.0
         required: true
         type: string
+    # Not required. A release must not go red because a channel nobody has
+    # set up yet has no credentials: the job below checks and skips instead.
     secrets:
       WINGET_TOKEN:
-        required: true
+        required: false
 
   release:
     types: [published]
@@ -35,8 +37,33 @@ permissions:
   contents: read
 
 jobs:
+  # A job of its own because a secret cannot be read in a job-level `if`, and
+  # skipping is the answer that reads correctly on the release: not configured
+  # is not a failure.
+  configured:
+    name: Is winget publishing set up?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TOKEN:-}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::winget publishing is not configured (WINGET_TOKEN); skipping."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
   manifest:
     name: Submit the manifest
+    needs: configured
     runs-on: windows-latest
     timeout-minutes: 20
 
@@ -44,7 +71,9 @@ jobs:
     # refused. Written as "dispatch or not a prerelease" this skips every
     # workflow_call: the event is then the caller's tag push, there is no
     # release object, and the comparison quietly comes out false.
-    if: github.event_name != 'release' || github.event.release.prerelease == false
+    if: >-
+      needs.configured.outputs.ready == 'true'
+      && (github.event_name != 'release' || github.event.release.prerelease == false)
 
     steps:
       - name: Work out the release
