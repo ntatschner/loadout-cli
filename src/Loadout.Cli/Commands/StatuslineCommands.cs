@@ -279,6 +279,7 @@ public class StatuslineTargetSettings : GlobalSettings
 /// </para>
 /// </summary>
 [Description("Show the project, directory, branch and context usage in the agent status line.")]
+[CommandMeta(CommandCategory.Integration, Intent = "status line install prompt project branch context", Mutates = true)]
 public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSettings>
 {
     private readonly StatuslineTargets _targets;
@@ -311,6 +312,21 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
                 ExitCode.GeneralFailure);
         }
 
+        // The targets are resolved, so the preview can name every settings file it
+        // would edit — and editing an agent's own settings is worth seeing first.
+        if (settings.DryRun)
+        {
+            foreach (var target in targetsResult.Value!)
+            {
+                output.WriteLine(
+                    $"[bold]Would install[/] for {target.Description.EscapeMarkup()}");
+                output.WriteLine($"  [dim]{target.SettingsPath.EscapeMarkup()}[/]");
+            }
+
+            output.WriteLine("Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var installed = new List<StatuslineInstallation>();
 
         foreach (var target in targetsResult.Value!)
@@ -363,6 +379,7 @@ public sealed class StatuslineInstallCommand : AsyncCommand<StatuslineTargetSett
 
 /// <summary>Removes the status line, leaving the rest of the settings file alone.</summary>
 [Description("Remove the agent status line.")]
+[CommandMeta(CommandCategory.Integration, Intent = "status line remove uninstall", Mutates = true)]
 public sealed class StatuslineUninstallCommand : AsyncCommand<StatuslineTargetSettings>
 {
     private readonly StatuslineTargets _targets;
@@ -386,6 +403,19 @@ public sealed class StatuslineUninstallCommand : AsyncCommand<StatuslineTargetSe
             return output.Fail(targetsResult);
         }
 
+        // Same for removal: name the files rather than edit them.
+        if (settings.DryRun)
+        {
+            foreach (var target in targetsResult.Value!)
+            {
+                output.WriteLine(
+                    $"[bold]Would remove[/] from {target.Description.EscapeMarkup()}");
+            }
+
+            output.WriteLine("Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         foreach (var target in targetsResult.Value!)
         {
             var result = await StatuslineInstaller
@@ -415,6 +445,7 @@ public sealed class StatuslineUninstallCommand : AsyncCommand<StatuslineTargetSe
 /// </para>
 /// </summary>
 [Description("Show where the status line is installed and what it looks like.")]
+[CommandMeta(CommandCategory.Integration, Intent = "status line show where installed preview")]
 public sealed class StatuslineShowCommand : AsyncCommand<StatuslineTargetSettings>
 {
     private readonly StatuslineTargets _targets;

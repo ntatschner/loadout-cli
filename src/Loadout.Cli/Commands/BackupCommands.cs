@@ -11,6 +11,7 @@ namespace Loadout.Cli.Commands;
 
 /// <summary>Lists the snapshots taken before mutating operations.</summary>
 [Description("List backup sets taken before mutating operations.")]
+[CommandMeta(CommandCategory.Administration, Intent = "backup list snapshots taken before changes")]
 public sealed class BackupListCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IBackupService _backups;

@@ -1,3 +1,4 @@
+using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Mcp;
@@ -29,6 +30,7 @@ public class McpSettings : GlobalSettings
 /// </para>
 /// </summary>
 [Description("List the MCP servers a project loads, and any clashes between them.")]
+[CommandMeta(CommandCategory.Integration, Intent = "mcp server list tools clashes duplicates")]
 public sealed class McpListCommand : AsyncCommand<McpSettings>
 {
     private readonly IMcpService _mcp;
@@ -169,6 +171,7 @@ public sealed class McpAddSettings : McpSettings
 /// Adds an MCP server to the workspace, warning about anything it clashes with.
 /// </summary>
 [Description("Add an MCP server for a project, or for every project.")]
+[CommandMeta(CommandCategory.Integration, Intent = "mcp server add install tool", Mutates = true)]
 public sealed class McpAddCommand : AsyncCommand<McpAddSettings>
 {
     private readonly IMcpService _mcp;
@@ -246,6 +249,17 @@ public sealed class McpAddCommand : AsyncCommand<McpAddSettings>
             output.WriteLine("[yellow]Added anyway, as asked.[/]");
         }
 
+        // After the clash check, so the preview reports what adding it would collide
+        // with — which is the thing worth knowing before doing it.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would add[/] {Markup.Escape(settings.Name)} "
+                + $"to {(scope == McpScope.Global ? "every project" : Markup.Escape(slug.Value!))}"
+                + ". Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var added = await _mcp
             .AddAsync(slug.Value!, scope, settings.Name, server)
             .ConfigureAwait(false);
@@ -265,6 +279,7 @@ public sealed class McpAddCommand : AsyncCommand<McpAddSettings>
 
 /// <summary>Removes a server from the workspace.</summary>
 [Description("Remove an MCP server from a project, or from every project.")]
+[CommandMeta(CommandCategory.Integration, Intent = "mcp server remove uninstall tool", Mutates = true)]
 public sealed class McpRemoveCommand : AsyncCommand<McpRemoveSettings>
 {
     private readonly IMcpService _mcp;
@@ -290,6 +305,16 @@ public sealed class McpRemoveCommand : AsyncCommand<McpRemoveSettings>
             return output.Fail(slug);
         }
 
+        // Removing a server changes what every session for the project loads.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would remove[/] {Markup.Escape(settings.Name)} from "
+                + (settings.Global ? "every project" : Markup.Escape(slug.Value!))
+                + ". Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var removed = await _mcp
             .RemoveAsync(
                 slug.Value!,

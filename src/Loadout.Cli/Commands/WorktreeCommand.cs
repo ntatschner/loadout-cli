@@ -1,3 +1,4 @@
+using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Git;
@@ -18,6 +19,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("List the working trees available for a project.")]
+[CommandMeta(CommandCategory.Projects, Intent = "worktree list working trees branches")]
 public sealed class WorktreeListCommand : AsyncCommand<WorktreeListCommand.Settings>
 {
     private readonly IProjectService _projects;

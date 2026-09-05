@@ -1,3 +1,4 @@
+using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Configuration;
@@ -12,6 +13,7 @@ namespace Loadout.Cli.Commands;
 
 /// <summary>Lists every setting and its current value (spec section 77).</summary>
 [Description("List configuration settings and their current values.")]
+[CommandMeta(CommandCategory.Administration, Intent = "config settings list show all options")]
 public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IConfigurationService _configuration;
@@ -99,6 +101,7 @@ public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
 
 /// <summary>Reads one setting (spec section 77).</summary>
 [Description("Print one configuration value.")]
+[CommandMeta(CommandCategory.Administration, Intent = "config read one setting value")]
 public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
 {
     private readonly IConfigurationService _configuration;
@@ -200,6 +203,7 @@ public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
 
 /// <summary>Writes one setting (spec section 77).</summary>
 [Description("Set one configuration value.")]
+[CommandMeta(CommandCategory.Administration, Intent = "config change setting option preference", Mutates = true)]
 public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
 {
     private readonly IConfigurationService _configuration;
@@ -243,6 +247,18 @@ public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
         // The other side of the pair is still loaded plainly, because it is
         // only read: a key writes to the machine file or the launcher file,
         // never both.
+        // Before the lock is taken and either file is written. The setting is named
+        // rather than the value, which for a key holding a token would otherwise
+        // print it back.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would set[/] {Markup.Escape(entry.Key)}"
+                + (entry.IsMachineLocal ? " for this machine" : string.Empty)
+                + ". Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         FormatException? invalid = null;
 
         // Carried out rather than thrown through the store: a write that throws
@@ -311,6 +327,7 @@ public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
 
 /// <summary>Opens the config file in the platform's editor (spec section 77).</summary>
 [Description("Print the path of the configuration file, or open it.")]
+[CommandMeta(CommandCategory.Administration, Intent = "config file path open edit by hand")]
 public sealed class ConfigEditCommand : AsyncCommand<ConfigEditCommand.Settings>
 {
     private readonly IPlatformPaths _paths;

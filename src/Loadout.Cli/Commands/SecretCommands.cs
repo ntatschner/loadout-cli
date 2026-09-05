@@ -1,3 +1,4 @@
+using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Models;
@@ -25,6 +26,7 @@ public class SecretSettings : GlobalSettings
 /// </para>
 /// </summary>
 [Description("Store a secret in the platform credential store.")]
+[CommandMeta(CommandCategory.Safety, Intent = "store secret credential token password", Mutates = true)]
 public sealed class SecretSetCommand : AsyncCommand<SecretSettings>
 {
     private readonly ISecretProvider _secrets;
@@ -68,6 +70,18 @@ public sealed class SecretSetCommand : AsyncCommand<SecretSettings>
             return output.Fail("An empty secret was supplied.", ExitCode.InvalidArguments);
         }
 
+        // Storing reaches the platform credential store, which is outside anything this can undo.
+        if (settings.DryRun)
+        {
+            // The value is never echoed, on this path least of all: a preview
+            // that printed what it would store would put the secret on screen
+            // and in the scrollback of anyone checking first.
+            output.WriteLine(
+                $"[bold]Would store[/] a secret under "
+                + $"{Markup.Escape(settings.Reference)}. Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var result = await _secrets.SetAsync(settings.Reference, value).ConfigureAwait(false);
         if (result.Failed)
         {
@@ -87,6 +101,7 @@ public sealed class SecretSetCommand : AsyncCommand<SecretSettings>
 /// (spec section 55). The value is deliberately never printed.
 /// </summary>
 [Description("Check that a secret reference resolves. Never prints the value.")]
+[CommandMeta(CommandCategory.Safety, Intent = "test secret reference resolves works")]
 public sealed class SecretTestCommand : AsyncCommand<SecretSettings>
 {
     private readonly ISecretProvider _secrets;
@@ -132,6 +147,7 @@ public sealed class SecretTestCommand : AsyncCommand<SecretSettings>
 
 /// <summary>Deletes a secret from the platform credential store (spec section 55).</summary>
 [Description("Remove a secret from the platform credential store.")]
+[CommandMeta(CommandCategory.Safety, Intent = "remove delete secret credential", Mutates = true)]
 public sealed class SecretRemoveCommand : AsyncCommand<SecretSettings>
 {
     private readonly ISecretProvider _secrets;
@@ -148,6 +164,15 @@ public sealed class SecretRemoveCommand : AsyncCommand<SecretSettings>
     {
         var output = new CommandOutput(_console, settings);
 
+        // Removing a credential cannot be undone from here, so the preview stops short of it.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would remove[/] the secret at "
+                + $"{Markup.Escape(settings.Reference)}. Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var result = await _secrets.RemoveAsync(settings.Reference).ConfigureAwait(false);
         if (result.Failed)
         {

@@ -47,6 +47,19 @@ public sealed class DesktopCommand : AsyncCommand<DesktopCommand.Settings>
     {
         var output = new CommandOutput(_console, settings);
 
+        // Both halves of this command write outside the home directory — a
+        // Start Menu shortcut on Windows, a .desktop file on Linux — so a
+        // preview that ran them and then reported "Installed the desktop
+        // entry." was not describing anything. It had installed it.
+        if (settings.DryRun)
+        {
+            output.WriteLine(settings.Remove
+                ? "[bold]Would remove[/] the desktop entry. Nothing was changed."
+                : "[bold]Would install[/] the desktop entry. Nothing was changed.");
+
+            return CommandOutput.Success();
+        }
+
         if (settings.Remove)
         {
             var removed = await _desktop.UninstallAsync().ConfigureAwait(false);
