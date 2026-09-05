@@ -55,7 +55,9 @@ public sealed class LaunchesCommand : AsyncCommand<LaunchesCommand.Settings>
     public sealed class Settings : GlobalSettings
     {
         [CommandArgument(0, "[project]")]
-        [Description("Only launches of this project. Defaults to all of them.")]
+        [Description(
+            "Only launches of this project. Without it, --repo scopes to the project "
+            + "at that path; without either, every project.")]
         public string? Project { get; init; }
 
         [CommandOption("--days <COUNT>")]
@@ -93,16 +95,30 @@ public sealed class LaunchesCommand : AsyncCommand<LaunchesCommand.Settings>
 
         var launches = read.Value!;
 
-        if (settings.Project is { Length: > 0 } handle)
-        {
-            var resolved = await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false);
+        // Named, or worked out from a directory, or neither. --repo is a
+        // global option every command carries, and this one accepted it and
+        // then ignored it: 'launches --repo .' inside a repository listed a
+        // different project's launches, which reads as the filter being broken
+        // rather than absent.
+        //
+        // No project and no --repo still means all of them, which is what this
+        // command's own help promises and what somebody asking "what have I
+        // been doing" usually wants.
+        var scope = settings.Project is { Length: > 0 } handle
+            ? await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false)
+            : settings.Repo is { Length: > 0 } repository
+                ? await _projects.ResolveFromDirectoryAsync(repository, cancellationToken)
+                    .ConfigureAwait(false)
+                : null;
 
-            if (resolved.Failed)
+        if (scope is not null)
+        {
+            if (scope.Failed)
             {
-                return output.Fail(resolved);
+                return output.Fail(scope);
             }
 
-            var slug = resolved.Value!.Entry.Slug;
+            var slug = scope.Value!.Entry.Slug;
 
             launches = launches
                 .Where(launch => string.Equals(launch.ProjectSlug, slug, StringComparison.OrdinalIgnoreCase))
