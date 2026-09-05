@@ -543,3 +543,17 @@ jobs:
       tag: ${{ github.ref_name }}
     secrets:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  # Called for the same reason Homebrew is, and independent of it: neither
+  # channel should be able to keep the other from publishing.
+  aur:
+    name: AUR
+    needs: release
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/aur.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+      AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
