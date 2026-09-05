@@ -17,13 +17,15 @@ on:
         description: The release tag to publish, for example v0.17.0
         required: true
         type: string
+    # Not required. A release must not go red because a channel nobody has
+    # set up yet has no credentials: the job below checks and skips instead.
     secrets:
       AUR_SSH_PRIVATE_KEY:
-        required: true
+        required: false
       AUR_USERNAME:
-        required: true
+        required: false
       AUR_EMAIL:
-        required: true
+        required: false
 
   release:
     types: [published]
@@ -39,8 +41,37 @@ permissions:
   contents: read
 
 jobs:
+  # A job of its own because a secret cannot be read in a job-level `if`, and
+  # skipping is the answer that reads correctly on the release: not configured
+  # is not a failure. Publishing was written before an account could be
+  # registered — AUR registration was closed — so this had to be able to sit
+  # dormant and start working the day the secrets appear, with nothing to
+  # remember to switch on.
+  configured:
+    name: Is AUR publishing set up?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          WHO: ${{ secrets.AUR_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${KEY:-}" ] || [ -z "${WHO:-}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AUR publishing is not configured (AUR_SSH_PRIVATE_KEY and AUR_USERNAME); skipping."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
   package:
     name: Update the AUR package
+    needs: configured
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -48,7 +79,9 @@ jobs:
     # refused. Written as "dispatch or not a prerelease" this skips every
     # workflow_call: the event is then the caller's tag push, there is no
     # release object, and the comparison quietly comes out false.
-    if: github.event_name != 'release' || github.event.release.prerelease == false
+    if: >-
+      needs.configured.outputs.ready == 'true'
+      && (github.event_name != 'release' || github.event.release.prerelease == false)
 
     # base-devel carries makepkg, which is the only thing that can be trusted
     # to write .SRCINFO. Generating that file by hand is how it drifts from the
