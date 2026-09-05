@@ -523,7 +523,7 @@ internal sealed class ContextCompiler : IContextCompiler
             "- `loadout memory find <query>` - search what this project already knows, before "
             + "working it out again; only the index above reaches this context, not the topics");
         builder.AppendLine(
-            "- `loadout memory write <project> <topic>` - record a fact worth having next time; "
+            "- `loadout memory write <topic>` - record a fact worth having next time; "
             + "it is screened for credentials and never takes a secret");
         builder.AppendLine(
             "- `loadout handoff create <project>` - leave the next session what this one worked "

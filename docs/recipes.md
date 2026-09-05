@@ -97,7 +97,7 @@ procedure. You need the mode: review skills don't load in `implement`.
 ## Write down one fact yourself
 
 ```bash
-loadout memory write starstats build-quirks \
+loadout memory write build-quirks --project starstats \
   --description "things that surprise people about the build" \
   --fact "The first build after a clean takes four minutes; the analyzers warm up."
 ```

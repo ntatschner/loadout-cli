@@ -43,6 +43,10 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
 
     public sealed class Settings : MemorySettings
     {
+        [CommandArgument(0, "[project]")]
+        [Description("Project slug, alias or name. Defaults to the repository you are in.")]
+        public override string? Project { get; init; }
+
         [CommandOption("--from <DIRECTORY>")]
         [Description("Where to read from. Found automatically when the agent's own layout is used.")]
         public string? From { get; init; }

@@ -7,7 +7,7 @@ traps that keep catching people. It lives in the workspace repository at
 next and a wrong one can be corrected in a pull request like any other mistake.
 
 ```bash
-loadout memory write starstats build-quirks \
+loadout memory write build-quirks --project starstats \
   --description "things that surprise people about the build" \
   --fact "The first build after a clean takes four minutes; the analyzers warm up."
 ```
@@ -26,9 +26,9 @@ them about `loadout-cli`. Open another project and an agent rediscovers them the
 expensive way.
 
 ```bash
-loadout memory write starstats upload-retries --scope project   # the default
-loadout memory write starstats review-habits --scope user
-loadout memory write starstats restart-manager --scope machine
+loadout memory write upload-retries --scope project   # the default
+loadout memory write review-habits --scope user
+loadout memory write restart-manager --project starstats --scope machine
 ```
 
 | Scope | Where it lives | Who it is true for |
