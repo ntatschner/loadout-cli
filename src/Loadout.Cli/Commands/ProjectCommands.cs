@@ -93,6 +93,7 @@ public sealed class ProjectListCommand : AsyncCommand<GlobalSettings>
 
 /// <summary>Registers an existing local repository (spec sections 25 and 26).</summary>
 [Description("Register an existing local Git repository as a project.")]
+[CommandMeta(CommandCategory.Projects, Intent = "add register project repository", Mutates = true)]
 public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
 {
     private readonly IProjectService _projects;
@@ -129,6 +130,15 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
         var output = new CommandOutput(_console, settings);
         var path = settings.Path ?? settings.Repo ?? Directory.GetCurrentDirectory();
 
+        // Registering writes the registry, so a preview that ran it would have registered it.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would register[/] {Markup.Escape(path)} as a project. "
+                + "Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var result = await _projects.AddAsync(path, settings.Slug).ConfigureAwait(false);
         if (result.Failed)
         {
@@ -226,6 +236,7 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
 
 /// <summary>Removes a project registration without touching its source (spec section 75).</summary>
 [Description("Remove a project registration. Never deletes source code.")]
+[CommandMeta(CommandCategory.Projects, Intent = "remove unregister project forget repository", Mutates = true)]
 public sealed class ProjectRemoveCommand : AsyncCommand<ProjectRemoveCommand.Settings>
 {
     private readonly IProjectService _projects;
@@ -269,6 +280,17 @@ public sealed class ProjectRemoveCommand : AsyncCommand<ProjectRemoveCommand.Set
             }
         }
 
+        // The command that most needs a preview: asking what it would remove must not remove it.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would remove[/] the registration for "
+                + $"{Markup.Escape(settings.Project)}"
+                + (settings.FromWorkspace ? ", and its workspace entry" : string.Empty)
+                + ". No source code is ever deleted, and nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var result = await _projects.RemoveAsync(settings.Project, settings.FromWorkspace)
             .ConfigureAwait(false);
 
@@ -302,6 +324,7 @@ public sealed class ProjectRemoveCommand : AsyncCommand<ProjectRemoveCommand.Set
 
 /// <summary>Scans the configured discovery roots (spec section 64).</summary>
 [Description("Scan the configured roots for Git repositories.")]
+[CommandMeta(CommandCategory.Projects, Intent = "discover scan find git repositories roots")]
 public sealed class ProjectDiscoverCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IProjectService _projects;
@@ -369,6 +392,7 @@ public sealed class ProjectDiscoverCommand : AsyncCommand<GlobalSettings>
 
 /// <summary>Opens a project directory in the platform file manager (spec section 73).</summary>
 [Description("Open a project directory in the file manager.")]
+[CommandMeta(CommandCategory.Projects, Intent = "open project folder file manager explorer")]
 public sealed class ProjectOpenCommand : AsyncCommand<ProjectOpenCommand.Settings>
 {
     private readonly IProjectService _projects;

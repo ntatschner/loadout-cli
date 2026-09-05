@@ -1,3 +1,4 @@
+using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Configuration;
@@ -12,6 +13,7 @@ namespace Loadout.Cli.Commands;
 
 /// <summary>Reports the state of the central workspace clone (spec section 76).</summary>
 [Description("Show the state of the central workspace.")]
+[CommandMeta(CommandCategory.Workspace, Intent = "workspace status state central clone")]
 public sealed class WorkspaceStatusCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IWorkspaceManager _workspace;
@@ -105,6 +107,7 @@ public sealed class WorkspaceStatusCommand : AsyncCommand<GlobalSettings>
 
 /// <summary>Synchronises the workspace clone (spec sections 45, 47, 48, 76).</summary>
 [Description("Fetch and fast-forward the central workspace.")]
+[CommandMeta(CommandCategory.Workspace, Intent = "workspace sync fetch pull update", Mutates = true, RequiresNetwork = true)]
 public sealed class WorkspaceSyncCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IWorkspaceManager _workspace;
@@ -138,6 +141,15 @@ public sealed class WorkspaceSyncCommand : AsyncCommand<GlobalSettings>
                 "Cannot synchronise while --offline is set.", ExitCode.InvalidArguments);
         }
 
+        // Syncing reaches the network and moves the local clone's HEAD.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                "[bold]Would fetch[/] the workspace and fast-forward it. "
+                + "Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var result = await _workspace.SyncAsync(configResult.Value!).ConfigureAwait(false);
         if (result.Failed)
         {
@@ -195,6 +207,7 @@ public sealed class WorkspaceSyncCommand : AsyncCommand<GlobalSettings>
 
 /// <summary>Opens the workspace clone in the file manager (spec section 73).</summary>
 [Description("Open the local workspace clone in the file manager.")]
+[CommandMeta(CommandCategory.Workspace, Intent = "open workspace folder file manager")]
 public sealed class WorkspaceOpenCommand : AsyncCommand<GlobalSettings>
 {
     private readonly IWorkspaceManager _workspace;

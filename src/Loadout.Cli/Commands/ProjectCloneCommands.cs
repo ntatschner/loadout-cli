@@ -1,3 +1,4 @@
+using Loadout.Tui;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Projects;
@@ -17,6 +18,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Clone a registered project that is not yet on this machine.")]
+[CommandMeta(CommandCategory.Projects, Intent = "clone project get repository onto this machine", Mutates = true, RequiresNetwork = true)]
 public sealed class ProjectCloneCommand : AsyncCommand<ProjectCloneCommand.Settings>
 {
     private readonly IProjectService _projects;
@@ -44,6 +46,17 @@ public sealed class ProjectCloneCommand : AsyncCommand<ProjectCloneCommand.Setti
     {
         var output = new CommandOutput(_console, settings);
 
+        // Cloning reaches the network and writes a working tree, so the preview has to stop before it.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would clone[/] {Markup.Escape(settings.Project)}"
+                + (settings.Destination is { Length: > 0 } into
+                    ? $" into {Markup.Escape(into)}" : string.Empty)
+                + ". Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var result = await _projects.CloneAsync(settings.Project, settings.Destination, cancellationToken)
             .ConfigureAwait(false);
 
@@ -84,6 +97,7 @@ public sealed class ProjectCloneCommand : AsyncCommand<ProjectCloneCommand.Setti
 /// </para>
 /// </summary>
 [Description("Point a project at a different local path on this machine.")]
+[CommandMeta(CommandCategory.Projects, Intent = "move project moved path relocate elsewhere", Mutates = true)]
 public sealed class ProjectRelocateCommand : AsyncCommand<ProjectRelocateCommand.Settings>
 {
     private readonly IProjectService _projects;
@@ -111,6 +125,15 @@ public sealed class ProjectRelocateCommand : AsyncCommand<ProjectRelocateCommand
     {
         var output = new CommandOutput(_console, settings);
 
+        // Repointing a project rewrites the registry entry every other command reads.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would point[/] {Markup.Escape(settings.Project)} at "
+                + $"{Markup.Escape(settings.Path)}. Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var result = await _projects.RelocateAsync(settings.Project, settings.Path)
             .ConfigureAwait(false);
 
@@ -129,6 +152,7 @@ public sealed class ProjectRelocateCommand : AsyncCommand<ProjectRelocateCommand
 
 /// <summary>Shows everything the launcher knows about one project (spec section 75).</summary>
 [Description("Show the details of one project.")]
+[CommandMeta(CommandCategory.Projects, Intent = "show project details one repository")]
 public sealed class ProjectShowCommand : AsyncCommand<ProjectShowCommand.Settings>
 {
     private readonly IProjectService _projects;

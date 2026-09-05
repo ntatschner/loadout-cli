@@ -1,3 +1,4 @@
+using Loadout.Tui;
 using System.ComponentModel;
 using System.Globalization;
 using Loadout.Cli.Infrastructure;
@@ -79,6 +80,7 @@ public abstract class RulesCommandBase<TSettings> : AsyncCommand<TSettings>
 
 /// <summary>Lists the instruction rules that apply to a project.</summary>
 [Description("List the path-scoped instruction rules for a project.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "rules list path scoped instructions")]
 public sealed class RulesListCommand : RulesCommandBase<RulesListCommand.Settings>
 {
     private readonly IRuleService _rules;
@@ -188,6 +190,7 @@ public sealed class RulesListCommand : RulesCommandBase<RulesListCommand.Setting
 /// </para>
 /// </summary>
 [Description("Report how much instruction text loads on every session.")]
+[CommandMeta(CommandCategory.Health, Intent = "budget how much instruction text every session costs")]
 public sealed class RulesBudgetCommand : RulesCommandBase<RulesBudgetCommand.Settings>
 {
     /// <summary>
@@ -303,6 +306,7 @@ public sealed class RulesBudgetCommand : RulesCommandBase<RulesBudgetCommand.Set
 /// and imports nobody has counted.
 /// </summary>
 [Description("Check a project's instruction rules and core context for defects.")]
+[CommandMeta(CommandCategory.Health, Intent = "audit check rules instructions defects")]
 public sealed class RulesAuditCommand : RulesCommandBase<RulesAuditCommand.Settings>
 {
     private readonly IRuleService _rules;

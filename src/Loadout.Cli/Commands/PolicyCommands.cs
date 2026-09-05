@@ -21,6 +21,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </summary>
 [Description("Check a repository for tracked AI tooling files.")]
+[CommandMeta(CommandCategory.Safety, Intent = "check repository tracked ai tooling files")]
 public sealed class RepoCheckCommand : AsyncCommand<RepoCheckCommand.Settings>
 {
     private readonly IPolicyService _policies;

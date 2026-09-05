@@ -1,3 +1,4 @@
+using Loadout.Tui;
 using System.ComponentModel;
 using System.Globalization;
 using Loadout.Cli.Infrastructure;
@@ -75,6 +76,7 @@ public abstract class MemoryCommandBase<TSettings> : AsyncCommand<TSettings>
 
 /// <summary>Lists a project's memory topics.</summary>
 [Description("List the durable facts recorded for a project.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "memory list facts recorded topics")]
 public sealed class MemoryListCommand : MemoryCommandBase<MemoryListCommand.Settings>
 {
     private readonly IMemoryService _memory;
@@ -207,6 +209,7 @@ public sealed class MemoryListCommand : MemoryCommandBase<MemoryListCommand.Sett
 /// </para>
 /// </summary>
 [Description("Record a durable fact about a project.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "memory record fact remember note down", Mutates = true)]
 public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Settings>
 {
     private readonly IMemoryService _memory;
@@ -379,6 +382,7 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
 /// </para>
 /// </summary>
 [Description("Check a project's memory for secrets, duplicates, staleness and index rot.")]
+[CommandMeta(CommandCategory.Health, Intent = "memory check secrets duplicates stale index rot", Mutates = true)]
 public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Settings>
 {
     private readonly IMemoryService _memory;
@@ -646,6 +650,7 @@ public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Se
 
 /// <summary>Rewrites the memory index from the topics on disk.</summary>
 [Description("Rebuild MEMORY.md from the topic files that actually exist.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "memory rebuild index repair MEMORY.md", Mutates = true)]
 public sealed class MemoryReindexCommand : MemoryCommandBase<MemoryReindexCommand.Settings>
 {
     private readonly IMemoryService _memory;
@@ -675,6 +680,16 @@ public sealed class MemoryReindexCommand : MemoryCommandBase<MemoryReindexComman
             return output.Fail(slug);
         }
 
+        // Rebuilding overwrites MEMORY.md, which is the half of memory that reaches a session.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would rebuild[/] the memory index for "
+                + $"{Markup.Escape(slug.Value!)} from the topic files on disk. "
+                + "Nothing was changed.");
+        
+            return CommandOutput.Success();
+        }
         var rebuilt = await _memory
             .RebuildIndexAsync(Workspace.LocalPath, slug.Value!)
             .ConfigureAwait(false);

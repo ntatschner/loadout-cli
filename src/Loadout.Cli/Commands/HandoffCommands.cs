@@ -183,6 +183,7 @@ public sealed class HandoffCreateCommand : AsyncCommand<HandoffCreateCommand.Set
 
 /// <summary>Lists a project's context profiles (spec section 34).</summary>
 [Description("List the context profiles available for a project.")]
+[CommandMeta(CommandCategory.AgentConfiguration, Intent = "profile list context variants available")]
 public sealed class ProfileListCommand : AsyncCommand<ProfileListCommand.Settings>
 {
     private readonly IProjectService _projects;
