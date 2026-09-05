@@ -328,7 +328,7 @@ internal sealed class LauncherWindow : Window
                 {
                     Title = "Launch _history and posture",
                     Action = () => WithSelected(p =>
-                        RunCommand($"{LauncherCommands.Launches} --project {p.Entry.Slug}")),
+                        RunCommand($"{LauncherCommands.Launches} {p.Entry.Slug}")),
                 },
                 new MenuItem
                 {
@@ -445,7 +445,7 @@ internal sealed class LauncherWindow : Window
         AddCommand(Command.Context, () =>
         {
             WithSelected(p => RunCommand(
-                $"{LauncherCommands.Launches} --project {p.Entry.Slug}"));
+                $"{LauncherCommands.Launches} {p.Entry.Slug}"));
 
             return true;
         });
