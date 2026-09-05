@@ -56,7 +56,8 @@ Ask the launcher what it already knows, rather than deriving it:
 Write the findings down as you go, one topic per subject:
 
 ```
-loadout memory write <project> <topic>
+loadout memory write <topic>                  # this repository's project
+loadout memory write <topic> --project <slug>
 ```
 
 or `loadout_remember` if the launcher's tools are available in this session.

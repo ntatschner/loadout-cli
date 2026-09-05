@@ -39,9 +39,20 @@ public abstract class MemoryCommandBase<TSettings> : AsyncCommand<TSettings>
 
     public class MemorySettings : GlobalSettings
     {
-        [CommandArgument(0, "[project]")]
+        /// <summary>
+        /// How the project is named on the command line, which is not the same
+        /// for every memory command.
+        /// </summary>
+        /// <remarks>
+        /// Declared without a position here so that each command can say. Most
+        /// take it as their only positional argument. 'write' cannot: it has a
+        /// topic to take as well, and an optional argument in front of a
+        /// required one is not optional at all — Spectre binds by declared
+        /// position, so the first word typed went to the project and the topic
+        /// was reported missing however many arguments were given.
+        /// </remarks>
         [Description("Project slug, alias or name. Defaults to the repository you are in.")]
-        public string? Project { get; init; }
+        public virtual string? Project { get; init; }
     }
 
     /// <summary>
@@ -77,6 +88,10 @@ public sealed class MemoryListCommand : MemoryCommandBase<MemoryListCommand.Sett
 
     public sealed class Settings : MemorySettings
     {
+        [CommandArgument(0, "[project]")]
+        [Description("Project slug, alias or name. Defaults to the repository you are in.")]
+        public override string? Project { get; init; }
+
         [CommandOption("--show <TOPIC>")]
         [Description("Print one topic in full instead of listing them.")]
         public string? Show { get; init; }
@@ -205,9 +220,17 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
 
     public sealed class Settings : MemorySettings
     {
-        [CommandArgument(1, "<topic>")]
+        [CommandArgument(0, "<topic>")]
         [Description("Topic name, for example 'build-quirks'.")]
         public string Topic { get; init; } = string.Empty;
+
+        // An option rather than a second positional, the way 'memory find'
+        // takes it. Behind the topic it would read as though the two were
+        // interchangeable, and getting them the wrong way round records the
+        // fact under the wrong name without saying so.
+        [CommandOption("--project <SLUG>")]
+        [Description("Project slug, alias or name. Defaults to the repository you are in.")]
+        public override string? Project { get; init; }
 
         [CommandOption("--fact <TEXT>")]
         [Description("A fact to record. Repeat for several.")]
@@ -291,6 +314,25 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
             }
         }
 
+        // Everything above this line reads. Nothing below it does, so the
+        // preview goes here: it has the project, the kind, the scope and the
+        // verdict on each fact to report, and none of them cost a write.
+        //
+        // This command wrote the file and added the index line under --dry-run,
+        // and said "commit it with: loadout workspace save" while it did — the
+        // same shape of defect 'workspace save' had, where the preview and the
+        // real run were indistinguishable from the output.
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"[bold]Would record[/] {settings.Facts.Length} fact(s) under "
+                + $"'{Markup.Escape(settings.Topic)}' for {Markup.Escape(slug.Value!)} "
+                + $"as a {kind.Value.ToString().ToLowerInvariant()} memory, "
+                + $"scoped to {scope.Value.ToString().ToLowerInvariant()}. Nothing was changed.");
+
+            return CommandOutput.Success();
+        }
+
         var written = await _memory.WriteAsync(
             Workspace.LocalPath,
             slug.Value!,
@@ -356,6 +398,10 @@ public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Se
 
     public sealed class Settings : MemorySettings
     {
+        [CommandArgument(0, "[project]")]
+        [Description("Project slug, alias or name. Defaults to the repository you are in.")]
+        public override string? Project { get; init; }
+
         [CommandOption("--stale-months <MONTHS>")]
         [Description("Age at which a dated fact is worth rechecking. Defaults to 6.")]
         public int StaleMonths { get; init; } = 6;
@@ -611,7 +657,12 @@ public sealed class MemoryReindexCommand : MemoryCommandBase<MemoryReindexComman
         IAnsiConsole console)
         : base(projects, workspace, console) => _memory = memory;
 
-    public sealed class Settings : MemorySettings;
+    public sealed class Settings : MemorySettings
+    {
+        [CommandArgument(0, "[project]")]
+        [Description("Project slug, alias or name. Defaults to the repository you are in.")]
+        public override string? Project { get; init; }
+    }
 
     /// <inheritdoc />
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
