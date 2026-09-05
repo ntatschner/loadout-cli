@@ -543,3 +543,17 @@ jobs:
       tag: ${{ github.ref_name }}
     secrets:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  # Independent of the other two, and allowed to fail without them. This one
+  # opens a pull request into somebody else's repository and waits on a
+  # validation pipeline and a person, so it is the one channel whose outcome
+  # is not known by the time the release is done.
+  winget:
+    name: winget
+    needs: release
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/winget.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}

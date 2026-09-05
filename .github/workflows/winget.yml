@@ -1,0 +1,133 @@
+# Submits the winget manifest for a release.
+#
+# Called by release.yml rather than listening for `release: published`. That
+# release is created by a workflow using GITHUB_TOKEN, and GitHub raises no
+# workflow runs from events that token causes.
+#
+# The only one of the three channels with a queue behind it. This opens a pull
+# request against microsoft/winget-pkgs; a validation pipeline installs the MSI
+# on a clean machine and a person looks at it afterwards. So the release does
+# not wait on it, and a failure here is not a failure of the release.
+name: winget
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag to publish, for example v0.17.0
+        required: true
+        type: string
+    secrets:
+      WINGET_TOKEN:
+        required: true
+
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag to publish, for example v0.17.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  manifest:
+    name: Submit the manifest
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    # Only a release event can be a prerelease, and only a prerelease is
+    # refused. Written as "dispatch or not a prerelease" this skips every
+    # workflow_call: the event is then the caller's tag push, there is no
+    # release object, and the comparison quietly comes out false.
+    if: github.event_name != 'release' || github.event.release.prerelease == false
+
+    steps:
+      - name: Work out the release
+        id: release
+        env:
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="${TAG#v}"
+
+          if [ -z "$version" ]; then
+            echo "No tag to publish." >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check the installers are actually there
+        id: installers
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+
+          # Checked before submitting rather than after. wingetcreate downloads
+          # what it is pointed at, and a URL that 404s becomes a submission
+          # failure inside somebody else's repository — a worse place to find
+          # out than here.
+          for rid in win-x64 win-arm64; do
+            url="$base/loadout-$VERSION-$rid.msi"
+
+            if ! curl -fsSLI "$url" > /dev/null; then
+              echo "No installer at $url" >&2
+              exit 1
+            fi
+
+            echo "found $url"
+          done
+
+          echo "x64=$base/loadout-$VERSION-win-x64.msi" >> "$GITHUB_OUTPUT"
+          echo "arm64=$base/loadout-$VERSION-win-arm64.msi" >> "$GITHUB_OUTPUT"
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # The standalone executable rather than `winget install`, because a
+          # hosted runner has no winget source configured and the App Installer
+          # bootstrap is slower than the download this replaces it with.
+          Invoke-WebRequest -Uri https://aka.ms/wingetcreate/latest `
+            -OutFile wingetcreate.exe
+
+      - name: Submit it
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # TheCodeSaiyan.Loadout: the publisher half has to match the MSI's
+          # manufacturer, which Directory.Build.props sets as "TheCodeSaiyan
+          # Ltd". The identifier is effectively permanent once accepted —
+          # renaming means a new package and orphaning everyone who installed
+          # the old one.
+          ./wingetcreate.exe update TheCodeSaiyan.Loadout `
+            --version ${{ steps.release.outputs.version }} `
+            --urls "${{ steps.installers.outputs.x64 }}" "${{ steps.installers.outputs.arm64 }}" `
+            --submit `
+            --token $env:WINGET_TOKEN
+
+          if ($LASTEXITCODE -ne 0) {
+            # Said plainly rather than left as an exit code. The first release
+            # cannot use `update`: there is nothing upstream to update, and the
+            # package has to be created once with `wingetcreate new` by hand
+            # before this path works at all.
+            Write-Host "::error::wingetcreate exited $LASTEXITCODE. If this is the first submission, run 'wingetcreate new' locally to create TheCodeSaiyan.Loadout before this workflow can update it."
+            exit $LASTEXITCODE
+          }
