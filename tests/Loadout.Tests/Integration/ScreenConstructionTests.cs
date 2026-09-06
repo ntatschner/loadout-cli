@@ -641,6 +641,87 @@ public sealed class ScreenConstructionTests
     }
 
     [Fact]
+    public void Selecting_a_project_does_not_open_another_screen()
+    {
+        using var window = Launcher(out var app);
+
+        using (app)
+        {
+            var list = FindProjectList(window);
+            list.SetFocus();
+
+            _ = list;
+
+            // Terminal.Gui's own words for Activate: "Activates the View or an
+            // item in the View ... e.g. toggling a checkbox, selecting a list
+            // item, focusing". It is ordinary interaction, raised by clicking
+            // about the screen, so nothing that opens a different screen may
+            // hang off it. F4 did, and clicking a project opened the manager.
+            //
+            // Enter raises Accept, not Activate, which is why the launch test
+            // below stayed green throughout.
+            // Activate is the one that broke; the others are the same family
+            // and would break the same way, so the whole vocabulary is held to
+            // the rule rather than the single member that caught us out.
+            foreach (var ordinary in new[] { Command.Activate, Command.Accept, Command.HotKey })
+            {
+                window.InvokeCommand(ordinary);
+
+                window.Intent?.Action.Should().NotBe(
+                    LauncherAction.Manager,
+                    $"{ordinary} is how a view is selected or focused, not a request for a screen");
+            }
+        }
+    }
+
+    [Fact]
+    public void The_manager_key_still_opens_the_manager()
+    {
+        using var window = Launcher(out var app);
+
+        using (app)
+        {
+            window.KeyBindings.TryGet(Key.F4, out var binding)
+                .Should().BeTrue("F4 opens the manager");
+
+            foreach (var command in binding.Commands)
+            {
+                window.InvokeCommand(command);
+            }
+
+            window.Intent!.Action.Should().Be(LauncherAction.Manager);
+        }
+    }
+
+    /// <summary>A launcher with one project on it, drawn and ready to poke.</summary>
+    private static LauncherWindow Launcher(out IApplication app)
+    {
+        app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var project = new ProjectResolution(
+            new ProjectRegistryEntry { Slug = "alpha", Name = "Alpha" },
+            Path.GetTempPath(), null, 0, false);
+
+        var window = new LauncherWindow(
+            [project],
+            null,
+            "workspace ready",
+            ["claude"],
+            (_, _) => Task.FromResult<ProjectOverview?>(null),
+            _ => { },
+            [],
+            app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        return window;
+    }
+
+    [Fact]
     public void Pressing_enter_on_a_project_launches_it()
     {
         using IApplication app = Application.Create();

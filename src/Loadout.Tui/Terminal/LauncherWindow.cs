@@ -453,9 +453,19 @@ internal sealed class LauncherWindow : Window
 
         // F4, beside F2 and F3. The function keys are the family that
         // survived a real Windows console, where Ctrl+comma did nothing at all.
-        this.BindEverywhere(Key.F4, Command.Activate);
+        //
+        // Refresh rather than Activate. The slot is chosen for being inert,
+        // not for reading well: Terminal.Gui describes Activate as "activates
+        // the View or an item in the View ... e.g. toggling a checkbox,
+        // selecting a list item, focusing", so a handler on it fires when
+        // somebody clicks about the screen. Hanging the manager there meant
+        // clicking a project opened the manager instead of launching it.
+        //
+        // Enter raises Accept, not Activate, so every launch test stayed green
+        // while the launcher's most ordinary action was broken.
+        this.BindEverywhere(Key.F4, Command.Refresh);
 
-        AddCommand(Command.Activate, () =>
+        AddCommand(Command.Refresh, () =>
         {
             Close(new LauncherIntent(LauncherAction.Manager, Selected));
             return true;
