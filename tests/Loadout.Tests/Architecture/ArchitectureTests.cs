@@ -45,7 +45,7 @@ public sealed class ArchitectureTests
         PathOf<Loadout.Models.ExitCode>(),
         PathOf(typeof(Loadout.Core.ServiceRegistration)),
         PathOf<Loadout.Agents.IAgentAdapter>(),
-        PathOf<Loadout.Tui.LauncherTui>(),
+        PathOf<Loadout.Tui.Terminal.TerminalLauncher>(),
     ];
 
     public static TheoryData<string> AllProductAssemblies =>
@@ -54,7 +54,7 @@ public sealed class ArchitectureTests
         PathOf(typeof(Loadout.Platform.PlatformServices)),
         PathOf(typeof(Loadout.Core.ServiceRegistration)),
         PathOf<Loadout.Agents.IAgentAdapter>(),
-        PathOf<Loadout.Tui.LauncherTui>(),
+        PathOf<Loadout.Tui.Terminal.TerminalLauncher>(),
         PathOf(typeof(Loadout.Cli.Program)),
     ];
 
