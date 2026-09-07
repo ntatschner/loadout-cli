@@ -311,7 +311,10 @@ public sealed class RealLaunchTests : IAsyncLifetime
 
         plan.Should().NotBeNull();
         plan!.Arguments.Should().ContainInOrder("--project", Slug);
-        plan.WorkingDirectory.Should().Be(_repository);
+
+        // Compared as paths, not strings: on macOS the temp directory is a
+        // symlink, and the launch records where it resolves to.
+        new PathSemantics().PathsEqual(plan.WorkingDirectory, _repository).Should().BeTrue();
         plan.ContextPath.Should().NotBeNullOrEmpty();
         plan.Instructions.Should().NotBeNull();
 
