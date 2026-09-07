@@ -44,10 +44,32 @@ public static class ServiceRegistration
                 .Paths.State));
         // Under the cache root, not the state root: the symbol index is derived
         // from one checkout at one commit and can be thrown away at any moment.
-        services.AddSingleton<ISymbolIndexService>(provider => new SymbolIndexService(
-            provider.GetRequiredService<IGitManager>(),
-            provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>()
-                .Paths.Cache));
+        services.AddSingleton<ISymbolTagger>(provider => new CtagsTagger(
+            provider.GetRequiredService<Loadout.Platform.Abstractions.IProcessLauncher>(),
+            provider.GetRequiredService<Loadout.Platform.Abstractions.IExecutableResolver>()));
+        services.AddSingleton<ISymbolIndexService>(provider =>
+        {
+            var workspace = provider.GetRequiredService<IWorkspaceManager>();
+
+            return new SymbolIndexService(
+                provider.GetRequiredService<IGitManager>(),
+                provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>().Paths.Cache,
+                provider.GetRequiredService<ISymbolTagger>(),
+
+                // The manifest's say on how its code is read. A project with
+                // no workspace, or no manifest, gets the defaults.
+                async (slug, ct) =>
+                {
+                    if (!workspace.IsAvailable())
+                    {
+                        return SymbolScanOptions.Default;
+                    }
+
+                    var manifest = await workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+                    return SymbolScanOptions.From(manifest.Value?.Symbols);
+                });
+        });
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<Instructions.MemoryCompressor>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();

@@ -407,6 +407,56 @@ public sealed class LoadoutTools
         return answer.ToString().TrimEnd();
     }
 
+    [McpServerTool(Name = "loadout_code_map")]
+    [Description(
+        "A map of the code as it stands now: one line per directory naming the types it holds. "
+        + "Use it to choose where to look, and to refresh a map you were given at launch after "
+        + "the tree has changed. For any one name, loadout_locate gives the file and line.")]
+    public async Task<string> CodeMapAsync(CancellationToken ct = default)
+    {
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here, so there is nothing to map.";
+        }
+
+        var resolved = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+        var path = resolved.Succeeded
+            ? SymbolTree.Of(
+                resolved.Value!,
+                _scope.Project is { Length: > 0 } ? null : Directory.GetCurrentDirectory())
+            : null;
+
+        if (path is null)
+        {
+            return $"'{slug}' is not on this machine, so there is nothing to map.";
+        }
+
+        // The same digest the compiled context inlines when a project asks
+        // for it, from the same cache; pulled here rather than pushed, which
+        // is what an agent with no after-edit hook has.
+        var digest = await _symbols.DigestAsync(path, slug, ct).ConfigureAwait(false);
+
+        if (digest.Failed)
+        {
+            return digest.Error ?? "The map could not be drawn.";
+        }
+
+        var map = digest.Value!;
+
+        if (map.Indexed == 0)
+        {
+            return $"Nothing in '{slug}' is in a language the scan reads, so there is no map.";
+        }
+
+        var at = map.Head is { Length: >= 7 } head ? $" at {head[..7]}" : string.Empty;
+
+        return $"{map.Indexed} symbol(s){at} in {string.Join(", ", map.Languages)}."
+            + Environment.NewLine + Environment.NewLine + map.Text.TrimEnd();
+    }
+
     /// <summary>A named scope, defaulting to the project when it is not one we know.</summary>
     private static MemoryScope Scope(string? name) =>
         Enum.TryParse<MemoryScope>(name, ignoreCase: true, out var parsed)

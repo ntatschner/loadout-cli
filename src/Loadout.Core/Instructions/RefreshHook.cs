@@ -6,9 +6,26 @@ using Loadout.Models.Results;
 namespace Loadout.Core.Instructions;
 
 /// <summary>What an agent's after-edit hook handed over.</summary>
-/// <param name="FilePath">The file the tool changed, or null when the tool changed no file.</param>
+/// <param name="Files">The files the tool changed. Empty when it changed none.</param>
 /// <param name="WorkingDirectory">Where the agent is running, or null when unsaid.</param>
-public sealed record RefreshHookInput(string? FilePath, string? WorkingDirectory);
+public sealed record RefreshHookInput(IReadOnlyList<string> Files, string? WorkingDirectory)
+{
+    /// <summary>The first file changed, for callers that take one.</summary>
+    public string? FilePath => Files.Count > 0 ? Files[0] : null;
+
+    /// <summary>Nothing to refresh.</summary>
+    public static readonly RefreshHookInput None = new([], null);
+}
+
+/// <summary>Which agent's hook is speaking, and so what it expects back.</summary>
+public enum HookDialect
+{
+    /// <summary>Claude Code: reads a JSON document with <c>hookSpecificOutput</c>.</summary>
+    Claude,
+
+    /// <summary>Anything else: plain text, for a hook that shows or ignores stdout.</summary>
+    Generic,
+}
 
 /// <summary>
 /// The two ends of the after-edit hook: reading what Claude sends, and writing
@@ -57,32 +74,74 @@ public static class RefreshHook
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return new RefreshHookInput(null, null);
+            return RefreshHookInput.None;
         }
 
         try
         {
             if (JsonNode.Parse(json, nodeOptions: null, Lenient) is not JsonObject root)
             {
-                return new RefreshHookInput(null, null);
+                return RefreshHookInput.None;
             }
 
-            var file = root["tool_input"] is JsonObject input
-                ? input["file_path"]?.GetValue<string>()
-                : null;
+            // The shapes agents actually send. Claude nests the path under the
+            // tool's input; Cursor puts it at the top; a script of somebody's
+            // own may send a list. Read whichever is there rather than one.
+            var files = new List<string>();
 
-            var cwd = root["cwd"]?.GetValue<string>();
+            if (root["tool_input"] is JsonObject input)
+            {
+                Add(files, input["file_path"]);
+                AddAll(files, input["files"]);
+            }
 
-            return new RefreshHookInput(
-                file is { Length: > 0 } ? file : null,
-                cwd is { Length: > 0 } ? cwd : null);
+            Add(files, root["file_path"]);
+            Add(files, root["path"]);
+            AddAll(files, root["files"]);
+
+            var cwd = Text(root["cwd"]) ?? Text(root["workspace_root"]);
+
+            if (cwd is null && root["workspace_roots"] is JsonArray roots && roots.Count > 0)
+            {
+                cwd = Text(roots[0]);
+            }
+
+            return new RefreshHookInput([.. files.Distinct(StringComparer.Ordinal)], cwd);
         }
         catch (Exception exception) when (
             exception is JsonException or InvalidOperationException or FormatException)
         {
-            return new RefreshHookInput(null, null);
+            return RefreshHookInput.None;
         }
     }
+
+    private static void Add(List<string> files, JsonNode? node)
+    {
+        if (Text(node) is { } file)
+        {
+            files.Add(file);
+        }
+    }
+
+    private static void AddAll(List<string> files, JsonNode? node)
+    {
+        if (node is JsonArray list)
+        {
+            foreach (var item in list)
+            {
+                Add(files, item);
+            }
+        }
+    }
+
+    private static string? Text(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var text) && text.Length > 0
+            ? text
+            : null;
+
+    /// <summary>What to write to stdout in a dialect, or null to write nothing.</summary>
+    public static string? Output(SymbolRefresh refresh, HookDialect dialect) =>
+        dialect == HookDialect.Claude ? Output(refresh) : Context(refresh);
 
     /// <summary>
     /// What to tell the agent, or null when there is nothing worth a line.

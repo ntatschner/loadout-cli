@@ -34,18 +34,50 @@ public sealed class RefreshHookTests : IDisposable
     [Fact]
     public void The_file_and_working_directory_are_read_from_the_payload_and_nothing_else_breaks_it()
     {
-        var input = RefreshHook.Parse(
+        var claude = RefreshHook.Parse(
             """{"session_id":"s","cwd":"D:/git/repo","hook_event_name":"PostToolUse","tool_name":"Edit","tool_input":{"file_path":"D:/git/repo/src/A.cs","old_string":"a","new_string":"b"},"tool_response":{}}""");
 
-        input.Should().Be(new RefreshHookInput("D:/git/repo/src/A.cs", "D:/git/repo"));
+        claude.Files.Should().Equal("D:/git/repo/src/A.cs");
+        claude.FilePath.Should().Be("D:/git/repo/src/A.cs");
+        claude.WorkingDirectory.Should().Be("D:/git/repo");
+
+        // Cursor's after-edit hook puts the path at the top and names the
+        // workspace roots rather than a cwd.
+        var cursor = RefreshHook.Parse(
+            """{"conversation_id":"c","hook_event_name":"afterFileEdit","workspace_roots":["D:/git/repo"],"file_path":"D:/git/repo/src/B.ts","edits":[]}""");
+
+        cursor.Files.Should().Equal("D:/git/repo/src/B.ts");
+        cursor.WorkingDirectory.Should().Be("D:/git/repo");
+
+        // A script of somebody's own may send a list, and a path twice is
+        // one file.
+        var list = RefreshHook.Parse("""{"files":["src/A.cs","src/B.cs","src/A.cs"],"workspace_root":"D:/git/repo"}""");
+
+        list.Files.Should().Equal("src/A.cs", "src/B.cs");
+        list.WorkingDirectory.Should().Be("D:/git/repo");
 
         // A tool that names no file, an empty payload, and a payload that is
         // not JSON at all: none of these are the agent's problem.
-        RefreshHook.Parse("""{"tool_name":"Bash","tool_input":{"command":"ls"}}""")
-            .Should().Be(new RefreshHookInput(null, null));
-        RefreshHook.Parse(string.Empty).Should().Be(new RefreshHookInput(null, null));
-        RefreshHook.Parse("not json {").Should().Be(new RefreshHookInput(null, null));
-        RefreshHook.Parse("[1,2]").Should().Be(new RefreshHookInput(null, null));
+        RefreshHook.Parse("""{"tool_name":"Bash","tool_input":{"command":"ls"}}""").Files.Should().BeEmpty();
+        RefreshHook.Parse(string.Empty).Files.Should().BeEmpty();
+        RefreshHook.Parse("not json {").Files.Should().BeEmpty();
+        RefreshHook.Parse("[1,2]").Files.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_generic_dialect_gets_the_text_and_claude_gets_the_document()
+    {
+        var changed = new SymbolRefresh(
+            [new SymbolRefreshedFile("src/A.cs", 1, 2)], 10, "abc", false,
+            [new SymbolMapChange("src", "- `src` — 1 type(s): A", "- `src` — 2 type(s): A, B")]);
+
+        RefreshHook.Output(changed, HookDialect.Generic).Should().Be(RefreshHook.Context(changed));
+        RefreshHook.Output(changed, HookDialect.Claude).Should().StartWith("{\"hookSpecificOutput\"");
+
+        var quiet = changed with { MapChanges = [] };
+
+        RefreshHook.Output(quiet, HookDialect.Generic).Should().BeNull();
+        RefreshHook.Output(quiet, HookDialect.Claude).Should().BeNull();
     }
 
     [Fact]

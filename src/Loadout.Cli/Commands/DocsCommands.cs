@@ -230,11 +230,13 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
 public sealed class DocsExportCommand : AsyncCommand<DocsExportCommand.Settings>
 {
     private readonly IProjectService _projects;
+    private readonly ISymbolIndexService _symbols;
     private readonly IAnsiConsole _console;
 
-    public DocsExportCommand(IProjectService projects, IAnsiConsole console)
+    public DocsExportCommand(IProjectService projects, ISymbolIndexService symbols, IAnsiConsole console)
     {
         _projects = projects;
+        _symbols = symbols;
         _console = console;
     }
 
@@ -295,7 +297,12 @@ public sealed class DocsExportCommand : AsyncCommand<DocsExportCommand.Settings>
                 ExitCode.RepositoryUnavailable);
         }
 
-        var symbols = SymbolScan.Scan(path, cancellationToken);
+        // The same scan the index makes: git's file list, the project's own
+        // exclusions and mappings, and the tagger for what the table cannot
+        // read. Two scans that disagreed would make the documents and the
+        // lookup describe different codebases.
+        var symbols = await _symbols.ScanAsync(path, project.Entry.Slug, cancellationToken)
+            .ConfigureAwait(false);
 
         if (symbols.Count == 0)
         {
@@ -629,9 +636,15 @@ public sealed class DocsRefreshCommand : AsyncCommand<DocsRefreshCommand.Setting
 
         [CommandOption("--hook")]
         [Description(
-            "Run as Claude's after-edit hook: read the file from the hook payload on standard "
+            "Run as an agent's after-edit hook: read the files from the hook payload on standard "
             + "input, and write a line for the agent only when the map of the code changed.")]
         public bool Hook { get; init; }
+
+        [CommandOption("--dialect <NAME>")]
+        [Description(
+            "Whose hook this is: claude (the default) writes the JSON document Claude Code reads "
+            + "back; generic writes plain text, for a hook that shows or ignores it.")]
+        public string Dialect { get; init; } = "claude";
     }
 
     /// <inheritdoc />
@@ -768,10 +781,16 @@ public sealed class DocsRefreshCommand : AsyncCommand<DocsRefreshCommand.Setting
         var payload = await System.Console.In.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
         var input = RefreshHook.Parse(payload);
 
-        if (input.FilePath is null)
+        if (input.Files.Count == 0)
         {
             return CommandOutput.Success();
         }
+
+        var dialect = settings.Dialect.Trim().ToLowerInvariant() switch
+        {
+            "" or "claude" => HookDialect.Claude,
+            _ => HookDialect.Generic,
+        };
 
         var resolution = await ResolveAsync(settings, input.WorkingDirectory ?? settings.Repo, cancellationToken)
             .ConfigureAwait(false);
@@ -792,7 +811,7 @@ public sealed class DocsRefreshCommand : AsyncCommand<DocsRefreshCommand.Setting
         }
 
         var refreshed = await _symbols
-            .RefreshAsync(path, resolution.Value!.Entry.Slug, [input.FilePath], dryRun: false, cancellationToken)
+            .RefreshAsync(path, resolution.Value!.Entry.Slug, input.Files, dryRun: false, cancellationToken)
             .ConfigureAwait(false);
 
         if (refreshed.Failed)
@@ -803,7 +822,7 @@ public sealed class DocsRefreshCommand : AsyncCommand<DocsRefreshCommand.Setting
             return CommandOutput.Success();
         }
 
-        if (RefreshHook.Output(refreshed.Value!) is { } document)
+        if (RefreshHook.Output(refreshed.Value!, dialect) is { } document)
         {
             await System.Console.Out.WriteAsync(document).ConfigureAwait(false);
         }

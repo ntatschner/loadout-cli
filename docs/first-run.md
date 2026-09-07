@@ -161,6 +161,49 @@ The **machine index** opens with a digest of the modules and what each holds, so
 a session can pick a file to open instead of reading the tree, and follows it
 with one tab-separated line per symbol.
 
+### Which files, and which languages
+
+The files come from git: everything tracked, plus anything present that
+`.gitignore` does not exclude. A hand-kept list of directories to skip is
+always one short — it had left this repository's own scripts out, because they
+live under `build`, and let a parked virtual environment in, because it lived
+under a name nobody had thought of. The project has already written down what
+is its own, and git applies it exactly. Outside a repository the tree is walked
+with the old rules.
+
+Where [Universal Ctags](https://ctags.io) is on `PATH`, it reads the files the
+built-in table does not — well over a hundred languages — and the two halves
+are joined by file, so nothing is counted twice. The table keeps the languages
+it knows, because it also reads the comment that documents a declaration and
+ctags does not. A machine without ctags gets the table and no message about a
+tool it never had.
+
+A project can say more in its manifest, under `symbols`:
+
+```yaml
+symbols:
+  ignore:
+    - generated/**
+  extensions:
+    .pyw: python
+  languages:
+    - id: elixir
+      name: Elixir
+      extensions: [ex, exs]
+      types: '^\s*defmodule\s+(?<name>[\w.]+)'
+      members: '^\s*def(?:p)?\s+(?<name>\w+)'
+      docs: hash
+```
+
+`ignore` takes globs the scan leaves out even though git lists them.
+`extensions` maps an extension onto a language the table knows. `languages`
+describes one the table does not: a pattern for a line declaring a type
+(optional) and one for a function or member, each with a `name` group, and how
+the language documents a declaration — `hash`, `double_slash`, `slashes`,
+`double_dash`, `block` or `docstring_below`. Run `loadout docs find` once after
+writing one: a pattern that does not compile drops its language rather than
+failing every lookup.
+
 ### Finding one thing
 
 ```
@@ -201,6 +244,21 @@ read once at launch, so the map in it cannot be rewritten in place, but a line
 added to the conversation can correct it. The file is in the workspace, so the
 hook travels with the next `loadout workspace save`. Codex has no such hook,
 and there the lookup's own re-reading is the whole answer.
+
+### From other agents and editors
+
+Everything above is served over MCP as well as on the command line, and the
+server needs nothing but a registered project: `loadout mcp serve --project
+<slug>` in any MCP client's configuration — Cursor, VS Code, Codex — gives that
+client `loadout_locate` and `loadout_code_map`. The map tool returns the digest
+as it stands now, pulled rather than pushed, which is what an agent with no
+after-edit hook has instead of the hook. The hook command itself reads the
+payloads agents actually send — Claude's `tool_input.file_path`, Cursor's
+top-level `file_path`, or a plain `files` list — and `--dialect generic` makes
+it write plain text for a hook that shows or ignores stdout rather than the
+document Claude reads back. Only the Claude entry is installed by
+`loadout protect --refresh-hook`; a Cursor hook lives in a file the repository
+policy keeps out of the repository, so that one is yours to write.
 
 A project that wants the map itself in every session, rather than one lookup
 at a time, sets `code_map: true` under `context` in its manifest. That inlines

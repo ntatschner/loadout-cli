@@ -33,6 +33,12 @@ public sealed class StubSymbolIndex : ISymbolIndexService
         Task.FromResult(OperationResult<SymbolLookup>.Ok(new SymbolLookup(
             SymbolSearch.Find(_symbols, query, limit), _symbols.Count, "abc1234", false, false)));
 
+    public Task<IReadOnlyList<Symbol>> ScanAsync(
+        string repositoryPath,
+        string slug,
+        CancellationToken ct = default) =>
+        Task.FromResult(_symbols);
+
     public Task<OperationResult<SymbolRefresh>> RefreshAsync(
         string repositoryPath,
         string slug,

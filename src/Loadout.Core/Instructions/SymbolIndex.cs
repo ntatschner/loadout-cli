@@ -58,6 +58,19 @@ public interface ISymbolIndexService
         string slug,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Everything named in the repository, read the way the project asked:
+    /// git's file list, the project's exclusions and mappings, the table for
+    /// the languages it reads and the tagger for the rest.
+    /// </summary>
+    /// <param name="repositoryPath">The repository to read.</param>
+    /// <param name="slug">The project, whose manifest may say how.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<IReadOnlyList<Symbol>> ScanAsync(
+        string repositoryPath,
+        string slug,
+        CancellationToken ct = default);
+
     /// <summary>Brings the cached index up to date for the files named, and only those.</summary>
     /// <param name="repositoryPath">The repository the files are in.</param>
     /// <param name="slug">The project, which names the cache.</param>
@@ -189,9 +202,10 @@ public sealed record SymbolDigest(
             .GroupBy(symbol => symbol.Language, StringComparer.Ordinal)
             .OrderByDescending(group => group.Count())
             .ThenBy(group => group.Key, StringComparer.Ordinal)
-            .Select(group => SymbolLanguages.All.FirstOrDefault(l => l.Id == group.Key)?.Name)
-            .Where(name => name is not null)
-            .Select(name => name!),
+            .Select(group => group.Key)
+            .Where(id => id.Length > 0)
+            .Select(id => SymbolLanguages.All.FirstOrDefault(l => l.Id == id)?.Name
+                ?? char.ToUpperInvariant(id[0]) + id[1..]),
     ];
 }
 
@@ -292,7 +306,7 @@ public sealed class SymbolIndexCache
     /// would otherwise keep answering from the old scan until the next commit
     /// happened to move.
     /// </remarks>
-    internal const int Format = 2;
+    internal const int Format = 3;
 
     private readonly string _root;
 
@@ -540,26 +554,87 @@ public sealed class SymbolIndexService : ISymbolIndexService
 {
     private readonly Func<string, CancellationToken, Task<string?>> _head;
     private readonly SymbolIndexCache _cache;
+    private readonly ISymbolSourceLister? _sources;
+    private readonly ISymbolTagger? _tagger;
+    private readonly Func<string, CancellationToken, Task<SymbolScanOptions>> _options;
 
-    /// <param name="git">Where the commit comes from.</param>
+    /// <param name="git">Where the commit and the file list come from.</param>
     /// <param name="cacheRoot">The machine's cache directory.</param>
-    public SymbolIndexService(IGitManager git, string cacheRoot)
-        : this(HeadFrom(git), new SymbolIndexCache(cacheRoot))
+    /// <param name="tagger">Reads the files the table cannot, when something on the machine can.</param>
+    /// <param name="options">What a project's manifest says about reading it, by slug.</param>
+    public SymbolIndexService(
+        IGitManager git,
+        string cacheRoot,
+        ISymbolTagger? tagger = null,
+        Func<string, CancellationToken, Task<SymbolScanOptions>>? options = null)
+        : this(HeadFrom(git), new SymbolIndexCache(cacheRoot), new GitSourceLister(git), tagger, options)
     {
     }
 
     /// <summary>For tests, which have no git to ask.</summary>
     /// <param name="fallback">Answers when the repository's own files cannot.</param>
     /// <param name="cache">Where the index is kept.</param>
+    /// <param name="sources">Lists the files, or null to walk the tree.</param>
+    /// <param name="tagger">Reads what the table cannot, or null for nothing.</param>
+    /// <param name="options">What the project said, or null for nothing.</param>
     internal SymbolIndexService(
         Func<string, CancellationToken, Task<string?>> fallback,
-        SymbolIndexCache cache)
+        SymbolIndexCache cache,
+        ISymbolSourceLister? sources = null,
+        ISymbolTagger? tagger = null,
+        Func<string, CancellationToken, Task<SymbolScanOptions>>? options = null)
     {
         // The file first, the fallback only when the file cannot be read with
         // confidence. Git costs a process; the file costs a read, and a lookup
         // that runs after every edit pays whichever this picks.
         _head = async (path, ct) => GitHead.Read(path) ?? await fallback(path, ct).ConfigureAwait(false);
         _cache = cache;
+        _sources = sources;
+        _tagger = tagger;
+        _options = options ?? ((_, _) => Task.FromResult(SymbolScanOptions.Default));
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Symbol>> ScanAsync(
+        string repositoryPath,
+        string slug,
+        CancellationToken ct = default)
+    {
+        var options = await _options(slug, ct).ConfigureAwait(false);
+
+        var files = _sources is not null
+            ? await _sources.ListAsync(repositoryPath, ct).ConfigureAwait(false)
+            : null;
+
+        var symbols = SymbolScan.Scan(repositoryPath, files, options, ct);
+
+        if (_tagger is null)
+        {
+            return symbols;
+        }
+
+        // The table keeps the files it reads; the tagger gets the rest. Joined
+        // by file, so nothing is counted twice.
+        var unread = SymbolScan.Unread(repositoryPath, files, options, ct);
+
+        if (unread.Count == 0)
+        {
+            return symbols;
+        }
+
+        var tagged = await _tagger.TagAsync(repositoryPath, unread, ct).ConfigureAwait(false);
+
+        if (tagged is null || tagged.Count == 0)
+        {
+            return symbols;
+        }
+
+        return
+        [
+            .. symbols.Concat(tagged)
+                .OrderBy(symbol => symbol.File, StringComparer.Ordinal)
+                .ThenBy(symbol => symbol.Line),
+        ];
     }
 
     /// <inheritdoc />
@@ -606,7 +681,7 @@ public sealed class SymbolIndexService : ISymbolIndexService
         {
             var hadExact = matches.Any(match => match.Exact);
 
-            matches = Refresh(matches, repositoryPath, query, limit);
+            matches = await RefreshAsync(matches, repositoryPath, slug, query, limit, ct).ConfigureAwait(false);
 
             // A miss, or an exact answer that the files no longer bear out. The
             // second is the type moved to a new file this session: the old
@@ -735,7 +810,7 @@ public sealed class SymbolIndexService : ISymbolIndexService
         if (cached is null)
         {
             var built = dryRun
-                ? SymbolScan.Scan(repositoryPath, ct)
+                ? await ScanAsync(repositoryPath, slug, ct).ConfigureAwait(false)
                 : await ScanAsync(repositoryPath, slug, head, ct).ConfigureAwait(false);
 
             return OperationResult<SymbolRefresh>.Ok(new SymbolRefresh(
@@ -748,11 +823,12 @@ public sealed class SymbolIndexService : ISymbolIndexService
 
         var kept = cached.Where(symbol => !relatives.Contains(symbol.File, StringComparer.Ordinal)).ToList();
         var refreshed = new List<SymbolRefreshedFile>();
+        var options = await _options(slug, ct).ConfigureAwait(false);
 
         foreach (var relative in relatives.Distinct(StringComparer.Ordinal))
         {
             var before = cached.Count(symbol => symbol.File == relative);
-            var now = Current(root, relative);
+            var now = await CurrentAsync(root, relative, options, ct).ConfigureAwait(false);
 
             kept.AddRange(now);
             refreshed.Add(new SymbolRefreshedFile(relative, before, now.Count));
@@ -860,19 +936,44 @@ public sealed class SymbolIndexService : ISymbolIndexService
         return string.Join('/', spelled);
     }
 
+    /// <summary>
+    /// What one file declares now: the table where it reads the file, the
+    /// tagger where only it does.
+    /// </summary>
+    private async Task<List<Symbol>> CurrentAsync(
+        string root,
+        string relative,
+        SymbolScanOptions options,
+        CancellationToken ct)
+    {
+        if (options.LanguageFor(relative) is not null || _tagger is null)
+        {
+            return Current(root, relative, options);
+        }
+
+        if (!File.Exists(Path.Combine(root, relative)) || options.Excludes(relative))
+        {
+            return [];
+        }
+
+        var tagged = await _tagger.TagAsync(root, [relative], ct).ConfigureAwait(false);
+
+        return tagged is null ? [] : [.. tagged];
+    }
+
     /// <summary>What one file declares now, or nothing when it is gone or unreadable.</summary>
-    private static List<Symbol> Current(string root, string relative)
+    private static List<Symbol> Current(string root, string relative, SymbolScanOptions options)
     {
         var path = Path.Combine(root, relative);
 
-        if (!File.Exists(path))
+        if (!File.Exists(path) || options.Excludes(relative))
         {
             return [];
         }
 
         try
         {
-            return [.. SymbolScan.InFile(File.ReadAllLines(path), relative)];
+            return [.. SymbolScan.InFile(File.ReadAllLines(path), relative, options)];
         }
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException)
@@ -887,7 +988,7 @@ public sealed class SymbolIndexService : ISymbolIndexService
         string? head,
         CancellationToken ct)
     {
-        var symbols = SymbolScan.Scan(repositoryPath, ct);
+        var symbols = await ScanAsync(repositoryPath, slug, ct).ConfigureAwait(false);
 
         if (head is not null)
         {
@@ -907,36 +1008,20 @@ public sealed class SymbolIndexService : ISymbolIndexService
     /// file that is gone contributes nothing; a symbol that has moved within
     /// its file is reported at its new line; one renamed away is dropped.
     /// </remarks>
-    private static IReadOnlyList<SymbolMatch> Refresh(
+    private async Task<IReadOnlyList<SymbolMatch>> RefreshAsync(
         IReadOnlyList<SymbolMatch> matches,
         string repositoryPath,
+        string slug,
         string query,
-        int limit)
+        int limit,
+        CancellationToken ct)
     {
         var current = new List<Symbol>();
+        var options = await _options(slug, ct).ConfigureAwait(false);
 
         foreach (var file in matches.Select(match => match.Symbol.File).Distinct(StringComparer.Ordinal))
         {
-            var path = Path.Combine(repositoryPath, file);
-
-            if (!File.Exists(path))
-            {
-                continue;
-            }
-
-            string[] lines;
-
-            try
-            {
-                lines = File.ReadAllLines(path);
-            }
-            catch (Exception exception) when (
-                exception is IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
-
-            current.AddRange(SymbolScan.InFile(lines, file));
+            current.AddRange(await CurrentAsync(repositoryPath, file, options, ct).ConfigureAwait(false));
         }
 
         return SymbolSearch.Find(current, query, limit);

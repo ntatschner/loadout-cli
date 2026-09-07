@@ -83,8 +83,18 @@ public static partial class SymbolScan
 
     /// <summary>Everything named in a repository's source files, in every language the scan reads.</summary>
     /// <param name="repositoryPath">Where to look.</param>
+    /// <param name="files">
+    /// Repository-relative paths to read, or null to walk the tree. Given
+    /// by whoever knows which files are the project's own, which git does
+    /// and a walk only guesses at.
+    /// </param>
+    /// <param name="options">What the project has said about how to read it.</param>
     /// <param name="ct">Cancellation token.</param>
-    public static IReadOnlyList<Symbol> Scan(string repositoryPath, CancellationToken ct = default)
+    public static IReadOnlyList<Symbol> Scan(
+        string repositoryPath,
+        IReadOnlyList<string>? files = null,
+        SymbolScanOptions? options = null,
+        CancellationToken ct = default)
     {
         var found = new List<Symbol>();
 
@@ -93,9 +103,11 @@ public static partial class SymbolScan
             return found;
         }
 
-        foreach (var file in Walk(repositoryPath, ct))
+        options ??= SymbolScanOptions.Default;
+
+        foreach (var relative in Candidates(repositoryPath, files, options, ct))
         {
-            if (SymbolLanguages.For(file) is not { } language)
+            if (options.LanguageFor(relative) is not { } language)
             {
                 continue;
             }
@@ -104,15 +116,13 @@ public static partial class SymbolScan
 
             try
             {
-                lines = File.ReadAllLines(file);
+                lines = File.ReadAllLines(Path.Combine(repositoryPath, relative));
             }
             catch (Exception exception) when (
                 exception is IOException or UnauthorizedAccessException)
             {
                 continue;
             }
-
-            var relative = Path.GetRelativePath(repositoryPath, file).Replace('\\', '/');
 
             found.AddRange(InFile(lines, relative, language));
         }
@@ -125,9 +135,66 @@ public static partial class SymbolScan
         ];
     }
 
+    /// <summary>
+    /// The files given that no language here reads, for a tagger to try.
+    /// </summary>
+    public static IReadOnlyList<string> Unread(
+        string repositoryPath,
+        IReadOnlyList<string>? files,
+        SymbolScanOptions? options = null,
+        CancellationToken ct = default)
+    {
+        options ??= SymbolScanOptions.Default;
+
+        return
+        [
+            .. Candidates(repositoryPath, files, options, ct)
+                .Where(relative => options.LanguageFor(relative) is null)
+                .Where(relative => Path.GetExtension(relative).Length > 0),
+        ];
+    }
+
+    /// <summary>
+    /// The files to consider, repository-relative and forward-slashed, with
+    /// the project's exclusions applied to whichever source they came from.
+    /// </summary>
+    private static IEnumerable<string> Candidates(
+        string repositoryPath,
+        IReadOnlyList<string>? files,
+        SymbolScanOptions options,
+        CancellationToken ct)
+    {
+        var relatives = files is not null
+            ? files.Select(file => file.Replace('\\', '/'))
+            : Walk(repositoryPath, ct)
+                .Select(file => Path.GetRelativePath(repositoryPath, file).Replace('\\', '/'));
+
+        var seen = 0;
+
+        foreach (var relative in relatives)
+        {
+            if (seen++ >= MostFiles)
+            {
+                yield break;
+            }
+
+            if (options.Excludes(relative))
+            {
+                continue;
+            }
+
+            yield return relative;
+        }
+    }
+
     /// <summary>The symbols one file declares, in the language its extension says.</summary>
-    internal static IEnumerable<Symbol> InFile(IReadOnlyList<string> lines, string file) =>
-        SymbolLanguages.For(file) is { } language ? InFile(lines, file, language) : [];
+    internal static IEnumerable<Symbol> InFile(
+        IReadOnlyList<string> lines,
+        string file,
+        SymbolScanOptions? options = null) =>
+        (options ?? SymbolScanOptions.Default).LanguageFor(file) is { } language
+            ? InFile(lines, file, language)
+            : [];
 
     /// <summary>The symbols one file declares.</summary>
     internal static IEnumerable<Symbol> InFile(
