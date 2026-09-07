@@ -2,6 +2,7 @@
 foundation.change-safety
 foundation.engineering-core
 foundation.evidence-first
+foundation.forward-motion
 foundation.verification
 mode.implement
 language.csharp
@@ -12,6 +13,7 @@ function.distributed-systems
 foundation.change-safety
 foundation.engineering-core
 foundation.evidence-first
+foundation.forward-motion
 foundation.verification
 mode.implement
 language.python
@@ -21,6 +23,7 @@ framework.django
 foundation.change-safety
 foundation.engineering-core
 foundation.evidence-first
+foundation.forward-motion
 foundation.verification
 mode.implement
 language.rust
@@ -30,6 +33,7 @@ function.performance
 foundation.change-safety
 foundation.engineering-core
 foundation.evidence-first
+foundation.forward-motion
 foundation.verification
 mode.review
 language.go
@@ -39,6 +43,7 @@ function.code-review
 foundation.change-safety
 foundation.engineering-core
 foundation.evidence-first
+foundation.forward-motion
 foundation.verification
 mode.implement
 language.typescript
@@ -49,6 +54,7 @@ framework.react
 foundation.change-safety
 foundation.engineering-core
 foundation.evidence-first
+foundation.forward-motion
 foundation.verification
 mode.advise
 language.terraform
@@ -57,6 +63,7 @@ language.terraform
 foundation.change-safety
 foundation.engineering-core
 foundation.evidence-first
+foundation.forward-motion
 foundation.verification
 mode.investigate
 language.csharp
@@ -73,6 +80,7 @@ function.performance
 foundation.change-safety
 foundation.engineering-core
 foundation.evidence-first
+foundation.forward-motion
 foundation.verification
 mode.implement
 function.refactoring
