@@ -105,6 +105,24 @@ public sealed class SpecialistLibraryTests
     }
 
     [Fact]
+    public async Task Foundation_is_exactly_the_set_every_session_is_meant_to_carry()
+    {
+        var catalogue = await BuiltInAsync();
+
+        // Named rather than counted, so that adding one is a deliberate act
+        // taken here as well as in the library. Forward motion is in the set
+        // because an agent that stops for the length of a build has wasted
+        // that time on every launch, whatever the task was.
+        catalogue.OfKind(SpecialistKind.Foundation).Select(s => s.Id)
+            .Should().BeEquivalentTo(
+                "foundation.change-safety",
+                "foundation.engineering-core",
+                "foundation.evidence-first",
+                "foundation.forward-motion",
+                "foundation.verification");
+    }
+
+    [Fact]
     public async Task Every_requirement_names_a_specialist_that_exists()
     {
         var catalogue = await BuiltInAsync();
