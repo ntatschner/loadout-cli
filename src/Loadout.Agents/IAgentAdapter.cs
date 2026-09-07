@@ -94,10 +94,10 @@ public sealed record AgentInvocation(
 /// be added without touching the launcher itself.
 /// </para>
 /// <para>
-/// Milestone 1 implements detection, capability probing, validation and
-/// invocation building. Context compilation, session resume and security
-/// profile translation are milestone 2 and are deliberately absent rather than
-/// stubbed, so nothing appears to work when it does not.
+/// Detection, capability probing and invocation building live here. Whether
+/// the agent is installed and whether the working directory exists are
+/// preflight's questions, asked once there for every adapter rather than
+/// again in each.
 /// </para>
 /// </summary>
 public interface IAgentAdapter
@@ -111,15 +111,10 @@ public interface IAgentAdapter
     /// <summary>
     /// Locates the agent and probes what it can do (spec sections 65 and 66).
     /// Returns a descriptor with IsInstalled false rather than failing when the
-    /// agent is simply not installed, which is an ordinary state.
+    /// agent is simply not installed, which is an ordinary state. Probed once
+    /// per adapter; later calls return the same answer.
     /// </summary>
     Task<AgentDescriptor> DetectAsync(CancellationToken ct = default);
-
-    /// <summary>
-    /// Checks that this adapter can launch the given project right now, as part
-    /// of preflight (spec section 59).
-    /// </summary>
-    Task<OperationResult> ValidateAsync(AgentLaunchContext context, CancellationToken ct = default);
 
     /// <summary>Builds the executable, arguments and environment for a launch.</summary>
     Task<OperationResult<AgentInvocation>> BuildInvocationAsync(

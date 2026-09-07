@@ -297,6 +297,55 @@ public sealed class RealLaunchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_dry_run_says_what_would_have_run()
+    {
+        var result = await _launcher.LaunchAsync(new LaunchRequest(Slug, "stub", DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error ?? string.Empty);
+
+        // The whole report used to be that the executable "would be started
+        // with N argument(s)". The command, its arguments and what it would
+        // be given are the launch, and a dry run that withholds them answers
+        // nothing.
+        var plan = result.Value!.Plan;
+
+        plan.Should().NotBeNull();
+        plan!.Arguments.Should().ContainInOrder("--project", Slug);
+        plan.WorkingDirectory.Should().Be(_repository);
+        plan.ContextPath.Should().NotBeNullOrEmpty();
+        plan.Instructions.Should().NotBeNull();
+
+        // By name only. The value of that variable is a path here and a
+        // resolved secret elsewhere, and a dry run is printed.
+        plan.EnvironmentVariables.Should().Contain("LOADOUT_STUB_REPORT");
+        plan.EnvironmentVariables.Should().NotContain(v => v.Contains(_report, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_specialist_the_agent_cannot_act_on_is_left_out_and_said_so()
+    {
+        WriteInstruction(
+            Path.Combine("specialists", "needs-files.md"),
+            "---\nid: foundation.needs-files\nkind: foundation\ntitle: Needs files\nalways: true\n"
+            + "capabilities:\n  - external_prompt_file\n---\n\nOnly useful when a prompt file can be attached.\n");
+
+        var result = await _launcher.LaunchAsync(new LaunchRequest(Slug, "stub", DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error ?? string.Empty);
+
+        // The resolver has always had this step, and it always returned at
+        // once: the agent was detected after the context was compiled, so the
+        // descriptor did not exist yet and nothing passed one. The stub agent
+        // claims no capabilities, so a specialist needing one cannot load.
+        var instructions = result.Value!.Plan!.Instructions!;
+
+        instructions.Selected.Should().NotContain(s => s.Specialist.Id == "foundation.needs-files");
+        instructions.Omitted.Should().Contain(s =>
+            s.Specialist.Id == "foundation.needs-files"
+            && s.Reason.Contains("does not support", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task The_agent_starts_in_the_repository()
     {
         await _launcher.LaunchAsync(new LaunchRequest(Slug, "stub"));
