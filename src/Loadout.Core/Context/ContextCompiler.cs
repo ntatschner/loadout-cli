@@ -25,15 +25,26 @@ internal sealed class ContextCompiler : IContextCompiler
     private readonly IFilePermissions _permissions;
     private readonly IRuleService _rules;
     private readonly IMemoryService _memory;
+    private readonly Instructions.ISymbolIndexService? _symbols;
 
+    /// <param name="permissions">Restricts the compiled file to its owner.</param>
+    /// <param name="rules">Where scoped rules come from.</param>
+    /// <param name="memory">Where the memory index comes from.</param>
+    /// <param name="symbols">
+    /// Where the map of the code comes from. Optional, and null means the
+    /// layer is simply never written: a compiler built without it compiles
+    /// exactly what it compiled before.
+    /// </param>
     public ContextCompiler(
         IFilePermissions permissions,
         IRuleService rules,
-        IMemoryService memory)
+        IMemoryService memory,
+        Instructions.ISymbolIndexService? symbols = null)
     {
         _permissions = permissions;
         _rules = rules;
         _memory = memory;
+        _symbols = symbols;
     }
 
     /// <inheritdoc />
@@ -45,6 +56,7 @@ internal sealed class ContextCompiler : IContextCompiler
         string? profileName = null,
         string? handoffPath = null,
         Models.Instructions.EffectiveInstructions? instructions = null,
+        string? repositoryPath = null,
         CancellationToken ct = default)
     {
         if (!Directory.Exists(runtimeDirectory))
@@ -82,7 +94,7 @@ internal sealed class ContextCompiler : IContextCompiler
         var missing = new List<string>();
 
         WriteHeader(builder, manifest, agentName, profileName);
-        WriteToolAccess(builder);
+        WriteToolAccess(builder, instructions);
 
         // Specialists come before the project's own material, because they are
         // the more general half: the C# specialist says what C# code should
@@ -136,6 +148,12 @@ internal sealed class ContextCompiler : IContextCompiler
 
         await AppendMemoryAsync(builder, sources, workspacePath, manifest.Slug, ct)
             .ConfigureAwait(false);
+
+        if (manifest.Context.CodeMap)
+        {
+            await AppendCodeMapAsync(builder, sources, manifest.Slug, repositoryPath, ct)
+                .ConfigureAwait(false);
+        }
 
         var outputPath = Path.Combine(runtimeDirectory, CompiledFileName);
 
@@ -342,6 +360,75 @@ internal sealed class ContextCompiler : IContextCompiler
     }
 
     /// <summary>
+    /// Appends the map of the code: one line per directory, naming its types.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The digest half of the machine index and nothing more. The index half —
+    /// one line per symbol — is what <c>loadout docs find</c> answers from, and
+    /// inlining it would cost more than the searching it saves. The digest is
+    /// the part worth paying for up front: it lets a session pick a directory
+    /// to open instead of reading the tree to find one.
+    /// </para>
+    /// <para>
+    /// Accounted as a source like everything else, so the budget report can
+    /// show what the project chose to spend. Absent without a word when the
+    /// repository is not on this machine or the scan finds nothing: a project
+    /// in a language the scan does not read has asked for a map that cannot
+    /// be drawn, and an empty heading would be noise where the map should be.
+    /// </para>
+    /// </remarks>
+    private async Task AppendCodeMapAsync(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        string slug,
+        string? repositoryPath,
+        CancellationToken ct)
+    {
+        if (_symbols is null || repositoryPath is null)
+        {
+            return;
+        }
+
+        var digest = await _symbols.DigestAsync(repositoryPath, slug, ct).ConfigureAwait(false);
+
+        if (digest.Failed || digest.Value!.Indexed == 0)
+        {
+            return;
+        }
+
+        var map = digest.Value!;
+        var at = map.Head is { Length: >= 7 } head ? $" at {head[..7]}" : string.Empty;
+
+        builder.AppendLine();
+        builder.AppendLine("## Where the code is");
+        builder.AppendLine();
+        builder.AppendLine($"<!-- source: symbols/{slug} -->");
+        builder.AppendLine();
+        builder.AppendLine(
+            $"One line per directory, from a scan of the tree{at}: {map.Indexed} symbol(s) in "
+            + $"{Listed(map.Languages)}. Use it to choose where to look. For any one name, "
+            + "`loadout docs find <name>` gives the file and line without a search.");
+        builder.AppendLine();
+        builder.AppendLine(map.Text.TrimEnd());
+        builder.AppendLine();
+
+        sources.Add(new ContextSource(
+            $"symbols/{slug}",
+            "Where the code is",
+            Encoding.UTF8.GetByteCount(map.Text)));
+    }
+
+    /// <summary>"C#", "C# and Python", "C#, Python and Go".</summary>
+    private static string Listed(IReadOnlyList<string> names) =>
+        names.Count switch
+        {
+            0 => "no language the scan reads",
+            1 => names[0],
+            _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
+        };
+
+    /// <summary>
     /// Shows a rule by its path inside the workspace rather than its absolute
     /// location, so the compiled context reads the same on every machine.
     /// </summary>
@@ -508,7 +595,9 @@ internal sealed class ContextCompiler : IContextCompiler
     /// Short because it is paid for on every launch, whatever the task.
     /// </para>
     /// </remarks>
-    private static void WriteToolAccess(StringBuilder builder)
+    private static void WriteToolAccess(
+        StringBuilder builder,
+        Models.Instructions.EffectiveInstructions? instructions)
     {
         builder.AppendLine("## The launcher is also a command");
         builder.AppendLine();
@@ -519,6 +608,23 @@ internal sealed class ContextCompiler : IContextCompiler
             "- `loadout instructions show <id>` - the full text of a specialist named above");
         builder.AppendLine(
             "- `loadout instructions explain --project <slug>` - what this session was given, and why");
+
+        // Only where it can answer. A language specialist is selected by the
+        // files in the tree, and the index behind this reads the same
+        // languages, so a selected specialist the scan knows is the honest
+        // test. A project in nothing the scan reads would pay for a line
+        // naming a command that finds nothing.
+        var readable = Instructions.SymbolLanguages.SpecialistIds;
+
+        if (instructions?.Selected.Any(selection =>
+                readable.Contains(selection.Specialist.Id, StringComparer.Ordinal)) == true)
+        {
+            builder.AppendLine(
+                "- `loadout docs find <name>` - where a type or member is declared, as file and "
+                + "line, from an index kept in step with the repository; cheaper than searching "
+                + "the tree when you know the name");
+        }
+
         builder.AppendLine(
             "- `loadout memory find <query>` - search what this project already knows, before "
             + "working it out again; only the index above reaches this context, not the topics");

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Instructions;
 using Loadout.Core.Policies;
 using Loadout.Core.Projects;
 using Loadout.Models;
@@ -211,12 +212,18 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
 {
     private readonly IPolicyService _policies;
     private readonly IProjectService _projects;
+    private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
     private readonly IAnsiConsole _console;
 
-    public ProtectCommand(IPolicyService policies, IProjectService projects, IAnsiConsole console)
+    public ProtectCommand(
+        IPolicyService policies,
+        IProjectService projects,
+        Loadout.Core.Workspace.IWorkspaceManager workspace,
+        IAnsiConsole console)
     {
         _policies = policies;
         _projects = projects;
+        _workspace = workspace;
         _console = console;
     }
 
@@ -237,12 +244,23 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
         [CommandOption("--remove")]
         [Description("Remove a hook the launcher installed.")]
         public bool Remove { get; init; }
+
+        [CommandOption("--refresh-hook")]
+        [Description(
+            "Instead of the Git hook, install Claude's after-edit hook that keeps the symbol "
+            + "index current, in the project's own Claude settings.")]
+        public bool RefreshHook { get; init; }
     }
 
     /// <inheritdoc />
     protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
+
+        if (settings.RefreshHook)
+        {
+            return await RefreshHookAsync(output, settings, cancellationToken).ConfigureAwait(false);
+        }
 
         if (settings.Global)
         {
@@ -343,5 +361,145 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
 
         return OperationResult<IReadOnlyList<string>>.Ok(
             [settings.Repo ?? Directory.GetCurrentDirectory()]);
+    }
+
+    /// <summary>
+    /// Installs or removes the after-edit hook in each project's Claude settings.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The project's own settings file in the workspace, which the Claude
+    /// adapter already passes with <c>--settings</c>, rather than the user's
+    /// file: the hook refreshes one project's index, and a hook that fires in
+    /// every session on the machine for a project it cannot work out is a
+    /// hook that mostly says nothing at a cost.
+    /// </para>
+    /// <para>
+    /// Lives here rather than in a command of its own because this is already
+    /// the command that installs hooks and previews before it does. The file
+    /// it writes is in the workspace repository, so the change travels with
+    /// the next <c>workspace save</c>, which is said on the way out.
+    /// </para>
+    /// </remarks>
+    private async Task<int> RefreshHookAsync(
+        CommandOutput output,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        if (settings.Global)
+        {
+            return output.Fail(
+                "The after-edit hook is installed per project, not globally: it refreshes one "
+                + "project's index. Name a project, use --all, or run it inside one.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (!_workspace.IsAvailable())
+        {
+            return output.Fail(
+                "There is no workspace on this machine, so there is no project settings file "
+                + "to write the hook into.",
+                ExitCode.RepositoryUnavailable);
+        }
+
+        var slugs = await SlugsAsync(settings, cancellationToken).ConfigureAwait(false);
+
+        if (slugs.Failed)
+        {
+            return output.Fail(slugs);
+        }
+
+        var verb = settings.Remove ? "remove" : "install";
+
+        foreach (var slug in slugs.Value!)
+        {
+            var path = Path.Combine(
+                _workspace.LocalPath, "projects", slug, "agents", "claude", "settings.json");
+
+            if (settings.DryRun)
+            {
+                output.WriteLine(
+                    $"[bold]Would {verb}[/] the after-edit hook for {Markup.Escape(slug)} in "
+                    + $"{Markup.Escape(path)}");
+
+                continue;
+            }
+
+            if (settings.Remove)
+            {
+                var removed = await RefreshHookInstaller.UninstallAsync(path, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (removed.Failed)
+                {
+                    output.WriteLine(
+                        $"[yellow]skipped[/] {Markup.Escape(slug)}  [dim]{Shown.Safely(removed.Error!)}[/]");
+
+                    continue;
+                }
+
+                output.WriteLine(removed.Value
+                    ? $"[green]Removed[/] the after-edit hook from {Markup.Escape(slug)}"
+                    : $"[dim]{Markup.Escape(slug)} had no after-edit hook to remove.[/]");
+
+                continue;
+            }
+
+            var installed = await RefreshHookInstaller
+                .InstallAsync(path, slug, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (installed.Failed)
+            {
+                output.WriteLine(
+                    $"[yellow]skipped[/] {Markup.Escape(slug)}  [dim]{Shown.Safely(installed.Error!)}[/]");
+
+                continue;
+            }
+
+            output.WriteLine(installed.Value!.AlreadyThere
+                ? $"[dim]{Markup.Escape(slug)} already has the after-edit hook.[/]"
+                : $"[green]Installed[/] the after-edit hook for {Markup.Escape(slug)}: "
+                    + $"[dim]{Markup.Escape(installed.Value.Command)}[/]");
+        }
+
+        if (settings.DryRun)
+        {
+            output.WriteLine("[dim]Nothing was changed.[/]");
+        }
+        else
+        {
+            output.WriteLine(
+                "[dim]The settings file is in the workspace, so this travels with the next "
+                + "'loadout workspace save'.[/]");
+        }
+
+        return CommandOutput.Success();
+    }
+
+    /// <summary>The projects the hook applies to, by slug.</summary>
+    private async Task<OperationResult<IReadOnlyList<string>>> SlugsAsync(
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        if (settings.All)
+        {
+            var list = await _projects.ListAsync(cancellationToken).ConfigureAwait(false);
+
+            return list.Failed
+                ? OperationResult<IReadOnlyList<string>>.Fail(list.Error!, list.ExitCode)
+                : OperationResult<IReadOnlyList<string>>.Ok(
+                    [.. list.Value!.Where(p => p.IsAvailableLocally).Select(p => p.Entry.Slug)]);
+        }
+
+        var resolved = settings.Project is not null
+            ? await _projects.ResolveAsync(settings.Project, cancellationToken).ConfigureAwait(false)
+            : await _projects.ResolveFromDirectoryAsync(
+                settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken)
+                .ConfigureAwait(false);
+
+        return resolved.Failed
+            ? OperationResult<IReadOnlyList<string>>.Fail(resolved.Error!, resolved.ExitCode)
+            : OperationResult<IReadOnlyList<string>>.Ok([resolved.Value!.Entry.Slug]);
     }
 }

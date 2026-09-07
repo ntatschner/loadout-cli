@@ -155,7 +155,7 @@ public static class DocsExport
                 + "it explains itself badly here too.")
             .AppendLine();
 
-        foreach (var module in Modules(symbols))
+        foreach (var module in SymbolDigest.ByModule(symbols))
         {
             text.AppendLine($"## {module.Key}").AppendLine();
 
@@ -212,7 +212,7 @@ public static class DocsExport
                 + "teaches them nothing.")
             .AppendLine();
 
-        foreach (var module in Modules(symbols))
+        foreach (var module in SymbolDigest.ByModule(symbols))
         {
             text.AppendLine($"## {module.Key}").AppendLine();
             text.AppendLine("TODO: what does somebody use this for, and when?").AppendLine();
@@ -245,17 +245,7 @@ public static class DocsExport
         // reading the tree. Written first because it is the part worth reading
         // when the index is too long to spend tokens on.
         text.AppendLine("## Modules").AppendLine();
-
-        foreach (var module in Modules(symbols))
-        {
-            var types = module.Where(symbol => symbol.Kind == SymbolKind.Type).ToList();
-
-            text.AppendLine(
-                $"- `{module.Key}` — {types.Count} type(s): "
-                + string.Join(", ", Named(types).Take(12))
-                + (Named(types).Count > 12 ? ", and more" : string.Empty));
-        }
-
+        text.Append(SymbolDigest.Modules(symbols));
         text.AppendLine().AppendLine("## Index").AppendLine();
 
         // Deliberately flat and uniform. This one is not read by a person, so
@@ -270,38 +260,4 @@ public static class DocsExport
         return text.ToString();
     }
 
-    /// <summary>
-    /// Distinct type names in a module, in order.
-    /// </summary>
-    /// <remarks>
-    /// Nested types repeat: every command in this codebase carries its own
-    /// Settings, so a raw list reads "Settings, ThingCommand, Settings,
-    /// OtherCommand, Settings". The repetition says nothing and costs the
-    /// tokens this digest exists to save.
-    /// </remarks>
-    private static List<string> Named(IEnumerable<Symbol> types) =>
-    [
-        .. types
-            .Select(symbol => symbol.Name)
-            .Distinct(StringComparer.Ordinal),
-    ];
-
-    /// <summary>
-    /// Symbols grouped by the directory that holds them.
-    /// </summary>
-    /// <remarks>
-    /// The directory is the closest thing to a module a lexical scan can see,
-    /// and in practice it is what people mean anyway: a namespace that does not
-    /// match its folder is rare, and where it happens the folder is still where
-    /// somebody would go looking.
-    /// </remarks>
-    private static IEnumerable<IGrouping<string, Symbol>> Modules(IReadOnlyList<Symbol> symbols) =>
-        symbols
-            .GroupBy(symbol =>
-            {
-                var directory = Path.GetDirectoryName(symbol.File)?.Replace('\\', '/');
-
-                return directory is { Length: > 0 } ? directory : "(root)";
-            })
-            .OrderBy(group => group.Key, StringComparer.Ordinal);
 }

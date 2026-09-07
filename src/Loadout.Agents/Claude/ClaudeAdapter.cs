@@ -32,6 +32,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// <summary>Capability key for the file-based system prompt option.</summary>
     private const string SystemPromptFile = "external_prompt_file";
 
+    /// <summary>How the screened settings copy is written: readable, since somebody may open it to see what was dropped.</summary>
+    private static readonly System.Text.Json.JsonSerializerOptions SettingsLayout = new() { WriteIndented = true };
+
     public ClaudeAdapter(
         IExecutableResolver resolver,
         IProcessLauncher processes,
@@ -109,7 +112,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         AddResume(context, descriptor, arguments, warnings);
         AddMcpServers(context, descriptor, arguments, warnings);
-        AddSettings(context, descriptor, arguments, warnings);
+        await AddSettingsAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
         AddSecurityProfile(context, descriptor, arguments, warnings);
@@ -198,13 +201,36 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// <summary>
     /// Points Claude at the project's settings file in the workspace, so the
     /// application repository needs no .claude directory of its own
-    /// (spec section 9).
+    /// (spec section 9) — screened first, because the workspace travels.
     /// </summary>
-    private static void AddSettings(
+    /// <remarks>
+    /// <para>
+    /// The file went to Claude as it was from the first commit, as the way of
+    /// moving a repository's own <c>.claude/settings.json</c> out of the
+    /// repository. That predates the rule the security profile follows — a
+    /// shared file may only tighten — and was never weighed against it. A
+    /// hook in this file is a command run after every edit, on whichever
+    /// machine pulls the workspace next, so the hooks are now screened: the
+    /// launcher's own is kept and pointed at this machine's launcher,
+    /// anything <c>commands.allowed_hooks</c> in config.yaml names is kept,
+    /// and the rest is dropped and said. Everything else in the file passes
+    /// untouched, as it did.
+    /// </para>
+    /// <para>
+    /// The screened copy is written into the runtime directory, which is
+    /// owner-only and deleted when the launch ends, and that is the path
+    /// Claude is given. A file with no hooks is passed as it is; nothing is
+    /// copied for nothing. A file that cannot be read as JSON is not passed
+    /// at all, because a file this cannot see into is a file this cannot
+    /// vouch for.
+    /// </para>
+    /// </remarks>
+    private static async Task AddSettingsAsync(
         AgentLaunchContext context,
         AgentDescriptor descriptor,
         List<string> arguments,
-        List<string> warnings)
+        List<string> warnings,
+        CancellationToken ct)
     {
         if (context.WorkspacePath is null || context.Manifest is null)
         {
@@ -233,8 +259,88 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             return;
         }
 
+        string text;
+
+        try
+        {
+            text = await File.ReadAllTextAsync(settingsPath, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            warnings.Add($"The project's settings.json could not be read, so it was not applied: {ex.Message}");
+
+            return;
+        }
+
+        var launcher = Core.Agents.LauncherInvocation.Current() ?? "loadout";
+
+        // Both forms of a pre-approval: as written, and as this adapter sends
+        // it to Claude, so an allow entry the file and the machine agree on
+        // survives whichever way somebody spelled it.
+        var preApproved = new List<string>(context.PreApprovedCommands ?? []);
+
+        preApproved.AddRange(Specifiers(context.PreApprovedCommands));
+
+        var screened = Core.Policies.SettingsScreen.Screen(
+            text, context.AllowedHooks ?? [], preApproved, launcher);
+
+        if (screened is null)
+        {
+            warnings.Add(
+                "The project's settings.json is not a JSON object, so it was not applied: a file "
+                + "the launcher cannot read is one it cannot vouch for.");
+
+            return;
+        }
+
+        var slug = context.Manifest.Slug;
+
+        foreach (var dropped in screened.DroppedHooks)
+        {
+            warnings.Add(
+                $"The hook '{dropped}' in the project's settings.json was not applied. A shared "
+                + "settings file may only tighten, and a hook runs a command after every edit. "
+                + $"Allow it on this machine under commands.allowed_hooks.{slug} in config.yaml.");
+        }
+
+        foreach (var dropped in screened.DroppedApprovals)
+        {
+            warnings.Add(
+                $"The approval '{dropped}' in the project's settings.json was not applied. A shared "
+                + "settings file may only tighten, and an approval removes a prompt. Pre-approve it "
+                + $"on this machine under commands.pre_approved.{slug} in config.yaml.");
+        }
+
+        foreach (var dropped in screened.DroppedSettings)
+        {
+            warnings.Add(
+                $"'{dropped}' in the project's settings.json was not applied: a shared settings "
+                + "file may only tighten, and nothing on this machine can put that back.");
+        }
+
+        var path = settingsPath;
+
+        if (screened.Changed)
+        {
+            path = Path.Combine(context.RuntimeDirectory, "settings.json");
+
+            try
+            {
+                await File.WriteAllTextAsync(
+                    path, screened.Document.ToJsonString(SettingsLayout), ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                warnings.Add(
+                    $"The screened settings could not be written, so the project's settings.json "
+                    + $"was not applied: {ex.Message}");
+
+                return;
+            }
+        }
+
         arguments.Add("--settings");
-        arguments.Add(settingsPath);
+        arguments.Add(path);
     }
 
     /// <summary>

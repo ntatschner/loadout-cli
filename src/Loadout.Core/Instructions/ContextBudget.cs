@@ -70,11 +70,17 @@ public sealed record ContextBudget(IReadOnlyList<ContextLayer> Layers, int Token
     /// The memory index, which is the only part of memory a session pays for:
     /// topics stay on disk and are read when something makes them relevant.
     /// </param>
+    /// <param name="codeMapBytes">
+    /// The map of the code, when the project has asked for it. Zero otherwise,
+    /// and shown either way: a layer somebody can switch on ought to be visible
+    /// at its price of nothing before it is switched on.
+    /// </param>
     public static ContextBudget From(
         Models.Instructions.EffectiveInstructions instructions,
         long alwaysLoadedRuleBytes,
         long scopedRuleBytes,
-        long memoryIndexBytes)
+        long memoryIndexBytes,
+        long codeMapBytes = 0)
     {
         ArgumentNullException.ThrowIfNull(instructions);
 
@@ -83,6 +89,7 @@ public sealed record ContextBudget(IReadOnlyList<ContextLayer> Layers, int Token
             new("Specialists", instructions.Budget.Bytes, instructions.Budget.EstimatedTokens, true),
             new("Instructions and rules", alwaysLoadedRuleBytes, Tokens(alwaysLoadedRuleBytes), true),
             new("Memory index", memoryIndexBytes, Tokens(memoryIndexBytes), true),
+            new("Code map", codeMapBytes, Tokens(codeMapBytes), true),
             new("Scoped rules", scopedRuleBytes, Tokens(scopedRuleBytes), false),
         };
 

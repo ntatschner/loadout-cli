@@ -224,4 +224,23 @@ public sealed class SpecialistCompositionTests : IDisposable
         // second time and risking a different answer.
         result.Value!.Instructions.Should().BeSameAs(instructions);
     }
+
+    [Fact]
+    public async Task The_symbol_lookup_is_offered_only_where_it_can_answer()
+    {
+        // The index behind 'docs find' reads a fixed set of languages. A line
+        // naming it in any other project's context is paid for on every
+        // launch and finds nothing, so a language specialist the scan knows —
+        // selected by the same evidence, the files in the tree — is the test
+        // for whether to spend the line.
+        var python = await CompileAsync(Effective(
+            Chosen(Specialist("language.python", SpecialistKind.Language, "Python", "Body."))));
+
+        var unread = await CompileAsync(Effective(
+            Chosen(Specialist("language.cobol", SpecialistKind.Language, "COBOL", "Body.")),
+            Chosen(Specialist("framework.dotnet", SpecialistKind.Framework, ".NET", "Body."))));
+
+        python.Should().Contain("loadout docs find <name>");
+        unread.Should().NotContain("loadout docs find");
+    }
 }

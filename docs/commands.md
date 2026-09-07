@@ -27,6 +27,9 @@
 | `loadout doctor --fix` | Put right the findings the doctor can fix itself |
 | `loadout doctor --bundle [path]` | Write the findings to one file to send somebody, screened first |
 | `loadout docs audit [project]` | Report where the documentation has come adrift from the repository |
+| `loadout docs find <name>` | Say where a type or member is declared, from an index kept in step with the repository |
+| `loadout docs refresh <file>` | Bring the symbol index up to date for the files named, after an edit; `--hook` is the form an after-edit hook runs, `--dialect generic` for one that is not Claude's |
+| `loadout protect --refresh-hook [project]` | Install that hook in the project's Claude settings, or `--remove` it |
 | `loadout protect` | Install a pre-commit hook, or `--global` Git excludes |
 | `loadout migrate` | Move existing AI tooling files into the workspace |
 | `loadout project worktrees <project>` | List a project's working trees |
@@ -327,13 +330,15 @@ agent and heard nothing more. Every launch now also declares Loadout itself as
 an MCP server, so a session can ask it things rather than parse console output
 written for a person.
 
-Five tools, each making the same call its command makes:
+Seven tools, each making the same call its command makes:
 
 | | |
 |---|---|
 | `loadout_specialist` | The full text of one specialist, as `instructions show` prints it |
 | `loadout_effective_instructions` | What this session was given, and what triggered each part |
 | `loadout_recall` | Search what the project already knows, as `memory find` does |
+| `loadout_locate` | Where a type or member is declared, as `docs find` says |
+| `loadout_code_map` | The map of the code as it stands now, one line per directory |
 | `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
 
@@ -342,6 +347,13 @@ line per topic — and a session deciding from that alone either opens six files
 or opens none. It searches inside them. It matches words rather than meanings,
 which it says when it finds nothing, so an agent doesn't conclude a fact is
 unrecorded when it is recorded in other words.
+
+`loadout_locate` answers the question an agent asks most often and most
+expensively — where is this thing declared — with one line each, from a symbol
+index cached against the commit it was built at. It matches names rather than
+meanings, in whichever of the languages the scan reads each file turns out to
+be in, and says so when it finds nothing, so an agent doesn't conclude a thing
+is absent when it is merely called something else.
 
 `loadout_mode` is there because a mode is a session-wide directive and work
 changes shape: a session that started out investigating a bug ends up fixing it.
