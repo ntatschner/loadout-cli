@@ -53,7 +53,6 @@ public static class ConfigKeys
         public const string Agents = "Agents";
         public const string Editor = "Editor";
         public const string Syncing = "Syncing";
-        public const string Terminal = "Terminal";
         public const string Secrets = "Secrets";
         public const string Updates = "Updates";
         public const string Statusline = "Agent status line";
@@ -64,7 +63,7 @@ public static class ConfigKeys
         /// <summary>In the order a screen should show them.</summary>
         public static IReadOnlyList<string> InOrder =>
         [
-            Workspace, Agents, Editor, Syncing, Terminal, Secrets, Updates,
+            Workspace, Agents, Editor, Syncing, Secrets, Updates,
             Statusline, Instructions, Telemetry, Machine, General,
         ];
     }
@@ -176,20 +175,6 @@ public static class ConfigKeys
             (c, _) => c.Secrets.Provider,
             (c, _, v) => c.Secrets.Provider = v, false,
             Group: Groups.Secrets),
-
-        // Nothing reads this yet. ITerminalProvider is implemented for all
-        // three platforms, registered for injection, and injected nowhere —
-        // so an agent always launches in the terminal the launcher was
-        // started from, whatever this says. Said in the description because
-        // that is the one place every surface shows: config list, config get,
-        // and the hint under the field on the settings screen, which is where
-        // it became a problem. A setting that can be changed and does nothing
-        // is worse the more prominent it is.
-        new("terminal",
-            "Preferred terminal. Not yet honoured: agents launch in the current one",
-            (c, _) => c.Terminal.Preferred,
-            (c, _, v) => c.Terminal.Preferred = v, false,
-            Group: Groups.Terminal),
 
         new("updates-source", "Release feed URL",
             (c, _) => c.Updates.Source,
