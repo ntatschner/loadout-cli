@@ -8,8 +8,7 @@
 | `loadout here` | Launch the agent for the current repository |
 | `loadout doctor` | Platform, Git, workspace, secret and agent diagnostics |
 | `loadout status` | Summary of workspace, projects and agents |
-| `loadout project add\|list\|| `loadout instructions list|show|explain` | Read the specialists, and see which ones a task would load |
-| `loadout instructions explain --against-mode|--against-task` | Show only what changes between two ways of asking ||remove\|discover\|open` | Manage project registration |
+| `loadout project add\|list\|remove\|discover\|open` | Manage project registration |
 | `loadout project clone\|relocate <project>` | Get a registered project onto this machine |
 | `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `loadout project link [project]` | Record inside a repository which project it belongs to |
@@ -49,11 +48,12 @@
 | `loadout launches [project]` | What this machine launched, and what each launch was given |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
 | `loadout instructions list\|show\|explain` | Read the specialists, and see which ones a task would load |
+| `loadout instructions explain --against-mode\|--against-task` | Show only what changes between two ways of asking |
 | `loadout instructions audit\|validate` | Check a project against what its specialists ask for, or check the library itself |
 | `loadout instructions new <id>` | Draft a specialist or skill in the workspace, or in one project |
 | `loadout instructions stats` | Say which specialists launches actually reached, and which none did |
 | `loadout usage [--days|--by|--project]` | What the agents have spent, by project, day, model or agent |
-| `loadout usage --format markdown|csv` | The same report written to send somebody, or to open in a spreadsheet ||--by\|--project]` | What the agents have spent, by project, day, model or agent |
+| `loadout usage --format markdown\|csv` | The same report written to send somebody, or to open in a spreadsheet |
 | `loadout telemetry serve\|status` | Receive, locally, what launched agents report about their own usage |
 | `loadout statusline install\|uninstall\|show` | Put the project, branch and context spent in the agent's status line |
 | `loadout backup list\|restore` | Undo an operation that changed files |
