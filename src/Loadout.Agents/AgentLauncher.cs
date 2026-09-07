@@ -363,7 +363,14 @@ public sealed class AgentLauncher : IAgentLauncher
                 // Carried out, never inferred. This is a choice somebody wrote
                 // in the manifest; working one out from how hard the task looks
                 // would be a guess wearing a metric's clothes.
-                Core.Agents.ModelPolicy.For(manifest, request.Mode));
+                Core.Agents.ModelPolicy.For(manifest, request.Mode),
+
+                // From the same machine-local file as the pre-approvals: a
+                // hook in the project's settings runs after every edit, and
+                // the file that carries it travels.
+                config.Commands.AllowedHooks.TryGetValue(project.Entry.Slug, out var hooks)
+                    ? hooks
+                    : null);
 
             var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
             if (invocationResult.Failed)

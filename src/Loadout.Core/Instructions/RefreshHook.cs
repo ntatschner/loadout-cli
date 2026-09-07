@@ -57,6 +57,29 @@ public static class RefreshHook
     /// <summary>The argument that puts the refresh command into hook mode.</summary>
     public const string Argument = "--hook";
 
+    /// <summary>The hook as a synced file spells it: the launcher by name.</summary>
+    public const string Portable = "loadout docs refresh " + Argument;
+
+    /// <summary>Whether a hook command is this launcher's refresh hook, however it names the launcher.</summary>
+    public static bool IsOwn(string command) =>
+        command.Contains("docs refresh " + Argument, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The launcher's own hook, pointed at this machine's launcher.
+    /// </summary>
+    /// <remarks>
+    /// Whatever preceded <c>docs refresh</c> — a bare name, a path from
+    /// another machine, a host and a dll from a development build — is
+    /// replaced by how this launcher starts here. The arguments after it,
+    /// which name the project, are kept.
+    /// </remarks>
+    public static string Localise(string command, string launcher)
+    {
+        var at = command.IndexOf("docs refresh " + Argument, StringComparison.Ordinal);
+
+        return at < 0 ? command : launcher + " " + command[at..].Trim();
+    }
+
     private static readonly JsonDocumentOptions Lenient = new()
     {
         CommentHandling = JsonCommentHandling.Skip,
@@ -234,28 +257,26 @@ public static class RefreshHookInstaller
     };
 
     /// <summary>
-    /// The command to install: this launcher, quoted for the shell Claude
-    /// hands it to, in hook mode.
+    /// The command to install: the launcher by name, in hook mode.
     /// </summary>
-    /// <param name="executablePath">The process that is the launcher.</param>
-    /// <param name="entryAssembly">
-    /// The launcher's own assembly when the process is only a host for it.
-    /// A build run as <c>dotnet loadout.dll</c> has <c>dotnet.exe</c> for its
-    /// process path, and a hook naming that alone would start the host with
-    /// no program to run — which is exactly what the first install of this
-    /// did.
-    /// </param>
-    /// <param name="slug">
-    /// The project, named on the command so the hook need not work it out
+    /// <remarks>
+    /// <para>
+    /// By name and not by path. The settings file this goes into lives in the
+    /// workspace, which syncs between machines, and a path is true of one
+    /// machine: the first install wrote a development build's <c>dotnet.exe</c>
+    /// and its dll, which would have been wrong everywhere else. The launcher
+    /// substitutes its own location when it hands the file to the agent, so
+    /// the file need never say where anything is.
+    /// </para>
+    /// <para>
+    /// The project is named on the command so the hook need not work it out
     /// from the directory on every edit: that costs two git processes and a
-    /// listing of every project, and the settings file it lives in is that
-    /// project's own.
-    /// </param>
-    public static string CommandFor(string executablePath, string? entryAssembly = null, string? slug = null) =>
-        "\"" + executablePath + "\""
-        + (entryAssembly is { Length: > 0 } ? " \"" + entryAssembly + "\"" : string.Empty)
-        + " docs refresh " + RefreshHook.Argument
-        + (slug is { Length: > 0 } ? " --project " + slug : string.Empty);
+    /// listing of every project, and the file it lives in is that project's
+    /// own.
+    /// </para>
+    /// </remarks>
+    public static string CommandFor(string? slug = null) =>
+        RefreshHook.Portable + (slug is { Length: > 0 } ? " --project " + slug : string.Empty);
 
     /// <summary>
     /// How long Claude waits for the hook, in seconds.
@@ -272,8 +293,6 @@ public static class RefreshHookInstaller
     /// <summary>Writes the hook, creating the file when it does not exist.</summary>
     public static async Task<OperationResult<RefreshHookInstallation>> InstallAsync(
         string settingsPath,
-        string executablePath,
-        string? entryAssembly = null,
         string? slug = null,
         CancellationToken ct = default)
     {
@@ -285,7 +304,7 @@ public static class RefreshHookInstaller
         }
 
         var root = read.Value!;
-        var command = CommandFor(executablePath, entryAssembly, slug);
+        var command = CommandFor(slug);
 
         if (root["hooks"] is not JsonObject hooks)
         {
@@ -444,8 +463,7 @@ public static class RefreshHookInstaller
         entry["hooks"] is JsonArray list ? list.OfType<JsonObject>() : [];
 
     private static bool IsOurs(JsonObject hook) =>
-        CommandOf(hook) is { } command
-        && command.Contains("docs refresh " + RefreshHook.Argument, StringComparison.Ordinal);
+        CommandOf(hook) is { } command && RefreshHook.IsOwn(command);
 
     /// <summary>
     /// A hook's command when it is a string, and null for anything else.

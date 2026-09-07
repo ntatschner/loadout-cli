@@ -402,15 +402,6 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
                 ExitCode.RepositoryUnavailable);
         }
 
-        var launcher = Launcher();
-
-        if (!settings.Remove && launcher is null)
-        {
-            return output.Fail(
-                "This launcher's own path could not be determined, so the hook cannot name it.",
-                ExitCode.GeneralFailure);
-        }
-
         var slugs = await SlugsAsync(settings, cancellationToken).ConfigureAwait(false);
 
         if (slugs.Failed)
@@ -455,7 +446,7 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
             }
 
             var installed = await RefreshHookInstaller
-                .InstallAsync(path, launcher!.Value.Executable, launcher.Value.EntryAssembly, slug, cancellationToken)
+                .InstallAsync(path, slug, cancellationToken)
                 .ConfigureAwait(false);
 
             if (installed.Failed)
@@ -484,47 +475,6 @@ public sealed class ProtectCommand : AsyncCommand<ProtectCommand.Settings>
         }
 
         return CommandOutput.Success();
-    }
-
-    /// <summary>
-    /// How to start this launcher again from a hook: the process, and the
-    /// assembly too when the process is only a host for it.
-    /// </summary>
-    /// <remarks>
-    /// The shipped launcher is one executable and its process path is the
-    /// answer. A development build is run as <c>dotnet loadout.dll</c>, whose
-    /// process path is <c>dotnet.exe</c>, and a hook naming that alone starts
-    /// the host with nothing to run. The first install of this hook did
-    /// exactly that, which is why the host case is told apart by name.
-    /// </remarks>
-    private static (string Executable, string? EntryAssembly)? Launcher()
-    {
-        if (Environment.ProcessPath is not { Length: > 0 } process)
-        {
-            return null;
-        }
-
-        var name = Path.GetFileNameWithoutExtension(process);
-
-        if (!name.Equals("dotnet", StringComparison.OrdinalIgnoreCase))
-        {
-            return (process, null);
-        }
-
-        // The assembly's own location is empty inside a single-file build, so
-        // it is found by name in the application directory instead — and a
-        // single-file build never reaches this branch anyway, since its
-        // process is the launcher itself.
-        var assembly = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name;
-
-        if (assembly is not { Length: > 0 })
-        {
-            return null;
-        }
-
-        var entry = Path.Combine(AppContext.BaseDirectory, assembly + ".dll");
-
-        return File.Exists(entry) ? (process, entry) : null;
     }
 
     /// <summary>The projects the hook applies to, by slug.</summary>

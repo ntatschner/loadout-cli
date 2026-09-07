@@ -23,4 +23,17 @@ public sealed class CommandPolicySettings
 {
     /// <summary>Project slug to the commands pre-approved for it on this machine.</summary>
     public Dictionary<string, List<string>> PreApproved { get; set; } = [];
+
+    /// <summary>
+    /// Project slug to the hook commands allowed to run for it on this machine.
+    /// </summary>
+    /// <remarks>
+    /// The same rule as pre-approvals, for the same reason. A hook in the
+    /// project's Claude settings file is a command run after every edit, and
+    /// that file lives in the workspace, which travels. So the file may carry
+    /// a hook, and this machine decides whether it runs: an entry here is the
+    /// whole command or a prefix of it ending at a word. The launcher's own
+    /// after-edit hook needs no entry, since the launcher wrote it.
+    /// </remarks>
+    public Dictionary<string, List<string>> AllowedHooks { get; set; } = [];
 }

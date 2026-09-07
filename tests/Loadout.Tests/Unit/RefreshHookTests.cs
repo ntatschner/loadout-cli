@@ -130,13 +130,13 @@ public sealed class RefreshHookTests : IDisposable
             }
             """);
 
-        var first = await RefreshHookInstaller.InstallAsync(path, @"C:\tools\loadout.exe");
+        var first = await RefreshHookInstaller.InstallAsync(path);
 
         first.Succeeded.Should().BeTrue(first.Error);
         first.Value!.AlreadyThere.Should().BeFalse();
-        first.Value!.Command.Should().Be("\"C:\\tools\\loadout.exe\" docs refresh --hook");
+        first.Value!.Command.Should().Be("loadout docs refresh --hook");
 
-        var again = await RefreshHookInstaller.InstallAsync(path, @"C:\tools\loadout.exe");
+        var again = await RefreshHookInstaller.InstallAsync(path);
 
         again.Value!.AlreadyThere.Should().BeTrue();
 
@@ -156,20 +156,25 @@ public sealed class RefreshHookTests : IDisposable
     }
 
     [Fact]
-    public void A_hosted_launcher_names_its_assembly_and_a_shipped_one_names_only_itself()
+    public void The_command_names_the_launcher_by_name_and_the_project_by_slug()
     {
-        // The first install of this hook, from a development build, wrote
-        // "dotnet.exe docs refresh --hook": the host with nothing to run.
-        RefreshHookInstaller.CommandFor(@"C:\Program Files\dotnet\dotnet.exe", @"D:\build\loadout.dll")
-            .Should().Be("\"C:\\Program Files\\dotnet\\dotnet.exe\" \"D:\\build\\loadout.dll\" docs refresh --hook");
+        // No path. The file this goes into syncs between machines, and the
+        // first install wrote a development build's dotnet.exe and dll, true
+        // of one machine. The launcher substitutes its own location when it
+        // hands the file to the agent.
+        RefreshHookInstaller.CommandFor().Should().Be("loadout docs refresh --hook");
+        RefreshHookInstaller.CommandFor("starstats").Should().Be("loadout docs refresh --hook --project starstats");
 
-        RefreshHookInstaller.CommandFor(@"C:\tools\loadout.exe")
-            .Should().Be("\"C:\\tools\\loadout.exe\" docs refresh --hook");
+        // Whatever named the launcher before is replaced at launch; the
+        // arguments after it are kept.
+        RefreshHook.Localise("\"C:\\Program Files\\dotnet\\dotnet.exe\" \"D:\\b\\loadout.dll\" docs refresh --hook --project x", "\"C:\\tools\\loadout.exe\"")
+            .Should().Be("\"C:\\tools\\loadout.exe\" docs refresh --hook --project x");
+        RefreshHook.Localise("loadout docs refresh --hook", "\"/usr/local/bin/loadout\"")
+            .Should().Be("\"/usr/local/bin/loadout\" docs refresh --hook");
+        RefreshHook.Localise("prettier --write", "\"C:\\tools\\loadout.exe\"").Should().Be("prettier --write");
 
-        // The project named on the command, so the hook need not work it out
-        // from the directory on every edit.
-        RefreshHookInstaller.CommandFor(@"C:\tools\loadout.exe", null, "starstats")
-            .Should().Be("\"C:\\tools\\loadout.exe\" docs refresh --hook --project starstats");
+        RefreshHook.IsOwn("loadout docs refresh --hook --project x").Should().BeTrue();
+        RefreshHook.IsOwn("echo docs").Should().BeFalse();
     }
 
     [Fact]
@@ -191,7 +196,7 @@ public sealed class RefreshHookTests : IDisposable
             }
             """);
 
-        var installed = await RefreshHookInstaller.InstallAsync(path, @"C:\tools\loadout.exe", null, "starstats");
+        var installed = await RefreshHookInstaller.InstallAsync(path, "starstats");
 
         installed.Succeeded.Should().BeTrue(installed.Error);
 
@@ -210,20 +215,27 @@ public sealed class RefreshHookTests : IDisposable
     }
 
     [Fact]
-    public async Task A_moved_launcher_is_updated_in_place_rather_than_installed_twice()
+    public async Task A_hook_written_with_a_path_is_made_portable_in_place_rather_than_installed_twice()
     {
         var path = Path.Combine(_root, "settings.json");
 
-        await RefreshHookInstaller.InstallAsync(path, @"C:\old\loadout.exe");
+        // An entry from before the command was portable: the launcher named
+        // by an absolute path from some machine.
+        await File.WriteAllTextAsync(
+            path,
+            """
+            { "hooks": { "PostToolUse": [ { "matcher": "Edit|Write|MultiEdit", "hooks": [
+              { "type": "command", "command": "\"C:\\old\\loadout.exe\" docs refresh --hook", "timeout": 30 } ] } ] } }
+            """);
 
-        var moved = await RefreshHookInstaller.InstallAsync(path, @"C:\new\loadout.exe");
+        var moved = await RefreshHookInstaller.InstallAsync(path);
 
         moved.Value!.AlreadyThere.Should().BeFalse();
 
         var post = JsonNode.Parse(await File.ReadAllTextAsync(path))!["hooks"]!["PostToolUse"]!.AsArray();
 
         post.Should().HaveCount(1);
-        post[0]!["hooks"]![0]!["command"]!.GetValue<string>().Should().Contain(@"C:\new\loadout.exe");
+        post[0]!["hooks"]![0]!["command"]!.GetValue<string>().Should().Be("loadout docs refresh --hook");
 
         // An entry written before the timeout existed is brought up to date,
         // even when its command already matches, rather than reported as
@@ -231,7 +243,7 @@ public sealed class RefreshHookTests : IDisposable
         post[0]!["hooks"]![0]!.AsObject().Remove("timeout");
         await File.WriteAllTextAsync(path, post.Parent!.Parent!.ToJsonString());
 
-        var same = await RefreshHookInstaller.InstallAsync(path, @"C:\new\loadout.exe");
+        var same = await RefreshHookInstaller.InstallAsync(path);
 
         same.Value!.AlreadyThere.Should().BeFalse();
 
@@ -257,7 +269,7 @@ public sealed class RefreshHookTests : IDisposable
             }
             """);
 
-        await RefreshHookInstaller.InstallAsync(path, @"C:\tools\loadout.exe");
+        await RefreshHookInstaller.InstallAsync(path);
 
         (await RefreshHookInstaller.UninstallAsync(path)).Value.Should().BeTrue();
         (await RefreshHookInstaller.UninstallAsync(path)).Value.Should().BeFalse("it is already gone");
@@ -271,7 +283,7 @@ public sealed class RefreshHookTests : IDisposable
         // A file that held nothing but ours is left with no empty scaffolding.
         var alone = Path.Combine(_root, "alone.json");
 
-        await RefreshHookInstaller.InstallAsync(alone, @"C:\tools\loadout.exe");
+        await RefreshHookInstaller.InstallAsync(alone);
         await RefreshHookInstaller.UninstallAsync(alone);
 
         JsonNode.Parse(await File.ReadAllTextAsync(alone))!.AsObject().Should().BeEmpty();
@@ -287,7 +299,7 @@ public sealed class RefreshHookTests : IDisposable
 
         await File.WriteAllTextAsync(path, "{ not json");
 
-        var result = await RefreshHookInstaller.InstallAsync(path, @"C:\tools\loadout.exe");
+        var result = await RefreshHookInstaller.InstallAsync(path);
 
         result.Failed.Should().BeTrue();
         (await File.ReadAllTextAsync(path)).Should().Be("{ not json");

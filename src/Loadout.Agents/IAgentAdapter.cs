@@ -49,6 +49,12 @@ namespace Loadout.Agents;
 /// its own default. Named as the agent spells it: the launcher translates the
 /// flag, not the name.
 /// </param>
+/// <param name="AllowedHooks">
+/// Hook commands this machine allows to run for the project, from the same
+/// machine-local configuration as the pre-approvals and for the same reason:
+/// the project's settings file travels, and a command that runs after every
+/// edit is this machine's to permit.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -62,7 +68,8 @@ public sealed record AgentLaunchContext(
     string? ResumeSessionId = null,
     IReadOnlyList<string>? McpConfigFiles = null,
     IReadOnlyList<string>? PreApprovedCommands = null,
-    string? Model = null);
+    string? Model = null,
+    IReadOnlyList<string>? AllowedHooks = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

@@ -235,7 +235,30 @@ by the time the agent asks.
 
 `loadout protect --refresh-hook` installs that hook, in the project's own
 Claude settings file in the workspace rather than the user's, since it
-refreshes one project's index. In hook mode the command reads the edited file
+refreshes one project's index. It writes the launcher by name, never by path:
+the file syncs between machines, and the launcher substitutes its own location
+when it hands the file to Claude.
+
+That hand-over is now screened, by the rule pre-approvals already follow. A
+file that travels between people and machines may only tighten, and a hook is a
+command run after every edit. So the hooks in the project's settings file are
+read at launch: the launcher's own is kept and pointed at this machine's
+launcher, anything named under `commands.allowed_hooks.<slug>` in `config.yaml`
+— which stays on this machine — is kept as written, and the rest is dropped and
+named in a warning that says how to allow it here. An entry is the whole
+command or a prefix of it ending at a word, so `prettier` allows
+`prettier --write`. Everything else in the file passes as it always did, and a
+file with no hooks is handed over untouched. The screened copy lives in the
+launch's own runtime directory and goes when the session does.
+
+```yaml
+# config.yaml, this machine only
+commands:
+  allowed_hooks:
+    starstats:
+      - prettier
+      - npm test
+``` In hook mode the command reads the edited file
 from what Claude sends it and says nothing back unless a directory's line on
 the map changed — a type added, removed or renamed. An edit inside a method,
 which is most of them, passes in silence. That one line is the only way a
