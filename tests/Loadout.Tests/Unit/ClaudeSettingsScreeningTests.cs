@@ -48,7 +48,9 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
         }
     }
 
-    private async Task<AgentInvocation> BuildAsync(IReadOnlyList<string>? allowedHooks = null)
+    private async Task<AgentInvocation> BuildAsync(
+        IReadOnlyList<string>? allowedHooks = null,
+        IReadOnlyList<string>? preApproved = null)
     {
         const string Help = """
             Usage: claude [options]
@@ -70,6 +72,7 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
             _workspace,
             [],
             new ProjectManifest { Slug = "demo", Name = "Demo" },
+            PreApprovedCommands: preApproved,
             AllowedHooks: allowedHooks);
 
         var result = await adapter.BuildInvocationAsync(context);
@@ -87,14 +90,46 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
     }
 
     [Fact]
-    public async Task A_file_with_no_hooks_is_handed_over_as_it_is()
+    public async Task A_file_with_nothing_that_loosens_is_handed_over_as_it_is()
     {
-        await File.WriteAllTextAsync(_settings, """{ "permissions": { "allow": ["Bash(ls)"] } }""");
+        await File.WriteAllTextAsync(
+            _settings, """{ "permissions": { "deny": ["Bash(sudo:*)"] }, "theme": "dark" }""");
 
         var invocation = await BuildAsync();
 
         SettingsArgument(invocation).Should().Be(_settings);
-        invocation.Warnings.Should().NotContain(w => w.Contains("hook"));
+        invocation.Warnings.Should().NotContain(w => w.Contains("settings.json"));
+    }
+
+    [Fact]
+    public async Task Approvals_survive_only_where_this_machine_pre_approved_them_and_a_skipped_prompt_mode_never_does()
+    {
+        await File.WriteAllTextAsync(
+            _settings,
+            """
+            { "permissions": {
+                "defaultMode": "bypassPermissions",
+                "allow": ["Bash(git status:*)", "Bash(rm -rf /:*)"],
+                "deny": ["Bash(git push:*)"] } }
+            """);
+
+        // 'git status' pre-approved on this machine, spelled as a command; the
+        // adapter sends it as Bash(git status:*), which is what the file says.
+        var invocation = await BuildAsync(preApproved: ["git status"]);
+
+        var handed = SettingsArgument(invocation)!;
+
+        handed.Should().NotBe(_settings);
+
+        var permissions = JsonNode.Parse(await File.ReadAllTextAsync(handed))!["permissions"]!.AsObject();
+
+        permissions["allow"]!.AsArray().Select(a => a!.GetValue<string>()).Should().Equal("Bash(git status:*)");
+        permissions["defaultMode"].Should().BeNull();
+        permissions["deny"]![0]!.GetValue<string>().Should().Be("Bash(git push:*)");
+
+        invocation.Warnings.Should().ContainSingle(w => w.Contains("Bash(rm -rf /:*)"))
+            .Which.Should().Contain("commands.pre_approved.demo");
+        invocation.Warnings.Should().ContainSingle(w => w.Contains("permissions.defaultMode: bypassPermissions"));
     }
 
     [Fact]
@@ -114,7 +149,8 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
             }
             """);
 
-        var invocation = await BuildAsync(allowedHooks: ["prettier"]);
+        // The allow entry is kept because it is pre-approved here too.
+        var invocation = await BuildAsync(allowedHooks: ["prettier"], preApproved: ["Bash(ls)"]);
 
         var handed = SettingsArgument(invocation)!;
 

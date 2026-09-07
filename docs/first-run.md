@@ -239,21 +239,35 @@ refreshes one project's index. It writes the launcher by name, never by path:
 the file syncs between machines, and the launcher substitutes its own location
 when it hands the file to Claude.
 
-That hand-over is now screened, by the rule pre-approvals already follow. A
-file that travels between people and machines may only tighten, and a hook is a
-command run after every edit. So the hooks in the project's settings file are
-read at launch: the launcher's own is kept and pointed at this machine's
-launcher, anything named under `commands.allowed_hooks.<slug>` in `config.yaml`
-— which stays on this machine — is kept as written, and the rest is dropped and
-named in a warning that says how to allow it here. An entry is the whole
-command or a prefix of it ending at a word, so `prettier` allows
-`prettier --write`. Everything else in the file passes as it always did, and a
-file with no hooks is handed over untouched. The screened copy lives in the
+That hand-over is now screened, by the rule pre-approvals already follow: a
+file that travels between people and machines may only tighten, and anything
+that loosens comes from `config.yaml`, which stays on this machine. Three
+things in the project's settings file loosen, and each is read at launch.
+
+- **Hooks** run a command after every edit. The launcher's own is kept and
+  pointed at this machine's launcher; anything named under
+  `commands.allowed_hooks.<slug>` is kept as written, by whole command or a
+  prefix ending at a word, so `prettier` allows `prettier --write`; the rest is
+  dropped.
+- **`permissions.allow`** removes an approval prompt. An entry is kept only
+  where `commands.pre_approved.<slug>` already says the same, spelled either as
+  the command or as the specifier Claude sees; the rest is dropped. `deny` and
+  `ask` only tighten and pass untouched.
+- **`permissions.defaultMode`** may only be `default` or `plan`; a mode that
+  skips prompts is dropped, as is `additionalDirectories`, because nothing
+  local can put either back.
+
+Every dropped entry is named in a warning that says which config key allows it
+here. Everything else in the file passes as it always did, a file with nothing
+that loosens is handed over untouched, and the screened copy lives in the
 launch's own runtime directory and goes when the session does.
 
 ```yaml
 # config.yaml, this machine only
 commands:
+  pre_approved:
+    starstats:
+      - git status
   allowed_hooks:
     starstats:
       - prettier

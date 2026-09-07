@@ -273,7 +273,16 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         }
 
         var launcher = Core.Agents.LauncherInvocation.Current() ?? "loadout";
-        var screened = Core.Policies.HookScreen.Screen(text, context.AllowedHooks ?? [], launcher);
+
+        // Both forms of a pre-approval: as written, and as this adapter sends
+        // it to Claude, so an allow entry the file and the machine agree on
+        // survives whichever way somebody spelled it.
+        var preApproved = new List<string>(context.PreApprovedCommands ?? []);
+
+        preApproved.AddRange(Specifiers(context.PreApprovedCommands));
+
+        var screened = Core.Policies.SettingsScreen.Screen(
+            text, context.AllowedHooks ?? [], preApproved, launcher);
 
         if (screened is null)
         {
@@ -284,13 +293,29 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             return;
         }
 
-        foreach (var dropped in screened.Dropped)
+        var slug = context.Manifest.Slug;
+
+        foreach (var dropped in screened.DroppedHooks)
         {
             warnings.Add(
                 $"The hook '{dropped}' in the project's settings.json was not applied. A shared "
                 + "settings file may only tighten, and a hook runs a command after every edit. "
-                + $"Allow it on this machine under commands.allowed_hooks.{context.Manifest.Slug} "
-                + "in config.yaml.");
+                + $"Allow it on this machine under commands.allowed_hooks.{slug} in config.yaml.");
+        }
+
+        foreach (var dropped in screened.DroppedApprovals)
+        {
+            warnings.Add(
+                $"The approval '{dropped}' in the project's settings.json was not applied. A shared "
+                + "settings file may only tighten, and an approval removes a prompt. Pre-approve it "
+                + $"on this machine under commands.pre_approved.{slug} in config.yaml.");
+        }
+
+        foreach (var dropped in screened.DroppedSettings)
+        {
+            warnings.Add(
+                $"'{dropped}' in the project's settings.json was not applied: a shared settings "
+                + "file may only tighten, and nothing on this machine can put that back.");
         }
 
         var path = settingsPath;
