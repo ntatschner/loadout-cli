@@ -11,6 +11,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
 using Loadout.Models.Diagnostics;
+using Loadout.Models.Agents;
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
@@ -89,6 +90,11 @@ public sealed record LaunchRequest(
 /// Which layer chose the agent. Four can, and until this said so there was no
 /// answer to "why is it launching that one?" short of reading the code.
 /// </param>
+/// <param name="Plan">
+/// What the launch resolved to before anything started, for a dry run to
+/// print and a caller to inspect. Null when the launch failed before it got
+/// that far.
+/// </param>
 public sealed record LaunchOutcome(
     int AgentExitCode,
     WorkspaceSyncOutcome SyncOutcome,
@@ -97,7 +103,51 @@ public sealed record LaunchOutcome(
     IReadOnlyList<string>? PendingWorkspaceChanges = null,
     string? ProjectName = null,
     string? AgentName = null,
-    SettingSource AgentSource = SettingSource.BuiltIn);
+    SettingSource AgentSource = SettingSource.BuiltIn,
+    LaunchPlan? Plan = null);
+
+/// <summary>
+/// What a launch resolved to, before anything was started.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This is what <c>--dry-run</c> exists to show, and for a long time it showed
+/// none of it: the whole report was that the executable "would be started with
+/// 8 argument(s)", which answers no question anybody asking for a dry run has.
+/// The arguments, the compiled context, the specialists chosen and the MCP
+/// files are the launch; this carries them so a caller can print them.
+/// </para>
+/// <para>
+/// Environment variables are carried by name only. Their values are exactly
+/// where a resolved secret ends up, and a dry run printed to a terminal or a
+/// log is not somewhere a secret may go.
+/// </para>
+/// </remarks>
+/// <param name="Executable">The agent binary that would run.</param>
+/// <param name="Arguments">Every argument, in order, passthrough last.</param>
+/// <param name="WorkingDirectory">Where it would run.</param>
+/// <param name="EnvironmentVariables">Names of the variables set for it, sorted.</param>
+/// <param name="McpConfigFiles">MCP configuration files it would be handed.</param>
+/// <param name="ContextPath">The compiled context file, or null when none was compiled.</param>
+/// <param name="ContextBytes">Its size.</param>
+/// <param name="ContextSources">How many sources went into it.</param>
+/// <param name="Profile">The context profile used, or null for the project's own settings.</param>
+/// <param name="Instructions">The specialists resolved for it, with reasons, or null.</param>
+/// <param name="Task">What the session was said to be for, or null.</param>
+/// <param name="Mode">The posture asked for, or null when the task decided.</param>
+public sealed record LaunchPlan(
+    string Executable,
+    IReadOnlyList<string> Arguments,
+    string WorkingDirectory,
+    IReadOnlyList<string> EnvironmentVariables,
+    IReadOnlyList<string> McpConfigFiles,
+    string? ContextPath,
+    long ContextBytes,
+    int ContextSources,
+    string? Profile,
+    EffectiveInstructions? Instructions,
+    string? Task = null,
+    string? Mode = null);
 
 /// <summary>Runs the launch sequence of spec section 45.</summary>
 public interface IAgentLauncher
@@ -242,8 +292,15 @@ public sealed class AgentLauncher : IAgentLauncher
 
         try
         {
+            // Detected before the context is compiled, not after. The resolver
+            // leaves out specialists the agent cannot act on, and it can only
+            // do that if it is told which agent this is: for as long as
+            // detection came second, the descriptor did not exist yet, nothing
+            // passed one, and that step returned before doing anything.
+            var descriptor = await adapter.DetectAsync(ct).ConfigureAwait(false);
+
             var compiled = await CompileContextAsync(
-                manifest, runtimeDirectory, adapter.Name, request, project.LocalPath,
+                manifest, runtimeDirectory, adapter.Name, descriptor, request, project.LocalPath,
                 directoryResult.Value!, warnings, ct)
                 .ConfigureAwait(false);
 
@@ -251,8 +308,6 @@ public sealed class AgentLauncher : IAgentLauncher
             {
                 return OperationResult<LaunchOutcome>.Fail(compiled.Error!, compiled.ExitCode);
             }
-
-            var descriptor = await adapter.DetectAsync(ct).ConfigureAwait(false);
 
             ResolvedEnvironment? environment = null;
 
@@ -412,15 +467,29 @@ public sealed class AgentLauncher : IAgentLauncher
             // and was never read: the launcher went on to start the agent, and
             // on an interactive terminal that is a session opening in front of
             // somebody who asked for a description of one.
+            var plan = new LaunchPlan(
+                invocation.Executable,
+                invocation.Arguments,
+                context.WorkingDirectory,
+                invocation.Environment.Keys.OrderBy(name => name, StringComparer.Ordinal).ToList(),
+                context.McpConfigFiles ?? [],
+                compiled.Value?.FilePath,
+                compiled.Value?.TotalBytes ?? 0,
+                compiled.Value?.Sources.Count ?? 0,
+                compiled.Value?.ProfileName,
+                compiled.Value?.Instructions,
+                request.Task,
+                request.Mode);
+
             if (request.DryRun)
             {
-                warnings.Add(
-                    $"Dry run: {invocation.Executable} would be started with "
-                    + $"{invocation.Arguments.Count} argument(s). Nothing was launched.");
+                warnings.Add("Dry run: nothing was launched.");
 
                 // No session ran, so there is nothing it could have changed.
                 return OperationResult<LaunchOutcome>.Ok(
-                    new LaunchOutcome(0, syncOutcome, warnings, preflight, null));
+                    new LaunchOutcome(
+                        0, syncOutcome, warnings, preflight, null,
+                        project.Entry.Name, adapter.Name, agent.Source, plan));
             }
 
             // Written before the agent starts rather than after it exits. A
@@ -503,7 +572,8 @@ public sealed class AgentLauncher : IAgentLauncher
                 pending,
                 project.Entry.Name,
                 adapter.Name,
-                agent.Source));
+                agent.Source,
+                plan));
         }
         finally
         {
@@ -610,6 +680,7 @@ public sealed class AgentLauncher : IAgentLauncher
     private async Task<OperationResult<EffectiveInstructions>> ResolveInstructionsAsync(
         ProjectManifest manifest,
         string agentName,
+        AgentDescriptor agent,
         LaunchRequest request,
         string? repositoryPath,
         List<string> warnings,
@@ -621,6 +692,7 @@ public sealed class AgentLauncher : IAgentLauncher
                 RepositoryPath: request.RepositoryPath ?? repositoryPath,
                 WorkspacePath: _workspace.LocalPath,
                 AgentName: agentName,
+                Agent: agent,
                 ProfileName: request.Profile,
                 Task: request.Task,
                 Explicit: request.Specialists,
@@ -655,6 +727,7 @@ public sealed class AgentLauncher : IAgentLauncher
         ProjectManifest? manifest,
         string runtimeDirectory,
         string agentName,
+        AgentDescriptor agent,
         LaunchRequest request,
         string? repositoryPath,
         string workingDirectory,
@@ -686,7 +759,7 @@ public sealed class AgentLauncher : IAgentLauncher
         // relevant depends on the task and the agent, and the compiler's job is
         // to assemble what it is given in the right order.
         var instructions = await ResolveInstructionsAsync(
-            manifest, agentName, request, repositoryPath, warnings, ct).ConfigureAwait(false);
+            manifest, agentName, agent, request, repositoryPath, warnings, ct).ConfigureAwait(false);
 
         if (instructions.Failed)
         {

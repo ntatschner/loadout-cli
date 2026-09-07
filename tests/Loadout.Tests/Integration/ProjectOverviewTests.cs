@@ -221,7 +221,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
         // difference between protection people think they have and protection
         // they do.
         overview.Value!.Protected.Should().BeFalse();
-        LauncherTui.Warnings(overview.Value).Should().Contain(w => w.Contains("pre-commit"));
+        Loadout.Tui.Terminal.ProjectDetailView.Warnings(overview.Value).Should().Contain(w => w.Contains("pre-commit"));
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
 
         // Whatever the recency ordering says, the repository you are standing in
         // is almost always the one you meant.
-        LauncherTui.Order([first, here], here)
+        Loadout.Tui.Terminal.LauncherWindow.Order([first, here], here)
             .Select(p => p.Entry.Slug).Should().Equal("omega", "alpha");
     }
 
@@ -263,7 +263,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
         var second = new ProjectResolution(
             new ProjectRegistryEntry { Slug = "omega", Name = "Omega" }, "/o", null, 0, false);
 
-        LauncherTui.Order([first, second], null)
+        Loadout.Tui.Terminal.LauncherWindow.Order([first, second], null)
             .Select(p => p.Entry.Slug).Should().Equal("alpha", "omega");
     }
 
@@ -298,12 +298,6 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
         // Not in the warnings, deliberately. A session running is a fact about
         // right now, not a problem with the project, and putting it under
         // "needs attention" would train somebody to ignore that list.
-        // Both surfaces, because there are two Warnings methods — the plain
-        // listing's and the panel's — and a rule enforced in one of them is
-        // enforced nowhere in particular.
-        LauncherTui.Warnings(Overview(running: 2))
-            .Should().NotContain(w => w.Contains("running", StringComparison.OrdinalIgnoreCase));
-
         Loadout.Tui.Terminal.ProjectDetailView.Warnings(Overview(running: 2))
             .Should().NotContain(w => w.Contains("running", StringComparison.OrdinalIgnoreCase));
     }

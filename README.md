@@ -1,21 +1,26 @@
 # Loadout
 
-**One place for everything your AI agents need, so none of it ends up in your repo.**
+**A launcher for your coding agents. Pick a project, say what you're doing,
+see what the agent will be told, go.**
 
 [![CI](https://github.com/ntatschner/loadout-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ntatschner/loadout-cli/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ntatschner/loadout-cli)](https://github.com/ntatschner/loadout-cli/releases/latest)
 [![Licence](https://img.shields.io/github/license/ntatschner/loadout-cli)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)](https://github.com/ntatschner/loadout-cli/releases/latest)
 
-Every coding agent wants to leave something in your repository. Instruction
-files, a rules directory, MCP config, session state, notes it wrote to itself.
-Each tool spells it differently, none of them clean up, and all of it turns up
-in someone else's diff eventually.
+Run `loadout`, pick a project, and the launch sheet asks the four things that
+decide a session: which agent, what the task is, how to work, and which
+profile or worktree. Underneath, it shows which specialists that task would
+load and what they cost, before anything is spent on them. Enter starts the
+agent with exactly that.
 
-Loadout keeps that stuff somewhere else. You get one workspace, a plain
-directory or a Git repo if you want it versioned, holding the config, memory
-and instructions for every project you work on. Your repository goes back to
-being code.
+What makes that possible is where everything lives. Every coding agent wants
+to leave something in your repository — instruction files, a rules directory,
+MCP config, session state, notes it wrote to itself — and Loadout keeps all of
+it in one workspace instead, a plain directory or a Git repo if you want it
+versioned. The launcher reads your repo, works out which instructions apply,
+compiles one context for the session, and deletes it when the agent exits.
+Your repository goes back to being code.
 
 It runs natively on Windows, Linux and macOS. No VM, no container, no "works
 on Linux, should be fine elsewhere".
@@ -88,9 +93,12 @@ loadout protect                # keep agent files out of it
 loadout                        # launcher opens, pick a project, go
 ```
 
-Run `loadout` with nothing after it and you get the terminal UI. `loadout here`
-launches the agent for whatever repo you're in. `loadout <project>` skips
-straight to a registered one.
+Run `loadout` with nothing after it and you get the launcher: a project list,
+what a session there would start with, and Enter to open the launch sheet.
+`loadout here` launches the agent for whatever repo you're in. `loadout
+<project>` skips straight to a registered one, and takes the same choices as
+flags: `--agent`, `--task`, `--mode`, `--profile`, `--worktree`. Add
+`--dry-run` to see the whole launch described and start nothing.
 
 ## How it works
 
@@ -99,12 +107,13 @@ everything your agent needs to work on it, so a teammate who's never installed
 Loadout sees a clean diff.
 
 When you launch, Loadout reads your repo to see what it's made of, works out
-which instructions apply, and builds one context file for that session. The file
-goes in a directory only you can read and is deleted when the agent exits.
+which instructions apply to what you said you're doing, and builds one context
+file for that session. The file goes in a directory only you can read and is
+deleted when the agent exits.
 
-Nothing is guessed silently. `loadout instructions explain` shows you the whole
-set and why each part was picked, before you spend anything on it. The rest is
-in **[what you get](docs/features.md)**.
+Nothing is guessed silently. The launch sheet shows the set and why each part
+was picked before you start; `loadout instructions explain` shows the same
+from the command line. The rest is in **[what you get](docs/features.md)**.
 
 ## Documentation
 
