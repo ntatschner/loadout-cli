@@ -19,8 +19,10 @@ public enum SymbolKind
 /// <param name="Reasoning">
 /// The opening paragraph of its remarks, which in this codebase is where the
 /// decision lives. Only the first: what follows is usually the worked examples
-/// and the history, which belong in the file.
+/// and the history, which belong in the file. C# only, because only C# has a
+/// remarks section to read.
 /// </param>
+/// <param name="Language">The language it was read from, by the scan's short name.</param>
 public sealed record Symbol(
     SymbolKind Kind,
     string Name,
@@ -28,10 +30,11 @@ public sealed record Symbol(
     string File,
     int Line,
     string Summary,
-    string Reasoning = "");
+    string Reasoning = "",
+    string Language = "");
 
 /// <summary>
-/// Finds the public surface of a C# codebase by reading it, not by parsing it.
+/// Finds the public surface of a codebase by reading it, not by parsing it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -42,11 +45,17 @@ public sealed record Symbol(
 /// brace onto the next line, anything inside a string that looks like code.
 /// </para>
 /// <para>
-/// The alternative is a real parse, which means taking on Roslyn — a large
-/// dependency for a launcher, to produce a document nobody compiles. The trade
-/// is deliberate, and the honest consequence is that output built from this is
-/// a good index and not an authority. Where it is wrong it omits rather than
-/// invents, which is the failure worth having.
+/// The alternative is a real parse, which for one language means taking on a
+/// compiler front end and for a dozen means taking on a dozen — a great deal
+/// of dependency for a launcher, to produce a document nobody compiles. The
+/// trade is deliberate, and the honest consequence is that output built from
+/// this is a good index and not an authority. Where it is wrong it omits
+/// rather than invents, which is the failure worth having.
+/// </para>
+/// <para>
+/// Which language a file is in comes from its extension, and each language's
+/// grammar is a pair of line patterns in <see cref="SymbolLanguages"/>. A file
+/// in a language the table does not know is skipped, not guessed at.
 /// </para>
 /// </remarks>
 public static partial class SymbolScan
@@ -62,20 +71,9 @@ public static partial class SymbolScan
     private static readonly HashSet<string> Ignored = new(StringComparer.OrdinalIgnoreCase)
     {
         ".git", "node_modules", "bin", "obj", "dist", "build", "out", "target",
-        "vendor", ".venv", "venv", "__pycache__", "packages", "coverage", "artifacts",
+        "vendor", ".venv", "venv", "__pycache__", "packages", "site-packages", "coverage",
+        "artifacts",
     };
-
-    [GeneratedRegex(
-        @"^\s*(?:public|internal)\s+(?:(?:static|sealed|abstract|partial|readonly|ref)\s+)*"
-        + @"(?<kind>class|record|struct|interface|enum)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
-        RegexOptions.Compiled)]
-    private static partial Regex TypeDeclaration();
-
-    [GeneratedRegex(
-        @"^\s*public\s+(?:(?:static|async|virtual|override|sealed|partial|new|readonly)\s+)*"
-        + @"(?<type>[A-Za-z_][A-Za-z0-9_<>,\.\?\[\]\s]*?)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*[\(\{=]",
-        RegexOptions.Compiled)]
-    private static partial Regex MemberDeclaration();
 
     [GeneratedRegex(@"^\s*///\s*<summary>\s*(?<text>.*?)\s*(?:</summary>)?\s*$", RegexOptions.Compiled)]
     private static partial Regex SummaryOpen();
@@ -83,7 +81,7 @@ public static partial class SymbolScan
     [GeneratedRegex(@"^\s*///\s*(?<text>.+?)\s*$", RegexOptions.Compiled)]
     private static partial Regex DocLine();
 
-    /// <summary>Everything named in a repository's C# files.</summary>
+    /// <summary>Everything named in a repository's source files, in every language the scan reads.</summary>
     /// <param name="repositoryPath">Where to look.</param>
     /// <param name="ct">Cancellation token.</param>
     public static IReadOnlyList<Symbol> Scan(string repositoryPath, CancellationToken ct = default)
@@ -97,7 +95,7 @@ public static partial class SymbolScan
 
         foreach (var file in Walk(repositoryPath, ct))
         {
-            if (!file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            if (SymbolLanguages.For(file) is not { } language)
             {
                 continue;
             }
@@ -116,7 +114,7 @@ public static partial class SymbolScan
 
             var relative = Path.GetRelativePath(repositoryPath, file).Replace('\\', '/');
 
-            found.AddRange(InFile(lines, relative));
+            found.AddRange(InFile(lines, relative, language));
         }
 
         return
@@ -127,37 +125,46 @@ public static partial class SymbolScan
         ];
     }
 
+    /// <summary>The symbols one file declares, in the language its extension says.</summary>
+    internal static IEnumerable<Symbol> InFile(IReadOnlyList<string> lines, string file) =>
+        SymbolLanguages.For(file) is { } language ? InFile(lines, file, language) : [];
+
     /// <summary>The symbols one file declares.</summary>
-    internal static IEnumerable<Symbol> InFile(IReadOnlyList<string> lines, string file)
+    internal static IEnumerable<Symbol> InFile(
+        IReadOnlyList<string> lines,
+        string file,
+        SymbolLanguage language)
     {
         for (var i = 0; i < lines.Count; i++)
         {
             var line = lines[i];
 
-            var type = TypeDeclaration().Match(line);
+            var type = language.Types?.Match(line);
 
-            if (type.Success)
+            if (type is { Success: true })
             {
                 yield return new Symbol(
                     SymbolKind.Type,
-                    type.Groups["name"].Value,
-                    line.Trim().TrimEnd('{').TrimEnd(),
+                    SymbolLanguages.NameOf(type),
+                    Signature(line),
                     file,
                     i + 1,
-                    SummaryAbove(lines, i),
-                    ReasoningAbove(lines, i));
+                    SymbolLanguages.Summary(lines, i, language.Docs),
+                    language.Docs == DocStyle.XmlSlashes ? ReasoningAbove(lines, i) : string.Empty,
+                    language.Id);
 
                 continue;
             }
 
-            var member = MemberDeclaration().Match(line);
+            var member = language.Members.Match(line);
 
-            // Two things keep two different intruders out. Control flow is
-            // excluded by the shape — the pattern wants an identifier, a space
-            // and another identifier before the bracket, and "if (" has only
-            // one. A local variable is excluded by the "public": "var turns =
-            // 1" has exactly the shape of a field and nothing but the modifier
-            // separates them.
+            // Two things keep two different intruders out of the C# pattern,
+            // and the other languages' patterns take the same care each in
+            // their own way. Control flow is excluded by the shape — the
+            // pattern wants an identifier, a space and another identifier
+            // before the bracket, and "if (" has only one. A local variable is
+            // excluded by the "public": "var turns = 1" has exactly the shape
+            // of a field and nothing but the modifier separates them.
             //
             // A keyword exclusion list stood here too and was removed. Deleting
             // it failed no test, and scanning this repository with and without
@@ -167,14 +174,20 @@ public static partial class SymbolScan
             {
                 yield return new Symbol(
                     SymbolKind.Member,
-                    member.Groups["name"].Value,
-                    line.Trim().TrimEnd('{').TrimEnd(),
+                    SymbolLanguages.NameOf(member),
+                    Signature(line),
                     file,
                     i + 1,
-                    SummaryAbove(lines, i));
+                    SymbolLanguages.Summary(lines, i, language.Docs),
+                    string.Empty,
+                    language.Id);
             }
         }
     }
+
+    /// <summary>The declaring line without the punctuation that opens its body.</summary>
+    private static string Signature(string line) =>
+        line.Trim().TrimEnd('{', ':').TrimEnd();
 
     /// <summary>
     /// The first line of the doc comment above a declaration, if there is one.
@@ -420,7 +433,15 @@ public static partial class SymbolScan
 
             foreach (var child in directories)
             {
-                if (!Ignored.Contains(Path.GetFileName(child)))
+                var name = Path.GetFileName(child);
+
+                // Hidden directories hold tooling, not source: .git, .venv, a
+                // .tmp somebody parked a virtual environment in. That last one
+                // put twenty-three thousand symbols from other people's
+                // packages into one project's index, which is why the rule is
+                // the dot rather than a list of names that would always be one
+                // short.
+                if (!Ignored.Contains(name) && !name.StartsWith('.'))
                 {
                     queue.Enqueue(child);
                 }

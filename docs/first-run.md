@@ -133,6 +133,13 @@ loadout docs export --type machine-index --out docs/index.txt
 loadout docs export --type user-guide    --out docs/guide.md
 ```
 
+The language of each file comes from its extension, and the scan reads C#,
+TypeScript and JavaScript, Python, Go, Rust, Java, Kotlin, Swift, Ruby, PHP, C
+and C++, PowerShell, shell, Terraform and SQL. It is lexical — a pair of line
+patterns per language and the comment style that documents a declaration — so
+where it is wrong it leaves something out rather than inventing it. A file in a
+language it doesn't know is skipped, not guessed at.
+
 **The four are not equally derivable, and the output says which is which.** The
 reference and machine index fall out of the code — always true, always dull,
 never need a person. The technical guide is the prose already sitting in your
@@ -153,6 +160,57 @@ meet it rather than in a guide read end to end.
 The **machine index** opens with a digest of the modules and what each holds, so
 a session can pick a file to open instead of reading the tree, and follows it
 with one tab-separated line per symbol.
+
+### Finding one thing
+
+```
+loadout docs find PreflightService
+```
+
+The same scan, kept rather than written out. `docs find` says where a type or
+member is declared, as file and line, and is what the compiled context points
+an agent at when it knows a name — one line back instead of
+a search across the tree and whatever it opened on the way. An agent launched
+with the launcher's own tools gets it as `loadout_locate`, through the same
+code, so the two cannot drift.
+
+The index is cached under the machine's cache directory against the commit it
+was built at, and thrown away when the commit moves. That is a coarse key, so
+two rules keep the answer right about the tree as it stands: every file a cached
+hit names is read again before it is reported, and a cached miss is checked
+against a fresh scan before it is reported as one. The cache can make a hit
+faster; it cannot make an answer wrong. `--rescan` reads the tree regardless.
+
+The commit is a coarse key, and a session's edits do not move it. A lookup
+copes: it re-reads any file it names, and a name the index has never seen sends
+it back to the tree. `loadout docs refresh <file>` does better for a file that
+has just changed, replacing that file's entries in the index at the cost of
+reading one file, so a name added a minute ago is found without a rescan and
+the directory map is corrected as the edits happen. It is made to be run by an
+agent's after-edit hook; with no index yet it builds one, so the index is warm
+by the time the agent asks.
+
+`loadout protect --refresh-hook` installs that hook, in the project's own
+Claude settings file in the workspace rather than the user's, since it
+refreshes one project's index. In hook mode the command reads the edited file
+from what Claude sends it and says nothing back unless a directory's line on
+the map changed — a type added, removed or renamed. An edit inside a method,
+which is most of them, passes in silence. That one line is the only way a
+change made during a session reaches a running agent: the compiled context is
+read once at launch, so the map in it cannot be rewritten in place, but a line
+added to the conversation can correct it. The file is in the workspace, so the
+hook travels with the next `loadout workspace save`. Codex has no such hook,
+and there the lookup's own re-reading is the whole answer.
+
+A project that wants the map itself in every session, rather than one lookup
+at a time, sets `code_map: true` under `context` in its manifest. That inlines
+one line per directory naming the types it holds, at a cost of a few thousand
+tokens on every launch; [the context budget](context-budget.md) says when that
+is worth paying, and `loadout instructions explain` shows the figure.
+
+It is not memory, and deliberately so. Memory holds what the code does not say
+and travels with the workspace; a symbol index is derived from one checkout at
+one commit and would fail `memory audit` on the day it was written.
 
 ### Publishing it
 

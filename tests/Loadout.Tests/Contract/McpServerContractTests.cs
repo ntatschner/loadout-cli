@@ -201,6 +201,7 @@ public sealed class McpServerContractTests
         tools.Should().Contain("loadout_recall");
         tools.Should().Contain("loadout_remember");
         tools.Should().Contain("loadout_mode");
+        tools.Should().Contain("loadout_locate");
     }
 
     [BuiltCliFact]

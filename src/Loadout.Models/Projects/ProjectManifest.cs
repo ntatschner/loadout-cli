@@ -123,6 +123,20 @@ public sealed class ProjectContext
 
     /// <summary>Workspace-relative paths under this project, e.g. <c>context/architecture.md</c>.</summary>
     public List<string> Project { get; set; } = [];
+
+    /// <summary>
+    /// Whether to inline a map of the code — one line per directory, naming
+    /// the types it holds — into every session's context.
+    /// </summary>
+    /// <remarks>
+    /// Off unless asked for, because it is paid for on every launch whether or
+    /// not the session needed it: a few thousand tokens on a mid-sized
+    /// repository, which is roughly what everything else in the context costs
+    /// put together. It earns that on a session that explores widely and loses
+    /// it on a one-line fix. The lookup behind <c>loadout docs find</c> is
+    /// there either way and costs nothing until it is asked.
+    /// </remarks>
+    public bool CodeMap { get; set; }
 }
 
 /// <summary>How the agent process is started.</summary>

@@ -42,6 +42,12 @@ public static class ServiceRegistration
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>()
                 .Paths.State));
+        // Under the cache root, not the state root: the symbol index is derived
+        // from one checkout at one commit and can be thrown away at any moment.
+        services.AddSingleton<ISymbolIndexService>(provider => new SymbolIndexService(
+            provider.GetRequiredService<IGitManager>(),
+            provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>()
+                .Paths.Cache));
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<Instructions.MemoryCompressor>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();

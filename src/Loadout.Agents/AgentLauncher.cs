@@ -243,7 +243,8 @@ public sealed class AgentLauncher : IAgentLauncher
         try
         {
             var compiled = await CompileContextAsync(
-                manifest, runtimeDirectory, adapter.Name, request, project.LocalPath, warnings, ct)
+                manifest, runtimeDirectory, adapter.Name, request, project.LocalPath,
+                directoryResult.Value!, warnings, ct)
                 .ConfigureAwait(false);
 
             if (compiled.Failed)
@@ -649,6 +650,7 @@ public sealed class AgentLauncher : IAgentLauncher
         string agentName,
         LaunchRequest request,
         string? repositoryPath,
+        string workingDirectory,
         List<string> warnings,
         CancellationToken ct)
     {
@@ -696,6 +698,11 @@ public sealed class AgentLauncher : IAgentLauncher
             request.Profile,
             handoffPath,
             instructions.Value,
+
+            // The tree the agent will sit in, which with --worktree is not the
+            // registered checkout: a map of the primary clone's directories
+            // describes a branch the session is not on.
+            workingDirectory,
             ct).ConfigureAwait(false);
 
         // A bad profile name is the user's mistake and must stop the launch:

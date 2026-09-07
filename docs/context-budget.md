@@ -10,6 +10,7 @@ it, is the one cost the launcher exists to control. This is the model.
 | Instructions | Every session, inlined in full | Its own length, every launch |
 | Scoped rules | Only when the work touches their paths | Its own length, sometimes |
 | Memory | Index inlined; topics fetched on demand | One index entry, then nothing |
+| Code map | Every session, only where the project asks for it | One line per directory, every launch |
 
 The prices are what make the layers different, and they are not a matter of
 taste. A fact in instructions is paid for on every launch whether or not the
@@ -18,6 +19,18 @@ read only when something makes it relevant.
 
 That difference is the whole reason for the tooling below. None of it deletes
 anything: it moves content between layers whose prices differ.
+
+The code map is the one layer that is off until a project asks for it, with
+`code_map: true` under `context` in its manifest. It is the digest half of the
+machine index — one line per directory naming the types it holds — inlined so
+a session can choose where to look without reading the tree. It costs a few
+thousand tokens on a mid-sized repository, every launch, which is roughly what
+everything else in the context costs put together: worth it for a session that
+explores widely, wasted on a one-line fix. The lookup behind
+`loadout docs find` is there whether or not the map is, and costs nothing until
+it is asked. `loadout instructions explain` shows the map's price as its own
+line, at zero until it is switched on, so the decision can be made with the
+figure in front of you.
 
 ## Reading the budget
 

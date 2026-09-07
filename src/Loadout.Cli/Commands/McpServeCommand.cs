@@ -138,6 +138,7 @@ public sealed class LoadoutTools
     private readonly IProjectService _projects;
     private readonly Core.Tasks.ITaskService _tasks;
     private readonly IGitManager _git;
+    private readonly ISymbolIndexService _symbols;
     private readonly TimeProvider _time;
     private readonly LoadoutToolScope _scope;
 
@@ -148,6 +149,7 @@ public sealed class LoadoutTools
         IProjectService projects,
         Core.Tasks.ITaskService tasks,
         IGitManager git,
+        ISymbolIndexService symbols,
         TimeProvider time,
         LoadoutToolScope scope)
     {
@@ -157,6 +159,7 @@ public sealed class LoadoutTools
         _projects = projects;
         _tasks = tasks;
         _git = git;
+        _symbols = symbols;
         _time = time;
         _scope = scope;
     }
@@ -325,6 +328,83 @@ public sealed class LoadoutTools
         return written.Succeeded
             ? $"Recorded under '{topic}'."
             : written.Error ?? "It could not be recorded.";
+    }
+
+    [McpServerTool(Name = "loadout_locate")]
+    [Description(
+        "Where a type or member is declared, as file and line, from an index kept in step with "
+        + "the repository. Use it instead of searching the tree when you know a name. It matches "
+        + "names rather than meanings, whole or in part, in the mainstream languages by file "
+        + "extension: a thing called something else, or in a language it does not read, is "
+        + "not found rather than absent.")]
+    public async Task<string> LocateAsync(
+        [Description("A type or member name, whole or in part. Case does not matter.")]
+        string name,
+        [Description("How many to return. Defaults to 10.")] int limit = 10,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here, so there is nothing to look in.";
+        }
+
+        var resolved = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+        // The tree the agent is in when the project was worked out from it,
+        // which for a worktree is not the registered checkout.
+        var path = resolved.Succeeded
+            ? SymbolTree.Of(
+                resolved.Value!,
+                _scope.Project is { Length: > 0 } ? null : Directory.GetCurrentDirectory())
+            : null;
+
+        if (path is null)
+        {
+            return $"'{slug}' is not on this machine, so there is nothing to look in.";
+        }
+
+        // The same call 'loadout docs find' makes, cache and all.
+        var found = await _symbols
+            .FindAsync(path, slug, name, limit > 0 ? limit : 10, rescan: false, ct)
+            .ConfigureAwait(false);
+
+        if (found.Failed)
+        {
+            return found.Error ?? "The index could not be read.";
+        }
+
+        var lookup = found.Value!;
+
+        if (lookup.Matches.Count == 0)
+        {
+            // Said plainly, for the same reason recall says it: an agent told
+            // "nothing" will otherwise conclude the thing does not exist.
+            return $"Nothing named like '{name}' among {lookup.Indexed} symbol(s). It matches "
+                + "names rather than meanings; try a shorter fragment. It reads "
+                + $"{SymbolLanguages.Names}.";
+        }
+
+        var answer = new StringBuilder();
+
+        foreach (var match in lookup.Matches)
+        {
+            answer.Append(match.Symbol.File).Append(':').Append(match.Symbol.Line)
+                .Append('\t').Append(match.Symbol.Kind.ToString().ToLowerInvariant())
+                .Append('\t').Append(match.Symbol.Name);
+
+            if (match.Symbol.Summary.Length > 0)
+            {
+                answer.Append(" - ").Append(match.Symbol.Summary);
+            }
+
+            answer.AppendLine();
+        }
+
+        return answer.ToString().TrimEnd();
     }
 
     /// <summary>A named scope, defaulting to the project when it is not one we know.</summary>

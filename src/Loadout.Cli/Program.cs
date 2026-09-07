@@ -633,6 +633,8 @@ public static class Program
                 "docs documentation stale links broken references audit");
             docs.AddCommand<DocsAuditCommand>("audit");
             docs.AddCommand<DocsExportCommand>("export");
+            docs.AddCommand<DocsFindCommand>("find");
+            docs.AddCommand<DocsRefreshCommand>("refresh");
             docs.AddCommand<DocsCiCommand>("ci");
         });
 
