@@ -3,6 +3,8 @@ using Loadout.Core.Configuration;
 using Loadout.Core.Context;
 using Loadout.Core.Diagnostics;
 using Loadout.Core.Editors;
+using Loadout.Core.Git;
+using Loadout.Core.Instructions;
 using Loadout.Core.Manager;
 using Loadout.Core.Projects;
 using Loadout.Core.Sessions;
@@ -10,6 +12,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
 using Loadout.Models.Diagnostics;
+using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
@@ -45,7 +48,6 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IWorkspaceManager _workspace;
     private readonly IConfigurationService _configuration;
     private readonly IAgentRegistry _agents;
-    private readonly IAgentLauncher _launcher;
     private readonly IShellProvider _shells;
     private readonly IProcessLauncher _processes;
     private readonly IProjectOverviewService _overviews;
@@ -60,6 +62,11 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IEditorService _editors;
     private readonly ISessionHistoryService _sessions;
     private readonly IManagerInventory _manager;
+    private readonly IInstructionService _instructions;
+    private readonly IGitManager _git;
+
+    /// <summary>Agents detected on this machine, once the first screen has asked.</summary>
+    private IReadOnlyList<string> _installed = [];
 
     public TerminalLauncher(
         IAnsiConsole console,
@@ -67,7 +74,6 @@ public sealed class TerminalLauncher : ILauncherTui
         IWorkspaceManager workspace,
         IConfigurationService configuration,
         IAgentRegistry agents,
-        IAgentLauncher launcher,
         IShellProvider shells,
         IProcessLauncher processes,
         IProjectOverviewService overviews,
@@ -81,14 +87,17 @@ public sealed class TerminalLauncher : ILauncherTui
         IPlatformPaths paths,
         IEditorService editors,
         ISessionHistoryService sessions,
-        IManagerInventory manager)
+        IManagerInventory manager,
+        IInstructionService instructions,
+        IGitManager git)
     {
+        _instructions = instructions;
+        _git = git;
         _console = console;
         _projects = projects;
         _workspace = workspace;
         _configuration = configuration;
         _agents = agents;
-        _launcher = launcher;
         _shells = shells;
         _processes = processes;
         _overviews = overviews;
@@ -160,6 +169,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
                     here = await locating.ConfigureAwait(false);
                     installed = await detecting.ConfigureAwait(false);
+                    _installed = installed;
 
                     var projects = await listing.ConfigureAwait(false);
                     var sessions = await recalling.ConfigureAwait(false);
@@ -843,82 +853,213 @@ public sealed class TerminalLauncher : ILauncherTui
         LaunchOptions? options,
         CancellationToken ct)
     {
-        var agentName = agent ?? project.Entry.DefaultAgent;
+        // The screen said which project. Everything else a launch can be
+        // asked is asked on the sheet, with the terminal to itself, unless the
+        // caller already had the answers.
+        options ??= await AskAsync(project, ct).ConfigureAwait(false);
 
-        var profile = await ChooseProfileAsync(project.Entry.Slug, agentName, ct)
-            .ConfigureAwait(false);
+        // Dismissed means dismissed: back to the list, and no session started
+        // that nobody asked for.
+        if (options is null)
+        {
+            return null;
+        }
 
-        // Everything the screen was asked for reaches the same request the
-        // command line builds. The task and the mode are the ones that matter:
-        // they are what the resolver reads to choose specialists.
-        var result = await _launcher.LaunchAsync(
-            new LaunchRequest(
-                project.Entry.Slug,
-                agentName,
-                Offline: options?.Offline ?? false,
-                NoSync: options?.NoSync ?? false,
-                Profile: profile,
-                Task: options?.Task,
-                Mode: options?.Mode),
+        // The same command somebody would have typed, with what the sheet
+        // collected spelled as its flags. This used to build a launch request
+        // of its own and hand it to the launcher directly, which was a second
+        // way in: it printed less than 'launch -v' did and never asked about
+        // workspace changes on the way out, because that question lives in the
+        // command. Going through the parser gives a screen launch everything a
+        // typed one has, and keeps it that way as the command grows.
+        return await _catalogue.RunAsync(
+            LauncherCommands.Launch,
+            LaunchArguments(project, agent, options),
             ct).ConfigureAwait(false);
-
-        if (result.Failed)
-        {
-            _console.MarkupLine($"[red]{Shown.Safely(result.Error!)}[/]");
-            return (int)result.ExitCode;
-        }
-
-        foreach (var warning in result.Value!.Warnings)
-        {
-            _console.MarkupLine($"[yellow]warning[/] {Markup.Escape(warning)}");
-        }
-
-        return result.Value.AgentExitCode;
     }
 
     /// <summary>
-    /// Asks which context profile to start with, when there is more than one.
-    /// <para>
-    /// Asked only when the answer matters. A project with a single profile has
-    /// nothing to choose between, and putting a dialog up to say so would be a
-    /// question whose answer is already known.
-    /// </para>
+    /// What the sheet chose, as the arguments the launch command takes.
     /// </summary>
-    private async Task<string?> ChooseProfileAsync(
-        string slug,
-        string agentName,
-        CancellationToken ct)
+    /// <remarks>
+    /// The defaults are left out rather than spelled: a launch with no
+    /// <c>--profile</c> is a launch with the project's own settings, and
+    /// passing "default" by name would fail with "no profile named default".
+    /// </remarks>
+    internal static IReadOnlyList<string> LaunchArguments(
+        ProjectResolution project,
+        string? agent,
+        LaunchOptions options)
     {
-        var manifest = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(options);
 
-        if (manifest.Failed)
+        var arguments = new List<string> { project.Entry.Slug };
+
+        var agentName = options.Agent ?? agent;
+
+        if (agentName is { Length: > 0 })
         {
-            return null;
+            arguments.AddRange(["--agent", agentName]);
         }
 
-        var profiles = _compiler.ListProfiles(manifest.Value!, agentName);
-
-        if (profiles.Count <= 1)
+        if (options.Task is { Length: > 0 } task)
         {
-            return null;
+            arguments.AddRange(["--task", task]);
         }
 
-        var labels = profiles
-            .Select(name => manifest.Value!.Profiles.TryGetValue(name, out var profile)
-                && !string.IsNullOrWhiteSpace(profile.Description)
-                    ? $"{name}  ({profile.Description})"
-                    : name)
-            .ToList();
+        if (options.Mode is { Length: > 0 } mode)
+        {
+            arguments.AddRange(["--mode", mode]);
+        }
+
+        if (options.Profile is { Length: > 0 } profile)
+        {
+            arguments.AddRange(["--profile", profile]);
+        }
+
+        if (options.Worktree is { Length: > 0 } worktree)
+        {
+            arguments.AddRange(["--worktree", worktree]);
+        }
+
+        if (options.IncludeHandoff)
+        {
+            arguments.Add("--handoff");
+        }
+
+        if (options.Offline)
+        {
+            arguments.Add("--offline");
+        }
+
+        if (options.NoSync)
+        {
+            arguments.Add("--no-sync");
+        }
+
+        return arguments;
+    }
+
+    /// <summary>
+    /// Puts the launch sheet up and returns what it collected, or null when it
+    /// was dismissed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A screen of its own, after the launcher has closed, for the reason the
+    /// profile chooser it replaces was: the sheet reads the repository to say
+    /// what a launch would load, and doing that under a screen that is still
+    /// drawing would freeze it.
+    /// </para>
+    /// <para>
+    /// Skipped where nobody is at the terminal. A redirected run cannot answer
+    /// a sheet, and blocking on one would hang a script; it gets the defaults,
+    /// which are what Enter on the sheet would have given.
+    /// </para>
+    /// </remarks>
+    private async Task<LaunchOptions?> AskAsync(ProjectResolution project, CancellationToken ct)
+    {
+        if (!Watching)
+        {
+            return new LaunchOptions();
+        }
 
         using IApplication application = Application.Create();
 
         application.InitLegibly();
 
-        using var chooser = new ChoiceDialog("What are you working on?", labels, application);
+        using var sheet = new LaunchOptionsDialog(
+            project,
+            _installed,
+            application,
+            new LaunchSheetSources(ChoicesAsync, PreviewAsync));
 
-        await application.RunAsync(chooser, ct).ConfigureAwait(false);
+        await application.RunAsync(sheet, ct).ConfigureAwait(false);
 
-        return chooser.ChosenIndex is int index ? profiles[index] : null;
+        return sheet.Chosen;
+    }
+
+    /// <summary>
+    /// The profiles the agent can use and the working trees the repository
+    /// has, for the sheet to offer.
+    /// </summary>
+    private async Task<LaunchChoices> ChoicesAsync(
+        ProjectResolution project,
+        string agentName,
+        CancellationToken ct)
+    {
+        var profiles = LaunchChoices.None.Profiles;
+        var worktrees = LaunchChoices.None.Worktrees;
+
+        var manifest = await _workspace.ReadProjectAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
+        if (manifest.Succeeded)
+        {
+            // The default profile is the absence of one, which is how the
+            // launch spells it; the rest go by name.
+            profiles = _compiler.ListProfiles(manifest.Value!, agentName)
+                .Select((name, index) => new LaunchChoice(
+                    manifest.Value!.Profiles.TryGetValue(name, out var profile)
+                        && !string.IsNullOrWhiteSpace(profile.Description)
+                        ? $"{name}  ({profile.Description})"
+                        : name,
+                    index == 0 ? null : name))
+                .ToList();
+        }
+
+        if (project.LocalPath is { Length: > 0 } path)
+        {
+            var listed = await _git.ListWorktreesAsync(path, ct).ConfigureAwait(false);
+
+            if (listed.Succeeded && listed.Value!.Count > 0)
+            {
+                // Named the way --worktree expects: by branch, or by directory
+                // where there is no branch. The primary is the main working
+                // tree, which a launch spells as no worktree at all.
+                worktrees = listed.Value
+                    .OrderByDescending(w => w.IsPrimary)
+                    .Select(w => new LaunchChoice(
+                        w.IsPrimary
+                            ? $"{w.Branch ?? Path.GetFileName(w.Path)}  (main working tree)"
+                            : w.Branch ?? Path.GetFileName(w.Path),
+                        w.IsPrimary ? null : w.Branch ?? Path.GetFileName(w.Path)))
+                    .ToList();
+            }
+        }
+
+        return new LaunchChoices(profiles, worktrees);
+    }
+
+    /// <summary>
+    /// What a launch as described would load: the same question the launch
+    /// asks, put to the same resolver.
+    /// </summary>
+    private async Task<EffectiveInstructions?> PreviewAsync(
+        LaunchPreviewRequest request,
+        CancellationToken ct)
+    {
+        var manifest = await _workspace
+            .ReadProjectAsync(request.Project.Entry.Slug, ct)
+            .ConfigureAwait(false);
+
+        var resolved = await _instructions.ResolveAsync(
+            new InstructionRequest(
+                manifest.Succeeded ? manifest.Value : null,
+                RepositoryPath: request.Project.LocalPath,
+                WorkspacePath: _workspace.LocalPath,
+                AgentName: request.Agent,
+                ProfileName: request.Profile,
+                Task: request.Task,
+                Mode: request.Mode),
+            ct).ConfigureAwait(false);
+
+        if (resolved.Failed)
+        {
+            throw new InvalidOperationException(resolved.Error);
+        }
+
+        return resolved.Value;
     }
 
     private async Task<int?> OpenShellAsync(string workingDirectory, CancellationToken ct)

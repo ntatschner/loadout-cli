@@ -288,15 +288,7 @@ internal sealed class LauncherWindow : Window
     private MenuBar BuildMenu() =>
         new([
             new MenuBarItem("_Project", [
-                new MenuItem { Title = "_Launch", Action = LaunchSelected },
-                new MenuItem
-                {
-                    // The options a launch can carry that Enter cannot. Task
-                    // and mode are what select the specialists, so this is the
-                    // only way from a screen to say what a session is for.
-                    Title = "Launch with _options...",
-                    Action = LaunchWithOptions,
-                },
+                new MenuItem { Title = "_Launch...", Action = LaunchSelected },
                 new MenuItem
                 {
                     Title = "_Resume a session",
@@ -853,15 +845,26 @@ internal sealed class LauncherWindow : Window
     /// </summary>
     private void Populate()
     {
-        if (_here is not null)
+        _shown = Order(_projects, _here);
+        Render();
+    }
+
+    /// <summary>
+    /// The repository somebody is standing in first, and the rest as given.
+    /// </summary>
+    internal static List<ProjectResolution> Order(
+        IReadOnlyList<ProjectResolution> projects,
+        ProjectResolution? here)
+    {
+        if (here is null)
         {
-            _shown = [
-                .. _projects.Where(p => p.Entry.Slug == _here.Entry.Slug),
-                .. _projects.Where(p => p.Entry.Slug != _here.Entry.Slug),
-            ];
+            return [.. projects];
         }
 
-        Render();
+        return [
+            .. projects.Where(p => p.Entry.Slug == here.Entry.Slug),
+            .. projects.Where(p => p.Entry.Slug != here.Entry.Slug),
+        ];
     }
 
     /// <summary>
@@ -1165,19 +1168,13 @@ internal sealed class LauncherWindow : Window
             return;
         }
 
+        // No options: the launcher puts the launch sheet up next, with the
+        // terminal to itself, and asks everything there. The screen only says
+        // which project.
         Close(new LauncherIntent(
             LauncherAction.Launch, project, project.Entry.DefaultAgent));
     }
 
-    /// <summary>
-    /// Asks what the session is for, then launches with the answer.
-    /// </summary>
-    /// <remarks>
-    /// A launch carries fourteen things and Enter fills three. The task and the
-    /// mode are what choose the specialists an agent is given, so without this
-    /// the screen could start a session but never say what it was for, while
-    /// the command line could — which made the screen a subset of it.
-    /// </remarks>
     /// <summary>
     /// Asks what to create, then hands the answer to the command line.
     /// </summary>
@@ -1214,39 +1211,6 @@ internal sealed class LauncherWindow : Window
         }
 
         RunCommand(command);
-    }
-
-    private void LaunchWithOptions()
-    {
-        if (Selected is not { } project)
-        {
-            return;
-        }
-
-        if (!project.IsAvailableLocally)
-        {
-            Say($"{project.Entry.Name} is not on this machine. "
-                + "Registry ▸ Clone onto this machine.");
-
-            return;
-        }
-
-        using var dialog = new LaunchOptionsDialog(project.Entry.Name, _application);
-
-        _application.Run(dialog);
-
-        // Dismissed means dismissed. Launching with the defaults because a
-        // dialog was closed would start a session nobody asked for.
-        if (dialog.Chosen is not { } options)
-        {
-            return;
-        }
-
-        Close(new LauncherIntent(
-            LauncherAction.Launch,
-            project,
-            project.Entry.DefaultAgent,
-            Options: options));
     }
 
     /// <summary>
