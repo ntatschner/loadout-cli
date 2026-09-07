@@ -105,6 +105,12 @@ Run `loadout` on its own. Every row tells you whether you can work on that
 project, and the panel on the right shows what a session would start with, so
 you know before you spend one.
 
+Enter opens the launch sheet: which agent, what the task is, how to work, and
+which profile or worktree, all filled in with the defaults so Enter again
+starts the session. Underneath, the sheet shows which specialists that task
+would load and what they cost, re-resolved as you type, by asking the same
+resolver the launch asks. What it shows is what the session gets.
+
 `Ctrl+P` opens a palette over every command the CLI has, and it finds them by
 what they're for. Search `undo` and you get `backup restore`. Search `broken`
 and you get `doctor`. Nobody looking to undo a mistake searches for the words

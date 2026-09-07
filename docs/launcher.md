@@ -21,22 +21,14 @@ Redraw them after a change with:
 LOADOUT_DOCS_IMAGES=1 dotnet test --filter DocumentationImagesTests
 ```
 
-Every row says whether you can work on that project, so the list answers the
-question without you selecting anything:
-
-| State | Means |
-|---|---|
-| `+ Ready` | Nothing is in the way |
-| `! Attention` | It will launch, and something is worth knowing first |
-| `x Blocked` | It will not launch until something is done |
-
-**Blocked is reserved for what genuinely stops a launch** — the repository is
-not on this machine, or the agent it wants is not installed here. Committed
-agent files, an oversized instruction layer, memory recorded where nothing reads
-it, a missing pre-commit hook: all worth fixing, none of them stopping you, so
-all of them Attention. A list where everything is blocked says no more than a
-list with no states at all, and teaches you to ignore the one project that
-really is.
+A row carries a mark only when something genuinely stops a launch: the
+repository is not on this machine, or the agent it wants is not installed here.
+Everything else about a project — committed agent files, an oversized
+instruction layer, memory recorded where nothing reads it, a missing pre-commit
+hook — is worth fixing and stops nothing, so it goes in the panel on the right
+under *Needs attention* rather than on the row. A list where every row carries
+a warning says no more than a list with none, and teaches you to ignore the one
+project that really is blocked.
 
 Every state is a word and a mark, never colour alone, so a monochrome terminal
 and anyone who cannot tell red from green read the same thing.
@@ -50,11 +42,69 @@ reopens that conversation rather than asking again which you meant.
 
 | Key | Does |
 |---|---|
-| `Enter` | Launch the selected project |
+| `Enter` | Open the launch sheet for the selected project |
 | `Ctrl+P` | Every command the CLI has, filtered as you type |
 | `Ctrl+N` | Add a project |
-| `F9` | Menu |
+| `F2` | Settings and paths |
+| `F3` | Launch history and posture for the selected project |
+| `F4` | Packs, MCP servers, skills and plugins |
+| `F10` | Menu |
 | `Ctrl+Q` | Quit |
+
+## The launch sheet
+
+Enter on a project does not start the agent. It opens the launch sheet, which
+is where everything a launch can be asked is asked, filled in with the
+defaults, so Enter again starts the session. That is one keystroke more than
+before, and what it buys is the preview.
+
+```text
+╭┤Launch loadout-cli├──────────────────────────────────────────────────────╮
+│ What are you about to do?                                                │
+│ fix the memory import notice                                             │
+│ This chooses the specialists the agent is given.                         │
+│                                                                          │
+│ Agent          Mode                    Profile            Worktree       │
+│ claude         (let the task decide)   default            main (main …)  │
+│ codex          advise                                     feature-x      │
+│                implement                                                 │
+│                investigate                                               │
+│                review                                                    │
+│                                                                          │
+│ [ ] Work offline  [ ] Skip workspace sync  [ ] Append last handoff       │
+│╭ This session would load ───────────────────────────────────────────────╮│
+││ foundation   Change safety, Engineering core, Evidence first, …        ││
+││ mode         Implement                  implement mode                 ││
+││ language     C#                         459 .cs files                  ││
+││ framework    .NET                       Microsoft.Extensions. declared ││
+││                                                                        ││
+││ specialists  about 1,456 tokens, 12% of 12,000                         ││
+│╰────────────────────────────────────────────────────────────────────────╯│
+│ [ Launch ]  [ Cancel ]                                                   │
+╰──────────────────────────────────────────────────────────────────────────╯
+```
+
+**Agent** lists every agent installed on this machine, the project's own
+first. Before the sheet, every launch from the screen started the project's
+default agent whatever else was installed, and switching meant quitting and
+typing `loadout launch <project> --agent codex`.
+
+**Task and mode** are what choose the specialists. **Profile** and **Worktree**
+are offered up front when the project has more than one, by the same names
+`--profile` and `--worktree` take, so the sheet and the command line cannot
+mean different things.
+
+**This session would load** is the answer the launch itself will get. As you
+type the task or change the mode, the sheet asks the same resolver the launch
+asks and shows what came back: which specialists, why each was chosen, and
+what they cost against the budget. It is not a second implementation of that
+choice; it is the choice, shown early. Before the sheet, the only way to see
+this was a command that closed the launcher and printed to the terminal.
+
+Cancelling the sheet returns to the list and starts nothing. Launching hands
+what was chosen to the `launch` command as its flags, so a session started
+from the screen is the same session a typed one is, down to the question about
+uncommitted workspace changes on the way out.
 
 ![The command palette, listing commands with the one that cannot run from a menu
 marked "terminal only"](images/command-palette.svg)
@@ -134,8 +184,11 @@ What the key runs is the command itself, not a copy of it. A screen never
 implements command behaviour here, or there are two implementations and one of
 them drifts.
 
-**F3 has not been pressed on a real console.** F2 next to it was, before being
-written down, and the function keys are the family that survived — but a key
-that passes its test and does nothing on the machine is worse than no key, so
-the menu item reaches the same command without one. Worth trying once and
-telling me if it does nothing.
+F3 has been pressed on a real Windows console and returned the project's
+launch history. The menu item reaches the same command for anyone whose
+terminal eats function keys.
+
+The launch sheet has not yet been used on a real console. Its keystrokes and
+what it draws are tested through the headless driver at 80x24 and above, but
+whether it is comfortable to use is not something a test can say. Worth trying
+once and telling me what is awkward.

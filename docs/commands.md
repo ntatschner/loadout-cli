@@ -64,6 +64,13 @@ means the same thing: show what would happen and change nothing. Several
 commands have their own older spelling — `--apply` on some, `--fix` on others —
 and those still work; where both are given, the more cautious wins.
 
+For a launch, the dry run is the launch described in full: the agent and its
+executable, the working directory, the compiled context and where it went,
+the MCP configuration files, the environment variables by name, the complete
+command line, and every specialist chosen with the reason for each and what
+they cost. With `--json` the same is written as one document. Variable values
+are never printed, because a resolved secret is exactly what one can hold.
+
 Every command accepts `--json`, and everything after a bare `--` is passed to
 the agent untouched:
 
@@ -128,7 +135,10 @@ attributes them:
 `loadout resume` opens a picker, or takes a session id or `--last`. Resuming
 goes through the launcher rather than the agent directly, so the workspace
 synchronises and the context recompiles instead of a bare transcript being
-reopened. The interactive launcher offers the same picker per project.
+reopened. The task, mode, profile and worktree the session was launched with
+are read back from the launch ledger and carried over, so it reopens with the
+specialists it had; `--task` and `--mode` replace them when the work has
+changed shape. The interactive launcher offers the same picker per project.
 
 Neither storage format is a published contract, so both readers are
 best-effort by construction: a transcript that cannot be understood costs that
