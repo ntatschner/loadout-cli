@@ -3,6 +3,7 @@ using Loadout.Agents;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Sessions;
 using Loadout.Models;
+using Loadout.Models.Agents;
 using Loadout.Models.Results;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -128,6 +129,14 @@ public sealed class ResumeSettings : SessionSettings
     [CommandOption("--last")]
     [Description("Resume the most recent session without asking.")]
     public bool Last { get; init; }
+
+    [CommandOption("--task <TASK>")]
+    [Description("What the session is for now. Otherwise what it was launched for is carried over.")]
+    public string? Task { get; init; }
+
+    [CommandOption("--mode <MODE>")]
+    [Description("Posture: advise, investigate, implement or review. Otherwise carried over.")]
+    public string? Mode { get; init; }
 }
 
 /// <summary>
@@ -147,17 +156,20 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
     private readonly ISessionHistoryService _sessions;
     private readonly SessionScope _scope;
     private readonly IAgentLauncher _launcher;
+    private readonly ILaunchLedger _ledger;
     private readonly IAnsiConsole _console;
 
     public ResumeCommand(
         ISessionHistoryService sessions,
         SessionScope scope,
         IAgentLauncher launcher,
+        ILaunchLedger ledger,
         IAnsiConsole console)
     {
         _sessions = sessions;
         _scope = scope;
         _launcher = launcher;
+        _ledger = ledger;
         _console = console;
     }
 
@@ -228,14 +240,39 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
             $"Resuming [cyan]{slug.EscapeMarkup()}[/] with {chosen.Agent.EscapeMarkup()}: "
             + $"{chosen.Label.EscapeMarkup()}");
 
+        // What the session was launched for, so it reopens with the same
+        // specialists. Resuming recompiles the context, and until this was
+        // read back a resumed session got the no-task, no-mode set — a
+        // different one from the session it claimed to be continuing.
+        var carried = await CarriedOverAsync(chosen, slug, cancellationToken).ConfigureAwait(false);
+
+        if (carried is not null && settings.Task is null && settings.Mode is null)
+        {
+            var what = string.Join(", ", new[]
+            {
+                carried.Task is { Length: > 0 } task ? $"task '{task}'" : null,
+                carried.Mode is { Length: > 0 } mode ? $"mode {mode}" : null,
+                carried.Profile is { Length: > 0 } profile ? $"profile {profile}" : null,
+                carried.Worktree is { Length: > 0 } worktree ? $"worktree {worktree}" : null,
+            }.Where(part => part is not null));
+
+            if (what.Length > 0)
+            {
+                output.WriteLine($"[dim]Carrying over from its launch: {what.EscapeMarkup()}[/]");
+            }
+        }
+
         var launch = await _launcher.LaunchAsync(new LaunchRequest(
             slug,
             chosen.Agent,
             Offline: settings.Offline,
             NoSync: settings.NoSync,
-            Profile: settings.Profile,
+            Worktree: carried?.Worktree,
+            Profile: settings.Profile ?? carried?.Profile,
             Environment: settings.Environment,
-            ResumeSessionId: chosen.SessionId)).ConfigureAwait(false);
+            ResumeSessionId: chosen.SessionId,
+            Task: settings.Task ?? carried?.Task,
+            Mode: settings.Mode ?? carried?.Mode)).ConfigureAwait(false);
 
         if (launch.Failed)
         {
@@ -249,6 +286,52 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
 
         // The agent's own exit status is the command's, per spec section 40.
         return launch.Value.AgentExitCode;
+    }
+
+    /// <summary>
+    /// The launch this session came from, as far as the ledger can say.
+    /// </summary>
+    /// <remarks>
+    /// The ledger cannot read it: a launch record has no session id, because
+    /// the agent chooses that after it starts. Tolerated when the ledger
+    /// cannot be read at all — resuming without the task is what happened
+    /// before, and it is no reason to refuse.
+    /// </remarks>
+    private async Task<LaunchRecord?> CarriedOverAsync(
+        AgentSession session,
+        string slug,
+        CancellationToken ct)
+    {
+        var launches = await _ledger.ReadAsync(DateTimeOffset.UnixEpoch, ct).ConfigureAwait(false);
+
+        return launches.Succeeded ? LaunchOf(launches.Value!, session, slug) : null;
+    }
+
+    /// <summary>
+    /// The most recent launch of this project with this agent that had begun
+    /// by the time the session was last active, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Inferred rather than known, and deliberately narrow: same project, same
+    /// agent, started no later than the session's last activity. A session
+    /// that was active before any recorded launch of its project gets nothing
+    /// carried over, which is the right answer for one this launcher did not
+    /// start.
+    /// </remarks>
+    internal static LaunchRecord? LaunchOf(
+        IReadOnlyList<LaunchRecord> launches,
+        AgentSession session,
+        string slug)
+    {
+        ArgumentNullException.ThrowIfNull(launches);
+        ArgumentNullException.ThrowIfNull(session);
+
+        return launches
+            .Where(launch => string.Equals(launch.ProjectSlug, slug, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(launch.Agent, session.Agent, StringComparison.OrdinalIgnoreCase)
+                && launch.StartedAt <= session.LastActive)
+            .OrderByDescending(launch => launch.StartedAt)
+            .FirstOrDefault();
     }
 
     /// <summary>
