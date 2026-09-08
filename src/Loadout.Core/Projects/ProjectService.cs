@@ -191,6 +191,13 @@ internal sealed class ProjectService : IProjectService
     /// unversioned keeps this from quietly answering for a registered
     /// repository somebody has deleted the <c>.git</c> directory out of, which
     /// is a different problem and should not look like a working project.
+    /// <para>
+    /// Walks up from the directory given, the way finding a repository root
+    /// does, so this behaves the same from a subdirectory as from the top. An
+    /// exact match only would have meant <c>loadout here</c> working at the
+    /// root of an unversioned project and failing one directory into it, which
+    /// is the sort of difference nobody would think to look for.
+    /// </para>
     /// </remarks>
     private async Task<OperationResult<ProjectResolution>?> ResolveUnversionedAsync(
         string directory,
@@ -203,19 +210,27 @@ internal sealed class ProjectService : IProjectService
             return null;
         }
 
-        foreach (var candidate in listed.Value!)
+        // Nearest first: walking outwards means the innermost project wins,
+        // which is what somebody standing in it means.
+        for (var here = new DirectoryInfo(Path.GetFullPath(directory));
+            here is not null;
+            here = here.Parent)
         {
-            if (candidate.LocalPath is null || !_paths.PathsEqual(candidate.LocalPath, directory))
+            foreach (var candidate in listed.Value!)
             {
-                continue;
-            }
+                if (candidate.LocalPath is null
+                    || !_paths.PathsEqual(candidate.LocalPath, here.FullName))
+                {
+                    continue;
+                }
 
-            var manifest = await _workspace.ReadProjectAsync(candidate.Entry.Slug, ct)
-                .ConfigureAwait(false);
+                var manifest = await _workspace.ReadProjectAsync(candidate.Entry.Slug, ct)
+                    .ConfigureAwait(false);
 
-            if (manifest.Succeeded && !manifest.Value!.Repository.Versioned)
-            {
-                return OperationResult<ProjectResolution>.Ok(candidate);
+                if (manifest.Succeeded && !manifest.Value!.Repository.Versioned)
+                {
+                    return OperationResult<ProjectResolution>.Ok(candidate);
+                }
             }
         }
 

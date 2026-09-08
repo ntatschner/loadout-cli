@@ -381,6 +381,26 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Here_resolves_from_inside_an_unversioned_project_too()
+    {
+        var plain = Path.Combine(_repositories, "deep-start");
+        var inner = Path.Combine(plain, "src", "api");
+
+        Directory.CreateDirectory(inner);
+
+        await _projects.AddAsync(plain);
+
+        // A repository resolves from any directory in it, because finding the
+        // root walks up. Matching only the exact path would have made this work
+        // at the top of an unversioned project and fail one directory into it,
+        // which is the sort of difference nobody thinks to look for.
+        var resolved = await _projects.ResolveFromDirectoryAsync(inner);
+
+        resolved.Succeeded.Should().BeTrue(resolved.Error);
+        resolved.Value!.Entry.Slug.Should().Be("deep-start");
+    }
+
+    [Fact]
     public async Task A_directory_belonging_to_no_project_still_fails()
     {
         var stranger = Path.Combine(_root, "nobody's");
