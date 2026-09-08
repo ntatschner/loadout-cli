@@ -76,6 +76,24 @@ public sealed class ProjectRepository
     public string Remote { get; set; } = string.Empty;
 
     public string DefaultBranch { get; set; } = "main";
+
+    /// <summary>
+    /// Whether there is a Git repository here yet.
+    /// </summary>
+    /// <remarks>
+    /// True for every project that has ever been registered, which is why it
+    /// defaults to true: a manifest written before this existed describes a
+    /// repository, and reading it must not turn it into something else.
+    /// <para>
+    /// False says the directory was registered deliberately before it was
+    /// versioned — code somebody wants an agent to work on, where initialising
+    /// the repository is the first piece of that work rather than a
+    /// precondition for asking. Everything that reads Git has to check this
+    /// rather than assume, and say nothing instead of reporting a repository
+    /// that is missing on purpose.
+    /// </para>
+    /// </remarks>
+    public bool Versioned { get; set; } = true;
 }
 
 /// <summary>Which agents this project supports and how each is configured.</summary>
@@ -140,6 +158,20 @@ public sealed class ProjectContext
     /// there either way and costs nothing until it is asked.
     /// </remarks>
     public bool CodeMap { get; set; }
+
+    /// <summary>
+    /// Whether the project's open tasks are put in front of every session.
+    /// </summary>
+    /// <remarks>
+    /// Off until it is turned on for a project, rather than on by default.
+    /// The task record is a claim somebody made, not a fact about the code,
+    /// and a project that does not keep one would otherwise pay for a heading
+    /// saying so on every launch. Turned on automatically for a project
+    /// registered before it has a repository, because there the whole point of
+    /// registering it is to hand the setup work to the agent, and a task the
+    /// agent is never shown is a note to nobody.
+    /// </remarks>
+    public bool Tasks { get; set; }
 }
 
 /// <summary>

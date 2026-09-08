@@ -130,26 +130,34 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
         var output = new CommandOutput(_console, settings);
         var path = settings.Path ?? settings.Repo ?? Directory.GetCurrentDirectory();
 
-        // Registering writes the registry, so a preview that ran it would have
-        // registered it. What the preview can do is ask the same questions the
-        // registration asks first — it is a Git repository, and a slug can be
-        // worked out — because neither of those writes anything. Without that
-        // this said "Would register" about a directory the real run refuses,
-        // and named no slug it could be checked against.
+        // Asked once, for both paths. Registering writes the registry, so a
+        // preview that ran it would have registered it — but the questions the
+        // registration asks first are all reads, and asking them here is what
+        // stops the preview and the real run disagreeing. This said "Would
+        // register" about anything at all, and named no slug to check it by.
+        var preview = await _projects
+            .ValidateAddAsync(path, settings.Slug, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (preview.Failed)
+        {
+            return output.Fail(preview);
+        }
+
+        var versioned = preview.Value!.Versioned;
+
         if (settings.DryRun)
         {
-            var allowed = await _projects
-                .ValidateAddAsync(path, settings.Slug, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (allowed.Failed)
-            {
-                return output.Fail(allowed);
-            }
-
             output.WriteLine(
                 $"[bold]Would register[/] {Markup.Escape(path)} as "
-                + $"'{Markup.Escape(allowed.Value!)}'. Nothing was changed.");
+                + $"'{Markup.Escape(preview.Value.Slug)}'. Nothing was changed.");
+
+            if (!versioned)
+            {
+                output.WriteLine(
+                    "  [yellow]There is no Git repository there yet.[/] It would be registered "
+                    + "as one still to be set up, with a task saying so.");
+            }
 
             return CommandOutput.Success();
         }
@@ -180,6 +188,19 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
             output.WriteLine(
                 $"[green]Registered[/] {Markup.Escape(project.Entry.Name)} "
                 + $"[dim]({Markup.Escape(project.Entry.Slug)})[/]");
+
+            // Said plainly, because it is the unusual case and because
+            // somebody who meant to register a repository has typed a path one
+            // level out. The alternative — registering it silently — is how
+            // you end up with a project pointing at a directory nobody meant.
+            if (!versioned)
+            {
+                output.WriteLine(
+                    "  [yellow]There is no Git repository here yet.[/] Recorded as a task, "
+                    + "so the next session is told to set one up before other work.");
+                output.WriteLine(
+                    $"  [dim]loadout task list {Markup.Escape(project.Entry.Slug)}[/]");
+            }
 
             foreach (var choice in applied)
             {

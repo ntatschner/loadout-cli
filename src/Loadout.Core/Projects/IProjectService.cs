@@ -96,17 +96,16 @@ public interface IProjectService
         CancellationToken ct = default);
 
     /// <summary>
-    /// Whether a registration would be accepted, and the slug it would use.
-    /// Changes nothing.
+    /// What a registration would do, without doing it.
     /// </summary>
     /// <remarks>
     /// For the preview. <c>--dry-run</c> reported "Would register" for any path
-    /// at all, including one that is not a Git repository — which the real run
-    /// turns away. A preview that says yes where the command says no is worse
-    /// than no preview: it is confidently wrong about the case somebody ran it
-    /// to check.
+    /// at all, whatever the real run would say. A preview that says yes where
+    /// the command says no is worse than no preview: it is confidently wrong
+    /// about the case somebody ran it to check. So this answers the same
+    /// questions the registration asks, and the two have to agree.
     /// </remarks>
-    Task<OperationResult<string>> ValidateAddAsync(
+    Task<OperationResult<AddPreview>> ValidateAddAsync(
         string repositoryPath,
         string? slug = null,
         CancellationToken ct = default);
@@ -155,3 +154,16 @@ public interface IProjectService
         string? destination = null,
         CancellationToken ct = default);
 }
+
+/// <summary>
+/// What registering a path would produce.
+/// </summary>
+/// <param name="Slug">The handle the project would be registered under.</param>
+/// <param name="Versioned">
+/// Whether there is a Git repository at the path. False is a registration that
+/// will still go ahead: a directory somebody wants an agent to work on before
+/// it has been initialised. The caller is expected to say so rather than
+/// register it silently, because it is the unusual case and the one where
+/// somebody may simply be standing in the wrong directory.
+/// </param>
+public sealed record AddPreview(string Slug, bool Versioned);

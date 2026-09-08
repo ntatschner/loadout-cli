@@ -35,6 +35,7 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     private IProjectService _projects = null!;
     private IGitManager _git = null!;
     private IWorkspaceManager _workspace = null!;
+    private Loadout.Core.Tasks.ITaskService _tasks = null!;
 
     public ProjectLifecycleTests()
     {
@@ -95,7 +96,8 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         _workspace = new WorkspaceManager(paths, _git, yaml, TimeProvider.System);
 
         _configuration = configuration;
-        _projects = new ProjectService(configuration, _workspace, _git, new PathSemantics());
+        _tasks = new Loadout.Core.Tasks.TaskService(_workspace, yaml, TimeProvider.System);
+        _projects = new ProjectService(configuration, _workspace, _git, new PathSemantics(), _tasks);
     }
 
     public Task DisposeAsync()
@@ -287,30 +289,127 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Registering_a_directory_that_is_not_a_repository_fails_clearly()
+    public async Task Registering_a_path_that_does_not_exist_fails_clearly()
     {
-        var plain = Path.Combine(_root, "not-a-repo");
-        Directory.CreateDirectory(plain);
+        // A directory that is not a repository is now registered deliberately.
+        // A path that is not there at all is still a typo, and registering it
+        // would make a project pointing at nothing.
+        var missing = Path.Combine(_root, "no-such-directory");
 
-        var result = await _projects.AddAsync(plain);
+        var result = await _projects.AddAsync(missing);
 
         result.Failed.Should().BeTrue();
         result.ExitCode.Should().Be(Models.ExitCode.RepositoryUnavailable);
     }
 
     [Fact]
-    public async Task A_preview_refuses_what_the_registration_would_refuse()
+    public async Task A_directory_with_no_repository_is_registered_and_says_so()
     {
-        var plain = Path.Combine(_root, "also-not-a-repo");
+        var plain = Path.Combine(_repositories, "unversioned");
+        Directory.CreateDirectory(plain);
+        await File.WriteAllTextAsync(Path.Combine(plain, "app.py"), "print('hello')");
+
+        var result = await _projects.AddAsync(plain);
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.Entry.Slug.Should().Be("unversioned");
+
+        var manifest = await _workspace.ReadProjectAsync("unversioned");
+
+        manifest.Succeeded.Should().BeTrue();
+        manifest.Value!.Repository.Versioned.Should().BeFalse(
+            "the manifest has to record that there is no repository here yet");
+
+        // Turned on for this project alone, because the task below is the
+        // whole reason for registering it and a task nobody is shown is a note
+        // to nobody.
+        manifest.Value.Context.Tasks.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Registering_an_unversioned_directory_leaves_the_setup_work_as_a_task()
+    {
+        var plain = Path.Combine(_repositories, "needs-git");
         Directory.CreateDirectory(plain);
 
-        var preview = await _projects.ValidateAddAsync(plain);
+        await _projects.AddAsync(plain);
 
-        // The check above proves the registration refuses this. The preview
-        // said "Would register" about it, so the one command somebody runs to
-        // find out what will happen was the one that got it wrong.
-        preview.Failed.Should().BeTrue();
-        preview.ExitCode.Should().Be(Models.ExitCode.RepositoryUnavailable);
+        var tasks = await _tasks.ListAsync("needs-git");
+
+        tasks.Succeeded.Should().BeTrue(tasks.Error);
+
+        var setup = tasks.Value!.Should().ContainSingle().Subject;
+
+        setup.Id.Should().Be("setup-repository");
+        setup.State.Should().Be(Models.Tasks.TaskState.Open);
+        setup.Note.Should().Contain("Git repository");
+    }
+
+    [Fact]
+    public async Task A_registered_repository_is_not_recorded_as_unversioned()
+    {
+        var repository = await CreateRepositoryAsync("proper", "ssh://git.internal/apps/proper.git");
+
+        await _projects.AddAsync(repository);
+
+        var manifest = await _workspace.ReadProjectAsync("proper");
+
+        manifest.Value!.Repository.Versioned.Should().BeTrue();
+
+        // And the other half: no task, and the section stays off. A repository
+        // that is already a repository has nothing to be told.
+        manifest.Value.Context.Tasks.Should().BeFalse();
+        (await _tasks.ListAsync("proper")).Value!.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Here_resolves_inside_a_project_that_has_no_repository_yet()
+    {
+        var plain = Path.Combine(_repositories, "start-here");
+        Directory.CreateDirectory(plain);
+
+        await _projects.AddAsync(plain);
+
+        // The session that is meant to do the initialising has to be able to
+        // start in the directory it is about. Every other way of attributing a
+        // directory — the marker in Git config, the remote — needs a
+        // repository to read.
+        var resolved = await _projects.ResolveFromDirectoryAsync(plain);
+
+        resolved.Succeeded.Should().BeTrue(resolved.Error);
+        resolved.Value!.Entry.Slug.Should().Be("start-here");
+    }
+
+    [Fact]
+    public async Task Here_resolves_from_inside_an_unversioned_project_too()
+    {
+        var plain = Path.Combine(_repositories, "deep-start");
+        var inner = Path.Combine(plain, "src", "api");
+
+        Directory.CreateDirectory(inner);
+
+        await _projects.AddAsync(plain);
+
+        // A repository resolves from any directory in it, because finding the
+        // root walks up. Matching only the exact path would have made this work
+        // at the top of an unversioned project and fail one directory into it,
+        // which is the sort of difference nobody thinks to look for.
+        var resolved = await _projects.ResolveFromDirectoryAsync(inner);
+
+        resolved.Succeeded.Should().BeTrue(resolved.Error);
+        resolved.Value!.Entry.Slug.Should().Be("deep-start");
+    }
+
+    [Fact]
+    public async Task A_directory_belonging_to_no_project_still_fails()
+    {
+        var stranger = Path.Combine(_root, "nobody's");
+        Directory.CreateDirectory(stranger);
+
+        var resolved = await _projects.ResolveFromDirectoryAsync(stranger);
+
+        resolved.Failed.Should().BeTrue(
+            "matching an unversioned project must not become a way of answering for any folder");
     }
 
     [Fact]
@@ -322,11 +421,30 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         var preview = await _projects.ValidateAddAsync(repository);
 
         preview.Succeeded.Should().BeTrue(preview.Error);
-        preview.Value.Should().Be("previewable");
+        preview.Value!.Slug.Should().Be("previewable");
+        preview.Value.Versioned.Should().BeTrue();
 
         // And it has to have changed nothing while working that out.
         (await _projects.ResolveAsync("previewable")).Failed.Should().BeTrue(
             "a preview that registered the project would be the defect it replaces");
+    }
+
+    [Fact]
+    public async Task A_preview_says_when_there_is_no_repository_to_register()
+    {
+        var plain = Path.Combine(_repositories, "previewed-unversioned");
+        Directory.CreateDirectory(plain);
+
+        var preview = await _projects.ValidateAddAsync(plain);
+
+        preview.Succeeded.Should().BeTrue(preview.Error);
+        preview.Value!.Versioned.Should().BeFalse();
+
+        // The preview and the registration have to agree about what would
+        // happen, and disagree entirely about whether it has happened.
+        File.Exists(Path.Combine(
+                _workspace.LocalPath, "projects", "previewed-unversioned", "tasks.yaml"))
+            .Should().BeFalse("a preview writes nothing, the task included");
     }
 
     [Fact]

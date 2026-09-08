@@ -452,6 +452,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     private readonly IRuleService _rules;
     private readonly IMemoryService _memory;
     private readonly ISymbolIndexService _symbols;
+    private readonly Loadout.Core.Tasks.ITaskService _tasks;
 
     public InstructionsExplainCommand(
         IInstructionService instructions,
@@ -461,12 +462,14 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
         IRuleService rules,
         IMemoryService memory,
         ISymbolIndexService symbols,
+        Loadout.Core.Tasks.ITaskService tasks,
         IAnsiConsole console)
         : base(instructions, workspace, projects, git, console)
     {
         _rules = rules;
         _memory = memory;
         _symbols = symbols;
+        _tasks = tasks;
     }
 
     /// <summary>
@@ -478,7 +481,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     /// missing layer counts as nothing rather than as unknown: a session with no
     /// memory really is paying nothing for it.
     /// </remarks>
-    private async Task<(long Always, long Scoped, long MemoryIndex, long CodeMap)> LayersAsync(
+    private async Task<(long Always, long Scoped, long MemoryIndex, long CodeMap, long Tasks)> LayersAsync(
         string? slug,
         ProjectManifest? manifest,
         string? repositoryPath,
@@ -486,7 +489,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     {
         if (slug is null || WorkspacePath is null)
         {
-            return (0, 0, 0, 0);
+            return (0, 0, 0, 0, 0);
         }
 
         var always = 0L;
@@ -519,7 +522,25 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             codeMap = digest.Succeeded ? Encoding.UTF8.GetByteCount(digest.Value!.Text) : 0;
         }
 
-        return (always, scoped, index.Value?.Length ?? 0, codeMap);
+        // Same rule as the map above: counted only where the project asked
+        // for it, and measured the way the compiler measures it.
+        var tasks = 0L;
+
+        if (manifest?.Context.Tasks == true)
+        {
+            var open = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+            if (open.Succeeded)
+            {
+                tasks = open.Value!
+                    .Where(t => t.State is Models.Tasks.TaskState.Open
+                        or Models.Tasks.TaskState.Doing
+                        or Models.Tasks.TaskState.Blocked)
+                    .Sum(t => Encoding.UTF8.GetByteCount(t.Id + t.Title + t.DeclaredBy));
+            }
+        }
+
+        return (always, scoped, index.Value?.Length ?? 0, codeMap, tasks);
     }
 
     /// <inheritdoc />
@@ -610,7 +631,8 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             effective,
             settings.Task,
             ContextBudget.From(
-                effective, counted.Always, counted.Scoped, counted.MemoryIndex, counted.CodeMap));
+                effective, counted.Always, counted.Scoped, counted.MemoryIndex, counted.CodeMap,
+                    counted.Tasks));
 
         return CommandOutput.Success();
     }

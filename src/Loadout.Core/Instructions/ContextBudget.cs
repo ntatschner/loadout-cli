@@ -75,12 +75,17 @@ public sealed record ContextBudget(IReadOnlyList<ContextLayer> Layers, int Token
     /// and shown either way: a layer somebody can switch on ought to be visible
     /// at its price of nothing before it is switched on.
     /// </param>
+    /// <param name="openTaskBytes">
+    /// The open tasks, on a project that puts them in front of every session.
+    /// Zero otherwise, and shown either way for the same reason as the map.
+    /// </param>
     public static ContextBudget From(
         Models.Instructions.EffectiveInstructions instructions,
         long alwaysLoadedRuleBytes,
         long scopedRuleBytes,
         long memoryIndexBytes,
-        long codeMapBytes = 0)
+        long codeMapBytes = 0,
+        long openTaskBytes = 0)
     {
         ArgumentNullException.ThrowIfNull(instructions);
 
@@ -90,6 +95,11 @@ public sealed record ContextBudget(IReadOnlyList<ContextLayer> Layers, int Token
             new("Instructions and rules", alwaysLoadedRuleBytes, Tokens(alwaysLoadedRuleBytes), true),
             new("Memory index", memoryIndexBytes, Tokens(memoryIndexBytes), true),
             new("Code map", codeMapBytes, Tokens(codeMapBytes), true),
+
+            // Counted like the rest. A layer that loads and is not in the
+            // accounting is the drift this report exists to prevent, and it
+            // would understate every launch on a project that keeps tasks.
+            new("Open tasks", openTaskBytes, Tokens(openTaskBytes), true),
             new("Scoped rules", scopedRuleBytes, Tokens(scopedRuleBytes), false),
         };
 

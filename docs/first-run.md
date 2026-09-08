@@ -303,6 +303,13 @@ one line per directory naming the types it holds, at a cost of a few thousand
 tokens on every launch; [the context budget](context-budget.md) says when that
 is worth paying, and `loadout instructions explain` shows the figure.
 
+`tasks: true`, in the same place, puts the project's open work in front of
+every session — what `loadout task list` shows, with who said so and when. Off
+until asked for, because the task record is a claim rather than a fact about
+the code and a project that keeps none should not pay for a heading saying so.
+The agent moves an entry on with `loadout_task_declare`, or
+`loadout task declare <id> <state>`, and the context tells it to.
+
 It is not memory, and deliberately so. Memory holds what the code does not say
 and travels with the workspace; a symbol index is derived from one checkout at
 one commit and would fail `memory audit` on the day it was written.

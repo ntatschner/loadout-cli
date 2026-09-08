@@ -132,6 +132,24 @@ the context says so rather than leaving it to be worked out. Ask an agent to
 review a repository and it has a procedure to follow — `skill.repository-review`
 — and somewhere to put what it finds.
 
+It can also read and update what the project is working on. `loadout task`
+keeps that record — open, doing, done, blocked or dropped, each with who said
+so and when — and checks it against the repository, which is how "called done,
+and nothing has been committed since" gets said out loud. A project that sets
+`tasks: true` under `context` puts the open entries in front of every session,
+so the answer to "where were we" comes from the record rather than from
+whatever is still in the conversation. They are observations, never verdicts:
+corroboration can say a claim is unsupported and can never say one is wrong.
+
+### Code that isn't a repository yet
+
+`loadout project add` takes a directory that has no Git repository in it. It
+registers as one still to be set up, with a task saying so, and the first
+session is told on the way in rather than discovering it by running something
+and reading an error. Initialising it, the first commit and the remote are the
+work; `loadout protect` comes after. A path that does not exist is still
+refused, because that is a typo rather than a plan.
+
 ### Undo
 
 Every command that changes a file takes `--dry-run` and shows you the change

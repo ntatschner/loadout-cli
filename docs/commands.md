@@ -8,7 +8,7 @@
 | `loadout here` | Launch the agent for the current repository |
 | `loadout doctor` | Platform, Git, workspace, secret and agent diagnostics |
 | `loadout status` | Summary of workspace, projects and agents |
-| `loadout project add\|list\|remove\|discover\|open` | Manage project registration |
+| `loadout project add\|list\|remove\|discover\|open` | Manage project registration. A directory with no repository yet is registered as one still to be set up |
 | `loadout project clone\|relocate <project>` | Get a registered project onto this machine |
 | `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `loadout project link [project]` | Record inside a repository which project it belongs to |

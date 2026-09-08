@@ -2,6 +2,7 @@ using System.Text;
 using Loadout.Core.Instructions;
 using Loadout.Models;
 using Loadout.Models.Projects;
+using Loadout.Models.Tasks;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 
@@ -26,6 +27,7 @@ internal sealed class ContextCompiler : IContextCompiler
     private readonly IRuleService _rules;
     private readonly IMemoryService _memory;
     private readonly Instructions.ISymbolIndexService? _symbols;
+    private readonly Tasks.ITaskService? _tasks;
 
     /// <param name="permissions">Restricts the compiled file to its owner.</param>
     /// <param name="rules">Where scoped rules come from.</param>
@@ -35,16 +37,22 @@ internal sealed class ContextCompiler : IContextCompiler
     /// layer is simply never written: a compiler built without it compiles
     /// exactly what it compiled before.
     /// </param>
+    /// <param name="tasks">
+    /// Where the open tasks come from, on the projects that ask for them.
+    /// Optional for the same reason as the symbol index.
+    /// </param>
     public ContextCompiler(
         IFilePermissions permissions,
         IRuleService rules,
         IMemoryService memory,
-        Instructions.ISymbolIndexService? symbols = null)
+        Instructions.ISymbolIndexService? symbols = null,
+        Tasks.ITaskService? tasks = null)
     {
         _permissions = permissions;
         _rules = rules;
         _memory = memory;
         _symbols = symbols;
+        _tasks = tasks;
     }
 
     /// <inheritdoc />
@@ -153,6 +161,11 @@ internal sealed class ContextCompiler : IContextCompiler
         {
             await AppendCodeMapAsync(builder, sources, manifest.Slug, repositoryPath, ct)
                 .ConfigureAwait(false);
+        }
+
+        if (manifest.Context.Tasks)
+        {
+            await AppendTasksAsync(builder, sources, manifest.Slug, ct).ConfigureAwait(false);
         }
 
         var outputPath = Path.Combine(runtimeDirectory, CompiledFileName);
@@ -357,6 +370,86 @@ internal sealed class ContextCompiler : IContextCompiler
             $"{relative}/MEMORY.md",
             "Project memory",
             Encoding.UTF8.GetByteCount(index.Value)));
+    }
+
+    /// <summary>
+    /// Appends what the project is working on, for a project that keeps a task
+    /// record and has asked for it.
+    /// </summary>
+    /// <remarks>
+    /// The tools to read and write this have been served to the agent since
+    /// they existed, and nothing ever told it they were there: no specialist
+    /// mentioned them, the context did not carry a task, and an agent does not
+    /// call a tool it has no reason to think is relevant. So the record was
+    /// only ever written by a person, and "what were we doing" was answered
+    /// from whatever happened to still be in the conversation.
+    /// <para>
+    /// Open and doing only. A finished task is in the record for the audit
+    /// trail, and putting it in front of every later session is paying for
+    /// something nobody has to act on.
+    /// </para>
+    /// </remarks>
+    private async Task AppendTasksAsync(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        string slug,
+        CancellationToken ct)
+    {
+        if (_tasks is null)
+        {
+            return;
+        }
+
+        var listed = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return;
+        }
+
+        var open = listed.Value!
+            .Where(t => t.State is TaskState.Open or TaskState.Doing or TaskState.Blocked)
+            .OrderBy(t => t.State)
+            .ToList();
+
+        if (open.Count == 0)
+        {
+            // A heading over nothing is a heading somebody reads and learns
+            // nothing from, paid for on every launch.
+            return;
+        }
+
+        var section = new StringBuilder();
+
+        section.AppendLine(
+            "What this project is working on, as somebody last said. These are claims with a "
+            + "name and a date on them, not established facts: check one against the repository "
+            + "before relying on it. Change one with the `loadout_task_declare` tool, or "
+            + "`loadout task declare <id> <state>`, when the work moves — a record nobody "
+            + "updates is worse than none, because it is believed.");
+        section.AppendLine();
+
+        foreach (var task in open)
+        {
+            var title = task.Title.Length > 0 ? task.Title : task.Id;
+
+            section.AppendLine(
+                $"- **{task.Id}** ({task.State.ToString().ToLowerInvariant()}) — {title}");
+            section.AppendLine(
+                $"  {task.DeclaredBy}, {task.DeclaredUtc:yyyy-MM-dd}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Open tasks");
+        builder.AppendLine();
+        builder.AppendLine($"<!-- source: projects/{slug}/tasks.yaml -->");
+        builder.AppendLine();
+        builder.Append(section);
+
+        sources.Add(new ContextSource(
+            $"projects/{slug}/tasks.yaml",
+            "Open tasks",
+            Encoding.UTF8.GetByteCount(section.ToString())));
     }
 
     /// <summary>
