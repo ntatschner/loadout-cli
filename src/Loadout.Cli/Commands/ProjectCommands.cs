@@ -396,6 +396,12 @@ public sealed class ProjectDiscoverCommand : AsyncCommand<GlobalSettings>
                     remote = r.RemoteUrl,
                     registered = r.IsRegistered,
                     slug = r.MatchedSlug,
+
+                    // Added rather than inferred from an absent remote: a
+                    // repository with no remote is not the same thing as a
+                    // directory that is not a repository, and a script cannot
+                    // tell them apart without this.
+                    versioned = r.Versioned,
                 }),
             });
 
@@ -409,15 +415,21 @@ public sealed class ProjectDiscoverCommand : AsyncCommand<GlobalSettings>
             return CommandOutput.Success();
         }
 
-        output.WriteLine($"[bold]Repositories discovered[/] [dim]({found.Count})[/]");
+        output.WriteLine($"[bold]Projects discovered[/] [dim]({found.Count})[/]");
         output.WriteBlankLine();
 
         foreach (var repository in found)
         {
             var marker = repository.IsRegistered ? "[green]+[/]" : "[yellow]?[/]";
+
+            // Said on the row rather than left to be inferred from a missing
+            // remote. Registering one of these is a different decision from
+            // registering a repository, and somebody should make it knowingly.
             var suffix = repository.IsRegistered
                 ? $"[dim]registered as {Markup.Escape(repository.MatchedSlug!)}[/]"
-                : "[dim]not registered[/]";
+                : repository.Versioned
+                    ? "[dim]not registered[/]"
+                    : "[dim]not registered, and not a Git repository yet[/]";
 
             output.WriteLine($"{marker} {Markup.Escape(repository.Path)}  {suffix}");
         }

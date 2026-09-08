@@ -57,6 +57,35 @@ public sealed class PreflightTests
     }
 
     [Fact]
+    public async Task A_project_with_no_repository_yet_is_told_so_on_the_way_in()
+    {
+        var manifest = Manifest();
+        manifest.Repository.Versioned = false;
+
+        var context = Context() with
+        {
+            Manifest = manifest,
+            Hook = new HookState(Installed: false, NeedsUpgrade: false),
+        };
+
+        var result = await Service().RunAsync(context);
+
+        // Never blocks. Registering a directory before initialising it is a
+        // deliberate act, and the whole point is to start a session that does
+        // the initialising.
+        result.Value!.CanLaunch.Should().BeTrue();
+
+        result.Value.Checks.Should().Contain(check =>
+            check.Name == "Version control" && check.Detail.Contains("no Git repository"));
+
+        // And the hook warning is withheld, because there is no repository to
+        // install a pre-commit hook into. Telling somebody to run
+        // 'loadout protect' here sends them at a problem they cannot fix yet.
+        result.Value.Checks.Should().NotContain(check =>
+            check.Name == "Pre-commit protection");
+    }
+
+    [Fact]
     public async Task A_hook_from_an_older_version_is_said_differently_from_a_missing_one()
     {
         // Protected in practice and still worth replacing. Telling somebody it

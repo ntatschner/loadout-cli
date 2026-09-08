@@ -9,12 +9,21 @@ namespace Loadout.Core.Projects;
 /// <param name="RemoteUrl">Origin remote, or null when the repository has none.</param>
 /// <param name="IsRegistered">True when this repository already maps to a registered project.</param>
 /// <param name="MatchedSlug">Slug it matched, when it is already registered.</param>
+/// <param name="Versioned">
+/// Whether there is a Git repository there. False is a directory holding code
+/// that has never been initialised — offered because <c>project add</c> takes
+/// one, and leaving it out of the list meant the only way to reach it was to
+/// know the path and type it. It is never swept up by a bulk registration: a
+/// scratch folder under a discovery root is not a project because somebody
+/// asked to register everything they had cloned.
+/// </param>
 public sealed record DiscoveredRepository(
     string Path,
     string Name,
     string? RemoteUrl,
     bool IsRegistered,
-    string? MatchedSlug);
+    string? MatchedSlug,
+    bool Versioned = true);
 
 /// <summary>What removing a project registration did, and what it did not.</summary>
 /// <param name="Slug">The project that was removed.</param>

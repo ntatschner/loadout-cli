@@ -258,14 +258,122 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Discovery_ignores_a_directory_that_is_not_a_repository()
+    public async Task Discovery_ignores_an_empty_directory()
     {
         await CreateRepositoryAsync("real", "ssh://git.internal/apps/real.git");
         Directory.CreateDirectory(Path.Combine(_repositories, "just-a-folder"));
 
+        // An empty directory is not a project somebody forgot to initialise,
+        // it is an empty directory. Offering it would fill the list with noise.
         var discovered = (await _projects.DiscoverAsync()).Value!;
 
         discovered.Should().ContainSingle().Which.Name.Should().Be("real");
+    }
+
+    [Fact]
+    public async Task Discovery_offers_code_that_is_not_under_version_control()
+    {
+        await CreateRepositoryAsync("real", "ssh://git.internal/apps/real.git");
+
+        var loose = Path.Combine(_repositories, "courtfinances");
+        Directory.CreateDirectory(loose);
+        await File.WriteAllTextAsync(Path.Combine(loose, "app.py"), "print('hello')");
+
+        // 'project add' takes one of these, so the list of things worth adding
+        // has to contain it. Left out, the only way to register such a
+        // directory was to know the path already and type it, and the
+        // launcher's own Add Project list could not show what it could add.
+        var discovered = (await _projects.DiscoverAsync()).Value!;
+
+        var found = discovered.Should().ContainSingle(r => r.Name == "courtfinances").Subject;
+
+        found.Versioned.Should().BeFalse();
+        found.IsRegistered.Should().BeFalse();
+        discovered.Should().ContainSingle(r => r.Name == "real" && r.Versioned);
+    }
+
+    [Fact]
+    public async Task A_folder_that_merely_holds_repositories_is_not_itself_offered()
+    {
+        var group = Path.Combine(_repositories, "GateConquestRepos");
+        Directory.CreateDirectory(group);
+        await File.WriteAllTextAsync(Path.Combine(group, "notes.txt"), "a stray file");
+
+        await CreateRepositoryAsync(Path.Combine("GateConquestRepos", "web"), "ssh://g/web.git");
+        await CreateRepositoryAsync(Path.Combine("GateConquestRepos", "api"), "ssh://g/api.git");
+
+        var discovered = (await _projects.DiscoverAsync()).Value!;
+
+        // It has a file of its own, so the cheap test would offer it. It holds
+        // two repositories, which makes it a folder rather than a project.
+        discovered.Should().NotContain(r => r.Name == "GateConquestRepos");
+        discovered.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task The_shallowest_unversioned_directory_is_the_one_offered()
+    {
+        var project = Path.Combine(_repositories, "loose");
+        var inner = Path.Combine(project, "docs");
+
+        Directory.CreateDirectory(inner);
+        await File.WriteAllTextAsync(Path.Combine(project, "main.go"), "package main");
+        await File.WriteAllTextAsync(Path.Combine(inner, "readme.md"), "# docs");
+
+        var discovered = (await _projects.DiscoverAsync()).Value!;
+
+        // Offering the deepest instead would list 'loose/docs' and not 'loose',
+        // which is the wrong end of the tree and not a project at all.
+        discovered.Should().ContainSingle().Which.Name.Should().Be("loose");
+    }
+
+    [Fact]
+    public async Task Build_output_is_not_offered_as_a_project()
+    {
+        foreach (var name in new[] { "__pycache__", "test-results", "screenshots", "dist" })
+        {
+            var directory = Path.Combine(_repositories, name);
+            Directory.CreateDirectory(directory);
+            await File.WriteAllTextAsync(Path.Combine(directory, "a.bin"), "x");
+        }
+
+        var real = Path.Combine(_repositories, "actual-code");
+        Directory.CreateDirectory(real);
+        await File.WriteAllTextAsync(Path.Combine(real, "main.py"), "x = 1");
+
+        var discovered = (await _projects.DiscoverAsync()).Value!;
+
+        // Pointed at a real machine the first time, this offered '__pycache__',
+        // 'test-results' and a screenshots folder alongside the genuine ones.
+        discovered.Should().ContainSingle().Which.Name.Should().Be("actual-code");
+    }
+
+    [Fact]
+    public async Task Build_output_is_still_descended_into_when_looking_for_repositories()
+    {
+        // The name filter applies to what is offered, never to the walk.
+        // Skipping 'build' while descending would hide a real repository that
+        // happens to live under one, and hiding a repository is the worse
+        // failure of the two.
+        var buried = await CreateRepositoryAsync(
+            Path.Combine("build", "shipped"), "ssh://git.internal/apps/shipped.git");
+
+        buried.Should().NotBeNull();
+
+        var discovered = (await _projects.DiscoverAsync()).Value!;
+
+        discovered.Should().ContainSingle().Which.Name.Should().Be("shipped");
+    }
+
+    [Fact]
+    public async Task A_discovery_root_is_never_offered_as_a_project_itself()
+    {
+        await File.WriteAllTextAsync(Path.Combine(_repositories, "stray.txt"), "x");
+
+        var discovered = (await _projects.DiscoverAsync()).Value!;
+
+        // A discovery root is where projects live, not one of them.
+        discovered.Should().BeEmpty();
     }
 
     [Fact]
