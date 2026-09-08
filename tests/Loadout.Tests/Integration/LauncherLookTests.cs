@@ -196,9 +196,11 @@ public sealed class LauncherLookTests
     [Fact]
     public void A_project_being_read_does_not_wear_the_last_one_s_running_session()
     {
-        // Alpha answers at once and has a session running. Beta never answers,
-        // so the pane stays in its reading state, which is where the previous
-        // project's line was being left behind.
+        // Alpha answers at once and has a session running. Beta does not
+        // answer until asked to stop, so the pane stays in its reading state,
+        // which is where the previous project's line was being left behind.
+        // The read honours the token, so closing the screen ends it rather
+        // than leaving a read pending in the test host after the test.
         var alpha = Project("alpha", "Alpha");
         var beta = Project("beta", "Beta");
 
@@ -209,9 +211,9 @@ public sealed class LauncherLookTests
             null,
             "workspace connected",
             ["claude"],
-            (project, _) => project == alpha
+            (project, token) => project == alpha
                 ? Task.FromResult<ProjectOverview?>(Overview(alpha) with { RunningSessions = 1 })
-                : never.Task,
+                : never.Task.WaitAsync(token),
             _ => { },
             [],
             app));
