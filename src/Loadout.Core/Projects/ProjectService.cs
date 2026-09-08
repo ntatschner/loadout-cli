@@ -590,15 +590,21 @@ internal sealed class ProjectService : IProjectService
         {
             ct.ThrowIfCancellationRequested();
 
-            foreach (var repository in FindRepositories(root, DiscoveryDepth))
+            foreach (var (repository, versioned) in FindProjects(root, DiscoveryDepth))
             {
                 if (!seen.Add(_paths.Canonicalise(repository)))
                 {
                     continue;
                 }
 
-                var stateResult = await _git.GetStateAsync(repository, ct).ConfigureAwait(false);
-                var remote = stateResult.Succeeded ? stateResult.Value!.RemoteUrl : null;
+                // Only asked of a repository. Running git against a directory
+                // that is not one costs a process to be told what the walk
+                // already established.
+                var remote = versioned
+                    && await _git.GetStateAsync(repository, ct).ConfigureAwait(false)
+                        is { Succeeded: true } state
+                    ? state.Value!.RemoteUrl
+                    : null;
 
                 var match = known.FirstOrDefault(p =>
                     (p.LocalPath is not null && _paths.PathsEqual(p.LocalPath, repository))
@@ -609,7 +615,8 @@ internal sealed class ProjectService : IProjectService
                     Path.GetFileName(repository),
                     remote,
                     match is not null,
-                    match?.Entry.Slug));
+                    match?.Entry.Slug,
+                    versioned));
             }
         }
 
@@ -902,10 +909,27 @@ internal sealed class ProjectService : IProjectService
     }
 
     /// <summary>
-    /// Walks a configured root looking for repository directories, bounded by
-    /// depth and never following a repository into itself.
+    /// Walks a configured root for things worth registering, bounded by depth
+    /// and never following a repository into itself.
     /// </summary>
-    private static IEnumerable<string> FindRepositories(string root, int remainingDepth)
+    /// <remarks>
+    /// Repositories, and directories holding code that is not under version
+    /// control yet. The second kind exists because <c>project add</c> takes
+    /// one: leaving them out meant the only way to register such a directory
+    /// was to already know its path and type it, and the launcher's own Add
+    /// Project list could not show the thing it is able to add.
+    /// <para>
+    /// An unversioned candidate is the shallowest directory with no repository
+    /// anywhere beneath it, which is what keeps the answer useful. Offering the
+    /// deepest instead would list <c>courtfinances/docs</c> and not
+    /// <c>courtfinances</c>; offering every level would list a parent that
+    /// merely holds two repositories, which is a folder rather than a project.
+    /// </para>
+    /// </remarks>
+    private static IEnumerable<(string Path, bool Versioned)> FindProjects(
+        string root,
+        int remainingDepth,
+        bool isConfiguredRoot = true)
     {
         if (remainingDepth <= 0 || !Directory.Exists(root))
         {
@@ -917,39 +941,112 @@ internal sealed class ProjectService : IProjectService
             // Found a repository. Its subdirectories are source code, not more
             // projects, so the walk stops here rather than descending into
             // vendored dependencies.
-            yield return root;
+            yield return (root, true);
             yield break;
         }
 
-        IEnumerable<string> children;
-        try
+        var children = Readable(root);
+
+        // Nothing versioned under here, so this directory is the project rather
+        // than a folder on the way to one. Never the configured root itself: a
+        // discovery root is where projects live, not a project.
+        if (!isConfiguredRoot
+            && !children.Any(child => HoldsRepository(child, remainingDepth - 1))
+            && HoldsFiles(root)
+            && !IsLikelyOutput(Path.GetFileName(root)))
         {
-            children = Directory.EnumerateDirectories(root);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // An unreadable directory is skipped rather than aborting the scan.
-            // On macOS this is what a protected location looks like when the
-            // launcher has not been granted access, and spec section 85 says
-            // normal permission behaviour should simply apply.
+            yield return (root, false);
             yield break;
         }
 
         foreach (var child in children)
         {
-            var name = Path.GetFileName(child);
-
-            // Hidden directories are dotfile stores and caches, not project
-            // roots, and descending into them is how a scan becomes slow.
-            if (name.StartsWith('.') || name is "node_modules" or "bin" or "obj")
+            foreach (var found in FindProjects(child, remainingDepth - 1, isConfiguredRoot: false))
             {
-                continue;
+                yield return found;
             }
+        }
+    }
 
-            foreach (var repository in FindRepositories(child, remainingDepth - 1))
+    /// <summary>Whether a repository sits at or under a directory.</summary>
+    private static bool HoldsRepository(string root, int remainingDepth)
+    {
+        if (remainingDepth <= 0 || !Directory.Exists(root))
+        {
+            return false;
+        }
+
+        return IsWorkingTree(root)
+            || Readable(root).Any(child => HoldsRepository(child, remainingDepth - 1));
+    }
+
+    /// <summary>
+    /// Whether a directory name says it holds output, cache or artefacts
+    /// rather than somebody's code.
+    /// </summary>
+    /// <remarks>
+    /// Applied only to the unversioned offer, never to the walk. Skipping a
+    /// name while descending would hide a real repository that happens to sit
+    /// under a directory called <c>build</c>, and hiding a repository is a
+    /// worse failure than listing a folder somebody has to scroll past.
+    /// <para>
+    /// The list earned itself on a real machine: a first run offered
+    /// <c>__pycache__</c>, <c>test-results</c>, <c>test-screenshots</c> and a
+    /// screenshots folder among the genuine candidates. Names only, because
+    /// looking inside to guess whether something is code is a heuristic that
+    /// would be wrong more interestingly.
+    /// </para>
+    /// </remarks>
+    private static bool IsLikelyOutput(string name) =>
+        name is "__pycache__" or "dist" or "build" or "out" or "target" or "vendor"
+            or "packages" or "coverage" or "TestResults" or "test-results"
+            or "screenshots" or "test-screenshots" or "logs" or "tmp" or "temp"
+        || name.EndsWith("-results", StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith("-screenshots", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether a directory holds any file of its own.</summary>
+    /// <remarks>
+    /// An empty directory is not a project somebody forgot to initialise, it
+    /// is an empty directory, and offering it would fill the list with noise.
+    /// </remarks>
+    private static bool HoldsFiles(string root)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(root).Any();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Subdirectories worth descending into, or nothing when the directory
+    /// cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// An unreadable directory is skipped rather than aborting the scan. On
+    /// macOS this is what a protected location looks like when the launcher
+    /// has not been granted access, and spec section 85 says normal permission
+    /// behaviour should simply apply.
+    /// </remarks>
+    private static List<string> Readable(string root)
+    {
+        try
+        {
+            return [.. Directory.EnumerateDirectories(root).Where(child =>
             {
-                yield return repository;
-            }
+                var name = Path.GetFileName(child);
+
+                // Hidden directories are dotfile stores and caches, not project
+                // roots, and descending into them is how a scan becomes slow.
+                return !name.StartsWith('.') && name is not ("node_modules" or "bin" or "obj");
+            })];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
         }
     }
 }

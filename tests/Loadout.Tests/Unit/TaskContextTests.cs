@@ -48,11 +48,13 @@ public sealed class TaskContextTests : IDisposable
         }
     }
 
-    private static TaskItem Task(string id, TaskState state, string title) => new()
+    private static TaskItem Task(
+        string id, TaskState state, string title, string? note = null) => new()
     {
         Id = id,
         Title = title,
         State = state,
+        Note = note ?? string.Empty,
         DeclaredBy = "nigel",
         DeclaredUtc = new DateTimeOffset(2026, 9, 8, 12, 0, 0, TimeSpan.Zero),
     };
@@ -133,6 +135,28 @@ public sealed class TaskContextTests : IDisposable
         text.Should().NotContain("old-news");
         text.Should().NotContain("dropped");
         text.Should().NotContain("Open tasks", "a heading over nothing teaches nobody anything");
+    }
+
+    [Fact]
+    public async Task The_note_is_carried_because_it_is_what_the_work_actually_is()
+    {
+        var service = new StubTasks([
+            Task(
+                "setup-repository",
+                TaskState.Open,
+                "Put this project under version control",
+                "'D:\\code\\thing' was registered before it had a Git repository. "
+                + "Initialising it, making the first commit and setting a remote are the work."),
+        ]);
+
+        var text = await CompileAsync(tasks: true, service);
+
+        // The title names the task; the note says what doing it involves, and
+        // it is the half somebody wrote deliberately. Dropping it left the
+        // session with a heading and nothing to act on — which is what it
+        // looked like from the outside: a launch that said nothing about
+        // setting up the repository, because the part that said so was cut.
+        text.Should().Contain("Initialising it, making the first commit");
     }
 
     [Fact]

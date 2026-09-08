@@ -437,6 +437,19 @@ internal sealed class ContextCompiler : IContextCompiler
                 $"- **{task.Id}** ({task.State.ToString().ToLowerInvariant()}) — {title}");
             section.AppendLine(
                 $"  {task.DeclaredBy}, {task.DeclaredUtc:yyyy-MM-dd}");
+
+            // The note, which is where the work actually is. Leaving it out
+            // put a heading and a one-line title in front of the session and
+            // nothing it could act on: a project registered before it had a
+            // repository arrived carrying a careful explanation of what to do
+            // about that, and the compiler dropped every word of it.
+            if (task.Note is { Length: > 0 } note)
+            {
+                foreach (var line in note.Split('\n'))
+                {
+                    section.AppendLine($"  {line.TrimEnd()}");
+                }
+            }
         }
 
         builder.AppendLine();

@@ -144,11 +144,20 @@ corroboration can say a claim is unsupported and can never say one is wrong.
 ### Code that isn't a repository yet
 
 `loadout project add` takes a directory that has no Git repository in it. It
-registers as one still to be set up, with a task saying so, and the first
-session is told on the way in rather than discovering it by running something
-and reading an error. Initialising it, the first commit and the remote are the
-work; `loadout protect` comes after. A path that does not exist is still
-refused, because that is a typo rather than a plan.
+registers as one still to be set up, with a task saying so, and the launch says
+so too — so the first session is told on the way in rather than discovering it
+by running something and reading an error. Initialising it, the first commit
+and the remote are the work; `loadout protect` comes after, and is not
+suggested before there is anything to protect. A path that does not exist is
+still refused, because that is a typo rather than a plan.
+
+`loadout project discover` and the launcher's Add Project list offer these too,
+marked as not being repositories, because a list of things you can register
+that leaves out a kind you can register is a list you cannot trust. They are
+never swept up by a bulk registration: a scratch folder is not a project
+because somebody asked to register everything they had cloned. Build output —
+`__pycache__`, `dist`, a screenshots folder — is left out of the offer, though
+still walked through in case a repository is buried in one.
 
 ### Undo
 
