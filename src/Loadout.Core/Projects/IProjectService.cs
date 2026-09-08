@@ -96,6 +96,22 @@ public interface IProjectService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Whether a registration would be accepted, and the slug it would use.
+    /// Changes nothing.
+    /// </summary>
+    /// <remarks>
+    /// For the preview. <c>--dry-run</c> reported "Would register" for any path
+    /// at all, including one that is not a Git repository — which the real run
+    /// turns away. A preview that says yes where the command says no is worse
+    /// than no preview: it is confidently wrong about the case somebody ran it
+    /// to check.
+    /// </remarks>
+    Task<OperationResult<string>> ValidateAddAsync(
+        string repositoryPath,
+        string? slug = null,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Removes a project registration. Never touches the source repository:
     /// spec section 75 requires deleting code to be a separate, explicit act.
     /// <para>

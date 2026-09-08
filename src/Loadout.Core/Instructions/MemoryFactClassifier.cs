@@ -197,11 +197,32 @@ public static partial class MemoryFactClassifier
     /// Words that make a standing claim: how something behaves, what it needs,
     /// what must not happen, or why.
     /// </summary>
+    /// <remarks>
+    /// A whitelist of verbs is always shorter than the language, and this one
+    /// was short enough to reject ordinary statements of fact: "the build pins
+    /// the SDK", "the tokens carry numeric identifiers", "this overrides the
+    /// default". Every one of those is a standing claim, and an audit that
+    /// says otherwise about eleven of seventeen topics is one people stop
+    /// reading — which costs the findings that were right.
+    /// <para>
+    /// Widening is safe because the positive test is the last thing tried. Noise,
+    /// time-sensitivity and change-log phrasing are all decided before it, so a
+    /// line that reads as an account of a change is still read as one however
+    /// many everyday verbs it happens to contain.
+    /// </para>
+    /// </remarks>
     [GeneratedRegex(
         @"(?i)\b(?:is|are|was designed|lives?\s+(?:in|under|at|alongside)|requires?|depends? on|"
         + @"must|must not|never|always|cannot|only|because|root cause|responsible for|enforces?|"
         + @"expects?|assumes?|defaults? to|returns?|throws?|fails? when|breaks? when|owns?|"
-        + @"handles?|survives?)\b",
+        + @"handles?|survives?|"
+        // Everyday declarative verbs. Each earned its place by appearing in a
+        // real fact this classifier turned away.
+        + @"applies|apply|carr(?:y|ies)|holds?|keeps?|pins?|points?|rewrites?|recurs?|"
+        + @"overrides?|wants?|needs?|uses?|sets?|stores?|writes?|reads?|runs?|takes?|"
+        + @"treats?|contains?|causes?|prevents?|blocks?|ignores?|skips?|wins?|"
+        + @"disables?|enables?|produces?|makes?|names?|means?|matters?|costs?|"
+        + @"reports?|goes|comes|gets?|gives?|shows?|says?)\b",
         RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex Assertion();
 

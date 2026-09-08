@@ -157,6 +157,35 @@ internal sealed class ProjectService : IProjectService
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<string>> ValidateAddAsync(
+        string repositoryPath,
+        string? slug = null,
+        CancellationToken ct = default)
+    {
+        var stateResult = await _git.GetStateAsync(repositoryPath, ct).ConfigureAwait(false);
+
+        return stateResult.Failed
+            ? OperationResult<string>.Fail(stateResult.Error!, stateResult.ExitCode)
+            : DeriveSlug(stateResult.Value!, slug);
+    }
+
+    /// <summary>
+    /// The slug a registration would use, or why one cannot be worked out.
+    /// </summary>
+    private static OperationResult<string> DeriveSlug(GitRepositoryState state, string? slug)
+    {
+        var resolved = NormaliseSlug(
+            slug
+            ?? GitRemote.InferRepositoryName(state.RemoteUrl)
+            ?? Path.GetFileName(state.Root));
+
+        return resolved.Length == 0
+            ? OperationResult<string>.Fail(
+                "A project slug could not be derived; pass one explicitly.", ExitCode.InvalidArguments)
+            : OperationResult<string>.Ok(resolved);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<ProjectResolution>> AddAsync(
         string repositoryPath,
         string? slug = null,
@@ -170,16 +199,13 @@ internal sealed class ProjectService : IProjectService
 
         var state = stateResult.Value!;
 
-        var resolvedSlug = NormaliseSlug(
-            slug
-            ?? GitRemote.InferRepositoryName(state.RemoteUrl)
-            ?? Path.GetFileName(state.Root));
-
-        if (resolvedSlug.Length == 0)
+        var slugResult = DeriveSlug(state, slug);
+        if (slugResult.Failed)
         {
-            return OperationResult<ProjectResolution>.Fail(
-                "A project slug could not be derived; pass one explicitly.", ExitCode.InvalidArguments);
+            return OperationResult<ProjectResolution>.Fail(slugResult.Error!, slugResult.ExitCode);
         }
+
+        var resolvedSlug = slugResult.Value!;
 
         var registryResult = await _workspace.ReadRegistryAsync(ct).ConfigureAwait(false);
         if (registryResult.Failed)
@@ -680,6 +706,24 @@ internal sealed class ProjectService : IProjectService
     }
 
     /// <summary>
+    /// Whether a directory is a working tree, linked worktrees included.
+    /// </summary>
+    /// <remarks>
+    /// A linked worktree keeps a <c>.git</c> file holding a pointer, where an
+    /// ordinary clone keeps a <c>.git</c> directory. Discovery asked only
+    /// whether the directory existed, so every worktree under a discovery root
+    /// looked like a plain folder and was walked straight past — and the
+    /// launcher offers <c>project worktrees</c>, so it plainly meant to know
+    /// about them.
+    /// </remarks>
+    private static bool IsWorkingTree(string directory)
+    {
+        var git = Path.Combine(directory, ".git");
+
+        return Directory.Exists(git) || File.Exists(git);
+    }
+
+    /// <summary>
     /// Walks a configured root looking for repository directories, bounded by
     /// depth and never following a repository into itself.
     /// </summary>
@@ -690,7 +734,7 @@ internal sealed class ProjectService : IProjectService
             yield break;
         }
 
-        if (Directory.Exists(Path.Combine(root, ".git")))
+        if (IsWorkingTree(root))
         {
             // Found a repository. Its subdirectories are source code, not more
             // projects, so the walk stops here rather than descending into

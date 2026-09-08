@@ -58,6 +58,14 @@
 | `loadout statusline install\|uninstall\|show` | Put the project, branch and context spent in the agent's status line |
 | `loadout backup list\|restore` | Undo an operation that changed files |
 | `loadout completion <shell>` | Emit a completion script |
+| `loadout commands` | List everything the launcher can do, grouped by what it is for |
+| `loadout list` | List registered projects |
+| `loadout running` | The sessions running now, and how long each has been quiet |
+| `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
+| `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
+| `loadout pack list\|add\|approve\|update\|remove` | Specialist packs fetched from a Git remote, approved per machine |
+| `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |
+| `loadout spend refresh` | See and refresh where spending stands against your thresholds |
 
 **Every command that can change something accepts `--dry-run`,** and it always
 means the same thing: show what would happen and change nothing. Several
@@ -340,7 +348,7 @@ agent and heard nothing more. Every launch now also declares Loadout itself as
 an MCP server, so a session can ask it things rather than parse console output
 written for a person.
 
-Seven tools, each making the same call its command makes:
+Nine tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -350,6 +358,8 @@ Seven tools, each making the same call its command makes:
 | `loadout_locate` | Where a type or member is declared, as `docs find` says |
 | `loadout_code_map` | The map of the code as it stands now, one line per directory |
 | `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
+| `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
+| `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
 
 `loadout_recall` exists because only the memory index reaches the context — one

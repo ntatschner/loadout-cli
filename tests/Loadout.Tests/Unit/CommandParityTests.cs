@@ -266,6 +266,29 @@ public sealed class CommandParityTests
             .Should().Contain("backup");
     }
 
+    [Theory]
+    [InlineData("powershell")]
+    [InlineData("bash")]
+    [InlineData("zsh")]
+    [InlineData("fish")]
+    public void The_completion_script_offers_every_command(string shell)
+    {
+        var names = Program.CommandNames();
+
+        var script = Loadout.Cli.Commands.CompletionCommand.ScriptFor(shell);
+
+        // The third copy of the command list, after the parser's and the
+        // catalogue's. It was a hand-written nine and the command line had
+        // reached about forty, so tab completion silently stopped at the
+        // commands that existed when somebody last remembered to edit it.
+        foreach (var name in names)
+        {
+            script.Should().Contain(name, $"'{name}' is a command, so {shell} should complete it");
+        }
+
+        names.Count.Should().BeGreaterThan(20, "the set being checked has to be the real one");
+    }
+
     [Fact]
     public void Configuring_twice_does_not_duplicate_the_catalogue()
     {

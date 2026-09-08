@@ -121,4 +121,45 @@ public sealed class ConfigKeyTests
 
         machine.DiscoveryRoots.Should().Equal("/home/a", "/home/b", "/home/c");
     }
+
+    [Fact]
+    public void A_list_setting_takes_the_separator_windows_users_reach_for()
+    {
+        var entry = ConfigKeys.Find("discovery-roots")!;
+        var machine = new MachineConfig();
+
+        // A semicolon is what separates paths in PATH on Windows, so it is what
+        // gets typed. Taken as part of the path it produced one root that
+        // cannot exist, and discovery then found nothing at all — not even the
+        // root that had been working a moment earlier. The only report was "no
+        // repositories found", which describes a machine with no code on it.
+        entry.Write(new LauncherConfig(), machine, @"D:\git;C:\work");
+
+        machine.DiscoveryRoots.Should().Equal(@"D:\git", @"C:\work");
+    }
+
+    [Fact]
+    public void A_windows_drive_letter_is_not_mistaken_for_a_separator()
+    {
+        var entry = ConfigKeys.Find("discovery-roots")!;
+        var machine = new MachineConfig();
+
+        entry.Write(new LauncherConfig(), machine, @"C:\git");
+
+        machine.DiscoveryRoots.Should().Equal(@"C:\git");
+    }
+
+    [Fact]
+    public void The_other_path_list_splits_the_same_way()
+    {
+        // Same shape, same trap: whatever is true of one list of directories
+        // has to be true of the other, or the fix is a note somebody has to
+        // remember.
+        var entry = ConfigKeys.Find("agent-search-paths")!;
+        var config = new LauncherConfig();
+
+        entry.Write(config, new MachineConfig(), @"D:\tools;D:\more");
+
+        config.AgentSearchPaths.Should().Equal(@"D:\tools", @"D:\more");
+    }
 }

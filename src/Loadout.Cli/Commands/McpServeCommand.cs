@@ -196,7 +196,7 @@ public sealed class LoadoutTools
         var resolved = await _instructions.ResolveAsync(
             new InstructionRequest(
                 manifest.Value,
-                RepositoryPath: null,
+                await RepositoryPathAsync(slug, ct).ConfigureAwait(false),
                 _workspace.LocalPath,
                 manifest.Value?.Agents.Default ?? "claude"),
             ct).ConfigureAwait(false);
@@ -657,7 +657,7 @@ public sealed class LoadoutTools
         var resolved = await _instructions.ResolveAsync(
             new InstructionRequest(
                 manifest.Value,
-                RepositoryPath: null,
+                await RepositoryPathAsync(slug, ct).ConfigureAwait(false),
                 _workspace.LocalPath,
                 manifest.Value?.Agents.Default ?? "claude",
                 Task: task,
@@ -686,6 +686,29 @@ public sealed class LoadoutTools
             allows: a reviewing skill is offered in investigate, advise and review, and
             withheld from implement.
             """;
+    }
+
+    /// <summary>
+    /// Where the project's repository is, for a resolution that has to see it.
+    /// </summary>
+    /// <remarks>
+    /// Both tools that resolve instructions passed null here, and null means
+    /// the repository is never read: no language, no framework, none of the
+    /// specialists chosen from what the repository is made of. The reply named
+    /// the foundations and the mode and stopped, which is not what the session
+    /// was given — and the mode tool went on to tell the agent, in the same
+    /// breath, that the language and framework specialists come from the
+    /// repository. Null when the project is not on this machine, which the
+    /// resolver already treats as "no evidence" rather than an error.
+    /// </remarks>
+    private async Task<string?> RepositoryPathAsync(string slug, CancellationToken ct)
+    {
+        var resolved = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+        return resolved.Succeeded && resolved.Value!.LocalPath is { Length: > 0 } path
+            && Directory.Exists(path)
+                ? path
+                : null;
     }
 
     private async Task<string?> SlugAsync(CancellationToken ct)

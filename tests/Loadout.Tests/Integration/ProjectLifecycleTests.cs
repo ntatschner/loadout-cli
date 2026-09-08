@@ -267,6 +267,26 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Discovery_finds_a_linked_worktree()
+    {
+        var main = await CreateRepositoryAsync("trunk", "ssh://git.internal/apps/trunk.git");
+
+        var worktree = Path.Combine(_repositories, "trunk-hotfix");
+
+        await RunGitAsync(main, "worktree", "add", "-b", "hotfix", worktree);
+
+        // A linked worktree keeps a .git *file* pointing at the real directory,
+        // not a .git directory. The walk asked Directory.Exists, so a worktree
+        // was indistinguishable from an ordinary folder and never appeared —
+        // while the attribution code two files away already knew the
+        // distinction and documented it.
+        var discovered = (await _projects.DiscoverAsync()).Value!;
+
+        discovered.Select(r => r.Name).Should().Contain("trunk-hotfix");
+        discovered.Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task Registering_a_directory_that_is_not_a_repository_fails_clearly()
     {
         var plain = Path.Combine(_root, "not-a-repo");
@@ -276,6 +296,37 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
 
         result.Failed.Should().BeTrue();
         result.ExitCode.Should().Be(Models.ExitCode.RepositoryUnavailable);
+    }
+
+    [Fact]
+    public async Task A_preview_refuses_what_the_registration_would_refuse()
+    {
+        var plain = Path.Combine(_root, "also-not-a-repo");
+        Directory.CreateDirectory(plain);
+
+        var preview = await _projects.ValidateAddAsync(plain);
+
+        // The check above proves the registration refuses this. The preview
+        // said "Would register" about it, so the one command somebody runs to
+        // find out what will happen was the one that got it wrong.
+        preview.Failed.Should().BeTrue();
+        preview.ExitCode.Should().Be(Models.ExitCode.RepositoryUnavailable);
+    }
+
+    [Fact]
+    public async Task A_preview_names_the_slug_the_registration_would_use()
+    {
+        var repository = await CreateRepositoryAsync(
+            "previewable", "ssh://git.internal/apps/previewable.git");
+
+        var preview = await _projects.ValidateAddAsync(repository);
+
+        preview.Succeeded.Should().BeTrue(preview.Error);
+        preview.Value.Should().Be("previewable");
+
+        // And it has to have changed nothing while working that out.
+        (await _projects.ResolveAsync("previewable")).Failed.Should().BeTrue(
+            "a preview that registered the project would be the defect it replaces");
     }
 
     [Fact]

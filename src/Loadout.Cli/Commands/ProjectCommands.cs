@@ -130,15 +130,30 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
         var output = new CommandOutput(_console, settings);
         var path = settings.Path ?? settings.Repo ?? Directory.GetCurrentDirectory();
 
-        // Registering writes the registry, so a preview that ran it would have registered it.
+        // Registering writes the registry, so a preview that ran it would have
+        // registered it. What the preview can do is ask the same questions the
+        // registration asks first — it is a Git repository, and a slug can be
+        // worked out — because neither of those writes anything. Without that
+        // this said "Would register" about a directory the real run refuses,
+        // and named no slug it could be checked against.
         if (settings.DryRun)
         {
+            var allowed = await _projects
+                .ValidateAddAsync(path, settings.Slug, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (allowed.Failed)
+            {
+                return output.Fail(allowed);
+            }
+
             output.WriteLine(
-                $"[bold]Would register[/] {Markup.Escape(path)} as a project. "
-                + "Nothing was changed.");
-        
+                $"[bold]Would register[/] {Markup.Escape(path)} as "
+                + $"'{Markup.Escape(allowed.Value!)}'. Nothing was changed.");
+
             return CommandOutput.Success();
         }
+
         var result = await _projects.AddAsync(path, settings.Slug).ConfigureAwait(false);
         if (result.Failed)
         {

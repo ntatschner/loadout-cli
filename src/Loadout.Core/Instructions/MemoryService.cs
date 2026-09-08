@@ -80,6 +80,24 @@ public interface IMemoryService
         CancellationToken ct = default);
 
     /// <summary>
+    /// The refusals <see cref="WriteAsync"/> makes, without making the write.
+    /// </summary>
+    /// <remarks>
+    /// Here so a caller previewing a write is told what a real one would say.
+    /// Both refusals lived inside the write, past the point a dry run returned
+    /// from, so <c>--dry-run</c> reported a write that could not have happened —
+    /// on a credential, of all things. The write still makes them itself: this
+    /// is the same decision offered earlier, not a replacement for it.
+    /// </remarks>
+    /// <param name="name">Topic name, as given.</param>
+    /// <param name="description">The one line that reaches a session's context.</param>
+    /// <param name="facts">The facts about to be recorded.</param>
+    OperationResult ValidateWrite(
+        string name,
+        string description,
+        IReadOnlyList<string> facts);
+
+    /// <summary>
     /// Rewrites the index from the topics actually present, which is also how a
     /// missing or drifted index gets repaired.
     /// </summary>
@@ -664,41 +682,11 @@ internal sealed partial class MemoryService : IMemoryService
                 "A topic name is required.", ExitCode.InvalidArguments);
         }
 
-        // Refuses to write a credential rather than writing it and flagging it
-        // afterwards. Once it is on disk and committed it is disclosed, and an
-        // audit finding does not undo that.
-        //
-        // First of the two refusals, and the order matters: a write carrying
-        // both a credential and a weak description has to be turned away for the
-        // credential. Told to fix its description instead, the caller fixes it
-        // and writes the credential on the second attempt.
-        foreach (var fact in facts)
+        // Made here as well as wherever the caller made them. A validation the
+        // write trusts a caller to have done is a validation that is not there.
+        if (ValidateWrite(name, description, facts) is { Failed: true } refused)
         {
-            var patterns = SecretScanner.Match(fact);
-
-            if (patterns.Count > 0)
-            {
-                return OperationResult<MemoryTopic>.Fail(
-                    $"That looks like it contains a credential ({string.Join(", ", patterns)}). "
-                    + "Memory is committed to the workspace repository, so it will not be written.",
-                    ExitCode.PolicyViolation);
-            }
-        }
-
-        // Only the index reaches a compiled context, so this one line is all a
-        // session has to decide whether the topic is worth opening. Refused
-        // here, where whoever is writing it still has the subject in mind:
-        // afterwards it is a chore nobody comes back for, and the topic goes
-        // unread rather than being found to be wrong.
-        var indexLine = MemoryDescriptionClassifier.Classify(safeName, description);
-
-        if (indexLine != DescriptionVerdict.Decidable)
-        {
-            return OperationResult<MemoryTopic>.Fail(
-                $"That description will not do: {MemoryDescriptionClassifier.Explain(indexLine)}. "
-                + "Only this line reaches a session's context, so say what question the topic "
-                + "answers, as in \"why installers fail with 1603 over a running app\".",
-                ExitCode.InvalidArguments);
+            return OperationResult<MemoryTopic>.Fail(refused.Error!, refused.ExitCode);
         }
 
         if (DirectoryFor(workspaceRoot, slug, scope) is not { } directory)
@@ -1112,8 +1100,23 @@ internal sealed partial class MemoryService : IMemoryService
         _ => "## Also true of this machine only, and not of any other",
     };
 
-    private static string Truncate(string value) =>
-        value.Length <= 70 ? value : value[..70] + "...";
+    /// <summary>
+    /// Quotes part of a fact back in a finding, with anything credential-shaped
+    /// taken out of it first.
+    /// </summary>
+    /// <remarks>
+    /// The audit refuses to name a credential it finds and then quoted the fact
+    /// holding it two lines later, under a different finding about the same
+    /// fact. Redacting before truncating rather than after, because cutting a
+    /// token in half leaves something the pattern no longer matches and the
+    /// redactor would then wave through.
+    /// </remarks>
+    private static string Truncate(string value)
+    {
+        var safe = SecretRedactor.Redact(value);
+
+        return safe.Length <= 70 ? safe : safe[..70] + "...";
+    }
 
     /// <summary>
     /// Reduces a fact to a comparison key: case and punctuation differences
@@ -1121,6 +1124,51 @@ internal sealed partial class MemoryService : IMemoryService
     /// </summary>
     private static string Normalise(string value) =>
         NonComparable().Replace(value.ToLowerInvariant(), " ").Trim();
+
+    /// <inheritdoc />
+    public OperationResult ValidateWrite(
+        string name,
+        string description,
+        IReadOnlyList<string> facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+
+        // Refuses to write a credential rather than writing it and flagging it
+        // afterwards. Once it is on disk and committed it is disclosed, and an
+        // audit finding does not undo that.
+        //
+        // First of the two refusals, and the order matters: a write carrying
+        // both a credential and a weak description has to be turned away for the
+        // credential. Told to fix its description instead, the caller fixes it
+        // and writes the credential on the second attempt.
+        foreach (var fact in facts)
+        {
+            var patterns = SecretScanner.Match(fact);
+
+            if (patterns.Count > 0)
+            {
+                return OperationResult.Fail(
+                    $"That looks like it contains a credential ({string.Join(", ", patterns)}). "
+                    + "Memory is committed to the workspace repository, so it will not be written.",
+                    ExitCode.PolicyViolation);
+            }
+        }
+
+        // Only the index reaches a compiled context, so this one line is all a
+        // session has to decide whether the topic is worth opening. Refused
+        // here, where whoever is writing it still has the subject in mind:
+        // afterwards it is a chore nobody comes back for, and the topic goes
+        // unread rather than being found to be wrong.
+        var indexLine = MemoryDescriptionClassifier.Classify(Slugify(name), description);
+
+        return indexLine != DescriptionVerdict.Decidable
+            ? OperationResult.Fail(
+                $"That description will not do: {MemoryDescriptionClassifier.Explain(indexLine)}. "
+                + "Only this line reaches a session's context, so say what question the topic "
+                + "answers, as in \"why installers fail with 1603 over a running app\".",
+                ExitCode.InvalidArguments)
+            : OperationResult.Ok();
+    }
 
     internal static string Slugify(string value)
     {

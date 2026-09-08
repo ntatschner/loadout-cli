@@ -5,6 +5,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Backups;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
+using Loadout.Core.Security;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Instructions;
@@ -302,9 +303,30 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
             return output.Fail(slug);
         }
 
+        // Both refusals the write makes, made before anything quotes a fact
+        // back and whether or not this is a dry run.
+        //
+        // They used to live only inside the write, below the point a dry run
+        // returned from — so the preview announced a write the real run turns
+        // away, which is the one case somebody runs a dry run to find out
+        // about. And the advisory below ran first either way, printing the fact
+        // verbatim, so most of a token reached the terminal on its way to being
+        // refused: the refusal named only the pattern, and the line above it
+        // gave the value away.
+        var allowed = _memory.ValidateWrite(
+            settings.Topic, settings.Description ?? string.Empty, settings.Facts);
+
+        if (allowed.Failed)
+        {
+            return output.Fail(allowed.Error!, allowed.ExitCode);
+        }
+
         // Said before the write, where it can still be acted on. The same check
         // runs in the audit, but by then the fact is committed and somebody has
         // to go and edit it.
+        //
+        // Redacted even so: the screen above catches the shapes it knows, and
+        // this quotes whatever it was handed. A quote is not worth a disclosure.
         foreach (var fact in settings.Facts)
         {
             var verdict = MemoryFactClassifier.Classify(fact);
@@ -312,7 +334,7 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
             if (verdict != FactVerdict.Durable)
             {
                 output.WriteLine(
-                    $"[yellow]Noted, but[/] \"{Markup.Escape(Shorten(fact))}\" "
+                    $"[yellow]Noted, but[/] \"{Markup.Escape(Shorten(SecretRedactor.Redact(fact)))}\" "
                     + Markup.Escape(MemoryFactClassifier.Explain(verdict)));
             }
         }

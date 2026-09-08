@@ -262,6 +262,14 @@ public sealed class InstructionsTests : IAsyncLifetime
         audit.Value!.Verdict.Should().Be("ACTION REQUIRED");
         audit.Value.Errors.Should().ContainSingle(f => f.Kind == "credential");
         audit.Value.Errors.Single().Detail.Should().NotContain("sk-ant-api03");
+
+        // Every finding, not only the one about the credential. One fact draws
+        // more than one finding, and the others quote it to say which fact they
+        // mean — so the audit named the pattern carefully in one line and
+        // printed the value two lines below it, about the same fact.
+        audit.Value.Findings.Should().OnlyContain(
+            f => !f.Detail.Contains("sk-ant-api03", StringComparison.Ordinal),
+            "no finding may quote a credential, whatever it is a finding about");
     }
 
     [Fact]
