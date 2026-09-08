@@ -1,5 +1,7 @@
 using Terminal.Gui.Configuration;
 using Terminal.Gui.Drawing;
+using Terminal.Gui.ViewBase;
+using Terminal.Gui.Views;
 
 // Disambiguated because System.Attribute is in scope everywhere.
 using Ink = Terminal.Gui.Drawing.Attribute;
@@ -70,14 +72,19 @@ internal static class LauncherTheme
 
     internal static void Apply()
     {
+        // Flat. A button with a shadow under it is drawn in two colours the
+        // font has to have block glyphs for, and in the documentation image
+        // the shadows read as a row of debris under every button. Nothing
+        // else on the screen has depth, so a button should not either.
+        Button.DefaultShadow = ShadowStyles.None;
+
         // The body of the application: frames, lists, labels.
         Set(Schemes.Base, new Scheme
         {
-            // Borders, titles and body text all come from Normal, because a
-            // border is not a view in this toolkit and cannot be given a
-            // scheme of its own. So the hierarchy cannot come from role — it
-            // has to come from state, and Normal has to be a weight that suits
-            // a project's name and the box drawn round it equally.
+            // Body text, and by default the frame round it: a border takes
+            // whatever scheme its view has unless it is handed one of its own,
+            // which is what Quieten below does for the panels. Normal here is
+            // therefore the weight of a project's name, not of a line.
             Normal = new Ink(Text, Ground),
 
             // The accent, and the only place it appears at rest: the letter
@@ -103,15 +110,13 @@ internal static class LauncherTheme
             Disabled = new Ink(Dim, Ground),
         });
 
-        // Borders and titles. This is the one the launcher was missing: the
-        // cyan frames everywhere came from here, and the first attempt themed
-        // a scheme called "TopLevel" that does not exist — Terminal.Gui's
-        // names are Base, Accent, Dialog, Menu and Error, so that call added a
-        // scheme nothing asked for and the frames stayed exactly as they were.
-        //
-        // Quiet at rest and accented when focused, so the panel you are in is
-        // the one with the warm border. That is colour saying something rather
-        // than colour being present.
+        // The toolkit's Accent scheme, for anything that asks for it by name.
+        // This was believed to be where the frames got their colour, and it
+        // is not: reading back the colour of every cell after a draw showed
+        // the frames in Base's Normal, the same weight as the text inside
+        // them. A frame is coloured by handing its border a scheme, which is
+        // what Quieten does below. Kept themed so that nothing asking for
+        // "Accent" comes out cyan.
         Set(Schemes.Accent, new Scheme
         {
             Normal = new Ink(Border, Ground),
@@ -156,4 +161,141 @@ internal static class LauncherTheme
             Disabled = new Ink(Dim, Raised),
         });
     }
+
+    // What follows is applied to particular views rather than by name, because
+    // a frame's border is not a view with a scheme name of its own. It is drawn
+    // by an adornment that takes whatever its parent has, so a frame's lines
+    // were drawn in the same weight as the text inside it — every box on the
+    // screen as loud as the words it was around, which is the toolkit-sample
+    // look the palette above was supposed to have ended.
+
+    /// <summary>A frame nobody is in: lines and title in the quiet grey.</summary>
+    private static readonly Scheme AtRest = new()
+    {
+        Normal = new Ink(Dim, Ground),
+        HotNormal = new Ink(Dim, Ground),
+        Focus = new Ink(Accent, Ground),
+        HotFocus = new Ink(Accent, Ground),
+        Active = new Ink(Dim, Ground),
+        HotActive = new Ink(Dim, Ground),
+        Highlight = new Ink(Accent, Ground),
+        Disabled = new Ink(Dim, Ground),
+    };
+
+    /// <summary>The frame you are in: lines and title in the accent.</summary>
+    private static readonly Scheme Lit = new()
+    {
+        Normal = new Ink(Accent, Ground),
+        HotNormal = new Ink(Accent, Ground),
+        Focus = new Ink(Accent, Ground),
+        HotFocus = new Ink(Bright, Ground),
+        Active = new Ink(Accent, Ground),
+        HotActive = new Ink(Accent, Ground),
+        Highlight = new Ink(Accent, Ground),
+        Disabled = new Ink(Dim, Ground),
+    };
+
+    /// <summary>
+    /// Makes a frame quiet until the focus is inside it, and warm while it is.
+    /// </summary>
+    /// <remarks>
+    /// The border draws its lines in its own Normal whether or not the view
+    /// is focused; only the title follows the focus. So the whole scheme is
+    /// swapped when the focus arrives rather than relying on the roles, which
+    /// is what makes the line and the title change together. One warm frame
+    /// on a screen of grey ones says where you are without a bar of colour
+    /// having to.
+    /// </remarks>
+    internal static void Quieten(View frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+
+        var border = frame.Border?.View
+            ?? throw new InvalidOperationException("The frame has no border to colour.");
+
+        border.SetScheme(AtRest);
+
+        frame.HasFocusChanged += (_, e) => border.SetScheme(e.NewValue ? Lit : AtRest);
+    }
+
+    /// <summary>
+    /// Keeps a frame warm whether or not it has the focus, for a panel that
+    /// is put up to be read rather than moved into.
+    /// </summary>
+    internal static void Light(View frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+
+        (frame.Border?.View ?? throw new InvalidOperationException("The frame has no border to colour."))
+            .SetScheme(Lit);
+    }
+
+    /// <summary>
+    /// A surface that sits above the ground: the detail pane. Everything
+    /// inside it inherits this, so a button or a list added later is on the
+    /// same surface without being told.
+    /// </summary>
+    internal static readonly Scheme RaisedSurface = new()
+    {
+        Normal = new Ink(Text, Raised),
+        HotNormal = new Ink(Accent, Raised),
+        Focus = new Ink(Ground, Accent),
+        HotFocus = new Ink(Ground, Accent),
+        Active = new Ink(Ground, Accent),
+        HotActive = new Ink(Ground, Accent),
+        Highlight = new Ink(Accent, Raised),
+        Editable = new Ink(Text, Raised),
+        ReadOnly = new Ink(Dim, Raised),
+        Disabled = new Ink(Dim, Raised),
+    };
+
+    /// <summary>A heading on the raised surface: bright and bold.</summary>
+    internal static readonly Scheme Heading = new()
+    {
+        Normal = new Ink(Bright, Raised, TextStyle.Bold),
+        HotNormal = new Ink(Bright, Raised, TextStyle.Bold),
+        Focus = new Ink(Bright, Raised, TextStyle.Bold),
+        HotFocus = new Ink(Bright, Raised, TextStyle.Bold),
+        Disabled = new Ink(Dim, Raised),
+    };
+
+    /// <summary>The name of a fact, beside its value: quieter than the value.</summary>
+    internal static readonly Scheme Muted = new()
+    {
+        Normal = new Ink(Dim, Raised),
+        HotNormal = new Ink(Dim, Raised),
+        Focus = new Ink(Dim, Raised),
+        HotFocus = new Ink(Dim, Raised),
+        Disabled = new Ink(Dim, Raised),
+    };
+
+    /// <summary>The same, on the ground rather than the raised surface.</summary>
+    internal static readonly Scheme MutedOnGround = new()
+    {
+        Normal = new Ink(Dim, Ground),
+        HotNormal = new Ink(Accent, Ground),
+        Focus = new Ink(Dim, Ground),
+        HotFocus = new Ink(Accent, Ground),
+        Disabled = new Ink(Dim, Ground),
+    };
+
+    /// <summary>A key somebody could press, on the ground: the accent, at rest.</summary>
+    internal static readonly Scheme KeyOnGround = new()
+    {
+        Normal = new Ink(Accent, Ground),
+        HotNormal = new Ink(Accent, Ground),
+        Focus = new Ink(Accent, Ground),
+        HotFocus = new Ink(Accent, Ground),
+        Disabled = new Ink(Dim, Ground),
+    };
+
+    /// <summary>Something wrong, said on the raised surface.</summary>
+    internal static readonly Scheme Alert = new()
+    {
+        Normal = new Ink(Warn, Raised, TextStyle.Bold),
+        HotNormal = new Ink(Warn, Raised, TextStyle.Bold),
+        Focus = new Ink(Warn, Raised, TextStyle.Bold),
+        HotFocus = new Ink(Warn, Raised, TextStyle.Bold),
+        Disabled = new Ink(Dim, Raised),
+    };
 }

@@ -128,22 +128,64 @@ internal static class Wordmark
     /// A progress bar would be a lie here: reading a repository's state gives
     /// no way to know how much of it is left.
     /// </remarks>
-    internal static string Pulse(int step, int width = 12)
+    /// <param name="step">Which frame. Any integer: the wave repeats.</param>
+    /// <param name="width">How many columns the bar fills.</param>
+    /// <param name="glyphs">
+    /// The levels to draw the bar in, lowest first. <see cref="Bars"/> unless
+    /// the terminal cannot draw them.
+    /// </param>
+    internal static string Pulse(int step, int width = 12, string? glyphs = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
 
-        const string Blocks = " ▁▂▃▄▅▆▇█";
+        var blocks = glyphs is { Length: > 1 } ? glyphs : Bars;
 
         var bar = new StringBuilder(width);
 
         for (var i = 0; i < width; i++)
         {
             var wave = Math.Sin((step * StepPhase) - (i * 0.6));
-            var level = (int)Math.Round((Blocks.Length - 1) / 2.0 * (1 + wave));
+            var level = (int)Math.Round((blocks.Length - 1) / 2.0 * (1 + wave));
 
-            bar.Append(Blocks[Math.Clamp(level, 0, Blocks.Length - 1)]);
+            bar.Append(blocks[Math.Clamp(level, 0, blocks.Length - 1)]);
         }
 
         return bar.ToString();
     }
+
+    /// <summary>
+    /// The bar as a wave of rising blocks, which is how it is meant to look.
+    /// </summary>
+    internal const string Bars = " ▁▂▃▄▅▆▇█";
+
+    /// <summary>
+    /// The same wave in shades, for a console whose font has no eighth blocks.
+    /// </summary>
+    /// <remarks>
+    /// A photograph of a plain Windows console showed <see cref="Bars"/> as a
+    /// row of boxes with only the half and full blocks legible: the stock
+    /// console font has the code page 437 blocks — the halves, the full block
+    /// and the three shades — and none of the eighths. The headless tests
+    /// could not see it, because a missing glyph is decided by the font long
+    /// after the character has left this program. The bars were preferred
+    /// where they can be drawn, so this is the fallback rather than the rule.
+    /// </remarks>
+    internal const string Shades = " ░▒▓█";
+
+    /// <summary>
+    /// Which form the reading indicator takes on this terminal.
+    /// </summary>
+    /// <remarks>
+    /// Decided from what the terminal is rather than from what it says it can
+    /// do. The toolkit's legacy-console flag was tried first and is false on
+    /// a Windows 11 console, which speaks the escape sequences perfectly well
+    /// and still has no glyph for an eighth block. Windows Terminal ships a
+    /// font that has them and marks its children with <c>WT_SESSION</c>;
+    /// every other host on Windows is assumed to be the plain console, whose
+    /// font is the one photographed. Elsewhere the bars are safe.
+    /// </remarks>
+    /// <param name="onWindows">Whether this is Windows at all.</param>
+    /// <param name="inWindowsTerminal">Whether Windows Terminal is the host.</param>
+    internal static string PulseGlyphsFor(bool onWindows, bool inWindowsTerminal) =>
+        onWindows && !inWindowsTerminal ? Shades : Bars;
 }

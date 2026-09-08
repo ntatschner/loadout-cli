@@ -32,9 +32,11 @@ internal sealed class LauncherWindow : Window
     private readonly IReadOnlyList<string> _agents;
 
     private readonly TextField _filter;
+    private readonly Label _placeholder;
     private readonly KeyedListView _list;
+    private readonly FrameView _listFrame;
     private readonly ProjectDetailView _detail;
-    private readonly Label _summary;
+    private readonly KeyLine _footer;
 
     /// <summary>Projects currently shown, after the filter has been applied.</summary>
     private List<ProjectResolution> _shown;
@@ -84,18 +86,49 @@ internal sealed class LauncherWindow : Window
         _shown = [.. projects];
 
         Title = "Loadout";
-        BorderStyle = LineStyle.Rounded;
+
+        // No frame round the whole screen. A border round a window says
+        // "this is a window", and there is nothing on the screen for the
+        // launcher to be a window in front of. The frames that remain are
+        // the panels, and there is one for each thing the eye has to find.
+        BorderStyle = LineStyle.None;
+
+        // Thirty-eight per cent left the detail pane two thirds empty while
+        // the list beside it was cutting names in half. The detail pane holds
+        // five short labelled lines and a row of buttons; it does not need
+        // most of the screen, and the list does.
+        var columnWidth = Dim.Percent(46);
 
         // Typed into rather than searched for. A list long enough to need
         // searching is a list where the search box should already be visible.
+        //
+        // Over the list rather than across the screen, because it filters the
+        // list and nothing else, and the state of the machine sits beside it
+        // where a label used to.
         _filter = new TextField
         {
-            X = 9,
+            X = 1,
             Y = 1,
-            Width = Dim.Fill(1),
+            Width = columnWidth - 1,
         };
 
-        var filterLabel = new Label { X = 1, Y = 1, Text = "Filter" };
+        // What the field is for, written in it until something is typed.
+        // The label that used to sit beside it said the same thing at a
+        // permanent cost of nine columns.
+        _placeholder = new Label { X = 2, Y = 1, Text = "Filter projects" };
+        _placeholder.SetScheme(LauncherTheme.Muted);
+
+        // One line that says what state the machine is in, so it is answered
+        // before it is asked rather than hidden behind a menu.
+        var state = new Label
+        {
+            X = Pos.Right(_filter) + 2,
+            Y = 1,
+            Width = Dim.Fill(1),
+            Text = Describe(projects.Count, workspaceState, agents),
+        };
+
+        state.SetScheme(LauncherTheme.MutedOnGround);
 
         _list = new KeyedListView
         {
@@ -113,12 +146,6 @@ internal sealed class LauncherWindow : Window
         // noticed, because nothing tested it.
         var recentHeight = _recent.Count == 0 ? 0 : Math.Min(_recent.Count + 2, 7);
 
-        // Thirty-eight per cent left the detail pane two thirds empty while
-        // the list beside it was cutting names in half. The detail pane holds
-        // five short labelled lines and a row of buttons; it does not need
-        // most of the screen, and the list does.
-        var columnWidth = Dim.Percent(46);
-
         var listFrame = new FrameView
         {
             X = 0,
@@ -130,6 +157,10 @@ internal sealed class LauncherWindow : Window
         };
 
         listFrame.Add(_list);
+
+        LauncherTheme.Quieten(listFrame);
+
+        _listFrame = listFrame;
 
         if (recentHeight > 0)
         {
@@ -169,48 +200,57 @@ internal sealed class LauncherWindow : Window
                 Y = Pos.Bottom(listFrame),
                 Width = columnWidth,
                 Height = recentHeight,
-                Title = "Recent",
+                Title = $"Recent ({_recent.Count})",
                 BorderStyle = LineStyle.Rounded,
             };
 
             recentFrame.Add(_recentList);
+
+            LauncherTheme.Quieten(recentFrame);
 
             _recentFrame = recentFrame;
         }
 
         _detail = new ProjectDetailView
         {
-            X = Pos.Right(listFrame),
+            X = Pos.Right(listFrame) + 1,
             Y = 3,
-            Width = Dim.Fill(),
+            Width = Dim.Fill(1),
             Height = Dim.Fill(2),
         };
 
-        // One line that says what state the machine is in, so it is answered
-        // before it is asked rather than hidden behind a menu.
-        _summary = new Label
+        // The keys somebody would reach for, along the bottom, with the part
+        // to press picked out. The menu key is asked for rather than written
+        // down, for the reason given at KeyList.
+        _footer = new KeyLine(
+        [
+            ("Enter", "launch"),
+            ("Ctrl+P", "commands"),
+            ("Ctrl+N", "add"),
+            ("F2", "settings"),
+            ("?", "keys"),
+            ($"{MenuBar.DefaultKey}", "menu"),
+            ("Ctrl+Q", "quit"),
+        ])
         {
             X = 1,
             Y = Pos.AnchorEnd(1),
-            Width = Dim.Fill(1),
-            Text = Describe(projects.Count, workspaceState, agents),
         };
-
-        // Kept, so that anything said along the bottom can be taken back when
-        // the cursor moves off whatever it was about.
-        _state = _summary.Text;
 
         // Added between the project list and the detail, so tabbing follows
         // the way the screen reads: down the left column, then across. Adding
         // it last put it behind every button in the detail pane, which is four
         // stops past where somebody would look for it.
+        //
+        // The placeholder is added after the field it sits in, because views
+        // draw in the order they were added and it has to be on top.
         if (_recentFrame is not null)
         {
-            Add(BuildMenu(), filterLabel, _filter, listFrame, _recentFrame, _detail, _summary);
+            Add(BuildMenu(), _filter, _placeholder, state, listFrame, _recentFrame, _detail, _footer);
         }
         else
         {
-            Add(BuildMenu(), filterLabel, _filter, listFrame, _detail, _summary);
+            Add(BuildMenu(), _filter, _placeholder, state, listFrame, _detail, _footer);
         }
 
         // A row cannot be laid out against a width the list does not have
@@ -223,9 +263,16 @@ internal sealed class LauncherWindow : Window
 
         Add(_keys);
 
+        LauncherTheme.Light(_keys);
+
         SubViewsLaidOut += (_, _) => FitToLayout();
 
-        _filter.TextChanged += (_, _) => ApplyFilter();
+        _filter.TextChanged += (_, _) =>
+        {
+            _placeholder.Visible = string.IsNullOrEmpty(_filter.Text);
+
+            ApplyFilter();
+        };
 
         _list.ValueChanged += (_, _) =>
         {
@@ -834,8 +881,7 @@ internal sealed class LauncherWindow : Window
             ? "no agents installed"
             : string.Join(", ", agents);
 
-        return $"{projects}  ·  {workspace}  ·  {installed}"
-            + $"      Ctrl+P commands   Ctrl+N add   {MenuBar.DefaultKey} menu   Ctrl+Q quit";
+        return $"{projects}  ·  {workspace}  ·  {installed}";
     }
 
     /// <summary>
@@ -915,6 +961,13 @@ internal sealed class LauncherWindow : Window
             _shown.Select(project => Row(project, RowWidth)));
 
         _list.SetSource(rows);
+
+        // The count in the title, because a list that fills its panel gives
+        // no other sign of how much of it is out of sight, and a filtered
+        // list should say how much of the registry it is showing.
+        _listFrame.Title = _shown.Count == _projects.Count
+            ? $"Projects ({_projects.Count})"
+            : $"Projects ({_shown.Count} of {_projects.Count})";
 
         if (_shown.Count > 0)
         {
@@ -1217,15 +1270,7 @@ internal sealed class LauncherWindow : Window
     /// Says something along the bottom, until the cursor moves off whatever it
     /// was about.
     /// </summary>
-    private void Say(string message)
-    {
-        _summary.Text = message;
-
-        SetNeedsDraw();
-    }
-
-    /// <summary>What the bottom line says when it has nothing else to say.</summary>
-    private readonly string _state = string.Empty;
+    private void Say(string message) => _footer.Say(message);
 
     /// <summary>
     /// Shows what is known about the selected project, reading the parts that
@@ -1236,9 +1281,9 @@ internal sealed class LauncherWindow : Window
     {
         // Whatever was said about the last project stops being true the moment
         // the cursor leaves it.
-        if (_summary.Text != _state)
+        if (_footer.Message is not null)
         {
-            _summary.Text = _state;
+            _footer.Say(null);
         }
 
         var project = Selected;
@@ -1327,7 +1372,7 @@ internal sealed class LauncherWindow : Window
 
         _pulseStep = 0;
 
-        _detail.ShowHeading(Selected!, Wordmark.Pulse(_pulseStep));
+        _detail.ShowHeading(Selected!, Wordmark.Pulse(_pulseStep, glyphs: PulseGlyphs));
 
         _pulse = _application.AddTimeout(PulseInterval, () =>
         {
@@ -1336,11 +1381,20 @@ internal sealed class LauncherWindow : Window
                 return false;
             }
 
-            _detail.SetStatus(Wordmark.Pulse(++_pulseStep));
+            _detail.SetStatus(Wordmark.Pulse(++_pulseStep, glyphs: PulseGlyphs));
 
             return true;
         });
     }
+
+    /// <summary>
+    /// What the reading indicator is drawn in: bars, unless this is a console
+    /// whose font cannot draw them. Decided once; the terminal does not change
+    /// while the screen is up.
+    /// </summary>
+    private static readonly string PulseGlyphs = Wordmark.PulseGlyphsFor(
+        OperatingSystem.IsWindows(),
+        Environment.GetEnvironmentVariable("WT_SESSION") is { Length: > 0 });
 
     private void StopPulsing()
     {
