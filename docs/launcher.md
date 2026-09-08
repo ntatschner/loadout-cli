@@ -138,7 +138,10 @@ fix would change below](images/problems.svg)
 
 **Problems** is a screen of its own: what was found, what can be put right, and
 what each fix says it would change, ticked rather than applied as you move
-through the list. Nothing is applied from that screen — inspecting a repository
+through the list. Space ticks a fix and Enter applies what is ticked; Esc backs
+out and changes nothing. Applying with nothing ticked says so rather than
+closing, because a screen that closes either way looks the same whether or
+not a fix went through. Nothing is applied from that screen — inspecting a repository
 and applying a fix are both slow enough that doing them while still drawing
 would look like a hang, so the screen collects what was ticked, closes, and the
 fixes run with the terminal handed back.

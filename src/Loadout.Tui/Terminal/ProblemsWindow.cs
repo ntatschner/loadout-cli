@@ -136,7 +136,16 @@ internal sealed class ProblemsWindow : Window
 
         previewFrame.Add(_preview);
 
-        var apply = new Button { X = 1, Y = Pos.AnchorEnd(1), Text = "_Apply ticked" };
+        // Read, never moved into. With the focus able to land here, Tab from
+        // the remedies went to this frame rather than to the button, so the
+        // Enter that followed fell on a label and applied nothing. That is
+        // how a fix was "applied" from this screen and nothing changed.
+        previewFrame.CanFocus = false;
+
+        // The default, so Enter on the remedies applies what is ticked. It is
+        // what a person presses after ticking something; sending them to find
+        // a button, and closing on Esc with nothing said, cost a fix or two.
+        var apply = new Button { X = 1, Y = Pos.AnchorEnd(1), Text = "_Apply ticked", IsDefault = true };
         var close = new Button { X = Pos.Right(apply) + 2, Y = Pos.AnchorEnd(1), Text = "_Close" };
 
         apply.Enabled = offered.Count > 0;
@@ -145,9 +154,21 @@ internal sealed class ProblemsWindow : Window
         {
             e.Handled = true;
 
-            Chosen = [.. Enumerable.Range(0, _offered.Count)
+            var chosen = Enumerable.Range(0, _offered.Count)
                 .Where(i => _remedies.Source?.IsMarked(i) == true)
-                .Select(i => _offered[i].Remedy)];
+                .Select(i => _offered[i].Remedy)
+                .ToList();
+
+            // Applying nothing is not a reason to leave. Closing here looked
+            // exactly like a fix going through, and the list beside it looked
+            // exactly as it did before, because it was.
+            if (chosen.Count == 0)
+            {
+                _preview.Text = NothingTicked;
+                return;
+            }
+
+            Chosen = chosen;
 
             _application.RequestStop(this);
         };
@@ -167,6 +188,10 @@ internal sealed class ProblemsWindow : Window
 
         ShowPreview();
     }
+
+    /// <summary>What the preview says when Apply is pressed with nothing ticked.</summary>
+    internal const string NothingTicked =
+        "Nothing is ticked, so nothing was changed. Space ticks the highlighted fix.";
 
     private void ShowPreview()
     {

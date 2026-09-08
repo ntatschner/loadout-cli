@@ -138,6 +138,15 @@ public sealed class DocumentationImagesTests
         using IApplication app = Application.Create();
 
         app.Init(DriverRegistry.Names.ANSI);
+
+        // What the launcher does after Init, and what TuiSession does for
+        // the other screen tests. Without it the pictures depended on which
+        // tests had run first in the process: drawn alone they showed
+        // shadowed buttons in brackets the console font cannot draw, and
+        // drawn after the workflow tests they showed the launcher as it is.
+        ConsoleGlyphs.MakeLegible();
+        LauncherTheme.Apply();
+
         app.Screen = new Rectangle(0, 0, Width, Height);
 
         using var window = build(app);
