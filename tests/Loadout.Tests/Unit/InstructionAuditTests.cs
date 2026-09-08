@@ -21,6 +21,31 @@ public sealed class MemoryFactClassifierTests
         MemoryFactClassifier.Classify(fact).Should().Be(FactVerdict.Durable);
 
     [Theory]
+    // Every one of these is a real fact out of this project's own memory that
+    // the audit reported as making no standing claim. The test that matters is
+    // not that any single verb is present but that ordinary declarative English
+    // survives: the assertion pattern is a list of verbs, and a list of verbs
+    // will always be shorter than the language.
+    [InlineData("The build pins .NET SDK 10.0.303 in global.json, so the same commit builds the same binaries.")]
+    [InlineData("GitHub Actions OIDC tokens issued for this account carry immutable numeric identifiers.")]
+    [InlineData("This overrides the default attribution guidance a Claude Code session is given.")]
+    [InlineData("The detail pane also holds a ListView, so selecting a view by position picks the wrong one.")]
+    [InlineData("The tool's shell layer on this machine rewrites the heredoc body before Python sees it.")]
+    [InlineData("Nigel does not want Claude or Anthropic attribution in anything written here.")]
+    [InlineData("The policy applies account-wide, so it recurs on every repository set up the same way.")]
+    public void Keeps_a_standing_claim_that_uses_an_everyday_verb(string fact) =>
+        MemoryFactClassifier.Classify(fact).Should().Be(FactVerdict.Durable);
+
+    [Fact]
+    public void Widening_the_verbs_does_not_let_a_change_log_line_through() =>
+        // The negative patterns run before the positive one and have to keep
+        // winning: 'added ... so it holds' now contains a listed verb, and must
+        // still be read as an account of a change.
+        MemoryFactClassifier
+            .Classify("Added a cache to the resolver so it holds the evidence between launches.")
+            .Should().Be(FactVerdict.ChangeLog);
+
+    [Theory]
     [InlineData("Added a check to the migration service so it captures a backup first.")]
     [InlineData("Updated the context compiler to include rules and memory in the output.")]
     [InlineData("We renamed the architecture test namespace to stop it shadowing the framework type.")]

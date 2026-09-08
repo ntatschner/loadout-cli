@@ -122,6 +122,31 @@ public sealed class DocumentationCommandTests
             + "does not exist reads as a broken tool rather than an old page");
     }
 
+    [Fact]
+    public void Every_command_that_exists_is_named_in_the_command_reference()
+    {
+        var roots = Program.CommandNames();
+
+        var reference = Documentation()
+            .Single(f => Path.GetFileName(f).Equals("commands.md", StringComparison.Ordinal));
+
+        var text = File.ReadAllText(reference);
+
+        // The check above runs one way only: it catches a documented command
+        // that does not exist and is blind to a command nobody documented. So
+        // 'task', 'checkpoint', 'pack', 'running', 'share' and 'spend' were all
+        // shipped and absent from the page that calls itself the whole command
+        // surface — and 'commands', which exists to list everything the
+        // launcher can do, was itself unlisted.
+        var missing = roots
+            .Where(name => !text.Contains("loadout " + name, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        missing.Should().BeEmpty(
+            "docs/commands.md is the command reference, so every command belongs in it");
+    }
+
     private static IEnumerable<string> Documentation()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);

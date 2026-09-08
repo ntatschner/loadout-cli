@@ -264,20 +264,37 @@ public static class ConfigKeys
 
         new("discovery-roots", "Comma-separated directories scanned for repositories",
             (_, m) => string.Join(", ", m.DiscoveryRoots),
-            (_, m, v) => m.DiscoveryRoots = v
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToList(),
+            (_, m, v) => m.DiscoveryRoots = SplitDirectories(v),
             true,
             Group: Groups.Machine),
 
         new("agent-search-paths", "Comma-separated extra directories searched for agent executables",
             (c, _) => string.Join(", ", c.AgentSearchPaths),
-            (c, _, v) => c.AgentSearchPaths = v
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToList(),
+            (c, _, v) => c.AgentSearchPaths = SplitDirectories(v),
             false,
             Group: Groups.Agents),
     ];
+
+    /// <summary>
+    /// Splits a list of directories on either separator somebody might type.
+    /// </summary>
+    /// <remarks>
+    /// A comma is what the help says. A semicolon is what separates paths in
+    /// <c>PATH</c> on Windows, so it is what gets typed anyway — and taken as
+    /// part of a path it made one root that could not exist. Discovery then
+    /// reported no repositories at all, including the root that had been
+    /// working before the second one was added, and said only "no repositories
+    /// found": a true sentence about a machine full of code.
+    /// <para>
+    /// Safe on both separators because neither is legal in a Windows path, and
+    /// a colon is deliberately not among them: <c>C:\git</c> would split into
+    /// two roots that are each nonsense.
+    /// </para>
+    /// </remarks>
+    private static List<string> SplitDirectories(string value) =>
+        [.. value.Split(
+            [',', ';'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
     /// <summary>How a flag is shown, in the spelling the setter accepts back.</summary>
     private static string Boolean(bool value) => value ? "true" : "false";
