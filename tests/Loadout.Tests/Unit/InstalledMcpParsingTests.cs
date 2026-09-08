@@ -20,8 +20,44 @@ namespace Loadout.Tests.Unit;
 /// a warning and never a launch.
 /// </para>
 /// </summary>
-public sealed class InstalledMcpParsingTests
+public sealed class InstalledMcpParsingTests : IDisposable
 {
+    /// <summary>
+    /// Temporary homes this class made, removed when it is done with them.
+    /// </summary>
+    /// <remarks>
+    /// Each test here writes a configuration into a fresh directory under the
+    /// system temp and left it there. One run is a handful; a working day is
+    /// hundreds, and they are never collected because nothing owns them.
+    /// <para>
+    /// Not a tidiness point. Roughly seventeen hundred of these accumulated on
+    /// one machine and took the full suite from 2m11s to 12m17s — every test
+    /// that touches the temp directory pays for the ones before it, and the
+    /// slowdown looks like whatever change happened to be in flight at the
+    /// time. It also manufactures exactly the resource pressure that makes
+    /// Windows refuse to start a process.
+    /// </para>
+    /// </remarks>
+    private readonly List<string> _homes = [];
+
+    public void Dispose()
+    {
+        foreach (var home in _homes)
+        {
+            try
+            {
+                if (Directory.Exists(home))
+                {
+                    Directory.Delete(home, recursive: true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A leftover temp tree is not worth failing the run over.
+            }
+        }
+    }
+
     /// <summary>Real output, trimmed to the interesting rows.</summary>
     private const string RealListing = """
         Checking MCP server health…
@@ -128,9 +164,11 @@ public sealed class InstalledMcpParsingTests
     }
 
     /// <summary>Builds a home directory with a plugin that declares a server.</summary>
-    private static string HomeWithPlugin(string pluginName, bool enabled)
+    private string HomeWithPlugin(string pluginName, bool enabled)
     {
         var home = Path.Combine(Path.GetTempPath(), "loadout-plugin-" + Guid.NewGuid().ToString("N"));
+
+        Remember(home);
 
         var pluginDirectory = Path.Combine(home, ".claude", "plugins", "cache", "owner", pluginName, "1.0.0");
 
@@ -177,4 +215,7 @@ public sealed class InstalledMcpParsingTests
         // warning about its servers would describe something not happening.
         FromHome(HomeWithPlugin("context7", enabled: false)).Should().BeEmpty();
     }
+
+    /// <summary>Notes a temporary home so <see cref="Dispose"/> can remove it.</summary>
+    private void Remember(string home) => _homes.Add(home);
 }

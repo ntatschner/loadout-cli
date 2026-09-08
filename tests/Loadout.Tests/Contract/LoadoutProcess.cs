@@ -213,9 +213,10 @@ public sealed class LoadoutProcess : IDisposable
     /// <see cref="ContractCollection"/>: this cap counts only the processes
     /// started through here, while the shortage is made by the whole suite, most
     /// of it Git spawned from integration tests running on other threads. The
-    /// runner is limited to two threads for that. This stays because it is the
-    /// only defence against load from outside the suite, which no setting here
-    /// can see.
+    /// runner is limited to two threads for that, and every test that starts a
+    /// process now goes through a suite-wide ceiling. This stays because it is
+    /// the only defence against load from outside the test run itself, which no
+    /// setting here can see.
     /// </para>
     /// </remarks>
     private static readonly SemaphoreSlim Starting =
@@ -430,10 +431,22 @@ public sealed class LoadoutProcess : IDisposable
     {
         try
         {
-            if (Directory.Exists(_home))
+            if (!Directory.Exists(_home))
             {
-                Directory.Delete(_home, recursive: true);
+                return;
             }
+
+            // Git marks objects in .git read-only on Windows, and a plain
+            // recursive delete stops at the first one. The integration fixtures
+            // have always cleared the attribute first; this one did not, so a
+            // handful of trees survived every run and accumulated — which is
+            // how a machine ends up slow for reasons nobody can place.
+            foreach (var file in Directory.EnumerateFiles(_home, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
+            Directory.Delete(_home, recursive: true);
         }
         catch (Exception exception) when (
             exception is IOException or UnauthorizedAccessException)

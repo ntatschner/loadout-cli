@@ -27,7 +27,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
     private const string Slug = "starstats";
 
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IProjectOverviewService _overviews = null!;
     private readonly Loadout.Tests.Fakes.QuietSessionRegistry _running = new();

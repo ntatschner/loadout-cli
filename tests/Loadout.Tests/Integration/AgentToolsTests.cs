@@ -29,7 +29,7 @@ public sealed class AgentToolsTests : IAsyncLifetime
 {
     private readonly string _root;
     private readonly string _repositories;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IProjectService _projects = null!;
     private IWorkspaceManager _workspace = null!;

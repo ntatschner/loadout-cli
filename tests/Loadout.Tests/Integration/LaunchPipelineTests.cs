@@ -39,7 +39,7 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     private const string ProjectSlug = "starstats";
 
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IAgentLauncher _launcher = null!;
     private IProjectService _projects = null!;

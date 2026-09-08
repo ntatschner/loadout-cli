@@ -27,7 +27,7 @@ public sealed class PreflightTests
 
     private static PreflightService Service(Dictionary<string, string>? secrets = null) =>
         new(
-            new GitManager(new ProcessLauncher(), new ExecutableResolver(
+            new GitManager(new ThrottledProcessLauncher(), new ExecutableResolver(
                 new FakeEnvironmentProvider("/home/test"), [])),
             new FakeSecretProvider(secrets));
 
