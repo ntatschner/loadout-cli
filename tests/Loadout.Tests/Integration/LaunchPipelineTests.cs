@@ -40,6 +40,7 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
 
     private readonly string _root;
     private readonly ThrottledProcessLauncher _processes = new();
+    private readonly SpyReaper _reaper = new();
 
     private IAgentLauncher _launcher = null!;
     private IProjectService _projects = null!;
@@ -141,7 +142,22 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             new Loadout.Tests.Fakes.QuietSpendWatch(),
             new Loadout.Core.Statusline.LoadedSpecialistStore(
                 _paths, new Loadout.Core.Configuration.YamlStore(new Loadout.Tests.Fakes.NoOpFilePermissions()),
-                TimeProvider.System));
+                TimeProvider.System),
+            _reaper);
+    }
+
+    /// <summary>Records whether the launch asked for a collection.</summary>
+    private sealed class SpyReaper : Loadout.Core.Sessions.IRuntimeReaper
+    {
+        public int Calls { get; private set; }
+
+        public Task<Loadout.Models.Results.OperationResult<int>> ReapAsync(
+            CancellationToken ct = default)
+        {
+            Calls++;
+
+            return Task.FromResult(Loadout.Models.Results.OperationResult<int>.Ok(0));
+        }
     }
 
     public Task DisposeAsync()
@@ -164,6 +180,35 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         }
 
         return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task A_launch_collects_what_earlier_ones_left_behind()
+    {
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        // The only reliable moment. A session that ends cleans up after itself;
+        // one that is killed never reaches the code that would.
+        _reaper.Calls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_dry_run_collects_nothing()
+    {
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        // The dry run reaches the line that reaps: it compiles a real context
+        // into a real directory and returns well after that point. Reaping
+        // there would have the one command whose whole promise is changing
+        // nothing delete other sessions' contexts — which is the defect this
+        // launcher has already shipped twice in other commands.
+        _reaper.Calls.Should().Be(0);
     }
 
     [Fact]

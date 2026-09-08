@@ -177,6 +177,12 @@ public sealed class AgentLauncher : IAgentLauncher
     private readonly Core.Usage.ISpendWatch _spend;
     private readonly Core.Statusline.ILoadedSpecialistStore _loaded;
 
+    /// <summary>
+    /// Collects the runtime directories of sessions that never ended. Optional
+    /// so a launcher built without one behaves exactly as it did before.
+    /// </summary>
+    private readonly Core.Sessions.IRuntimeReaper? _reaper;
+
     public AgentLauncher(
         IProjectService projects,
         IWorkspaceManager workspace,
@@ -195,8 +201,10 @@ public sealed class AgentLauncher : IAgentLauncher
         Core.Sessions.ISessionRegistry running,
         IPolicyService policies,
         Core.Usage.ISpendWatch spend,
-        Core.Statusline.ILoadedSpecialistStore loaded)
+        Core.Statusline.ILoadedSpecialistStore loaded,
+        Core.Sessions.IRuntimeReaper? reaper = null)
     {
+        _reaper = reaper;
         _spend = spend;
         _loaded = loaded;
         _ledger = ledger;
@@ -285,6 +293,24 @@ public sealed class AgentLauncher : IAgentLauncher
 
         var adapter = adapterResult.Value!;
         var runtimeDirectory = _paths.CreateRuntimeDirectory();
+
+        // Every real launch collects what earlier ones left behind. This is the
+        // only reliable moment: the exit path cleans up after a session that
+        // ends, and a session that was killed or whose terminal was closed
+        // never reaches it — which is exactly the case leaving directories
+        // behind.
+        //
+        // After creating this launch's own directory, so it is the newest thing
+        // there and cannot be mistaken for a leftover.
+        //
+        // Not on a dry run. The dry run reaches this line — it compiles a real
+        // context into a real directory and returns further down — so reaping
+        // here would have a command whose whole promise is changing nothing
+        // delete other sessions' contexts.
+        if (!request.DryRun)
+        {
+            await ReapAsync(ct).ConfigureAwait(false);
+        }
 
         // Held out here so the entry is given up however the launch unwinds,
         // not only when the agent exits tidily.
@@ -1020,6 +1046,27 @@ public sealed class AgentLauncher : IAgentLauncher
         }
 
         return OperationResult<string>.Ok(match.Path);
+    }
+
+    /// <summary>
+    /// Collects abandoned runtime directories, and never fails a launch over
+    /// housekeeping.
+    /// </summary>
+    private async Task ReapAsync(CancellationToken ct)
+    {
+        if (_reaper is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _reaper.ReapAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Tidying is not the job the caller asked for.
+        }
     }
 
     /// <summary>
