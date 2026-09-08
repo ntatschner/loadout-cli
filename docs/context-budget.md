@@ -20,7 +20,7 @@ read only when something makes it relevant.
 That difference is the whole reason for the tooling below. None of it deletes
 anything: it moves content between layers whose prices differ.
 
-The code map is the one layer that is off until a project asks for it, with
+Two layers are off until a project asks for them. The code map is the larger:
 `code_map: true` under `context` in its manifest. It is the digest half of the
 machine index — one line per directory naming the types it holds — inlined so
 a session can choose where to look without reading the tree. It costs a few
@@ -31,6 +31,18 @@ explores widely, wasted on a one-line fix. The lookup behind
 it is asked. `loadout instructions explain` shows the map's price as its own
 line, at zero until it is switched on, so the decision can be made with the
 figure in front of you.
+
+The other is open tasks, with `tasks: true` under `context`. It inlines what
+the project is working on — the open, doing and blocked entries from
+`loadout task list`, each with who said so and when — so a session can pick up
+where the last one left off instead of asking. It is cheap, a line or two per
+task, and it is off by default for a different reason from the map: the record
+is a claim somebody made rather than a fact about the code, and a project that
+does not keep one would otherwise pay for a heading saying so on every launch.
+Finished and dropped tasks stay in the record and out of the context, because
+nobody has to act on them. A project registered before it had a repository has
+this switched on already, since the setup task is the whole reason it was
+registered that way.
 
 ## Reading the budget
 
