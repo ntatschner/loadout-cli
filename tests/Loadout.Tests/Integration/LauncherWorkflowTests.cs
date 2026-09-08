@@ -786,6 +786,73 @@ public sealed class DialogWorkflowTests
     }
 
     [Fact]
+    public void Ticking_a_remedy_and_applying_it_chooses_it()
+    {
+        ProblemsWindow? window = null;
+
+        using var session = TuiSession.Start(app =>
+        {
+            window = new ProblemsWindow("Problems - Alpha", Findings, Offered, app);
+            return window;
+        });
+
+        // Focus starts on the findings; the remedies are the next stop.
+        session.Tab();
+        session.Press(Key.Space);
+
+        // Then the button, which has to be the very next stop. The preview
+        // frame used to take the focus first, so this Enter landed on a label
+        // and nothing was applied — from a screen that looked as though it had.
+        session.Tab();
+        session.Focused?.Text.Should().Contain("Apply");
+        session.Press(Key.Enter);
+
+        window!.Chosen.Should().ContainSingle(r => r.Kind == RemedyKind.InstallPreCommitHook);
+    }
+
+    [Fact]
+    public void Applying_with_nothing_ticked_says_so_and_stays()
+    {
+        ProblemsWindow? window = null;
+
+        using var session = TuiSession.Start(app =>
+        {
+            window = new ProblemsWindow("Problems - Alpha", Findings, Offered, app);
+            return window;
+        });
+
+        // Straight to the button, ticking nothing.
+        session.Tab();
+        session.Tab();
+        session.Press(Key.Enter);
+
+        window!.Chosen.Should().BeEmpty();
+        session.Screen.Should().Contain("Nothing is ticked", "leaving silently looked like a fix going through");
+    }
+
+    [Fact]
+    public void Enter_on_a_ticked_remedy_applies_it()
+    {
+        ProblemsWindow? window = null;
+
+        using var session = TuiSession.Start(app =>
+        {
+            window = new ProblemsWindow("Problems - Alpha", Findings, Offered, app);
+            return window;
+        });
+
+        session.Tab();
+        session.Press(Key.Space);
+
+        // What a person does after ticking something: press Enter. Sending
+        // them to find a button, and closing on Esc with nothing said, is how
+        // a fix gets "applied" and nothing changes.
+        session.Press(Key.Enter);
+
+        window!.Chosen.Should().ContainSingle(r => r.Kind == RemedyKind.InstallPreCommitHook);
+    }
+
+    [Fact]
     public void The_problems_screen_shows_the_finding_and_what_a_fix_would_change()
     {
         using var session = TuiSession.Start(app =>
