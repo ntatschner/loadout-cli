@@ -115,6 +115,7 @@ public static class ServiceRegistration
         // Written by the launcher rather than reconstructed afterwards, because
         // a launch nobody recorded cannot be recovered later.
         services.AddSingleton<Sessions.ILaunchLedger, Sessions.LaunchLedger>();
+        services.AddSingleton<Sessions.IRuntimeReaper, Sessions.RuntimeReaper>();
 
         // And which of them are still going. Separate from the ledger because
         // the questions differ: one is a history that is only ever added to,
