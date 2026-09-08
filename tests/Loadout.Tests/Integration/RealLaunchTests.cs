@@ -43,7 +43,7 @@ public sealed class RealLaunchTests : IAsyncLifetime
     private const string Slug = "alpha";
 
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IAgentLauncher _launcher = null!;
     private IProjectService _projects = null!;

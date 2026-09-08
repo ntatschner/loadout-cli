@@ -24,8 +24,44 @@ namespace Loadout.Tests.Unit;
 /// switching anything off.
 /// </para>
 /// </remarks>
-public sealed class SpecialistProviderTests
+public sealed class SpecialistProviderTests : IDisposable
 {
+    /// <summary>
+    /// Temporary homes this class made, removed when it is done with them.
+    /// </summary>
+    /// <remarks>
+    /// Each test here writes a configuration into a fresh directory under the
+    /// system temp and left it there. One run is a handful; a working day is
+    /// hundreds, and they are never collected because nothing owns them.
+    /// <para>
+    /// Not a tidiness point. Roughly seventeen hundred of these accumulated on
+    /// one machine and took the full suite from 2m11s to 12m17s — every test
+    /// that touches the temp directory pays for the ones before it, and the
+    /// slowdown looks like whatever change happened to be in flight at the
+    /// time. It also manufactures exactly the resource pressure that makes
+    /// Windows refuse to start a process.
+    /// </para>
+    /// </remarks>
+    private readonly List<string> _homes = [];
+
+    public void Dispose()
+    {
+        foreach (var home in _homes)
+        {
+            try
+            {
+                if (Directory.Exists(home))
+                {
+                    Directory.Delete(home, recursive: true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A leftover temp tree is not worth failing the run over.
+            }
+        }
+    }
+
     [Fact]
     public void No_adapter_knows_what_a_specialist_is()
     {
@@ -114,9 +150,11 @@ public sealed class SpecialistProviderTests
     }
 
     /// <summary>An instruction service reading a configuration written to a temporary home.</summary>
-    private static InstructionService Service(InstructionContextSettings settings)
+    private InstructionService Service(InstructionContextSettings settings)
     {
         var home = Path.Combine(Path.GetTempPath(), "loadout-prov-" + Guid.NewGuid().ToString("N"));
+
+        Remember(home);
 
         Directory.CreateDirectory(home);
 
@@ -159,4 +197,7 @@ public sealed class SpecialistProviderTests
 
         return root!.FullName;
     }
+
+    /// <summary>Notes a temporary home so <see cref="Dispose"/> can remove it.</summary>
+    private void Remember(string home) => _homes.Add(home);
 }

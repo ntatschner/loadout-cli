@@ -25,7 +25,7 @@ namespace Loadout.Tests.Integration;
 public sealed class WorkspaceSyncTests : IAsyncLifetime
 {
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IWorkspaceManager _workspace = null!;
     private string _remote = null!;
