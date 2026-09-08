@@ -13,6 +13,14 @@ loadout starstats          # skip it and launch that project
 loadout here               # skip it and launch whatever repository you are in
 ```
 
+The screen is quiet on purpose. The frame you are in is the warm one and every
+other frame is grey, so the eye finds the focus without a bar of colour; the
+detail pane sits a shade above the ground with no line round it; and the keys
+along the bottom are picked out from what they do. The list's title carries a
+count, and says how much of the registry a filter is showing. None of that is
+load-bearing: the same words and marks are there in a terminal with no colour
+at all.
+
 The pictures here are drawn by the tests, using the same headless driver they
 assert on, so they're the real widgets rather than someone's drawing of them.
 Redraw them after a change with:
