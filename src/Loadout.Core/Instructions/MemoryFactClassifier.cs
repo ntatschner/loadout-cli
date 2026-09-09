@@ -227,6 +227,37 @@ public static partial class MemoryFactClassifier
     private static partial Regex Assertion();
 
     /// <summary>
+    /// Whether a line is structure attached to the claim above it rather than a
+    /// claim of its own: a labelled elaboration, a cross-reference, or a fenced
+    /// block.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A shape test, not a judgement. Whether such a line is acceptable depends
+    /// on what sits above it, which one line cannot see — so the caller decides
+    /// that, and this only says what the line looks like.
+    /// </para>
+    /// <para>
+    /// Nothing here is any one tool's convention. Loadout prescribes no format
+    /// for a fact and this does not start: it recognises the shapes prose takes
+    /// when it elaborates, which is why the labels are matched by their form
+    /// rather than by a list of the ones seen so far. The audit was reading each
+    /// bullet as a standalone assertion, so a topic written as a claim followed
+    /// by its reasoning drew a finding for every line of the reasoning.
+    /// </para>
+    /// </remarks>
+    public static bool IsElaboration(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && Elaboration().IsMatch(text.Trim());
+
+    /// <summary>
+    /// A bolded label, a cross-reference, or the start of a fenced block.
+    /// </summary>
+    [GeneratedRegex(
+        @"^(?:\*\*[A-Za-z][^*\n]{0,40}:\*\*|(?i:related|see also|see)\s*:|```)",
+        RegexOptions.None, MatchTimeoutMilliseconds)]
+    private static partial Regex Elaboration();
+
+    /// <summary>
     /// Nouns that name the kind of knowledge worth keeping, for facts phrased
     /// without an obvious assertion verb.
     /// </summary>

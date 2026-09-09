@@ -273,6 +273,43 @@ public sealed class InstructionsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_elaboration_beneath_a_claim_is_not_judged_as_a_claim_itself()
+    {
+        WriteTopic("shaped", "---\ndescription: why the palette uses Accepting rather than Accepted\n---\n"
+            + "- Terminal.Gui raises Accepting on the command palette's list, and never Accepted.\n"
+            + "- **Why:** a quirk of the widget hierarchy, found the hard way over four attempts.\n"
+            + "- **How to apply:** prefer the earlier hook, and open the framework source first.\n"
+            + "- Related: [[terminal-gui-command-slots-collide]].\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // The three lines under the claim are structure: two labelled
+        // elaborations and a cross-reference. None is a standalone assertion and
+        // none was written to be read as one, so judging each as though it were
+        // produced three findings about one well-formed topic — which is how an
+        // audit teaches people to stop reading it.
+        audit.Value!.Findings
+            .Where(f => f.Topic == "shaped" && f.Kind == "noassertion")
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task The_same_elaboration_with_nothing_above_it_is_still_a_fragment()
+    {
+        WriteTopic("dangling", "---\ndescription: what the palette does about the Accepting event\n---\n"
+            + "- **Why:** a quirk of the widget hierarchy, found the hard way over four attempts.\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // The other half of the rule, and what stops it becoming a way to put
+        // anything past the check by prefixing it. The line is word for word the
+        // one exempted above: an elaboration elaborates something, and alone at
+        // the top of a topic it explains nothing, leaving a "why" with no "what".
+        audit.Value!.Findings
+            .Should().Contain(f => f.Topic == "dangling" && f.Kind == "noassertion");
+    }
+
+    [Fact]
     public async Task The_audit_finds_a_fact_repeated_in_two_topics()
     {
         const string fact = "- The workspace repository always wins when it disagrees with the code.";
