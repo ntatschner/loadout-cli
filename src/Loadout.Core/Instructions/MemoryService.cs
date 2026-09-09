@@ -539,8 +539,10 @@ internal sealed partial class MemoryService : IMemoryService
                     "has no description, so the index cannot say what it is for."));
             }
 
-            foreach (var fact in topic.Facts)
+            for (var index = 0; index < topic.Facts.Count; index++)
             {
+                var fact = topic.Facts[index];
+
                 var patterns = SecretScanner.Match(fact);
 
                 if (patterns.Count > 0)
@@ -555,7 +557,21 @@ internal sealed partial class MemoryService : IMemoryService
 
                 var verdict = MemoryFactClassifier.Classify(fact);
 
-                if (verdict != FactVerdict.Durable)
+                // A labelled elaboration, a cross-reference or a fenced block
+                // beneath a claim is that claim's reasoning rather than a claim
+                // of its own, and reading each as though it stood alone drew a
+                // finding for every line of a well-written topic. Only beneath
+                // something, though: first in a topic it elaborates nothing, and
+                // the reader is left with a "why" and no "what".
+                //
+                // By position rather than by searching for the text, so a topic
+                // that repeats a line is judged on where each copy sits.
+                var elaborates = index > 0 && MemoryFactClassifier.IsElaboration(fact);
+
+                // Narrowed to this one finding. Everything else here still
+                // applies: a credential in an elaboration is a credential, and
+                // a date in one goes stale exactly as fast.
+                if (verdict != FactVerdict.Durable && !elaborates)
                 {
                     // Reported rather than removed. The classifier is a good
                     // filter and not an oracle, and silently deleting somebody's
