@@ -4,6 +4,12 @@ kind: foundation
 title: Verification
 summary: A change is not finished because it compiles.
 always: true
+probe:
+  summary: ran a test suite
+  tools:
+    - Bash
+    - PowerShell
+  pattern: (?i)\b(dotnet test|npm (run )?test|pytest|go test|cargo test|ctest)\b
 ---
 
 ## Scope
