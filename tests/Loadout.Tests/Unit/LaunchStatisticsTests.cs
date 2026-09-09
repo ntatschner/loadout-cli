@@ -51,6 +51,57 @@ public sealed class LaunchStatisticsTests
     }
 
     [Fact]
+    public void A_specialist_is_counted_against_the_launches_it_could_have_reached()
+    {
+        // The one that sent somebody looking. 'foundation.forward-motion'
+        // reported 27 of 45 launches — 60%, beside four foundations at 100% —
+        // which reads exactly like a specialist that is not loading. It was
+        // added a fortnight into the window, and had loaded on every launch
+        // since. Counting launches that happened before a specialist existed
+        // makes a new one look broken and an old one look better than it is.
+        var statistics = LaunchStatistics.From(
+            [
+                Record("a", ["foundation.change-safety"], at: Day(1)),
+                Record("b", ["foundation.change-safety"], at: Day(2)),
+                Record("c", ["foundation.change-safety", "language.csharp"], at: Day(3)),
+                Record("d", ["foundation.change-safety", "language.csharp"], at: Day(4)),
+            ],
+            Library);
+
+        var newcomer = statistics.Loaded.Single(usage => usage.Id == "language.csharp");
+
+        newcomer.Launches.Should().Be(2);
+        newcomer.Eligible.Should().Be(
+            2, "it did not exist for the first two, so they are not launches it missed");
+
+        var oldTimer = statistics.Loaded.Single(usage => usage.Id == "foundation.change-safety");
+
+        oldTimer.Launches.Should().Be(4);
+        oldTimer.Eligible.Should().Be(4);
+    }
+
+    [Fact]
+    public void A_specialist_that_stopped_being_reached_is_still_counted_against_them()
+    {
+        // The other side of the same rule, and what stops it flattering
+        // everything to a hundred percent. Once a specialist has appeared,
+        // every later launch is one it could have applied to.
+        var statistics = LaunchStatistics.From(
+            [
+                Record("a", ["language.csharp"], at: Day(1)),
+                Record("b", [], at: Day(2)),
+                Record("c", [], at: Day(3)),
+                Record("d", [], at: Day(4)),
+            ],
+            Library);
+
+        var faded = statistics.Loaded.Single(usage => usage.Id == "language.csharp");
+
+        faded.Launches.Should().Be(1);
+        faded.Eligible.Should().Be(4);
+    }
+
+    [Fact]
     public void A_specialist_no_launch_reached_is_named()
     {
         var statistics = LaunchStatistics.From(
@@ -149,14 +200,18 @@ public sealed class LaunchStatisticsTests
     private static LaunchRecord Moded(string id, string? mode, int tokens) =>
         Record(id, [], tokens) with { Mode = mode };
 
+    private static DateTimeOffset Day(int day) =>
+        new(2026, 2, day, 9, 0, 0, TimeSpan.Zero);
+
     private static LaunchRecord Record(
         string id,
         string[] specialists,
         int tokens = 1000,
-        int? exitCode = null) =>
+        int? exitCode = null,
+        DateTimeOffset? at = null) =>
         new(
             id,
-            new DateTimeOffset(2026, 2, 1, 9, 0, 0, TimeSpan.Zero),
+            at ?? new DateTimeOffset(2026, 2, 1, 9, 0, 0, TimeSpan.Zero),
             "starstats",
             "StarStats",
             "claude",

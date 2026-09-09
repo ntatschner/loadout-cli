@@ -147,6 +147,58 @@ public sealed record SpecialistActivation(
 }
 
 /// <summary>
+/// Something a session doing as this specialist asks would visibly do.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Loading a specialist is not the same as following it, and until now only the
+/// first was measurable: <c>instructions stats</c> says which ones launches
+/// reached and nothing at all about whether any of them changed what happened
+/// next. A specialist nobody follows costs tokens on every launch and buys
+/// nothing, and there was no way to find that out.
+/// </para>
+/// <para>
+/// A probe is one observable consequence, not a proof of compliance. It can
+/// say a session did the thing, never that it did it because of this. Most
+/// specialists have no probe and should not be given a contrived one: a
+/// signature nobody can write is a specialist whose effect cannot be measured,
+/// and inventing one would put a number on a question it does not answer.
+/// </para>
+/// </remarks>
+/// <param name="Summary">What the signature is, in the words of a person.</param>
+/// <param name="Tools">Tool names whose use counts, as the agent records them.</param>
+/// <param name="Argument">
+/// An argument that must be set on the call. Null when any use of the tool
+/// counts.
+/// </param>
+/// <param name="Pattern">
+/// A regular expression the call's arguments must match. Null when the tool
+/// alone is the signature.
+/// </param>
+/// <param name="Absent">
+/// That the signature is the tool <em>not</em> being used.
+/// </param>
+/// <remarks>
+/// Some guidance asks for restraint rather than an act, and the only thing it
+/// leaves behind is the absence of something. Asking the person a question is
+/// the case this was added for: the rule is to carry on and say which reading
+/// was taken, so the session that followed it has no question in its transcript
+/// at all.
+/// <para>
+/// It changes who is counted as well as what counts. A positive signature is
+/// measured against the sessions that used the tool, because those are the ones
+/// that had the chance to use it well; an absent one is measured against every
+/// session that did any work, because any of them could have stopped and asked.
+/// </para>
+/// </remarks>
+public sealed record SpecialistProbe(
+    string Summary,
+    IReadOnlyList<string> Tools,
+    string? Argument = null,
+    string? Pattern = null,
+    bool Absent = false);
+
+/// <summary>
 /// One specialist: a body of guidance plus the evidence that makes it relevant.
 /// </summary>
 /// <remarks>
@@ -175,6 +227,10 @@ public sealed record SpecialistActivation(
 /// Where it was read from, for diagnostics. Empty for built-ins, which are not
 /// on disk at all.
 /// </param>
+/// <param name="Probe">
+/// Something a session following this would visibly do, or null where no
+/// honest signature can be written. Most are null.
+/// </param>
 public sealed record SpecialistDocument(
     string Id,
     SpecialistKind Kind,
@@ -184,7 +240,8 @@ public sealed record SpecialistDocument(
     string Body,
     long Bytes,
     SpecialistOrigin Origin = SpecialistOrigin.BuiltIn,
-    string Path = "")
+    string Path = "",
+    SpecialistProbe? Probe = null)
 {
     /// <summary>
     /// A rough token count for the body.

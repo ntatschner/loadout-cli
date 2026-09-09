@@ -492,7 +492,11 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
             body,
             Encoding.UTF8.GetByteCount(body),
             origin,
-            origin == SpecialistOrigin.BuiltIn ? string.Empty : path));
+            origin == SpecialistOrigin.BuiltIn ? string.Empty : path,
+            front.Probe is { Tools.Count: > 0, Summary.Length: > 0 } probe
+                ? new SpecialistProbe(
+                    probe.Summary.Trim(), probe.Tools, probe.Argument, probe.Pattern, probe.Absent)
+                : null));
     }
 
     /// <summary>The frontmatter as written, before it is checked.</summary>
@@ -523,6 +527,22 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
         public List<string> Capabilities { get; set; } = [];
 
         public List<string> Modes { get; set; } = [];
+
+        public ProbeFront? Probe { get; set; }
+    }
+
+    /// <summary>A probe as written, before it is checked.</summary>
+    internal sealed class ProbeFront
+    {
+        public string Summary { get; set; } = string.Empty;
+
+        public List<string> Tools { get; set; } = [];
+
+        public string? Argument { get; set; }
+
+        public string? Pattern { get; set; }
+
+        public bool Absent { get; set; }
     }
 
     [GeneratedRegex(@"\A---\r?\n(?<front>.*?)\r?\n---[ \t]*\r?\n",
