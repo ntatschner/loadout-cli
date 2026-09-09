@@ -210,17 +210,25 @@ public sealed class LoadoutProcess : IDisposable
     /// </para>
     /// <para>
     /// That did not hold either, and the reason is written up on
-    /// <see cref="ContractCollection"/>: this cap counts only the processes
+    /// <see cref="ContractCollection"/>: this cap counted only the processes
     /// started through here, while the shortage is made by the whole suite, most
-    /// of it Git spawned from integration tests running on other threads. The
-    /// runner is limited to two threads for that, and every test that starts a
-    /// process now goes through a suite-wide ceiling. This stays because it is
-    /// the only defence against load from outside the test run itself, which no
-    /// setting here can see.
+    /// of it Git spawned from integration tests running on other threads.
+    /// </para>
+    /// <para>
+    /// Nor did the next attempt, which put a ceiling on the launcher the rest of
+    /// the suite starts processes through — because that left two caps that
+    /// could not see one another. A four-core Windows arm64 runner allowed four
+    /// there and two here, six at once on a host that could not take it, and a
+    /// run failed forty-three starts. Two independent limits are not a limit.
+    /// </para>
+    /// <para>
+    /// So there is one gate now, and this path takes a place in it like every
+    /// other. The count is what the host can bear, and nothing in the suite is
+    /// outside it.
     /// </para>
     /// </remarks>
-    private static readonly SemaphoreSlim Starting =
-        new(Math.Max(2, Environment.ProcessorCount / 2));
+    private static Task<IDisposable> EnterAsync() =>
+        Fakes.ThrottledProcessLauncher.EnterAsync();
 
     /// <summary>Runs one command and captures everything it produced.</summary>
     public async Task<LoadoutRun> RunAsync(params string[] arguments)
@@ -233,7 +241,7 @@ public sealed class LoadoutProcess : IDisposable
                 && run.StandardOutput.Length == 0
                 && run.StandardError.Length == 0;
 
-            if (!startupFailure || attempt >= 4)
+            if (!startupFailure || attempt >= 5)
             {
                 return run;
             }
@@ -243,21 +251,22 @@ public sealed class LoadoutProcess : IDisposable
             // something: five attempts a quarter of a second apart is over in
             // one second, and the shortage that failed thirty-nine tests at
             // once lasted longer than that.
-            await Task.Delay(250 * (attempt + 1)).ConfigureAwait(false);
+            //
+            // Six attempts over about ten seconds now, because a later run
+            // exhausted the previous budget forty-three times on one leg. This
+            // is the second lever and not the first: the ceiling is what stops
+            // the shortage happening, and a retry only survives one that
+            // happens anyway. Waiting longer costs nothing on a healthy machine,
+            // where the first attempt succeeds and none of this runs.
+            await Task.Delay(500 * (attempt + 1)).ConfigureAwait(false);
         }
     }
 
     private async Task<LoadoutRun> RunOnceAsync(string[] arguments)
     {
-        await Starting.WaitAsync().ConfigureAwait(false);
-
-        try
+        using (await EnterAsync().ConfigureAwait(false))
         {
             return await RunOnceCoreAsync(arguments).ConfigureAwait(false);
-        }
-        finally
-        {
-            Starting.Release();
         }
     }
 
