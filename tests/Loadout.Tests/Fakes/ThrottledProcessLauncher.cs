@@ -42,14 +42,22 @@ public sealed class ThrottledProcessLauncher : IProcessLauncher
     /// How many processes the whole assembly may have starting at once.
     /// </summary>
     /// <remarks>
-    /// Generous on purpose. The failure is a burst of simultaneous starts, and
-    /// what has to be prevented is the pathological peak, not ordinary
-    /// concurrency — a tight ceiling took this suite from 2m11s to 12m17s on
-    /// one machine, which is a worse bargain than the flake it was bought to
-    /// stop. Scaled to the machine so a small CI runner is held tighter than a
-    /// workstation, which is also where the failures happen.
+    /// <para>
+    /// Half the processors, and never below two. Scaled to the machine because
+    /// the limit being hit is the desktop heap, which is a property of the host
+    /// rather than of the suite: a four-core runner has to be held to two where
+    /// a workstation is comfortable at eight.
+    /// </para>
+    /// <para>
+    /// It was <c>Math.Max(4, ProcessorCount)</c>, which on a four-core Windows
+    /// arm64 runner permitted four here and two more through the contract
+    /// harness's own semaphore, and that run failed forty-three starts. The
+    /// number was chosen then to avoid a slowdown that turned out to be
+    /// seventeen hundred leaked temp directories rather than the ceiling, so it
+    /// was set generously against a cost that was never real.
+    /// </para>
     /// </remarks>
-    private static readonly int Ceiling = Math.Max(4, Environment.ProcessorCount);
+    internal static readonly int Ceiling = Math.Max(2, Environment.ProcessorCount / 2);
 
     private static readonly SemaphoreSlim Gate = new(Ceiling, Ceiling);
 
@@ -72,15 +80,29 @@ public sealed class ThrottledProcessLauncher : IProcessLauncher
         TimeSpan? timeout = null,
         CancellationToken ct = default)
     {
-        await EnterGateAsync(ct).ConfigureAwait(false);
+        for (var attempt = 0; ; attempt++)
+        {
+            await EnterGateAsync(ct).ConfigureAwait(false);
 
-        try
-        {
-            return await _inner.RunAsync(request, timeout, ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            Gate.Release();
+            OperationResult<ProcessOutcome> result;
+
+            try
+            {
+                result = await _inner.RunAsync(request, timeout, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                Gate.Release();
+            }
+
+            if (attempt >= Attempts
+                || result.Value is not { } outcome
+                || !RefusedToStart(outcome.ExitCode, outcome.StandardOutput, outcome.StandardError))
+            {
+                return result;
+            }
+
+            await BackOffAsync(attempt, ct).ConfigureAwait(false);
         }
     }
 
@@ -89,15 +111,34 @@ public sealed class ThrottledProcessLauncher : IProcessLauncher
         ProcessRequest request,
         CancellationToken ct = default)
     {
-        await EnterGateAsync(ct).ConfigureAwait(false);
+        for (var attempt = 0; ; attempt++)
+        {
+            await EnterGateAsync(ct).ConfigureAwait(false);
 
-        try
-        {
-            return await _inner.RunInteractiveAsync(request, ct).ConfigureAwait(false);
-        }
-        finally
-        {
-            Gate.Release();
+            OperationResult<int> result;
+
+            try
+            {
+                result = await _inner.RunInteractiveAsync(request, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                Gate.Release();
+            }
+
+            // No streams to consult on this path, so the exit code is the whole
+            // of the evidence. That is weaker, and acceptable: a command under
+            // test choosing to return this exact value is not a thing that
+            // happens, and the alternative is leaving the launch tests with no
+            // defence at all.
+            if (attempt >= Attempts
+                || result.Failed
+                || result.Value != ProcessInitialisationFailed)
+            {
+                return result;
+            }
+
+            await BackOffAsync(attempt, ct).ConfigureAwait(false);
         }
     }
 
@@ -108,6 +149,46 @@ public sealed class ThrottledProcessLauncher : IProcessLauncher
         // finish, which is a deadlock rather than a slow test. Detached starts
         // are rare and are stubbed in every test that reaches one.
         _inner.StartDetached(request);
+
+    /// <summary>
+    /// Windows' status code for a process that could not finish initialising.
+    /// </summary>
+    private const int ProcessInitialisationFailed = unchecked((int)0xC0000142);
+
+    /// <summary>How many times a start that never happened is tried again.</summary>
+    private const int Attempts = 5;
+
+    /// <summary>
+    /// Whether an outcome is Windows refusing the start rather than the command
+    /// running and failing.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are required. A command that ran says something, on one
+    /// stream or the other; a process that died before its entry point writes
+    /// nothing at all. Retrying on the exit code alone would re-run a command
+    /// that genuinely returned it, and hide a real failure behind four more
+    /// attempts.
+    /// </remarks>
+    private static bool RefusedToStart(int exitCode, string standardOutput, string standardError) =>
+        exitCode == ProcessInitialisationFailed
+        && standardOutput.Length == 0
+        && standardError.Length == 0;
+
+    /// <summary>
+    /// Waits longer after each refusal.
+    /// </summary>
+    /// <remarks>
+    /// The ceiling bounds what this suite contributes to the shortage and can do
+    /// nothing about the rest: the desktop heap belongs to the whole window
+    /// station, so a browser and thirty consoles draw on the same pool. That is
+    /// not a hypothetical — the run that motivated this was on a machine with
+    /// three hundred and ninety-one processes on it, and the tests that survived
+    /// were exactly the ones that already retried. So a shortage caused from
+    /// outside is waited out rather than prevented, because it cannot be
+    /// prevented from in here.
+    /// </remarks>
+    private static Task BackOffAsync(int attempt, CancellationToken ct) =>
+        Task.Delay(500 * (attempt + 1), ct);
 
     /// <summary>
     /// Takes a place, without an await when one is free.

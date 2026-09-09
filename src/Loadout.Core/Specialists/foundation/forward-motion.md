@@ -4,6 +4,12 @@ kind: foundation
 title: Forward motion
 summary: Waiting on a build, a test run or a job is not a reason to stop working.
 always: true
+probe:
+  summary: started a long-running command in the background rather than waiting on it
+  tools:
+    - Bash
+    - PowerShell
+  argument: run_in_background
 ---
 
 ## Scope
