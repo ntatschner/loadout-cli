@@ -51,15 +51,35 @@ jobs:
       - id: check
         env:
           TOKEN: ${{ secrets.WINGET_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
           if [ -z "${TOKEN:-}" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "::notice::winget publishing is not configured (WINGET_TOKEN); skipping."
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          # The token was never the only thing needed, and saying so here is the
+          # point of this check. 'wingetcreate update' updates something that
+          # exists; the first submission has to be made by hand with
+          # 'wingetcreate new' and accepted into winget-pkgs before any of this
+          # can run. Without this the job fails on the release after a token is
+          # added, which reads as a regression rather than as setup half done.
+          #
+          # winget-pkgs lays manifests out by the first letter of the publisher,
+          # lowercased, then publisher, then package.
+          package="manifests/t/TheCodeSaiyan/Loadout"
+
+          if gh api "repos/microsoft/winget-pkgs/contents/$package" \
+            --jq '.[0].name' > /dev/null 2>&1; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::TheCodeSaiyan.Loadout is not in winget-pkgs yet, so there is nothing to update. Create it once with 'wingetcreate new' and get that pull request accepted; every release after that updates it automatically."
 
   manifest:
     name: Submit the manifest
