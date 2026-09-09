@@ -214,6 +214,22 @@ internal sealed class ProbeService : IProbeService
 
                     foreach (var call in Calls(root))
                     {
+                        // An absent signature is measured against every session
+                        // that did any work, because any of them could have
+                        // stopped and asked. A positive one is measured only
+                        // against the sessions that used the tool at all.
+                        if (probe.Absent)
+                        {
+                            used = true;
+
+                            // Named as well as matching: the name check lives
+                            // outside Matches, so asking it alone would count
+                            // every tool call as the one being looked for.
+                            showed |= Named(call, probe) && Matches(call, probe);
+
+                            continue;
+                        }
+
                         // Only a call to one of the probe's own tools counts a
                         // session in. A session that never ran a shell command
                         // could not have backgrounded one, and counting it as
@@ -237,8 +253,11 @@ internal sealed class ProbeService : IProbeService
             return null;
         }
 
+        // Inverted at the end rather than per call: the signature is that the
+        // whole session went by without it, which is not a thing any single
+        // line can show.
         return used && last is { } day
-            ? (DateOnly.FromDateTime(day.UtcDateTime), showed)
+            ? (DateOnly.FromDateTime(day.UtcDateTime), probe.Absent ? !showed : showed)
             : null;
     }
 

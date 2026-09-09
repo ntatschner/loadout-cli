@@ -175,11 +175,28 @@ public sealed record SpecialistActivation(
 /// A regular expression the call's arguments must match. Null when the tool
 /// alone is the signature.
 /// </param>
+/// <param name="Absent">
+/// That the signature is the tool <em>not</em> being used.
+/// </param>
+/// <remarks>
+/// Some guidance asks for restraint rather than an act, and the only thing it
+/// leaves behind is the absence of something. Asking the person a question is
+/// the case this was added for: the rule is to carry on and say which reading
+/// was taken, so the session that followed it has no question in its transcript
+/// at all.
+/// <para>
+/// It changes who is counted as well as what counts. A positive signature is
+/// measured against the sessions that used the tool, because those are the ones
+/// that had the chance to use it well; an absent one is measured against every
+/// session that did any work, because any of them could have stopped and asked.
+/// </para>
+/// </remarks>
 public sealed record SpecialistProbe(
     string Summary,
     IReadOnlyList<string> Tools,
     string? Argument = null,
-    string? Pattern = null);
+    string? Pattern = null,
+    bool Absent = false);
 
 /// <summary>
 /// One specialist: a body of guidance plus the evidence that makes it relevant.

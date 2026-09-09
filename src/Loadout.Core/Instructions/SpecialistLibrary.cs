@@ -495,7 +495,7 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
             origin == SpecialistOrigin.BuiltIn ? string.Empty : path,
             front.Probe is { Tools.Count: > 0, Summary.Length: > 0 } probe
                 ? new SpecialistProbe(
-                    probe.Summary.Trim(), probe.Tools, probe.Argument, probe.Pattern)
+                    probe.Summary.Trim(), probe.Tools, probe.Argument, probe.Pattern, probe.Absent)
                 : null));
     }
 
@@ -541,6 +541,8 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
         public string? Argument { get; set; }
 
         public string? Pattern { get; set; }
+
+        public bool Absent { get; set; }
     }
 
     [GeneratedRegex(@"\A---\r?\n(?<front>.*?)\r?\n---[ \t]*\r?\n",

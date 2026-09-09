@@ -155,6 +155,69 @@ public sealed class ProbeServiceTests : IDisposable
         week.Showed.Should().Be(1);
     }
 
+    private static readonly SpecialistProbe WithoutAsking =
+        new("carried on without stopping to ask", ["AskUserQuestion"], Absent: true);
+
+    [Fact]
+    public async Task An_absent_signature_is_shown_by_a_session_that_never_did_it()
+    {
+        Transcript("carried on", false, ("Bash", new { command = "dotnet build" }));
+
+        var week = await MeasureAsync(WithoutAsking);
+
+        // Some guidance asks for restraint, and the only thing it leaves behind
+        // is the absence of something.
+        week!.Sessions.Should().Be(1);
+        week.Showed.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task An_absent_signature_is_not_shown_by_a_session_that_did_it()
+    {
+        Transcript(
+            "stopped",
+            false,
+            ("Bash", new { command = "dotnet build" }),
+            ("AskUserQuestion", new { questions = "which way" }));
+
+        var week = await MeasureAsync(WithoutAsking);
+
+        week!.Sessions.Should().Be(1);
+        week.Showed.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task An_absent_signature_counts_every_session_that_did_any_work()
+    {
+        // The denominator differs from a positive signature and has to. A
+        // session that only read files never used AskUserQuestion either, and
+        // it genuinely carried on without asking — where for a positive
+        // signature the same session had no opportunity and is left out.
+        Transcript("reading", false, ("Read", new { file_path = "/somewhere" }));
+
+        var week = await MeasureAsync(WithoutAsking);
+
+        week!.Sessions.Should().Be(1);
+        week.Showed.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task An_absent_signature_is_not_shown_by_every_tool_there_is()
+    {
+        // The name check lives outside the matcher, so an absent probe that
+        // forgot to apply it counted any tool call as the one it was looking
+        // for — and reported nought per cent on five weeks where the true
+        // figure ranged from eleven to eighty-nine.
+        Transcript("busy", false,
+            ("Bash", new { command = "x" }),
+            ("Edit", new { file_path = "y" }),
+            ("Write", new { file_path = "z" }));
+
+        var week = await MeasureAsync(WithoutAsking);
+
+        week!.Showed.Should().Be(1, "none of those is the tool the probe names");
+    }
+
     [Fact]
     public async Task A_specialist_with_no_probe_is_refused_rather_than_scored_zero()
     {
