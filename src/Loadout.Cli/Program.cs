@@ -705,6 +705,7 @@ public static class Program
             project.AddCommand<ProjectShowCommand>("show");
             project.AddCommand<ProjectSurveyCommand>("survey");
             project.AddCommand<ProjectLinkCommand>("link");
+            project.AddCommand<ProjectContextCommand>("context");
         });
 
         TopBranch(config, "workspace", workspace =>

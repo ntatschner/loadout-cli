@@ -298,15 +298,17 @@ document Claude reads back. Only the Claude entry is installed by
 policy keeps out of the repository, so that one is yours to write.
 
 A project that wants the map itself in every session, rather than one lookup
-at a time, sets `code_map: true` under `context` in its manifest. That inlines
-one line per directory naming the types it holds, at a cost of a few thousand
-tokens on every launch; [the context budget](context-budget.md) says when that
-is worth paying, and `loadout instructions explain` shows the figure.
+at a time, runs `loadout project context code-map on`, which writes
+`code_map: true` under `context` in its manifest. That inlines one line per
+directory naming the types it holds, at a cost of a few thousand tokens on
+every launch; [the context budget](context-budget.md) says when that is worth
+paying, and `loadout instructions explain` shows the figure.
 
-`tasks: true`, in the same place, puts the project's open work in front of
-every session — what `loadout task list` shows, with who said so and when. Off
-until asked for, because the task record is a claim rather than a fact about
-the code and a project that keeps none should not pay for a heading saying so.
+`loadout project context tasks on`, which is `tasks: true` in the same place,
+puts the project's open work in front of every session — what
+`loadout task list` shows, with who said so and when. Off until asked for,
+because the task record is a claim rather than a fact about the code and a
+project that keeps none should not pay for a heading saying so.
 The agent moves an entry on with `loadout_task_declare`, or
 `loadout task declare <id> <state>`, and the context tells it to.
 

@@ -54,7 +54,18 @@ internal static class LauncherCommands
     /// </remarks>
     internal const string Launches = "launches";
 
+    /// <summary>
+    /// Reads and changes what a project carries into every session.
+    /// </summary>
+    /// <remarks>
+    /// Run rather than reimplemented, like the ledger above. These switches
+    /// live in the workspace manifest, and a screen that wrote to it directly
+    /// would be a second implementation of the write — including the part that
+    /// decides what a dry run means.
+    /// </remarks>
+    internal const string ProjectContext = "project context";
+
     /// <summary>Every one of them, for the test that checks they are real.</summary>
     internal static IReadOnlyList<string> All =>
-        [Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches];
+        [Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches, ProjectContext];
 }

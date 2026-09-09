@@ -190,6 +190,10 @@ line answers a question you'd otherwise type a command for.
   for the selected project: what was launched, in which posture, and how much
   context each was given.
 - *Token usage for this project* runs `loadout usage`.
+- *Carry open tasks into sessions* and *Inline the code map into sessions* run
+  `loadout project context`, flipping whichever switch the panel is showing.
+  The Context line says what a session is given beyond its instructions, so
+  the state the entry flips is on screen next to it rather than remembered.
 
 What the key runs is the command itself, not a copy of it. A screen never
 implements command behaviour here, or there are two implementations and one of

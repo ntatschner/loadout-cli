@@ -69,8 +69,9 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
 
         var output = new CommandOutput(_console, settings);
 
-        var resolution = await TaskResolution
-            .ResolveAsync(_projects, settings, cancellationToken).ConfigureAwait(false);
+        var resolution = await ProjectHandle
+            .ResolveAsync(_projects, settings.Project, settings.Repo, cancellationToken)
+            .ConfigureAwait(false);
 
         if (resolution.Failed)
         {
@@ -225,15 +226,18 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
 {
     private readonly ITaskService _tasks;
     private readonly IProjectService _projects;
+    private readonly Core.Workspace.IWorkspaceManager _workspace;
     private readonly IAnsiConsole _console;
 
     public TaskDeclareCommand(
         ITaskService tasks,
         IProjectService projects,
+        Core.Workspace.IWorkspaceManager workspace,
         IAnsiConsole console)
     {
         _tasks = tasks;
         _projects = projects;
+        _workspace = workspace;
         _console = console;
     }
 
@@ -277,8 +281,9 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
                 ExitCode.InvalidArguments);
         }
 
-        var resolution = await TaskResolution
-            .ResolveAsync(_projects, settings, cancellationToken).ConfigureAwait(false);
+        var resolution = await ProjectHandle
+            .ResolveAsync(_projects, settings.Project, settings.Repo, cancellationToken)
+            .ConfigureAwait(false);
 
         if (resolution.Failed)
         {
@@ -315,7 +320,43 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             $"[green]+[/] {Markup.Escape(declared.Value!.Id)} is "
             + $"{declared.Value.State.ToString().ToLowerInvariant()}.");
 
+        await SayIfNobodyWillSeeItAsync(output, slug, cancellationToken).ConfigureAwait(false);
+
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Says so when the project does not carry its tasks into a session.
+    /// </summary>
+    /// <remarks>
+    /// Said rather than fixed. Turning the switch on from here would rewrite the
+    /// manifest as a side effect of recording a task, which is the kind of
+    /// surprise preview-before-mutation exists to prevent — and the switch is
+    /// paid for on every launch of the project, not only this one.
+    /// <para>
+    /// Not a failure: the record is worth keeping either way, and the audit
+    /// trail reads it whether or not a session is shown it.
+    /// </para>
+    /// </remarks>
+    private async Task SayIfNobodyWillSeeItAsync(
+        CommandOutput output,
+        string slug,
+        CancellationToken ct)
+    {
+        var manifest = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+        if (manifest.Failed || manifest.Value!.Context.Tasks)
+        {
+            return;
+        }
+
+        output.WriteLine(
+            $"[yellow]![/] {Markup.Escape(slug)} does not carry its tasks into a session, "
+            + "so nothing will show this to one.");
+
+        output.WriteLine(
+            "[dim]  Turn it on with: loadout project context tasks on "
+            + $"--project {Markup.Escape(slug)}[/]");
     }
 }
 
@@ -355,8 +396,9 @@ public sealed class TaskRemoveCommand : AsyncCommand<TaskRemoveCommand.Settings>
 
         var output = new CommandOutput(_console, settings);
 
-        var resolution = await TaskResolution
-            .ResolveAsync(_projects, settings, cancellationToken).ConfigureAwait(false);
+        var resolution = await ProjectHandle
+            .ResolveAsync(_projects, settings.Project, settings.Repo, cancellationToken)
+            .ConfigureAwait(false);
 
         if (resolution.Failed)
         {
@@ -385,17 +427,4 @@ public sealed class TaskRemoveCommand : AsyncCommand<TaskRemoveCommand.Settings>
 
         return CommandOutput.Success();
     }
-}
-
-/// <summary>Working out which project a task command is about.</summary>
-internal static class TaskResolution
-{
-    internal static Task<Loadout.Models.Results.OperationResult<Models.Projects.ProjectResolution>> ResolveAsync(
-        IProjectService projects,
-        TaskSettings settings,
-        CancellationToken ct) =>
-        settings.Project is { Length: > 0 } handle
-            ? projects.ResolveAsync(handle, ct)
-            : projects.ResolveFromDirectoryAsync(
-                settings.Repo ?? Directory.GetCurrentDirectory(), ct);
 }
