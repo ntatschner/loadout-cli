@@ -217,9 +217,11 @@ internal sealed class ProjectDetailView : FrameView
 
         var budget = FormatBytes(overview.AlwaysLoadedBytes);
 
+        var carried = Carried(overview);
+
         _context.Text = overview.IsOverBudget
-            ? $"{budget} every session — larger than it needs to be"
-            : $"{budget} every session";
+            ? $"{budget} every session — larger than it needs to be{carried}"
+            : $"{budget} every session{carried}";
 
         _rules.Text = overview.ScopedRules == 1
             ? "1 scoped rule, loaded on demand"
@@ -243,6 +245,35 @@ internal sealed class ProjectDetailView : FrameView
         {
             _warnings.SetSource(new ObservableCollection<string>(warnings.Select(w => $"! {w}")));
         }
+    }
+
+    /// <summary>
+    /// What this project carries beyond its instructions, appended to the
+    /// context line rather than given a row of its own.
+    /// </summary>
+    /// <remarks>
+    /// Shown because the menu can switch these on and off, and a toggle whose
+    /// current state is nowhere on the screen is a guess. Silent when both are
+    /// off, which is the ordinary case: the line is about what a session costs,
+    /// and "carrying nothing extra" costs nothing to say and nothing to know.
+    /// </remarks>
+    internal static string Carried(ProjectOverview overview)
+    {
+        ArgumentNullException.ThrowIfNull(overview);
+
+        var carried = new List<string>();
+
+        if (overview.CarriesTasks)
+        {
+            carried.Add("open tasks");
+        }
+
+        if (overview.CarriesCodeMap)
+        {
+            carried.Add("the code map");
+        }
+
+        return carried.Count == 0 ? string.Empty : ", plus " + string.Join(" and ", carried);
     }
 
     /// <summary>

@@ -375,6 +375,16 @@ internal sealed class LauncherWindow : Window
                     Action = () => WithSelected(p =>
                         RunCommand($"{LauncherCommands.Instructions} --project {p.Entry.Slug}")),
                 },
+                new MenuItem
+                {
+                    Title = "Carry open _tasks into sessions",
+                    Action = () => WithSelected(p => RunCommand(ContextToggleFor(p, "tasks"))),
+                },
+                new MenuItem
+                {
+                    Title = "Inline the code _map into sessions",
+                    Action = () => WithSelected(p => RunCommand(ContextToggleFor(p, "code-map"))),
+                },
                 new Line(),
                 new MenuItem
                 {
@@ -867,6 +877,39 @@ internal sealed class LauncherWindow : Window
     }
 
     /// <summary>
+    /// The command that flips one of the switches deciding what a project
+    /// carries into every session.
+    /// </summary>
+    /// <remarks>
+    /// Composed and then run through the parser, never applied here: a screen
+    /// that wrote the manifest itself would be a second implementation of
+    /// <c>project context</c>, and the two would drift.
+    /// </remarks>
+    internal static string ContextToggle(string slug, string key, bool on) =>
+        $"{LauncherCommands.ProjectContext} {key} {(on ? "off" : "on")} --project {slug}";
+
+    /// <summary>
+    /// The same, for the project on screen.
+    /// </summary>
+    /// <remarks>
+    /// The state comes from the overview the panel is showing, so the entry
+    /// flips what somebody is looking at. A project whose overview has not
+    /// arrived yet reads as off, which is what a manifest that has never been
+    /// asked about defaults to — and the command reports what it did either
+    /// way, so a wrong guess is visible rather than silent.
+    /// </remarks>
+    private string ContextToggleFor(ProjectResolution project, string key)
+    {
+        var carried = _carried.TryGetValue(project.Entry.Slug, out var known)
+            ? known
+            : (Tasks: false, CodeMap: false);
+
+        var on = key == "tasks" ? carried.Tasks : carried.CodeMap;
+
+        return ContextToggle(project.Entry.Slug, key, on);
+    }
+
+    /// <summary>
     /// Runs a command from the palette, which means leaving the screen: a
     /// command writes to the terminal the toolkit is drawing on.
     /// </summary>
@@ -1125,6 +1168,13 @@ internal sealed class LauncherWindow : Window
     private readonly Dictionary<string, Readiness> _readiness = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// What each project carries into a session, as the last overview reported
+    /// it, so a menu entry can flip what the panel beside it is showing.
+    /// </summary>
+    private readonly Dictionary<string, (bool Tasks, bool CodeMap)> _carried =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Notes a project's readiness and redraws the list.
     /// </summary>
     /// <remarks>
@@ -1135,6 +1185,11 @@ internal sealed class LauncherWindow : Window
     /// </remarks>
     private void Record(ProjectResolution project, ProjectOverview? overview)
     {
+        if (overview is not null)
+        {
+            _carried[project.Entry.Slug] = (overview.CarriesTasks, overview.CarriesCodeMap);
+        }
+
         _readiness[project.Entry.Slug] = ProjectReadinessRules.Of(
             overview,
             project.IsAvailableLocally,

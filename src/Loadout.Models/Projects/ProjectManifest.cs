@@ -156,6 +156,9 @@ public sealed class ProjectContext
     /// put together. It earns that on a session that explores widely and loses
     /// it on a one-line fix. The lookup behind <c>loadout docs find</c> is
     /// there either way and costs nothing until it is asked.
+    /// <para>
+    /// Changed with <c>loadout project context code-map on</c>.
+    /// </para>
     /// </remarks>
     public bool CodeMap { get; set; }
 
@@ -170,6 +173,13 @@ public sealed class ProjectContext
     /// registered before it has a repository, because there the whole point of
     /// registering it is to hand the setup work to the agent, and a task the
     /// agent is never shown is a note to nobody.
+    /// <para>
+    /// Changed with <c>loadout project context tasks on</c>. That command
+    /// exists because this switch spent its first releases with no way to reach
+    /// it: the assignment above was the only one anywhere, so a project
+    /// registered from a repository was stuck off, and the tasks its sessions
+    /// recorded were shown to nobody.
+    /// </para>
     /// </remarks>
     public bool Tasks { get; set; }
 }

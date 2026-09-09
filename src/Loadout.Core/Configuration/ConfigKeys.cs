@@ -321,7 +321,12 @@ public static class ConfigKeys
     /// whichever of these came to mind, and refusing all but one spelling
     /// would be pedantry rather than validation.
     /// </summary>
-    private static bool Flag(string value) =>
+    /// <remarks>
+    /// Public because the project switches in <c>project context</c> accept the
+    /// same words, and two vocabularies for yes would drift the moment one of
+    /// them learned a new spelling.
+    /// </remarks>
+    public static bool Flag(string value) =>
         value.Trim().ToLowerInvariant() switch
         {
             "true" or "yes" or "on" or "1" => true,

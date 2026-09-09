@@ -302,7 +302,10 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
             .Should().NotContain(w => w.Contains("running", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static ProjectOverview Overview(int running) =>
+    private static ProjectOverview Overview(
+        int running,
+        bool tasks = false,
+        bool codeMap = false) =>
         new(
             new ProjectResolution(
                 new ProjectRegistryEntry { Slug = Slug, Name = "StarStats" }, null, null, 0, false),
@@ -316,7 +319,59 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
             0,
             false,
             null,
-            running);
+            running,
+            tasks,
+            codeMap);
+
+    [Fact]
+    public async Task What_a_project_carries_is_read_from_its_manifest()
+    {
+        await _workspace.WriteProjectAsync(new ProjectManifest
+        {
+            Slug = Slug,
+            Name = "StarStats",
+            Context = new ProjectContext { Tasks = true },
+        });
+
+        var overview = await _overviews.DescribeAsync(Project());
+
+        // Read, not assumed. The panel is the only place the state of these
+        // switches is visible, and the menu entry beside it flips whatever the
+        // panel is showing — so a stale answer here turns the entry the wrong
+        // way round.
+        overview.Value!.CarriesTasks.Should().BeTrue();
+        overview.Value.CarriesCodeMap.Should().BeFalse();
+    }
+
+    [Fact]
+    public void The_context_line_says_what_else_a_session_is_given()
+    {
+        // Silent in the ordinary case: the line is about what a session costs,
+        // and "carrying nothing extra" is not worth a word on every project.
+        Loadout.Tui.Terminal.ProjectDetailView.Carried(Overview(running: 0))
+            .Should().BeEmpty();
+
+        Loadout.Tui.Terminal.ProjectDetailView.Carried(Overview(running: 0, tasks: true))
+            .Should().Be(", plus open tasks");
+
+        Loadout.Tui.Terminal.ProjectDetailView
+            .Carried(Overview(running: 0, tasks: true, codeMap: true))
+            .Should().Be(", plus open tasks and the code map");
+    }
+
+    [Fact]
+    public void The_menu_entry_flips_the_switch_the_panel_is_showing()
+    {
+        // Composed as a command line and run through the parser. A screen that
+        // wrote the manifest itself would be a second implementation of
+        // 'project context' — including its dry run, which is the half that
+        // gets forgotten.
+        Loadout.Tui.Terminal.LauncherWindow.ContextToggle(Slug, "tasks", on: false)
+            .Should().Be($"project context tasks on --project {Slug}");
+
+        Loadout.Tui.Terminal.LauncherWindow.ContextToggle(Slug, "code-map", on: true)
+            .Should().Be($"project context code-map off --project {Slug}");
+    }
 
     [Fact]
     public async Task Sessions_open_against_this_project_are_counted_and_others_are_not()

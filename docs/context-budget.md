@@ -20,8 +20,16 @@ read only when something makes it relevant.
 That difference is the whole reason for the tooling below. None of it deletes
 anything: it moves content between layers whose prices differ.
 
-Two layers are off until a project asks for them. The code map is the larger:
-`code_map: true` under `context` in its manifest. It is the digest half of the
+Two layers are off until a project asks for them, and `loadout project context`
+is where both are read and changed:
+
+```bash
+loadout project context             # what this project carries, and what not
+loadout project context tasks on    # takes effect at the next launch
+```
+
+The code map is the larger: `loadout project context code-map on`, which is
+`code_map: true` under `context` in the manifest. It is the digest half of the
 machine index — one line per directory naming the types it holds — inlined so
 a session can choose where to look without reading the tree. It costs a few
 thousand tokens on a mid-sized repository, every launch, which is roughly what
@@ -32,17 +40,21 @@ it is asked. `loadout instructions explain` shows the map's price as its own
 line, at zero until it is switched on, so the decision can be made with the
 figure in front of you.
 
-The other is open tasks, with `tasks: true` under `context`. It inlines what
-the project is working on — the open, doing and blocked entries from
-`loadout task list`, each with who said so and when — so a session can pick up
-where the last one left off instead of asking. It is cheap, a line or two per
-task, and it is off by default for a different reason from the map: the record
-is a claim somebody made rather than a fact about the code, and a project that
-does not keep one would otherwise pay for a heading saying so on every launch.
+The other is open tasks: `loadout project context tasks on`, written as
+`tasks: true` under `context`. It inlines what the project is working on — the
+open, doing and blocked entries from `loadout task list`, each with who said so
+and when — so a session can pick up where the last one left off instead of
+asking. It is cheap, a line or two per task, and it is off by default for a
+different reason from the map: the record is a claim somebody made rather than
+a fact about the code, and a project that does not keep one would otherwise
+pay for a heading saying so on every launch.
 Finished and dropped tasks stay in the record and out of the context, because
 nobody has to act on them. A project registered before it had a repository has
 this switched on already, since the setup task is the whole reason it was
-registered that way.
+registered that way. Every other project starts with it off, and until the
+command above existed that was where it stayed: sessions could write to the
+record and nothing ever showed it to them. `loadout task declare` now says so
+when it is recording into a project nothing will read it from.
 
 ## Reading the budget
 
