@@ -28,7 +28,30 @@ public static class ConfigKeys
         bool IsMachineLocal,
         string? Sample = null,
         string Group = Groups.General,
-        bool IsFlag = false);
+        bool IsFlag = false,
+        string? WhenUnset = null);
+
+    /// <summary>
+    /// What a setting does when nobody has set it, for the settings where that
+    /// is a behaviour rather than an absence.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An empty value is shown as "(unset)" everywhere, and that word covers
+    /// two different situations. <c>updates-source</c> unset means the launcher
+    /// follows this project's own releases, which is something happening;
+    /// <c>agent-search-paths</c> unset means the usual places are searched. Both
+    /// read as though nothing is configured and nothing is going on.
+    /// </para>
+    /// <para>
+    /// Named here rather than worked out from the reader, because the behaviour
+    /// lives in whatever consumes the setting and cannot be recovered from a
+    /// null. A setting where unset genuinely means "off" leaves this alone, and
+    /// "(unset)" is then the whole truth.
+    /// </para>
+    /// </remarks>
+    public static string? Unset(string key) =>
+        All.FirstOrDefault(e => string.Equals(e.Key, key, StringComparison.Ordinal))?.WhenUnset;
 
     /// <summary>
     /// <c>IsFlag</c> marks a setting whose whole vocabulary is yes and no, so
@@ -123,23 +146,27 @@ public static class ConfigKeys
         new("onboarding-agent", "Agent a newly registered project launches",
             (c, _) => c.Onboarding.Agent,
             (c, _, v) => c.Onboarding.Agent = v, false,
-            Group: Groups.Agents),
+            Group: Groups.Agents,
+            WhenUnset: "new projects take default-agent"),
 
         new("onboarding-model", "Model a newly registered project pins",
             (c, _) => c.Onboarding.Model,
             (c, _, v) => c.Onboarding.Model = v, false,
-            Group: Groups.Agents),
+            Group: Groups.Agents,
+            WhenUnset: "new projects pin no model, so the agent picks"),
 
         new("onboarding-models", "Model per mode for a new project, as review=small;implement=big",
             (c, _) => FormatProfiles(c.Onboarding.ModelByMode),
             (c, _, v) => WriteProfiles(c.Onboarding.ModelByMode, v), false,
             Sample: "review=small-model;implement=big-model",
-            Group: Groups.Agents),
+            Group: Groups.Agents,
+            WhenUnset: "every mode uses onboarding-model"),
 
         new("onboarding-editor", "Editor profile a newly registered project opens under",
             (c, _) => c.Onboarding.EditorProfile,
             (c, _, v) => c.Onboarding.EditorProfile = v, false,
-            Group: Groups.Editor),
+            Group: Groups.Editor,
+            WhenUnset: "new projects open in the editor's default profile"),
 
         new("editor-command", "Editor opened by 'loadout code': code, code-insiders, codium, cursor",
             (c, _) => c.Editor.Command,
@@ -180,7 +207,8 @@ public static class ConfigKeys
             "Release feed URL. Empty means this project's own releases; 'off' means never check",
             (c, _) => c.Updates.Source,
             (c, _, v) => c.Updates.Source = v, false,
-            Group: Groups.Updates),
+            Group: Groups.Updates,
+            WhenUnset: "follows this project's own releases"),
 
         new("agent-tools", "Serve the launcher's own tools to the agent it starts",
             (c, _) => Boolean(c.AgentTools.Enabled),
@@ -273,7 +301,8 @@ public static class ConfigKeys
             (c, _) => string.Join(", ", c.AgentSearchPaths),
             (c, _, v) => c.AgentSearchPaths = SplitDirectories(v),
             false,
-            Group: Groups.Agents),
+            Group: Groups.Agents,
+            WhenUnset: "agents are looked for on PATH and their usual install directories"),
     ];
 
     /// <summary>

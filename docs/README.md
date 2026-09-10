@@ -31,4 +31,3 @@ is the detail behind it.
 ## Internals
 
 - [Architecture and building](architecture.md) — the platform seam, the build, testing, signing
-- [Specialist architecture](specialists-architecture.md) — why the library is shaped the way it is

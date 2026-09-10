@@ -231,9 +231,8 @@ root: docs
 counts:
   specialist: "src/Loadout.Core/Specialists/**/*.md"
 counts_exclude:
-  # A survey of a proposed external bundle, written before implementation.
-  # Its numbers are about that bundle, not about this repository.
-  - specialists-architecture.md
+  # A page whose figures are about somebody else's library rather than yours.
+  - vendor-comparison.md
 ```
 
 This is the drift that rots invisibly, because the sentence still reads
@@ -243,12 +242,12 @@ derived, because writing both out is configuration nobody keeps in step. The
 number one is never read as a total — "the full text of one specialist" is a
 quantity in a sentence, and prose is full of them.
 
-`counts_exclude` is there because counting assumes a noun means the same thing on
-every page, and sometimes it doesn't. Without it, this project's own
-`specialists-architecture.md` reports as stale on every number it contains: it's
-a survey of somebody else's library, and every one of those numbers is correct
-about that library. A project with no policy still gets all the checks above,
-which need nothing configured.
+`counts_exclude` is there because counting assumes a noun means the same thing
+on every page, and sometimes it doesn't. A page comparing your library against
+somebody else's, or quoting figures from a specification, reports as stale on
+every number it contains — and every one of those numbers is right about the
+thing it actually describes. A project with no policy still gets all the checks
+above, which need nothing configured.
 
 ## Saving what a session produced
 
