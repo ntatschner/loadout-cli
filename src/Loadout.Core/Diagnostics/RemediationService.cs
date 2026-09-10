@@ -90,6 +90,7 @@ internal sealed class RemediationService : IRemediationService
             RemedyKind.ImportProjectMemory => await MemoryAsync(remedy, apply, ct).ConfigureAwait(false),
             RemedyKind.UntrackAgentFiles => await UntrackAsync(remedy, apply, ct).ConfigureAwait(false),
             RemedyKind.ClearStaleSessionMarker => ClearSessionMarker(remedy, apply),
+            RemedyKind.CarryProjectContext => await ProjectContextAsync(remedy, apply, ct).ConfigureAwait(false),
             _ => OperationResult<RemedyOutcome>.Fail(
                 $"This build does not know how to apply '{remedy.Kind}'.",
                 ExitCode.InvalidArguments),
@@ -241,6 +242,84 @@ internal sealed class RemediationService : IRemediationService
         }
 
         return Done(remedy, "The session marker is gone; installing will not be refused.");
+    }
+
+    /// <summary>
+    /// Turns on one of a project's context switches, named in the target as
+    /// <c>slug=key</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The only remedy that turns something on rather than putting something
+    /// right, so it is the only one that can be declined without leaving
+    /// anything broken.
+    /// </para>
+    /// <para>
+    /// A switch already on is reported as already on rather than written again.
+    /// Between a suggestion being made and being agreed to somebody may have
+    /// done it themselves, and a fix that reports work it did not do is a fix
+    /// nobody can trust about the work it did.
+    /// </para>
+    /// </remarks>
+    private async Task<OperationResult<RemedyOutcome>> ProjectContextAsync(
+        Remedy remedy,
+        bool apply,
+        CancellationToken ct)
+    {
+        if (remedy.Target is not { Length: > 0 } target
+            || target.Split('=', 2) is not [{ Length: > 0 } slug, { Length: > 0 } key])
+        {
+            return OperationResult<RemedyOutcome>.Fail(
+                "No project and switch were named, so there is nothing to turn on.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (!apply)
+        {
+            return Preview(remedy, $"Carry {key} into every {slug} session.");
+        }
+
+        var read = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            return OperationResult<RemedyOutcome>.Fail(read.Error!, read.ExitCode);
+        }
+
+        var manifest = read.Value!;
+
+        var already = key switch
+        {
+            "tasks" => manifest.Context.Tasks,
+            "code-map" => manifest.Context.CodeMap,
+            _ => (bool?)null,
+        };
+
+        if (already is null)
+        {
+            return OperationResult<RemedyOutcome>.Fail(
+                $"'{key}' is not something a project can carry.", ExitCode.InvalidArguments);
+        }
+
+        if (already is true)
+        {
+            return Done(remedy, $"{slug} already carries {key}; nothing changed.");
+        }
+
+        if (key == "tasks")
+        {
+            manifest.Context.Tasks = true;
+        }
+        else
+        {
+            manifest.Context.CodeMap = true;
+        }
+
+        var written = await _workspace.WriteProjectAsync(manifest, ct).ConfigureAwait(false);
+
+        return written.Failed
+            ? OperationResult<RemedyOutcome>.Fail(written.Error!, written.ExitCode)
+            : Done(remedy, $"{slug} carries {key} from its next launch.");
     }
 
     private async Task<OperationResult<RemedyOutcome>> ExcludesAsync(
