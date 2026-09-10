@@ -155,6 +155,7 @@ public sealed class SetupWizard : ISetupWizard
         }
 
         await ChooseSecretProviderAsync(config, ct).ConfigureAwait(false);
+        ChooseUpdateSource(config, request);
 
         var save = await _configuration.SaveConfigAsync(config, ct).ConfigureAwait(false);
         if (save.Failed)
@@ -611,6 +612,63 @@ public sealed class SetupWizard : ISetupWizard
             }
         }
     }
+
+    /// <summary>
+    /// Where this machine looks for new versions.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked here because it is a machine-wide answer and this is the one place
+    /// machine-wide answers are given. Registering a project is not the moment
+    /// to decide where the launcher gets its own updates, so the project flows
+    /// do not ask.
+    /// </para>
+    /// <para>
+    /// The default is left empty rather than written out. An empty setting
+    /// means "the project's own releases", so a machine set up today follows
+    /// the feed wherever it moves, while a URL written into the file would
+    /// still be the old one.
+    /// </para>
+    /// <para>
+    /// Nothing here contacts the network. The answer decides where
+    /// <c>loadout update</c> will look when somebody runs it, and setup does
+    /// not run it.
+    /// </para>
+    /// </remarks>
+    private void ChooseUpdateSource(LauncherConfig config, SetupRequest request)
+    {
+        if (request.UpdateFeed is { } answered)
+        {
+            config.Updates.Source = answered.Trim();
+            return;
+        }
+
+        if (!request.Interactive)
+        {
+            return;
+        }
+
+        _console.WriteLine();
+
+        if (_console.Confirm(
+            "Check this project's releases for new versions of loadout?",
+            defaultValue: true))
+        {
+            return;
+        }
+
+        // Said rather than left silent, because "no" here is the answer that
+        // makes a command stop working, and somebody should know which command
+        // and how to undo it.
+        config.Updates.Source = Off;
+
+        _console.MarkupLine(
+            "[dim]  loadout update will not check anything. Undo with: "
+            + "loadout config set updates-source \"\"[/]");
+    }
+
+    /// <summary>What the setting is set to when somebody declines.</summary>
+    private const string Off = "off";
 
     /// <summary>Offers the global Git excludes of spec section 50.</summary>
     private async Task OfferGlobalProtectionAsync(SetupRequest request, CancellationToken ct)
