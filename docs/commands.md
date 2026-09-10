@@ -236,8 +236,8 @@ counts_exclude:
 ```
 
 This is the drift that rots invisibly, because the sentence still reads
-perfectly. "There are 73 specialists" sat at 71 while the library grew, and
-nothing about the page looked wrong. Keyed by the singular; the plural is
+perfectly. A page here claimed 73 of them while the library sat at 71, and
+nothing about it looked wrong. Keyed by the singular; the plural is
 derived, because writing both out is configuration nobody keeps in step. The
 number one is never read as a total — "the full text of one specialist" is a
 quantity in a sentence, and prose is full of them.
