@@ -665,7 +665,12 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             }
         }
 
-        if (skills.Count == 0 && BuiltInSkills.Names.Count == 0)
+        // The launcher's own, derived from the skill specialists rather than
+        // kept as a second copy of them. One source, so the command and the
+        // guidance the context composes cannot drift apart.
+        var shipped = Loadout.Core.Instructions.SkillExport.Shipped();
+
+        if (skills.Count == 0 && shipped.Count == 0)
         {
             return;
         }
@@ -677,7 +682,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         {
             warnings.Add(
                 "This build of Claude Code does not advertise --plugin-dir, so the "
-                + $"{skills.Count + BuiltInSkills.Names.Count} skill(s) available to "
+                + $"{skills.Count + shipped.Count} skill(s) available to "
                 + $"{context.Manifest.Slug} were not loaded.");
 
             return;
@@ -703,9 +708,12 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             // replaces it. Built-in, then workspace, then project: the same
             // order the specialist library and the rules already resolve in,
             // and the same reason — the narrower answer is the later one.
-            foreach (var name in BuiltInSkills.Names)
+            foreach (var (name, content) in shipped)
             {
-                BuiltInSkills.WriteTo(name, Path.Combine(plugin, "skills", name));
+                var into = Path.Combine(plugin, "skills", name);
+
+                Directory.CreateDirectory(into);
+                File.WriteAllText(Path.Combine(into, "SKILL.md"), content);
             }
 
             foreach (var (name, from) in skills)

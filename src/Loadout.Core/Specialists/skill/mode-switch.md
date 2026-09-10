@@ -3,6 +3,10 @@ id: skill.mode-switch
 kind: skill
 title: Changing mode mid-session
 summary: What a mode governs, and how to change it when the work changes shape.
+
+# Not offered as a command: this is the agent knowing how a mode works, not a
+# procedure anybody would start by typing its name.
+command: none
 task_phrases:
   - 'switch mode'
   - 'change mode'

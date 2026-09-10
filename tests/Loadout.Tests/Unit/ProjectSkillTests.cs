@@ -1,6 +1,8 @@
 using FluentAssertions;
 using Loadout.Agents;
 using Loadout.Agents.Claude;
+using Loadout.Core.Instructions;
+using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
 using Loadout.Tests.Fakes;
 using Xunit;
@@ -127,6 +129,40 @@ public sealed class ProjectSkillTests : IDisposable
 
         File.Exists(Path.Combine(plugin!, "skills", "finishup", "SKILL.md"))
             .Should().BeTrue("finishup ships with the launcher");
+    }
+
+    [Fact]
+    public async Task Mode_switch_is_not_offered_as_a_command()
+    {
+        var plugin = PluginDirectory(await BuildAsync())!;
+
+        // It is the agent knowing how a mode works, not a procedure anybody
+        // starts by typing its name, and a command nobody would type is in the
+        // way of the ones they would.
+        Directory.Exists(Path.Combine(plugin, "skills", "mode-switch"))
+            .Should().BeFalse("this one opts out");
+    }
+
+    [Fact]
+    public async Task A_shipped_skill_carries_the_specialist_body_unchanged()
+    {
+        var plugin = PluginDirectory(await BuildAsync())!;
+
+        var written = File.ReadAllText(Path.Combine(plugin, "skills", "finishup", "SKILL.md"));
+
+        var source = (await new SpecialistLibrary().LoadAsync(workspaceRoot: null))
+            .OfKind(SpecialistKind.Skill)
+            .Single(s => s.Id == "skill.session-retrospective");
+
+        // Counted rather than eyeballed, the way the rules splitter proves the
+        // same promise. Nothing summarises, reflows or drops a line: only the
+        // frontmatter differs, because that is the part the agent reads.
+        foreach (var line in source.Body.ReplaceLineEndings("\n").Split('\n')
+            .Select(l => l.TrimEnd())
+            .Where(l => l.Length > 0))
+        {
+            written.Should().Contain(line, "the body moves verbatim");
+        }
     }
 
     [Fact]
