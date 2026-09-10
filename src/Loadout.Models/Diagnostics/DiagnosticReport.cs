@@ -25,6 +25,18 @@ public enum RemedyKind
     /// Target is the repository path.
     /// </summary>
     UntrackAgentFiles,
+
+    /// <summary>
+    /// Delete a session marker no running session accounts for. Target is the
+    /// marker's path.
+    /// </summary>
+    /// <remarks>
+    /// A file rather than a state to repair, and deleting it is the whole fix.
+    /// It exists so an installer can tell that closing the launcher would end
+    /// somebody's session; one left behind by a launcher that was killed
+    /// refuses every install until it goes.
+    /// </remarks>
+    ClearStaleSessionMarker,
 }
 
 /// <summary>

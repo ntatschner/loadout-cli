@@ -101,6 +101,38 @@ if ($close) {
         "$close runs before RemoveExistingProducts, which deletes the old copy during an upgrade"
 }
 
+# A session runs inside the launcher process, so the action above ends one when
+# it closes a launcher that is hosting it. The package refuses instead, on a
+# file the launcher keeps for exactly as long as a session is running — and
+# refusing needs three things present together, none of which is visible from
+# outside the package.
+$conditions = @(Get-MsiRow 'SELECT `Condition`,`Description` FROM `LaunchCondition`')
+
+$session = $conditions | Where-Object { $_[0] -match 'LOADOUTSESSIONRUNNING' } | Select-Object -First 1
+
+Assert-That ($null -ne $session) `
+    'the package refuses to install while a session is running'
+
+if ($session) {
+    Assert-That ($session[1] -match 'Close your Loadout sessions') `
+        'the refusal says what to close, rather than only that it failed'
+}
+
+# The property the condition tests has to be filled by a search, or it is never
+# set and the condition is always true — which reads exactly like a package
+# that has this protection when it has none.
+$searches = @(Get-MsiRow 'SELECT `Signature`,`FileName` FROM `Signature`')
+
+Assert-That ($null -ne ($searches | Where-Object { $_[1] -match 'in-progress' })) `
+    'the package looks for the marker the launcher writes while a session runs'
+
+if ($close) {
+    $closeCondition = @(Get-MsiRow "SELECT ``Action``,``Condition`` FROM ``InstallExecuteSequence`` WHERE ``Action`` = '$close'")
+
+    Assert-That ($closeCondition.Count -eq 1 -and $closeCondition[0][1] -match 'LOADOUTSESSIONRUNNING') `
+        'the action that closes the launcher is itself conditioned on no session running'
+}
+
 # An upgrade only replaces an older install when these agree, and a mismatch
 # produces two entries in Add or Remove Programs rather than one upgraded one.
 $upgrades = @(Get-MsiRow 'SELECT `UpgradeCode`,`ActionProperty` FROM `Upgrade`')

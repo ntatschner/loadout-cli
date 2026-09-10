@@ -85,6 +85,7 @@ public static class ServiceRegistration
 
         services.AddSingleton<Editors.IEditorService, Editors.EditorService>();
         services.AddSingleton<IDiagnosticContributor, Editors.EditorDiagnosticContributor>();
+        services.AddSingleton<IDiagnosticContributor, Sessions.SessionDiagnosticContributor>();
         services.AddSingleton<IDoctorService, DoctorService>();
         services.AddSingleton<IRemediationService, RemediationService>();
 

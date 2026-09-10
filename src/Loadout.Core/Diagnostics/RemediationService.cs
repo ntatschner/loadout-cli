@@ -89,6 +89,7 @@ internal sealed class RemediationService : IRemediationService
             RemedyKind.RepairGlobalExcludes => await ExcludesAsync(remedy, apply, ct).ConfigureAwait(false),
             RemedyKind.ImportProjectMemory => await MemoryAsync(remedy, apply, ct).ConfigureAwait(false),
             RemedyKind.UntrackAgentFiles => await UntrackAsync(remedy, apply, ct).ConfigureAwait(false),
+            RemedyKind.ClearStaleSessionMarker => ClearSessionMarker(remedy, apply),
             _ => OperationResult<RemedyOutcome>.Fail(
                 $"This build does not know how to apply '{remedy.Kind}'.",
                 ExitCode.InvalidArguments),
@@ -205,6 +206,43 @@ internal sealed class RemediationService : IRemediationService
     /// path, and never edits a file somebody else owns.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Removes a session marker nothing is running behind.
+    /// </summary>
+    /// <remarks>
+    /// The check decided it was stale, by asking the registry what is actually
+    /// running; this only carries that out. Deliberately does not re-derive the
+    /// answer, because the two would then be able to disagree — and the failure
+    /// that matters is deleting a marker while a session is live, which would
+    /// let an installer close somebody's work.
+    /// </remarks>
+    private static OperationResult<RemedyOutcome> ClearSessionMarker(Remedy remedy, bool apply)
+    {
+        if (remedy.Target is not { Length: > 0 } path)
+        {
+            return OperationResult<RemedyOutcome>.Fail(
+                "No marker was named, so there is nothing to remove.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (!apply)
+        {
+            return Preview(remedy, $"Delete {path}.");
+        }
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<RemedyOutcome>.Fail(
+                $"The session marker could not be removed: {ex.Message}", ExitCode.GeneralFailure);
+        }
+
+        return Done(remedy, "The session marker is gone; installing will not be refused.");
+    }
+
     private async Task<OperationResult<RemedyOutcome>> ExcludesAsync(
         Remedy remedy,
         bool apply,
