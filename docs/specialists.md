@@ -1,30 +1,31 @@
 # Specialists and skills
 
-An agent launched at a repository needs to know two different things: what it
-should know, and what it should do. Specialists answer the first, skills the
-second, and the point of both is that a session gets the small relevant set
-rather than everything the project has ever touched.
+An agent launched at a repository needs two different things: what it should
+know, and what it should do. Specialists answer the first, skills the second.
+The point of both is that a session gets the small relevant set instead of
+everything the project has ever touched.
 
-This is the fourth layer of the model in [the context budget](context-budget.md),
-and it is priced the same way: what loads on every launch costs on every launch.
+This is the fourth layer of the model in [the context
+budget](context-budget.md), and it's priced the same way: what loads on every
+launch costs on every launch.
 
 ## Specialist or skill
 
 A **specialist** is expertise. It says what to care about, what to avoid, what
-to inspect and when to hand over to somebody else. `database.postgresql` knows
-that the estimate-versus-actual gap in a plan usually means stale statistics.
+to look at, and when to hand over to somebody else. `database.postgresql` knows
+that a big estimate-versus-actual gap in a plan usually means stale statistics.
 
-A **skill** is a procedure. It is a numbered list you can follow and know when
-you have finished. `skill.query-optimisation` is ten steps ending in "confirm
-the result set is unchanged".
+A **skill** is a procedure — a numbered list you can follow and know when you've
+finished. `skill.query-optimisation` is ten steps ending in "confirm the result
+set is unchanged".
 
-The difference matters when writing one. A skill that reads like a description
+The difference matters when you write one. A skill that reads like a description
 of a subject is a specialist in the wrong folder.
 
 ## Layers
 
-Guidance composes from the general to the specific, so where two sources
-disagree the narrower one is read last.
+Guidance composes general to specific, so where two sources disagree, the
+narrower one is read last.
 
 | Layer | What it is | Example |
 |---|---|---|
@@ -45,18 +46,18 @@ anything, and the chain is three deep at most.
 
 ## Modes
 
-Four postures, which change what to do rather than what to know.
+Four postures. They change what to do, not what to know.
 
 | Mode | Posture |
 |---|---|
-| `advise` | Answer the question. Do not change the repository. |
-| `investigate` | Find out what is happening. The fix is a separate step. |
+| `advise` | Answer the question. Don't change the repository. |
+| `investigate` | Find out what's happening. The fix is a separate step. |
 | `implement` | Make the change and verify it. The default. |
-| `review` | Judge the change as written. Report, do not rewrite. |
+| `review` | Judge the change as written. Report, don't rewrite. |
 
 Modes combine with specialists rather than duplicating them. `performance` with
-`investigate` means measure and isolate before editing; `performance` with
-`implement` means apply an optimisation that has already been justified.
+`investigate` means measure and isolate before editing. `performance` with
+`implement` means apply an optimisation somebody has already justified.
 
 ### A mode lasts the whole session
 
@@ -105,26 +106,26 @@ in the new task. Nothing already in the context is taken away.
 Four ways, in descending order of authority.
 
 **You asked for it.** `--specialist function.security` loads it whatever the
-evidence says, and it is never dropped for budget. Asking for something and
-silently not getting it is the worst outcome available, so naming a specialist
-that does not exist stops the command rather than proceeding without it.
+evidence says, and it's never dropped for budget. Asking for something and
+silently not getting it is the worst outcome going, so naming a specialist that
+doesn't exist stops the command instead of carrying on without it.
 
-**The task says so.** The strongest automatic signal, because it is the only one
-that reflects what you are actually doing. Phrases are matched on whole words:
-`api` does not match "capital".
+**The task says so.** The strongest automatic signal, because it's the only one
+that reflects what you're actually doing. Phrases match on whole words: `api`
+doesn't match "capital".
 
-**A dependency declares it.** `Npgsql` in a project file is a deliberate choice
+**A dependency declares it.** `Npgsql` in a project file is a deliberate choice,
 and worth more than a file extension.
 
-**The repository looks like it.** The weakest signal, and restricted on purpose.
-Files and dependencies activate **languages and frameworks only** — the layers
-that describe what the code *is*. Databases, platforms, clouds and functional
-specialists describe what you are *doing*, and a repository contains all of
-those whatever today's task is. This is the rule that stops somebody fixing a
-null reference being handed PostgreSQL, Kubernetes and Azure.
+**The repository looks like it.** The weakest signal, and deliberately fenced
+in. Files and dependencies activate **languages and frameworks only** — the
+layers that describe what the code *is*. Databases, platforms, clouds and
+functional specialists describe what you're *doing*, and a repository holds all
+of those whatever today's task is. This is the rule that stops somebody fixing a
+null reference from being handed PostgreSQL, Kubernetes and Azure.
 
 A language also has to clear a threshold of three files. One stray `.sql` file
-does not make a project a database project.
+doesn't make a project a database project.
 
 ## Project preferences
 
@@ -142,16 +143,16 @@ specialists:
   mode: implement
 ```
 
-**Preferred does not mean always loaded.** For a language or framework, a
-preference plus supporting evidence is enough. For anything else, a preference
-raises the specialist's standing — so it is not the first thing dropped when the
-budget is tight — but the task still has to point at it. A project that lists
-four technologies uses all four; that is not a reason to put all four in front
-of every session.
+**Preferred doesn't mean always loaded.** For a language or framework, a
+preference plus supporting evidence is enough. For anything else a preference
+raises the specialist's standing — so it isn't first out when the budget gets
+tight — but the task still has to point at it. A project that lists four
+technologies uses all four. That's no reason to put all four in front of every
+session.
 
 **Excluded is honoured.** It beats every kind of inference, including a
-requirement from another specialist. The one thing that overrides it is naming
-the specialist explicitly on the command line.
+requirement from another specialist. The only thing that overrides it is naming
+the specialist yourself on the command line.
 
 A profile's preferences replace the project's rather than adding to them, so a
 profile can narrow.
@@ -199,9 +200,9 @@ Context
   Usage: 24%
 ```
 
-Every line carries the reason it is there, and `--json` gives the same
-information as a document. The explanation runs through the same service the
-launch path uses, so it describes what would actually be composed.
+Every line carries the reason it's there, and `--json` gives you the same thing
+as a document. The explanation runs through the same service the launch path
+uses, so it describes what would actually get composed.
 
 ## Reading one
 
@@ -226,10 +227,10 @@ Lifetimes and ownership, and what the code does when something fails.
 ...
 ```
 
-The whole text, what triggers it, and what it costs. Worth reading before
-writing your own version of one: the shipped specialists are deliberately
-short, and a project specialist with the same id replaces rather than
-supplements the one it shadows.
+The whole text, what triggers it, and what it costs. Worth reading before you
+write your own version of one. The shipped specialists are deliberately short,
+and a project specialist with the same id replaces the one it shadows rather
+than adding to it.
 
 To see what there is at all:
 
