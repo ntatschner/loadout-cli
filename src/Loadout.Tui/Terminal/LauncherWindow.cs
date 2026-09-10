@@ -375,14 +375,14 @@ internal sealed class LauncherWindow : Window
                     Action = () => WithSelected(p =>
                         RunCommand($"{LauncherCommands.Instructions} --project {p.Entry.Slug}")),
                 },
-                new MenuItem
+                _carryTasks = new MenuItem
                 {
-                    Title = "Carry open _tasks into sessions",
+                    Title = ContextTitle(CarryTasks, on: false),
                     Action = () => WithSelected(p => RunCommand(ContextToggleFor(p, "tasks"))),
                 },
-                new MenuItem
+                _inlineCodeMap = new MenuItem
                 {
-                    Title = "Inline the code _map into sessions",
+                    Title = ContextTitle(InlineCodeMap, on: false),
                     Action = () => WithSelected(p => RunCommand(ContextToggleFor(p, "code-map"))),
                 },
                 new Line(),
@@ -898,6 +898,77 @@ internal sealed class LauncherWindow : Window
     /// asked about defaults to — and the command reports what it did either
     /// way, so a wrong guess is visible rather than silent.
     /// </remarks>
+    /// <summary>The two menu items whose label has to say where the switch stands.</summary>
+    private MenuItem? _carryTasks;
+    private MenuItem? _inlineCodeMap;
+
+    internal const string CarryTasks = "Carry open _tasks into sessions";
+    internal const string InlineCodeMap = "Inline the code _map into sessions";
+
+    /// <summary>
+    /// The two context switch labels as they currently read.
+    /// </summary>
+    /// <remarks>
+    /// Exposed because a menu bar does not put its items in the view tree until
+    /// somebody opens it, so a test walking subviews finds nothing and reads as
+    /// though the items are missing. This asserts on what the item says, which
+    /// is the thing under test.
+    /// </remarks>
+    internal (string Tasks, string CodeMap) ContextLabels =>
+        (_carryTasks?.Title ?? string.Empty, _inlineCodeMap?.Title ?? string.Empty);
+
+    /// <summary>
+    /// A context switch's menu label, with where it currently stands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The label itself never changes, so the item stays in the same place and
+    /// reads the same way whichever state it is in — a menu whose wording moves
+    /// under you is one you have to read again every time. What changes is the
+    /// word after it.
+    /// </para>
+    /// <para>
+    /// Written out rather than ticked. Terminal.Gui decorates with characters a
+    /// stock console font may have no glyph for, and a missing glyph is decided
+    /// by the font long after the character has left this program — which the
+    /// ANSI test harness cannot see, because the text it asserts on is correct
+    /// either way. Seven of the toolkit's glyphs already render blank in
+    /// Cascadia Mono. "(on)" cannot.
+    /// </para>
+    /// </remarks>
+    internal static string ContextTitle(string label, bool on) =>
+        $"{label}  ({(on ? "on" : "off")})";
+
+    /// <summary>
+    /// Puts the current state of the selected project's context switches into
+    /// their menu labels.
+    /// </summary>
+    /// <remarks>
+    /// Called wherever the answer can change: the cursor moving to another
+    /// project, and an overview arriving for the one already under it. The menu
+    /// is built once, so this updates the items rather than rebuilding it —
+    /// rebuilding a Terminal.Gui menu re-registers every handler on it, and
+    /// this application has twice shipped a defect from handlers being
+    /// registered more than once.
+    /// </remarks>
+    private void RefreshContextMenu()
+    {
+        var carried = Selected is { } project
+            && _carried.TryGetValue(project.Entry.Slug, out var known)
+            ? known
+            : (Tasks: false, CodeMap: false);
+
+        if (_carryTasks is not null)
+        {
+            _carryTasks.Title = ContextTitle(CarryTasks, carried.Tasks);
+        }
+
+        if (_inlineCodeMap is not null)
+        {
+            _inlineCodeMap.Title = ContextTitle(InlineCodeMap, carried.CodeMap);
+        }
+    }
+
     private string ContextToggleFor(ProjectResolution project, string key)
     {
         var carried = _carried.TryGetValue(project.Entry.Slug, out var known)
@@ -1190,6 +1261,10 @@ internal sealed class LauncherWindow : Window
             _carried[project.Entry.Slug] = (overview.CarriesTasks, overview.CarriesCodeMap);
         }
 
+        // The menu labels say where this project's switches stand, so they move
+        // when the answer does rather than only when the cursor does.
+        RefreshContextMenu();
+
         _readiness[project.Entry.Slug] = ProjectReadinessRules.Of(
             overview,
             project.IsAvailableLocally,
@@ -1342,6 +1417,8 @@ internal sealed class LauncherWindow : Window
         }
 
         var project = Selected;
+
+        RefreshContextMenu();
 
         if (project is null)
         {
