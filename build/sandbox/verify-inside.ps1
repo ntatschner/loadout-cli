@@ -73,19 +73,44 @@ try {
 
     Write-Host "== Verifying $($current.Name) =="
 
-    $arguments = @{
-        Msi = $current.FullName
+    # Run under the staged PowerShell 7, not the 5.1 this bootstrap is in.
+    #
+    # Start-Process -PassThru with redirected output does not expose ExitCode
+    # on 5.1: it comes back empty, so every bounded check in the verification
+    # compares against nothing and the run fails saying so. Verified against
+    # both hosts rather than assumed — 7 returns the code, 5.1 returns nothing,
+    # and neither caching the handle nor a second no-argument wait changes it.
+    $pwsh = Join-Path $Payload 'pwsh\pwsh.exe'
+
+    if (-not (Test-Path -LiteralPath $pwsh)) {
+        throw "PowerShell 7 was not staged into the payload; the verification cannot run on 5.1."
     }
+
+    $arguments = @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', (Join-Path $Payload 'verify-windows-install.ps1'),
+        '-Msi', $current.FullName)
 
     if ($previous) {
         Write-Host "Upgrading over $($previous.Name)."
-        $arguments['PreviousMsi'] = $previous.FullName
+        $arguments += @('-PreviousMsi', $previous.FullName)
     }
     else {
         Write-Host 'No previous release was mapped in, so only a fresh install is checked.'
     }
 
-    & (Join-Path $Payload 'verify-windows-install.ps1') @arguments
+    # Piped through this host rather than left to write to the console.
+    # Start-Transcript records what PowerShell writes, not what a child process
+    # does, so running it directly left the transcript with a hole exactly
+    # where the interesting part goes — and a failure with no detail is the
+    # thing this whole harness exists to stop producing.
+    & $pwsh @arguments 2>&1 |
+        Tee-Object -FilePath (Join-Path $Results 'verification.log') |
+        ForEach-Object { Write-Host $_ }
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "The verification exited $LASTEXITCODE."
+    }
 
     'PASS' | Set-Content -Path $verdict -Encoding ascii
     Write-Host '== PASS =='
@@ -99,4 +124,15 @@ catch {
 }
 finally {
     Stop-Transcript | Out-Null
+
+    # Closed from the inside, because nothing on the host can tell whether this
+    # has finished or is still working. The verdict is already written to a
+    # mapped folder, which is the host's own filesystem rather than anything
+    # that needs flushing, so it survives the machine going away underneath it.
+    #
+    # A moment first: the transcript handle has just been released, and taking
+    # the machine down in the same breath has no upside.
+    Start-Sleep -Seconds 3
+
+    & shutdown.exe /s /t 0
 }

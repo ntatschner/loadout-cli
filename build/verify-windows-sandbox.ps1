@@ -38,7 +38,11 @@ param(
 
     [string] $PreviousVersion,
 
-    [int] $TimeoutMinutes = 20
+    [int] $TimeoutMinutes = 20,
+
+    # Pinned rather than "latest", so a run today and a run next month are the
+    # same run. Bump it deliberately.
+    [string] $PwshVersion = '7.6.6'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -100,6 +104,46 @@ New-Item -ItemType Directory -Force -Path $payload, $results | Out-Null
 Copy-Item -LiteralPath $Msi -Destination $payload
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'verify-windows-install.ps1') -Destination $payload
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'sandbox\verify-inside.ps1') -Destination $payload
+
+# PowerShell 7, staged, because a clean Windows image has only Windows
+# PowerShell 5.1 and the verification cannot run there.
+#
+# Start-Process -PassThru with redirected output does not expose ExitCode on
+# 5.1 — it comes back empty, while the same call on 7 returns the code — so
+# every bounded check in the verification would compare against nothing. That
+# is worse than not running it: the run reports a failure it cannot explain,
+# and would report a pass just as readily.
+#
+# Staging the same host the release workflow uses also means the local run is
+# the run CI does, rather than an approximation of it that can disagree.
+$pwshCache = Join-Path ([System.IO.Path]::GetTempPath()) "loadout-sandbox-pwsh-$PwshVersion"
+$pwshExe = Join-Path $pwshCache 'pwsh.exe'
+
+if (-not (Test-Path -LiteralPath $pwshExe)) {
+    Write-Host "Staging PowerShell $PwshVersion for the sandbox (once; it is cached after this)..."
+
+    $zip = Join-Path ([System.IO.Path]::GetTempPath()) "PowerShell-$PwshVersion-win-x64.zip"
+
+    if (-not (Test-Path -LiteralPath $zip)) {
+        $url = "https://github.com/PowerShell/PowerShell/releases/download/v$PwshVersion/PowerShell-$PwshVersion-win-x64.zip"
+
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        }
+        catch {
+            Fail "PowerShell $PwshVersion could not be fetched from $url : $($_.Exception.Message)"
+        }
+    }
+
+    New-Item -ItemType Directory -Force -Path $pwshCache | Out-Null
+    Expand-Archive -LiteralPath $zip -DestinationPath $pwshCache -Force
+
+    if (-not (Test-Path -LiteralPath $pwshExe)) {
+        Fail "PowerShell $PwshVersion unpacked without a pwsh.exe in it."
+    }
+}
+
+Copy-Item -LiteralPath $pwshCache -Destination (Join-Path $payload 'pwsh') -Recurse
 
 if ($PreviousVersion -ne 'none') {
     if (-not $PreviousVersion) {
