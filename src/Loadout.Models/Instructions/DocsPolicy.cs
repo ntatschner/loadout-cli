@@ -46,16 +46,15 @@ public sealed class DocsPolicy
     /// <remarks>
     /// <para>
     /// Counting assumes a noun means the same thing on every page, and that is
-    /// not always true. This project's own <c>specialists-architecture.md</c> is
-    /// a survey written before implementation, of a proposed external bundle:
-    /// its "52 specialists" and "77 markdown files" are about somebody else's
-    /// library. Counted against this repository every number in it is wrong, and
-    /// none of them is stale.
+    /// not always true. A page comparing this library against somebody else's,
+    /// or quoting the figures in a specification, is about a different set of
+    /// things entirely: counted against this repository every number in it is
+    /// wrong, and none of them is stale.
     /// </para>
     /// <para>
-    /// Matched as a suffix of the path, so <c>specialists-architecture.md</c>
-    /// covers <c>docs/specialists-architecture.md</c> without the policy having
-    /// to repeat the root it already declared.
+    /// Matched as a suffix of the path, so <c>vendor-comparison.md</c> covers
+    /// <c>docs/vendor-comparison.md</c> without the policy having to repeat the
+    /// root it already declared.
     /// </para>
     /// </remarks>
     public List<string> CountsExclude { get; set; } = [];

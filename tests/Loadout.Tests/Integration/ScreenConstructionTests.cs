@@ -511,6 +511,31 @@ public sealed class ScreenConstructionTests
     }
 
     [Fact]
+    public void An_empty_setting_that_still_does_something_says_what_it_does()
+    {
+        // "(unset)" covers two different situations and reads as neither: an
+        // empty updates-source follows this project's own releases, and an
+        // empty telemetry-endpoint really is nothing. A screen that draws both
+        // as a blank box says the second about the first.
+        var behaving = ConfigKeys.All
+            .Where(entry => entry.WhenUnset is { Length: > 0 })
+            .ToList();
+
+        behaving.Should().NotBeEmpty("some settings do something while unset");
+
+        foreach (var entry in behaving)
+        {
+            SettingsWindow.Hint(entry, string.Empty)
+                .Should().Contain(entry.WhenUnset!,
+                    $"an empty {entry.Key} still does something and the screen has to say so");
+
+            SettingsWindow.Hint(entry, "a value")
+                .Should().NotContain(entry.WhenUnset!,
+                    $"{entry.Key} is set, so what it would do while empty is not the question");
+        }
+    }
+
+    [Fact]
     public void The_agent_to_editor_profile_map_gets_a_row_per_agent_rather_than_a_syntax()
     {
         using IApplication app = Application.Create();

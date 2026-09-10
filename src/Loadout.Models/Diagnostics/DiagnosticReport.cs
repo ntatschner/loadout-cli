@@ -37,6 +37,19 @@ public enum RemedyKind
     /// refuses every install until it goes.
     /// </remarks>
     ClearStaleSessionMarker,
+
+    /// <summary>
+    /// Put something the project already holds in front of its sessions. Target
+    /// is the project and what to carry, written <c>slug=key</c>.
+    /// </summary>
+    /// <remarks>
+    /// Two things in one string, which the other kinds do not need. They apply
+    /// to a thing — a repository, a project, a marker — and this applies to a
+    /// thing and which of its switches. Encoding both keeps <c>Remedy</c> the
+    /// same shape for every kind, and the alternative is a field that means
+    /// nothing to the other five.
+    /// </remarks>
+    CarryProjectContext,
 }
 
 /// <summary>
@@ -72,6 +85,33 @@ public sealed record DiagnosticCheck(
     public static DiagnosticCheck Ok(string category, string name, string detail) =>
         new(category, name, DiagnosticSeverity.Info, detail);
 
+    /// <summary>
+    /// Something worth turning on that is not turned on, with the change that
+    /// would do it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Info rather than a warning, and that is the whole point of it being its
+    /// own factory. <c>Overall</c> is the worst severity present and decides
+    /// the verdict, so one warning turns a machine where everything works into
+    /// a DEGRADED one. Not having opted into an optional feature is not a
+    /// degradation, and a report that says it is teaches people to skim past
+    /// the warnings that matter.
+    /// </para>
+    /// <para>
+    /// It still carries a remedy, because <c>Remedies</c> collects them at
+    /// every severity. So a suggestion is offered by <c>--fix</c> exactly as a
+    /// repair is, and inherits the same preview, the same single question and
+    /// the same re-check afterwards.
+    /// </para>
+    /// </remarks>
+    public static DiagnosticCheck Suggest(
+        string category,
+        string name,
+        string detail,
+        Remedy remedy) =>
+        new(category, name, DiagnosticSeverity.Info, detail, remedy);
+
     public static DiagnosticCheck Warn(
         string category,
         string name,
@@ -105,6 +145,35 @@ public sealed record DiagnosticReport(IReadOnlyList<DiagnosticCheck> Checks)
             .Select(c => c.Remedy)
             .OfType<Remedy>()
             .DistinctBy(r => (r.Kind, r.Target))
+            .ToList();
+
+    /// <summary>
+    /// Remedies for something that is actually wrong, as opposed to something
+    /// optional that is switched off.
+    /// </summary>
+    /// <remarks>
+    /// Split out so a report can offer both without calling both the same
+    /// thing. "Put right" is the wrong verb for turning on a feature nobody
+    /// asked for, and a count that mixes the two tells you neither how much is
+    /// broken nor how much is available.
+    /// </remarks>
+    public IReadOnlyList<Remedy> Repairs =>
+        Checks
+            .Where(c => c.Severity != DiagnosticSeverity.Info)
+            .Select(c => c.Remedy)
+            .OfType<Remedy>()
+            .DistinctBy(r => (r.Kind, r.Target))
+            .ToList();
+
+    /// <summary>Remedies for something optional that is available and off.</summary>
+    public IReadOnlyList<Remedy> Suggestions =>
+        Checks
+            .Where(c => c.Severity == DiagnosticSeverity.Info)
+            .Select(c => c.Remedy)
+            .OfType<Remedy>()
+            .DistinctBy(r => (r.Kind, r.Target))
+            .Where(suggestion => !Repairs.Any(
+                repair => repair.Kind == suggestion.Kind && repair.Target == suggestion.Target))
             .ToList();
 
     /// <summary>The single word printed at the end of the report.</summary>
