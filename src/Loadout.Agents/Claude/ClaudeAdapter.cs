@@ -78,6 +78,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             [SystemPromptFile] = ["--append-system-prompt-file", "--append-system-prompt[-file]"],
 
             [AgentCapabilities.AdditionalDirectories] = ["--add-dir"],
+            [AgentCapabilities.ProjectSkills] = ["--plugin-dir"],
             [AgentCapabilities.McpConfig] = ["--mcp-config"],
             [AgentCapabilities.SessionResume] = ["--resume", "--continue"],
             [PermissionMode] = ["--permission-mode"],
@@ -115,6 +116,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         await AddSettingsAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
+        AddProjectSkills(context, descriptor, arguments, warnings);
         AddSecurityProfile(context, descriptor, arguments, warnings);
         AddModel(context, descriptor, arguments, warnings);
 
@@ -540,10 +542,15 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     }
 
     /// <summary>
-    /// Grants read access to the project's workspace directory so the agent can
-    /// reach prompts and skills that were deliberately kept out of the
-    /// application repository.
+    /// Grants read access to the project's workspace directory, so the agent
+    /// can open prompts and other files kept out of the application repository.
     /// </summary>
+    /// <remarks>
+    /// Read access only. A skill sitting under this directory is a file the
+    /// session can open if it already knows the path, and nothing more: it is
+    /// not a command anybody can reach and nothing announces it. Skills are
+    /// handed over separately, by <see cref="AddProjectSkills"/>.
+    /// </remarks>
 
     /// <summary>
     /// Asks for the model the project pinned, where the agent can be told.
@@ -598,6 +605,124 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         {
             arguments.Add("--add-dir");
             arguments.Add(projectWorkspace);
+        }
+    }
+
+    /// <summary>
+    /// Hands the session the skills the workspace holds for this project, as
+    /// commands it can actually reach.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The workspace keeps them at <c>agents/&lt;agent&gt;/skills/&lt;name&gt;/SKILL.md</c>,
+    /// which is not where the agent looks, so until now they were authored and
+    /// never loaded: nothing named them and nothing could invoke them.
+    /// </para>
+    /// <para>
+    /// Written into the per-launch runtime directory and passed with
+    /// <c>--plugin-dir</c>, which loads for that session only. That is the same
+    /// bargain the compiled context makes, and it is what keeps this out of
+    /// both the application repository, where agent state does not belong, and
+    /// the agent's own configuration home, where it would outlive the session
+    /// and collide with the next project's.
+    /// </para>
+    /// <para>
+    /// A manifest is written rather than relying on a bare directory of skills
+    /// being accepted. Both shapes may work; only this one is known to.
+    /// </para>
+    /// </remarks>
+    private static void AddProjectSkills(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.WorkspacePath is null || context.Manifest is null)
+        {
+            return;
+        }
+
+        var source = Path.Combine(
+            context.WorkspacePath, "projects", context.Manifest.Slug, "agents", "claude", "skills");
+
+        if (!Directory.Exists(source))
+        {
+            return;
+        }
+
+        var skills = Directory.EnumerateDirectories(source)
+            .Where(directory => File.Exists(Path.Combine(directory, "SKILL.md")))
+            .ToList();
+
+        if (skills.Count == 0)
+        {
+            return;
+        }
+
+        // Said rather than skipped. A skill somebody wrote and cannot reach is
+        // exactly the state this exists to end, and a build that cannot take
+        // them should not leave that looking like it worked.
+        if (!descriptor.Supports(AgentCapabilities.ProjectSkills))
+        {
+            warnings.Add(
+                $"This build of Claude Code does not advertise --plugin-dir, so the {skills.Count} "
+                + $"skill(s) the workspace holds for {context.Manifest.Slug} were not loaded.");
+
+            return;
+        }
+
+        var plugin = Path.Combine(context.RuntimeDirectory, "skills", $"loadout-{context.Manifest.Slug}");
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(plugin, ".claude-plugin"));
+
+            File.WriteAllText(
+                Path.Combine(plugin, ".claude-plugin", "plugin.json"),
+                $$"""
+                {
+                  "name": "loadout-{{context.Manifest.Slug}}",
+                  "version": "0.0.0",
+                  "description": "Skills the workspace holds for {{context.Manifest.Slug}}, for this session only."
+                }
+                """);
+
+            foreach (var skill in skills)
+            {
+                CopyDirectory(skill, Path.Combine(plugin, "skills", Path.GetFileName(skill)));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            warnings.Add(
+                $"The skills for {context.Manifest.Slug} could not be prepared, so none were "
+                + $"loaded: {ex.Message}");
+
+            return;
+        }
+
+        arguments.Add("--plugin-dir");
+        arguments.Add(plugin);
+    }
+
+    /// <summary>Copies a skill and whatever it brings with it.</summary>
+    /// <remarks>
+    /// Everything, not just the <c>SKILL.md</c>. A skill routinely ships the
+    /// scripts it tells the session to run, and one copied without them is a
+    /// skill that fails at the first instruction it gives.
+    /// </remarks>
+    private static void CopyDirectory(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+
+        foreach (var file in Directory.EnumerateFiles(from))
+        {
+            File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(from))
+        {
+            CopyDirectory(directory, Path.Combine(to, Path.GetFileName(directory)));
         }
     }
 }

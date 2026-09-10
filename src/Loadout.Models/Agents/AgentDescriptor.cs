@@ -54,4 +54,17 @@ public static class AgentCapabilities
 
     /// <summary>Previous sessions can be resumed (spec section 68).</summary>
     public const string SessionResume = "session_resume";
+
+    /// <summary>
+    /// Skills the workspace holds for a project can be supplied to the session
+    /// as commands, from a directory the launcher controls.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="AdditionalDirectories"/>, which is what the
+    /// workspace skills had before and is not the same thing. Granting read
+    /// access to the directory a skill sits in lets a session open the file if
+    /// it already knows the path; it does not make the skill a command anybody
+    /// can reach, and nothing tells the session it is there.
+    /// </remarks>
+    public const string ProjectSkills = "project_skills";
 }
