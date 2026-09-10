@@ -51,10 +51,10 @@ $ loadout instructions explain "why is this postgres query so slow" \
   Estimated  2,403 to 1,655 (-748)
 ```
 
-The lines both sides share are counted rather than listed — they are not the
-question — and the costliest change comes first, because somebody comparing
-configurations is usually trying to get under a budget. If it picked something daft you
-can rule it out with `--without`.
+Lines both sides share get counted rather than listed, since they aren't the
+question, and the costliest change comes first, because anyone comparing
+configurations is usually trying to get under a budget. If it picks something
+daft, rule it out with `--without`.
 
 ### Memory that doesn't grow forever
 
@@ -143,21 +143,21 @@ corroboration can say a claim is unsupported and can never say one is wrong.
 
 ### Code that isn't a repository yet
 
-`loadout project add` takes a directory that has no Git repository in it. It
+`loadout project add` takes a directory with no Git repository in it. It
 registers as one still to be set up, with a task saying so, and the launch says
-so too — so the first session is told on the way in rather than discovering it
-by running something and reading an error. Initialising it, the first commit
-and the remote are the work; `loadout protect` comes after, and is not
-suggested before there is anything to protect. A path that does not exist is
-still refused, because that is a typo rather than a plan.
+so too — the first session gets told on the way in instead of finding out by
+running something and reading an error. Initialising it, the first commit and
+the remote are the work. `loadout protect` comes after, and isn't suggested
+before there's anything to protect. A path that doesn't exist is still refused,
+because that's a typo rather than a plan.
 
 `loadout project discover` and the launcher's Add Project list offer these too,
-marked as not being repositories, because a list of things you can register
-that leaves out a kind you can register is a list you cannot trust. They are
-never swept up by a bulk registration: a scratch folder is not a project
-because somebody asked to register everything they had cloned. Build output —
-`__pycache__`, `dist`, a screenshots folder — is left out of the offer, though
-still walked through in case a repository is buried in one.
+marked as not repositories, because a list of things you can register that
+leaves out a kind you can register isn't a list you can trust. They're never
+swept up by a bulk registration: a scratch folder doesn't become a project
+because somebody asked to register everything they'd cloned. Build output —
+`__pycache__`, `dist`, a screenshots folder — stays out of the offer, though
+it's still walked through in case a repository is buried in one.
 
 ### Undo
 
