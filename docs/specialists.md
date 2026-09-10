@@ -238,8 +238,8 @@ loadout instructions list            # everything available to this project
 loadout instructions list --kind language
 ```
 
-The library ships 76 specialists — 5 foundations, 4 modes, 10 languages, 8
-frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions and 15 skills.
+The library ships 77 specialists — 5 foundations, 4 modes, 10 languages, 8
+frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions and 16 skills.
 They are embedded in the binary rather than kept on disk, so the command is the
 way to read them; there is no directory to browse.
 
