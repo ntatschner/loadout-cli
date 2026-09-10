@@ -51,10 +51,9 @@ saying so on every launch.
 Finished and dropped tasks stay in the record and out of the context, because
 nobody has to act on them. A project registered before it had a repository comes
 with this switched on, since the setup task is the whole reason it was
-registered that way. Every other project starts with it off — and until the
-command above existed, that's where it stayed. Sessions could write to the
-record and nothing ever showed it back to them. `loadout task declare` now says
-so when it's recording into a project that nothing will read it from.
+registered that way. Every other project starts with it off, so `loadout task
+declare` tells you when it's recording into a project that nothing will read it
+back from.
 
 ## Reading the budget
 

@@ -74,17 +74,17 @@ Supported runtime identifiers: `win-x64`, `win-arm64`, `linux-x64`,
 ## Testing
 
 The suite covers more than units. Four kinds are worth knowing about, because
-each one exists for a class of defect that reached a user:
+each one exists for a class of defect the others can't reach:
 
 - **Contract tests** run the built command line as a real process against a
   throwaway home, and pin the shape of every `--json` document. Rename a
-  published property and they fail. `--json` is what scripts read, and nothing
-  asserted any of it before.
+  published property and they fail. `--json` is what scripts read, so its shape
+  is a promise.
 - **Interaction tests** drive the launcher with keystrokes on a headless ANSI
   driver, at 80×24 through 200×60, and assert on what actually got drawn.
-  Building screens without pressing keys let three defects through: a crash on
-  startup, a menu naming a command that didn't exist, and a capability that
-  vanished in a rewrite.
+  Building screens without pressing keys catches none of what this does: a
+  crash on startup, a menu naming a command that doesn't exist, a capability
+  that vanished in a rewrite.
 - **Leakage tests** plant a synthetic credential and hunt for it down every
   output path — stdout, stderr, JSON, and a full stack trace under `--debug`.
 - **Mutation checks** are why the tests above are worth trusting. Each one was
@@ -150,19 +150,19 @@ and removes it again. It's a development convenience and nothing more — spec
 section 1 forbids a container from being any part of how the launcher runs, and
 CI still runs these tests natively on its Ubuntu leg.
 
-It earns its keep. The first run found four defects a Windows machine can't see:
-a `waitpid` call that reaped unrelated child processes, a library that only
+It earns its keep, because it catches what a Windows machine can't see: a
+`waitpid` call that reaps unrelated child processes, a library that only
 resolves under a name you get with development packages installed, a pre-commit
-hook test that proved nothing because a fake stood in for the executable bit,
-and an assertion about Windows paths that could only ever pass on Windows.
+hook test that proves nothing because a fake stands in for the executable bit,
+an assertion about Windows paths that could only ever pass on Windows.
 
 The `arm64` run is emulated. That's slow, and it's the only way to run a
 `linux-arm64` build without arm64 hardware — otherwise that build is
-cross-compiled and never runs anywhere. It found a fifth defect: `posix_spawn`
-reports a missing executable to the caller on x64, and lets the child exit 127
-on arm64. The same missing agent would have given you a clear error on one
-machine and silence on another. The launcher now checks before it spawns, which
-is what Windows already did.
+cross-compiled and never runs anywhere. It's worth the wait for defects that
+only appear there: `posix_spawn` reports a missing executable to the caller on
+x64 and lets the child exit 127 on arm64, so the same missing agent gives a
+clear error on one machine and silence on the other. The launcher checks before
+it spawns, which is what Windows already did.
 
 Emulation can't build Debian or RPM packages. The `stat` that `tar
 --no-recursion` relies on returns `EINVAL` under QEMU, and a two-file package

@@ -61,10 +61,10 @@ reopens that conversation rather than asking again which you meant.
 
 ## The launch sheet
 
-Enter on a project does not start the agent. It opens the launch sheet, which
-is where everything a launch can be asked is asked, filled in with the
-defaults, so Enter again starts the session. That is one keystroke more than
-before, and what it buys is the preview.
+Enter on a project doesn't start the agent. It opens the launch sheet, where
+every question a launch can ask is already asked and filled in with the
+defaults, so Enter again starts the session. That's one keystroke for the
+preview, which is a good trade.
 
 ```text
 ╭┤Launch loadout-cli├──────────────────────────────────────────────────────╮
@@ -92,79 +92,75 @@ before, and what it buys is the preview.
 ╰──────────────────────────────────────────────────────────────────────────╯
 ```
 
-**Agent** lists every agent installed on this machine, the project's own
-first. Before the sheet, every launch from the screen started the project's
-default agent whatever else was installed, and switching meant quitting and
-typing `loadout launch <project> --agent codex`.
+**Agent** lists every agent installed on this machine, the project's own first,
+so switching is a keystroke rather than a quit and a retyped command line.
 
 **Task and mode** are what choose the specialists. **Profile** and **Worktree**
-are offered up front when the project has more than one, by the same names
-`--profile` and `--worktree` take, so the sheet and the command line cannot
-mean different things.
+show up front when the project has more than one, under the same names
+`--profile` and `--worktree` take, so the sheet and the command line can't mean
+different things.
 
 **This session would load** is the answer the launch itself will get. As you
 type the task or change the mode, the sheet asks the same resolver the launch
-asks and shows what came back: which specialists, why each was chosen, and
-what they cost against the budget. It is not a second implementation of that
-choice; it is the choice, shown early. Before the sheet, the only way to see
-this was a command that closed the launcher and printed to the terminal.
+asks, and shows you what came back: which specialists, why each one was chosen,
+and what they cost against the budget. It isn't a second implementation of that
+choice. It's the choice, shown early, without closing the launcher to see it.
 
-Cancelling the sheet returns to the list and starts nothing. Launching hands
-what was chosen to the `launch` command as its flags, so a session started
-from the screen is the same session a typed one is, down to the question about
+Cancel the sheet and you're back at the list with nothing started. Launch and it
+hands what you chose to the `launch` command as its flags, so a session started
+from the screen is the same session a typed one is — down to the question about
 uncommitted workspace changes on the way out.
 
 ![The command palette, listing commands with the one that cannot run from a menu
 marked "terminal only"](images/command-palette.svg)
 
-**Ctrl+P reaches everything, and finds it by what it is for.** Searching `undo`
-reaches `backup restore`; `broken` reaches `doctor`; `vscode` reaches `code`.
-Nobody wanting to undo a mistake searches for the words "backup restore", and a
-palette matching only names leaves them believing the capability is absent.
+**Ctrl+P reaches everything, and finds it by what it's for.** Search `undo` and
+you get `backup restore`; `broken` gets you `doctor`; `vscode` gets you `code`.
+Nobody trying to undo a mistake searches for the words "backup restore", and a
+palette that matches names alone just convinces them the capability isn't there.
 
-The list is built while the commands are registered rather than written out by
-hand, so a command added tomorrow appears without anybody remembering to add it,
-and a test asserts the two agree. Commands are grouped by what they are for and
-the ones that change files say so, because a palette that looks the same for
+The list is built as the commands are registered rather than written out by
+hand, so a command added tomorrow turns up without anybody remembering to add
+it, and a test asserts the two agree. Commands are grouped by what they're for,
+and the ones that change files say so — a palette that looks identical for
 reading settings and rewriting them is asking you to remember which is which.
 
-The few that cannot work from a menu — `completion` writes a script to be piped
-somewhere, `statusline` is run by the agent several times a minute — are listed
-with the reason rather than hidden. Something you cannot find is
-indistinguishable from something that does not exist.
+The few that can't work from a menu are listed with the reason rather than
+hidden: `completion` writes a script you pipe somewhere, `statusline` gets run
+by the agent several times a minute. Something you can't find looks exactly like
+something that doesn't exist.
 
 ![The problems screen: what was found above, what can be put right and what each
 fix would change below](images/problems.svg)
 
 **Problems** is a screen of its own: what was found, what can be put right, and
-what each fix says it would change, ticked rather than applied as you move
-through the list. Space ticks a fix and Enter applies what is ticked; Esc backs
-out and changes nothing. Applying with nothing ticked says so rather than
-closing, because a screen that closes either way looks the same whether or
-not a fix went through. Nothing is applied from that screen — inspecting a repository
-and applying a fix are both slow enough that doing them while still drawing
-would look like a hang, so the screen collects what was ticked, closes, and the
+what each fix says it would change — ticked as you move through the list, not
+applied. Space ticks a fix, Enter applies what's ticked, Esc backs out and
+changes nothing. Apply with nothing ticked and it tells you, rather than just
+closing, because a screen that closes either way looks the same whether or not a
+fix went through. Nothing actually runs from that screen. Inspecting a
+repository and applying a fix are both slow enough that doing either mid-draw
+would look like a hang, so the screen collects what you ticked, closes, and the
 fixes run with the terminal handed back.
 
-That is the rule the whole launcher follows. Anything needing the terminal for
-itself — an agent, a shell, a command's output — happens with the screen closed,
-and running a command hands it to the same parser you would have typed at rather
-than to a second implementation.
+That's the rule the whole launcher follows. Anything that needs the terminal for
+itself — an agent, a shell, a command's output — happens with the screen closed.
+And running a command hands it to the same parser you'd have typed at, not to a
+second implementation.
 
-Adding a project stays a sequence of questions rather than a form: it scans the
-configured folders or takes a path, registers what you pick, and offers to move
-any agent files it finds. That is the same flow first-run setup uses, because
-registering a project a fortnight later is the same job.
+Adding a project stays a sequence of questions rather than a form. It scans the
+folders you configured or takes a path, registers what you pick, and offers to
+move any agent files it finds. That's the same flow first-run setup uses,
+because registering a project a fortnight later is the same job.
 
-Changing the workspace repository moves any existing clone aside rather than
-reusing or deleting it. The clone belongs to the old repository, so a sync
-against a new remote would either fail or, worse, appear to work against the
-wrong history.
+Changing the workspace repository moves any existing clone aside instead of
+reusing or deleting it. The clone belongs to the old repository, so syncing it
+against a new remote would either fail or — worse — look like it worked, against
+the wrong history.
 
-The launcher is driven end to end in the tests through a headless ANSI driver
-that reports back what was actually drawn, so the assertions are about what
-somebody would be looking at rather than about text that happened to be
-printed.
+The tests drive the launcher end to end through a headless ANSI driver that
+reports what was actually drawn, so the assertions are about what you'd be
+looking at rather than text that happened to get printed.
 
 ## Sessions already running
 

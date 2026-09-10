@@ -74,12 +74,12 @@ means the same thing: show what would happen and change nothing. Several
 commands have their own older spelling — `--apply` on some, `--fix` on others —
 and those still work; where both are given, the more cautious wins.
 
-For a launch, the dry run is the launch described in full: the agent and its
-executable, the working directory, the compiled context and where it went,
-the MCP configuration files, the environment variables by name, the complete
-command line, and every specialist chosen with the reason for each and what
-they cost. With `--json` the same is written as one document. Variable values
-are never printed, because a resolved secret is exactly what one can hold.
+For a launch, the dry run is the whole launch described: the agent and its
+executable, the working directory, the compiled context and where it went, the
+MCP configuration files, the environment variables by name, the full command
+line, and every specialist chosen with the reason for each and what it costs.
+`--json` writes the same thing as one document. Values are never printed —
+a resolved secret is exactly what a variable can hold.
 
 Every command accepts `--json`, and everything after a bare `--` is passed to
 the agent untouched:
@@ -95,9 +95,9 @@ Exit codes are stable and documented in
 
 VS Code keeps settings, extensions and keybindings in named profiles, and
 working with an agent usually wants a different set from working without one.
-`loadout code` opens a project under the profile that suits it, so the same
-repository opened for Claude and opened for Codex can put the editor in two
-different states.
+`loadout code` opens a project under the profile that suits it, so opening the
+same repository for Claude and for Codex can put the editor in two different
+states.
 
 ```yaml
 # config.yaml
@@ -108,8 +108,8 @@ editor:
     codex: Codex
 ```
 
-The profile used is the project's own if it names one, then the one configured
-for the agent it uses, then none — so if you do not use profiles you get the
+It uses the project's own profile if it names one, then whatever's configured
+for the agent it uses, then none. So if you don't use profiles, you get the
 editor you always get.
 
 ```bash
@@ -143,16 +143,16 @@ attributes them:
 ```
 
 `loadout resume` opens a picker, or takes a session id or `--last`. Resuming
-goes through the launcher rather than the agent directly, so the workspace
-synchronises and the context recompiles instead of a bare transcript being
-reopened. The task, mode, profile and worktree the session was launched with
-are read back from the launch ledger and carried over, so it reopens with the
-specialists it had; `--task` and `--mode` replace them when the work has
-changed shape. The interactive launcher offers the same picker per project.
+goes through the launcher rather than straight to the agent, so the workspace
+syncs and the context recompiles instead of just reopening a bare transcript.
+The task, mode, profile and worktree the session launched with are read back
+from the launch ledger and carried over, so it reopens with the specialists it
+had. `--task` and `--mode` replace them when the work has changed shape. The
+interactive launcher offers the same picker per project.
 
-Neither storage format is a published contract, so both readers are
-best-effort by construction: a transcript that cannot be understood costs that
-one session and never the listing.
+Neither storage format is a published contract, so both readers are best-effort
+by design: a transcript nobody can make sense of costs you that one session,
+never the listing.
 
 ## Launches, which are not sessions
 
@@ -179,12 +179,12 @@ Composed  3
   language.csharp
 ```
 
-They are separate lists on purpose, and neither can be turned into the other: an
-agent picks its own session identifier and the launcher never learns it. Nor
-does this say what a launch spent — token counts are aggregated by directory and
-day, so attributing them to one of three launches that day would be arithmetic
-dressed as fact. The tokens shown are the instruction tokens the launcher
-estimated and recorded, which really are per launch.
+They're separate lists on purpose, and neither turns into the other: an agent
+picks its own session identifier and the launcher never learns it. This also
+won't tell you what a launch spent. Token counts are aggregated by directory and
+day, so pinning them on one of the three launches you made that day would be
+arithmetic dressed up as fact. The tokens shown are the instruction tokens the
+launcher estimated and recorded, and those really are per launch.
 
 A launch has three outcomes rather than two. `unclosed` means no ending was
 recorded — killed, terminal closed, or still going — and `never ran` means it
@@ -193,12 +193,13 @@ neither has.
 
 ## Documentation that still describes the code
 
-Loadout has checked its own documentation for a while, by hand, three times
-over: a test that every command the docs name exists, one that the install
-examples name the version that ships, one that the specialist count is the
-count. Each was written after the drift it now catches — a table left naming the
-old sub-commands, a count left at 71, a download link left at 0.9.2 through five
-releases. `loadout docs audit` is that habit offered to any repository.
+Loadout checks its own documentation three ways, by hand: a test that every
+command the docs name exists, one that the install examples name the version
+that ships, one that the specialist count is the count. Each guards a way prose
+rots while still reading perfectly — a table naming sub-commands that were
+renamed, a total left behind by the thing it counts, a download link pointing at
+a version no longer at the top of the releases page. `loadout docs audit` is
+that habit offered to any repository.
 
 ```console
 $ loadout docs audit
@@ -236,8 +237,8 @@ counts_exclude:
 ```
 
 This is the drift that rots invisibly, because the sentence still reads
-perfectly. A page here claimed 73 of them while the library sat at 71, and
-nothing about it looked wrong. Keyed by the singular; the plural is
+perfectly. A page can claim a total the library passed months ago and nothing
+about it will look wrong. Keyed by the singular; the plural is
 derived, because writing both out is configuration nobody keeps in step. The
 number one is never read as a total — "the full text of one specialist" is a
 quantity in a sentence, and prose is full of them.
@@ -275,12 +276,11 @@ Take the value out and put it in the credential store with 'loadout secret set',
 then save again.
 ```
 
-Memory has been screened at the point of writing since it existed. This is the
-same answer applied to everything else the policy commits — handoffs, project
-instructions, context notes, profiles, MCP definitions — and to anything an agent
-wrote into the workspace directly, which no check at the point of writing can
-see. Binary files are left alone; a file that can't be read is reported rather
-than passed, because "clean" is the one thing a scan must not say about
+Memory is screened as it's written. The same screening applies to everything
+else the policy commits — handoffs, project instructions, context notes,
+profiles, MCP definitions — and to anything an agent wrote into the workspace
+directly, which no check at the point of writing can see. Binary files are left alone. A file that can't be read gets reported rather
+than passed, because "clean" is the one thing a scan must never say about
 something it never opened.
 
 Commits follow the format in spec section 46, so a workspace history reads as a
@@ -294,15 +294,15 @@ Agent: claude
 Machine: DEV-PC
 ```
 
-A session that only read produces no commit. If a push fails the commit has
-already happened, and the message says so rather than implying the work went
-nowhere. The fourth option is deliberately "leave them uncommitted" rather than
-"discard": the launcher has no business deleting work somebody just did.
+A session that only read produces no commit. If a push fails, the commit has
+already happened, and the message says so rather than implying your work went
+nowhere. The fourth option is deliberately "leave them uncommitted" and not
+"discard" — the launcher has no business deleting work somebody just did.
 
-The prompt lives in the CLI, not in core. Core decides whether a person needs
-to be asked; it never asks, because spec section 37 forbids a menu appearing in
-a pipe or a CI job. Non-interactively the changes are left in place and
-`loadout workspace save` is suggested.
+The prompt lives in the CLI, not in core. Core decides whether somebody needs to
+be asked; it never asks, because spec section 37 forbids a menu turning up in a
+pipe or a CI job. With nobody there, the changes are left in place and it
+suggests `loadout workspace save`.
 
 ## MCP servers
 
@@ -321,10 +321,10 @@ claude.ai Context7, context7  the same service under more than one name, so ever
 tool it offers is loaded twice and the model sees each one twice
 ```
 
-Servers the workspace declares are held there rather than in the repository, and
-handed to the agent with `--mcp-config` at launch — so they are the same on
-every machine that clones the workspace, instead of on whichever one happened to
-have them configured.
+Servers the workspace declares live there rather than in the repository, and get
+handed to the agent with `--mcp-config` at launch. So they're the same on every
+machine that clones the workspace, instead of on whichever one happened to have
+them configured.
 
 Three things are reported:
 
@@ -345,9 +345,8 @@ is not happening.
 
 ### The launcher's own server
 
-The handoff used to run one way: the launcher composed a context, started an
-agent and heard nothing more. Every launch now also declares Loadout itself as
-an MCP server, so a session can ask it things rather than parse console output
+Every launch declares Loadout itself as an MCP server, so the handoff runs both
+ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
 Nine tools, each making the same call its command makes:
