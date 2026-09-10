@@ -18,6 +18,9 @@ public sealed class QuietSessionRegistry : ISessionRegistry
     public string Path => "(none)";
 
     /// <inheritdoc />
+    public string InProgressPath => "(none)";
+
+    /// <inheritdoc />
     public Task RegisterAsync(NewSession session, CancellationToken ct = default) =>
         Task.CompletedTask;
 

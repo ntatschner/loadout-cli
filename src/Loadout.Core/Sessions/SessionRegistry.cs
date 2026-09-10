@@ -55,6 +55,28 @@ public interface ISessionRegistry
     /// <summary>Where the entries are kept, so a person can go and look.</summary>
     string Path { get; }
 
+    /// <summary>
+    /// A file that exists for exactly as long as a session is running, and is
+    /// absent otherwise.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For the Windows installer, which has to know whether closing the
+    /// launcher would end somebody's session and cannot run code to find out.
+    /// A session runs inside the launcher process — the agent inherits its
+    /// terminal — so an installer that closes every launcher to replace the
+    /// binary takes the session with it. The one thing MSI can do unaided is
+    /// look for a file with a known name.
+    /// </para>
+    /// <para>
+    /// The entries next to it already say this, one file per session, but
+    /// answering "is any of them still alive" means reading each one and
+    /// checking a process, which is code. This is the same answer with the
+    /// checking already done.
+    /// </para>
+    /// </remarks>
+    string InProgressPath { get; }
+
     /// <summary>Claims an entry for a session that is about to run.</summary>
     Task RegisterAsync(NewSession session, CancellationToken ct = default);
 
@@ -116,10 +138,17 @@ internal sealed class SessionRegistry : ISessionRegistry
         _time = time;
 
         Path = System.IO.Path.Combine(paths.Paths.State, "launches", "running");
+
+        // Beside the entries rather than among them: they are enumerated as
+        // *.json, so this name cannot be mistaken for one.
+        InProgressPath = System.IO.Path.Combine(Path, "in-progress");
     }
 
     /// <inheritdoc />
     public string Path { get; }
+
+    /// <inheritdoc />
+    public string InProgressPath { get; }
 
     /// <inheritdoc />
     public async Task RegisterAsync(NewSession session, CancellationToken ct = default)
@@ -157,6 +186,8 @@ internal sealed class SessionRegistry : ISessionRegistry
 
             // It says what somebody is working on and where the code lives.
             _permissions.RestrictToCurrentUser(file);
+
+            await RefreshInProgressAsync(ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -167,11 +198,11 @@ internal sealed class SessionRegistry : ISessionRegistry
     }
 
     /// <inheritdoc />
-    public Task ReleaseAsync(string launchId, CancellationToken ct = default)
+    public async Task ReleaseAsync(string launchId, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(launchId))
         {
-            return Task.CompletedTask;
+            return;
         }
 
         try
@@ -183,7 +214,9 @@ internal sealed class SessionRegistry : ISessionRegistry
             // Left behind, and the process check will see it for what it is.
         }
 
-        return Task.CompletedTask;
+        // The last session ending is the moment the installer is allowed to
+        // close the launcher again, so the marker goes as the entry does.
+        await RefreshInProgressAsync(ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -203,6 +236,61 @@ internal sealed class SessionRegistry : ISessionRegistry
     }
 
     /// <summary>Deletes the entries whose processes are gone.</summary>
+    /// <summary>
+    /// Puts the marker in step with what is actually running.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the entries every time rather than counted as sessions come
+    /// and go. A count kept in a variable is a count that is wrong after a
+    /// crash, and the thing reading this is an installer deciding whether it is
+    /// safe to close somebody's work.
+    /// <para>
+    /// A launcher that dies without releasing its entry leaves the marker
+    /// behind, and it stays until something touches the registry — which the
+    /// next launch does, because registering sweeps abandoned entries first.
+    /// <c>loadout doctor</c> reports one that has outlived every session.
+    /// </para>
+    /// </remarks>
+    private async Task RefreshInProgressAsync(CancellationToken ct)
+    {
+        var live = false;
+
+        foreach (var (session, _) in await ReadAllAsync(ct).ConfigureAwait(false))
+        {
+            if (_processes.IsRunning(session.ProcessId, session.ProcessStartedAt))
+            {
+                live = true;
+                break;
+            }
+        }
+
+        try
+        {
+            if (live)
+            {
+                if (!File.Exists(InProgressPath))
+                {
+                    // Empty: its existence is the whole message, and anything
+                    // written inside would be a second thing to keep true.
+                    await File.WriteAllTextAsync(InProgressPath, string.Empty, ct)
+                        .ConfigureAwait(false);
+
+                    _permissions.RestrictToCurrentUser(InProgressPath);
+                }
+            }
+            else if (File.Exists(InProgressPath))
+            {
+                File.Delete(InProgressPath);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Another launcher is doing the same thing at the same moment.
+            // Whichever wins, it agrees with the entries beside it, and a
+            // session must not fail to start over a marker.
+        }
+    }
+
     private async Task ClearAbandonedAsync(CancellationToken ct)
     {
         foreach (var (session, file) in await ReadAllAsync(ct).ConfigureAwait(false))

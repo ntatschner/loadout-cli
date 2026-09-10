@@ -176,7 +176,16 @@ function Invoke-Msi {
     # every call this script makes still fits inside the job timeout with room
     # to spare. That margin is the whole point: it is what turns a hang into a
     # failure with a log.
-    param([string] $Label, [string[]] $Arguments, [int] $TimeoutSeconds = 180)
+    param(
+        [string] $Label,
+        [string[]] $Arguments,
+        [int] $TimeoutSeconds = 180,
+
+        # For the cases where being refused is the pass. Returns the log so the
+        # caller can assert on why it was refused: an install that failed for
+        # some other reason would otherwise read as a success.
+        [switch] $ExpectFailure
+    )
 
     $log = Join-Path $logs "$Label.log"
 
@@ -192,6 +201,14 @@ function Invoke-Msi {
     }
 
     Write-Host "  $Label exit $($process.ExitCode)"
+
+    if ($ExpectFailure) {
+        if ($process.ExitCode -eq 0) {
+            throw "$Label was expected to be refused and succeeded instead. Log: $log"
+        }
+
+        return $log
+    }
 
     if ($process.ExitCode -ne 0) {
         Get-Content $log -Encoding Unicode -ErrorAction SilentlyContinue |
@@ -418,6 +435,48 @@ $path = [Environment]::GetEnvironmentVariable('PATH', 'User')
 if ($path -notlike '*loadout*') {
     throw 'The install did not add loadout to the user PATH, so nothing can find it by name.'
 }
+
+# The failure this exists for: a session runs inside the launcher process,
+# because the agent inherits its terminal, so the action that closes every
+# launcher to replace the binary ends live sessions. The launcher keeps a file
+# for exactly as long as a session is running and the package refuses while it
+# is there.
+#
+# Verified here rather than on a developer's machine deliberately. Proving it
+# means having something that looks like a running session and then running an
+# installer that closes launchers, and doing that where somebody is working is
+# how you take out their session — which has happened on this project before.
+Step 'Checking an install is refused while a session is running...'
+
+$marker = Join-Path $env:LOCALAPPDATA 'Loadout\launches\running\in-progress'
+
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $marker) | Out-Null
+[System.IO.File]::WriteAllText($marker, '')
+
+$refusedLog = Invoke-Msi 'refused-while-session-running' @('/i', $Msi) -ExpectFailure
+
+$said = Get-Content $refusedLog -Encoding Unicode -ErrorAction SilentlyContinue
+
+if (-not ($said | Select-String -Pattern 'Close your Loadout sessions' -Quiet)) {
+    throw "The install was refused, but not for the reason it should have been. Log: $refusedLog"
+}
+
+# And the kill action must not have run: it is conditioned on the same
+# property, so a refusal that still closed the launcher would have ended the
+# session it was protecting before saying no.
+if ($said | Select-String -Pattern 'CloseRunningLoadout' -Quiet) {
+    throw "The package refused the install but ran CloseRunningLoadout anyway. Log: $refusedLog"
+}
+
+Write-Host '  refused, and named the reason'
+
+Step 'Checking the same install proceeds once no session is running...'
+
+Remove-Item -LiteralPath $marker -Force
+
+# The other half of the pair. Without it, a package that refused every install
+# unconditionally would pass the check above.
+Invoke-Msi 'allowed-after-session-ends' @('/i', $Msi)
 
 Step 'Removing it...'
 
