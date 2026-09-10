@@ -172,3 +172,42 @@ isn't there. arm64 packages are built on an x86-64 host in CI, where `tar`
 behaves. Installing an arm64 package *on* arm64 is the one thing still covered
 nowhere.
 
+
+## Verifying the installer without a spare machine
+
+`build/verify-windows-install.ps1` installs software, upgrades over the previous
+release and uninstalls again. It says in its own description that it's meant for
+a disposable machine and not one somebody is using — which is true, and which is
+why it only ever ran after a tag was pushed. That's a slow place to find out an
+installer is wrong.
+
+```powershell
+pwsh ./build/verify-windows-sandbox.ps1
+```
+
+That runs the same script in a Windows Sandbox and reports back. Both packages
+and the script are staged here and mapped in read-only, so nothing inside
+reaches the network or needs a credential.
+
+A sandbox rather than a container, and the package decides it. The MSI installs
+per user: `%LOCALAPPDATA%\Programs\loadout`, a user `PATH` entry, a Start Menu
+shortcut. A Windows container has no logged-in user to have any of those, so it
+would be checking something other than what people run.
+
+**It disables the Restart Manager before it starts, and that's the point.** The
+failure this whole check exists for — an upgrade over a running launcher ending
+in 1603 — only happens where the Restart Manager is disabled. That's a policy on
+managed Windows builds, not a default anywhere. A CI runner has it enabled and
+so does a fresh sandbox, so both would install cleanly over a running launcher
+and pass a package that fails on the machines the defect was reported from.
+Setting it here makes the precondition something the test states rather than
+something the machine happened to have.
+
+Windows Sandbox ships with Windows 11 Pro and needs enabling once:
+
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName 'Containers-DisposableClientVM' -All
+```
+
+The script says so if it's missing, rather than enabling it for you: that needs
+elevation and a restart, which is a decision for whoever owns the machine.
