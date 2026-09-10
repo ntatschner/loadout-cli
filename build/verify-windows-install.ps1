@@ -37,6 +37,12 @@ param(
 
     [string] $PreviousVersion,
 
+    # The previous release as a file already on disk, for an environment with
+    # no network and no credentials — a disposable machine this script is
+    # handed rather than one that can fetch for itself. Given this, nothing
+    # here reaches the network at all.
+    [string] $PreviousMsi,
+
     # Asked of GitHub through the bounded runner below when no version is
     # given, because the caller asking inline is what hung.
     [string] $Repository,
@@ -380,19 +386,41 @@ if (-not $PreviousVersion -and $Repository) {
     }
 }
 
+if ($PreviousMsi -and -not (Test-Path -LiteralPath $PreviousMsi)) {
+    throw "The previous release was named as '$PreviousMsi', and there is no such file."
+}
+
+if ($PreviousMsi -and -not $PreviousVersion) {
+    # Named from the file rather than asked for twice. A version and a package
+    # that disagreed would be checked against the wrong number, and the file is
+    # the thing actually being installed.
+    if ((Split-Path -Leaf $PreviousMsi) -match '(\d+\.\d+\.\d+)') {
+        $PreviousVersion = $Matches[1]
+    }
+    else {
+        throw "No version could be read from '$PreviousMsi'. Pass -PreviousVersion as well."
+    }
+}
+
 if ($PreviousVersion) {
     Write-Host "Installing $PreviousVersion first, so the upgrade path is the one under test..."
 
     $previous = Join-Path $logs "previous.msi"
 
-    Step "Downloading v$PreviousVersion..."
+    if ($PreviousMsi) {
+        Step "Using the previous release already here: $PreviousMsi"
+        Copy-Item -LiteralPath $PreviousMsi -Destination $previous -Force
+    }
+    else {
+        Step "Downloading v$PreviousVersion..."
 
-    Invoke-BoundedTool 'download-previous' 'gh' @(
-        'release', 'download', "v$PreviousVersion",
-        '--repo', 'ntatschner/loadout-cli',
-        '--pattern', '*win-x64.msi',
-        '--output', $previous,
-        '--clobber')
+        Invoke-BoundedTool 'download-previous' 'gh' @(
+            'release', 'download', "v$PreviousVersion",
+            '--repo', 'ntatschner/loadout-cli',
+            '--pattern', '*win-x64.msi',
+            '--output', $previous,
+            '--clobber')
+    }
 
     Step 'Installing the previous version...'
     Invoke-Msi 'install-previous' @('/i', $previous)
