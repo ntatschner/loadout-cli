@@ -154,7 +154,7 @@ public sealed class SetupWizard : ISetupWizard
             return (int)outcome.ExitCode;
         }
 
-        await ChooseSecretProviderAsync(config, ct).ConfigureAwait(false);
+        await ChooseSecretProviderAsync(config, request, ct).ConfigureAwait(false);
         ChooseUpdateSource(config, request);
 
         var save = await _configuration.SaveConfigAsync(config, ct).ConfigureAwait(false);
@@ -543,7 +543,10 @@ public sealed class SetupWizard : ISetupWizard
         return OperationResult.Ok();
     }
 
-    private async Task ChooseSecretProviderAsync(LauncherConfig config, CancellationToken ct)
+    private async Task ChooseSecretProviderAsync(
+        LauncherConfig config,
+        SetupRequest request,
+        CancellationToken ct)
     {
         var availability = await _secrets.IsAvailableAsync(ct).ConfigureAwait(false);
 
@@ -560,6 +563,24 @@ public sealed class SetupWizard : ISetupWizard
         // offered instead of the setup simply failing.
         _console.MarkupLine(
             $"[yellow]The native secret store is unavailable:[/] {Shown.Safely(availability.Error!)}");
+
+        if (!request.Interactive)
+        {
+            // The fallback spec section 86 already names, taken rather than
+            // asked for. This prompt ignored --non-interactive, so provisioning
+            // a headless Linux machine — which is the case with no Secret
+            // Service, and so the only case that reaches here — died on
+            // "cannot show selection prompt since the current terminal isn't
+            // interactive". The scripted path existing at all is the point of
+            // the flag.
+            config.Secrets.Provider = "environment";
+
+            _console.MarkupLine(
+                "[dim]+ Secret provider  environment. Change it with:[/] "
+                + "loadout config set secrets-provider <name>");
+
+            return;
+        }
 
         config.Secrets.Provider = _console.Prompt(
             new SelectionPrompt<string>()
