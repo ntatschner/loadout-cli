@@ -154,7 +154,8 @@ public sealed class SetupWizard : ISetupWizard
             return (int)outcome.ExitCode;
         }
 
-        await ChooseSecretProviderAsync(config, ct).ConfigureAwait(false);
+        await ChooseSecretProviderAsync(config, request, ct).ConfigureAwait(false);
+        ChooseUpdateSource(config, request);
 
         var save = await _configuration.SaveConfigAsync(config, ct).ConfigureAwait(false);
         if (save.Failed)
@@ -542,7 +543,10 @@ public sealed class SetupWizard : ISetupWizard
         return OperationResult.Ok();
     }
 
-    private async Task ChooseSecretProviderAsync(LauncherConfig config, CancellationToken ct)
+    private async Task ChooseSecretProviderAsync(
+        LauncherConfig config,
+        SetupRequest request,
+        CancellationToken ct)
     {
         var availability = await _secrets.IsAvailableAsync(ct).ConfigureAwait(false);
 
@@ -559,6 +563,24 @@ public sealed class SetupWizard : ISetupWizard
         // offered instead of the setup simply failing.
         _console.MarkupLine(
             $"[yellow]The native secret store is unavailable:[/] {Shown.Safely(availability.Error!)}");
+
+        if (!request.Interactive)
+        {
+            // The fallback spec section 86 already names, taken rather than
+            // asked for. This prompt ignored --non-interactive, so provisioning
+            // a headless Linux machine — which is the case with no Secret
+            // Service, and so the only case that reaches here — died on
+            // "cannot show selection prompt since the current terminal isn't
+            // interactive". The scripted path existing at all is the point of
+            // the flag.
+            config.Secrets.Provider = "environment";
+
+            _console.MarkupLine(
+                "[dim]+ Secret provider  environment. Change it with:[/] "
+                + "loadout config set secrets-provider <name>");
+
+            return;
+        }
 
         config.Secrets.Provider = _console.Prompt(
             new SelectionPrompt<string>()
@@ -611,6 +633,63 @@ public sealed class SetupWizard : ISetupWizard
             }
         }
     }
+
+    /// <summary>
+    /// Where this machine looks for new versions.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked here because it is a machine-wide answer and this is the one place
+    /// machine-wide answers are given. Registering a project is not the moment
+    /// to decide where the launcher gets its own updates, so the project flows
+    /// do not ask.
+    /// </para>
+    /// <para>
+    /// The default is left empty rather than written out. An empty setting
+    /// means "the project's own releases", so a machine set up today follows
+    /// the feed wherever it moves, while a URL written into the file would
+    /// still be the old one.
+    /// </para>
+    /// <para>
+    /// Nothing here contacts the network. The answer decides where
+    /// <c>loadout update</c> will look when somebody runs it, and setup does
+    /// not run it.
+    /// </para>
+    /// </remarks>
+    private void ChooseUpdateSource(LauncherConfig config, SetupRequest request)
+    {
+        if (request.UpdateFeed is { } answered)
+        {
+            config.Updates.Source = answered.Trim();
+            return;
+        }
+
+        if (!request.Interactive)
+        {
+            return;
+        }
+
+        _console.WriteLine();
+
+        if (_console.Confirm(
+            "Check this project's releases for new versions of loadout?",
+            defaultValue: true))
+        {
+            return;
+        }
+
+        // Said rather than left silent, because "no" here is the answer that
+        // makes a command stop working, and somebody should know which command
+        // and how to undo it.
+        config.Updates.Source = Off;
+
+        _console.MarkupLine(
+            "[dim]  loadout update will not check anything. Undo with: "
+            + "loadout config set updates-source \"\"[/]");
+    }
+
+    /// <summary>What the setting is set to when somebody declines.</summary>
+    private const string Off = "off";
 
     /// <summary>Offers the global Git excludes of spec section 50.</summary>
     private async Task OfferGlobalProtectionAsync(SetupRequest request, CancellationToken ct)

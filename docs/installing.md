@@ -80,9 +80,28 @@ quietly broken archive.
 ## Updating
 
 ```bash
-loadout config set updates-source https://internal.example/loadout/feed.json
 loadout update --check
 loadout update
+```
+
+Out of the box that reads this project's own releases: every release publishes
+a `feed.json` beside the archives, and the setting is empty until somebody says
+otherwise. Empty means the default, so a machine follows the feed wherever it
+moves rather than pointing at the URL that was current the day it was set up.
+
+First-run setup asks, and takes the answer as a flag when nobody is there:
+
+```bash
+loadout setup --no-update-feed                                   # never check
+loadout setup --update-feed https://internal.example/feed.json   # somewhere else
+```
+
+Afterwards it is one setting, shared with every machine on the workspace:
+
+```bash
+loadout config set updates-source https://internal.example/loadout/feed.json
+loadout config set updates-source off       # never check
+loadout config set updates-source ""        # back to this project's releases
 ```
 
 The source is any JSON document reachable over HTTP, or a path — a directory on

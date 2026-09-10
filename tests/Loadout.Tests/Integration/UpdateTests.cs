@@ -90,13 +90,63 @@ public sealed class UpdateTests : IDisposable
     }
 
     [Fact]
-    public async Task An_unconfigured_source_says_so_rather_than_failing_obscurely()
+    public void An_unconfigured_source_means_this_project_s_own_releases()
     {
-        await _configuration.SaveConfigAsync(new LauncherConfig());
+        // It used to mean nothing at all: an empty setting failed with "no
+        // release source is configured", which is the state every install
+        // starts in — and there was no URL to give it, because the release
+        // published archives and a manifest but never a feed. The command was
+        // therefore dead on every machine.
+        //
+        // Asserted on the resolution rather than through CheckAsync, because
+        // the answer is now a real URL and a unit test has no business reaching
+        // for it.
+        ReleaseSource.Resolve(null).Should().Be(ReleaseSource.Default);
+        ReleaseSource.Resolve(string.Empty).Should().Be(ReleaseSource.Default);
+        ReleaseSource.Resolve("   ").Should().Be(ReleaseSource.Default);
+
+        ReleaseSource.Default.Should().StartWith("https://");
+
+        // The redirecting URL, not a versioned one. A feed URL naming a version
+        // is a feed URL that stops finding updates the moment one is released.
+        ReleaseSource.Default.Should().Contain("/releases/latest/download/");
+    }
+
+    [Fact]
+    public void A_source_somebody_has_set_is_left_alone()
+    {
+        ReleaseSource.Resolve(" https://internal.example/feed.json ")
+            .Should().Be("https://internal.example/feed.json");
+    }
+
+    [Theory]
+    [InlineData("off")]
+    [InlineData("none")]
+    [InlineData("OFF")]
+    [InlineData(" disabled ")]
+    public void Switching_it_off_is_something_you_can_say(string value) =>
+        // Distinct from empty, which is the default. Turning something off has
+        // to be sayable, not said by deleting — and the several spellings are
+        // deliberate, because this setting is typed by hand.
+        ReleaseSource.IsDisabled(value).Should().BeTrue();
+
+    [Fact]
+    public void A_feed_url_is_not_mistaken_for_switching_it_off() =>
+        ReleaseSource.IsDisabled("https://internal.example/none.json").Should().BeFalse();
+
+    [Fact]
+    public async Task A_machine_that_has_switched_it_off_is_told_which_command_to_undo()
+    {
+        var config = new LauncherConfig();
+        config.Updates.Source = "off";
+
+        await _configuration.SaveConfigAsync(config);
 
         var result = await Service().CheckAsync();
 
+        // Refused before anything is fetched, so the answer costs no network.
         result.Failed.Should().BeTrue();
+        result.Error.Should().Contain("switched off");
         result.Error.Should().Contain("loadout config set updates-source");
     }
 

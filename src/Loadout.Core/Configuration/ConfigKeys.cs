@@ -176,7 +176,8 @@ public static class ConfigKeys
             (c, _, v) => c.Secrets.Provider = v, false,
             Group: Groups.Secrets),
 
-        new("updates-source", "Release feed URL",
+        new("updates-source",
+            "Release feed URL. Empty means this project's own releases; 'off' means never check",
             (c, _) => c.Updates.Source,
             (c, _, v) => c.Updates.Source = v, false,
             Group: Groups.Updates),

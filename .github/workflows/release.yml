@@ -408,6 +408,38 @@ jobs:
 
           cat SHA256SUMS
 
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The document 'loadout update' reads. Until this step existed the
+      # setting pointed at nothing: every release published archives and a
+      # manifest, and the updater wants one JSON file naming, per platform,
+      # where the archive is and what it hashes to. So the command refused
+      # on every machine, whatever it was configured with.
+      #
+      # Built from SHA256SUMS rather than by hashing again, so the feed
+      # cannot disagree with the checksums people are told to verify.
+      - name: Build the release feed
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+
+          base="${{ github.server_url }}/${{ github.repository }}/releases"
+
+          pwsh ./build/feed.ps1 -Version "$VERSION" -Directory downloaded \
+            -BaseUrl "$base/download/v$VERSION" \
+            -Notes "$base/tag/v$VERSION"
+
+          cat downloaded/feed.json
+
       # What changed in this version, which until now was written into the
       # tag and read by nobody: the release body below is the same paragraph
       # for every version, so the notes never reached the page people
@@ -463,6 +495,7 @@ jobs:
             downloaded/*.deb
             downloaded/*.rpm
             downloaded/SHA256SUMS
+            downloaded/feed.json
           # What changed, then the standing paragraph. arm64 Windows and
           # Linux are cross-compiled and never executed in CI, because GitHub
           # offers no hosted runner for either, and that is said there rather
