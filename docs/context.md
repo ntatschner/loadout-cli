@@ -73,9 +73,20 @@ never is, and it never reaches a log or a diagnostic report.
 
 ## Skills the project already has
 
-A project can keep skills for its agent in the workspace, at
-`agents/<agent>/skills/<name>/SKILL.md`. They're not instructions — nothing
-inlines them, and they cost nothing until somebody asks for one.
+The launcher ships skills of its own, and a session gets them as commands it can
+invoke. `/finishup` is the first: it closes a session honestly and keeps what it
+worked out.
+
+You can add your own. A skill true of everything you do goes in the workspace at
+`global/agents/<agent>/skills/<name>/SKILL.md`; one that's only about a single
+codebase goes at `projects/<slug>/agents/<agent>/skills/<name>/SKILL.md`. They're
+not instructions — nothing inlines them, and they cost nothing until somebody
+asks for one.
+
+Shipped, then workspace, then project, with a later one of the same name
+replacing the earlier — the same order the specialists and the rules resolve in,
+for the same reason. Replacing, not merging: a skill you write under a shipped
+one's name is yours, not a mixture of the two.
 
 For Claude they're handed over at launch as a plugin written into the same
 per-launch runtime directory the compiled context goes to, and loaded for that

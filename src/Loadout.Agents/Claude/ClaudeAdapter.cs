@@ -642,19 +642,30 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             return;
         }
 
-        var source = Path.Combine(
-            context.WorkspacePath, "projects", context.Manifest.Slug, "agents", "claude", "skills");
-
-        if (!Directory.Exists(source))
+        // Workspace-wide first, then the project, so a project that writes a
+        // skill of the same name replaces the general one rather than colliding
+        // with it. That is the order everything else composes in.
+        var roots = new[]
         {
-            return;
+            Path.Combine(context.WorkspacePath, "global", "agents", "claude", "skills"),
+            Path.Combine(
+                context.WorkspacePath, "projects", context.Manifest.Slug, "agents", "claude", "skills"),
+        };
+
+        var skills = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var root in roots.Where(Directory.Exists))
+        {
+            foreach (var directory in Directory.EnumerateDirectories(root))
+            {
+                if (File.Exists(Path.Combine(directory, "SKILL.md")))
+                {
+                    skills[Path.GetFileName(directory)] = directory;
+                }
+            }
         }
 
-        var skills = Directory.EnumerateDirectories(source)
-            .Where(directory => File.Exists(Path.Combine(directory, "SKILL.md")))
-            .ToList();
-
-        if (skills.Count == 0)
+        if (skills.Count == 0 && BuiltInSkills.Names.Count == 0)
         {
             return;
         }
@@ -665,8 +676,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         if (!descriptor.Supports(AgentCapabilities.ProjectSkills))
         {
             warnings.Add(
-                $"This build of Claude Code does not advertise --plugin-dir, so the {skills.Count} "
-                + $"skill(s) the workspace holds for {context.Manifest.Slug} were not loaded.");
+                "This build of Claude Code does not advertise --plugin-dir, so the "
+                + $"{skills.Count + BuiltInSkills.Names.Count} skill(s) available to "
+                + $"{context.Manifest.Slug} were not loaded.");
 
             return;
         }
@@ -683,13 +695,32 @@ public sealed class ClaudeAdapter : AgentAdapterBase
                 {
                   "name": "loadout-{{context.Manifest.Slug}}",
                   "version": "0.0.0",
-                  "description": "Skills the workspace holds for {{context.Manifest.Slug}}, for this session only."
+                  "description": "Skills for {{context.Manifest.Slug}}, for this session only."
                 }
                 """);
 
-            foreach (var skill in skills)
+            // Shipped first, so a workspace or project skill of the same name
+            // replaces it. Built-in, then workspace, then project: the same
+            // order the specialist library and the rules already resolve in,
+            // and the same reason — the narrower answer is the later one.
+            foreach (var name in BuiltInSkills.Names)
             {
-                CopyDirectory(skill, Path.Combine(plugin, "skills", Path.GetFileName(skill)));
+                BuiltInSkills.WriteTo(name, Path.Combine(plugin, "skills", name));
+            }
+
+            foreach (var (name, from) in skills)
+            {
+                var into = Path.Combine(plugin, "skills", name);
+
+                // Cleared rather than merged. A project's version of a skill is
+                // a replacement, and leaving the shipped one's files underneath
+                // would hand the session a mixture neither author wrote.
+                if (Directory.Exists(into))
+                {
+                    Directory.Delete(into, recursive: true);
+                }
+
+                CopyDirectory(from, into);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

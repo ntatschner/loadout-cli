@@ -119,12 +119,31 @@ public sealed class ProjectSkillTests : IDisposable
     }
 
     [Fact]
-    public async Task A_project_with_no_skills_is_handed_no_plugin()
+    public async Task The_skills_the_launcher_ships_reach_a_project_with_none_of_its_own()
     {
-        var invocation = await BuildAsync();
+        var plugin = PluginDirectory(await BuildAsync());
 
-        PluginDirectory(invocation).Should().BeNull(
-            "there is nothing to hand over, and an empty plugin is a thing to explain");
+        plugin.Should().NotBeNull("the launcher ships skills of its own");
+
+        File.Exists(Path.Combine(plugin!, "skills", "finishup", "SKILL.md"))
+            .Should().BeTrue("finishup ships with the launcher");
+    }
+
+    [Fact]
+    public async Task A_project_can_replace_a_shipped_skill()
+    {
+        GivenSkill("finishup", "notes.md");
+
+        var plugin = PluginDirectory(await BuildAsync())!;
+        var copied = Path.Combine(plugin, "skills", "finishup");
+
+        // Replaced, not merged. Leaving the shipped version's files underneath
+        // a project's own would hand the session a mixture neither wrote.
+        File.Exists(Path.Combine(copied, "notes.md")).Should().BeTrue(
+            "this is the project's version");
+
+        File.ReadAllText(Path.Combine(copied, "SKILL.md"))
+            .Should().Contain("Whatever finishup is for", "and its SKILL.md too");
     }
 
     [Fact]
@@ -172,9 +191,12 @@ public sealed class ProjectSkillTests : IDisposable
 
         var plugin = PluginDirectory(await BuildAsync())!;
 
+        // Both of the project's, in the one plugin. Asserted as containment
+        // rather than as the whole list, because the launcher ships skills of
+        // its own and a total is a number this test has no business pinning.
         Directory.EnumerateDirectories(Path.Combine(plugin, "skills"))
             .Select(Path.GetFileName)
-            .Should().BeEquivalentTo(["run-the-app", "seed-the-database"]);
+            .Should().Contain(["run-the-app", "seed-the-database"]);
     }
 
     [Fact]
@@ -191,7 +213,56 @@ public sealed class ProjectSkillTests : IDisposable
         // would put that straight back.
         invocation.Warnings.Should().Contain(warning =>
             warning.Contains("--plugin-dir", StringComparison.Ordinal)
-            && warning.Contains("1 skill", StringComparison.Ordinal));
+            && warning.Contains("were not loaded", StringComparison.Ordinal));
+    }
+
+    /// <summary>Writes a skill the workspace holds for every project.</summary>
+    private void GivenGlobalSkill(string name)
+    {
+        var directory = Path.Combine(
+            _workspace, "global", "agents", "claude", "skills", name);
+
+        Directory.CreateDirectory(directory);
+
+        File.WriteAllText(
+            Path.Combine(directory, "SKILL.md"),
+            $"---\nname: {name}\ndescription: Whatever {name} is for.\n---\n\nEverywhere.\n");
+    }
+
+    [Fact]
+    public async Task A_skill_the_workspace_holds_for_everything_reaches_every_project()
+    {
+        // The reason this scope exists: a skill like "wrap up the session" is
+        // not about one codebase, and putting a copy in each project is how it
+        // goes stale in all but the one somebody remembered.
+        GivenGlobalSkill("finishup");
+
+        var plugin = PluginDirectory(await BuildAsync());
+
+        plugin.Should().NotBeNull("a global skill is still a skill this session can use");
+
+        File.Exists(Path.Combine(plugin!, "skills", "finishup", "SKILL.md")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_project_can_replace_a_global_skill_rather_than_collide_with_it()
+    {
+        GivenGlobalSkill("run-the-app");
+        GivenSkill("run-the-app", "driver.mjs");
+
+        var plugin = PluginDirectory(await BuildAsync())!;
+        var copied = Path.Combine(plugin, "skills", "run-the-app");
+
+        // Narrower last, the way everything else composes. The project's copy
+        // brought a script with it; the global one did not, so its presence is
+        // what says which of the two won.
+        File.Exists(Path.Combine(copied, "driver.mjs")).Should().BeTrue(
+            "the project's own version is the one that should be there");
+
+        Directory.EnumerateDirectories(Path.Combine(plugin, "skills"))
+            .Select(Path.GetFileName)
+            .Count(name => string.Equals(name, "run-the-app", StringComparison.OrdinalIgnoreCase))
+            .Should().Be(1, "one name is one skill, not two");
     }
 
     [Fact]
@@ -199,7 +270,9 @@ public sealed class ProjectSkillTests : IDisposable
     {
         Directory.CreateDirectory(Path.Combine(_skills, "notes"));
 
-        PluginDirectory(await BuildAsync()).Should().BeNull(
+        var plugin = PluginDirectory(await BuildAsync())!;
+
+        Directory.Exists(Path.Combine(plugin, "skills", "notes")).Should().BeFalse(
             "a folder somebody left there is not something to load");
     }
 }

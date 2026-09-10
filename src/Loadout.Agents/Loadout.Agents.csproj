@@ -9,4 +9,13 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Loadout.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <!--
+      Skills the launcher ships, handed to a session as commands it can invoke.
+      Everything under a skill's directory, not only the SKILL.md: a skill
+      routinely carries the scripts it tells the session to run, and one
+      shipped without them fails at the first instruction it gives.
+    -->
+    <EmbeddedResource Include="Skills\**\*" />
+  </ItemGroup>
 </Project>
