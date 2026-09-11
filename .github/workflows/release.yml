@@ -578,7 +578,14 @@ jobs:
             '${{ github.repository }}', '${{ github.ref_name }}' -ScriptBlock {
               param($script, $msi, $repository, $tag)
 
-              & $script -Msi $msi -Repository $repository -CurrentTag $tag
+              # -DisableRestartManager is the whole reason this is worth
+              # running here. The failure it checks for only happens where the
+              # Restart Manager is off, which is a policy on managed Windows
+              # builds and a default on no runner, so every release until now
+              # was verified against the easy path and reported as the hard
+              # one. The runner is disposable, so writing the policy onto it
+              # costs nothing.
+              & $script -Msi $msi -Repository $repository -CurrentTag $tag -DisableRestartManager
             }
 
           if (-not (Wait-Job $work -Timeout 480)) {

@@ -43,6 +43,22 @@ param(
     # here reaches the network at all.
     [string] $PreviousMsi,
 
+    # Turns off the Restart Manager for this machine before anything installs,
+    # which is the condition the failure this whole script exists for needs.
+    #
+    # An upgrade over a running launcher ends in 1603 only where the Restart
+    # Manager is disabled: it is a policy on managed Windows builds and a
+    # default nowhere, so a runner has it enabled and so does a fresh sandbox.
+    # Verifying without it is verifying the easy path and calling it the hard
+    # one.
+    #
+    # A switch rather than something this always does, because it writes to the
+    # machine hive. On a disposable machine that costs nothing and is the point;
+    # on somebody's own it would change a setting they did not ask about, and
+    # this script is already explicit that it is not for a machine anybody is
+    # using.
+    [switch] $DisableRestartManager,
+
     # Asked of GitHub through the bounded runner below when no version is
     # given, because the caller asking inline is what hung.
     [string] $Repository,
@@ -340,6 +356,29 @@ function Get-InstalledProduct {
     Remove-Job $job -Force -ErrorAction SilentlyContinue
 
     return $result
+}
+
+if ($DisableRestartManager) {
+    Step 'Disabling the Restart Manager, which is the condition under test...'
+
+    # The machine hive, which is where the installer reads it.
+    $policy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer'
+
+    New-Item -Path $policy -Force | Out-Null
+
+    New-ItemProperty -Path $policy -Name 'DisableAutomaticApplicationShutdown' `
+        -Value 1 -PropertyType DWord -Force | Out-Null
+
+    # Asserted rather than assumed. A policy that silently did not take would
+    # leave this verifying the easy path while reporting the hard one, which is
+    # worse than not setting it at all.
+    $set = (Get-ItemProperty -Path $policy).DisableAutomaticApplicationShutdown
+
+    if ($set -ne 1) {
+        throw "The Restart Manager policy did not take: it reads '$set'."
+    }
+
+    Write-Host '  DisableAutomaticApplicationShutdown = 1'
 }
 
 # A runner is clean; a developer's machine is not, and a newer version

@@ -40,24 +40,6 @@ $verdict = Join-Path $Results 'verdict.txt'
 Start-Transcript -Path $transcript -Force | Out-Null
 
 try {
-    Write-Host '== Disabling the Restart Manager, which is the condition under test =='
-
-    # The same policy the reported failures were on. Written to the machine
-    # hive, which is where the installer reads it.
-    $key = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer'
-
-    New-Item -Path $key -Force | Out-Null
-    New-ItemProperty -Path $key -Name 'DisableAutomaticApplicationShutdown' `
-        -Value 1 -PropertyType DWord -Force | Out-Null
-
-    $set = (Get-ItemProperty -Path $key).DisableAutomaticApplicationShutdown
-
-    if ($set -ne 1) {
-        throw "The Restart Manager policy did not take: it reads '$set'."
-    }
-
-    Write-Host 'DisableAutomaticApplicationShutdown = 1'
-
     $current = Get-ChildItem -Path $Payload -Filter '*win-x64.msi' |
         Where-Object { $_.Name -notlike '*previous*' } |
         Sort-Object Name -Descending |
@@ -89,7 +71,12 @@ try {
     $arguments = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass',
         '-File', (Join-Path $Payload 'verify-windows-install.ps1'),
-        '-Msi', $current.FullName)
+        '-Msi', $current.FullName,
+
+        # The verification turns the Restart Manager off itself now. It used to
+        # be done here, which meant two places knew the condition and only one
+        # of them was the thing CI runs.
+        '-DisableRestartManager')
 
     if ($previous) {
         Write-Host "Upgrading over $($previous.Name)."
