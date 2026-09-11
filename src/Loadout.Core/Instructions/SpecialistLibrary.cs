@@ -481,7 +481,8 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
             front.TaskPhrases,
             front.Requires,
             front.Capabilities,
-            front.Modes);
+            front.Modes,
+            front.Command.Trim());
 
         return OperationResult<SpecialistDocument>.Ok(new SpecialistDocument(
             front.Id.Trim(),
@@ -527,6 +528,8 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
         public List<string> Capabilities { get; set; } = [];
 
         public List<string> Modes { get; set; } = [];
+
+        public string Command { get; set; } = string.Empty;
 
         public ProbeFront? Probe { get; set; }
     }

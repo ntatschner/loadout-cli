@@ -71,6 +71,40 @@ Secret references resolve through the platform keystore during preflight and
 reach the child process only. The reference is what gets committed. The value
 never is, and it never reaches a log or a diagnostic report.
 
+## Skills the project already has
+
+The launcher ships skills of its own, and a session gets them as commands it can
+invoke. `/finishup` is the first: it closes a session honestly and keeps what it
+worked out.
+
+You can add your own. A skill true of everything you do goes in the workspace at
+`global/agents/<agent>/skills/<name>/SKILL.md`; one that's only about a single
+codebase goes at `projects/<slug>/agents/<agent>/skills/<name>/SKILL.md`. They're
+not instructions — nothing inlines them, and they cost nothing until somebody
+asks for one.
+
+Shipped, then workspace, then project, with a later one of the same name
+replacing the earlier — the same order the specialists and the rules resolve in,
+for the same reason. Replacing, not merging: a skill you write under a shipped
+one's name is yours, not a mixture of the two.
+
+For Claude they're handed over at launch as a plugin written into the same
+per-launch runtime directory the compiled context goes to, and loaded for that
+session only. So they reach the session as commands you can actually invoke,
+without a `SKILL.md` ever landing in your repository or in the agent's own
+configuration home, where it would outlive the session and meet the next
+project's.
+
+Read access to the workspace directory isn't the same thing and never was. A
+session could open the file if it already knew the path; nothing named it, and
+nothing could run it.
+
+Codex manages plugins by installing them into its own configuration and has
+nothing that loads one for a single session, so skills under
+`agents/codex/skills` are reported at launch as not loaded rather than passed
+over in silence. Installing into somebody's Codex on their behalf is not the
+launcher's business.
+
 ## The agent can answer back
 
 The compiled context tells the agent that `loadout` is on PATH, and names the

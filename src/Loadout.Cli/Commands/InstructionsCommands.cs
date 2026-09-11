@@ -481,7 +481,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     /// missing layer counts as nothing rather than as unknown: a session with no
     /// memory really is paying nothing for it.
     /// </remarks>
-    private async Task<(long Always, long Scoped, long MemoryIndex, long CodeMap, long Tasks)> LayersAsync(
+    private async Task<(long Always, long Scoped, long MemoryIndex, long CodeMap, long Tasks, long Skills)> LayersAsync(
         string? slug,
         ProjectManifest? manifest,
         string? repositoryPath,
@@ -489,7 +489,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     {
         if (slug is null || WorkspacePath is null)
         {
-            return (0, 0, 0, 0, 0);
+            return (0, 0, 0, 0, 0, 0);
         }
 
         var always = 0L;
@@ -540,7 +540,13 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             }
         }
 
-        return (always, scoped, index.Value?.Length ?? 0, codeMap, tasks);
+        // Asked of the same enumeration the launch hands over, so the figure
+        // here and the skills a session actually gets cannot disagree. The
+        // agent decides which are offered, so it decides what is counted.
+        var skills = SkillExport.StandingBytes(
+            SkillExport.Offered(WorkspacePath, slug, manifest?.Agents.Default ?? "claude"));
+
+        return (always, scoped, index.Value?.Length ?? 0, codeMap, tasks, skills);
     }
 
     /// <inheritdoc />
@@ -632,7 +638,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             settings.Task,
             ContextBudget.From(
                 effective, counted.Always, counted.Scoped, counted.MemoryIndex, counted.CodeMap,
-                    counted.Tasks));
+                    counted.Tasks, counted.Skills));
 
         return CommandOutput.Success();
     }

@@ -3,6 +3,7 @@ id: skill.session-retrospective
 kind: skill
 title: Session retrospective
 summary: A procedure for closing a session honestly and keeping what it learned.
+command: finishup
 task_phrases:
   - 'finish up'
   - 'wrap up'

@@ -79,13 +79,20 @@ public sealed record ContextBudget(IReadOnlyList<ContextLayer> Layers, int Token
     /// The open tasks, on a project that puts them in front of every session.
     /// Zero otherwise, and shown either way for the same reason as the map.
     /// </param>
+    /// <param name="skillBytes">
+    /// What the skills on offer cost a session that never invokes one: their
+    /// descriptions, which an agent keeps in front of itself so it can tell
+    /// when one applies. The bodies are paid for on use and are not counted
+    /// here.
+    /// </param>
     public static ContextBudget From(
         Models.Instructions.EffectiveInstructions instructions,
         long alwaysLoadedRuleBytes,
         long scopedRuleBytes,
         long memoryIndexBytes,
         long codeMapBytes = 0,
-        long openTaskBytes = 0)
+        long openTaskBytes = 0,
+        long skillBytes = 0)
     {
         ArgumentNullException.ThrowIfNull(instructions);
 
@@ -100,6 +107,12 @@ public sealed record ContextBudget(IReadOnlyList<ContextLayer> Layers, int Token
             // accounting is the drift this report exists to prevent, and it
             // would understate every launch on a project that keeps tasks.
             new("Open tasks", openTaskBytes, Tokens(openTaskBytes), true),
+
+            // Counted for the same reason, and it took saying out loud: the
+            // skills reach the session as a plugin rather than inside the
+            // compiled context, so every earlier version of this report was
+            // silent about them while a launch paid for them anyway.
+            new("Skills", skillBytes, Tokens(skillBytes), true),
             new("Scoped rules", scopedRuleBytes, Tokens(scopedRuleBytes), false),
         };
 

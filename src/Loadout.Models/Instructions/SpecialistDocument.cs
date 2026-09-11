@@ -119,6 +119,13 @@ public enum SpecialistOrigin
 /// Agent capabilities this specialist needs before it is worth loading. Empty
 /// for almost everything, because instructions are text.
 /// </param>
+/// <param name="Command">
+/// What a skill is offered as when it is also a command, or <c>none</c> where
+/// it is not offered as one. Only meaningful on a skill. Absent means the
+/// command takes its name from the id, which is what nearly all of them want;
+/// this is for the few where the id reads well in a listing and badly as
+/// something somebody types.
+/// </param>
 /// <param name="Modes">
 /// Modes this specialist applies to. Empty means all of them.
 /// </param>
@@ -129,7 +136,8 @@ public sealed record SpecialistActivation(
     IReadOnlyList<string>? TaskPhrases = null,
     IReadOnlyList<string>? Requires = null,
     IReadOnlyList<string>? Capabilities = null,
-    IReadOnlyList<string>? Modes = null)
+    IReadOnlyList<string>? Modes = null,
+    string? Command = null)
 {
     public static readonly SpecialistActivation None = new();
 
