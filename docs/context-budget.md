@@ -11,6 +11,7 @@ it, is the one cost the launcher exists to control. This is the model.
 | Scoped rules | Only when the work touches their paths | Its own length, sometimes |
 | Memory | Index inlined; topics fetched on demand | One index entry, then nothing |
 | Code map | Every session, only where the project asks for it | One line per directory, every launch |
+| Skills | Descriptions every session; the body when one is invoked | A description each, every launch |
 
 The prices are what make the layers different, and they aren't a matter of
 taste. A fact in instructions gets paid for on every launch, whether or not the

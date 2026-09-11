@@ -91,6 +91,94 @@ public static class SkillExport
         return rendered;
     }
 
+    /// <summary>
+    /// What a session would be offered, as the command's name against the
+    /// <c>SKILL.md</c> it would get: the launcher's own, then what the
+    /// workspace holds for every project, then what this project holds.
+    /// </summary>
+    /// <remarks>
+    /// One enumeration, used both to hand the skills over and to count what
+    /// they cost. Two would be a launch that loads one set and a budget that
+    /// reports another, which is worse than not reporting at all.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, string> Offered(
+        string? workspacePath,
+        string? slug,
+        string agent)
+    {
+        var offered = new Dictionary<string, string>(Shipped(), StringComparer.OrdinalIgnoreCase);
+
+        if (workspacePath is not { Length: > 0 } || slug is not { Length: > 0 })
+        {
+            return offered;
+        }
+
+        // Narrower last, the way everything else composes.
+        string[] roots =
+        [
+            Path.Combine(workspacePath, "global", "agents", agent, "skills"),
+            Path.Combine(workspacePath, "projects", slug, "agents", agent, "skills"),
+        ];
+
+        foreach (var root in roots.Where(Directory.Exists))
+        {
+            foreach (var directory in Directory.EnumerateDirectories(root))
+            {
+                var file = Path.Combine(directory, "SKILL.md");
+
+                if (!File.Exists(file))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    offered[Path.GetFileName(directory)] = File.ReadAllText(file);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // A skill that cannot be read is one the launch will not
+                    // hand over either, so leaving it out keeps the count and
+                    // the launch saying the same thing.
+                }
+            }
+        }
+
+        return offered;
+    }
+
+    /// <summary>
+    /// What the skills cost a session that never invokes one, in bytes.
+    /// </summary>
+    /// <remarks>
+    /// The frontmatter only. An agent keeps every skill's name and description
+    /// in front of itself so it can tell when one applies, and reads the body
+    /// when somebody asks for it — so the standing price is the description and
+    /// the rest is paid on use. Counting whole files would overstate a launch
+    /// several times over, which is its own kind of wrong number.
+    /// </remarks>
+    public static long StandingBytes(IReadOnlyDictionary<string, string> offered)
+    {
+        ArgumentNullException.ThrowIfNull(offered);
+
+        long total = 0;
+
+        foreach (var content in offered.Values)
+        {
+            var opened = content.IndexOf("---", StringComparison.Ordinal);
+
+            var closed = opened < 0
+                ? -1
+                : content.IndexOf("\n---", opened + 3, StringComparison.Ordinal);
+
+            total += closed > opened
+                ? System.Text.Encoding.UTF8.GetByteCount(content[opened..(closed + 4)])
+                : System.Text.Encoding.UTF8.GetByteCount(content);
+        }
+
+        return total;
+    }
+
     /// <summary>Writes the specialist as a <c>SKILL.md</c>.</summary>
     /// <remarks>
     /// The description carries the phrases the specialist already declares,

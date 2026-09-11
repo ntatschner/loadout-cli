@@ -642,35 +642,15 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             return;
         }
 
-        // Workspace-wide first, then the project, so a project that writes a
-        // skill of the same name replaces the general one rather than colliding
-        // with it. That is the order everything else composes in.
-        var roots = new[]
-        {
-            Path.Combine(context.WorkspacePath, "global", "agents", "claude", "skills"),
-            Path.Combine(
-                context.WorkspacePath, "projects", context.Manifest.Slug, "agents", "claude", "skills"),
-        };
+        // The launcher's own, then the workspace's, then this project's, with
+        // a later one of the same name replacing the earlier. Asked of the same
+        // enumeration the budget counts, so what a session is handed and what
+        // it was told that would cost cannot disagree — two answers to one
+        // question is the drift this whole report exists to prevent.
+        var offered = Loadout.Core.Instructions.SkillExport.Offered(
+            context.WorkspacePath, context.Manifest.Slug, "claude");
 
-        var skills = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var root in roots.Where(Directory.Exists))
-        {
-            foreach (var directory in Directory.EnumerateDirectories(root))
-            {
-                if (File.Exists(Path.Combine(directory, "SKILL.md")))
-                {
-                    skills[Path.GetFileName(directory)] = directory;
-                }
-            }
-        }
-
-        // The launcher's own, derived from the skill specialists rather than
-        // kept as a second copy of them. One source, so the command and the
-        // guidance the context composes cannot drift apart.
-        var shipped = Loadout.Core.Instructions.SkillExport.Shipped();
-
-        if (skills.Count == 0 && shipped.Count == 0)
+        if (offered.Count == 0)
         {
             return;
         }
@@ -682,7 +662,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         {
             warnings.Add(
                 "This build of Claude Code does not advertise --plugin-dir, so the "
-                + $"{skills.Count + shipped.Count} skill(s) available to "
+                + $"{offered.Count} skill(s) available to "
                 + $"{context.Manifest.Slug} were not loaded.");
 
             return;
@@ -704,11 +684,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
                 }
                 """);
 
-            // Shipped first, so a workspace or project skill of the same name
-            // replaces it. Built-in, then workspace, then project: the same
-            // order the specialist library and the rules already resolve in,
-            // and the same reason — the narrower answer is the later one.
-            foreach (var (name, content) in shipped)
+            // The resolved set, already narrowed: one name is one skill, and
+            // whichever layer won has won by the time it gets here.
+            foreach (var (name, content) in offered)
             {
                 var into = Path.Combine(plugin, "skills", name);
 
@@ -716,19 +694,16 @@ public sealed class ClaudeAdapter : AgentAdapterBase
                 File.WriteAllText(Path.Combine(into, "SKILL.md"), content);
             }
 
-            foreach (var (name, from) in skills)
+            // The files a skill on disk brings with it — the scripts it tells
+            // the session to run. A shipped skill is a single document by
+            // construction and has none. Copied after the text above, so a
+            // skill that won on name keeps its own companions.
+            foreach (var (name, from) in OnDisk(context))
             {
-                var into = Path.Combine(plugin, "skills", name);
-
-                // Cleared rather than merged. A project's version of a skill is
-                // a replacement, and leaving the shipped one's files underneath
-                // would hand the session a mixture neither author wrote.
-                if (Directory.Exists(into))
+                if (offered.ContainsKey(name))
                 {
-                    Directory.Delete(into, recursive: true);
+                    CopyDirectory(from, Path.Combine(plugin, "skills", name));
                 }
-
-                CopyDirectory(from, into);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -742,6 +717,36 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         arguments.Add("--plugin-dir");
         arguments.Add(plugin);
+    }
+
+    /// <summary>
+    /// The skills this project has as directories, so their companion files
+    /// can be carried over. Keyed by name, narrower last.
+    /// </summary>
+    private static IEnumerable<(string Name, string From)> OnDisk(AgentLaunchContext context)
+    {
+        if (context.WorkspacePath is null || context.Manifest is null)
+        {
+            yield break;
+        }
+
+        string[] roots =
+        [
+            Path.Combine(context.WorkspacePath, "global", "agents", "claude", "skills"),
+            Path.Combine(
+                context.WorkspacePath, "projects", context.Manifest.Slug, "agents", "claude", "skills"),
+        ];
+
+        foreach (var root in roots.Where(Directory.Exists))
+        {
+            foreach (var directory in Directory.EnumerateDirectories(root))
+            {
+                if (File.Exists(Path.Combine(directory, "SKILL.md")))
+                {
+                    yield return (Path.GetFileName(directory), directory);
+                }
+            }
+        }
     }
 
     /// <summary>Copies a skill and whatever it brings with it.</summary>
