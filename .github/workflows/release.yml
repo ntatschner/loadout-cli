@@ -582,16 +582,32 @@ jobs:
             }
 
           if (-not (Wait-Job $work -Timeout 480)) {
+            # Report, then leave. Nothing here touches the wedged job, and that
+            # ordering is the whole point.
+            #
+            # Both runs of 0.28.0 ended at exactly 25m0s, which is this job's
+            # 20 minute timeout plus the five minutes the runner allows for
+            # cleanup before it kills the process — so the step never exited
+            # under its own power, and a cancelled job has its logs discarded.
+            # That is why eight stalls have left nothing to read, including the
+            # two that happened after this guard was written to prevent exactly
+            # that.
+            #
+            # The guard almost certainly fired on time and then blocked putting
+            # its own house in order: Stop-Job on a job wedged inside the
+            # installer service hangs the same way Kill does one level down,
+            # which the verification script already documents. So the tidying
+            # is gone. An exiting step does not need to tidy up after itself —
+            # the runner tears the process tree down either way, and a leaked
+            # msiexec on a machine that is about to be discarded costs nothing.
+            #
+            # Whether this is right is answerable by watching: the next stall
+            # either fails at eight minutes with output, or it does not.
             Write-Host "::error::The Windows install check stalled for eight minutes."
 
-            # msiexec first. The block is either in it or in a COM call waiting
-            # on the installer mutex it holds, so killing it is what lets the
-            # child job end rather than hanging on in the background.
-            Get-Process msiexec -ErrorAction SilentlyContinue | Stop-Process -Force
-            Stop-Job $work -ErrorAction SilentlyContinue
-
+            # Whatever the job managed to say before it stuck. Non-blocking:
+            # this takes what is already buffered rather than waiting for more.
             Receive-Job $work -ErrorAction SilentlyContinue
-            Remove-Job $work -Force -ErrorAction SilentlyContinue
 
             exit 1
           }
