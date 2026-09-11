@@ -385,7 +385,7 @@ public static class Program
                     "loadout was run with no arguments and no interactive terminal. "
                     + "Run 'loadout --help' for the available commands.");
 
-                return (int)ExitCode.InvalidArguments;
+                return (int)ExitCode.TerminalRequired;
 
             case LauncherEntry.Setup:
                 // A machine that has never been configured gets the wizard

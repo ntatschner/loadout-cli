@@ -89,7 +89,12 @@ loadout starstats --agent claude --profile database -- --verbose
 ```
 
 Exit codes are stable and documented in
-[`ExitCode.cs`](../src/Loadout.Models/ExitCode.cs).
+[`ExitCode.cs`](../src/Loadout.Models/ExitCode.cs). One is worth knowing before
+you script against it: `loadout` with no arguments and nowhere to draw exits
+**11**, not 0. It's the documented way to open the launcher, so the arguments
+were fine — what was missing was a terminal. A script that reaches that has
+asked for the interactive launcher by mistake, and saying so beats succeeding
+quietly.
 
 ## Editors
 
