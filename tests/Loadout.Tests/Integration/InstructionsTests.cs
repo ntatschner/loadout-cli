@@ -310,6 +310,55 @@ public sealed class InstructionsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_fact_that_is_only_true_today_holds_up_the_verdict()
+    {
+        WriteTopic("MEMORY", "# Index\n\n- [today](today.md) - which SDK the build uses for now\n");
+        WriteTopic("today", "---\ndescription: which SDK the build uses for now\n---\n"
+            + "- We are currently using the preview SDK until the release build lands.\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // This is the one class that turns from true into misleading with
+        // nothing in the store to catch it, so it cannot sit behind a word that
+        // says the memory is fine.
+        audit.Value!.Warnings.Should().Contain(f => f.Topic == "today" && f.Kind == "timesensitive");
+        audit.Value.Verdict.Should().Be("NEEDS ATTENTION");
+    }
+
+    [Fact]
+    public async Task A_fact_past_its_own_date_holds_up_the_verdict()
+    {
+        WriteTopic("MEMORY", "# Index\n\n- [dated](dated.md) - how far the submission got\n");
+        WriteTopic("dated", "---\ndescription: how far the submission got\n---\n"
+            + "- The submission passed every validation stage on 2024-01-15.\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // A memory saying a submission was blocked on a signature it had
+        // already received sat behind a HEALTHY verdict for two days. The audit
+        // had spotted it and filed it as an aside.
+        audit.Value!.Warnings.Should().Contain(f => f.Topic == "dated" && f.Kind == "stale");
+        audit.Value.Verdict.Should().Be("NEEDS ATTENTION");
+    }
+
+    [Fact]
+    public async Task A_badly_phrased_fact_does_not_hold_up_the_verdict()
+    {
+        WriteTopic("MEMORY", "# Index\n\n- [dangling](dangling.md) - what the palette does here\n");
+        WriteTopic("dangling", "---\ndescription: what the palette does here\n---\n"
+            + "- **Why:** a quirk of the widget hierarchy, found the hard way over four attempts.\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // The other half of the rule. Phrasing is worth reporting and is not
+        // worth stopping for, and an audit that demands attention for every
+        // weak sentence is one people stop reading — which costs more than the
+        // sentences do.
+        audit.Value!.Findings.Should().Contain(f => f.Topic == "dangling" && f.Kind == "noassertion");
+        audit.Value.Verdict.Should().Be("HEALTHY");
+    }
+
+    [Fact]
     public async Task The_audit_finds_a_fact_repeated_in_two_topics()
     {
         const string fact = "- The workspace repository always wins when it disagrees with the code.";
@@ -412,6 +461,24 @@ corruption.
         var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
 
         topics.Value!.Single().Facts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_quoted_description_keeps_the_quotes_that_are_inside_it()
+    {
+        WriteTopic(
+            "quoted",
+            "---\ndescription: \"Add the credential as \\\"Other issuer\\\", not the preset\"\n---\n"
+            + "\n- The portal preset writes a subject that never matches the issued token.");
+
+        var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
+
+        // Trimming quote characters off both ends is not unquoting. It ate the
+        // closing pair, left a stray backslash and cut the sentence short, and
+        // the index line is the only part of a topic a session is ever given —
+        // so half a line is half a fact.
+        topics.Value!.Single().Description
+            .Should().Be("Add the credential as \"Other issuer\", not the preset");
     }
 
     [Theory]
