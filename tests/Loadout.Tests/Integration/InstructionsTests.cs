@@ -504,6 +504,68 @@ corruption.
     }
 
     [Fact]
+    public async Task An_import_reports_a_topic_that_says_something_different()
+    {
+        WriteTopic(
+            "build-quirks",
+            "---\ndescription: the build\n---\n\n- Cap the concurrent starts with a semaphore.");
+
+        var source = Path.Combine(_root, "drifted");
+        Directory.CreateDirectory(source);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(source, "build-quirks.md"),
+            "---\ndescription: the build\n---\n\n- The cap did not hold. Set maxParallelThreads.");
+
+        var importer = new MemoryImporter(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()), _memory);
+
+        var imported = await importer.ImportAsync(_workspace.LocalPath, Slug, source, apply: true);
+
+        // A name-only check reports this as "already in the workspace" and the
+        // summary then says there is nothing left to bring across, which is how
+        // a superseded copy survives in one store while the correction sits in
+        // the other.
+        imported.Value!.Drifted.Should().ContainSingle().Which.Should().Be("build-quirks");
+        imported.Value.Skipped["build-quirks"].Should().Contain("differs");
+
+        var kept = await File.ReadAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "projects", Slug, "memory", "build-quirks.md"));
+
+        // Reported, never overwritten: which copy is right is not the
+        // importer's to decide.
+        kept.Should().Contain("semaphore");
+    }
+
+    [Fact]
+    public async Task An_import_does_not_call_a_topic_drifted_for_its_timestamp_alone()
+    {
+        WriteTopic(
+            "build-quirks",
+            "---\ndescription: the build\nmetadata:\n  modified: 2026-08-30T14:13:55.207Z\n---\n"
+            + "\n- The first build takes four minutes.");
+
+        var source = Path.Combine(_root, "restamped");
+        Directory.CreateDirectory(source);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(source, "build-quirks.md"),
+            "---\ndescription: the build\nmetadata:\n  modified: 2026-09-01T20:47:40.827Z\n---\n"
+            + "\n- The first build takes four minutes.");
+
+        var importer = new MemoryImporter(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()), _memory);
+
+        var imported = await importer.ImportAsync(_workspace.LocalPath, Slug, source, apply: true);
+
+        // The frontmatter carries a stamp that changes on every write. Compare
+        // the files and every topic reads as drifted, which is a warning nobody
+        // can act on and everybody learns to ignore.
+        imported.Value!.Drifted.Should().BeEmpty();
+        imported.Value.Skipped["build-quirks"].Should().Be("already in the workspace");
+    }
+
+    [Fact]
     public async Task An_import_preview_writes_nothing()
     {
         var source = Path.Combine(_root, "preview");

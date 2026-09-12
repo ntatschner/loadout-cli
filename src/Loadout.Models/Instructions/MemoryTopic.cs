@@ -179,4 +179,12 @@ public sealed record MemoryImport(
 {
     /// <summary>Facts brought across, which is the number that matters.</summary>
     public int Facts => Imported.Sum(topic => topic.Facts.Count);
+
+    /// <summary>
+    /// Topics the workspace already holds under the same name but saying
+    /// something different. A subset of <see cref="Skipped"/>, named separately
+    /// because an import that passes over them quietly is how two stores drift
+    /// apart without anyone noticing.
+    /// </summary>
+    public IReadOnlyList<string> Drifted { get; init; } = [];
 }
