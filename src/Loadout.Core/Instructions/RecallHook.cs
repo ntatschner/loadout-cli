@@ -104,25 +104,42 @@ public static class RecallHook
     }
 
     /// <summary>
+    /// How much of the question a topic has to carry before it is worth
+    /// interrupting with.
+    /// </summary>
+    /// <remarks>
+    /// One word was not enough. Over 248 questions from this project's own
+    /// transcripts, a single word landing in a name let "release and i'll test"
+    /// reach a topic about finding views in TUI tests, and "merge both PRs and
+    /// cut a release" reach one about commit attribution. Two words halves how
+    /// often it speaks — from 70% of real prompts to 42% — while keeping the
+    /// answers that were plainly right: an installer crash still reaches the
+    /// Restart Manager, a question about a VS Code shell still reaches window
+    /// titles.
+    /// </remarks>
+    public const int Words = 2;
+
+    /// <summary>
     /// The topics worth speaking about, out of everything the question reached.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The rule is that a word of the question reached the topic's name or
-    /// description rather than only its prose. The curated lines say what a
-    /// topic is about; prose says whatever it happens to say on the way past.
+    /// Two rules, both earned. A word of the question has to have reached the
+    /// topic's name or description rather than only its prose — the curated
+    /// lines say what a topic is about, prose says whatever it happens to say
+    /// on the way past — and it has to have reached with more than one word.
     /// </para>
     /// <para>
     /// It is the difference between a hook worth having and one worth turning
     /// off. Asked "what did you have for breakfast", a real store returns three
-    /// topics on the ordinary words of the question; with this rule it returns
-    /// none. Asked why a release did not publish to winget, it still answers.
+    /// topics on the ordinary words of the question; with these rules it
+    /// returns none. Asked why a release did not publish to winget, it answers.
     /// </para>
     /// </remarks>
     public static IReadOnlyList<MemoryMatch> Worth(IReadOnlyList<MemoryMatch> matches) =>
         matches is null
             ? []
-            : matches.Where(match => match.Curated).Take(Topics).ToList();
+            : matches.Where(match => match.Curated && match.Terms >= Words).Take(Topics).ToList();
 
     /// <summary>What to put in front of the session, or null to say nothing.</summary>
     public static string? Context(IReadOnlyList<MemoryMatch> matches)

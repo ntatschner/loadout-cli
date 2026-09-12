@@ -38,6 +38,18 @@ public sealed class RecallHookTests
     }
 
     [Fact]
+    public void One_word_of_the_question_is_not_enough_to_interrupt_with()
+    {
+        // Measured, not guessed: one word landing in a name let "release and
+        // i'll test" reach a topic about finding views in TUI tests, and "merge
+        // both PRs and cut a release" reach one about commit attribution.
+        var matches = new[] { Match("tui-tests-must-find-views-by-property", curated: true, terms: 1) };
+
+        RecallHook.Worth(matches).Should().BeEmpty();
+        RecallHook.Output(matches).Should().BeNull();
+    }
+
+    [Fact]
     public void Two_topics_are_offered_and_not_more()
     {
         // Two because the ranking earns two. Measured against a real store the
@@ -72,7 +84,7 @@ public sealed class RecallHookTests
         // of somebody mid-sentence.
         RecallHook.Parse(json).Should().BeNull();
 
-    private static MemoryMatch Match(string name, bool curated) =>
+    private static MemoryMatch Match(string name, bool curated, int terms = 2) =>
         new(
             new MemoryTopic(
                 name,
@@ -85,6 +97,6 @@ public sealed class RecallHookTests
                 WrittenUtc: new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)),
             Score: 1.0,
             Matched: [],
-            Terms: 2,
+            Terms: terms,
             Curated: curated);
 }
