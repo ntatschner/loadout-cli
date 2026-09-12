@@ -123,15 +123,13 @@ public static class MemorySearch
 
             foreach (var term in terms)
             {
-                var weight = document.Weight(term);
-
-                if (weight <= 0)
+                if (!document.Where(term).Anywhere)
                 {
                     continue;
                 }
 
                 hits++;
-                score += Saturate(weight, document.Length, averageLength) * Rarity(term, documents);
+                score += document.Weight(term, averageLength) * Rarity(term, documents);
             }
 
             if (score <= 0)
@@ -270,34 +268,88 @@ public static class MemorySearch
         }
     }
 
-    private static IReadOnlyDictionary<string, double> Fields(MemoryTopic topic)
+    /// <summary>
+    /// Where one term appears in a topic, kept apart rather than added up.
+    /// </summary>
+    /// <remarks>
+    /// A name and a description are curated and said once: a topic named for
+    /// winget publishing declares its subject, and saying "winget" twice in the
+    /// name would not make it more so. Facts are prose, where a term can repeat
+    /// for reasons that have nothing to do with what the topic is about. Adding
+    /// the two together made them indistinguishable — a term once in the name
+    /// scored exactly what a term three times in the body scored — which is how
+    /// a long account of something else outranked the topic named for the
+    /// subject.
+    /// </remarks>
+    private readonly record struct Occurrence(bool InName, bool InDescription, double Facts)
     {
-        var weights = new Dictionary<string, double>(StringComparer.Ordinal);
+        public bool Anywhere => InName || InDescription || Facts > 0;
+    }
 
-        Add(topic.Name, NameWeight);
-        Add(topic.Description, DescriptionWeight);
+    private static IReadOnlyDictionary<string, Occurrence> Fields(MemoryTopic topic)
+    {
+        var weights = new Dictionary<string, Occurrence>(StringComparer.Ordinal);
+
+        foreach (var term in Terms(topic.Name))
+        {
+            weights[term] = weights.GetValueOrDefault(term) with { InName = true };
+        }
+
+        foreach (var term in Terms(topic.Description))
+        {
+            weights[term] = weights.GetValueOrDefault(term) with { InDescription = true };
+        }
 
         foreach (var fact in topic.Facts)
         {
-            Add(fact, FactWeight);
+            foreach (var term in Terms(fact))
+            {
+                var seen = weights.GetValueOrDefault(term);
+
+                weights[term] = seen with { Facts = seen.Facts + 1 };
+            }
         }
 
         return weights;
-
-        void Add(string? text, double weight)
-        {
-            foreach (var term in Terms(text))
-            {
-                weights[term] = weights.GetValueOrDefault(term) + weight;
-            }
-        }
     }
 
-    private sealed record Document(MemoryTopic Topic, IReadOnlyDictionary<string, double> Weights)
+    private sealed record Document(MemoryTopic Topic, IReadOnlyDictionary<string, Occurrence> Weights)
     {
         public bool Contains(string term) => Weights.ContainsKey(term);
 
-        public double Weight(string term) => Weights.GetValueOrDefault(term);
+        public Occurrence Where(string term) => Weights.GetValueOrDefault(term);
+
+        /// <summary>
+        /// What one term is worth here: the curated fields count once each for
+        /// saying it at all, and the prose is saturated and length-scaled so
+        /// repetition cannot stand in for being the subject.
+        /// </summary>
+        public double Weight(string term, double averageLength)
+        {
+            var found = Where(term);
+
+            var value = 0.0;
+
+            if (found.InName)
+            {
+                value += NameWeight;
+            }
+
+            if (found.InDescription)
+            {
+                value += DescriptionWeight;
+            }
+
+            // Prose is saturated before it is added, not after. Said once a
+            // term is worth most of a mention; said eight times it is worth
+            // barely more, so a long topic cannot accumulate its way past one
+            // that declares the subject in its name. The curated fields are
+            // counted as they were, which is what keeps the balance between
+            // them and rarity where it was.
+            value += FactWeight * (found.Facts / (found.Facts + 1.0));
+
+            return Saturate(value, Length, averageLength);
+        }
 
         /// <summary>
         /// How much the topic says altogether, as the weights already measure
@@ -305,6 +357,6 @@ public static class MemorySearch
         /// the file size, so a topic is judged long for saying a lot, not for
         /// being stored verbosely.
         /// </summary>
-        public double Length { get; } = Weights.Values.Sum();
+        public double Length { get; } = Weights.Values.Sum(found => found.Facts);
     }
 }
