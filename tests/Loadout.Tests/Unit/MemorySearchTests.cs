@@ -143,6 +143,41 @@ public sealed class MemorySearchTests
         MemorySearch.Rank([], "build").Should().BeEmpty();
     }
 
+    [Fact]
+    public void A_long_topic_does_not_win_on_mentioning_the_subject_in_passing()
+    {
+        // Taken from a real store. The question is about winget publishing; the
+        // topic named for it is short, and the longest topic in the store says
+        // "release", "publish" and "winget" somewhere in a long account of
+        // something else. Three incidental hits used to outscore the topic that
+        // is actually about the subject, which put the right answer third.
+        //
+        // It matters more here than in a search box: what this ranks is what a
+        // session is handed, and handing it the wrong topic is worse than
+        // handing it none.
+        IReadOnlyList<MemoryTopic> store =
+        [
+            Topic(
+                "winget-publishing-never-runs",
+                "the winget job skips until the package exists upstream",
+                ["The release workflow cannot publish to winget until the manifest is accepted."]),
+            Topic(
+                "windows-install-check-stalls",
+                "the Windows install verification hangs in CI and discards its log",
+                [
+                    "The install check hangs for half an hour and the job is cancelled with its log discarded.",
+                    "The check runs inside the installer job, so a stall once meant the MSI was never uploaded.",
+                    "A stall meant the release published nothing and winget skipped behind it.",
+                    "Bounding every msiexec call to three minutes did not fix the hang.",
+                    "Reproduce it locally rather than re-running, because a passing run proves nothing.",
+                    "A passing run does the whole script in thirty-six seconds, so a long one is a hard hang.",
+                ]),
+        ];
+
+        MemorySearch.Rank(store, "why did the release not publish to winget")
+            .First().Topic.Name.Should().Be("winget-publishing-never-runs");
+    }
+
     private static IReadOnlyList<MemoryMatch> Rank(string query, int limit = 5) =>
         MemorySearch.Rank(Store, query, limit);
 
