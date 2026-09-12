@@ -77,6 +77,14 @@ public static class MemorySearch
     private const double FactWeight = 1.0;
 
     /// <summary>
+    /// How much of the saturation constant a topic's length accounts for, from
+    /// 0 for not at all to 1 for entirely. The usual ranking value: enough that
+    /// a long topic cannot win on incidental mentions, not so much that a
+    /// thorough topic is punished for being thorough.
+    /// </summary>
+    private const double LengthInfluence = 0.75;
+
+    /// <summary>
     /// The topics a query reaches, best first.
     /// </summary>
     /// <param name="topics">Everything to search.</param>
@@ -106,6 +114,7 @@ public static class MemorySearch
             .ToList();
 
         var matches = new List<MemoryMatch>();
+        var averageLength = documents.Average(document => document.Length);
 
         foreach (var document in documents)
         {
@@ -122,7 +131,7 @@ public static class MemorySearch
                 }
 
                 hits++;
-                score += Saturate(weight) * Rarity(term, documents);
+                score += Saturate(weight, document.Length, averageLength) * Rarity(term, documents);
             }
 
             if (score <= 0)
@@ -165,8 +174,30 @@ public static class MemorySearch
     /// constant is small because the weights here are small — a topic has one
     /// name, one description and a handful of facts, not a page of prose.
     /// </para>
+    /// <para>
+    /// Scaled by how long the topic is, because without that the longest topic
+    /// wins any question of several words. Asking a real store "why did the
+    /// release not publish to winget" put the topic about a stalling install
+    /// check first and the one named for winget publishing third: the install
+    /// topic is the longest in the store and happens to say "release",
+    /// "publish" and "winget" somewhere in it, and three weak hits outscored
+    /// one topic that is actually about the subject.
+    /// </para>
+    /// <para>
+    /// A topic of average length is saturated exactly as before, so the
+    /// constant above still means what it meant. A topic twice that length has
+    /// to say a term more often to be worth the same, which is the whole point:
+    /// mentioning something in passing is not being about it.
+    /// </para>
     /// </remarks>
-    private static double Saturate(double weight) => weight / (weight + 2.0);
+    private static double Saturate(double weight, double length, double averageLength)
+    {
+        var scale = averageLength <= 0
+            ? 1.0
+            : 1.0 - LengthInfluence + (LengthInfluence * length / averageLength);
+
+        return weight / (weight + (2.0 * scale));
+    }
 
     /// <summary>
     /// How much one term is worth, given how many topics use it.
@@ -267,5 +298,13 @@ public static class MemorySearch
         public bool Contains(string term) => Weights.ContainsKey(term);
 
         public double Weight(string term) => Weights.GetValueOrDefault(term);
+
+        /// <summary>
+        /// How much the topic says altogether, as the weights already measure
+        /// it. Derived from the same numbers the scoring uses rather than from
+        /// the file size, so a topic is judged long for saying a lot, not for
+        /// being stored verbosely.
+        /// </summary>
+        public double Length { get; } = Weights.Values.Sum();
     }
 }
