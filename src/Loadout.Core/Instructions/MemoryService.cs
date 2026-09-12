@@ -376,7 +376,7 @@ internal sealed partial class MemoryService : IMemoryService
     private static List<string> ExtractFacts(string text, string body)
     {
         var facts = Bullet().Matches(text)
-            .Select(m => m.Groups["text"].Value.Trim())
+            .Select(m => WhiteSpace().Replace(m.Groups["text"].Value, " ").Trim())
             .Where(value => value.Length > 0)
             .ToList();
 
@@ -1240,7 +1240,25 @@ internal sealed partial class MemoryService : IMemoryService
     [GeneratedRegex(@"\A---\r?\n(?<front>.*?)\r?\n---[ \t]*\r?\n", RegexOptions.Singleline, 1000)]
     private static partial Regex Frontmatter();
 
-    [GeneratedRegex(@"(?m)^[ \t]*[-*][ \t]+(?<text>.+)$", RegexOptions.None, 1000)]
+    /// <summary>
+    /// A bullet and the indented lines that continue it.
+    /// <para>
+    /// Taking only the bullet's first line cut every wrapped fact in half at
+    /// whatever column the author happened to wrap at. A topic saying
+    /// "`WINGET_TOKEN` was added on 9 September 2026, so a release that skips
+    /// winget is not evidence the secret is missing" was read as ending at
+    /// "so a" — which is also why the audit reported that fact as making no
+    /// standing claim. It did not; it had been cut before it made one.
+    /// </para>
+    /// <para>
+    /// A line that starts its own bullet is not a continuation, so nested
+    /// bullets stay separate facts.
+    /// </para>
+    /// </summary>
+    [GeneratedRegex(
+        @"(?m)^[ \t]*[-*][ \t]+(?<text>.+(?:\r?\n[ \t]+(?![-*][ \t]).+)*)",
+        RegexOptions.None,
+        1000)]
     private static partial Regex Bullet();
 
     [GeneratedRegex(@"\[\[(?<name>[^\]]+)\]\]", RegexOptions.None, 1000)]

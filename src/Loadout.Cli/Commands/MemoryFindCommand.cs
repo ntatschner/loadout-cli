@@ -104,6 +104,13 @@ public sealed class MemoryFindCommand : AsyncCommand<MemoryFindCommand.Settings>
                 match.Topic.Description,
                 match.Topic.Path,
                 match.Matched,
+
+                // How much of the question this topic touched at all, which is
+                // what a caller deciding whether a match is worth acting on has
+                // to go on. The score is comparable only within one search and
+                // so is deliberately still not published.
+                match.Terms,
+                match.Curated,
             }));
 
             return CommandOutput.Success();

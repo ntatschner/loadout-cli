@@ -454,6 +454,30 @@ corruption.
     }
 
     [Fact]
+    public async Task A_bullet_that_wraps_is_one_fact_and_not_half_of_one()
+    {
+        WriteTopic(
+            "wrapped",
+            "---\ndescription: what the token does and does not explain\n---\n\n"
+            + "- **Not the token any more.** The secret was added in September, so a\n"
+            + "  release that skips the step is not evidence the secret is missing. The\n"
+            + "  gate checks the token first and the package second.\n"
+            + "- A second bullet, which must stay a second fact rather than joining the first.\n");
+
+        var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
+
+        // Reading only a bullet's first line cut every wrapped fact off at
+        // whatever column its author happened to wrap at, which is also why the
+        // audit reported such facts as making no standing claim: they had been
+        // cut before they made one.
+        var facts = topics.Value!.Single().Facts;
+
+        facts.Should().HaveCount(2);
+        facts[0].Should().EndWith("the package second.").And.Contain("not evidence the secret is missing");
+        facts[1].Should().StartWith("A second bullet");
+    }
+
+    [Fact]
     public async Task A_topic_with_only_frontmatter_still_holds_nothing()
     {
         WriteTopic("bare", "---\ndescription: nothing\n---\n");

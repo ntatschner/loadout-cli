@@ -21,11 +21,23 @@ namespace Loadout.Core.Instructions;
 /// rather than take the ranking on trust. Empty when the match was on the name
 /// or description alone, which is an ordinary and often better match.
 /// </param>
+/// <param name="Curated">
+/// Whether any word of the query landed in the topic's name or description
+/// rather than only in its prose.
+/// <para>
+/// The difference between a topic that declares the subject and one that
+/// happens to mention it. It matters wherever a match is acted on without
+/// somebody reading it first: asked "what did you have for breakfast", a real
+/// store returns three topics, one of them on two words of the question, all of
+/// them on prose alone. A caller that spoke on that would speak on anything.
+/// </para>
+/// </param>
 public sealed record MemoryMatch(
     MemoryTopic Topic,
     double Score,
     IReadOnlyList<string> Matched,
-    int Terms);
+    int Terms,
+    bool Curated);
 
 /// <summary>
 /// Finds the topics that answer a question, without asking anything.
@@ -69,6 +81,19 @@ public static class MemorySearch
         "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
         "has", "have", "in", "is", "it", "its", "of", "on", "or", "that", "the",
         "there", "they", "this", "to", "was", "were", "will", "with",
+
+        // The words a question is made of rather than about. Rarity cannot
+        // discount these: it measures how rare a word is in this store, not how
+        // empty it is in English, and "you" appears in two descriptions and so
+        // counts as rare. Asked "what did you have for breakfast", a real store
+        // answered with a topic about annotated tags, matched on "you" in its
+        // description — which is harmless in a search somebody reads and not
+        // harmless at all in one that speaks by itself.
+        "am", "any", "can", "could", "did", "do", "does", "doing", "done",
+        "he", "her", "him", "his", "how", "i", "me", "my", "our", "please",
+        "she", "should", "some", "thanks", "their", "them", "us", "we", "what",
+        "when", "where", "which", "who", "whom", "whose", "why", "would",
+        "you", "your",
     };
 
     /// <summary>The name and description are curated; a fact is prose.</summary>
@@ -120,15 +145,19 @@ public static class MemorySearch
         {
             var score = 0.0;
             var hits = 0;
+            var curated = false;
 
             foreach (var term in terms)
             {
-                if (!document.Where(term).Anywhere)
+                var found = document.Where(term);
+
+                if (!found.Anywhere)
                 {
                     continue;
                 }
 
                 hits++;
+                curated |= found.InName || found.InDescription;
                 score += document.Weight(term, averageLength) * Rarity(term, documents);
             }
 
@@ -143,7 +172,8 @@ public static class MemorySearch
                 document.Topic.Facts
                     .Where(fact => terms.Any(term => Terms(fact).Contains(term, StringComparer.Ordinal)))
                     .ToList(),
-                hits));
+                hits,
+                curated));
         }
 
         return matches
