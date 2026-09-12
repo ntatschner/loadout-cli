@@ -21,11 +21,23 @@ namespace Loadout.Core.Instructions;
 /// rather than take the ranking on trust. Empty when the match was on the name
 /// or description alone, which is an ordinary and often better match.
 /// </param>
+/// <param name="Curated">
+/// Whether any word of the query landed in the topic's name or description
+/// rather than only in its prose.
+/// <para>
+/// The difference between a topic that declares the subject and one that
+/// happens to mention it. It matters wherever a match is acted on without
+/// somebody reading it first: asked "what did you have for breakfast", a real
+/// store returns three topics, one of them on two words of the question, all of
+/// them on prose alone. A caller that spoke on that would speak on anything.
+/// </para>
+/// </param>
 public sealed record MemoryMatch(
     MemoryTopic Topic,
     double Score,
     IReadOnlyList<string> Matched,
-    int Terms);
+    int Terms,
+    bool Curated);
 
 /// <summary>
 /// Finds the topics that answer a question, without asking anything.
@@ -69,6 +81,19 @@ public static class MemorySearch
         "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
         "has", "have", "in", "is", "it", "its", "of", "on", "or", "that", "the",
         "there", "they", "this", "to", "was", "were", "will", "with",
+
+        // The words a question is made of rather than about. Rarity cannot
+        // discount these: it measures how rare a word is in this store, not how
+        // empty it is in English, and "you" appears in two descriptions and so
+        // counts as rare. Asked "what did you have for breakfast", a real store
+        // answered with a topic about annotated tags, matched on "you" in its
+        // description — which is harmless in a search somebody reads and not
+        // harmless at all in one that speaks by itself.
+        "am", "any", "can", "could", "did", "do", "does", "doing", "done",
+        "he", "her", "him", "his", "how", "i", "me", "my", "our", "please",
+        "she", "should", "some", "thanks", "their", "them", "us", "we", "what",
+        "when", "where", "which", "who", "whom", "whose", "why", "would",
+        "you", "your",
     };
 
     /// <summary>The name and description are curated; a fact is prose.</summary>
@@ -120,18 +145,20 @@ public static class MemorySearch
         {
             var score = 0.0;
             var hits = 0;
+            var curated = false;
 
             foreach (var term in terms)
             {
-                var weight = document.Weight(term);
+                var found = document.Where(term);
 
-                if (weight <= 0)
+                if (!found.Anywhere)
                 {
                     continue;
                 }
 
                 hits++;
-                score += Saturate(weight, document.Length, averageLength) * Rarity(term, documents);
+                curated |= found.InName || found.InDescription;
+                score += document.Weight(term, averageLength) * Rarity(term, documents);
             }
 
             if (score <= 0)
@@ -145,7 +172,8 @@ public static class MemorySearch
                 document.Topic.Facts
                     .Where(fact => terms.Any(term => Terms(fact).Contains(term, StringComparer.Ordinal)))
                     .ToList(),
-                hits));
+                hits,
+                curated));
         }
 
         return matches
@@ -270,34 +298,88 @@ public static class MemorySearch
         }
     }
 
-    private static IReadOnlyDictionary<string, double> Fields(MemoryTopic topic)
+    /// <summary>
+    /// Where one term appears in a topic, kept apart rather than added up.
+    /// </summary>
+    /// <remarks>
+    /// A name and a description are curated and said once: a topic named for
+    /// winget publishing declares its subject, and saying "winget" twice in the
+    /// name would not make it more so. Facts are prose, where a term can repeat
+    /// for reasons that have nothing to do with what the topic is about. Adding
+    /// the two together made them indistinguishable — a term once in the name
+    /// scored exactly what a term three times in the body scored — which is how
+    /// a long account of something else outranked the topic named for the
+    /// subject.
+    /// </remarks>
+    private readonly record struct Occurrence(bool InName, bool InDescription, double Facts)
     {
-        var weights = new Dictionary<string, double>(StringComparer.Ordinal);
+        public bool Anywhere => InName || InDescription || Facts > 0;
+    }
 
-        Add(topic.Name, NameWeight);
-        Add(topic.Description, DescriptionWeight);
+    private static IReadOnlyDictionary<string, Occurrence> Fields(MemoryTopic topic)
+    {
+        var weights = new Dictionary<string, Occurrence>(StringComparer.Ordinal);
+
+        foreach (var term in Terms(topic.Name))
+        {
+            weights[term] = weights.GetValueOrDefault(term) with { InName = true };
+        }
+
+        foreach (var term in Terms(topic.Description))
+        {
+            weights[term] = weights.GetValueOrDefault(term) with { InDescription = true };
+        }
 
         foreach (var fact in topic.Facts)
         {
-            Add(fact, FactWeight);
+            foreach (var term in Terms(fact))
+            {
+                var seen = weights.GetValueOrDefault(term);
+
+                weights[term] = seen with { Facts = seen.Facts + 1 };
+            }
         }
 
         return weights;
-
-        void Add(string? text, double weight)
-        {
-            foreach (var term in Terms(text))
-            {
-                weights[term] = weights.GetValueOrDefault(term) + weight;
-            }
-        }
     }
 
-    private sealed record Document(MemoryTopic Topic, IReadOnlyDictionary<string, double> Weights)
+    private sealed record Document(MemoryTopic Topic, IReadOnlyDictionary<string, Occurrence> Weights)
     {
         public bool Contains(string term) => Weights.ContainsKey(term);
 
-        public double Weight(string term) => Weights.GetValueOrDefault(term);
+        public Occurrence Where(string term) => Weights.GetValueOrDefault(term);
+
+        /// <summary>
+        /// What one term is worth here: the curated fields count once each for
+        /// saying it at all, and the prose is saturated and length-scaled so
+        /// repetition cannot stand in for being the subject.
+        /// </summary>
+        public double Weight(string term, double averageLength)
+        {
+            var found = Where(term);
+
+            var value = 0.0;
+
+            if (found.InName)
+            {
+                value += NameWeight;
+            }
+
+            if (found.InDescription)
+            {
+                value += DescriptionWeight;
+            }
+
+            // Prose is saturated before it is added, not after. Said once a
+            // term is worth most of a mention; said eight times it is worth
+            // barely more, so a long topic cannot accumulate its way past one
+            // that declares the subject in its name. The curated fields are
+            // counted as they were, which is what keeps the balance between
+            // them and rarity where it was.
+            value += FactWeight * (found.Facts / (found.Facts + 1.0));
+
+            return Saturate(value, Length, averageLength);
+        }
 
         /// <summary>
         /// How much the topic says altogether, as the weights already measure
@@ -305,6 +387,6 @@ public static class MemorySearch
         /// the file size, so a topic is judged long for saying a lot, not for
         /// being stored verbosely.
         /// </summary>
-        public double Length { get; } = Weights.Values.Sum();
+        public double Length { get; } = Weights.Values.Sum(found => found.Facts);
     }
 }

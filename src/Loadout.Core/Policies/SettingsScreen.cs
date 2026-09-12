@@ -155,6 +155,20 @@ public static class SettingsScreen
                         continue;
                     }
 
+                    if (command is not null && RecallHook.IsOwn(command))
+                    {
+                        var local = RecallHook.Localise(command, launcher);
+
+                        if (local != command)
+                        {
+                            hook["command"] = local;
+                            rewritten++;
+                            changed = true;
+                        }
+
+                        continue;
+                    }
+
                     if (command is not null && IsAllowedHook(command, allowed))
                     {
                         continue;
