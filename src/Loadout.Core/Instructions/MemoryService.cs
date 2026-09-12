@@ -327,7 +327,7 @@ internal sealed partial class MemoryService : IMemoryService
                 }
 
                 var key = line[..separator].Trim().ToLowerInvariant();
-                var value = line[(separator + 1)..].Trim().Trim('"', '\'');
+                var value = Unquote(line[(separator + 1)..].Trim());
 
                 if (key == "description")
                 {
@@ -579,7 +579,14 @@ internal sealed partial class MemoryService : IMemoryService
                     // would be a worse failure than keeping a weak one.
                     findings.Add(new MemoryFinding(
                         topic.Name,
-                        MemoryFindingSeverity.Info,
+                        // A fact pinned to the moment it was written is the one
+                        // kind that turns from true into misleading on its own,
+                        // with nothing in the store to catch it. The others are
+                        // matters of phrasing: worth saying, not worth holding
+                        // up the verdict for.
+                        verdict == FactVerdict.TimeSensitive
+                            ? MemoryFindingSeverity.Warning
+                            : MemoryFindingSeverity.Info,
                         verdict.ToString().ToLowerInvariant(),
                         $"\"{Truncate(fact)}\" {MemoryFactClassifier.Explain(verdict)}"));
                 }
@@ -590,7 +597,11 @@ internal sealed partial class MemoryService : IMemoryService
                     && DateTimeOffset.TryParse(dated.Value, out var when)
                     && when < staleBefore)
                 {
-                    findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Info, "stale",
+                    // Past its own date and never rechecked. A memory that said
+                    // a submission was blocked on a signature it had already
+                    // received sat here for two days behind a HEALTHY verdict,
+                    // which is the whole reason this is not an aside.
+                    findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Warning, "stale",
                         $"dated {when:yyyy-MM-dd}: \"{Truncate(fact)}\". Check it still holds."));
                 }
             }
@@ -1132,6 +1143,36 @@ internal sealed partial class MemoryService : IMemoryService
         var safe = SecretRedactor.Redact(value);
 
         return safe.Length <= 70 ? safe : safe[..70] + "...";
+    }
+
+    /// <summary>
+    /// Strips one layer of YAML quoting from a frontmatter value.
+    /// <para>
+    /// Trimming quote characters off both ends is not the same thing, and the
+    /// difference is visible: a description ending in a quoted phrase was
+    /// written as <c>"... added as \"Other issuer\""</c> and reached the index
+    /// as <c>... added as \"Other issuer\</c> — the closing quotes eaten, a
+    /// stray backslash left, and the sentence cut off mid-phrase. The index
+    /// line is the only part of a topic a session is given, so a line that
+    /// stops early is a fact half delivered.
+    /// </para>
+    /// </summary>
+    private static string Unquote(string value)
+    {
+        if (value.Length < 2)
+        {
+            return value;
+        }
+
+        if (value[0] == '"' && value[^1] == '"')
+        {
+            return value[1..^1].Replace("\\\"", "\"").Replace("\\\\", "\\");
+        }
+
+        // Single quotes carry no escapes in YAML beyond a doubled quote.
+        return value[0] == '\'' && value[^1] == '\''
+            ? value[1..^1].Replace("''", "'")
+            : value;
     }
 
     /// <summary>
