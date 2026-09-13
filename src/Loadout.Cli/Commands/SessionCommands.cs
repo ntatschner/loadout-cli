@@ -423,6 +423,16 @@ internal sealed record SessionChoice(AgentSession? Session)
             return "Cancel";
         }
 
-        return SessionDisplay.Line(Session, width);
+        // Escaped because the picker parses what this returns as markup, and a
+        // session is named after the first thing said in it — which the person
+        // who said it was writing as prose, not as markup. A conversation that
+        // opened with '[SYSTEM NOTIFICATION - NOT USER INPUT]' took the whole
+        // picker down with "Could not find color or style 'SYSTEM'", and the
+        // launcher's Resume looked like it had crashed.
+        //
+        // After the line is built, never before: the columns are padded to a
+        // width, and escaping first would have the padding count the doubled
+        // brackets that the renderer then draws as one.
+        return SessionDisplay.Line(Session, width).EscapeMarkup();
     }
 }
