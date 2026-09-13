@@ -1,5 +1,15 @@
 name: Release
 
+# The run's title says which of two things it is. A run from the Actions page
+# builds every package and publishes none of them — the publish, verify,
+# Homebrew and winget jobs are all gated on the ref being a tag — and it came
+# out green, titled "Release", with four jobs skipped. Somebody who had just
+# pressed the button read that as a release. Now the list says what happened.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('Build only {0} — nothing is published from the Actions page; push tag v{0} to release', inputs.version)
+      || format('Release {0}', github.ref_name) }}
+
 # Spec section 92 requires every release to be built against all Tier-1
 # platforms. Each archive is produced on the operating system it targets, so the
 # Unix executable bit and the macOS binaries come out right without the
@@ -11,7 +21,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to build, without the leading v
+        description: >-
+          Version to BUILD, without the leading v. This checks the packaging and
+          publishes nothing. To release, push an annotated tag vX.Y.Z instead.
         required: true
         default: 0.1.0
 
@@ -78,6 +90,23 @@ jobs:
           else
             echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
+
+      # Once, on one leg of the matrix, so the run's summary page says it too
+      # for anyone who opens the run rather than reading its title.
+      - name: Say that this run publishes nothing
+        if: github.event_name == 'workflow_dispatch' && matrix.rid == 'linux-x64'
+        shell: bash
+        run: |
+          {
+            echo "## Build only — nothing is published"
+            echo
+            echo "This run was started from the Actions page. It builds every package so the"
+            echo "packaging can be checked, and then stops: the publish, verify, Homebrew and"
+            echo "winget jobs only run for a tag."
+            echo
+            echo "To release ${{ inputs.version }}: bump the version, commit, then push an annotated tag —"
+            echo '`git tag -a v${{ inputs.version }} -F notes && git push origin main v${{ inputs.version }}`'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # pwsh is present on every GitHub runner, which is why the packaging
       # script is PowerShell: one command works on all three legs.
