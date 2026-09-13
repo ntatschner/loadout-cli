@@ -104,20 +104,34 @@ public static class RecallHook
     }
 
     /// <summary>
-    /// How much of the question a topic has to carry before it is worth
-    /// interrupting with.
+    /// How much of what made the question distinctive a topic has to account
+    /// for before it is worth interrupting with.
     /// </summary>
     /// <remarks>
-    /// One word was not enough. Over 248 questions from this project's own
-    /// transcripts, a single word landing in a name let "release and i'll test"
-    /// reach a topic about finding views in TUI tests, and "merge both PRs and
-    /// cut a release" reach one about commit attribution. Two words halves how
-    /// often it speaks — from 70% of real prompts to 42% — while keeping the
-    /// answers that were plainly right: an installer crash still reaches the
-    /// Restart Manager, a question about a VS Code shell still reaches window
-    /// titles.
+    /// <para>
+    /// This was a count of matched words first, and counting was the wrong
+    /// measure. A minimum of two silenced "what did i need to get for winget
+    /// again" outright: only "winget" survives the ignored list, and the topic
+    /// named for winget publishing carries exactly that one word — the same
+    /// count as the topic that reaches "release and i'll test" on "test".
+    /// </para>
+    /// <para>
+    /// How rare the matched word is separates them, and it has to be counted
+    /// absolutely rather than as a share of the question. A share was tried in
+    /// between and was worse: a question reduced to one surviving word hands
+    /// whatever matches it the whole hundred per cent, so "thanks that worked"
+    /// came back at full confidence on the word "worked".
+    /// </para>
+    /// <para>
+    /// Two, because a word used by one or two topics picks something out and a
+    /// word used by three no longer does. The rule it replaced was justified on
+    /// an installer crash and a VS Code question that both kept working, and
+    /// the winget question it broke was not run again before it shipped — which
+    /// is the reason to re-check the case an investigation turned on, not only
+    /// the ones already passing.
+    /// </para>
     /// </remarks>
-    public const int Words = 2;
+    public const int Users = 2;
 
     /// <summary>
     /// The topics worth speaking about, out of everything the question reached.
@@ -139,7 +153,7 @@ public static class RecallHook
     public static IReadOnlyList<MemoryMatch> Worth(IReadOnlyList<MemoryMatch> matches) =>
         matches is null
             ? []
-            : matches.Where(match => match.Curated && match.Terms >= Words).Take(Topics).ToList();
+            : matches.Where(match => match.Curated && match.Sharpest <= Users).Take(Topics).ToList();
 
     /// <summary>What to put in front of the session, or null to say nothing.</summary>
     public static string? Context(IReadOnlyList<MemoryMatch> matches)

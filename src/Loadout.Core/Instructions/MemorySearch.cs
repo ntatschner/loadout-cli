@@ -32,12 +32,31 @@ namespace Loadout.Core.Instructions;
 /// them on prose alone. A caller that spoke on that would speak on anything.
 /// </para>
 /// </param>
+/// <param name="Sharpest">
+/// How many topics use the most distinctive word this match was made on —
+/// 1 where the word picks out this topic alone, and the size of the store
+/// where everything says it. <see cref="int.MaxValue"/> when nothing matched.
+/// <para>
+/// Counting matched words cannot tell a decisive word from an ordinary one:
+/// the topic named for winget publishing reaches "what did i need to get for
+/// winget again" on one word, and a topic about TUI tests reaches "release and
+/// i'll test" on one word too. How rare the word is separates them — "winget"
+/// is used by two topics, "test" by most of them.
+/// </para>
+/// <para>
+/// Counted absolutely, not as a share of the question. A share was tried first
+/// and is worse than useless: a question reduced to a single surviving word
+/// hands whatever matches it the whole hundred per cent, so "thanks that
+/// worked" scored full confidence on the word "worked".
+/// </para>
+/// </param>
 public sealed record MemoryMatch(
     MemoryTopic Topic,
     double Score,
     IReadOnlyList<string> Matched,
     int Terms,
-    bool Curated);
+    bool Curated,
+    int Sharpest);
 
 /// <summary>
 /// Finds the topics that answer a question, without asking anything.
@@ -112,6 +131,16 @@ public static class MemorySearch
         "us", "use", "used", "very", "want", "way", "we", "well", "what",
         "where", "which", "while", "who", "whom", "whose", "why", "would",
         "you", "your",
+
+        // Commonplaces that a store's own statistics cannot recognise. "thanks
+        // that worked" reached a topic about the installed launcher because
+        // "working tree" stands in its description and no other topic declares
+        // the word, so by every measure the store has — declared once, in a
+        // curated field — it looked as decisive as "winget". The difference is
+        // that one is a technical term and the other is an English verb, which
+        // is what a list knows and arithmetic does not.
+        "work", "happen", "start", "stop", "keep", "try", "seem", "mean",
+        "come", "leave", "bring", "send", "call", "ask", "turn", "hold",
     };
 
     /// <summary>The name and description are curated; a fact is prose.</summary>
@@ -159,11 +188,13 @@ public static class MemorySearch
         var matches = new List<MemoryMatch>();
         var averageLength = documents.Average(document => document.Length);
 
+
         foreach (var document in documents)
         {
             var score = 0.0;
             var hits = 0;
             var curated = false;
+            var sharpest = int.MaxValue;
 
             foreach (var term in terms)
             {
@@ -176,6 +207,7 @@ public static class MemorySearch
 
                 hits++;
                 curated |= found.InName || found.InDescription;
+                sharpest = Math.Min(sharpest, Users(term, documents));
                 score += document.Weight(term, averageLength) * Rarity(term, documents);
             }
 
@@ -191,7 +223,8 @@ public static class MemorySearch
                     .Where(fact => terms.Any(term => Terms(fact).Contains(term, StringComparer.Ordinal)))
                     .ToList(),
                 hits,
-                curated));
+                curated,
+                sharpest));
         }
 
         return matches
@@ -295,10 +328,36 @@ public static class MemorySearch
     /// </remarks>
     private static double Rarity(string term, IReadOnlyList<Document> documents)
     {
+        // Counted over everything, unlike Users: ranking wants to know how
+        // common a word is in the store, not how many topics claim it.
         var appearances = documents.Count(document => document.Contains(term));
 
         return appearances == 0 ? 0 : Math.Log(1.0 + ((double)documents.Count / appearances));
     }
+
+    /// <summary>
+    /// How many topics <em>declare</em> a term, by putting it in their name or
+    /// description rather than only mentioning it in prose.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Exposed as a count rather than as <see cref="Rarity"/>'s logarithm
+    /// because a caller deciding whether to act on a match needs a number that
+    /// means the same thing in every store: a word two topics declare picks
+    /// something out, a word twenty declare does not.
+    /// </para>
+    /// <para>
+    /// Counted over the curated fields only, because prose dilutes a word
+    /// without claiming it. Writing down what went wrong with retrieval put
+    /// "winget" into five topics — the one named for it, and four quoting it as
+    /// an example — and a count over everything then called the word ordinary
+    /// and silenced the question it was the whole subject of. One topic still
+    /// declares it. A store that documents its own failures must not lose the
+    /// ability to answer for them.
+    /// </para>
+    /// </remarks>
+    private static int Users(string term, IReadOnlyList<Document> documents) =>
+        documents.Count(document => document.Where(term) is { InName: true } or { InDescription: true });
 
     /// <summary>
     /// The words of a piece of text, lowercased, with the ignorable ones gone.
@@ -348,10 +407,21 @@ public static class MemorySearch
 
             word.Clear();
 
-            // One-character words carry nothing and match everywhere.
+            // One-character words carry nothing and match everywhere. The
+            // ignored list is consulted on both the word and its stem, so a
+            // single entry covers every inflection: "work" catches "worked"
+            // and "working" without either being listed, and a word whose stem
+            // comes out odd is still caught in its written form.
             if (term.Length > 1 && !Ignored.Contains(term))
             {
-                into.Add(Stem(term));
+                var stem = Stem(term);
+
+                if (Ignored.Contains(stem))
+                {
+                    return;
+                }
+
+                into.Add(stem);
             }
         }
     }

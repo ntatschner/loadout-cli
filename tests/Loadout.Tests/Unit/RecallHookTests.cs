@@ -38,15 +38,33 @@ public sealed class RecallHookTests
     }
 
     [Fact]
-    public void One_word_of_the_question_is_not_enough_to_interrupt_with()
+    public void A_word_half_the_store_declares_is_not_enough_to_interrupt_with()
     {
-        // Measured, not guessed: one word landing in a name let "release and
-        // i'll test" reach a topic about finding views in TUI tests, and "merge
-        // both PRs and cut a release" reach one about commit attribution.
-        var matches = new[] { Match("tui-tests-must-find-views-by-property", curated: true, terms: 1) };
+        // "release and i'll test" reached a topic about finding views in TUI
+        // tests on the single word "test", which three topics declare.
+        var matches = new[]
+        {
+            Match("tui-tests-must-find-views-by-property", curated: true, terms: 1, declaredBy: 3),
+        };
 
         RecallHook.Worth(matches).Should().BeEmpty();
         RecallHook.Output(matches).Should().BeNull();
+    }
+
+    [Fact]
+    public void One_word_is_enough_when_only_this_topic_declares_it()
+    {
+        // The case a count of words got wrong. "what did i need to get for
+        // winget again" leaves one word once the ignored list has had it, and
+        // the topic named for winget publishing is the only one declaring it —
+        // which is as decisive as a match gets, not as weak.
+        var matches = new[]
+        {
+            Match("winget-publishing-never-runs", curated: true, terms: 1, declaredBy: 1),
+        };
+
+        RecallHook.Worth(matches).Should().ContainSingle()
+            .Which.Topic.Name.Should().Be("winget-publishing-never-runs");
     }
 
     [Fact]
@@ -84,7 +102,7 @@ public sealed class RecallHookTests
         // of somebody mid-sentence.
         RecallHook.Parse(json).Should().BeNull();
 
-    private static MemoryMatch Match(string name, bool curated, int terms = 2) =>
+    private static MemoryMatch Match(string name, bool curated, int terms = 2, int declaredBy = 1) =>
         new(
             new MemoryTopic(
                 name,
@@ -98,5 +116,6 @@ public sealed class RecallHookTests
             Score: 1.0,
             Matched: [],
             Terms: terms,
-            Curated: curated);
+            Curated: curated,
+            Sharpest: declaredBy);
 }

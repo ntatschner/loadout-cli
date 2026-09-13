@@ -111,6 +111,12 @@ public sealed class MemoryFindCommand : AsyncCommand<MemoryFindCommand.Settings>
                 // so is deliberately still not published.
                 match.Terms,
                 match.Curated,
+
+                // How many topics use the most distinctive word this match was
+                // made on. Unlike the score it means the same thing from
+                // one search to the next, which is what a caller deciding
+                // whether to act on a match needs.
+                match.Sharpest,
             }));
 
             return CommandOutput.Success();
