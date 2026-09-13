@@ -460,24 +460,50 @@ jobs:
             echo "No notes were written for this version." > notes.md
           fi
 
-          # The standing paragraph every release carries, after what is
-          # particular to this one.
-          cat >> notes.md <<'STANDING'
+          # The standing part every release carries, after what is particular
+          # to this one. Written as a page somebody has landed on wanting to
+          # install this: the commands first, the small print after. The
+          # version is substituted so the commands can be copied as they are
+          # rather than edited first.
+          version="${{ github.ref_name }}"
+          version="${version#v}"
 
-          ---
+          cat >> notes.md <<STANDING
 
-          Self-contained builds of `loadout`. No .NET installation required.
+          ## Install
 
-          Archives work anywhere; the `.msi`, `.deb` and `.rpm` install
-          `loadout` onto `PATH` for the current user or machine.
+          **Linux and macOS**
 
-          Tested on Windows x64, Linux x64, macOS Apple Silicon, Windows arm64
-          and Linux arm64. The arm64 binaries are cross-compiled from x64,
-          though the suite is executed on arm64 runners. macOS packages are not
-          signed or notarised.
+          \`\`\`bash
+          tar -xzf loadout-${version}-linux-x64.tar.gz
+          ./install.sh
+          loadout setup
+          \`\`\`
 
-          Verify a download against `SHA256SUMS`, then see the README for
-          installation.
+          \`install.sh\` verifies the SHA-256 before extracting anything, installs
+          to \`~/.local/bin\`, and needs no root. On macOS it also clears the
+          download quarantine from the installed binary.
+
+          **Windows**
+
+          \`\`\`powershell
+          msiexec /i loadout-${version}-win-x64.msi
+          loadout setup
+          \`\`\`
+
+          Per-user, no elevation, and puts \`loadout\` on your \`PATH\`. Or take the
+          zip and place \`loadout.exe\` wherever you like.
+
+          There is a \`.deb\` and an \`.rpm\` below too.
+
+          ## The small print
+
+          Self-contained builds — no .NET installation required. Verify any
+          download against \`SHA256SUMS\`.
+
+          Built for Windows, Linux and macOS on x64, and Windows and Linux on
+          arm64. The arm64 binaries are cross-compiled, though the test suite
+          runs on arm64 machines. macOS packages are not signed or notarised.
           STANDING
 
 
