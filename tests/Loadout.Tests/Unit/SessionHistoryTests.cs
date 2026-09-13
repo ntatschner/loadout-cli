@@ -224,6 +224,107 @@ public sealed class SessionHistoryTests : IDisposable
         sessions.Value.Should().BeEmpty();
     }
 
+    /// <summary>Writes a subagent transcript where Claude now puts one.</summary>
+    /// <remarks>
+    /// Claude Code grew a per-session folder beside the transcript —
+    /// <c>&lt;session-id&gt;/subagents/agent-*.jsonl</c>, and a
+    /// <c>tool-results</c> folder next to it — some time before 27 August 2026.
+    /// The files are ordinary transcripts with a cwd and a first prompt, so
+    /// nothing about their contents marks them out. Only where they sit does.
+    /// </remarks>
+    private string WriteClaudeSubagentTranscript(
+        string sessionId,
+        string agentId,
+        string directory,
+        params string[] lines)
+    {
+        var folder = Path.Combine(
+            _root,
+            ".claude",
+            "projects",
+            directory.Replace(':', '-').Replace(Path.DirectorySeparatorChar, '-'),
+            sessionId,
+            "subagents");
+
+        Directory.CreateDirectory(folder);
+
+        var path = Path.Combine(folder, agentId + ".jsonl");
+
+        File.WriteAllLines(path, lines);
+
+        return path;
+    }
+
+    [Fact]
+    public async Task A_subagent_transcript_is_not_offered_as_a_session()
+    {
+        const string id = "00000000-0000-4000-8000-00000000000c";
+
+        var directory = Path.Combine(_root, "code", "alpha");
+
+        WriteClaudeTranscript(
+            id, directory, ClaudeUserLine(directory, "work", "Fix the importer"));
+
+        var subagent = WriteClaudeSubagentTranscript(
+            id,
+            "agent-a2feab3bbb1dc3a34",
+            directory,
+            ClaudeUserLine(directory, "work", "Research the statistics of information retrieval"));
+
+        // Newest, so it wins the ordering and would take the whole list with a
+        // realistic limit. That is the shape of the reported failure: the
+        // picker filled with research prompts and the real sessions pushed off
+        // the end of it.
+        File.SetLastWriteTimeUtc(subagent, DateTime.UtcNow.AddHours(1));
+
+        var sessions = await new ClaudeSessionHistory(_environment).ListAsync(10);
+
+        sessions.Succeeded.Should().BeTrue();
+
+        // 'agent-a2feab3bbb1dc3a34' is not something Claude can resume. Handing
+        // it to --resume starts nothing, which is what a dead Resume button
+        // looks like from outside.
+        sessions.Value.Should().ContainSingle();
+        sessions.Value![0].SessionId.Should().Be(id);
+    }
+
+    [Fact]
+    public async Task The_limit_counts_sessions_rather_than_files()
+    {
+        var directory = Path.Combine(_root, "code", "alpha");
+
+        for (var i = 0; i < 3; i++)
+        {
+            WriteClaudeTranscript(
+                $"00000000-0000-4000-8000-00000000010{i}",
+                directory,
+                ClaudeUserLine(directory, "work", $"Session {i}"));
+        }
+
+        // Newer than all three, and unreadable: no working directory, so each
+        // is skipped rather than returned. Spending the limit before the read
+        // means asking for three sessions and being handed none, while three
+        // perfectly good ones sit just behind them.
+        for (var j = 0; j < 3; j++)
+        {
+            var unreadable = WriteClaudeTranscript(
+                $"00000000-0000-4000-8000-00000000020{j}",
+                directory,
+                """{"type":"queue-operation","sessionId":"s"}""");
+
+            File.SetLastWriteTimeUtc(unreadable, DateTime.UtcNow.AddHours(1));
+        }
+
+        var sessions = await new ClaudeSessionHistory(_environment).ListAsync(3);
+
+        // The limit is a promise about the answer, not about how much was read
+        // to find it.
+        sessions.Value!.Select(s => s.SessionId).Should().BeEquivalentTo(
+            "00000000-0000-4000-8000-000000000100",
+            "00000000-0000-4000-8000-000000000101",
+            "00000000-0000-4000-8000-000000000102");
+    }
+
     /// <summary>Writes a Codex rollout file and the index entry that names it.</summary>
     private void WriteCodexSession(string sessionId, string directory, string? name)
     {

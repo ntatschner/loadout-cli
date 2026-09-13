@@ -68,20 +68,44 @@ public sealed class DryRunTests
     }
 
     [Fact]
-    public void The_launcher_reads_it_too_although_it_changes_no_files()
+    public void Everything_that_starts_an_agent_reads_it_too()
     {
-        // 'launch' does not declare that it mutates, and by the letter of it
-        // that is right: it writes nothing. It starts an agent, which is a
-        // larger thing to do by surprise than writing a file, and the test
-        // above would never have covered it.
-        var launch = Path.Combine(
-            Repository(), "src", "Loadout.Cli", "Commands", "LaunchCommand.cs");
+        // These do not declare that they mutate, and by the letter of it that
+        // is right: they write nothing. They start an agent, which is a larger
+        // thing to do by surprise than writing a file, and the test above would
+        // never have covered it.
+        //
+        // Named by what they do rather than by file, because the first version
+        // of this test checked LaunchCommand.cs alone and 'resume' shipped for
+        // three weeks accepting --dry-run and starting a real session — the
+        // same silent failure, one file over.
+        var offenders = Commands()
+            .Where(command => command.StartsAnAgent && !command.ReadsTheFlag)
+            .Select(command => command.Where)
+            .ToList();
 
-        File.ReadAllText(launch).Should().Contain("DryRun");
+        offenders.Should().BeEmpty(
+            "a command that starts an agent has to be able to describe one instead");
+    }
+
+    [Fact]
+    public void The_search_finds_the_commands_that_start_an_agent()
+    {
+        // Calibration, as above: a predicate that matched nothing would pass
+        // the test before this one in perfect silence.
+        var starters = Commands().Where(command => command.StartsAnAgent).ToList();
+
+        starters.Select(command => command.Name)
+            .Should().Contain(["LaunchCommand", "HereCommand", "ResumeCommand"]);
     }
 
     /// <summary>One command, and the source that decides its answer.</summary>
-    private sealed record Command(string Name, string Where, bool Mutates, bool ReadsTheFlag);
+    private sealed record Command(
+        string Name,
+        string Where,
+        bool Mutates,
+        bool ReadsTheFlag,
+        bool StartsAnAgent);
 
     /// <summary>
     /// Every command in the command line, read one at a time.
@@ -148,7 +172,11 @@ public sealed class DryRunTests
                     name,
                     $"{Path.GetFileName(file)}:{name}",
                     span.WithPreamble.Contains("Mutates = true", StringComparison.Ordinal),
-                    source.Contains("DryRun", StringComparison.Ordinal)));
+                    source.Contains("DryRun", StringComparison.Ordinal),
+
+                    // Building a LaunchRequest is the one way to start an
+                    // agent: the launcher takes nothing else.
+                    span.Body.Contains("new LaunchRequest(", StringComparison.Ordinal)));
             }
         }
 
