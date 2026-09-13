@@ -46,14 +46,26 @@ internal sealed record LaunchChoice(string Label, string? Value);
 /// </summary>
 /// <param name="Profiles">Context profiles the chosen agent can use, the default first.</param>
 /// <param name="Worktrees">Working trees of the repository, the main one first.</param>
+/// <param name="Declared">
+/// What this project has recorded itself as working on, newest first.
+/// <para>
+/// The task line decides which specialists a session is given, and it was
+/// filled in twice in a hundred and twenty-two launches: a blank field asking
+/// for a sentence is answered by starting work instead. What a project has
+/// already declared is the one description of the work that exists before the
+/// sheet opens, so the sheet offers it rather than asking again.
+/// </para>
+/// </param>
 internal sealed record LaunchChoices(
     IReadOnlyList<LaunchChoice> Profiles,
-    IReadOnlyList<LaunchChoice> Worktrees)
+    IReadOnlyList<LaunchChoice> Worktrees,
+    IReadOnlyList<string> Declared)
 {
     /// <summary>A project with nothing to choose: one profile, one working tree.</summary>
     internal static readonly LaunchChoices None = new(
         [new LaunchChoice("default", null)],
-        [new LaunchChoice("main working tree", null)]);
+        [new LaunchChoice("main working tree", null)],
+        []);
 }
 
 /// <summary>What the preview is asked about: the launch as it stands.</summary>
@@ -137,6 +149,7 @@ internal sealed class LaunchOptionsDialog : Window
     private readonly IApplication _application;
 
     private readonly TextField _task;
+    private readonly Label _alsoDeclared;
     private readonly ListView _agent;
     private readonly ListView _mode;
     private readonly ListView _profile;
@@ -215,6 +228,13 @@ internal sealed class LaunchOptionsDialog : Window
             Y = 2,
             Text = "This chooses the specialists the agent is given.",
         });
+
+        // Says what else the project has on record without spending a picker
+        // on it. Empty for a project that has declared nothing, which is most
+        // of them.
+        _alsoDeclared = new Label { X = 1, Y = 3, Width = Dim.Fill(1), Text = string.Empty };
+
+        Add(_alsoDeclared);
 
         // Four pickers side by side, each a short list, so the whole sheet
         // fits an 80x24 terminal with the preview still visible beneath.
@@ -411,6 +431,25 @@ internal sealed class LaunchOptionsDialog : Window
 
         _worktree.SetSource(new ObservableCollection<string>(Labels(choices.Worktrees)));
         _worktree.SelectedItem = 0;
+
+        // Offered, never imposed: the field is filled only when it is empty,
+        // so a task typed before the choices arrived is never overwritten, and
+        // what lands there is editable text rather than a selection. Correcting
+        // a line beats composing one, which is the whole reason the field was
+        // left blank in a hundred and twenty launches out of a hundred and
+        // twenty-two.
+        if (choices.Declared.Count > 0 && string.IsNullOrWhiteSpace(_task.Text))
+        {
+            _task.Text = choices.Declared[0];
+
+            if (choices.Declared.Count > 1)
+            {
+                _alsoDeclared.Text =
+                    $"also recorded: {string.Join("; ", choices.Declared.Skip(1).Take(2))}";
+            }
+
+            PreviewSoon();
+        }
     }
 
     /// <summary>Re-resolves once typing has paused.</summary>
