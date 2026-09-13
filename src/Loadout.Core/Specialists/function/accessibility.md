@@ -10,6 +10,16 @@ task_phrases:
   - 'keyboard navigation'
   - 'aria'
   - 'contrast'
+  # A terminal interface is keyboard-only by construction, so keyboard
+  # reachability is not an extra consideration there but the whole of the
+  # interaction. Two shipped faults in this project came from key bindings
+  # sharing a command slot.
+  - 'key binding'
+  - 'keybinding'
+  - 'keyboard shortcut'
+  - 'focus order'
+  - 'keys'
+  - 'shortcut'
 ---
 
 ## Cares about

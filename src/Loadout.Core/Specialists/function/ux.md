@@ -10,6 +10,22 @@ task_phrases:
   - 'error message'
   - 'wording'
   - 'copy'
+  # An interface drawn in a terminal is still an interface, and clarity of
+  # state, feedback and error recovery do not depend on a browser. Thirteen
+  # task-shaped prompts about screens, dialogs and launcher UI reached no
+  # specialist at all in a project whose interface is a terminal.
+  #
+  # Taken from what those prompts actually say -- "the launch ui", "needs a
+  # screen", "the command palette" -- rather than from what a terminal
+  # interface sounds like it would be called. A first attempt used only 'tui'
+  # and 'terminal ui' and closed one of seven. Phrases match on whole words,
+  # so 'ui' cannot match inside "build".
+  - 'ui'
+  - 'tui'
+  - 'screen'
+  - 'dialog'
+  - 'palette'
+  - 'menu'
 ---
 
 ## Cares about

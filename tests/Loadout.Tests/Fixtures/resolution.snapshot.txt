@@ -49,6 +49,7 @@ mode.implement
 language.typescript
 framework.node
 framework.react
+function.ux
 
 # terraform-infra
 foundation.change-safety
