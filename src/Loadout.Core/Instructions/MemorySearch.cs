@@ -84,15 +84,33 @@ public static class MemorySearch
 
         // The words a question is made of rather than about. Rarity cannot
         // discount these: it measures how rare a word is in this store, not how
-        // empty it is in English, and "you" appears in two descriptions and so
-        // counts as rare. Asked "what did you have for breakfast", a real store
-        // answered with a topic about annotated tags, matched on "you" in its
-        // description — which is harmless in a search somebody reads and not
-        // harmless at all in one that speaks by itself.
-        "am", "any", "can", "could", "did", "do", "does", "doing", "done",
-        "he", "her", "him", "his", "how", "i", "me", "my", "our", "please",
-        "she", "should", "some", "thanks", "their", "them", "us", "we", "what",
-        "when", "where", "which", "who", "whom", "whose", "why", "would",
+        // empty it is in English, and a word that appears in exactly one topic
+        // scores as though it were the whole answer.
+        //
+        // Measured rather than guessed at. Over 248 questions taken from this
+        // project's own transcripts, "what did i need to get for winget again"
+        // returned mutation-reverts-*need*-copies above the topic named for
+        // winget publishing: both matched one word of the question in their
+        // name, and "need" was the rarer of the two.
+        //
+        // Kept to words that cannot name anything technical. "when", "before"
+        // and "after" stay out of this list deliberately — they carry meaning
+        // in a note about ordering, which is what the shorter list above was
+        // protecting.
+        "about", "all", "also", "am", "another", "any", "anything", "back",
+        "been", "both", "can", "could", "did", "do", "does", "doing", "done",
+        "each", "either", "else", "enough", "even", "ever", "every", "get",
+        "gets", "getting", "give", "go", "going", "got", "he", "her", "him",
+        "his", "how", "i", "if", "into", "just", "know", "let", "lets", "like",
+        "look", "made", "make", "many", "may", "me", "might", "more", "most",
+        "much", "must", "my", "need", "needs", "new", "next", "not", "now",
+        "one", "only", "option", "options", "other", "our", "out", "over",
+        "own", "please", "put", "really", "rest", "same", "say", "see", "she",
+        "should", "show", "so", "some", "something", "still", "such", "sure",
+        "take", "tell", "than", "thanks", "their", "them", "then", "these",
+        "thing", "things", "think", "those", "through", "too", "two", "up",
+        "us", "use", "used", "very", "want", "way", "we", "well", "what",
+        "where", "which", "while", "who", "whom", "whose", "why", "would",
         "you", "your",
     };
 
@@ -228,6 +246,46 @@ public static class MemorySearch
     }
 
     /// <summary>
+    /// A word reduced to the form a differently-inflected one also reaches.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Without this a question saying "test" cannot reach a topic named
+    /// <c>contract-tests-spawn-the-real-exe</c>, and one letter decides the
+    /// answer: "the test suite is hanging" returned a topic about running
+    /// suites in Docker, and "the tests suite is hanging" returned the one
+    /// about suite failures. That is not a question of weighting — the match
+    /// never happened.
+    /// </para>
+    /// <para>
+    /// Crude on purpose, and safe because it is crude in the same way on both
+    /// sides. Query and topic are stemmed by the same rules, so a stem that is
+    /// not a word — "kubernete" — still matches itself and costs nothing. The
+    /// only real risk is merging two distinct words, which the length guards
+    /// keep to words short enough that the store is unlikely to hold both.
+    /// </para>
+    /// </remarks>
+    private static string Stem(string term)
+    {
+        if (term.Length > 5 && term.EndsWith("ing", StringComparison.Ordinal))
+        {
+            return term[..^3];
+        }
+
+        if (term.Length > 4 && term.EndsWith("ed", StringComparison.Ordinal))
+        {
+            return term[..^2];
+        }
+
+        // "ss" is not a plural: process, class, address.
+        return term.Length > 3
+            && term.EndsWith('s')
+            && !term.EndsWith("ss", StringComparison.Ordinal)
+                ? term[..^1]
+                : term;
+    }
+
+    /// <summary>
     /// How much one term is worth, given how many topics use it.
     /// </summary>
     /// <remarks>
@@ -293,7 +351,7 @@ public static class MemorySearch
             // One-character words carry nothing and match everywhere.
             if (term.Length > 1 && !Ignored.Contains(term))
             {
-                into.Add(term);
+                into.Add(Stem(term));
             }
         }
     }
