@@ -96,6 +96,17 @@ public sealed class LaunchSheetTests
         }
     }
 
+    /// <summary>
+    /// The sheet's one text field: the task line.
+    /// </summary>
+    /// <remarks>
+    /// Found by type rather than by position, because selecting a view by
+    /// where it sits picks up whichever one happens to be there and reads as a
+    /// fresh bug when the layout moves.
+    /// </remarks>
+    private static TextField FieldNamed(View root) =>
+        AllViews(root).OfType<TextField>().Single();
+
     private static Button ButtonNamed(View root, string containing) =>
         AllViews(root).OfType<Button>()
             .Single(b => (b.Text ?? string.Empty).Contains(containing, StringComparison.Ordinal));
@@ -200,7 +211,8 @@ public sealed class LaunchSheetTests
     {
         var choices = new LaunchChoices(
             [new LaunchChoice("default", null), new LaunchChoice("database  (schema work)", "database")],
-            [new LaunchChoice("main  (main working tree)", null), new LaunchChoice("feature-x", "feature-x")]);
+            [new LaunchChoice("main  (main working tree)", null), new LaunchChoice("feature-x", "feature-x")],
+            []);
 
         using var session = Sheet(sources: Sources(choices: choices));
 
@@ -219,11 +231,38 @@ public sealed class LaunchSheetTests
     }
 
     [Fact]
+    public void What_the_project_says_it_is_working_on_fills_the_task_line()
+    {
+        var choices = new LaunchChoices(
+            [new LaunchChoice("default", null)],
+            [new LaunchChoice("main  (main working tree)", null)],
+            ["fix the flaky release check", "prune the narrative memory topics"]);
+
+        using var session = Sheet(sources: Sources(choices: choices));
+
+        Press(ButtonNamed(Built, "Launch"), Key.Enter);
+
+        // The line that decides which specialists a session is given was filled
+        // in twice in a hundred and twenty-two launches. A project that has
+        // already said what it is working on has answered the question once
+        // already, and asking again is how it ends up blank.
+        Built.Chosen!.Task.Should().Be("fix the flaky release check");
+    }
+
+    // NOT TESTED, deliberately: that a task already typed is never replaced by
+    // a recorded one. The guard is a line in Offer, and reaching it a second
+    // time needs the choices to arrive again after somebody has typed, which
+    // this harness does not reproduce — two attempts passed with the guard
+    // removed. A test that passes either way is worse than none, so there is
+    // not one, and the behaviour is unverified rather than falsely covered.
+
+    [Fact]
     public void The_main_working_tree_and_the_default_profile_are_no_option_at_all()
     {
         var choices = new LaunchChoices(
             [new LaunchChoice("default", null), new LaunchChoice("database", "database")],
-            [new LaunchChoice("main  (main working tree)", null), new LaunchChoice("feature-x", "feature-x")]);
+            [new LaunchChoice("main  (main working tree)", null), new LaunchChoice("feature-x", "feature-x")],
+            []);
 
         using var session = Sheet(sources: Sources(choices: choices));
 

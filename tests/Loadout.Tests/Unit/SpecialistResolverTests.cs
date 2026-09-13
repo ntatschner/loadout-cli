@@ -464,6 +464,16 @@ public sealed class SpecialistResolverTests
     [InlineData("fix the C# warning", "c#", true)]
     [InlineData("upgrade to .NET 10", ".net", true)]
     [InlineData("classic problem", "ci", false)]
+
+    // "ui" sits inside "build", "require" and "quick", and is now a phrase on
+    // the user-experience specialist because that is the word the tasks in
+    // this project's transcripts actually use — "the launch ui", "all the
+    // config in the UI". Whole-word matching is what makes a phrase that short
+    // safe to add at all.
+    [InlineData("build the project", "ui", false)]
+    [InlineData("that requires a rebuild", "ui", false)]
+    [InlineData("work on the launch ui", "ui", true)]
+    [InlineData("redesign the TUI", "tui", true)]
     public void Task_phrases_match_whole_words_rather_than_substrings(
         string task, string phrase, bool expected)
     {

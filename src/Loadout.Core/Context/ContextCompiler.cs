@@ -357,11 +357,27 @@ internal sealed class ContextCompiler : IContextCompiler
         builder.AppendLine();
         builder.AppendLine($"<!-- source: {relative}/MEMORY.md -->");
         builder.AppendLine();
+        // Imperative, and naming the occasions. The index has been carried in
+        // every compiled context for months and was acted on once in twelve
+        // thousand turns: "read the ones that bear on the task" leaves a
+        // session to notice, mid-task, that one of twenty-four titles might
+        // have applied. Telling it when to look is the whole difference, and
+        // is how the memory tool this is modelled on gets called at all.
         builder.AppendLine(
-            "Durable facts recorded from earlier sessions. Each entry is a file under "
-            + $"`{relative}/`; read the ones that bear on the task. The repository is "
-            + "authoritative: where memory and the code disagree, the code is right and the "
-            + "memory needs correcting.");
+            "Durable facts recorded from earlier sessions of this project: past failures, "
+            + "environment quirks, and decisions with the reasons behind them. Below are "
+            + $"titles only; each is a file under `{relative}/`.");
+        builder.AppendLine();
+        builder.AppendLine(
+            "**Check this before you investigate.** Call `loadout_recall`, or read the file, "
+            + "before diagnosing a failure, before an unfamiliar error, before anything about "
+            + "how this project builds, tests, releases or is configured, and before recording "
+            + "a fact of your own so an existing topic is extended rather than contradicted. "
+            + "The store is small and a miss costs one call.");
+        builder.AppendLine();
+        builder.AppendLine(
+            "The repository is authoritative: where memory and the code disagree, the code is "
+            + "right and the memory needs correcting.");
         builder.AppendLine();
         builder.AppendLine(index.Value.TrimEnd());
         builder.AppendLine();

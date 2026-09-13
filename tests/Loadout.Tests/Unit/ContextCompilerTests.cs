@@ -280,6 +280,25 @@ public sealed class ContextCompilerTests : IDisposable
     }
 
     [Fact]
+    public async Task The_memory_index_says_when_to_look_and_not_only_that_it_is_there()
+    {
+        WriteProject("starstats", "memory/MEMORY.md", "- [old](old.md) - an old topic");
+
+        var result = await _compiler.CompileAsync(Manifest(), _workspace, _runtime, "claude");
+        var compiled = await File.ReadAllTextAsync(result.Value!.FilePath);
+
+        // An index of titles was carried in every compiled context for months
+        // and acted on once in twelve thousand turns. Naming the occasions is
+        // the whole difference between a store a session reads and one it walks
+        // past, so the instruction is asserted rather than left to prose drift.
+        compiled.Should().Contain("loadout_recall");
+        compiled.Should().Contain("before you investigate");
+
+        // And the precedence rule survives: memory is a record, not an order.
+        compiled.Should().Contain("the code is right and the memory needs correcting");
+    }
+
+    [Fact]
     public async Task Memory_topics_are_listed_rather_than_inlined()
     {
         WriteProject("starstats", "memory/MEMORY.md", "- [old](old.md) - an old topic");

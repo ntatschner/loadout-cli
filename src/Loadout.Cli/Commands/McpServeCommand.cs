@@ -212,12 +212,18 @@ public sealed class LoadoutTools
     }
 
     [McpServerTool(Name = "loadout_recall")]
+    // Written around the occasions to call it rather than around what it does.
+    // The old description explained the mechanism accurately and was acted on
+    // once in twelve thousand turns; a tool nothing calls is a tool that is not
+    // there.
     [Description(
-        "Look for what this project already knows about something, before working it out again. "
-        + "The context carries only a one-line index of memory topics; this searches what is "
-        + "inside them. Matches words rather than meanings, so try the words the project would "
-        + "use. Ask before recording a fact, so an existing topic is extended rather than "
-        + "contradicted by a second one beside it.")]
+        "Search what this project has already learned: past failures, environment quirks, "
+        + "decisions and the reasons behind them. Use it BEFORE investigating anything that "
+        + "could have been hit before - a build or test failure, an unfamiliar error, a tool "
+        + "behaving oddly on this machine, a release or packaging step, or any question that "
+        + "starts 'why does'. Use it before recording a fact of your own, so an existing topic "
+        + "is extended rather than contradicted by a second one beside it. Matches words rather "
+        + "than meanings, so try the words the project would use.")]
     public async Task<string> RecallAsync(
         [Description("What you want to know, in your own words.")] string query,
         CancellationToken ct = default)

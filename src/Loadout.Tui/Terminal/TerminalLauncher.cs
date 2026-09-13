@@ -14,6 +14,7 @@ using Loadout.Models.Configuration;
 using Loadout.Models.Diagnostics;
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
+using Loadout.Models.Tasks;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 using Spectre.Console;
@@ -64,6 +65,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IManagerInventory _manager;
     private readonly IInstructionService _instructions;
     private readonly IGitManager _git;
+    private readonly Loadout.Core.Tasks.ITaskService _tasks;
 
     /// <summary>Agents detected on this machine, once the first screen has asked.</summary>
     private IReadOnlyList<string> _installed = [];
@@ -89,10 +91,12 @@ public sealed class TerminalLauncher : ILauncherTui
         ISessionHistoryService sessions,
         IManagerInventory manager,
         IInstructionService instructions,
-        IGitManager git)
+        IGitManager git,
+        Loadout.Core.Tasks.ITaskService tasks)
     {
         _instructions = instructions;
         _git = git;
+        _tasks = tasks;
         _console = console;
         _projects = projects;
         _workspace = workspace;
@@ -1028,7 +1032,31 @@ public sealed class TerminalLauncher : ILauncherTui
             }
         }
 
-        return new LaunchChoices(profiles, worktrees);
+        // What the project says it is working on, in the order somebody would
+        // pick from: being worked on first, then not started, then waiting.
+        // Finished and abandoned work is left out — it describes what a session
+        // is about to do, and those two no longer describe anything.
+        var declared = new List<string>();
+        var tasks = await _tasks.ListAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
+        if (tasks.Succeeded)
+        {
+            declared = tasks.Value!
+                .Where(item => item.State is TaskState.Doing or TaskState.Open or TaskState.Blocked)
+                .OrderBy(item => item.State switch
+                {
+                    TaskState.Doing => 0,
+                    TaskState.Open => 1,
+                    _ => 2,
+                })
+                .ThenByDescending(item => item.DeclaredUtc)
+                .Select(item => item.Title)
+                .Where(title => !string.IsNullOrWhiteSpace(title))
+                .Take(8)
+                .ToList();
+        }
+
+        return new LaunchChoices(profiles, worktrees, declared);
     }
 
     /// <summary>

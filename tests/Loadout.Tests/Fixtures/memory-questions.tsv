@@ -1,0 +1,37 @@
+# Questions that must reach a topic, and the topic they must reach.
+#
+# Taken from this project's own transcripts rather than invented while changing
+# the ranking. The two disagree by a wide margin: six invented questions once
+# said the retrieval was selective, and 248 real ones said it fired on three
+# prompts in four.
+#
+# This is a capability net, not a sample. It does not say how often retrieval is
+# right; it says that the cases an investigation turned on keep working. The
+# winget line is here because a confidence rule was once justified on two
+# questions that still passed while silencing that one outright, and nobody ran
+# it again before the change shipped.
+#
+# question<tab>topic that must appear in the top two
+
+what did i need to get for winget again?	winget-publishing-never-runs
+why did the release not publish to winget	winget-publishing-never-runs
+winget publishing status	winget-publishing-never-runs
+i had to uninstall 0.2.0 as 0.3.0 installer crashed	windows-restart-manager-disabled
+is there a way to ask people to close the running launcher	windows-restart-manager-disabled
+the installer fails with 1603	windows-restart-manager-disabled
+code command opens vscode, but just a vscode shell	vscode-window-titles-are-the-ground-truth
+how do i tell whether vscode actually opened the folder	vscode-window-titles-are-the-ground-truth
+whats the path of loadout i can test this with now	launcher-path-under-dotnet-host
+the status line names the wrong launcher on a dev build	launcher-path-under-dotnet-host
+the tests fail only in the full suite	contract-tests-spawn-the-real-exe
+# Singular on purpose. "test" cannot reach a topic named contract-*tests*-…
+# without stemming, and one letter once decided the answer. The plural line
+# above passes either way, so it does not guard this.
+the test suite fails only when the whole suite runs	contract-tests-spawn-the-real-exe
+a heredoc mangled the backslashes again	bash-heredocs-mangle-backslashes
+the exit code comes back empty on a clean windows image	powershell-51-loses-exit-codes
+a dependency bump fails restore with NU1004	partial-lock-updates-fail-restore
+the pinned action sha does not match its tag	annotated-tags-hide-the-commit
+how do i write the release notes	loadout-versioning
+two keys are sharing one command handler	terminal-gui-command-slots-collide
+reverting a mutation wiped my uncommitted edits	mutation-reverts-need-copies
