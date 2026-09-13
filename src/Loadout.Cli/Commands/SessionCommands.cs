@@ -272,20 +272,21 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
             Environment: settings.Environment,
             ResumeSessionId: chosen.SessionId,
             Task: settings.Task ?? carried?.Task,
-            Mode: settings.Mode ?? carried?.Mode)).ConfigureAwait(false);
+            Mode: settings.Mode ?? carried?.Mode,
+            DryRun: settings.DryRun)).ConfigureAwait(false);
 
         if (launch.Failed)
         {
             return output.Fail(launch);
         }
 
-        foreach (var warning in launch.Value!.Warnings)
-        {
-            output.WriteLine($"[yellow]{warning.EscapeMarkup()}[/]");
-        }
+        // The same report 'launch' writes, for the same reason it exists: three
+        // commands start an agent and they cannot be allowed to describe one
+        // differently. It carries the dry run's plan as well as the warnings.
+        LaunchReport.Write(output, launch.Value!, settings.DryRun);
 
         // The agent's own exit status is the command's, per spec section 40.
-        return launch.Value.AgentExitCode;
+        return launch.Value!.AgentExitCode;
     }
 
     /// <summary>
