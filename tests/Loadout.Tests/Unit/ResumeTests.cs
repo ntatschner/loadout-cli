@@ -3,6 +3,7 @@ using Loadout.Cli.Commands;
 using Loadout.Core.Sessions;
 using Loadout.Models;
 using Loadout.Models.Projects;
+using Spectre.Console;
 using Loadout.Tui.Terminal;
 using Xunit;
 
@@ -95,5 +96,58 @@ public sealed class ResumeTests
             new LauncherIntent(LauncherAction.Resume));
 
         arguments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_title_with_brackets_does_not_break_the_picker()
+    {
+        // Reported from use: choosing Resume in the launcher printed "Could not
+        // find color or style 'SYSTEM'" and dropped back to it. Spectre parses
+        // what a prompt's converter returns as markup, and this title is a real
+        // one — the opening line of a background-task notification, which is
+        // what a session gets named when that is the first thing in it.
+        var session = new AgentSession(
+            "claude",
+            "00000000-0000-4000-8000-000000000001",
+            "[SYSTEM NOTIFICATION - NOT USER INPUT] This is an automated",
+            "/repos/alpha",
+            "main",
+            DateTimeOffset.UtcNow,
+            "/transcripts/x.jsonl",
+            "alpha");
+
+        var rendered = new SessionChoice(session).Render(100);
+
+        // Parsing is the assertion: an unescaped '[SYSTEM' throws here exactly
+        // as it did in the launcher, and no amount of checking the string for
+        // brackets would prove the renderer is happy with it.
+        var parse = () => new Markup(rendered);
+
+        parse.Should().NotThrow();
+
+        // Escaped for the renderer, not mangled for the reader. Asserted on what
+        // the renderer would actually print, because deleting the brackets also
+        // stops the throw and a test checking only the words passes against it —
+        // that mutation was run, and did pass, before this line was written.
+        Markup.Remove(rendered).Should().Contain("[SYSTEM NOTIFICATION");
+    }
+
+    [Fact]
+    public void An_ordinary_title_is_left_alone()
+    {
+        var session = new AgentSession(
+            "claude",
+            "00000000-0000-4000-8000-000000000002",
+            "Fix the importer",
+            "/repos/alpha",
+            "main",
+            DateTimeOffset.UtcNow,
+            "/transcripts/y.jsonl",
+            "alpha");
+
+        // Escaping doubles a bracket and nothing else, so a title without one
+        // comes through untouched. Without this, escaping everything twice
+        // would pass the test above and quietly litter the list with '[['.
+        new SessionChoice(session).Render(100).Should().Contain("Fix the importer");
     }
 }
