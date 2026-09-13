@@ -38,6 +38,9 @@ internal sealed class LauncherWindow : Window
     private readonly ProjectDetailView _detail;
     private readonly KeyLine _footer;
 
+    /// <summary>Which build this is, top right; grows a suffix when a newer one exists.</summary>
+    private readonly Label _build;
+
     /// <summary>Projects currently shown, after the filter has been applied.</summary>
     private List<ProjectResolution> _shown;
 
@@ -137,14 +140,16 @@ internal sealed class LauncherWindow : Window
         // every width the launcher supports.
         var version = RunningVersion();
 
-        var build = new Label
+        _build = new Label
         {
             X = Pos.AnchorEnd(version.Length + 1),
             Y = 0,
             Text = version,
         };
 
-        build.SetScheme(LauncherTheme.MutedOnGround);
+        _build.SetScheme(LauncherTheme.MutedOnGround);
+
+        var build = _build;
 
         _list = new KeyedListView
         {
@@ -1034,6 +1039,30 @@ internal sealed class LauncherWindow : Window
     /// like an answer.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Says a newer launcher exists, beside the version that is running.
+    /// </summary>
+    /// <remarks>
+    /// Called on the main loop, after the answer arrives from wherever it was
+    /// being fetched: the screen is never held open waiting for it, and a
+    /// launcher that could not find out simply never calls this. What is
+    /// shown is the number and the word, not a command, because the command
+    /// is <c>loadout update</c> and the corner of a screen is no place to
+    /// teach it — anyone who wants it will find it under Tools.
+    /// </remarks>
+    internal void ShowUpdate(string available)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(available);
+
+        var text = $"{RunningVersion()} · {available} available";
+
+        _build.Text = text;
+        _build.X = Pos.AnchorEnd(text.Length + 1);
+
+        SetNeedsLayout();
+        SetNeedsDraw();
+    }
+
     internal static string RunningVersion()
     {
         var version = typeof(LauncherWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";

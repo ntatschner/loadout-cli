@@ -204,6 +204,15 @@ public static class ServiceRegistration
             provider.GetRequiredService<Platform.Abstractions.IFilePermissions>(),
             provider.GetRequiredService<HttpClient>()));
 
+        // In front of the service, for the launcher's corner: cached for a day
+        // and never an error, where the service is fresh every time and says
+        // what went wrong.
+        services.AddSingleton<IUpdateNotice>(provider => new UpdateNotice(
+            provider.GetRequiredService<IConfigurationService>(),
+            provider.GetRequiredService<IUpdateService>(),
+            provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
+            provider.GetRequiredService<TimeProvider>()));
+
         return services;
     }
 }
