@@ -240,4 +240,52 @@ public sealed class LauncherLookTests
         session.Screen.Split('\n')[0].Should().Contain("Project");
         session.Screen.Should().NotContain("┤Loadout├");
     }
+
+    [Fact]
+    public void The_running_build_is_shown_in_the_top_right()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")], out _);
+
+        var version = LauncherWindow.RunningVersion();
+
+        // It earns its place by answering "is this the build I just
+        // installed?" — the launcher on PATH can be releases behind the tree,
+        // and the feature that is missing from it says nothing at all.
+        session.Screen.Should().Contain(version);
+
+        // Top right, not merely somewhere. The state line beside the filter
+        // was already three parts long and a fourth ran off an 80-column
+        // terminal, which is the placement this replaced.
+        var top = session.Screen.Split('\n')[0];
+
+        top.Should().Contain(version);
+        top.TrimEnd().Should().EndWith(version);
+    }
+
+    [Fact]
+    public void A_development_build_says_so_rather_than_only_its_number()
+    {
+        // A development build carries the version of the release it was
+        // branched from, so the number alone cannot tell them apart. Reading
+        // the number and believing it is exactly how an old binary gets
+        // mistaken for a broken feature.
+        var shown = LauncherWindow.RunningVersion();
+
+        var host = Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? string.Empty);
+
+        if (host.Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            shown.Should().EndWith(" dev");
+        }
+        else
+        {
+            shown.Should().NotEndWith(" dev");
+        }
+
+        // Either way it says which version, and says it the way --version does.
+        shown.Should().StartWith("v");
+
+        shown.Should().Contain(
+            typeof(LauncherWindow).Assembly.GetName().Version!.ToString(3));
+    }
 }

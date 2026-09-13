@@ -130,6 +130,22 @@ internal sealed class LauncherWindow : Window
 
         state.SetScheme(LauncherTheme.MutedOnGround);
 
+        // Top right, on the menu bar's own row. The state line beside the
+        // filter was the obvious home and is already three parts long; a
+        // fourth pushed it past the edge of an 80-column terminal, and the
+        // end is what gets cut. The menu row has empty space to the right at
+        // every width the launcher supports.
+        var version = RunningVersion();
+
+        var build = new Label
+        {
+            X = Pos.AnchorEnd(version.Length + 1),
+            Y = 0,
+            Text = version,
+        };
+
+        build.SetScheme(LauncherTheme.MutedOnGround);
+
         _list = new KeyedListView
         {
             X = 0,
@@ -246,11 +262,11 @@ internal sealed class LauncherWindow : Window
         // draw in the order they were added and it has to be on top.
         if (_recentFrame is not null)
         {
-            Add(BuildMenu(), _filter, _placeholder, state, listFrame, _recentFrame, _detail, _footer);
+            Add(BuildMenu(), _filter, _placeholder, state, listFrame, _recentFrame, _detail, _footer, build);
         }
         else
         {
-            Add(BuildMenu(), _filter, _placeholder, state, listFrame, _detail, _footer);
+            Add(BuildMenu(), _filter, _placeholder, state, listFrame, _detail, _footer, build);
         }
 
         // A row cannot be laid out against a width the list does not have
@@ -996,6 +1012,37 @@ internal sealed class LauncherWindow : Window
             : string.Join(", ", agents);
 
         return $"{projects}  ·  {workspace}  ·  {installed}";
+    }
+
+    /// <summary>
+    /// Which build of the launcher this is, for the top right of the screen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same assembly version <c>--version</c> reports, so the two cannot
+    /// disagree. It earns its corner because the launcher on PATH can be
+    /// several releases behind the working tree, and a feature missing from
+    /// that build reports nothing at all — it simply does not happen, which
+    /// reads as a defect in the feature rather than an old binary.
+    /// </para>
+    /// <para>
+    /// A development build is run as <c>dotnet loadout.dll</c> and is told
+    /// apart the way <see cref="Loadout.Core.Agents.LauncherInvocation"/> tells
+    /// it apart, by the host's name. It carries the same version as the release
+    /// it was branched from, so the number alone cannot distinguish them and
+    /// saying only the number would be worse than saying nothing: it would look
+    /// like an answer.
+    /// </para>
+    /// </remarks>
+    internal static string RunningVersion()
+    {
+        var version = typeof(LauncherWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+        var host = Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? string.Empty);
+
+        return host.Equals("dotnet", StringComparison.OrdinalIgnoreCase)
+            ? $"v{version} dev"
+            : $"v{version}";
     }
 
     /// <summary>
