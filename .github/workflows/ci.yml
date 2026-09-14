@@ -116,8 +116,11 @@ jobs:
         # timeout is per test, renewed as each one finishes, and ten minutes
         # is longer than a whole healthy run, so it cannot fire on a slow
         # test; when it does fire, two-thirds of the job's allowance is still
-        # left to write the file.
-        run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx" --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type none
+        # left to write the file. The first catch named the test and showed
+        # every other test finished, which the name alone cannot explain, so a
+        # mini dump comes with it: the thread stacks are the only thing that
+        # says where inside that test the wait is.
+        run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx" --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini
 
       - name: Upload test results
         if: always()
@@ -127,6 +130,7 @@ jobs:
           path: |
             **/results.trx
             **/Sequence_*.xml
+            **/*.dmp
 
   publish:
     name: Publish ${{ matrix.rid }}
