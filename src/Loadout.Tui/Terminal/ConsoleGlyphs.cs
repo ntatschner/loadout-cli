@@ -1,6 +1,6 @@
 using System.Text;
 using Terminal.Gui.App;
-using Terminal.Gui.Drawing;
+using Terminal.Gui.Configuration;
 
 namespace Loadout.Tui.Terminal;
 
@@ -82,7 +82,12 @@ internal static class ConsoleGlyphs
     /// </summary>
     internal static void MakeLegible()
     {
-        Glyphs.LeftBracket = new Rune('[');
-        Glyphs.RightBracket = new Rune(']');
+        // Terminal.Gui 2.5 reads Glyphs from an immutable settings record, so
+        // the substitution is a new record rather than two assignments.
+        GlyphSettings.Current = GlyphSettings.Current with
+        {
+            LeftBracket = new Rune('['),
+            RightBracket = new Rune(']'),
+        };
     }
 }
