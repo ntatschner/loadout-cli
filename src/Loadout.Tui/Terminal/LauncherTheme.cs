@@ -76,7 +76,7 @@ internal static class LauncherTheme
         // font has to have block glyphs for, and in the documentation image
         // the shadows read as a row of debris under every button. Nothing
         // else on the screen has depth, so a button should not either.
-        Button.DefaultShadow = ShadowStyles.None;
+        ButtonSettings.Current = ButtonSettings.Current with { DefaultShadow = ShadowStyles.None };
 
         // The body of the application: frames, lists, labels.
         Set(Schemes.Base, new Scheme
