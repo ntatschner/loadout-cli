@@ -108,14 +108,29 @@ jobs:
           echo "Found $found"
 
       - name: Test
-        run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx"
+        # The hang detector names the tests in flight when the suite stops
+        # making progress, in a Sequence file beside the results. Without it a
+        # hung suite sits silent until the job timeout kills it, and the kill
+        # discards everything: three Unix legs did exactly that on 14
+        # September 2026 and left no way to tell which test had stopped. The
+        # timeout is per test, renewed as each one finishes, and ten minutes
+        # is longer than a whole healthy run, so it cannot fire on a slow
+        # test; when it does fire, two-thirds of the job's allowance is still
+        # left to write the file. The first catch named the test and showed
+        # every other test finished, which the name alone cannot explain, so a
+        # mini dump comes with it: the thread stacks are the only thing that
+        # says where inside that test the wait is.
+        run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx" --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}
-          path: '**/results.trx'
+          path: |
+            **/results.trx
+            **/Sequence_*.xml
+            **/*.dmp
 
   publish:
     name: Publish ${{ matrix.rid }}
