@@ -14,6 +14,7 @@ using Loadout.Models.Configuration;
 using Loadout.Models.Diagnostics;
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
+using Loadout.Core.Updates;
 using Loadout.Models.Tasks;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
@@ -65,6 +66,14 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IManagerInventory _manager;
     private readonly IInstructionService _instructions;
     private readonly IGitManager _git;
+    private readonly IUpdateNotice _updates;
+
+    /// <summary>
+    /// Whether a newer launcher exists, asked once per session in the
+    /// background. Every screen the session shows reads the same answer, so
+    /// the corner does not blink between one visit and the next.
+    /// </summary>
+    private Task<string?>? _updateNotice;
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
 
     /// <summary>Agents detected on this machine, once the first screen has asked.</summary>
@@ -92,10 +101,12 @@ public sealed class TerminalLauncher : ILauncherTui
         IManagerInventory manager,
         IInstructionService instructions,
         IGitManager git,
-        Loadout.Core.Tasks.ITaskService tasks)
+        Loadout.Core.Tasks.ITaskService tasks,
+        IUpdateNotice updates)
     {
         _instructions = instructions;
         _git = git;
+        _updates = updates;
         _tasks = tasks;
         _console = console;
         _projects = projects;
@@ -130,6 +141,13 @@ public sealed class TerminalLauncher : ILauncherTui
         }
 
         var config = configResult.Value!;
+
+        // Started here and never awaited: the launcher must not wait on the
+        // network to open, and a lookup that fails is a corner left blank.
+        // Once per session — the answer is cached for a day behind this call
+        // anyway, but a second question costs a file read on every return to
+        // the screen for no change in what it says.
+        _updateNotice = _updates.AvailableAsync(ct);
 
         var workspaceState = !_workspace.IsConfigured(config)
             ? "workspace not configured"
@@ -259,9 +277,68 @@ public sealed class TerminalLauncher : ILauncherTui
             recent,
             application);
 
+        Announce(_updateNotice, window, application);
+
         await application.RunAsync(window, ct).ConfigureAwait(false);
 
         return window.Intent ?? LauncherIntent.Quit;
+    }
+
+    /// <summary>
+    /// Puts the update notice on the screen when there is one, now if the
+    /// answer is already in and otherwise when it lands.
+    /// </summary>
+    /// <remarks>
+    /// The late path crosses threads, so it goes through the application's
+    /// invoke like every other late result on this screen. The window can have
+    /// closed by then — somebody who launched within a second of opening — and
+    /// a message to a screen that has gone is dropped rather than reported,
+    /// because there is nobody left it could be reported to.
+    /// </remarks>
+    internal static void Announce(Task<string?>? notice, LauncherWindow window, IApplication application)
+    {
+        if (notice is null)
+        {
+            return;
+        }
+
+        if (notice.IsCompleted)
+        {
+            if (notice.IsCompletedSuccessfully && notice.Result is { Length: > 0 } known)
+            {
+                window.ShowUpdate(known);
+            }
+
+            return;
+        }
+
+        _ = notice.ContinueWith(
+            finished =>
+            {
+                if (!finished.IsCompletedSuccessfully || finished.Result is not { Length: > 0 } available)
+                {
+                    return;
+                }
+
+                try
+                {
+                    application.Invoke(() =>
+                    {
+                        if (window.IsInitialized)
+                        {
+                            window.ShowUpdate(available);
+                        }
+                    });
+                }
+                catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
+                {
+                    // The screen closed before the answer came. Nothing to show
+                    // it to, and nothing worth saying about that.
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     /// <summary>

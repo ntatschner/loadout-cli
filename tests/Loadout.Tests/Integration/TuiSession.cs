@@ -226,6 +226,16 @@ internal sealed class TuiSession : IDisposable
         do
         {
             _application.RaiseIteration();
+
+            // Timers as well, which RaiseIteration does not run. A result that
+            // arrives from another thread reaches the screen through
+            // Application.Invoke, and off the main thread that is queued as a
+            // zero-length timeout — so until this line, nothing a background
+            // task handed to the screen could ever have shown up in a test, and
+            // the one test that appeared to cover that path used a task that
+            // never completed.
+            _application.TimedEvents?.RunTimers();
+
             _application.LayoutAndDraw();
 
             screen = Screen;

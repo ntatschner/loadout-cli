@@ -288,4 +288,80 @@ public sealed class LauncherLookTests
         shown.Should().Contain(
             typeof(LauncherWindow).Assembly.GetName().Version!.ToString(3));
     }
+
+    [Fact]
+    public void A_newer_version_is_named_beside_the_one_running()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")], out var window);
+
+        window.ShowUpdate("0.99.0");
+
+        // Read after a redraw, as every late result on this screen is: the
+        // driver's contents are whatever was last drawn, and nothing has been
+        // since the label changed.
+        var top = session.ScreenShowing("available").Split('\n')[0];
+
+        // Still says what is running — the number people compare against the
+        // release page — and then what is on offer, in the same corner rather
+        // than in the state line, for the reason the version went there.
+        top.Should().Contain(LauncherWindow.RunningVersion());
+        top.TrimEnd().Should().EndWith("0.99.0 available");
+    }
+
+    [Fact]
+    public void Nothing_is_said_about_updates_until_something_is_known()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")], out _);
+
+        // The check runs in the background and can fail, and a corner that
+        // said "checking…" or "unknown" would be the launcher talking about
+        // itself. Silence until there is a version to name.
+        session.Screen.Should().NotContain("available");
+    }
+
+    [Fact]
+    public void An_answer_already_in_hand_is_shown_at_once()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")], out var window);
+
+        // The second and later screens of a session: the check finished long
+        // ago, and the corner should not wait a trip round the main loop.
+        TerminalLauncher.Announce(Task.FromResult<string?>("0.99.0"), window, session.Application);
+
+        session.ScreenShowing("available").Should().Contain("0.99.0 available");
+    }
+
+    [Fact]
+    public async Task An_answer_that_arrives_later_reaches_the_screen_on_its_thread()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")], out var window);
+
+        var pending = new TaskCompletionSource<string?>();
+
+        TerminalLauncher.Announce(pending.Task, window, session.Application);
+
+        session.Screen.Should().NotContain("available", "nothing is known yet");
+
+        // Completed from another thread, as the real check is: the update has
+        // to cross to the main loop rather than touch the view from here.
+        await Task.Run(() => pending.SetResult("0.99.0"));
+
+        session.ScreenShowing("available").Should().Contain("0.99.0 available");
+    }
+
+    [Fact]
+    public void Nothing_known_and_nothing_found_both_leave_the_corner_alone()
+    {
+        using var session = Launcher([Project("alpha", "Alpha")], out var window);
+
+        TerminalLauncher.Announce(null, window, session.Application);
+        TerminalLauncher.Announce(Task.FromResult<string?>(null), window, session.Application);
+
+        var failed = new TaskCompletionSource<string?>();
+        TerminalLauncher.Announce(failed.Task, window, session.Application);
+        failed.SetException(new InvalidOperationException("the check is never supposed to throw, but if it did"));
+
+        session.Screen.Should().NotContain("available");
+        session.Screen.Should().Contain(LauncherWindow.RunningVersion(), "the version itself stays");
+    }
 }

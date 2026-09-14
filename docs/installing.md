@@ -104,6 +104,12 @@ loadout config set updates-source off       # never check
 loadout config set updates-source ""        # back to this project's releases
 ```
 
+The launcher looks on its own as well, once a day and in the background, and
+says so in its top-right corner when there is something newer — `v0.32.0 ·
+0.33.0 available` beside the version it is running. It never waits on that
+lookup to open and never reports one that failed; `off` silences it along with
+`loadout update`. Installing is still yours to do.
+
 The source is any JSON document you can reach over HTTP, or a path. A directory
 on a share makes a perfectly good internal release source (spec section 79), and
 nothing has to be running to answer:
