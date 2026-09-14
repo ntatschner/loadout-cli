@@ -3,7 +3,7 @@
 Download the archive for your platform, verify it, and install:
 
 ```bash
-tar -xzf loadout-0.32.0-linux-x64.tar.gz
+tar -xzf loadout-0.33.0-linux-x64.tar.gz
 ./install.sh                       # installs to ~/.local/bin, no root needed
 loadout setup
 ```
@@ -23,11 +23,11 @@ A release also carries an `.msi`, a `.deb` and an `.rpm`, if you'd rather not
 manage a `PATH` entry by hand:
 
 ```powershell
-msiexec /i loadout-0.32.0-win-x64.msi        # per-user, no elevation
+msiexec /i loadout-0.33.0-win-x64.msi        # per-user, no elevation
 ```
 
 ```bash
-sudo dpkg -i loadout_0.32.0_amd64.deb        # or: sudo rpm -i loadout-0.32.0-1.x86_64.rpm
+sudo dpkg -i loadout_0.33.0_amd64.deb        # or: sudo rpm -i loadout-0.33.0-1.x86_64.rpm
 ```
 
 The MSI installs per user into `%LOCALAPPDATA%\Programs\loadout`, adds that to
@@ -49,8 +49,8 @@ none.
 ### Building a release locally
 
 ```bash
-pwsh ./build/package.ps1 -Runtime linux-x64 -Version 0.32.0     # archive
-pwsh ./build/installer.ps1 -Runtime win-x64 -Version 0.32.0     # native installer
+pwsh ./build/package.ps1 -Runtime linux-x64 -Version 0.33.0     # archive
+pwsh ./build/installer.ps1 -Runtime win-x64 -Version 0.33.0     # native installer
 ```
 
 Each format is built by the tooling that owns it — WiX for the MSI, `dpkg-deb`
@@ -66,7 +66,7 @@ Maintenance Fee agreement, and that's a decision for whoever owns the project,
 not one a build script should make for them.
 
 ```bash
-pwsh ./build/package.ps1 -Runtime osx-arm64 -Version 0.32.0
+pwsh ./build/package.ps1 -Runtime osx-arm64 -Version 0.33.0
 ```
 
 That leaves the archive and its checksum in `artifacts/`. Unix archives get the
@@ -105,8 +105,8 @@ loadout config set updates-source ""        # back to this project's releases
 ```
 
 The launcher looks on its own as well, once a day and in the background, and
-says so in its top-right corner when there is something newer — `v0.32.0 ·
-0.33.0 available` beside the version it is running. It never waits on that
+says so in its top-right corner when there is something newer — `v1.2.0 ·
+1.3.0 available` beside the version it is running. It never waits on that
 lookup to open and never reports one that failed; `off` silences it along with
 `loadout update`. Installing is still yours to do.
 
@@ -117,11 +117,11 @@ nothing has to be running to answer:
 ```json
 {
   "schemaVersion": 1,
-  "version": "0.32.0",
+  "version": "0.33.0",
   "notes": "What changed.",
   "artifacts": {
     "osx-arm64": {
-      "url": "https://internal.example/loadout/loadout-0.32.0-osx-arm64.tar.gz",
+      "url": "https://internal.example/loadout/loadout-0.33.0-osx-arm64.tar.gz",
       "sha256": "985daa42...",
       "size": 31110221
     }
