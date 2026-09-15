@@ -281,7 +281,7 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
-    public async Task A_lead_that_asks_for_a_node_it_may_not_is_refused_and_told()
+    public async Task A_lead_that_asks_for_a_node_it_may_not_is_refused_and_both_the_person_and_the_lead_are_told()
     {
         var lead = LeadRequests(new ReportRequest("verifier", "verify", DeliverableKind.Decision)) with { Status = ReportStatus.Blocked };
         var team = await IteratingProjectAsync();
@@ -291,8 +291,39 @@ public sealed class TeamRunnerTests : IDisposable
 
         var outcome = (await RunAsync(team)).Value!;
 
-        outcome.Warnings.Should().Contain(w => w.Contains("'verifier', which it may not request"));
+        outcome.Warnings.Should().Contain(w => w.Contains("'verifier', which it may not request") && w.Contains("It may request: implementer"));
         _launcher.Requests.Should().HaveCount(1, "the refused node was never launched");
+
+        // The first real run refused the same request twice and the lead,
+        // never told, asked twice. Now the refusal is in its next turn.
+        _launcher.Written("role.project-lead")[1].Should().Contain("## Requests refused").And.Contain("'verifier'");
+    }
+
+    [Fact]
+    public async Task A_lead_is_told_which_nodes_it_may_request_and_may_ask_for_them_by_instance()
+    {
+        // "implementer/1" is how a role file's example and the real lead both
+        // spelled it. The node is called "implementer"; the instance name is
+        // what the worker is briefed as and reports as.
+        var done = ImplementerDone() with { Node = "implementer/1" };
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadRequests(AskImplementer() with { Node = "implementer/1" }), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(done, 0.03m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Ended.Should().Be("done");
+        outcome.Warnings.Should().NotContain(w => w.Contains("may not request"));
+
+        var leadBrief = _launcher.Written("role.project-lead")[0];
+        leadBrief.Should().Contain("## You may request");
+        leadBrief.Should().Contain("`implementer` (role.implementer, hands back commit), up to 3 at once");
+        leadBrief.Should().Contain("`name/1`, `name/2`");
+
+        var workerBrief = _launcher.Written("role.implementer")[0];
+        workerBrief.Should().Contain("# Brief for node implementer/1 (role.implementer)");
+        workerBrief.Should().NotContain("## You may request", "a worker requests nothing");
     }
 
     [Fact]
@@ -306,6 +337,26 @@ public sealed class TeamRunnerTests : IDisposable
         var outcome = (await RunAsync(autonomy: "autonomous")).Value!;
 
         outcome.Ended.Should().StartWith("no progress");
+    }
+
+    [Fact]
+    public async Task A_lead_that_exits_without_a_report_has_what_it_wrote_to_stderr_passed_on()
+    {
+        // The first real run: exit code 1 in under a second, no events, and
+        // the outcome said only "ended without a report". What the agent had
+        // printed on its error stream was the whole explanation, and nobody
+        // saw it.
+        _launcher.Script("role.project-lead", Init("lead-1"));
+        _launcher.Error("role.project-lead", "Error: unknown option '--frobnicate'\nrun claude --help");
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Ended.Should().Be("the lead ended without a report");
+        outcome.Warnings.Should().ContainSingle(w => w.Contains("error stream"))
+            .Which.Should().Contain("unknown option '--frobnicate'").And.Contain("exit code 0");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+        journal.Should().Contain(l => l.Contains("\"kind\":\"node.ended\"") && l.Contains("frobnicate"));
     }
 
     [Fact]
@@ -351,6 +402,11 @@ public sealed class TeamRunnerTests : IDisposable
             queue.Enqueue(lines);
         }
 
+        private readonly Dictionary<string, string> _errors = new(StringComparer.Ordinal);
+
+        /// <summary>What the next session of a role writes to its error stream.</summary>
+        public void Error(string role, string text) => _errors[role] = text;
+
         /// <summary>Every message written to every session of a role, in order, as the text the node read.</summary>
         public IReadOnlyList<string> Written(string role) =>
             _pipes.TryGetValue(role, out var pipes)
@@ -384,7 +440,8 @@ public sealed class TeamRunnerTests : IDisposable
                 return Task.FromResult(OperationResult<HeadlessLaunch>.Fail($"no script for {role}"));
             }
 
-            var pipe = new StubProcessLauncher.StubPipedProcess(string.Join("\n", queue.Dequeue()) + "\n", 0);
+            var pipe = new StubProcessLauncher.StubPipedProcess(
+                string.Join("\n", queue.Dequeue()) + "\n", 0, _errors.TryGetValue(role, out var error) ? error : string.Empty);
 
             if (!_pipes.TryGetValue(role, out var pipes))
             {

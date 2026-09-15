@@ -22,6 +22,13 @@ namespace Loadout.Models.Teams;
 /// <param name="Constraints">How far the node may go.</param>
 /// <param name="DoneWhen">The conditions under which the work is finished, each one something a test or a command can show.</param>
 /// <param name="Parameters">Values a team file passes to a parameterised role, such as a department.</param>
+/// <param name="Delegates">
+/// The nodes this node may request, with their roles, or null for a node
+/// that may request none. Only a lead has any. Named here because the first
+/// real run's lead asked for "implementer/1" from a role file's example,
+/// the team called the node "implementer", and the run refused it twice
+/// without the lead ever being told what the names were.
+/// </param>
 public sealed record Brief(
     [property: JsonPropertyName("run")] string Run,
     [property: JsonPropertyName("node")] string Node,
@@ -32,7 +39,8 @@ public sealed record Brief(
     [property: JsonPropertyName("inputs")] IReadOnlyList<string> Inputs,
     [property: JsonPropertyName("constraints")] BriefConstraints Constraints,
     [property: JsonPropertyName("done_when")] IReadOnlyList<string> DoneWhen,
-    [property: JsonPropertyName("parameters")] IReadOnlyDictionary<string, string>? Parameters = null)
+    [property: JsonPropertyName("parameters")] IReadOnlyDictionary<string, string>? Parameters = null,
+    [property: JsonPropertyName("delegates")] IReadOnlyList<BriefDelegate>? Delegates = null)
 {
     /// <summary>The version of this shape. Read before anything else, so an older reader can say it does not understand.</summary>
     [JsonPropertyName("contract")]
@@ -41,6 +49,17 @@ public sealed record Brief(
     /// <summary>The contract this record implements.</summary>
     public const string Version = "brief/1";
 }
+
+/// <summary>A node a lead may request, as the lead is told about it.</summary>
+/// <param name="Node">The name to use in a request. Instances of a parallel node are named <c>name/1</c>, <c>name/2</c>.</param>
+/// <param name="Role">The role it plays.</param>
+/// <param name="Deliverable">What kind of thing it hands back.</param>
+/// <param name="Parallel">How many instances may run at once.</param>
+public sealed record BriefDelegate(
+    [property: JsonPropertyName("node")] string Node,
+    [property: JsonPropertyName("role")] string Role,
+    [property: JsonPropertyName("deliverable")] string? Deliverable,
+    [property: JsonPropertyName("parallel")] int Parallel);
 
 /// <summary>How far a node may go.</summary>
 /// <param name="Mode">The posture the node runs in: advise, investigate, implement, review or coordinate.</param>

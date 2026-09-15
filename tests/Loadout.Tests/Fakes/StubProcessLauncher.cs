@@ -79,9 +79,10 @@ public sealed class StubProcessLauncher : IProcessLauncher
     /// <summary>The scripted conversation a stubbed pipe holds.</summary>
     public sealed class StubPipedProcess : IPipedProcess
     {
-        public StubPipedProcess(string output, int exitCode)
+        public StubPipedProcess(string output, int exitCode, string error = "")
         {
             Output = new StringReader(output);
+            Error = new StringReader(error);
             Exited = Task.FromResult(exitCode);
         }
 
@@ -96,7 +97,7 @@ public sealed class StubProcessLauncher : IProcessLauncher
 
         public TextReader Output { get; }
 
-        public TextReader Error { get; } = new StringReader(string.Empty);
+        public TextReader Error { get; }
 
         public Task<int> Exited { get; }
 

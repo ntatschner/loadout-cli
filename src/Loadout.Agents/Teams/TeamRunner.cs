@@ -182,7 +182,7 @@ public sealed class TeamRunner : ITeamRunner
         var leadBrief = MakeBrief(
             runId, team.Lead, parent: null, leadNode, leadRole, request.Goal, inputs: [],
             doneWhen: ["the goal is met, with the evidence cited from your nodes' reports"],
-            team, autonomy);
+            team, autonomy, request.Specialists.Find);
 
         if (request.DryRun)
         {
@@ -307,13 +307,22 @@ public sealed class TeamRunner : ITeamRunner
 
                 var requests = report.Requests ?? [];
                 var reports = new List<Report>();
+                var refused = new List<string>();
 
                 foreach (var ask in requests)
                 {
-                    if (!leadNode.Delegates.Contains(ask.Node, StringComparer.Ordinal) || !team.Nodes.TryGetValue(ask.Node, out var node))
+                    // "implementer/1" asks for an instance of the node called
+                    // "implementer"; the instance name is what the worker is
+                    // briefed as and reports as.
+                    var baseName = BaseNode(ask.Node);
+
+                    if (!leadNode.Delegates.Contains(baseName, StringComparer.Ordinal) || !team.Nodes.TryGetValue(baseName, out var node))
                     {
-                        var reason = $"The lead asked for '{ask.Node}', which it may not request.";
+                        var reason =
+                            $"The lead asked for '{ask.Node}', which it may not request. It may request: "
+                            + string.Join(", ", leadNode.Delegates) + ".";
                         warnings.Add(reason);
+                        refused.Add(reason);
                         await journal.WriteAsync("request.refused", team.Lead, new { ask.Node, reason }, ct).ConfigureAwait(false);
                         continue;
                     }
@@ -325,7 +334,9 @@ public sealed class TeamRunner : ITeamRunner
                     }
 
                     var role = request.Specialists.Find(node.Role)!;
-                    var brief = MakeBrief(runId, ask.Node, team.Lead, node, role, ask.Task, ask.Inputs ?? [], doneWhen: [], team, autonomy);
+                    var brief = MakeBrief(
+                        runId, ask.Node, team.Lead, node, role, ask.Task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
+                        request.Specialists.Find);
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
@@ -390,6 +401,20 @@ public sealed class TeamRunner : ITeamRunner
                     }
                 }
 
+                if (refused.Count > 0)
+                {
+                    // Said to the lead as well as to the person: a lead that
+                    // is refused and not told asks again, and did, twice.
+                    feedback.AppendLine("## Requests refused").AppendLine();
+
+                    foreach (var reason in refused)
+                    {
+                        feedback.AppendLine($"- {reason}");
+                    }
+
+                    feedback.AppendLine();
+                }
+
                 feedback.AppendLine(
                     "Decide what happens next: more requests, or finish. Reply with one report/1 document. "
                     + "Status done needs evidence cited from these reports.");
@@ -403,9 +428,20 @@ public sealed class TeamRunner : ITeamRunner
         finally
         {
             var (exit, killed) = await lead.Session!.EndAsync(EndGrace, CancellationToken.None).ConfigureAwait(false);
+            var stderr = Tail(lead.Session.StandardError);
 
-            await journal.WriteAsync("node.ended", team.Lead, new { exit, killed }, CancellationToken.None).ConfigureAwait(false);
+            await journal.WriteAsync("node.ended", team.Lead, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
             await lead.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
+
+            // A node that produced no report and said why on its error
+            // stream has explained itself, and that explanation must reach
+            // the person. The first real run ended "without a report" in
+            // under a second, exit code 1, and nothing said what the agent
+            // had printed.
+            if (final is null && stderr.Length > 0)
+            {
+                warnings.Add($"The lead wrote to its error stream (exit code {exit}): {stderr}");
+            }
         }
 
         await journal.WriteAsync("run.finished", null, new { ended, cost, rounds }, ct).ConfigureAwait(false);
@@ -448,10 +484,23 @@ public sealed class TeamRunner : ITeamRunner
         var (report, cost, halted) = await NodeTurnAsync(launch, brief, Render(brief), journal, ct).ConfigureAwait(false);
 
         var (exit, killed) = await launch.Session!.EndAsync(EndGrace, CancellationToken.None).ConfigureAwait(false);
-        await journal.WriteAsync("node.ended", brief.Node, new { exit, killed }, CancellationToken.None).ConfigureAwait(false);
+        var stderr = Tail(launch.Session.StandardError);
+
+        await journal.WriteAsync("node.ended", brief.Node, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
         await launch.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
 
-        return new WorkerOutcome(report, cost, halted, report is null ? "The node ended without a report." : null);
+        if (report is null && stderr.Length > 0)
+        {
+            warnings.Add($"{brief.Node} wrote to its error stream (exit code {exit}): {stderr}");
+        }
+
+        return new WorkerOutcome(
+            report,
+            cost,
+            halted,
+            report is null
+                ? $"The node ended without a report (exit code {exit})." + (stderr.Length > 0 ? $" It wrote: {stderr}" : string.Empty)
+                : null);
     }
 
     /// <summary>
@@ -590,13 +639,25 @@ public sealed class TeamRunner : ITeamRunner
         IReadOnlyList<string> inputs,
         IReadOnlyList<string> doneWhen,
         TeamDefinition team,
-        string autonomy)
+        string autonomy,
+        Func<string, SpecialistDocument?> specialistsOf)
     {
         var definition = role.Role;
 
         var outwardAllowed = autonomy == "autonomous"
             ? team.Rules.Gates.OutwardAllowedWhenAutonomous
             : [];
+
+        var delegates = node.Delegates.Count == 0
+            ? null
+            : node.Delegates
+                .Where(team.Nodes.ContainsKey)
+                .Select(name => new BriefDelegate(
+                    name,
+                    team.Nodes[name].Role,
+                    specialistsOf(team.Nodes[name].Role)?.Role?.Deliverable,
+                    team.Nodes[name].Parallel))
+                .ToList();
 
         return new Brief(
             runId,
@@ -613,7 +674,16 @@ public sealed class TeamRunner : ITeamRunner
                 Worktree: null,
                 OutwardAllowed: outwardAllowed),
             doneWhen,
-            node.Parameters.Count > 0 ? node.Parameters : null);
+            node.Parameters.Count > 0 ? node.Parameters : null,
+            delegates);
+    }
+
+    /// <summary>"implementer/2" is an instance of "implementer"; anything else is itself.</summary>
+    private static string BaseNode(string name)
+    {
+        var slash = name.IndexOf('/', StringComparison.Ordinal);
+
+        return slash > 0 ? name[..slash] : name;
     }
 
     /// <summary>The brief as the node reads it: the prose first, the JSON beside it, the contract last.</summary>
@@ -657,6 +727,21 @@ public sealed class TeamRunner : ITeamRunner
         text.AppendLine($"- turns: {(c.MaxTurns is { } t ? t.ToString(System.Globalization.CultureInfo.InvariantCulture) : "the agent's default")}");
         text.AppendLine($"- outward actions allowed: {(c.OutwardAllowed is { Count: > 0 } o ? string.Join(", ", o) : "none")}");
         text.AppendLine();
+
+        if (brief.Delegates is { Count: > 0 } delegates)
+        {
+            text.AppendLine("## You may request").AppendLine();
+            text.AppendLine("Use these names exactly in `requests`. A node that may run in parallel is asked for by instance: `name/1`, `name/2`.").AppendLine();
+
+            foreach (var delegate_ in delegates)
+            {
+                text.AppendLine(
+                    $"- `{delegate_.Node}` ({delegate_.Role}, hands back {delegate_.Deliverable ?? "an answer"})"
+                    + (delegate_.Parallel > 1 ? $", up to {delegate_.Parallel} at once" : string.Empty));
+            }
+
+            text.AppendLine();
+        }
 
         if (brief.Parameters is { Count: > 0 })
         {
@@ -733,6 +818,17 @@ public sealed class TeamRunner : ITeamRunner
         ReportStatus.NeedsDecision => "needs-decision",
         _ => status.ToString().ToLowerInvariant(),
     };
+
+    /// <summary>The last few lines an agent wrote to its error stream, as one line, or empty.</summary>
+    private static string Tail(IReadOnlyList<string> lines)
+    {
+        var kept = lines
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .TakeLast(5)
+            .Select(line => line.Trim());
+
+        return string.Join(" | ", kept);
+    }
 
     private static string Safe(string node) =>
         string.Concat(node.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '-'));

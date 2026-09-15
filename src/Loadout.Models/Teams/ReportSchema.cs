@@ -14,9 +14,15 @@ namespace Loadout.Models.Teams;
 public static class ReportSchema
 {
     /// <summary>The schema for <see cref="Report.Version"/>.</summary>
+    /// <remarks>
+    /// No <c>$schema</c> key. Claude Code's validator refuses one naming
+    /// draft 2020-12 ("no schema with key or ref"), and the first real run
+    /// ended in under a second on exactly that. Without the key the schema
+    /// is read as the validator's default draft, which supports everything
+    /// used here.
+    /// </remarks>
     public const string Version1 = """
         {
-          "$schema": "https://json-schema.org/draft/2020-12/schema",
           "title": "report/1",
           "type": "object",
           "additionalProperties": false,

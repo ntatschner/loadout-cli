@@ -147,16 +147,27 @@ public sealed class HeadlessSession : IAsyncDisposable
     {
         await _process.CloseInputAsync().ConfigureAwait(false);
 
+        int exitCode;
+        var killed = false;
+
         try
         {
-            return (await _process.Exited.WaitAsync(grace, ct).ConfigureAwait(false), false);
+            exitCode = await _process.Exited.WaitAsync(grace, ct).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             _process.Kill();
-
-            return (await _process.Exited.ConfigureAwait(false), true);
+            killed = true;
+            exitCode = await _process.Exited.ConfigureAwait(false);
         }
+
+        // The error stream closes when the process goes, and the pump reads
+        // to the end of it. Waiting for that here, briefly, is what makes
+        // StandardError complete for whoever reads it next: an agent's last
+        // words are usually why it left.
+        await Task.WhenAny(_errorPump, Task.Delay(TimeSpan.FromSeconds(2), ct)).ConfigureAwait(false);
+
+        return (exitCode, killed);
     }
 
     /// <summary>Stops the agent now, whatever it is doing.</summary>
