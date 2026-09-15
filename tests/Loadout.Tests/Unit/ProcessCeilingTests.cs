@@ -27,6 +27,39 @@ public sealed class ProcessCeilingTests
     [Fact]
     public async Task No_more_than_the_ceiling_are_ever_held_at_once()
     {
+        // The gate is shared with every other test that starts a process, and
+        // they run on other threads while this one does. On a two-slot ceiling
+        // one of those can hold a place for the whole of an attempt, in which
+        // case these callers file through the other one at a time and the
+        // peak reads 1 - which it did once on a loaded CI runner on 15
+        // September 2026. The upper bound holds on every attempt regardless;
+        // the lower one needs an attempt in which the gate was not otherwise
+        // busy, so it gets several. A gate of capacity one never shows a
+        // peak above one however many attempts it is given.
+        var best = 0;
+
+        for (var attempt = 0; attempt < 20 && best < 2; attempt++)
+        {
+            var peak = await Peak();
+
+            peak.Should().BeLessThanOrEqualTo(
+                ThrottledProcessLauncher.Ceiling,
+                "the gate is the only thing standing between the suite and a host that "
+                + "refuses to start any more processes");
+
+            best = Math.Max(best, peak);
+        }
+
+        // And it is a gate rather than a lock: holding the suite to one process
+        // at a time would fix this by making the run several minutes longer.
+        best.Should().BeGreaterThan(1, "the ceiling is meant to permit real concurrency");
+    }
+
+    /// <summary>
+    /// The most places held at once by a burst of callers through the gate.
+    /// </summary>
+    private static async Task<int> Peak()
+    {
         var held = 0;
         var peak = 0;
         var sync = new object();
@@ -57,14 +90,7 @@ public sealed class ProcessCeilingTests
 
         await Task.WhenAll(callers);
 
-        peak.Should().BeLessThanOrEqualTo(
-            ThrottledProcessLauncher.Ceiling,
-            "the gate is the only thing standing between the suite and a host that "
-            + "refuses to start any more processes");
-
-        // And it is a gate rather than a lock: holding the suite to one process
-        // at a time would fix this by making the run several minutes longer.
-        peak.Should().BeGreaterThan(1, "the ceiling is meant to permit real concurrency");
+        return peak;
     }
 
     [Fact]
