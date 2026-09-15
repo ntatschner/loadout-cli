@@ -131,4 +131,10 @@ public interface IAgentAdapter
 
     /// <summary>Adapter-specific diagnostic checks for the doctor report.</summary>
     Task<IReadOnlyList<DiagnosticCheck>> RunDiagnosticsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// How this agent is spoken to over its pipes, or null when it cannot be
+    /// driven without a terminal.
+    /// </summary>
+    IHeadlessProtocol? HeadlessProtocol { get; }
 }

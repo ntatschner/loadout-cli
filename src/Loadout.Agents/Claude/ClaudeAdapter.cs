@@ -53,6 +53,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     protected override string ExecutableName => "claude";
 
     /// <inheritdoc />
+    public override IHeadlessProtocol HeadlessProtocol => ClaudeHeadlessProtocol.Instance;
+
+    /// <inheritdoc />
     protected override IReadOnlyDictionary<string, string[]> CapabilityMarkers =>
         new Dictionary<string, string[]>
         {

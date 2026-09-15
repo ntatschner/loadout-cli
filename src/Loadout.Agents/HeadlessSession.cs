@@ -1,0 +1,194 @@
+using Loadout.Models.Agents;
+using Loadout.Platform.Abstractions;
+
+namespace Loadout.Agents;
+
+/// <summary>
+/// A conversation with an agent that has no terminal: a message goes in,
+/// events come out until the agent says the turn is over, and the caller
+/// decides when there will be no more.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The same for every agent. What differs, the wire format, is behind
+/// <see cref="IHeadlessProtocol"/>; what is the same, holding the pipe,
+/// reading line by line, knowing a turn from a stream, keeping the error
+/// stream drained so the child never blocks on it, and turning a running
+/// cost into a per-turn one, is here.
+/// </para>
+/// <para>
+/// The error stream is pumped from the moment the session starts. A child
+/// whose stderr nobody reads fills the pipe and stops, which looks exactly
+/// like a stalled agent and is not one.
+/// </para>
+/// </remarks>
+public sealed class HeadlessSession : IAsyncDisposable
+{
+    private readonly IPipedProcess _process;
+    private readonly IHeadlessProtocol _protocol;
+    private readonly List<string> _standardError = [];
+    private readonly Task _errorPump;
+    private decimal _costSoFar;
+
+    public HeadlessSession(IPipedProcess process, IHeadlessProtocol protocol)
+    {
+        ArgumentNullException.ThrowIfNull(process);
+        ArgumentNullException.ThrowIfNull(protocol);
+
+        _process = process;
+        _protocol = protocol;
+        _errorPump = Task.Run(PumpErrorAsync);
+    }
+
+    /// <summary>The agent's own identifier for this conversation, once it has said it.</summary>
+    public string? SessionId { get; private set; }
+
+    /// <summary>When the agent last wrote anything, for telling a quiet agent from a stalled one.</summary>
+    public DateTimeOffset LastEventAt { get; private set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>The operating system's identifier for the agent process.</summary>
+    public int ProcessId => _process.ProcessId;
+
+    /// <summary>Completes with the exit code once the agent has exited.</summary>
+    public Task<int> Exited => _process.Exited;
+
+    /// <summary>Everything the agent has written to its error stream so far.</summary>
+    public IReadOnlyList<string> StandardError
+    {
+        get
+        {
+            lock (_standardError)
+            {
+                return _standardError.ToList();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sends one message and reads until the agent reports the turn over, or
+    /// its output ends.
+    /// </summary>
+    public async Task<HeadlessTurn> TurnAsync(string message, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        await _process.Input.WriteLineAsync(_protocol.EncodeUserMessage(message).AsMemory(), ct).ConfigureAwait(false);
+        await _process.Input.FlushAsync(ct).ConfigureAwait(false);
+
+        return await ReadTurnAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads until the agent reports a turn over, or its output ends. For a
+    /// turn the agent started on its own, or the tail of one after a
+    /// message was sent another way.
+    /// </summary>
+    public async Task<HeadlessTurn> ReadTurnAsync(CancellationToken ct = default)
+    {
+        var events = new List<HeadlessEvent>();
+        HeadlessResult? result = null;
+
+        while (result is null)
+        {
+            var line = await _process.Output.ReadLineAsync(ct).ConfigureAwait(false);
+
+            if (line is null)
+            {
+                // The agent closed its output: it exited, or was killed. The
+                // caller gets what there was and a null result, and can tell
+                // the two apart from Exited.
+                break;
+            }
+
+            foreach (var evt in _protocol.Decode(line))
+            {
+                events.Add(evt);
+                LastEventAt = DateTimeOffset.UtcNow;
+
+                switch (evt)
+                {
+                    case HeadlessStarted { SessionId.Length: > 0 } started:
+                        SessionId = started.SessionId;
+                        break;
+
+                    case HeadlessResult finished:
+                        result = finished;
+                        break;
+                }
+            }
+        }
+
+        var cost = 0m;
+
+        if (result is not null)
+        {
+            // The agent reports the session's running total in every result.
+            // The turn's own cost is the step from the previous total, and
+            // the first result's step is from zero.
+            cost = result.CumulativeCostUsd - _costSoFar;
+            _costSoFar = result.CumulativeCostUsd;
+
+            if (result.SessionId is { Length: > 0 } id)
+            {
+                SessionId = id;
+            }
+        }
+
+        return new HeadlessTurn(events, result, cost);
+    }
+
+    /// <summary>
+    /// Tells the agent there are no more messages and waits for it to leave.
+    /// An agent that has not gone within the grace period is killed, because
+    /// a node that will not end on its own is a node the run has to end.
+    /// </summary>
+    /// <returns>The exit code, and whether the agent had to be killed to produce it.</returns>
+    public async Task<(int ExitCode, bool Killed)> EndAsync(TimeSpan grace, CancellationToken ct = default)
+    {
+        await _process.CloseInputAsync().ConfigureAwait(false);
+
+        try
+        {
+            return (await _process.Exited.WaitAsync(grace, ct).ConfigureAwait(false), false);
+        }
+        catch (TimeoutException)
+        {
+            _process.Kill();
+
+            return (await _process.Exited.ConfigureAwait(false), true);
+        }
+    }
+
+    /// <summary>Stops the agent now, whatever it is doing.</summary>
+    public void Kill() => _process.Kill();
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        await _process.DisposeAsync().ConfigureAwait(false);
+
+        // Ends on its own once the process is gone and its stream closes;
+        // bounded so a handle that never closes cannot hold the caller.
+        await Task.WhenAny(_errorPump, Task.Delay(TimeSpan.FromSeconds(5))).ConfigureAwait(false);
+    }
+
+    private async Task PumpErrorAsync()
+    {
+        try
+        {
+            string? line;
+
+            while ((line = await _process.Error.ReadLineAsync().ConfigureAwait(false)) is not null)
+            {
+                lock (_standardError)
+                {
+                    _standardError.Add(line);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            // The stream went away with the process. Nothing more to read.
+        }
+    }
+}

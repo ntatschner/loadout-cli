@@ -45,6 +45,10 @@ public abstract class AgentAdapterBase : IAgentAdapter
     /// <summary>Executable name to look for on PATH.</summary>
     protected abstract string ExecutableName { get; }
 
+    /// <inheritdoc />
+    /// <remarks>None until an adapter says otherwise. An agent that cannot be driven headlessly is the ordinary case.</remarks>
+    public virtual IHeadlessProtocol? HeadlessProtocol => null;
+
     /// <summary>
     /// Help-text markers that indicate each capability. The key is a capability
     /// name from <see cref="AgentCapabilities"/>; the value is the set of
