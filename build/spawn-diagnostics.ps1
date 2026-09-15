@@ -85,6 +85,17 @@ if ($crashes) {
     Write-Host 'none'
 }
 
+Heading 'What the test host recorded at its first refusal (SpawnRefusalProbe)'
+$probeFiles = Get-ChildItem -Path 'tests' -Recurse -Filter 'spawn-refusal-probe.txt' -ErrorAction SilentlyContinue
+if ($probeFiles) {
+    foreach ($file in $probeFiles) {
+        Write-Host "-- $($file.FullName)"
+        Get-Content -Path $file.FullName | ForEach-Object { Write-Host $_ }
+    }
+} else {
+    Write-Host 'none: no refusal was seen by LoadoutProcess, or the host died before writing it'
+}
+
 Heading 'Live probe: can this session still start a console process?'
 $probe = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'exit 0' -NoNewWindow -Wait -PassThru
 Write-Host "cmd.exe /c exit 0 -> exit code $($probe.ExitCode)"

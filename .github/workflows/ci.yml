@@ -147,6 +147,7 @@ jobs:
             **/results.trx
             **/Sequence_*.xml
             **/*.dmp
+            **/spawn-refusal-probe.txt
 
   publish:
     name: Publish ${{ matrix.rid }}
