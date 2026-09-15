@@ -173,8 +173,10 @@ public sealed class SpecialistLibraryTests
     {
         var catalogue = await BuiltInAsync();
 
+        // Roles are reached by name from a team file and never by evidence;
+        // that they carry no evidence is asserted separately.
         var unreachable = catalogue.All
-            .Where(s => s.Kind is not (SpecialistKind.Mode or SpecialistKind.Foundation))
+            .Where(s => s.Kind is not (SpecialistKind.Mode or SpecialistKind.Foundation or SpecialistKind.Role))
             .Where(s => s.Activation.GlobList.Count == 0
                 && s.Activation.DependencyList.Count == 0
                 && s.Activation.TaskPhraseList.Count == 0)

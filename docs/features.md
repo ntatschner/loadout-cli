@@ -5,8 +5,9 @@ the commands.
 
 ### Instructions picked for the job
 
-There are 77 specialists built into the binary: foundations, modes, languages,
-frameworks, databases, platforms, clouds, functional areas and skills. Instead
+There are 100 specialists built into the binary: foundations, modes, languages,
+frameworks, databases, platforms, clouds, functional areas, skills and the roles
+a team run gives its nodes. Instead
 of one enormous prompt that's mostly irrelevant, Loadout works out which ones
 your task needs from the repo you're in and the words you used, then tells you
 why it picked each one.

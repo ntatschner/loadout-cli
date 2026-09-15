@@ -46,7 +46,7 @@ anything, and the chain is three deep at most.
 
 ## Modes
 
-Four postures. They change what to do, not what to know.
+Five postures. They change what to do, not what to know.
 
 | Mode | Posture |
 |---|---|
@@ -54,6 +54,7 @@ Four postures. They change what to do, not what to know.
 | `investigate` | Find out what's happening. The fix is a separate step. |
 | `implement` | Make the change and verify it. The default. |
 | `review` | Judge the change as written. Report, don't rewrite. |
+| `coordinate` | Have the work done; do none of it. Judge what comes back by its evidence. For the lead of a team run. |
 
 Modes combine with specialists rather than duplicating them. `performance` with
 `investigate` means measure and isolate before editing. `performance` with
@@ -239,10 +240,16 @@ loadout instructions list            # everything available to this project
 loadout instructions list --kind language
 ```
 
-The library ships 77 specialists — 5 foundations, 4 modes, 10 languages, 8
-frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions and 16 skills.
-They are embedded in the binary rather than kept on disk, so the command is the
-way to read them; there is no directory to browse.
+The library ships 100 specialists — 5 foundations, 5 modes, 10 languages, 8
+frameworks, 4 databases, 5 platforms, 3 clouds, 22 functions, 16 skills and 22
+roles. They are embedded in the binary rather than kept on disk, so the command
+is the way to read them; there is no directory to browse.
+
+A role is one agent's job in a team run: what it may do, what it hands back
+and how it is judged. Roles never load from evidence. They have no globs, no
+dependencies and no task phrases, so the only way one reaches a session is by
+name, which is how a team run gives a node its role. Every role composes on
+top of `role.member`, which carries the contract a node reports against.
 
 ## The context budget
 
