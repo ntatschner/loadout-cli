@@ -15,6 +15,10 @@ public sealed class SpawnRefusalProbeTests
     {
         var report = SpawnRefusalProbe.Build(LoadoutProcess.Executable!);
 
+        // Kept beside the results as the healthy baseline, so a refusal's
+        // report on the same runner has something to be read against.
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "spawn-probe-healthy.txt"), report);
+
         report.Should().Contain("== spawn variants");
 
         // The shell variants exit 7 by construction; the executable answers
@@ -32,6 +36,13 @@ public sealed class SpawnRefusalProbeTests
         if (OperatingSystem.IsWindows())
         {
             report.Should().Contain("== console of this host");
+
+            // ConsoleIsolation's whole purpose: the toolkit must not believe
+            // the host's hidden console is a terminal, or every screen test
+            // drives the real driver against it. Without the initialiser
+            // this reads attached=True on any Windows host under dotnet test.
+            report.Should().Contain("toolkit sees    : attached=False",
+                "the screen tests must run the driver degraded, not against the host's console");
         }
     }
 }

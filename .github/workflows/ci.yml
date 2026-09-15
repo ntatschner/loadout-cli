@@ -148,6 +148,7 @@ jobs:
             **/Sequence_*.xml
             **/*.dmp
             **/spawn-refusal-probe.txt
+            **/spawn-probe-healthy.txt
 
   publish:
     name: Publish ${{ matrix.rid }}

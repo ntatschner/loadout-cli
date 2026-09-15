@@ -194,6 +194,20 @@ internal static class SpawnRefusalProbe
         }
 
         report.AppendLine($"input redirected: {Console.IsInputRedirected}, output redirected: {Console.IsOutputRedirected}, error redirected: {Console.IsErrorRedirected}");
+
+        // A console can exist without a window: a host started with
+        // CreateNoWindow has one, and every child that does not ask for its
+        // own attaches to it. GetConsoleCP is 0 only when there is none, and
+        // the process list names the host and whatever else is attached.
+        var codePage = GetConsoleCP();
+        report.AppendLine($"console code page: {codePage} ({(codePage == 0 ? "no console" : "a console exists")})");
+
+        var attached = new uint[64];
+        var count = GetConsoleProcessList(attached, (uint)attached.Length);
+        report.AppendLine($"attached procs  : {count}{(count > 0 ? " [" + string.Join(", ", attached.Take((int)Math.Min(count, attached.Length))) + "]" : string.Empty)}");
+
+        var attachedToTerminal = Terminal.Gui.Drivers.Driver.IsAttachedToTerminal(out var inputAttached, out var outputAttached);
+        report.AppendLine($"toolkit sees    : attached={attachedToTerminal} (input {inputAttached}, output {outputAttached})");
     }
 
     private static string FileType(uint type) => type switch
@@ -216,4 +230,10 @@ internal static class SpawnRefusalProbe
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool GetConsoleMode(nint handle, out uint mode);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetConsoleCP();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint GetConsoleProcessList(uint[] processList, uint count);
 }
