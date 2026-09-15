@@ -108,9 +108,9 @@ public interface ITeamRunner
 /// before it is acted on.
 /// </para>
 /// <para>
-/// This first runner briefs requests one at a time and runs each worker in
-/// the project's main tree: parallel workers in their own worktrees, the
-/// merge gate, the answerer for permission prompts and the daemon are later
+/// This first runner briefs requests one at a time, so a node that could
+/// have run beside another waits for it. Running them together, the merge
+/// gate, the answerer for permission prompts and the daemon are later
 /// pieces, and each is said in the outcome's warnings rather than implied.
 /// </para>
 /// </remarks>
@@ -174,8 +174,8 @@ public sealed class TeamRunner : ITeamRunner
         var runId = $"{_time.GetUtcNow():yyyyMMdd-HHmm}-{Guid.NewGuid().ToString("N")[..4]}";
         var warnings = new List<string>
         {
-            "This runner briefs requests one at a time and runs every node in the project's main tree; "
-            + "parallel workers in worktrees and the merge gate are not yet built.",
+            "This runner briefs requests one at a time, so a node that could run beside another waits for it, "
+            + "and the merge gate is not built: what a node commits stays on its own branch until you take it.",
         };
 
         var leadNode = team.Nodes[team.Lead];
