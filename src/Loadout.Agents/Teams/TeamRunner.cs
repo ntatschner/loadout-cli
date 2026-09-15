@@ -479,22 +479,6 @@ public sealed class TeamRunner : ITeamRunner
         List<string> warnings,
         CancellationToken ct)
     {
-        if (node.Worktree)
-        {
-            // Said, not skipped. The team declares that this node works in
-            // its own tree, the launcher cannot yet make one, and the
-            // difference is where the node's commit lands: in the main tree
-            // it goes onto the current branch, and the reviewer and verifier
-            // that follow are reading something already committed. A first
-            // real run did exactly that.
-            warnings.Add(
-                $"The team asks {brief.Node} to work in its own git worktree, and the launcher does not "
-                + "create one yet, so it worked in the project's main tree. Anything it commits is on the "
-                + "current branch before the reviewer or verifier sees it.");
-
-            await journal.WriteAsync("worktree.not-created", brief.Node, new { requested = true }, ct).ConfigureAwait(false);
-        }
-
         var started = await StartNodeAsync(request, team, node, role, brief, dryRun: false, ct).ConfigureAwait(false);
 
         if (started.Failed)
@@ -507,7 +491,21 @@ public sealed class TeamRunner : ITeamRunner
         await using var launch = started.Value!;
         warnings.AddRange(launch.Warnings);
 
-        await journal.WriteAsync("node.launched", brief.Node, new { launch = launch.LaunchId, role = node.Role }, ct).ConfigureAwait(false);
+        await journal.WriteAsync(
+            "node.launched",
+            brief.Node,
+            new { launch = launch.LaunchId, role = node.Role, directory = launch.Plan.WorkingDirectory, worktree = brief.Constraints.Worktree },
+            ct).ConfigureAwait(false);
+
+        if (brief.Constraints.Worktree is { Length: > 0 } tree)
+        {
+            // Named where a person will look for it. Nothing removes it:
+            // the commit the node made is in it, and the merge gate that
+            // would take that commit is not built.
+            warnings.Add(
+                $"{brief.Node} worked in a new worktree at {launch.Plan.WorkingDirectory}, on branch '{tree}'. "
+                + "It is left behind with whatever the node committed; remove it with git worktree remove when you are done with it.");
+        }
 
         var turn = await NodeTurnAsync(launch, brief, Render(brief), journal, ct).ConfigureAwait(false);
 
@@ -683,6 +681,8 @@ public sealed class TeamRunner : ITeamRunner
         // then the agent's own default. The same order the agent follows.
         var model = request.Model ?? (node.Model is { Length: > 0 } pinned ? pinned : null);
 
+        // A dry run makes nothing, so it describes the launch against the
+        // repository rather than a tree that would have to exist first.
         var launch = new LaunchRequest(
             request.ProjectHandle,
             request.AgentName ?? (node.Agent is { Length: > 0 } agent ? agent : null),
@@ -692,7 +692,13 @@ public sealed class TeamRunner : ITeamRunner
             Specialists: [role.Id],
             Mode: definition.Mode,
             DryRun: dryRun,
-            Model: model);
+            Model: model,
+
+            // The node's own tree, made for it: without one it commits to
+            // whatever the repository has checked out, and the reviewer
+            // after it reads a change already on that branch.
+            Worktree: brief.Constraints.Worktree,
+            CreateWorktree: brief.Constraints.Worktree is { Length: > 0 });
 
         return await _launcher.StartHeadlessAsync(launch, options, ct).ConfigureAwait(false);
     }
@@ -745,7 +751,11 @@ public sealed class TeamRunner : ITeamRunner
                 definition?.Mode ?? "implement",
                 BudgetUsd: null,
                 MaxTurns: team.Rules.Budget.TurnsPerNode,
-                Worktree: null,
+
+                // A branch of its own, named after the run and the node, so
+                // two runs of the same team never meet and a person reading
+                // the branch list can tell which run made what.
+                Worktree: node.Worktree ? $"teams/{runId}/{Safe(nodeName)}" : null,
                 OutwardAllowed: outwardAllowed),
             doneWhen,
             node.Parameters.Count > 0 ? node.Parameters : null,
@@ -798,6 +808,14 @@ public sealed class TeamRunner : ITeamRunner
 
         text.AppendLine("## Constraints").AppendLine();
         text.AppendLine($"- mode: {c.Mode}");
+
+        if (c.Worktree is { Length: > 0 } worktree)
+        {
+            text.AppendLine(
+                $"- worktree: you are in a git worktree of your own, on branch `{worktree}`. Commit here. "
+                + "Do not switch branches, do not touch the repository's other trees, and do not merge.");
+        }
+
         text.AppendLine($"- turns: {(c.MaxTurns is { } t ? t.ToString(System.Globalization.CultureInfo.InvariantCulture) : "the agent's default")}");
         text.AppendLine($"- outward actions allowed: {(c.OutwardAllowed is { Count: > 0 } o ? string.Join(", ", o) : "none")}");
         text.AppendLine();

@@ -152,6 +152,28 @@ public interface IGitManager
         string repositoryPath,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Adds a linked working tree on a new branch, so work can happen
+    /// somewhere other than the repository's own checkout.
+    /// </summary>
+    /// <remarks>
+    /// The point of it, for a team run, is that a node with its own tree
+    /// commits to its own branch. Without one it commits to whatever the
+    /// repository has checked out, and the reviewer that follows is reading
+    /// a change already on that branch.
+    /// </remarks>
+    /// <param name="repositoryPath">The repository to add it to.</param>
+    /// <param name="path">Where the new tree goes. Its parent is created if missing.</param>
+    /// <param name="branch">The branch to create and check out there.</param>
+    /// <param name="baseRef">What to branch from, or null for the repository's current HEAD.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<GitWorktree>> AddWorktreeAsync(
+        string repositoryPath,
+        string path,
+        string branch,
+        string? baseRef = null,
+        CancellationToken ct = default);
+
     /// <summary>Which set of paths to ask git about.</summary>
     /// <remarks>
     /// The distinction is the whole substance of the policy check: a tracked

@@ -459,6 +459,50 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<GitWorktree>> AddWorktreeAsync(
+        string repositoryPath,
+        string path,
+        string branch,
+        string? baseRef = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+
+        var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+
+        if (parent is { Length: > 0 })
+        {
+            try
+            {
+                Directory.CreateDirectory(parent);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return OperationResult<GitWorktree>.Fail(
+                    $"The worktree's directory could not be made at '{parent}': {ex.Message}");
+            }
+        }
+
+        // -b creates the branch, so an existing name fails rather than
+        // checking out somebody else's work into a new tree.
+        var arguments = new List<string> { "worktree", "add", "-b", branch, path };
+
+        if (baseRef is { Length: > 0 })
+        {
+            arguments.Add(baseRef);
+        }
+
+        var result = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return result.Failed
+            ? OperationResult<GitWorktree>.Fail(result.Error!)
+            : OperationResult<GitWorktree>.Ok(new GitWorktree(Path.GetFullPath(path), branch, IsPrimary: false));
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<string>>> ListFilesAsync(
         string repositoryPath,
         IReadOnlyList<string> patterns,

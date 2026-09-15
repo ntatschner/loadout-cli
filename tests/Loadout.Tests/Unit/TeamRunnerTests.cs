@@ -439,21 +439,33 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
-    public async Task A_worktree_the_launcher_cannot_make_is_said_rather_than_skipped()
+    public async Task A_node_whose_team_gives_it_a_worktree_is_launched_into_one_and_told_so()
     {
-        // The team's implementer declares worktree: true. The launcher
-        // cannot create one yet, and in a real run the node committed to
-        // main, which the reviewer and verifier then read as already done.
+        // The first run to finish committed to main, because the team's
+        // worktree: true went nowhere and the reviewer then read a change
+        // already on the branch.
         _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
         _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
 
         var outcome = (await RunAsync()).Value!;
 
-        outcome.Warnings.Should().ContainSingle(w => w.Contains("own git worktree"))
-            .Which.Should().Contain("before the reviewer or verifier sees it");
+        var (leadRequest, _) = _launcher.Requests[0];
+        var (workerRequest, _) = _launcher.Requests[1];
 
-        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
-        journal.Should().Contain(l => l.Contains("\"kind\":\"worktree.not-created\""));
+        leadRequest.Worktree.Should().BeNull("a lead changes nothing, so it works where the project is");
+        leadRequest.CreateWorktree.Should().BeFalse();
+
+        workerRequest.Worktree.Should().Be($"teams/{outcome.RunId}/implementer");
+        workerRequest.CreateWorktree.Should().BeTrue();
+
+        // The node is told where it is, because a node that switches branch
+        // or commits elsewhere undoes the point of the tree.
+        _launcher.Written("role.implementer")[0].Should()
+            .Contain($"worktree: you are in a git worktree of your own, on branch `teams/{outcome.RunId}/implementer`")
+            .And.Contain("do not merge");
+
+        outcome.Warnings.Should().ContainSingle(w => w.Contains("worked in a new worktree"))
+            .Which.Should().Contain("left behind");
     }
 
     [Fact]

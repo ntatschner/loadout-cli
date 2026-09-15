@@ -519,6 +519,73 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_launch_that_asks_for_a_worktree_gets_one_made_outside_the_repository()
+    {
+        const string Branch = "teams/20260916-0900-ab12/implementer-1";
+
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, Worktree: Branch, CreateWorktree: true),
+            new HeadlessOptions(DisableHooks: false));
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        await using var launch = started.Value!;
+
+        var directory = launch.Plan.WorkingDirectory;
+
+        directory.Should().NotBe(_repository, "the point of a worktree is that it is not the repository's own checkout");
+        directory.Should().StartWith(_paths.Paths.State, "a tree inside the repository would need ignoring and would be litter");
+        Directory.Exists(directory).Should().BeTrue();
+
+        // A real worktree of that repository, on the branch asked for.
+        var head = await _processes.RunAsync(
+            new ProcessRequest("git", ["rev-parse", "--abbrev-ref", "HEAD"], directory), TimeSpan.FromSeconds(30));
+
+        head.Value!.StandardOutput.Trim().Should().Be(Branch);
+
+        var listed = await _processes.RunAsync(
+            new ProcessRequest("git", ["worktree", "list"], _repository), TimeSpan.FromSeconds(30));
+
+        listed.Value!.StandardOutput.Should().Contain(Branch);
+
+        await launch.CompleteAsync(0);
+    }
+
+    [Fact]
+    public async Task A_worktree_that_does_not_exist_is_refused_unless_the_caller_asked_for_one()
+    {
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, Worktree: "no-such-tree"),
+            new HeadlessOptions());
+
+        started.Failed.Should().BeTrue();
+        started.Error.Should().Contain("No worktree named 'no-such-tree'");
+    }
+
+    [Fact]
+    public async Task A_dry_run_says_where_a_worktree_would_go_and_makes_none()
+    {
+        var before = await _processes.RunAsync(
+            new ProcessRequest("git", ["worktree", "list"], _repository), TimeSpan.FromSeconds(30));
+
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, Worktree: "teams/dry/one", CreateWorktree: true, DryRun: true),
+            new HeadlessOptions());
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        await using var launch = started.Value!;
+
+        launch.Warnings.Should().Contain(w => w.Contains("would be made at"));
+        launch.Plan.WorkingDirectory.Should().Be(_repository, "the launch is described against what it would branch from");
+
+        var after = await _processes.RunAsync(
+            new ProcessRequest("git", ["worktree", "list"], _repository), TimeSpan.FromSeconds(30));
+
+        after.Value!.StandardOutput.Should().Be(before.Value!.StandardOutput, "a dry run makes nothing");
+    }
+
+    [Fact]
     public async Task An_agent_that_cannot_be_driven_is_refused_as_a_node_before_anything_starts()
     {
         var since = DateTimeOffset.UtcNow.AddMinutes(-1);

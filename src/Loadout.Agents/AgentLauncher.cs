@@ -25,6 +25,13 @@ namespace Loadout.Agents;
 /// <param name="Offline">Skip the network entirely (spec section 48).</param>
 /// <param name="NoSync">Skip the workspace sync but stay online for anything else.</param>
 /// <param name="Worktree">Named worktree to launch in instead of the main tree (spec section 71).</param>
+/// <param name="CreateWorktree">
+/// Make the worktree named above when the repository has no such tree,
+/// rather than refusing. For a caller that knows the tree is its own to
+/// create: a team run gives each node one so its commits land on their own
+/// branch. A person naming a worktree means one that exists, so this is off
+/// unless asked for.
+/// </param>
 /// <param name="Profile">Context profile to apply (spec section 34).</param>
 /// <param name="IncludeHandoff">Append the most recent handoff to the context (spec section 69).</param>
 /// <param name="Environment">Environment to work in, such as production (spec section 57).</param>
@@ -73,7 +80,8 @@ public sealed record LaunchRequest(
     string? Mode = null,
     string? RepositoryPath = null,
     bool DryRun = false,
-    string? Model = null);
+    string? Model = null,
+    bool CreateWorktree = false);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -490,7 +498,7 @@ public sealed class AgentLauncher : IAgentLauncher
                 ExitCode.RepositoryUnavailable);
         }
 
-        var directoryResult = await ResolveWorkingDirectoryAsync(project, request.Worktree, ct)
+        var directoryResult = await ResolveWorkingDirectoryAsync(project, request, warnings, ct)
             .ConfigureAwait(false);
         if (directoryResult.Failed)
         {
@@ -1230,9 +1238,12 @@ public sealed class AgentLauncher : IAgentLauncher
 
     private async Task<OperationResult<string>> ResolveWorkingDirectoryAsync(
         ProjectResolution project,
-        string? worktree,
+        LaunchRequest request,
+        List<string> warnings,
         CancellationToken ct)
     {
+        var worktree = request.Worktree;
+
         if (string.IsNullOrWhiteSpace(worktree))
         {
             return OperationResult<string>.Ok(project.LocalPath!);
@@ -1248,7 +1259,12 @@ public sealed class AgentLauncher : IAgentLauncher
             w => string.Equals(w.Branch, worktree, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(Path.GetFileName(w.Path), worktree, StringComparison.OrdinalIgnoreCase));
 
-        if (match is null)
+        if (match is not null)
+        {
+            return OperationResult<string>.Ok(match.Path);
+        }
+
+        if (!request.CreateWorktree)
         {
             var available = string.Join(", ", worktreesResult.Value!
                 .Select(w => w.Branch ?? Path.GetFileName(w.Path)));
@@ -1258,8 +1274,39 @@ public sealed class AgentLauncher : IAgentLauncher
                 ExitCode.InvalidArguments);
         }
 
-        return OperationResult<string>.Ok(match.Path);
+        // Outside the repository, under this machine's state directory. A
+        // tree inside it would need ignoring, would travel in nobody's
+        // clone, and is exactly the litter the cleanliness rules exist to
+        // prevent; a tree beside it would clutter whatever directory the
+        // repository happens to sit in.
+        var path = Path.Combine(_paths.Paths.State, "worktrees", project.Entry.Slug, SafeDirectory(worktree));
+
+        if (request.DryRun)
+        {
+            // Making one is a change, and a dry run makes none. Said rather
+            // than done, and the launch is described against the repository
+            // it would have branched from.
+            warnings.Add($"A worktree on branch '{worktree}' would be made at {path}.");
+
+            return OperationResult<string>.Ok(project.LocalPath!);
+        }
+
+        var created = await _git.AddWorktreeAsync(
+            project.LocalPath!,
+            path,
+            worktree,
+            baseRef: null,
+            ct).ConfigureAwait(false);
+
+        return created.Failed
+            ? OperationResult<string>.Fail(
+                $"The worktree '{worktree}' could not be made: {created.Error}", ExitCode.RepositoryUnavailable)
+            : OperationResult<string>.Ok(created.Value!.Path);
     }
+
+    /// <summary>A branch name as a directory name: the slashes people put in branch names are not directories here.</summary>
+    private static string SafeDirectory(string branch) =>
+        string.Concat(branch.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-'));
 
     /// <summary>
     /// Collects abandoned runtime directories, and never fails a launch over
