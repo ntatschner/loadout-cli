@@ -199,6 +199,24 @@ public interface IGitManager
         string branch,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// Removes a linked working tree. Refuses one holding changes nobody has
+    /// committed, which is the guard rather than an inconvenience.
+    /// </summary>
+    Task<OperationResult> RemoveWorktreeAsync(
+        string repositoryPath,
+        string path,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes a branch that has been merged. Refuses one that has not,
+    /// because the commits on it would then exist nowhere.
+    /// </summary>
+    Task<OperationResult> DeleteMergedBranchAsync(
+        string repositoryPath,
+        string branch,
+        CancellationToken ct = default);
+
     /// <summary>Which set of paths to ask git about.</summary>
     /// <remarks>
     /// The distinction is the whole substance of the policy check: a tracked

@@ -159,6 +159,37 @@ public sealed class GitMergeTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_merged_branch_and_its_tree_can_be_cleared_away_and_an_unmerged_one_cannot()
+    {
+        var path = await BranchAsync("teams/run/four", "pong.txt", "pong");
+
+        // Before the merge, the branch holds the only copy of that commit
+        // and git says so rather than letting it go.
+        (await _git.DeleteMergedBranchAsync(_repository, "teams/run/four")).Failed.Should().BeTrue();
+
+        (await _git.MergeAsync(_repository, "teams/run/four")).Value!.Merged.Should().BeTrue();
+
+        (await _git.RemoveWorktreeAsync(_repository, path)).Succeeded.Should().BeTrue();
+        Directory.Exists(path).Should().BeFalse();
+
+        (await _git.DeleteMergedBranchAsync(_repository, "teams/run/four")).Succeeded.Should().BeTrue();
+        (await GitAsync("branch", "--list", "teams/run/four")).Trim().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_tree_with_work_nobody_committed_is_kept()
+    {
+        var path = await BranchAsync("teams/run/five", "pong.txt", "pong");
+
+        await File.WriteAllTextAsync(Path.Combine(path, "unsaved.txt"), "not committed\n");
+
+        var removed = await _git.RemoveWorktreeAsync(_repository, path);
+
+        removed.Failed.Should().BeTrue("the refusal is the guard, not an inconvenience");
+        Directory.Exists(path).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task A_branch_that_is_not_there_is_reported_rather_than_read_as_a_conflict()
     {
         var merged = await _git.MergeAsync(_repository, "teams/run/nowhere");

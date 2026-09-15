@@ -503,6 +503,44 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult> RemoveWorktreeAsync(
+        string repositoryPath,
+        string path,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        // No --force. git refuses a tree with uncommitted changes in it, and
+        // that refusal is the whole safety of doing this automatically.
+        var result = await RunAsync(
+            repositoryPath, ["worktree", "remove", path], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error ?? $"The worktree at '{path}' could not be removed.");
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> DeleteMergedBranchAsync(
+        string repositoryPath,
+        string branch,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+
+        // -d rather than -D: an unmerged branch is refused, so this can
+        // never be the reason somebody's commits stop existing.
+        var result = await RunAsync(
+            repositoryPath, ["branch", "-d", branch], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error ?? $"The branch '{branch}' could not be deleted.");
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<GitMerge>> MergeAsync(
         string repositoryPath,
         string branch,

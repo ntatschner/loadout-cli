@@ -465,7 +465,7 @@ public sealed class TeamRunnerTests : IDisposable
             .And.Contain("do not merge");
 
         outcome.Warnings.Should().ContainSingle(w => w.Contains("worked in a new worktree"))
-            .Which.Should().Contain("left behind");
+            .Which.Should().Contain("cleared away with its tree");
     }
 
     [Fact]

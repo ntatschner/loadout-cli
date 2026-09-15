@@ -192,8 +192,7 @@ public sealed class TeamRunner : ITeamRunner
         var runId = $"{_time.GetUtcNow():yyyyMMdd-HHmm}-{Guid.NewGuid().ToString("N")[..4]}";
         var warnings = new List<string>
         {
-            "This runner briefs requests one at a time, so a node that could run beside another waits for it, "
-            + "and the merge gate is not built: what a node commits stays on its own branch until you take it.",
+            "This runner briefs requests one at a time, so a node that could run beside another waits for it.",
         };
 
         var leadNode = team.Nodes[team.Lead];
@@ -675,9 +674,61 @@ public sealed class TeamRunner : ITeamRunner
                 result.Value.FastForward
                     ? $"Merged {branch} into {target}, fast-forward."
                     : $"Merged {branch} into {target} with a merge commit.");
+
+            await TidyAsync(repository, branch, journal, node, warnings, ct).ConfigureAwait(false);
         }
 
         return merged;
+    }
+
+    /// <summary>
+    /// Clears away a branch that has arrived: its worktree, then the branch
+    /// itself.
+    /// </summary>
+    /// <remarks>
+    /// Only ever after a merge, so nothing is thrown away: the commits are
+    /// in the repository and git refuses both steps if that turns out not to
+    /// be true. A tree left for every implementer of every run is litter
+    /// somebody has to clear by hand, and three of them had already
+    /// accumulated before this existed.
+    /// </remarks>
+    private async Task TidyAsync(
+        string repository,
+        string branch,
+        Journal journal,
+        string node,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        var worktrees = await _git!.ListWorktreesAsync(repository, ct).ConfigureAwait(false);
+
+        var tree = worktrees.Value?.FirstOrDefault(
+            w => !w.IsPrimary && string.Equals(w.Branch, branch, StringComparison.Ordinal));
+
+        if (tree is not null)
+        {
+            var removed = await _git.RemoveWorktreeAsync(repository, tree.Path, ct).ConfigureAwait(false);
+
+            if (removed.Failed)
+            {
+                // Almost always because the node left something uncommitted
+                // in there, which is worth keeping and worth saying.
+                warnings.Add($"The worktree at {tree.Path} was kept: {removed.Error}");
+
+                return;
+            }
+        }
+
+        var deleted = await _git.DeleteMergedBranchAsync(repository, branch, ct).ConfigureAwait(false);
+
+        await journal.WriteAsync(
+            "worktree.tidied", node, new { branch, path = tree?.Path, branchDeleted = deleted.Succeeded }, ct)
+            .ConfigureAwait(false);
+
+        if (deleted.Failed)
+        {
+            warnings.Add($"The branch {branch} was kept: {deleted.Error}");
+        }
     }
 
     private sealed record WorkerOutcome(Report? Report, decimal Cost, bool Halted, string? Failure);
@@ -713,12 +764,12 @@ public sealed class TeamRunner : ITeamRunner
 
         if (brief.Constraints.Worktree is { Length: > 0 } tree)
         {
-            // Named where a person will look for it. Nothing removes it:
-            // the commit the node made is in it, and the merge gate that
-            // would take that commit is not built.
+            // Named where a person will look for it. A branch that passes
+            // the gate takes its tree with it; one that does not is still
+            // here, and either way somebody may want to go and read it.
             warnings.Add(
                 $"{brief.Node} worked in a new worktree at {launch.Plan.WorkingDirectory}, on branch '{tree}'. "
-                + "It is left behind with whatever the node committed; remove it with git worktree remove when you are done with it.");
+                + "A branch the merge gate takes is cleared away with its tree; one it does not is left for you.");
         }
 
         var turn = await NodeTurnAsync(launch, brief, Render(brief), journal, ct).ConfigureAwait(false);
