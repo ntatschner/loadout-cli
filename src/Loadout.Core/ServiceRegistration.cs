@@ -155,6 +155,7 @@ public static class ServiceRegistration
         services.AddSingleton<Manager.IManagerInventory, Manager.ManagerInventory>();
         services.AddSingleton<Statusline.ILoadedSpecialistStore, Statusline.LoadedSpecialistStore>();
         services.AddSingleton<Checkpoints.ICheckpointService, Checkpoints.CheckpointService>();
+        services.AddSingleton<Teams.ITeamCatalogue, Teams.TeamCatalogue>();
 
         // The specialist layer: what an agent is told, and why. The library and
         // resolver hold no state of their own, so a singleton each is enough.

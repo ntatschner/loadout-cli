@@ -35,6 +35,7 @@ public static class ServiceRegistration
         });
 
         services.AddSingleton<IAgentLauncher, AgentLauncher>();
+        services.AddSingleton<Teams.ITeamRunner, Teams.TeamRunner>();
         services.AddSingleton<IDiagnosticContributor, AgentDiagnosticContributor>();
 
         return services;
