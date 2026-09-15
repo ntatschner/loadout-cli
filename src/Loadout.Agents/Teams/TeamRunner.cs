@@ -263,6 +263,7 @@ public sealed class TeamRunner : ITeamRunner
         // question is whether any of it may come back to the repository.
         var branches = new Dictionary<string, string>(StringComparer.Ordinal);
         var decisions = new Dictionary<string, string>(StringComparer.Ordinal);
+        var askedAboutTheGate = false;
 
         try
         {
@@ -295,6 +296,29 @@ public sealed class TeamRunner : ITeamRunner
                 }
 
                 final = report;
+
+                // A lead that says done while the team's gate has not been
+                // consulted is told once, because its role says to route
+                // every change through those nodes and a model that skipped
+                // them will otherwise end the run with the work stranded on
+                // a branch nobody looked at. Once: the second answer is the
+                // lead's to give.
+                if (report.Status == ReportStatus.Done && !askedAboutTheGate
+                    && Ungated(team, branches, decisions) is { Count: > 0 } pending)
+                {
+                    askedAboutTheGate = true;
+
+                    await journal.WriteAsync("gate.reminded", team.Lead, new { pending }, ct).ConfigureAwait(false);
+
+                    console.Note($"The lead reported done without the merge gate: {string.Join("; ", pending)}. Telling it once.");
+
+                    prompt =
+                        $"You reported done. This team will not take {string.Join(" or ", branches.Values)} back into "
+                        + $"the repository until {string.Join(" and ", team.Rules.Gates.Merge)} have accepted it, and "
+                        + $"{string.Join("; ", pending)}. Request them, or report done again and the work stays on its branch.";
+
+                    continue;
+                }
 
                 // A lead that has requests is mid-round whatever status it
                 // wrote: blocked on its own requests is how a round is asked
@@ -519,6 +543,29 @@ public sealed class TeamRunner : ITeamRunner
     };
 
     /// <summary>
+    /// The gate's nodes that have not accepted, each with what it did
+    /// instead, or nothing when there is no gate or nothing to take through
+    /// it.
+    /// </summary>
+    private static IReadOnlyList<string> Ungated(
+        TeamDefinition team,
+        IReadOnlyDictionary<string, string> branches,
+        IReadOnlyDictionary<string, string> decisions)
+    {
+        if (branches.Count == 0 || team.Rules.Gates.Merge.Count == 0)
+        {
+            return [];
+        }
+
+        return team.Rules.Gates.Merge
+            .Where(node => !decisions.TryGetValue(node, out var decision) || !Accepting.Contains(decision))
+            .Select(node => decisions.TryGetValue(node, out var decision)
+                ? $"{node} said '{decision}'"
+                : $"{node} decided nothing")
+            .ToList();
+    }
+
+    /// <summary>
     /// Takes the run's branches into the repository, where the team's gate
     /// says they may go and a person agrees.
     /// </summary>
@@ -574,10 +621,7 @@ public sealed class TeamRunner : ITeamRunner
             return merged;
         }
 
-        var missing = gate
-            .Where(node => !decisions.TryGetValue(node, out var decision) || !Accepting.Contains(decision))
-            .Select(node => decisions.TryGetValue(node, out var decision) ? $"{node} said '{decision}'" : $"{node} decided nothing")
-            .ToList();
+        var missing = Ungated(team, branches, decisions);
 
         if (missing.Count > 0)
         {

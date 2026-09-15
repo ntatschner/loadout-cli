@@ -135,9 +135,14 @@ public sealed class TeamRunnerTests : IDisposable
     [Fact]
     public async Task A_lead_that_requests_a_worker_gets_its_report_back_and_finishes()
     {
-        // The lead's session is one pipe across two turns: it asks, and after
-        // the worker's report it finishes. The worker is one pipe, one turn.
-        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
+        // The lead's session is one pipe: it asks, and after the worker's
+        // report it finishes. It says done twice because the team's merge
+        // gate has not been consulted and the coordinator says so once; the
+        // second is its answer. The worker is one pipe, one turn.
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+
         _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
 
         var result = await RunAsync();
@@ -146,7 +151,7 @@ public sealed class TeamRunnerTests : IDisposable
         var outcome = result.Value!;
 
         outcome.Ended.Should().Be("done");
-        outcome.Rounds.Should().Be(2);
+        outcome.Rounds.Should().Be(3);
         outcome.CostUsd.Should().Be(0.05m + 0.03m + 0.04m, "the lead's second turn is the step in its running total");
         outcome.FinalReport!.Status.Should().Be(ReportStatus.Done);
 
@@ -171,7 +176,7 @@ public sealed class TeamRunnerTests : IDisposable
         workerOptions.DeniedTools.Should().Contain("Bash(git push:*)");
 
         // The worker's report went back to the lead verbatim.
-        _launcher.Written("role.project-lead").Should().HaveCount(2);
+        _launcher.Written("role.project-lead").Should().HaveCount(3);
         _launcher.Written("role.project-lead")[1].Should().Contain("a4f21c9").And.Contain("Reports from your requests");
 
         // Both sessions were ended and both launches completed with an exit code.
@@ -224,7 +229,8 @@ public sealed class TeamRunnerTests : IDisposable
     [Fact]
     public async Task In_manual_mode_every_brief_and_every_report_is_a_gate()
     {
-        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
         _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
 
         (await RunAsync(autonomy: "manual")).Value!.Ended.Should().Be("done");
@@ -241,7 +247,8 @@ public sealed class TeamRunnerTests : IDisposable
     {
         var noEvidence = ImplementerDone() with { Evidence = [] };
 
-        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
         _launcher.Script("role.implementer", Init("impl-1"), Result(noEvidence, 0.02m), Result(ImplementerDone(), 0.03m));
 
         (await RunAsync()).Value!.Ended.Should().Be("done");
@@ -318,7 +325,8 @@ public sealed class TeamRunnerTests : IDisposable
         var done = ImplementerDone() with { Node = "implementer/1" };
 
         _launcher.Script("role.project-lead", Init("lead-1"),
-            Result(LeadRequests(AskImplementer() with { Node = "implementer/1" }), 0.05m), Result(LeadDone(), 0.09m));
+            Result(LeadRequests(AskImplementer() with { Node = "implementer/1" }), 0.05m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
         _launcher.Script("role.implementer", Init("impl-1"), Result(done, 0.03m));
 
         var outcome = (await RunAsync()).Value!;
@@ -496,7 +504,7 @@ public sealed class TeamRunnerTests : IDisposable
             Init("lead-1"),
             Result(LeadRequests(AskImplementer()), 0.05m),
             Result(LeadRequests(new ReportRequest("reviewer", "review it", DeliverableKind.Decision)), 0.06m),
-            Result(LeadDone(), 0.09m));
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
 
         _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
         _launcher.Script("role.reviewer", Init("rev-1"), Result(returned, 0.02m));
@@ -512,6 +520,39 @@ public sealed class TeamRunnerTests : IDisposable
 
         var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
         journal.Should().Contain(l => l.Contains("\"kind\":\"gate.refused\""));
+    }
+
+    [Fact]
+    public async Task A_lead_that_finishes_without_the_gate_is_told_once_and_then_left_to_it()
+    {
+        // A real lead took the implementer's done report and declared the
+        // goal met, having asked neither the reviewer nor the verifier its
+        // role tells it to route every change through. The gate refused the
+        // merge, which is right and late: the run had ended.
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.06m),
+            Result(LeadDone(), 0.07m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        var told = _launcher.Written("role.project-lead").Last();
+
+        told.Should().Contain("You reported done");
+        told.Should().Contain("reviewer and verifier");
+        told.Should().Contain("reviewer decided nothing");
+
+        // Told once. A lead that says done again has answered, and the work
+        // stays on its branch, which is what the message said would happen.
+        outcome.Ended.Should().Be("done");
+        outcome.Merged.Should().BeEmpty();
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+        journal.Count(l => l.Contains("\"kind\":\"gate.reminded\"")).Should().Be(1);
     }
 
     [Fact]
