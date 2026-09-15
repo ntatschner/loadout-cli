@@ -64,6 +64,7 @@
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
+| `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
 | `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
 | `loadout pack list\|add\|approve\|update\|remove` | Specialist packs fetched from a Git remote, approved per machine |
 | `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |

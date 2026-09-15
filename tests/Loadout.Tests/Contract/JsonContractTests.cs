@@ -68,6 +68,30 @@ public sealed class JsonContractTests
     }
 
     [BuiltCliFact]
+    public async Task Team_list_reports_the_teams_that_ship_with_what_a_run_would_read()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var json = (await loadout.RunAsync("team", "list", "--json")).Json();
+
+        // 'project' is there when a project resolved and absent, like every
+        // null, when the command ran outside one, as it does here.
+        ShouldHave(json, "teams", "findings");
+
+        var teams = json.GetProperty("teams").EnumerateArray().ToList();
+
+        teams.Should().NotBeEmpty("the launcher ships teams");
+
+        foreach (var team in teams)
+        {
+            ShouldHave(team, "name", "description", "template", "lead", "nodes", "autonomy");
+        }
+
+        teams.Select(t => t.GetProperty("name").GetString()).Should().Contain("iterating-project");
+        json.GetProperty("findings").EnumerateArray().Should().BeEmpty("a shipped team with a problem is a shipped defect");
+    }
+
+    [BuiltCliFact]
     public async Task Status_reports_the_workspace_agents_and_projects()
     {
         using var loadout = new LoadoutProcess();

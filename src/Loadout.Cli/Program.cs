@@ -527,6 +527,17 @@ public static class Program
             task.AddCommand<TaskRemoveCommand>("remove");
         });
 
+        TopBranch(config, "team", team =>
+        {
+            team.Describe(
+                "Run a team of agents against a project: a lead that briefs workers and reports to you.",
+                CommandCategory.Start,
+                "team teams agents orchestration swarm crew multi-agent autonomous");
+            team.AddCommand<TeamListCommand>("list");
+            team.AddCommand<TeamShowCommand>("show");
+            team.AddCommand<TeamRunCommand>("run");
+        });
+
         TopBranch(config, "spend", spend =>
         {
             spend.Describe(
