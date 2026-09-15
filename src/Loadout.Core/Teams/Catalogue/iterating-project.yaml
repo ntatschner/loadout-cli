@@ -1,0 +1,27 @@
+name: iterating-project
+description: Plans, implements, reviews and verifies in rounds until the goal is met, the budget is spent, or two rounds make no progress.
+lead: lead
+nodes:
+  lead:
+    role: role.project-lead
+    delegates: [planner, implementer, reviewer, verifier]
+  planner:
+    role: role.planner
+  implementer:
+    role: role.implementer
+    worktree: true
+    parallel: 3
+  reviewer:
+    role: role.reviewer
+  verifier:
+    role: role.verifier
+rules:
+  autonomy: supervised
+  budget:
+    usd: 25
+    turns_per_node: 40
+    wall_clock: 4h
+  gates:
+    outward: ask
+    merge: [reviewer, verifier]
+  stop_when: [goal_met, budget_spent, no_progress_2_rounds]

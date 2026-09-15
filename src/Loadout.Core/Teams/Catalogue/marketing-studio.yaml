@@ -1,0 +1,25 @@
+name: marketing-studio
+description: Turns a goal into a strategy, writes the pieces, edits every claim against the facts, and stages each send for you. Nothing is sent in any mode; your own copy may allow a named channel.
+lead: lead
+nodes:
+  lead:
+    role: role.project-lead
+    delegates: [strategist, copywriter, editor, scheduler]
+  strategist:
+    role: role.strategist
+  copywriter:
+    role: role.copywriter
+  editor:
+    role: role.editor
+  scheduler:
+    role: role.scheduler
+rules:
+  autonomy: supervised
+  budget:
+    usd: 12
+    turns_per_node: 30
+    wall_clock: 2h
+  gates:
+    outward: ask
+    merge: []
+  stop_when: [goal_met, budget_spent, no_progress_2_rounds]

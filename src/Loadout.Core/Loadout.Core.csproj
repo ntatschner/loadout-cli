@@ -20,6 +20,9 @@
          Somebody who disagrees with a built-in specialist puts one of the same
          id in their workspace, which is the supported way to override. -->
     <EmbeddedResource Include="Specialists\**\*.md" />
+
+    <!-- The built-in teams travel the same way, for the same reasons. -->
+    <EmbeddedResource Include="Teams\Catalogue\*.yaml" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Loadout.Tests" />
