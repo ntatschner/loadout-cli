@@ -241,6 +241,14 @@ public sealed class LoadoutProcess : IDisposable
                 && run.StandardOutput.Length == 0
                 && run.StandardError.Length == 0;
 
+            if (startupFailure)
+            {
+                // Once per process, at the first refusal: the condition is
+                // known to live in this host and die with it, so this is the
+                // only vantage point that can say what it is.
+                SpawnRefusalProbe.RecordOnce(Executable!);
+            }
+
             if (!startupFailure || attempt >= 5)
             {
                 return run;
