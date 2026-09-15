@@ -247,10 +247,11 @@ public sealed class TeamRunner : ITeamRunner
             {
                 rounds++;
 
-                var (report, turnCost, halted) = await NodeTurnAsync(lead, leadBrief, prompt, journal, ct).ConfigureAwait(false);
-                cost += turnCost;
+                var turn = await NodeTurnAsync(lead, leadBrief, prompt, journal, ct).ConfigureAwait(false);
+                var report = turn.Report;
+                cost += turn.Cost;
 
-                if (halted)
+                if (turn.Halted)
                 {
                     ended = "halted: the lead took an outward action its brief did not allow";
                     final = report;
@@ -259,7 +260,12 @@ public sealed class TeamRunner : ITeamRunner
 
                 if (report is null)
                 {
-                    ended = "the lead ended without a report";
+                    // What it said instead is the explanation, and it is
+                    // usually a sentence a person can act on.
+                    ended = turn.Said.Length > 0
+                        ? $"the lead ended without a report. It said: {turn.Said}"
+                        : "the lead ended without a report";
+
                     break;
                 }
 
@@ -481,7 +487,7 @@ public sealed class TeamRunner : ITeamRunner
 
         await journal.WriteAsync("node.launched", brief.Node, new { launch = launch.LaunchId, role = node.Role }, ct).ConfigureAwait(false);
 
-        var (report, cost, halted) = await NodeTurnAsync(launch, brief, Render(brief), journal, ct).ConfigureAwait(false);
+        var turn = await NodeTurnAsync(launch, brief, Render(brief), journal, ct).ConfigureAwait(false);
 
         var (exit, killed) = await launch.Session!.EndAsync(EndGrace, CancellationToken.None).ConfigureAwait(false);
         var stderr = Tail(launch.Session.StandardError);
@@ -489,25 +495,51 @@ public sealed class TeamRunner : ITeamRunner
         await journal.WriteAsync("node.ended", brief.Node, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
         await launch.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
 
-        if (report is null && stderr.Length > 0)
+        if (turn.Report is null)
         {
-            warnings.Add($"{brief.Node} wrote to its error stream (exit code {exit}): {stderr}");
+            // Both halves of what it left behind: what it wrote to the
+            // person, and what it wrote to its error stream. Either can be
+            // the reason, and neither is worth hiding.
+            if (turn.Said.Length > 0)
+            {
+                warnings.Add($"{brief.Node} produced no report. It said: {turn.Said}");
+            }
+
+            if (stderr.Length > 0)
+            {
+                warnings.Add($"{brief.Node} wrote to its error stream (exit code {exit}): {stderr}");
+            }
         }
 
         return new WorkerOutcome(
-            report,
-            cost,
-            halted,
-            report is null
-                ? $"The node ended without a report (exit code {exit})." + (stderr.Length > 0 ? $" It wrote: {stderr}" : string.Empty)
+            turn.Report,
+            turn.Cost,
+            turn.Halted,
+            turn.Report is null
+                ? $"The node ended without a report (exit code {exit})."
+                    + (turn.Said.Length > 0 ? $" It said: {turn.Said}" : string.Empty)
+                    + (stderr.Length > 0 ? $" It wrote to its error stream: {stderr}" : string.Empty)
                 : null);
     }
+
+    /// <summary>One exchange with a node, judged.</summary>
+    /// <param name="Report">What the node reported, or null when it produced nothing readable.</param>
+    /// <param name="Cost">What the exchange cost, including any correction.</param>
+    /// <param name="Halted">Whether the node took an outward action its brief did not allow.</param>
+    /// <param name="Said">
+    /// What the node wrote as ordinary text when it produced no report. An
+    /// agent that cannot answer usually says why in prose, and that sentence
+    /// is the whole explanation: a run whose nodes stopped reported only
+    /// "ended without a report" while every one of them was saying "You've
+    /// reached your Fable limit".
+    /// </param>
+    private sealed record NodeTurn(Report? Report, decimal Cost, bool Halted, string Said);
 
     /// <summary>
     /// One exchange with a node, judged. A report that fails the check goes
     /// back once with the reasons; a second failure is the node's answer.
     /// </summary>
-    private static async Task<(Report? Report, decimal Cost, bool Halted)> NodeTurnAsync(
+    private static async Task<NodeTurn> NodeTurnAsync(
         HeadlessLaunch launch,
         Brief brief,
         string prompt,
@@ -516,11 +548,17 @@ public sealed class TeamRunner : ITeamRunner
     {
         var session = launch.Session!;
         var cost = 0m;
+        var said = string.Empty;
 
         for (var attempt = 1; attempt <= 2; attempt++)
         {
             var turn = await session.TurnAsync(prompt, ct).ConfigureAwait(false);
             cost += turn.CostUsd;
+
+            if (Tidy(turn.Text) is { Length: > 0 } text)
+            {
+                said = text;
+            }
 
             await journal.WriteAsync("node.turn", brief.Node, new
             {
@@ -535,18 +573,18 @@ public sealed class TeamRunner : ITeamRunner
 
             if (!turn.Completed)
             {
-                return (null, cost, false);
+                return new NodeTurn(null, cost, false, said);
             }
 
             var read = ReportReader.Read(turn.StructuredOutputJson);
 
             if (read.Failed)
             {
-                await journal.WriteAsync("report.unreadable", brief.Node, new { read.Error }, ct).ConfigureAwait(false);
+                await journal.WriteAsync("report.unreadable", brief.Node, new { read.Error, said }, ct).ConfigureAwait(false);
 
                 if (attempt == 2)
                 {
-                    return (null, cost, false);
+                    return new NodeTurn(null, cost, false, said);
                 }
 
                 prompt = $"Your report could not be read: {read.Error} Reply with one report/1 document and nothing else.";
@@ -566,17 +604,17 @@ public sealed class TeamRunner : ITeamRunner
             switch (verdict.Outcome)
             {
                 case ReportOutcome.Halted:
-                    return (report, cost, true);
+                    return new NodeTurn(report, cost, true, said);
 
                 case ReportOutcome.Accepted:
-                    return (report, cost, false);
+                    return new NodeTurn(report, cost, false, said);
 
                 default:
                     if (attempt == 2)
                     {
                         // Returned twice. The node's answer is what it is,
                         // and the record says it was returned.
-                        return (report, cost, false);
+                        return new NodeTurn(report, cost, false, said);
                     }
 
                     prompt = "Your report was returned. " + string.Join(" ", verdict.Reasons)
@@ -585,7 +623,15 @@ public sealed class TeamRunner : ITeamRunner
             }
         }
 
-        return (null, cost, false);
+        return new NodeTurn(null, cost, false, said);
+    }
+
+    /// <summary>One line of what a node said, short enough to read in a warning.</summary>
+    private static string Tidy(string text)
+    {
+        var one = string.Join(" ", text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.Trim()));
+
+        return one.Length > 400 ? one[..400] + "…" : one;
     }
 
     private async Task<OperationResult<HeadlessLaunch>> StartNodeAsync(

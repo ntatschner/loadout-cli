@@ -117,6 +117,16 @@ public sealed class TeamRunnerTests : IDisposable
     private static string Result(Report report, decimal cumulativeCost) =>
         $$"""{"type":"result","subtype":"success","is_error":false,"num_turns":2,"duration_ms":5,"total_cost_usd":{{cumulativeCost.ToString(System.Globalization.CultureInfo.InvariantCulture)}},"usage":{},"structured_output":{{ReportReader.Write(report)}}}""";
 
+    /// <summary>A node writing ordinary prose to the person.</summary>
+    private static string Say(string text) =>
+        $$"""{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"{{text}}"}]},"parent_tool_use_id":null}""";
+
+    /// <summary>A turn that completed and produced no structured output at all.</summary>
+    /// <remarks>Concatenated rather than interpolated: a literal <c>}}</c> inside a raw interpolated string is read as the interpolation's close.</remarks>
+    private static string NoReport(decimal cumulativeCost) =>
+        """{"type":"result","subtype":"success","is_error":false,"num_turns":1,"duration_ms":5,"usage":{},"total_cost_usd":"""
+        + cumulativeCost.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}";
+
     private static ReportRequest AskImplementer() =>
         new("implementer", "Add --since to loadout usage; a test fails without it and passes with it.", DeliverableKind.Commit, ["plan:none"]);
 
@@ -357,6 +367,34 @@ public sealed class TeamRunnerTests : IDisposable
 
         var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
         journal.Should().Contain(l => l.Contains("\"kind\":\"node.ended\"") && l.Contains("frobnicate"));
+    }
+
+    [Fact]
+    public async Task A_node_that_answers_in_prose_instead_of_a_report_has_what_it_said_passed_on()
+    {
+        // The second real run stopped because the account reached its model
+        // limit, and every node said so in one plain sentence. The run
+        // reported "ended without a report" and threw the sentence away, so
+        // the cause took a transcript to find.
+        const string Limit = "You've reached your Fable limit. Switch to another model to continue.";
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Say(Limit), NoReport(0.05m), Say(Limit), NoReport(0.05m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Say(Limit), NoReport(0m), Say(Limit), NoReport(0m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Warnings.Should().Contain(w => w.Contains("implementer produced no report") && w.Contains("Fable limit"));
+        outcome.Ended.Should().Be($"the lead ended without a report. It said: {Limit}");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+        journal.Should().Contain(l => l.Contains("\"kind\":\"report.unreadable\"") && l.Contains("Fable limit"));
+
+        // The lead was told too, in the worker's failed report.
+        _launcher.Written("role.project-lead")[1].Should().Contain("Fable limit");
     }
 
     [Fact]
