@@ -214,6 +214,7 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
                     mode = specialists.Find(n.Value.Role)?.Role?.Mode,
                     deliverable = specialists.Find(n.Value.Role)?.Role?.Deliverable,
                     agent = n.Value.Agent.Length > 0 ? n.Value.Agent : null,
+                    model = n.Value.Model.Length > 0 ? n.Value.Model : null,
                     n.Value.Delegates,
                     n.Value.Worktree,
                     n.Value.Parallel,
@@ -245,6 +246,7 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
                 + $"[dim]{Markup.Escape(role?.Role?.Mode ?? "?"),-12} {Markup.Escape(role?.Role?.Deliverable ?? "?"),-9}[/]"
                 + (node.Parallel > 1 ? $" x{node.Parallel}" : string.Empty)
                 + (node.Worktree ? " worktree" : string.Empty)
+                + (node.Model is { Length: > 0 } model ? $" [dim]{Markup.Escape(model)}[/]" : string.Empty)
                 + (mark.Length > 0 ? $" [bold]{mark}[/]" : string.Empty));
 
             if (node.Delegates.Count > 0)
@@ -327,6 +329,10 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         [CommandOption("--rounds <N>")]
         [Description("How many times the lead may come back with more requests. Default 5.")]
         public int Rounds { get; init; } = 5;
+
+        [CommandOption("--model <MODEL>")]
+        [Description("A model for every node, overriding the team's and the project's. Written as the agent spells it.")]
+        public string? Model { get; init; }
     }
 
     /// <inheritdoc />
@@ -391,7 +397,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             settings.Agent,
             settings.Rounds,
             settings.Offline,
-            settings.NoSync);
+            settings.NoSync,
+            settings.Model);
 
         var console = new TerminalTeamConsole(_console, settings);
 

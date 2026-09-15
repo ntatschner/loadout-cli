@@ -398,6 +398,47 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task The_nearest_model_wins_over_the_team_and_the_project()
+    {
+        // Mode-keyed models in the manifest give five buckets for
+        // twenty-two roles, project-wide. A node names its own, and a run
+        // names one for everything.
+        var team = await IteratingProjectAsync();
+        team.Nodes["lead"].Model = "haiku";
+        team.Nodes["implementer"].Model = "sonnet";
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        await RunAsync(team);
+
+        _launcher.Requests[0].Request.Model.Should().Be("haiku");
+        _launcher.Requests[1].Request.Model.Should().Be("sonnet");
+
+        // A run that names one overrules every node; a run that names none
+        // leaves each node, and then the project, to decide.
+        var second = new FakeLauncher();
+        second.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await new TeamRunner(second, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest("demo", team, await SpecialistsAsync(), "goal", "supervised", Model: "opus"),
+            _console);
+
+        second.Requests[0].Request.Model.Should().Be("opus");
+    }
+
+    [Fact]
+    public async Task A_node_with_no_model_leaves_the_choice_to_the_project()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await RunAsync();
+
+        _launcher.Requests[0].Request.Model.Should().BeNull(
+            "the manifest's model_by_mode, read at launch, is what decides when nothing nearer does");
+    }
+
+    [Fact]
     public async Task A_template_and_a_bad_autonomy_are_refused_before_anything_starts()
     {
         var company = (await new TeamCatalogue().LoadAsync(null, null, await SpecialistsAsync())).Find("product-company")!;

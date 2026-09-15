@@ -54,6 +54,18 @@ public sealed class TeamNode
     /// <summary>The agent to run it on, or empty for the project's default.</summary>
     public string Agent { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The model this node's agent should use, or empty to let the project
+    /// and then the agent decide.
+    /// </summary>
+    /// <remarks>
+    /// Per node, because a team is where the shape of the work is known and
+    /// the same posture is not the same job: a reviewer reading one diff and
+    /// a release validator running every check both review, and only one of
+    /// them is worth a large model. Written as the agent spells it.
+    /// </remarks>
+    public string Model { get; set; } = string.Empty;
+
     /// <summary>Nodes this one may request. Only meaningful on a lead.</summary>
     public List<string> Delegates { get; set; } = [];
 

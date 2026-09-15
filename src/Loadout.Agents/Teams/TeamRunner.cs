@@ -19,6 +19,7 @@ namespace Loadout.Agents.Teams;
 /// <param name="Autonomy">manual, supervised or autonomous; null for the team's own setting.</param>
 /// <param name="DryRun">Prepare the lead's launch and start nothing.</param>
 /// <param name="AgentName">An agent for every node, overriding the team and the project.</param>
+/// <param name="Model">A model for every node, overriding the team and the project.</param>
 /// <param name="MaxRounds">How many times the lead may come back with more requests before the run stops.</param>
 /// <param name="Offline">Skip the network for every launch.</param>
 /// <param name="NoSync">Skip the workspace sync for every launch.</param>
@@ -32,7 +33,8 @@ public sealed record TeamRunRequest(
     string? AgentName = null,
     int MaxRounds = 5,
     bool Offline = false,
-    bool NoSync = false);
+    bool NoSync = false,
+    string? Model = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -656,6 +658,11 @@ public sealed class TeamRunner : ITeamRunner
             DisableHooks: true,
             IsolateMcpServers: true);
 
+        // Four places can name a model and the nearest wins: the run, then
+        // this node, then whatever the project pinned for the role's mode,
+        // then the agent's own default. The same order the agent follows.
+        var model = request.Model ?? (node.Model is { Length: > 0 } pinned ? pinned : null);
+
         var launch = new LaunchRequest(
             request.ProjectHandle,
             request.AgentName ?? (node.Agent is { Length: > 0 } agent ? agent : null),
@@ -664,7 +671,8 @@ public sealed class TeamRunner : ITeamRunner
             Task: brief.Task,
             Specialists: [role.Id],
             Mode: definition.Mode,
-            DryRun: dryRun);
+            DryRun: dryRun,
+            Model: model);
 
         return await _launcher.StartHeadlessAsync(launch, options, ct).ConfigureAwait(false);
     }

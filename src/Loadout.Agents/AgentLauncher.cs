@@ -51,6 +51,11 @@ namespace Loadout.Agents;
 /// specialists chosen, the warnings — and none of it changes anything. Only
 /// the last step does, so only the last step is skipped.
 /// </param>
+/// <param name="Model">
+/// The model to ask for, overriding whatever the project pinned, or null to
+/// let the project and then the agent decide. Written as the agent spells
+/// it: the launcher translates the flag, never the name.
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -67,7 +72,8 @@ public sealed record LaunchRequest(
     IReadOnlyList<string>? ExcludedSpecialists = null,
     string? Mode = null,
     string? RepositoryPath = null,
-    bool DryRun = false);
+    bool DryRun = false,
+    string? Model = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -694,7 +700,15 @@ public sealed class AgentLauncher : IAgentLauncher
             // Carried out, never inferred. This is a choice somebody wrote
             // in the manifest; working one out from how hard the task looks
             // would be a guess wearing a metric's clothes.
-            Core.Agents.ModelPolicy.For(manifest, request.Mode),
+            //
+            // What the caller asked for wins over what the project pinned,
+            // which is the ordinary precedence: the nearer decision is the
+            // more specific one. A team names a model per node and a run
+            // names one for everything, and neither would mean anything if
+            // the manifest overruled them.
+            request.Model is { Length: > 0 } asked
+                ? asked
+                : Core.Agents.ModelPolicy.For(manifest, request.Mode),
 
             // From the same machine-local file as the pre-approvals: a
             // hook in the project's settings runs after every edit, and
