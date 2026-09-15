@@ -84,7 +84,29 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             [PermissionMode] = ["--permission-mode"],
             [ToolRestrictions] = ["--allowed-tools", "--disallowed-tools"],
             [ModelSelection] = ["--model"],
+
+            // Both streams have to be switchable for a node: messages in as
+            // JSON lines and events out as JSON lines. A build with only one
+            // of the two would take a prompt and answer in prose.
+            [AgentCapabilities.Headless] = ["--input-format", "--output-format"],
+
+            // Documented only inside --permission-prompts' description on
+            // 2.1.270, never as an entry of its own, so the marker is the bare
+            // flag name and matches wherever the help mentions it. Proven to
+            // work on that build by driving a session with it.
+            [PermissionAnswerer] = ["--permission-prompt-tool"],
+            [OutputSchema] = ["--json-schema"],
+            [StrictMcp] = ["--strict-mcp-config"],
         };
+
+    /// <summary>Capability key for routing permission prompts to a tool.</summary>
+    private const string PermissionAnswerer = "permission_answerer";
+
+    /// <summary>Capability key for constraining the final answer to a schema.</summary>
+    private const string OutputSchema = "output_schema";
+
+    /// <summary>Capability key for connecting only the MCP servers the launcher names.</summary>
+    private const string StrictMcp = "strict_mcp";
 
     /// <summary>Capability key for the permission-mode option.</summary>
     private const string PermissionMode = "permission_mode";
@@ -119,6 +141,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         AddProjectSkills(context, descriptor, arguments, warnings);
         AddSecurityProfile(context, descriptor, arguments, warnings);
         AddModel(context, descriptor, arguments, warnings);
+        AddHeadless(context, descriptor, arguments, warnings);
 
         // Everything after a bare -- belongs to the agent untouched
         // (spec section 36), so it is appended last and never inspected.
@@ -322,7 +345,18 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         var path = settingsPath;
 
-        if (screened.Changed)
+        // A node's hooks are off from every scope, the machine's included,
+        // and the only way to say so is a key in the settings handed over.
+        // It goes into the copy written to the runtime directory, never into
+        // the project's own file, which travels.
+        var disableHooks = context.Headless?.DisableHooks == true;
+
+        if (disableHooks)
+        {
+            screened.Document["disableAllHooks"] = true;
+        }
+
+        if (screened.Changed || disableHooks)
         {
             path = Path.Combine(context.RuntimeDirectory, "settings.json");
 
@@ -584,6 +618,177 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         arguments.Add("--model");
         arguments.Add(model);
+    }
+
+    /// <summary>
+    /// Puts Claude into its message-in, event-out mode and applies everything
+    /// a node must be told explicitly.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The shape came out of driving Claude Code 2.1.270 from a process with
+    /// its pipes held: <c>-p</c> with both stream formats and <c>--verbose</c>,
+    /// which the stream output needs; the caps the agent enforces itself; the
+    /// permission mode and tool lists, so nothing is inherited from this
+    /// machine's interactive settings; the tool that answers when it would
+    /// otherwise prompt, since nobody is at the keyboard; the schema the final
+    /// answer must fit; only the MCP servers the launcher names, because
+    /// without that a node connected every server on the machine, several of
+    /// them waiting on an authentication nobody was there to give.
+    /// </para>
+    /// <para>
+    /// <c>--bare</c> is deliberately not used. It removes the hooks and the
+    /// plugins and it also removes the credentials, and the session answers
+    /// "Not logged in" to everything. Hooks are switched off through the
+    /// settings handed over instead.
+    /// </para>
+    /// </remarks>
+    private static void AddHeadless(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Headless is not { } headless)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(AgentCapabilities.Headless))
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise --input-format and --output-format, "
+                + "so it cannot be driven without a terminal. The session was not started headlessly.");
+
+            return;
+        }
+
+        arguments.Add("-p");
+        arguments.Add("--verbose");
+        arguments.Add("--input-format");
+        arguments.Add("stream-json");
+        arguments.Add("--output-format");
+        arguments.Add("stream-json");
+
+        if (headless.MaxTurns is { } turns)
+        {
+            arguments.Add("--max-turns");
+            arguments.Add(turns.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (headless.BudgetUsd is { } budget)
+        {
+            // Invariant, always: a comma here would be read as no cap at all.
+            arguments.Add("--max-budget-usd");
+            arguments.Add(budget.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (descriptor.Supports(PermissionMode))
+        {
+            arguments.Add("--permission-mode");
+            arguments.Add(headless.Permission switch
+            {
+                HeadlessPermission.AcceptEdits => "acceptEdits",
+                HeadlessPermission.DenyUnlessAllowed => "dontAsk",
+                HeadlessPermission.Bypass => "bypassPermissions",
+                _ => "default",
+            });
+        }
+        else
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise --permission-mode, so the node's "
+                + $"permission setting ({headless.Permission}) was not applied.");
+        }
+
+        var allowed = headless.AllowedTools ?? [];
+        var denied = headless.DeniedTools ?? [];
+
+        if (allowed.Count > 0 || denied.Count > 0)
+        {
+            if (descriptor.Supports(ToolRestrictions))
+            {
+                if (allowed.Count > 0)
+                {
+                    arguments.Add("--allowed-tools");
+                    arguments.Add(string.Join(",", allowed));
+                }
+
+                if (denied.Count > 0)
+                {
+                    arguments.Add("--disallowed-tools");
+                    arguments.Add(string.Join(",", denied));
+                }
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise tool restrictions, so the node's "
+                    + "allow and deny lists were not applied.");
+            }
+        }
+
+        if (headless.PermissionAnswerer is { Length: > 0 } answerer)
+        {
+            if (descriptor.Supports(PermissionAnswerer))
+            {
+                arguments.Add("--permission-prompt-tool");
+                arguments.Add(answerer);
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise --permission-prompt-tool, so "
+                    + "anything the node would have asked about will be denied instead.");
+            }
+        }
+
+        if (headless.OutputSchemaJson is { Length: > 0 } schema)
+        {
+            if (descriptor.Supports(OutputSchema))
+            {
+                arguments.Add("--json-schema");
+                arguments.Add(schema);
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise --json-schema, so the node's "
+                    + "report will arrive as free text rather than the shape asked for.");
+            }
+        }
+
+        if (headless.IsolateMcpServers)
+        {
+            if (descriptor.Supports(StrictMcp))
+            {
+                arguments.Add("--strict-mcp-config");
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise --strict-mcp-config, so the node "
+                    + "will connect this machine's own MCP servers as well as the launcher's.");
+            }
+        }
+
+        // The settings builder folds the key into the project's screened
+        // copy when there is one. With no project settings file there is
+        // nothing to fold it into, so it goes inline.
+        if (headless.DisableHooks && !arguments.Contains("--settings"))
+        {
+            if (descriptor.Supports(AgentCapabilities.ExternalSettings))
+            {
+                arguments.Add("--settings");
+                arguments.Add("{\"disableAllHooks\":true}");
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise --settings, so this machine's "
+                    + "hooks will run inside the node.");
+            }
+        }
     }
 
     private static void AddWorkspaceDirectory(

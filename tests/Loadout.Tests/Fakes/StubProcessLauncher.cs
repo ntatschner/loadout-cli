@@ -56,6 +56,66 @@ public sealed class StubProcessLauncher : IProcessLauncher
         return Task.FromResult(OperationResult<int>.Ok(_exitCode));
     }
 
+    /// <summary>What was last started with its pipes held, for a test to inspect.</summary>
+    public ProcessRequest? Piped { get; private set; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Answers with the prepared output as the child's whole conversation:
+    /// every line of it is readable at once, the exit code is already known,
+    /// and whatever is written to the input is kept for the test to read back.
+    /// </remarks>
+    public Task<OperationResult<IPipedProcess>> StartPipedAsync(
+        ProcessRequest request,
+        CancellationToken ct = default)
+    {
+        Piped = request;
+        Requests.Add(request);
+
+        return Task.FromResult(OperationResult<IPipedProcess>.Ok(
+            new StubPipedProcess(_standardOutput, _exitCode)));
+    }
+
+    /// <summary>The scripted conversation a stubbed pipe holds.</summary>
+    public sealed class StubPipedProcess : IPipedProcess
+    {
+        public StubPipedProcess(string output, int exitCode)
+        {
+            Output = new StringReader(output);
+            Exited = Task.FromResult(exitCode);
+        }
+
+        /// <summary>Everything written to the child's input.</summary>
+        public StringWriter Written { get; } = new();
+
+        public int ProcessId => 4242;
+
+        public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
+
+        public TextWriter Input => Written;
+
+        public TextReader Output { get; }
+
+        public TextReader Error { get; } = new StringReader(string.Empty);
+
+        public Task<int> Exited { get; }
+
+        public bool InputClosed { get; private set; }
+
+        public bool Killed { get; private set; }
+
+        public Task CloseInputAsync()
+        {
+            InputClosed = true;
+
+            return Task.CompletedTask;
+        }
+
+        public void Kill() => Killed = true;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     /// <summary>What was last started detached, for a test to inspect.</summary>
     public ProcessRequest? Detached { get; private set; }
 

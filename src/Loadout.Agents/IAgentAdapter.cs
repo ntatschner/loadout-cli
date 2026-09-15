@@ -55,6 +55,13 @@ namespace Loadout.Agents;
 /// the project's settings file travels, and a command that runs after every
 /// edit is this machine's to permit.
 /// </param>
+/// <param name="Headless">
+/// How to drive the session without a terminal, or null for an ordinary
+/// interactive launch. When set, the adapter puts the agent into its
+/// message-in, event-out mode and applies the permission, budget and output
+/// settings a node needs, all explicitly; nothing about a headless session
+/// is left to the machine's interactive defaults.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -69,7 +76,8 @@ public sealed record AgentLaunchContext(
     IReadOnlyList<string>? McpConfigFiles = null,
     IReadOnlyList<string>? PreApprovedCommands = null,
     string? Model = null,
-    IReadOnlyList<string>? AllowedHooks = null);
+    IReadOnlyList<string>? AllowedHooks = null,
+    HeadlessOptions? Headless = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

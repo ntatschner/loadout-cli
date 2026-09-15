@@ -148,6 +148,134 @@ public sealed class ProcessLauncher : IProcessLauncher
         return OperationResult<int>.Ok(process.ExitCode);
     }
 
+    /// <inheritdoc />
+    public async Task<OperationResult<IPipedProcess>> StartPipedAsync(
+        ProcessRequest request,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var startInfo = BuildStartInfo(request);
+        startInfo.RedirectStandardInput = true;
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+        startInfo.UseShellExecute = false;
+        startInfo.CreateNoWindow = true;
+
+        // UTF-8 on every stream whatever the console code page says. The
+        // agents write JSON lines in UTF-8, and a Windows console defaults to
+        // a legacy code page that turns any non-ASCII character in a reply
+        // into a question mark, which then fails to parse as the JSON it was.
+        startInfo.StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        startInfo.StandardOutputEncoding = Encoding.UTF8;
+        startInfo.StandardErrorEncoding = Encoding.UTF8;
+
+        var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+
+        try
+        {
+            if (!process.Start())
+            {
+                process.Dispose();
+
+                return OperationResult<IPipedProcess>.Fail(
+                    $"Could not start '{request.Executable}'.", ExitCode.AgentUnavailable);
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            process.Dispose();
+
+            return OperationResult<IPipedProcess>.Fail(
+                $"Could not start '{request.Executable}': {ex.Message}", ExitCode.AgentUnavailable);
+        }
+
+        var piped = new PipedProcess(process);
+
+        if (request.StandardInput is not null)
+        {
+            await piped.Input.WriteAsync(request.StandardInput.AsMemory(), ct).ConfigureAwait(false);
+            await piped.Input.FlushAsync(ct).ConfigureAwait(false);
+        }
+
+        return OperationResult<IPipedProcess>.Ok(piped);
+    }
+
+    /// <summary>The running half of <see cref="StartPipedAsync"/>.</summary>
+    private sealed class PipedProcess : IPipedProcess
+    {
+        private readonly Process _process;
+        private readonly TaskCompletionSource<int> _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private bool _inputClosed;
+
+        internal PipedProcess(Process process)
+        {
+            _process = process;
+
+            // Recorded from the process rather than from the clock, so it is
+            // the same value the inspector will compare against later.
+            StartedAt = process.StartTime;
+
+            _process.Exited += (_, _) => _exited.TrySetResult(_process.ExitCode);
+
+            // The event can fire before the handler is attached on a child
+            // that exits at once, so the state is checked as well.
+            if (_process.HasExited)
+            {
+                _exited.TrySetResult(_process.ExitCode);
+            }
+        }
+
+        /// <inheritdoc />
+        public int ProcessId => _process.Id;
+
+        /// <inheritdoc />
+        public DateTimeOffset StartedAt { get; }
+
+        /// <inheritdoc />
+        public TextWriter Input => _process.StandardInput;
+
+        /// <inheritdoc />
+        public TextReader Output => _process.StandardOutput;
+
+        /// <inheritdoc />
+        public TextReader Error => _process.StandardError;
+
+        /// <inheritdoc />
+        public Task<int> Exited => _exited.Task;
+
+        /// <inheritdoc />
+        public async Task CloseInputAsync()
+        {
+            if (_inputClosed)
+            {
+                return;
+            }
+
+            _inputClosed = true;
+
+            try
+            {
+                await _process.StandardInput.FlushAsync().ConfigureAwait(false);
+                _process.StandardInput.Close();
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+                // The child went away first. Nothing to tell it.
+            }
+        }
+
+        /// <inheritdoc />
+        public void Kill() => TryKill(_process);
+
+        /// <inheritdoc />
+        public async ValueTask DisposeAsync()
+        {
+            await CloseInputAsync().ConfigureAwait(false);
+            _process.Dispose();
+        }
+    }
+
     /// <summary>
     /// How long to let a launcher shim finish handing over before going on.
     /// Long enough for a slow disk, short enough not to be noticed.
