@@ -439,6 +439,37 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_worktree_the_launcher_cannot_make_is_said_rather_than_skipped()
+    {
+        // The team's implementer declares worktree: true. The launcher
+        // cannot create one yet, and in a real run the node committed to
+        // main, which the reviewer and verifier then read as already done.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Warnings.Should().ContainSingle(w => w.Contains("own git worktree"))
+            .Which.Should().Contain("before the reviewer or verifier sees it");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+        journal.Should().Contain(l => l.Contains("\"kind\":\"worktree.not-created\""));
+    }
+
+    [Fact]
+    public async Task The_same_notice_from_every_node_is_said_once()
+    {
+        _launcher.Warn("Pre-commit protection: not installed in this clone.");
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Warnings.Count(w => w.StartsWith("Pre-commit protection", StringComparison.Ordinal))
+            .Should().Be(1, "two nodes launched and each carried the same notice");
+    }
+
+    [Fact]
     public async Task A_template_and_a_bad_autonomy_are_refused_before_anything_starts()
     {
         var company = (await new TeamCatalogue().LoadAsync(null, null, await SpecialistsAsync())).Find("product-company")!;
@@ -486,6 +517,11 @@ public sealed class TeamRunnerTests : IDisposable
         /// <summary>What the next session of a role writes to its error stream.</summary>
         public void Error(string role, string text) => _errors[role] = text;
 
+        private readonly List<string> _warnings = [];
+
+        /// <summary>A notice every launch carries, as preflight's do.</summary>
+        public void Warn(string warning) => _warnings.Add(warning);
+
         /// <summary>Every message written to every session of a role, in order, as the text the node read.</summary>
         public IReadOnlyList<string> Written(string role) =>
             _pipes.TryGetValue(role, out var pipes)
@@ -530,7 +566,7 @@ public sealed class TeamRunnerTests : IDisposable
             pipes.Add(pipe);
 
             return Task.FromResult(OperationResult<HeadlessLaunch>.Ok(new HeadlessLaunch(
-                plan, [], preflight, "Demo", "claude", $"L-{Requests.Count}",
+                plan, [.. _warnings], preflight, "Demo", "claude", $"L-{Requests.Count}",
                 new HeadlessSession(pipe, ClaudeHeadlessProtocol.Instance),
                 (exit, _) => { Completed.Add(exit); return Task.CompletedTask; })));
         }

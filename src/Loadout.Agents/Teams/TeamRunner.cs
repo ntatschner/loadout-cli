@@ -459,7 +459,11 @@ public sealed class TeamRunner : ITeamRunner
             await WriteDocumentAsync(directory, "final-report.json", ReportReader.Write(final), ct).ConfigureAwait(false);
         }
 
-        return OperationResult<TeamRunOutcome>.Ok(new TeamRunOutcome(runId, directory, ended, final, cost, rounds, warnings));
+        // Every node's launch contributes the same preflight notices, so a
+        // four-node run said each of them four times. The same sentence
+        // twice is noise that buries the one that was only said once.
+        return OperationResult<TeamRunOutcome>.Ok(new TeamRunOutcome(
+            runId, directory, ended, final, cost, rounds, warnings.Distinct(StringComparer.Ordinal).ToList()));
     }
 
     private sealed record WorkerOutcome(Report? Report, decimal Cost, bool Halted, string? Failure);
@@ -475,6 +479,22 @@ public sealed class TeamRunner : ITeamRunner
         List<string> warnings,
         CancellationToken ct)
     {
+        if (node.Worktree)
+        {
+            // Said, not skipped. The team declares that this node works in
+            // its own tree, the launcher cannot yet make one, and the
+            // difference is where the node's commit lands: in the main tree
+            // it goes onto the current branch, and the reviewer and verifier
+            // that follow are reading something already committed. A first
+            // real run did exactly that.
+            warnings.Add(
+                $"The team asks {brief.Node} to work in its own git worktree, and the launcher does not "
+                + "create one yet, so it worked in the project's main tree. Anything it commits is on the "
+                + "current branch before the reviewer or verifier sees it.");
+
+            await journal.WriteAsync("worktree.not-created", brief.Node, new { requested = true }, ct).ConfigureAwait(false);
+        }
+
         var started = await StartNodeAsync(request, team, node, role, brief, dryRun: false, ct).ConfigureAwait(false);
 
         if (started.Failed)
