@@ -420,6 +420,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
                 outcome.Ended,
                 outcome.Rounds,
                 cost = outcome.CostUsd,
+                branches = outcome.Branches,
+                merged = outcome.Merged,
                 final = outcome.FinalReport,
                 plan = outcome.LeadPlan is { } plan ? new { plan.Executable, plan.Arguments, plan.WorkingDirectory } : null,
                 outcome.Warnings,
@@ -457,6 +459,21 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
                     {
                         output.WriteLine($"  [yellow]?[/] {Markup.Escape(question.Question)} [dim](recommended: {Markup.Escape(question.Recommendation)})[/]");
                     }
+                }
+            }
+
+            if (outcome.Branches is { Count: > 0 } branches)
+            {
+                output.WriteBlankLine();
+                output.WriteLine("[bold]Branches[/]");
+
+                foreach (var (node, branch) in branches)
+                {
+                    var taken = outcome.Merged?.Contains(branch) == true;
+
+                    output.WriteLine(
+                        $"  {Markup.Escape(branch)}  [dim]{Markup.Escape(node)}[/]"
+                        + (taken ? "  [green]merged[/]" : "  [dim]not merged[/]"));
                 }
             }
 

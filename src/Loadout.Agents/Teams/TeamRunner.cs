@@ -44,6 +44,8 @@ public sealed record TeamRunRequest(
 /// <param name="CostUsd">Everything every node spent, from the agents' own figures.</param>
 /// <param name="Rounds">How many times the lead was given the floor.</param>
 /// <param name="Warnings">Everything worth telling the person.</param>
+/// <param name="Branches">What the run left on branches of its own, node by node.</param>
+/// <param name="Merged">Branches taken into the repository's own branch, and how.</param>
 /// <param name="LeadPlan">On a dry run, what the lead would have been started with.</param>
 public sealed record TeamRunOutcome(
     string RunId,
@@ -53,6 +55,8 @@ public sealed record TeamRunOutcome(
     decimal CostUsd,
     int Rounds,
     IReadOnlyList<string> Warnings,
+    IReadOnlyDictionary<string, string>? Branches = null,
+    IReadOnlyList<string>? Merged = null,
     LaunchPlan? LeadPlan = null);
 
 /// <summary>
@@ -123,12 +127,26 @@ public sealed class TeamRunner : ITeamRunner
     private readonly IAgentLauncher _launcher;
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
+    private readonly Core.Projects.IProjectService? _projects;
+    private readonly Core.Git.IGitManager? _git;
 
-    public TeamRunner(IAgentLauncher launcher, IPlatformPaths paths, TimeProvider time)
+    /// <summary>
+    /// The project service and the git manager are optional so a caller that
+    /// only drives nodes needs neither; without them a run cannot merge and
+    /// says so rather than appearing to.
+    /// </summary>
+    public TeamRunner(
+        IAgentLauncher launcher,
+        IPlatformPaths paths,
+        TimeProvider time,
+        Core.Projects.IProjectService? projects = null,
+        Core.Git.IGitManager? git = null)
     {
         _launcher = launcher;
         _paths = paths;
         _time = time;
+        _projects = projects;
+        _git = git;
     }
 
     /// <inheritdoc />
@@ -200,7 +218,7 @@ public sealed class TeamRunner : ITeamRunner
             warnings.AddRange(plan.Warnings);
 
             return OperationResult<TeamRunOutcome>.Ok(new TeamRunOutcome(
-                runId, null, "dry run", null, 0m, 0, warnings, plan.Plan));
+                runId, null, "dry run", null, 0m, 0, warnings, LeadPlan: plan.Plan));
         }
 
         var directory = Path.Combine(_paths.Paths.State, "teams", "runs", runId);
@@ -240,6 +258,12 @@ public sealed class TeamRunner : ITeamRunner
         var quietRounds = 0;
         string ended;
         Report? final = null;
+
+        // What the run put on branches of its own, and what the team's merge
+        // gate nodes decided about it. Both are read at the end, when the
+        // question is whether any of it may come back to the repository.
+        var branches = new Dictionary<string, string>(StringComparer.Ordinal);
+        var decisions = new Dictionary<string, string>(StringComparer.Ordinal);
 
         try
         {
@@ -348,8 +372,23 @@ public sealed class TeamRunner : ITeamRunner
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
+                    if (brief.Constraints.Worktree is { Length: > 0 } made)
+                    {
+                        branches[ask.Node] = made;
+                    }
+
                     var workerReport = await RunWorkerAsync(request, team, node, role, brief, journal, warnings, ct).ConfigureAwait(false);
                     cost += workerReport.Cost;
+
+                    if (workerReport.Report is { } decided)
+                    {
+                        // A gate node's answer is the decision it hands back,
+                        // in the one word its role tells it to use.
+                        foreach (var deliverable in decided.Deliverables.Where(d => d.Kind == DeliverableKind.Decision))
+                        {
+                            decisions[BaseNode(ask.Node)] = deliverable.Ref.Trim();
+                        }
+                    }
 
                     if (workerReport.Halted)
                     {
@@ -452,7 +491,11 @@ public sealed class TeamRunner : ITeamRunner
             }
         }
 
-        await journal.WriteAsync("run.finished", null, new { ended, cost, rounds }, ct).ConfigureAwait(false);
+        var merged = await MergeAsync(
+            request, team, autonomy, ended, branches, decisions, console, journal, warnings, ct)
+            .ConfigureAwait(false);
+
+        await journal.WriteAsync("run.finished", null, new { ended, cost, rounds, merged }, ct).ConfigureAwait(false);
 
         if (final is not null)
         {
@@ -463,7 +506,178 @@ public sealed class TeamRunner : ITeamRunner
         // four-node run said each of them four times. The same sentence
         // twice is noise that buries the one that was only said once.
         return OperationResult<TeamRunOutcome>.Ok(new TeamRunOutcome(
-            runId, directory, ended, final, cost, rounds, warnings.Distinct(StringComparer.Ordinal).ToList()));
+            runId, directory, ended, final, cost, rounds,
+            warnings.Distinct(StringComparer.Ordinal).ToList(), branches, merged));
+    }
+
+    /// <summary>
+    /// The one word each reviewing role is told to hand back when it is
+    /// satisfied. Anything else, including silence, is not satisfaction.
+    /// </summary>
+    private static readonly HashSet<string> Accepting = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "accept", "accepted", "approve", "approved", "verified", "holds", "fit", "reads-true",
+    };
+
+    /// <summary>
+    /// Takes the run's branches into the repository, where the team's gate
+    /// says they may go and a person agrees.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Mechanical, and deliberately: no model decides this and none performs
+    /// it. The coordinator reads what the gate's nodes decided, asks whoever
+    /// is there, and then it is git's business. A conflict is not resolved
+    /// here at all.
+    /// </para>
+    /// <para>
+    /// Nothing is merged unless the run finished, the team names a gate, and
+    /// every node in that gate handed back an accepting decision. Each of
+    /// those is a reason a person would want to hear, so each is said.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<string>> MergeAsync(
+        TeamRunRequest request,
+        TeamDefinition team,
+        string autonomy,
+        string ended,
+        IReadOnlyDictionary<string, string> branches,
+        IReadOnlyDictionary<string, string> decisions,
+        ITeamConsole console,
+        Journal journal,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        var merged = new List<string>();
+
+        if (branches.Count == 0)
+        {
+            return merged;
+        }
+
+        var left = string.Join(", ", branches.Values);
+
+        if (!string.Equals(ended, "done", StringComparison.Ordinal))
+        {
+            warnings.Add($"Nothing was merged: the run ended {ended}. What the nodes committed is on {left}.");
+
+            return merged;
+        }
+
+        var gate = team.Rules.Gates.Merge;
+
+        if (gate.Count == 0)
+        {
+            warnings.Add(
+                $"Nothing was merged: '{team.Name}' names no merge gate, and a change nobody is required to "
+                + $"look at is not one this will land for you. It is on {left}.");
+
+            return merged;
+        }
+
+        var missing = gate
+            .Where(node => !decisions.TryGetValue(node, out var decision) || !Accepting.Contains(decision))
+            .Select(node => decisions.TryGetValue(node, out var decision) ? $"{node} said '{decision}'" : $"{node} decided nothing")
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            warnings.Add($"Nothing was merged: the gate needs {string.Join(" and ", gate)}, and {string.Join("; ", missing)}. It is on {left}.");
+            await journal.WriteAsync("gate.refused", null, new { gate, decisions }, ct).ConfigureAwait(false);
+
+            return merged;
+        }
+
+        if (_projects is null || _git is null)
+        {
+            warnings.Add($"Nothing was merged: this runner was built without a project service or git. It is on {left}.");
+
+            return merged;
+        }
+
+        var resolution = await _projects.ResolveAsync(request.ProjectHandle, ct).ConfigureAwait(false);
+
+        if (resolution.Failed || resolution.Value?.LocalPath is not { Length: > 0 } repository)
+        {
+            warnings.Add($"Nothing was merged: the project could not be resolved. It is on {left}.");
+
+            return merged;
+        }
+
+        var state = await _git.GetStateAsync(repository, ct).ConfigureAwait(false);
+
+        if (state.Failed)
+        {
+            warnings.Add($"Nothing was merged: {state.Error} It is on {left}.");
+
+            return merged;
+        }
+
+        if (!state.Value!.IsClean)
+        {
+            // Merging into a tree somebody is working in would mix the run's
+            // change with theirs, and untangling that is worse than waiting.
+            warnings.Add(
+                $"Nothing was merged: {repository} has uncommitted changes, and merging into a tree "
+                + $"somebody is working in mixes their work with the run's. It is on {left}.");
+
+            return merged;
+        }
+
+        var target = state.Value.Branch ?? "the current branch";
+
+        foreach (var (node, branch) in branches)
+        {
+            await journal.WriteAsync("gate.opened", node, new { gate = "merge", branch, target }, ct).ConfigureAwait(false);
+
+            // Autonomous has already been given the rules to follow and the
+            // gate's nodes have agreed; anything else asks, because this is
+            // the moment the run changes the repository somebody works in.
+            var allowed = autonomy == "autonomous"
+                || await console.ConfirmAsync($"Merge {branch} into {target}", ct).ConfigureAwait(false);
+
+            await journal.WriteAsync("gate.decided", node, new { gate = "merge", branch, allowed }, ct).ConfigureAwait(false);
+
+            if (!allowed)
+            {
+                warnings.Add($"{branch} was not merged, because you said not to. It is still there.");
+
+                continue;
+            }
+
+            var result = await _git.MergeAsync(repository, branch, ct).ConfigureAwait(false);
+
+            if (result.Failed)
+            {
+                warnings.Add($"{branch} could not be merged: {result.Error}");
+                await journal.WriteAsync("merge.failed", node, new { branch, error = result.Error }, ct).ConfigureAwait(false);
+
+                continue;
+            }
+
+            if (!result.Value!.Merged)
+            {
+                warnings.Add(
+                    $"{branch} conflicts with {target} in {string.Join(", ", result.Value.Conflicts)}, so nothing was "
+                    + "merged and the repository is as it was. Resolving it is not something this does for you.");
+
+                await journal.WriteAsync("merge.conflicted", node, new { branch, result.Value.Conflicts }, ct).ConfigureAwait(false);
+
+                continue;
+            }
+
+            merged.Add(branch);
+
+            await journal.WriteAsync("merge.done", node, new { branch, target, result.Value.FastForward }, ct)
+                .ConfigureAwait(false);
+
+            console.Note(
+                result.Value.FastForward
+                    ? $"Merged {branch} into {target}, fast-forward."
+                    : $"Merged {branch} into {target} with a merge commit.");
+        }
+
+        return merged;
     }
 
     private sealed record WorkerOutcome(Report? Report, decimal Cost, bool Halted, string? Failure);

@@ -15,6 +15,16 @@ public sealed record GitRepositoryState(
     bool IsClean,
     string? HeadCommit);
 
+/// <summary>What happened when one branch was merged into another.</summary>
+/// <param name="Merged">Whether the merge landed. False means the working tree is exactly as it was.</param>
+/// <param name="FastForward">
+/// Whether it moved the branch pointer rather than making a merge commit.
+/// Worth knowing because a fast-forward leaves the history the reviewer read
+/// and a merge commit does not.
+/// </param>
+/// <param name="Conflicts">Paths git could not merge, when it could not. Empty otherwise.</param>
+public sealed record GitMerge(bool Merged, bool FastForward, IReadOnlyList<string> Conflicts);
+
 /// <summary>A linked working tree (spec section 71).</summary>
 /// <param name="Path">Absolute path to the worktree.</param>
 /// <param name="Branch">Branch checked out there, or null when detached.</param>
@@ -172,6 +182,21 @@ public interface IGitManager
         string path,
         string branch,
         string? baseRef = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Merges a branch into whatever the repository has checked out,
+    /// preferring to move the pointer rather than make a commit.
+    /// </summary>
+    /// <remarks>
+    /// A merge it cannot do is undone rather than left half-applied: the
+    /// caller gets the conflicting paths and a working tree in the state it
+    /// was in, because a repository stopped mid-merge is a repository
+    /// somebody has to rescue by hand.
+    /// </remarks>
+    Task<OperationResult<GitMerge>> MergeAsync(
+        string repositoryPath,
+        string branch,
         CancellationToken ct = default);
 
     /// <summary>Which set of paths to ask git about.</summary>

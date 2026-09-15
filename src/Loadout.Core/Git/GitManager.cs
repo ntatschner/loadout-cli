@@ -503,6 +503,56 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<GitMerge>> MergeAsync(
+        string repositoryPath,
+        string branch,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+
+        // Tried first, because a fast-forward keeps the history somebody
+        // reviewed: the commits arrive as they were, with nothing added.
+        var fastForward = await RunAsync(
+            repositoryPath, ["merge", "--ff-only", branch], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        if (fastForward.Succeeded)
+        {
+            return OperationResult<GitMerge>.Ok(new GitMerge(Merged: true, FastForward: true, []));
+        }
+
+        var merge = await RunAsync(
+            repositoryPath, ["merge", "--no-ff", "--no-edit", branch], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        if (merge.Succeeded)
+        {
+            return OperationResult<GitMerge>.Ok(new GitMerge(Merged: true, FastForward: false, []));
+        }
+
+        // Whatever went wrong, the tree goes back to how it was. An aborted
+        // merge reports nothing merged; a merge left in progress would be
+        // somebody else's problem to find and undo.
+        var conflicts = await RunAsync(
+            repositoryPath, ["diff", "--name-only", "--diff-filter=U"], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        await RunAsync(repositoryPath, ["merge", "--abort"], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        var paths = conflicts.Succeeded
+            ? conflicts.Value!.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : [];
+
+        return paths.Length > 0
+            ? OperationResult<GitMerge>.Ok(new GitMerge(Merged: false, FastForward: false, paths))
+
+            // No conflicting paths and still no merge: the branch does not
+            // exist, the tree is dirty, or git refused for a reason of its
+            // own, and its own words are the most useful thing to pass on.
+            : OperationResult<GitMerge>.Fail(merge.Error ?? "The merge did not happen and git said nothing about why.");
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<string>>> ListFilesAsync(
         string repositoryPath,
         IReadOnlyList<string> patterns,

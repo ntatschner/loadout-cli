@@ -482,6 +482,54 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task Nothing_is_merged_until_every_node_the_gate_names_has_accepted()
+    {
+        // The iterating project's gate is the reviewer and the verifier. A
+        // reviewer that returned a change is not a reviewer that accepted
+        // it, and the difference is whether the run lands it.
+        var returned = new Report(
+            "reviewer", ReportStatus.Done, "Two findings.",
+            [new ReportDeliverable(DeliverableKind.Decision, "return", "a4f21c9")], [Passed], []);
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadRequests(new ReportRequest("reviewer", "review it", DeliverableKind.Decision)), 0.06m),
+            Result(LeadDone(), 0.09m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+        _launcher.Script("role.reviewer", Init("rev-1"), Result(returned, 0.02m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Ended.Should().Be("done");
+        outcome.Merged.Should().BeEmpty();
+        outcome.Branches.Should().ContainKey("implementer");
+
+        outcome.Warnings.Should().ContainSingle(w => w.StartsWith("Nothing was merged", StringComparison.Ordinal))
+            .Which.Should().Contain("reviewer said 'return'").And.Contain("verifier decided nothing");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+        journal.Should().Contain(l => l.Contains("\"kind\":\"gate.refused\""));
+    }
+
+    [Fact]
+    public async Task A_run_that_did_not_finish_merges_nothing_and_says_where_the_work_is()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadRequests() with { Status = ReportStatus.Blocked, Blocker = new ReportBlocker("stuck", "help") }, 0.06m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Ended.Should().Be("blocked");
+        outcome.Merged.Should().BeEmpty();
+        outcome.Warnings.Should().Contain(w => w.Contains("Nothing was merged: the run ended blocked"));
+    }
+
+    [Fact]
     public async Task A_template_and_a_bad_autonomy_are_refused_before_anything_starts()
     {
         var company = (await new TeamCatalogue().LoadAsync(null, null, await SpecialistsAsync())).Find("product-company")!;

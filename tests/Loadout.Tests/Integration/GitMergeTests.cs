@@ -1,0 +1,169 @@
+using FluentAssertions;
+using Loadout.Core.Git;
+using Loadout.Platform.Abstractions;
+using Loadout.Platform.Common;
+using Loadout.Tests.Fakes;
+using Xunit;
+
+namespace Loadout.Tests.Integration;
+
+/// <summary>
+/// Taking one branch into another, against real git.
+/// </summary>
+/// <remarks>
+/// The three outcomes are different enough to matter to whoever is watching:
+/// a fast-forward leaves the history a reviewer read, a merge commit does
+/// not, and a conflict must leave the repository exactly as it was. The
+/// third is the one worth testing hardest — a merge stopped half way is a
+/// repository somebody has to rescue by hand, and nothing about the code
+/// says whether the abort happened.
+/// </remarks>
+public sealed class GitMergeTests : IAsyncLifetime
+{
+    private readonly ThrottledProcessLauncher _processes = new();
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "loadout-merge-" + Guid.NewGuid().ToString("N"));
+
+    private GitManager _git = null!;
+    private string _repository = null!;
+
+    public async Task InitializeAsync()
+    {
+        _git = new GitManager(_processes, new ExecutableResolver(new FakeEnvironmentProvider(_root, new Dictionary<string, string>())
+        {
+            PathDirectories = Environment.GetEnvironmentVariable("PATH")?
+                .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries) ?? [],
+            ExecutableExtensions = OperatingSystem.IsWindows() ? [".exe", ".cmd"] : [string.Empty],
+        }, []));
+
+        _repository = Path.Combine(_root, "repo");
+        Directory.CreateDirectory(_repository);
+
+        await GitAsync("init", "-b", "main");
+        await GitAsync("config", "user.email", "tests@example.invalid");
+        await GitAsync("config", "user.name", "Merge Tests");
+        await GitAsync("config", "core.excludesFile", string.Empty);
+
+        await File.WriteAllTextAsync(Path.Combine(_repository, "README.md"), "one\n");
+        await GitAsync("add", ".");
+        await GitAsync("commit", "--message", "initial");
+    }
+
+    public Task DisposeAsync()
+    {
+        try
+        {
+            if (Directory.Exists(_root))
+            {
+                foreach (var file in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+                {
+                    File.SetAttributes(file, FileAttributes.Normal);
+                }
+
+                Directory.Delete(_root, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task<string> GitAsync(params string[] arguments)
+    {
+        var result = await _processes.RunAsync(
+            new ProcessRequest("git", arguments, _repository), TimeSpan.FromSeconds(60));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        return result.Value!.StandardOutput;
+    }
+
+    /// <summary>A branch with one commit on it, made in a worktree so the repository's own tree is untouched.</summary>
+    private async Task<string> BranchAsync(string branch, string file, string content)
+    {
+        var path = Path.Combine(_root, "trees", branch.Replace('/', '-'));
+
+        var added = await _git.AddWorktreeAsync(_repository, path, branch);
+        added.Succeeded.Should().BeTrue(added.Error);
+
+        await File.WriteAllTextAsync(Path.Combine(path, file), content);
+
+        var work = new ProcessRequest("git", ["add", "."], path);
+        (await _processes.RunAsync(work, TimeSpan.FromSeconds(60))).Value!.Succeeded.Should().BeTrue();
+
+        var commit = new ProcessRequest("git", ["commit", "--message", $"add {file}"], path);
+        (await _processes.RunAsync(commit, TimeSpan.FromSeconds(60))).Value!.Succeeded.Should().BeTrue();
+
+        return path;
+    }
+
+    [Fact]
+    public async Task A_branch_ahead_of_the_main_one_arrives_as_a_fast_forward()
+    {
+        await BranchAsync("teams/run/one", "pong.txt", "pong");
+
+        var merged = await _git.MergeAsync(_repository, "teams/run/one");
+
+        merged.Succeeded.Should().BeTrue(merged.Error);
+        merged.Value!.Merged.Should().BeTrue();
+        merged.Value.FastForward.Should().BeTrue("nothing happened on the main branch meanwhile");
+        merged.Value.Conflicts.Should().BeEmpty();
+
+        File.Exists(Path.Combine(_repository, "pong.txt")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_branch_that_diverged_arrives_as_a_merge_commit()
+    {
+        await BranchAsync("teams/run/two", "pong.txt", "pong");
+
+        // Something else landed on the main branch in the meantime.
+        await File.WriteAllTextAsync(Path.Combine(_repository, "other.txt"), "other\n");
+        await GitAsync("add", ".");
+        await GitAsync("commit", "--message", "meanwhile");
+
+        var merged = await _git.MergeAsync(_repository, "teams/run/two");
+
+        merged.Succeeded.Should().BeTrue(merged.Error);
+        merged.Value!.Merged.Should().BeTrue();
+        merged.Value.FastForward.Should().BeFalse();
+
+        File.Exists(Path.Combine(_repository, "pong.txt")).Should().BeTrue();
+        File.Exists(Path.Combine(_repository, "other.txt")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_conflict_merges_nothing_and_leaves_the_repository_as_it_was()
+    {
+        await BranchAsync("teams/run/three", "README.md", "theirs\n");
+
+        await File.WriteAllTextAsync(Path.Combine(_repository, "README.md"), "ours\n");
+        await GitAsync("add", ".");
+        await GitAsync("commit", "--message", "ours");
+
+        var head = (await GitAsync("rev-parse", "HEAD")).Trim();
+
+        var merged = await _git.MergeAsync(_repository, "teams/run/three");
+
+        merged.Succeeded.Should().BeTrue(merged.Error);
+        merged.Value!.Merged.Should().BeFalse();
+        merged.Value.Conflicts.Should().Contain("README.md");
+
+        (await GitAsync("rev-parse", "HEAD")).Trim().Should().Be(head, "nothing was committed");
+        (await File.ReadAllTextAsync(Path.Combine(_repository, "README.md"))).Should().Be("ours\n");
+
+        // The merge was aborted rather than left in progress: a repository
+        // mid-merge refuses the next one, and this proves it does not.
+        (await GitAsync("status", "--porcelain")).Trim().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_branch_that_is_not_there_is_reported_rather_than_read_as_a_conflict()
+    {
+        var merged = await _git.MergeAsync(_repository, "teams/run/nowhere");
+
+        merged.Failed.Should().BeTrue();
+        merged.Error.Should().NotBeNullOrWhiteSpace();
+    }
+}
