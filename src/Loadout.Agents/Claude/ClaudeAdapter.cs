@@ -155,8 +155,40 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             : new Dictionary<string, string>(context.ResolvedEnvironment);
 
         return OperationResult<AgentInvocation>.Ok(
-            new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));
+            new AgentInvocation(
+                descriptor.ExecutablePath,
+                arguments,
+                environment,
+                warnings,
+                context.Headless is null ? null : SessionMarkers));
     }
+
+    /// <summary>
+    /// Variables a running Claude Code session sets for its own children,
+    /// which a node must not inherit.
+    /// </summary>
+    /// <remarks>
+    /// Named one by one rather than by the <c>CLAUDE_CODE_</c> prefix, because
+    /// the prefix also covers things a person may rely on: an OAuth token, a
+    /// provider switch, the configuration directory. These are the ones a
+    /// session started from inside another session was seen to inherit, and a
+    /// child carrying them loses its own transcript and answers to the
+    /// wrong session. A prefix matches its own name exactly and any longer
+    /// name, so each entry below is written in full.
+    /// </remarks>
+    private static readonly IReadOnlyList<string> SessionMarkers =
+    [
+        "CLAUDECODE",
+        "CLAUDE_PID",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_EXECPATH",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_BRIDGE_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+    ];
 
     /// <summary>
     /// Hands Claude the MCP servers the workspace declares for this project.

@@ -132,6 +132,20 @@ public sealed class ClaudeHeadlessInvocationTests
         invocation.Arguments.Should().NotContain("-p");
         invocation.Arguments.Should().NotContain("--strict-mcp-config");
         invocation.Arguments.Should().NotContain("--settings");
+        invocation.RemoveEnvironmentPrefixes.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_node_does_not_inherit_the_markers_of_the_session_it_was_started_from()
+    {
+        var invocation = await BuildAsync(FullHelp, new HeadlessOptions());
+
+        // The markers a session sets for its children, and only those: the
+        // configuration directory and an OAuth token share the prefix and
+        // must reach the node.
+        invocation.RemoveEnvironmentPrefixes.Should().Contain(["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_CHILD_SESSION"]);
+        invocation.RemoveEnvironmentPrefixes.Should().NotContain(p => "CLAUDE_CONFIG_DIR".StartsWith(p, StringComparison.Ordinal));
+        invocation.RemoveEnvironmentPrefixes.Should().NotContain(p => "CLAUDE_CODE_OAUTH_TOKEN".StartsWith(p, StringComparison.Ordinal));
     }
 
     [Fact]

@@ -88,11 +88,18 @@ public sealed record AgentLaunchContext(
 /// that could not be attached. Shown to the user rather than swallowed: an
 /// agent silently starting without its context looks like it worked.
 /// </param>
+/// <param name="RemoveEnvironmentPrefixes">
+/// Variables the child must not inherit, by prefix, or null for none. An
+/// adapter names them because it knows which of its agent's variables mark a
+/// session that is already running: a node started from inside one would
+/// otherwise take those markers as its own and lose its transcript.
+/// </param>
 public sealed record AgentInvocation(
     string Executable,
     IReadOnlyList<string> Arguments,
     IReadOnlyDictionary<string, string> Environment,
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null,
+    IReadOnlyList<string>? RemoveEnvironmentPrefixes = null);
 
 /// <summary>
 /// Adapts one coding agent to the launcher (spec section 30).

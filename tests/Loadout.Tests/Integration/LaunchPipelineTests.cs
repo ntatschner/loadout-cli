@@ -46,6 +46,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     private IProjectService _projects = null!;
     private IPlatformPaths _paths = null!;
     private string _repository = null!;
+    private LaunchLedger _ledger = null!;
+    private SessionRegistry _running = null!;
 
     public LaunchPipelineTests() =>
         _root = Path.Combine(Path.GetTempPath(), "loadout-launch-" + Guid.NewGuid().ToString("N"));
@@ -112,11 +114,18 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
                     Arguments = { "hash-object", "${COMPILED_CONTEXT_FILE}" },
                 },
             },
+
+            // A stand-in Claude Code that speaks stream-json, for the headless
+            // path. Found through the search paths the way a real one would
+            // be on a machine where it is not on PATH.
+            AgentSearchPaths = { await WriteFakeClaudeAsync() },
         };
 
         await configuration.SaveConfigAsync(config);
 
         var agents = new AgentRegistry(resolver, _processes, config);
+        _ledger = new LaunchLedger(_paths, permissions, TimeProvider.System);
+        _running = new SessionRegistry(_paths, permissions, new ProcessInspector(), TimeProvider.System);
 
         _launcher = new AgentLauncher(
             _projects,
@@ -136,8 +145,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             new PreflightService(git, new FakeSecretProvider()),
             new SecurityProfileService(workspace, yaml),
             new McpService(workspace),
-            new LaunchLedger(_paths, permissions, TimeProvider.System),
-            new SessionRegistry(_paths, permissions, new ProcessInspector(), TimeProvider.System),
+            _ledger,
+            _running,
             new PolicyService(workspace, git, _paths, permissions, yaml),
             new Loadout.Tests.Fakes.QuietSpendWatch(),
             new Loadout.Core.Statusline.LoadedSpecialistStore(
@@ -460,5 +469,175 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         result.Succeeded.Should().BeTrue(result.Error);
         result.Value!.Succeeded.Should().BeTrue(
             $"git {string.Join(' ', arguments)} failed: {result.Value.StandardError}");
+    }
+
+    [Fact]
+    public async Task A_headless_launch_holds_the_conversation_and_closes_its_records_when_told()
+    {
+        var since = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, Task: "say pong"),
+            new HeadlessOptions(DisableHooks: false));
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        await using var launch = started.Value!;
+
+        launch.Session.Should().NotBeNull();
+        launch.LaunchId.Should().NotBeNull();
+        launch.Plan.Arguments.Should().ContainInOrder("-p", "--verbose", "--input-format", "stream-json");
+
+        // Registered while it runs, under the ledger's identifier.
+        (await _running.ListAsync()).Should().ContainSingle(s => s.LaunchId == launch.LaunchId);
+
+        var turn = await launch.Session!.TurnAsync("say pong");
+
+        turn.Completed.Should().BeTrue();
+        turn.Text.Should().Be("pong");
+        turn.CostUsd.Should().Be(0.01m);
+        launch.Session.SessionId.Should().Be("fake-1");
+
+        var (exit, killed) = await launch.Session.EndAsync(TimeSpan.FromSeconds(20));
+
+        killed.Should().BeFalse("the stand-in exits when its input closes");
+        exit.Should().Be(0);
+
+        await launch.CompleteAsync(exit);
+
+        var records = await _ledger.ReadAsync(since);
+        var record = records.Value!.Should().ContainSingle(r => r.Id == launch.LaunchId).Subject;
+
+        record.Agent.Should().Be("claude");
+        record.Task.Should().Be("say pong");
+        record.EndedAt.Should().NotBeNull();
+        record.ExitCode.Should().Be(0);
+
+        (await _running.ListAsync()).Should().NotContain(s => s.LaunchId == launch.LaunchId);
+        Directory.Exists(Path.GetDirectoryName(launch.Plan.ContextPath!)).Should().BeFalse(
+            "the runtime directory goes when the records are closed");
+    }
+
+    [Fact]
+    public async Task An_agent_that_cannot_be_driven_is_refused_as_a_node_before_anything_starts()
+    {
+        var since = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true),
+            new HeadlessOptions());
+
+        started.Failed.Should().BeTrue();
+        started.Error.Should().Contain("cannot be driven without a terminal");
+
+        (await _ledger.ReadAsync(since)).Value.Should().BeEmpty("nothing was launched, so nothing is recorded");
+    }
+
+    [Fact]
+    public async Task A_headless_dry_run_shows_the_node_line_and_starts_nothing()
+    {
+        var since = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, DryRun: true),
+            new HeadlessOptions(MaxTurns: 3, BudgetUsd: 0.5m, DisableHooks: false));
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        await using var launch = started.Value!;
+
+        launch.Session.Should().BeNull();
+        launch.LaunchId.Should().BeNull();
+        launch.Plan.Arguments.Should().ContainInOrder("--max-turns", "3", "--max-budget-usd", "0.5");
+        launch.Warnings.Should().Contain("Dry run: nothing was launched.");
+
+        (await _ledger.ReadAsync(since)).Value.Should().BeEmpty();
+        (await _running.ListAsync()).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// Writes a stand-in Claude Code and returns the directory it is in.
+    /// </summary>
+    /// <remarks>
+    /// Answers the two probes the adapter makes, a version and a help text
+    /// carrying every marker the headless path looks for, then waits for one
+    /// message on its input, writes the three events a real session writes
+    /// for a one-word answer, and exits when its input closes. Nothing here
+    /// depends on Claude Code being installed.
+    /// </remarks>
+    private async Task<string> WriteFakeClaudeAsync()
+    {
+        var directory = Path.Combine(_root, "fake-claude");
+        Directory.CreateDirectory(directory);
+
+        const string Help = """
+              --settings <file-or-json>
+              --append-system-prompt-file <file>
+              --mcp-config <configs...>
+              --input-format <format>
+              --output-format <format>
+              --permission-mode <mode>
+              --allowed-tools <tools...>
+              --disallowed-tools <tools...>
+              --permission-prompt-tool <tool>
+              --json-schema <schema>
+              --strict-mcp-config
+            """;
+
+        const string Init = """{"type":"system","subtype":"init","session_id":"fake-1","model":"fake","mcp_servers":[]}""";
+        const string Pong = """{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"pong"}]},"parent_tool_use_id":null}""";
+        const string Result = """{"type":"result","subtype":"success","is_error":false,"num_turns":1,"duration_ms":1,"total_cost_usd":0.01,"usage":{},"session_id":"fake-1"}""";
+
+        if (OperatingSystem.IsWindows())
+        {
+            var script = Path.Combine(directory, "claude.ps1");
+
+            await File.WriteAllTextAsync(script, $$"""
+                if ($args -contains '--version') { 'fake claude 9.9.9'; exit 0 }
+                if ($args -contains '--help') {
+                @'
+                {{Help}}
+                '@
+                exit 0
+                }
+                $null = [Console]::In.ReadLine()
+                [Console]::Out.WriteLine('{{Init}}')
+                [Console]::Out.WriteLine('{{Pong}}')
+                [Console]::Out.WriteLine('{{Result}}')
+                [Console]::Out.Flush()
+                while ($null -ne [Console]::In.ReadLine()) { }
+                exit 0
+                """);
+
+            await File.WriteAllTextAsync(
+                Path.Combine(directory, "claude.cmd"),
+                $"@powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{script}\" %*\r\n");
+        }
+        else
+        {
+            var script = Path.Combine(directory, "claude");
+
+            await File.WriteAllTextAsync(script, $$"""
+                #!/bin/sh
+                case " $* " in
+                  *" --version "*) echo 'fake claude 9.9.9'; exit 0 ;;
+                  *" --help "*) cat <<'HELP'
+                {{Help}}
+                HELP
+                exit 0 ;;
+                esac
+                read -r _first
+                echo '{{Init}}'
+                echo '{{Pong}}'
+                echo '{{Result}}'
+                while read -r _line; do :; done
+                exit 0
+                """.ReplaceLineEndings("\n"));
+
+            File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+
+        return directory;
     }
 }
