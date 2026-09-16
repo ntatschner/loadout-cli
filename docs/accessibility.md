@@ -1,0 +1,158 @@
+# Accessibility
+
+Loadout can be told how you want to be written to and asked. You set it once,
+and it changes three things: how the agent you launch talks to you, what that
+agent draws while it works, and what Loadout itself prints.
+
+```bash
+loadout config set accessibility-preset screen-reader
+```
+
+Nothing is detected. You turn it on, and the first line of output says which
+profile is active, so you can see it took.
+
+## Turning it on
+
+Three places, and the nearest one wins:
+
+1. `loadout team list --accessible` for one command, or
+   `--accessible=dyslexia` to name a profile.
+2. `LOADOUT_ACCESSIBLE=screen-reader` for a shell. `1`, `true` and `yes` mean
+   the screen-reader profile; `0`, `false` and `none` mean off.
+3. `loadout config set accessibility-preset <name>` for good.
+
+`NO_COLOR` is obeyed whatever the profile says, and switches off every escape
+sequence rather than colour alone, because bold is an escape too.
+
+## The presets
+
+A preset is a starting point, not a mode. It sets a bundle of settings, and
+anything you set yourself wins over it — so you can take the dyslexia bundle
+and still ask for the field's own vocabulary.
+
+| Preset | What it sets |
+|---|---|
+| `screen-reader` | No redraws, ASCII glyphs, lists instead of tables, numbered menus, the text launcher, no motion, the terminal bell, one question at a time |
+| `low-vision` | Sixteen colours, reduced motion, bold-only emphasis, a summary first |
+| `colour-blind` | Sixteen colours, and no red-and-green pairs |
+| `dyslexia` | Sentences under twenty words, paragraphs of four, bold-only emphasis, one word per thing, numbered steps, plain language, a summary first |
+| `adhd` | One question at a time with "question 2 of 4", a summary first, concise answers, confirmation before anything irreversible, reduced motion, no redraws |
+| `plain-language` | Plain words, every question explained, one word per thing, and why it is being asked |
+
+The settings are named for what they reduce rather than for a condition. You
+should not have to declare a diagnosis to a configuration file to get shorter
+sentences, and most of these help people who would not claim one.
+
+## What you can change on its own
+
+Every setting is settable by itself. `loadout config list` shows them under
+Accessibility, Writing and Display.
+
+**How a question arrives** — `ask-style` (choices, written or mixed),
+`ask-one-at-a-time`, `ask-why`, `ask-explain` (on-request, always or never),
+`ask-recommend`, `ask-unsure`, `ask-progress`, `ask-before-risky`.
+
+**What the prose looks like** — `write-verbosity` (concise, standard or full),
+`write-technicality` (plain, mixed or technical), `write-summary-first`,
+`write-sentence-words`, `write-paragraph`, `write-steps`, `write-emphasis`,
+`write-same-word`, `write-bionic`.
+
+**What gets drawn** — `show-colour` (full, sixteen or none), `show-colour-safe`,
+`show-glyphs` (unicode or ascii), `show-motion`, `show-redraw`, `show-tables`
+(tables or lists), `show-menus` (arrows or numbered), `show-launcher` (full or
+text), `show-bell`.
+
+## What it changes
+
+### What the agent writes
+
+A section at the end of the compiled context says how you asked to be written
+to: one question per message with a sentence on why, a way out that counts as
+an answer, a recommended option labelled with its downside and never chosen for
+you, the answer in the first sentence, sentences and paragraphs within your
+limits, numbered steps, bold and nothing else.
+
+It applies to what an agent writes and never to what it quotes. A log line, a
+diff or an error is reproduced exactly. And it changes how things are said,
+never what is done: a change is still tested and a failing test still reported
+as failing, with its output.
+
+You can move between the levels mid-session by saying so — "be brief", "say
+more", "less technical", "explain that more simply" — and the agent changes for
+the rest of the session and says that it has.
+
+### What the agent draws
+
+Claude Code is started in its own screen-reader mode where you have asked for
+no redraws, with reduced motion, spinner tips off, and the terminal bell as its
+notification channel where you asked for a bell. Codex has its animations
+switched off; it has no screen-reader mode, and Loadout says so at launch
+rather than leaving you to notice.
+
+Neither agent's theme is touched. Both ship colour-blind-safe themes in a light
+and a dark variant, and which one you want is not knowable from a profile —
+picking one would flip the colours of a terminal you have already set up.
+
+### What Loadout prints
+
+- Colour restricted to the sixteen your own terminal theme can remap, or none.
+- ASCII where you asked for it: no box drawing, no braille, no arrows. An em
+  dash becomes a hyphen, an ellipsis three dots.
+- Tables become one line per value, each carrying its own heading.
+- Menus become numbered lists answered by number, including the ones that take
+  several answers.
+- Spinners and progress bars stop redrawing.
+- The terminal bell rings when an answer is wanted, and at no other time.
+- `loadout` with no arguments opens a text menu of the same commands instead of
+  the full-screen launcher.
+
+## Bionic formatting
+
+`write-bionic` bolds the first half of each word in the agent's own prose. It
+is off by default and offered with its evidence: every controlled study of this
+finds no gain in reading speed or comprehension, and one finds it slower. It is
+here because people preferred styled text even where it did not help them, and
+a preference you can switch off is a fair thing to offer.
+
+It is refused under the screen-reader profile, where bold markup is read aloud
+as emphasis on every word.
+
+## What Loadout does not do
+
+**No dyslexia font.** Every peer-reviewed study of dyslexia-specific fonts finds
+no gain in speed or accuracy, and preference does not predict performance. The
+font is your terminal's to choose in any case.
+
+**No readability score.** A score measures sentence length, not whether anybody
+understood. The limits above are the ones GOV.UK and digital.gov use, and the
+test is people reading it.
+
+**No detection.** Nothing here is turned on by guessing at your needs from your
+machine.
+
+## What has been verified, and what has not
+
+Said plainly, because a claim about accessibility that nobody checked is worse
+than no claim.
+
+**Tested:** that each profile produces the guidance, flags and settings it
+promises; that a build of an agent without a flag says so instead of going
+quiet; that accessible output carries no escape sequences; that menus are
+numbered, bounded and refused when the number is outside the list; that a table
+becomes labelled lines with long values unbroken.
+
+**Not tested with a screen reader.** Nobody on the machine this was built on
+runs one. That NVDA, JAWS, VoiceOver or Orca read this well is drawn from
+published guidance and from what other command-line tools have shipped, not
+from listening to it. If you use one, what you find is worth more than any of
+the above, and an issue saying what you heard is the most useful thing you
+could send.
+
+**Not built yet:** speaking directly to a running screen reader, a self-voicing
+full-screen launcher, and the web dashboard.
+
+## The rest
+
+- [First run and configuration](first-run.md) — where `config.yaml` lives
+- [The launcher](launcher.md) — the full-screen one, and its keys
+- [Commands](commands.md) — everything `loadout` can do

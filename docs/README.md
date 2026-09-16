@@ -12,6 +12,7 @@ is the detail behind it.
 - [First run and configuration](first-run.md) — setup, `config.yaml`, environment and security profiles
 - [Commands](commands.md) — the whole command surface, editors, sessions, MCP servers
 - [The launcher](launcher.md) — the terminal UI, keys and navigation
+- [Accessibility](accessibility.md) — how you are written to and asked, and what was verified
 
 ## Instructions and context
 
