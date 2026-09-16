@@ -41,18 +41,22 @@ public sealed class MemoryReviewCommand : AsyncCommand<MemoryReviewCommand.Setti
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
 
+    private readonly ReadingProfile _reading;
+
     public MemoryReviewCommand(
         IMemoryService memory,
         IProjectService projects,
         IWorkspaceManager workspace,
         IAnsiConsole console,
-        TimeProvider time)
+        TimeProvider time,
+        ReadingProfile reading)
     {
         _memory = memory;
         _projects = projects;
         _workspace = workspace;
         _console = console;
         _time = time;
+        _reading = reading;
     }
 
     public sealed class Settings : GlobalSettings
@@ -178,10 +182,8 @@ public sealed class MemoryReviewCommand : AsyncCommand<MemoryReviewCommand.Setti
                 output.WriteLine($"  {Markup.Escape(Shorten(fact))}");
             }
 
-            var answer = _console.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("  Still true?")
-                    .AddChoices(Keep, Expire, Edit, Stop));
+            var answer = _reading.Ask(
+                _console, "  Still true?", [Keep, Expire, Edit, Stop], option => option);
 
             if (answer == Stop)
             {

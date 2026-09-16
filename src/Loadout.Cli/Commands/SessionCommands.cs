@@ -159,18 +159,22 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
     private readonly ILaunchLedger _ledger;
     private readonly IAnsiConsole _console;
 
+    private readonly ReadingProfile _reading;
+
     public ResumeCommand(
         ISessionHistoryService sessions,
         SessionScope scope,
         IAgentLauncher launcher,
         ILaunchLedger ledger,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        ReadingProfile reading)
     {
         _sessions = sessions;
         _scope = scope;
         _launcher = launcher;
         _ledger = ledger;
         _console = console;
+        _reading = reading;
     }
 
     /// <inheritdoc />
@@ -392,21 +396,18 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
             return null;
         }
 
-        var prompt = new SelectionPrompt<SessionChoice>()
-            .Title("Which session?")
-            .PageSize(15);
-
         // The picker leaves room for the selection marker it draws itself.
         var width = Math.Max(40, _console.Profile.Width - 4);
 
-        prompt.UseConverter(choice => choice.Render(width));
+        var choices = new List<SessionChoice>(sessions.Select(s => new SessionChoice(s)))
+        {
+            SessionChoice.Cancel,
+        };
 
-        prompt.AddChoices(sessions.Select(s => new SessionChoice(s)));
-        prompt.AddChoice(SessionChoice.Cancel);
+        var chosen = _reading.Ask(
+            _console, "Which session?", choices, choice => choice.Render(width), pageSize: 15);
 
-        var chosen = await prompt.ShowAsync(_console, CancellationToken.None).ConfigureAwait(false);
-
-        return chosen.Session;
+        return await Task.FromResult(chosen.Session).ConfigureAwait(false);
     }
 }
 

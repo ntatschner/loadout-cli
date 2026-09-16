@@ -195,12 +195,18 @@ public sealed record AccessibleMode(bool IsOn, string Name, AccessibilitySetting
             console.Pipeline.Attach(new AsciiOnly());
         }
 
-        // What redraws is what Spectre calls interactive: a status that
-        // animates in place, a progress bar that rewrites its own line. That
-        // switch is deliberately not thrown here, because the same capability
-        // is what a selection prompt needs to move its own cursor, and
-        // throwing it would turn every menu into an exception. It comes with
-        // the numbered menus that replace them.
+        if (string.Equals(Profile.Display.Redraw, "never", StringComparison.OrdinalIgnoreCase))
+        {
+            // What redraws is what Spectre calls interactive: a status that
+            // animates in place, a progress bar that rewrites its own line. A
+            // screen reader is read every frame of both.
+            //
+            // Safe to switch off only because the menus are numbered under the
+            // same setting. The capability is also what a selection prompt
+            // needs to move its own cursor, and a profile that had one without
+            // the other would turn every menu into an exception.
+            capabilities.Interactive = false;
+        }
     }
 
     /// <summary>What to say once, so a person can see the profile took.</summary>

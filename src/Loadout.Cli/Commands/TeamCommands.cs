@@ -672,13 +672,16 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
     private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
 
+    private readonly ReadingProfile _reading;
+
     public TeamRunCommand(
         ITeamRunner runner,
         ITeamCatalogue teams,
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
         IProjectService projects,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        ReadingProfile reading)
     {
         _runner = runner;
         _teams = teams;
@@ -686,6 +689,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         _workspace = workspace;
         _projects = projects;
         _console = console;
+        _reading = reading;
     }
 
     public sealed class Settings : TeamSettings
@@ -776,7 +780,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             settings.NoSync,
             settings.Model);
 
-        var console = new TerminalTeamConsole(_console, settings);
+        var console = new TerminalTeamConsole(_console, settings, _reading);
 
         var result = await _runner.RunAsync(request, console, cancellationToken).ConfigureAwait(false);
 
@@ -875,10 +879,13 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         private readonly IAnsiConsole _console;
         private readonly GlobalSettings _settings;
 
-        public TerminalTeamConsole(IAnsiConsole console, GlobalSettings settings)
+        private readonly ReadingProfile _reading;
+
+        public TerminalTeamConsole(IAnsiConsole console, GlobalSettings settings, ReadingProfile reading)
         {
             _console = console;
             _settings = settings;
+            _reading = reading;
         }
 
         public Task<bool> ConfirmAsync(string what, CancellationToken ct = default)
@@ -901,12 +908,11 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
                 return Task.FromResult<string?>(null);
             }
 
-            var prompt = new SelectionPrompt<string>()
-                .Title($"{Markup.Escape(question.Question)} [dim](the lead recommends: {Markup.Escape(question.Recommendation)})[/]")
-                .AddChoices(question.Options)
-                .AddChoices(Stop);
-
-            var chosen = _console.Prompt(prompt);
+            var chosen = _reading.Ask(
+                _console,
+                $"{question.Question} (the lead recommends: {question.Recommendation})",
+                [.. question.Options, Stop],
+                option => option);
 
             return Task.FromResult(chosen == Stop ? null : chosen);
         }

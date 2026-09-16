@@ -157,9 +157,7 @@ public static class Program
     /// already, and this runs on every invocation - including the status line,
     /// which runs on every prompt of every session.
     /// </remarks>
-    private static async Task<AccessibleMode> AccessibleAsync(
-        string[] arguments,
-        IServiceProvider provider)
+    private static AccessibleMode Accessible(string[] arguments, IServiceProvider provider)
     {
         var asked = provider.GetRequiredService<IEnvironmentProvider>()
             .GetVariable(AccessibleMode.Variable);
@@ -177,9 +175,15 @@ public static class Program
 
         if (!typed && string.IsNullOrEmpty(asked))
         {
-            var loaded = await provider.GetRequiredService<Loadout.Core.Configuration.IConfigurationService>()
+            // Blocking on one small local file, in a short-lived process with
+            // no synchronisation context to deadlock against, for the same
+            // reason the agent registry does it: the container has no
+            // asynchronous resolution and this has to be settled before the
+            // first thing is drawn.
+            var loaded = provider.GetRequiredService<Loadout.Core.Configuration.IConfigurationService>()
                 .LoadConfigAsync()
-                .ConfigureAwait(false);
+                .GetAwaiter()
+                .GetResult();
 
             settings = loaded.Value?.Accessibility;
         }
@@ -237,6 +241,13 @@ public static class Program
         services.AddSingleton<ICommandCatalogue>(_ =>
             new CommandCatalogue(arguments => RunParserAsync(registrar, arguments)));
 
+        // Registered rather than resolved and handed round, because the
+        // interactive launcher builds from these same services and a prompt in
+        // there needs the profile as much as a command does.
+        services.AddSingleton(sp => Accessible(launcherArgs, sp));
+        services.AddSingleton(sp => new ReadingProfile(
+            sp.GetRequiredService<AccessibleMode>() is { IsOn: true } on ? on.Profile : null));
+
         // Directories are created before any command runs so no command has to
         // guess whether its storage exists (spec section 16).
         var provider = services.BuildServiceProvider();
@@ -261,10 +272,9 @@ public static class Program
         // How this person asked to be shown things, settled before the first
         // thing is drawn. One call reaches every table, tree and spinner in
         // the application, because it changes the console they all share.
-        var accessible = await AccessibleAsync(launcherArgs, provider).ConfigureAwait(false);
+        var accessible = provider.GetRequiredService<AccessibleMode>();
 
         accessible.Apply(AnsiConsole.Console, Environment.GetEnvironmentVariable("NO_COLOR"));
-        services.AddSingleton(accessible);
 
         if (accessible.IsOn
             && !launcherArgs.Contains("--json", StringComparer.Ordinal)

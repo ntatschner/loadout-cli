@@ -159,15 +159,24 @@ public sealed class AccessibleModeTests
     }
 
     [Fact]
-    public void Menus_still_work_in_accessible_mode()
+    public void A_profile_that_refuses_redraws_stops_the_console_animating()
     {
-        // The capability a selection prompt needs to move its own cursor is
-        // the same one that lets a status animate. Switching it off here would
-        // turn every menu into an exception, so it waits for the numbered
-        // menus that replace them.
+        // Safe only because the menus are numbered under the same setting:
+        // this capability is also what a selection prompt needs to move its
+        // own cursor.
         var console = New(ColorSystem.TrueColor, unicode: true);
 
         AccessibleMode.Resolve(["--accessible"], null, null).Apply(console, noColour: null);
+
+        console.Profile.Capabilities.Interactive.Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_profile_that_says_nothing_about_redraws_leaves_them_alone()
+    {
+        var console = New(ColorSystem.TrueColor, unicode: true);
+
+        AccessibleMode.Resolve(["--accessible=dyslexia"], null, null).Apply(console, noColour: null);
 
         console.Profile.Capabilities.Interactive.Should().BeTrue();
     }
