@@ -278,6 +278,356 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
     }
 }
 
+/// <summary>What the runs on this machine did.</summary>
+[Description("List the team runs on this machine, newest first.")]
+[CommandMeta(CommandCategory.Start, Intent = "team runs history what did the team do")]
+public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
+{
+    private readonly IRunJournal _journal;
+    private readonly IAnsiConsole _console;
+
+    public TeamRunsCommand(IRunJournal journal, IAnsiConsole console)
+    {
+        _journal = journal;
+        _console = console;
+    }
+
+    /// <inheritdoc />
+    protected override Task<int> ExecuteAsync(
+        CommandContext context,
+        GlobalSettings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        var runs = _journal.List()
+            .Select(_journal.Summarise)
+            .Where(result => result.Succeeded)
+            .Select(result => result.Value!)
+            .ToList();
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                runs = runs.Select(run => new
+                {
+                    run = run.RunId,
+                    run.Team,
+                    run.Autonomy,
+                    run.Goal,
+                    ended = run.Ended,
+                    running = run.Running,
+                    cost = run.CostUsd,
+                    run.Rounds,
+                    nodes = run.Nodes.Count,
+                    run.Merged,
+                }),
+            });
+
+            return Task.FromResult(CommandOutput.Success());
+        }
+
+        if (runs.Count == 0)
+        {
+            output.WriteLine("[dim]No team has run on this machine yet.[/]");
+            output.WriteLine("[dim]Start one with:[/] loadout team run <team> \"<goal>\"");
+
+            return Task.FromResult(CommandOutput.Success());
+        }
+
+        foreach (var run in runs)
+        {
+            output.WriteLine(
+                $"{Markup.Escape(run.RunId),-22} {Markup.Escape(run.Team),-20} "
+                + (run.Running ? "[yellow]running[/]" : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
+                + $"  [dim]${run.CostUsd:0.00}[/]");
+
+            if (run.Goal is { Length: > 0 })
+            {
+                output.WriteLine($"  [dim]{Markup.Escape(Shorten(run.Goal))}[/]");
+            }
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine("[dim]One in full with:[/] loadout team status [<run>]");
+
+        return Task.FromResult(CommandOutput.Success());
+    }
+
+    private static string Shorten(string text) => text.Length > 90 ? text[..90] + "…" : text;
+}
+
+/// <summary>Where one run got to.</summary>
+[Description("Show one team run: where each node got to, what it cost, and what it left behind.")]
+[CommandMeta(CommandCategory.Start, Intent = "team status run progress nodes cost what is happening")]
+public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
+{
+    private readonly IRunJournal _journal;
+    private readonly IAnsiConsole _console;
+    private readonly TimeProvider _time;
+
+    public TeamStatusCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time)
+    {
+        _journal = journal;
+        _console = console;
+        _time = time;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandArgument(0, "[RUN]")]
+        [Description("The run, as 'team runs' shows it. The most recent one when omitted.")]
+        public string? Run { get; init; }
+    }
+
+    /// <inheritdoc />
+    protected override Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        var runId = settings.Run ?? _journal.List(1).FirstOrDefault();
+
+        if (runId is null)
+        {
+            return Task.FromResult(output.Fail(
+                "No team has run on this machine yet. Start one with: loadout team run <team> \"<goal>\"",
+                ExitCode.ProjectNotFound));
+        }
+
+        var read = _journal.Summarise(runId);
+
+        if (read.Failed)
+        {
+            return Task.FromResult(output.Fail(read));
+        }
+
+        var run = read.Value!;
+        var quiet = _time.GetUtcNow() - run.LastSeen;
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                run = run.RunId,
+                run.Team,
+                run.Goal,
+                run.Autonomy,
+                run.Directory,
+                started = run.Started,
+                finished = run.Finished,
+                ended = run.Ended,
+                running = run.Running,
+                quietSeconds = (int)quiet.TotalSeconds,
+                cost = run.CostUsd,
+                run.Rounds,
+                nodes = run.Nodes.Select(node => new
+                {
+                    node.Node,
+                    node.Role,
+                    node.State,
+                    node.Turns,
+                    cost = node.CostUsd,
+                    node.Branch,
+                    node.Denials,
+                    lastSeen = node.LastSeen,
+                }),
+                run.Branches,
+                run.Merged,
+            });
+
+            return Task.FromResult(CommandOutput.Success());
+        }
+
+        output.WriteLine(
+            $"[bold]{Markup.Escape(run.RunId)}[/]  {Markup.Escape(run.Team)}  "
+            + $"{Markup.Escape(run.Autonomy)}  "
+            + (run.Running
+                ? $"[yellow]running[/]  [dim]{Elapsed(quiet)} since it last said anything[/]"
+                : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
+            + $"  [dim]{run.Rounds} round(s), ${run.CostUsd:0.00}[/]");
+
+        if (run.Goal is { Length: > 0 })
+        {
+            output.WriteLine($"  {Markup.Escape(run.Goal)}");
+        }
+
+        output.WriteBlankLine();
+
+        foreach (var node in run.Nodes)
+        {
+            output.WriteLine(
+                $"  {Markup.Escape(node.Node),-16} {Markup.Escape(node.Role),-22} "
+                + $"{State(node.State),-18} [dim]{node.Turns,3} exchange(s)  ${node.CostUsd,6:0.00}[/]"
+                + (node.Denials > 0 ? $"  [yellow]{node.Denials} denial(s)[/]" : string.Empty));
+
+            if (node.Branch is { Length: > 0 } branch)
+            {
+                var taken = run.Merged.Contains(branch, StringComparer.Ordinal);
+
+                output.WriteLine(
+                    $"  {string.Empty,-16} [dim]{Markup.Escape(branch)}[/]"
+                    + (taken ? "  [green]merged[/]" : "  [dim]not merged[/]"));
+            }
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine($"[dim]journal: {Markup.Escape(Path.Combine(run.Directory, "journal.jsonl"))}[/]");
+        output.WriteLine($"[dim]Read it with:[/] loadout team log {Markup.Escape(run.RunId)}");
+
+        return Task.FromResult(CommandOutput.Success());
+    }
+
+    private static string State(string state) => state switch
+    {
+        "working" => "[yellow]working[/]",
+        "done" => "[green]done[/]",
+        "failed" => "[red]failed[/]",
+        "blocked" => "[yellow]blocked[/]",
+        "needs-decision" => "[yellow]needs a decision[/]",
+        _ => Markup.Escape(state),
+    };
+
+    private static string Elapsed(TimeSpan span) => span.TotalMinutes < 1
+        ? $"{(int)span.TotalSeconds}s"
+        : span.TotalHours < 1 ? $"{(int)span.TotalMinutes}m" : $"{(int)span.TotalHours}h {span.Minutes}m";
+}
+
+/// <summary>Everything a run wrote down, as it wrote it.</summary>
+[Description("Read a team run's journal, one line per thing that happened. --follow watches a run that is still going.")]
+[CommandMeta(CommandCategory.Start, Intent = "team log journal follow tail watch run")]
+public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
+{
+    /// <summary>How long to wait before looking at the journal again while following.</summary>
+    /// <remarks>
+    /// A node's turn takes tens of seconds, so nothing is missed by waiting
+    /// half of one, and a tighter loop would spend a core on an idle file.
+    /// </remarks>
+    private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(500);
+
+    private readonly IRunJournal _journal;
+    private readonly IAnsiConsole _console;
+
+    public TeamLogCommand(IRunJournal journal, IAnsiConsole console)
+    {
+        _journal = journal;
+        _console = console;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandArgument(0, "[RUN]")]
+        [Description("The run, as 'team runs' shows it. The most recent one when omitted.")]
+        public string? Run { get; init; }
+
+        [CommandOption("--follow")]
+        [Description("Keep reading as the run writes, until it finishes.")]
+        public bool Follow { get; init; }
+    }
+
+    /// <inheritdoc />
+    protected override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        var runId = settings.Run ?? _journal.List(1).FirstOrDefault();
+
+        if (runId is null)
+        {
+            return output.Fail(
+                "No team has run on this machine yet. Start one with: loadout team run <team> \"<goal>\"",
+                ExitCode.ProjectNotFound);
+        }
+
+        var read = _journal.Read(runId);
+
+        if (read.Failed)
+        {
+            return output.Fail(read);
+        }
+
+        if (output.IsJson)
+        {
+            // Read once, whatever --follow says: a document that never ends
+            // is not one anything can parse.
+            output.WriteJson(new
+            {
+                run = runId,
+                events = read.Value!.Select(entry => new
+                {
+                    at = entry.At,
+                    node = entry.Node,
+                    kind = entry.Kind,
+                    line = RunJournal.Describe(entry),
+                }),
+            });
+
+            return CommandOutput.Success();
+        }
+
+        var seen = 0;
+
+        foreach (var entry in read.Value!)
+        {
+            output.WriteLine(Markup.Escape(RunJournal.Describe(entry)));
+            seen++;
+        }
+
+        if (!settings.Follow || read.Value!.Any(entry => entry.Kind == "run.finished"))
+        {
+            return CommandOutput.Success();
+        }
+
+        if (!settings.AllowsPrompting)
+        {
+            // Following is watching, and nobody is. The lines above are the
+            // whole answer rather than a wait nothing would end.
+            output.WriteLine("[dim]Not following: there is nobody here to watch it.[/]");
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine("[dim]Following. Ctrl+C to stop.[/]");
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            await Task.Delay(Interval, cancellationToken).ConfigureAwait(false);
+
+            var again = _journal.Read(runId);
+
+            if (again.Failed)
+            {
+                continue;
+            }
+
+            foreach (var entry in again.Value!.Skip(seen))
+            {
+                output.WriteLine(Markup.Escape(RunJournal.Describe(entry)));
+                seen++;
+
+                if (entry.Kind == "run.finished")
+                {
+                    return CommandOutput.Success();
+                }
+            }
+        }
+
+        return CommandOutput.Success();
+    }
+}
+
 /// <summary>Runs a team against a project.</summary>
 /// <remarks>
 /// The only place a run starts. The launcher's screen and the dashboard,
