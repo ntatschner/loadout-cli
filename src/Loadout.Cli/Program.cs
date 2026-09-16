@@ -100,6 +100,25 @@ public static class Program
             Catalogue.Record($"{_name} {name}", typeof(TCommand));
             _inner.AddCommand<TCommand>(name);
         }
+
+        /// <summary>
+        /// A branch inside this one, recorded under its full path.
+        /// </summary>
+        /// <remarks>
+        /// Two levels are not new - the catalogue and the documentation check
+        /// have both allowed for three words since they were written - but
+        /// nothing had needed one until a family of commands arrived that
+        /// belongs under a family: 'team schedule add' is a schedule command
+        /// of the team's, not a team command called schedule-add.
+        /// </remarks>
+        internal void AddBranch(string name, Action<Branch> configure)
+        {
+            ArgumentNullException.ThrowIfNull(configure);
+
+            _inner.AddBranch<CommandSettings>(
+                name,
+                branch => configure(new Branch(branch, $"{_name} {name}")));
+        }
     }
 
     /// <summary>
@@ -622,6 +641,13 @@ public static class Program
             team.AddCommand<TeamStatusCommand>("status");
             team.AddCommand<TeamLogCommand>("log");
             team.AddCommand<TeamDashboardCommand>("dashboard");
+
+            team.AddBranch("schedule", schedule =>
+            {
+                schedule.AddCommand<TeamScheduleAddCommand>("add");
+                schedule.AddCommand<TeamScheduleListCommand>("list");
+                schedule.AddCommand<TeamScheduleRemoveCommand>("remove");
+            });
         });
 
         TopBranch(config, "spend", spend =>
