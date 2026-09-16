@@ -148,6 +148,46 @@ public static class Program
     internal static IReadOnlySet<string> CommandNames() => Names.Value;
 
     /// <summary>
+    /// What the person asked for, from the nearest place they said it.
+    /// </summary>
+    /// <remarks>
+    /// The configuration is read only when neither the flag nor the
+    /// environment answered, and only when somebody is looking at a terminal.
+    /// Output going into a pipe has no colour and no cursor to control
+    /// already, and this runs on every invocation - including the status line,
+    /// which runs on every prompt of every session.
+    /// </remarks>
+    private static async Task<AccessibleMode> AccessibleAsync(
+        string[] arguments,
+        IServiceProvider provider)
+    {
+        var asked = provider.GetRequiredService<IEnvironmentProvider>()
+            .GetVariable(AccessibleMode.Variable);
+
+        var typed = arguments.Any(a =>
+            string.Equals(a, AccessibleMode.Flag, StringComparison.Ordinal)
+            || a.StartsWith(AccessibleMode.Flag + "=", StringComparison.Ordinal));
+
+        if (!typed && string.IsNullOrEmpty(asked) && Console.IsOutputRedirected)
+        {
+            return AccessibleMode.Off;
+        }
+
+        Models.Configuration.AccessibilitySettings? settings = null;
+
+        if (!typed && string.IsNullOrEmpty(asked))
+        {
+            var loaded = await provider.GetRequiredService<Loadout.Core.Configuration.IConfigurationService>()
+                .LoadConfigAsync()
+                .ConfigureAwait(false);
+
+            settings = loaded.Value?.Accessibility;
+        }
+
+        return AccessibleMode.Resolve(arguments, asked, settings);
+    }
+
+    /// <summary>
     /// How long a command is given to notice it has been interrupted before it
     /// is ended for it.
     /// </summary>
@@ -216,6 +256,28 @@ public static class Program
                 + $"or '{paths.Paths.State}': {ex.Message}");
 
             return (int)ExitCode.ConfigurationInvalid;
+        }
+
+        // How this person asked to be shown things, settled before the first
+        // thing is drawn. One call reaches every table, tree and spinner in
+        // the application, because it changes the console they all share.
+        var accessible = await AccessibleAsync(launcherArgs, provider).ConfigureAwait(false);
+
+        accessible.Apply(AnsiConsole.Console, Environment.GetEnvironmentVariable("NO_COLOR"));
+        services.AddSingleton(accessible);
+
+        if (accessible.IsOn
+            && !launcherArgs.Contains("--json", StringComparer.Ordinal)
+            && !launcherArgs.Contains("--quiet", StringComparer.Ordinal)
+            && !launcherArgs.Contains("-q", StringComparer.Ordinal))
+        {
+            // Said once, first, so somebody can tell the setting took. A
+            // profile that is on and invisible is indistinguishable from one
+            // that was ignored.
+            // Written straight out rather than through the console, which
+            // would wrap it at the terminal width and hand a screen reader
+            // half a sentence at a time.
+            Console.Out.WriteLine(accessible.Line);
         }
 
         // No arguments means the interactive launcher, which is the same

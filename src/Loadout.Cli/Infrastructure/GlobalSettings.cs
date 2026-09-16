@@ -51,6 +51,20 @@ public class GlobalSettings : CommandSettings
     [Description("Show what would happen and change nothing.")]
     public bool DryRun { get; init; }
 
+    /// <summary>
+    /// Write for somebody who asked for it to be written differently.
+    /// </summary>
+    /// <remarks>
+    /// Declared here so the parser accepts it and the help lists it. What it
+    /// changes is the console itself, which has to be right before the first
+    /// thing is drawn on it, so the value is also read straight from the
+    /// command line before the parser runs. The two agree on the spelling and
+    /// nothing else depends on this property.
+    /// </remarks>
+    [CommandOption("--accessible [PRESET]")]
+    [Description("Write output for a named accessibility profile: screen-reader, low-vision, colour-blind, dyslexia, adhd or plain-language.")]
+    public Spectre.Console.Cli.FlagValue<string> Accessible { get; init; } = new();
+
     [CommandOption("--non-interactive")]
     [Description("Never prompt. Fails instead of asking a question.")]
     public bool NonInteractive { get; init; }
