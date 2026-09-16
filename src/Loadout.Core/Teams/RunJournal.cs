@@ -36,6 +36,12 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 /// <param name="Branch">The branch it worked on, when it had one of its own.</param>
 /// <param name="Decision">The one word it handed back, when its role hands one back.</param>
 /// <param name="Denials">Tool calls its own permission rules refused.</param>
+/// <param name="Started">When it was launched, for how long it has been at it.</param>
+/// <param name="Doing">
+/// The last thing it said it was doing. Emptied once it reports, because a
+/// node that has answered is not still doing the last thing anybody saw, and
+/// leaving it there is how a finished run looks busy.
+/// </param>
 public sealed record RunNode(
     string Node,
     string Role,
@@ -45,7 +51,14 @@ public sealed record RunNode(
     DateTimeOffset LastSeen,
     string? Branch = null,
     string? Decision = null,
-    int Denials = 0);
+    int Denials = 0,
+    DateTimeOffset? Started = null,
+    string? Doing = null)
+{
+    /// <summary>How long it has been going, or how long it took.</summary>
+    public TimeSpan? Took =>
+        Started is { } began && LastSeen > began ? LastSeen - began : null;
+}
 
 /// <summary>A run, read back from what it wrote down.</summary>
 public sealed record RunSummary(
@@ -61,7 +74,8 @@ public sealed record RunSummary(
     int Rounds,
     IReadOnlyList<RunNode> Nodes,
     IReadOnlyList<string> Merged,
-    IReadOnlyList<string> Branches)
+    IReadOnlyList<string> Branches,
+    int RoundLimit = 0)
 {
     /// <summary>Whether the run is still going, as far as its journal knows.</summary>
     /// <remarks>
@@ -74,6 +88,40 @@ public sealed record RunSummary(
     /// <summary>When the run last wrote anything at all.</summary>
     public DateTimeOffset LastSeen =>
         Nodes.Count == 0 ? Started : Nodes.Max(node => node.LastSeen) > Started ? Nodes.Max(node => node.LastSeen) : Started;
+
+    /// <summary>How long the run has been going, or how long it took.</summary>
+    public TimeSpan Elapsed => (Finished ?? LastSeen) - Started;
+
+    /// <summary>
+    /// The longest this run should still take, or null when there is nothing
+    /// to base it on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A ceiling, not a prediction, and the difference matters enough to be
+    /// the reason this is shaped the way it is. What a lead will ask for next
+    /// is not known to anybody, so the only defensible arithmetic is: this
+    /// run has taken this long for the rounds it has used, and it may use its
+    /// remaining rounds. Whoever shows this must say which of the two it is.
+    /// </para>
+    /// <para>
+    /// Null until a round has finished, because an estimate from no samples
+    /// is a number with nothing behind it, and a finished run has nothing
+    /// left to estimate.
+    /// </para>
+    /// </remarks>
+    public TimeSpan? AtMostRemaining
+    {
+        get
+        {
+            if (!Running || Rounds <= 0 || RoundLimit <= Rounds)
+            {
+                return null;
+            }
+
+            return Elapsed / Rounds * (RoundLimit - Rounds);
+        }
+    }
 }
 
 /// <summary>Reads what a run wrote down.</summary>
@@ -232,6 +280,7 @@ public sealed class RunJournal : IRunJournal
         string? ended = null;
         var cost = 0m;
         var rounds = 0;
+        var limit = 0;
         var merged = new List<string>();
 
         // Insertion order, because that is the order the run briefed them
@@ -253,7 +302,16 @@ public sealed class RunJournal : IRunJournal
                     team = entry.Text("team") ?? team;
                     goal = entry.Text("goal") ?? goal;
                     autonomy = entry.Text("autonomy") ?? autonomy;
+                    limit = (int)(entry.Number("rounds") ?? limit);
                     started = entry.At;
+                    break;
+
+                case "round.started":
+                    // A run still going has no ending to count rounds from,
+                    // and how far through it is is the thing somebody
+                    // watching most wants.
+                    rounds = (int)(entry.Number("round") ?? rounds + 1);
+                    limit = (int)(entry.Number("of") ?? limit);
                     break;
 
                 case "run.finished":
@@ -287,8 +345,13 @@ public sealed class RunJournal : IRunJournal
                         Branch = entry.Text("worktree") ?? node.Branch,
                         State = "working",
                         LastSeen = entry.At,
+                        Started = node.Started ?? entry.At,
                     });
 
+                    break;
+
+                case "node.doing" when entry.Node is { Length: > 0 } busy:
+                    Set(busy, node => node with { Doing = entry.Text("doing"), LastSeen = entry.At });
                     break;
 
                 case "node.turn" when entry.Node is { Length: > 0 } turned:
@@ -307,12 +370,13 @@ public sealed class RunJournal : IRunJournal
                     {
                         State = entry.Text("status") ?? node.State,
                         LastSeen = entry.At,
+                        Doing = null,
                     });
 
                     break;
 
                 case "node.ended" when entry.Node is { Length: > 0 } finishedNode:
-                    Set(finishedNode, node => node with { LastSeen = entry.At });
+                    Set(finishedNode, node => node with { LastSeen = entry.At, Doing = null });
                     break;
 
                 case "merge.done" when entry.Text("branch") is { Length: > 0 } branch:
@@ -342,7 +406,8 @@ public sealed class RunJournal : IRunJournal
             rounds,
             nodes.Values.ToList(),
             merged,
-            nodes.Values.Where(node => node.Branch is { Length: > 0 }).Select(node => node.Branch!).ToList());
+            nodes.Values.Where(node => node.Branch is { Length: > 0 }).Select(node => node.Branch!).ToList(),
+            limit);
     }
 
     /// <summary>One event as a line somebody can read.</summary>
@@ -356,6 +421,8 @@ public sealed class RunJournal : IRunJournal
         {
             "run.started" => $"started {entry.Text("team")}, {entry.Text("autonomy")}: {entry.Text("goal")}",
             "run.finished" => $"finished: {entry.Text("ended")}",
+            "round.started" => $"round {entry.Number("round")} of {entry.Number("of")}",
+            "node.doing" => entry.Text("doing") ?? "working",
             "node.launched" => $"launched as {entry.Text("role")}"
                 + (entry.Text("worktree") is { Length: > 0 } tree ? $" on {tree}" : string.Empty),
             "node.turn" => $"turn {entry.Number("attempt")}: {entry.Number("turns")} exchange(s), "

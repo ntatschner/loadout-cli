@@ -130,6 +130,10 @@ public sealed class TeamRunnerTests : IDisposable
         """{"type":"result","subtype":"success","is_error":false,"num_turns":1,"duration_ms":5,"usage":{},"total_cost_usd":"""
         + cumulativeCost.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}";
 
+    /// <summary>A node calling a tool, as the agent reports it while the turn runs.</summary>
+    private static string Using(string tool, string inputJson) =>
+        $$"""{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"{{tool}}","input":{{inputJson}}}]},"parent_tool_use_id":null}""";
+
     private static ReportRequest AskImplementer() =>
         new("implementer", "Add --since to loadout usage; a test fails without it and passes with it.", DeliverableKind.Commit, ["plan:none"]);
 
@@ -298,6 +302,48 @@ public sealed class TeamRunnerTests : IDisposable
         (await RunAsync(autonomy: "autonomous")).Value!.Ended.Should().Be("done");
 
         _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **yes**");
+    }
+
+    [Fact]
+    public async Task A_node_says_what_it_is_doing_while_the_turn_is_still_running()
+    {
+        // Before this, a turn that ran for minutes wrote nothing until it
+        // was over, so anybody watching saw "working" and no more.
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Using("Read", """{"file_path":"docs/commands.md"}"""),
+            Using("Bash", """{"command":"dotnet test"}"""),
+            Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        var doing = (await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl")))
+            .Where(line => line.Contains("\"node.doing\"", StringComparison.Ordinal))
+            .ToList();
+
+        doing.Should().ContainSingle(
+            "an agent writes hundreds of events in a turn, and a line for each would bury the record")
+            .Which.Should().Contain("Read docs/commands.md");
+    }
+
+    [Fact]
+    public async Task What_a_node_is_doing_names_the_tool_and_never_the_call()
+    {
+        // A tool call carries file contents and command text. The record is
+        // shared and kept, so it gets the name and the target and no more.
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Using("Write", """{"file_path":"notes.md","content":"the whole file, which does not belong in the record"}"""),
+            Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        var journal = await File.ReadAllTextAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain("Write notes.md");
+        journal.Should().NotContain("does not belong in the record");
     }
 
     [Fact]

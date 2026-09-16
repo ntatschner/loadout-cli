@@ -41,8 +41,22 @@ public sealed class RunJournalTests
     private const string Finished =
         """{"at":"2026-09-15T22:58:03+00:00","run":"r","node":null,"kind":"run.finished","data":{"ended":"done","cost":0.2503,"rounds":5,"merged":["teams/r/implementer-1"]}}""";
 
+    private const string Round =
+        """{"at":"2026-09-15T22:54:22+00:00","run":"r","node":null,"kind":"round.started","data":{"round":2,"of":5}}""";
+
+    private static DateTimeOffset When(string time) =>
+        DateTimeOffset.Parse($"2026-09-15T{time}+00:00", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <remarks>
+    /// Sorted by time, because a journal is appended to as things happen and
+    /// is therefore always in that order. A test that handed the fold events
+    /// out of order would be testing something no run can produce.
+    /// </remarks>
     private static RunSummary Fold(params string[] extra) =>
-        RunJournal.Fold(Run, "C:/runs/" + Run, [.. Lines.Concat(extra).Select(RunJournal.Parse).Where(e => e is not null)!]);
+        RunJournal.Fold(Run, "C:/runs/" + Run, [.. Lines.Concat(extra)
+            .Select(RunJournal.Parse)
+            .Where(e => e is not null)
+            .OrderBy(e => e!.At)!]);
 
     [Fact]
     public void A_finished_run_reads_back_as_what_each_node_did()
@@ -125,6 +139,70 @@ public sealed class RunJournalTests
         described[5].Should().Contain("5 exchange(s)").And.Contain("3 denial(s)");
         described[^2].Should().Contain("merged teams/r/implementer-1 into main");
         described[^1].Should().Contain("finished: done");
+    }
+
+    [Fact]
+    public void A_node_still_working_says_what_it_is_doing_and_how_long_it_has_been_at_it()
+    {
+        // The gap this fills: a turn runs for minutes and the run said
+        // nothing in between, so watching one showed a node "working" and
+        // never what on.
+        var doing = """{"at":"2026-09-15T22:56:00+00:00","run":"r","node":"lead","kind":"node.doing","data":{"doing":"Read docs/commands.md"}}""";
+
+        var lead = Fold(doing).Nodes[0];
+
+        lead.Doing.Should().Be("Read docs/commands.md");
+        lead.Started.Should().Be(When("22:54:23"));
+        lead.Took.Should().Be(TimeSpan.FromSeconds(97), "launched at 22:54:23, last heard from at 22:56:00");
+    }
+
+    [Fact]
+    public void A_node_that_has_reported_is_no_longer_doing_anything()
+    {
+        // Left standing, the last thing anybody saw makes a finished run
+        // look busy for ever. The lead here reports and does not end, so
+        // this is the report clearing it and nothing else.
+        var doing = """{"at":"2026-09-15T22:54:30+00:00","run":"r","node":"lead","kind":"node.doing","data":{"doing":"Read docs/commands.md"}}""";
+
+        Fold(doing).Nodes[0].Doing.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_node_that_has_gone_is_no_longer_doing_anything_either()
+    {
+        // Between its report and its exit, which is where the implementer
+        // was when the coordinator last heard from it.
+        var doing = """{"at":"2026-09-15T22:55:40.5+00:00","run":"r","node":"implementer/1","kind":"node.doing","data":{"doing":"Bash git commit"}}""";
+
+        Fold(doing).Nodes[1].Doing.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_run_still_going_knows_which_round_it_is_on()
+    {
+        var run = Fold(Round);
+
+        run.Rounds.Should().Be(2, "nothing has written the ending's count yet");
+        run.RoundLimit.Should().Be(5);
+    }
+
+    [Fact]
+    public void What_is_left_is_a_ceiling_from_the_rounds_it_has_used()
+    {
+        // Two rounds in 81 seconds, three rounds left. A prediction would be
+        // a different claim and the journal cannot support one: what the
+        // lead asks for next is not known to anybody.
+        var run = Fold(Round);
+
+        run.Elapsed.Should().Be(TimeSpan.FromSeconds(81));
+        run.AtMostRemaining.Should().Be(TimeSpan.FromSeconds(81) / 2 * 3);
+    }
+
+    [Fact]
+    public void A_run_with_nothing_to_go_on_estimates_nothing()
+    {
+        Fold().AtMostRemaining.Should().BeNull("no round has been recorded, so there is no rate");
+        Fold(Round, Finished).AtMostRemaining.Should().BeNull("a run that has ended has nothing left to take");
     }
 
     [Fact]

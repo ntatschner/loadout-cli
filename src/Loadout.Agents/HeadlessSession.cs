@@ -68,14 +68,25 @@ public sealed class HeadlessSession : IAsyncDisposable
     /// Sends one message and reads until the agent reports the turn over, or
     /// its output ends.
     /// </summary>
-    public async Task<HeadlessTurn> TurnAsync(string message, CancellationToken ct = default)
+    /// <param name="message">What to say to the agent.</param>
+    /// <param name="watching">
+    /// Called with each event as it arrives, for anything that wants to know
+    /// what the agent is doing before the turn is over. A turn can run for
+    /// minutes, and until this existed the only thing anybody could see was
+    /// the summary afterwards.
+    /// </param>
+    /// <param name="ct">Cancels the turn.</param>
+    public async Task<HeadlessTurn> TurnAsync(
+        string message,
+        Func<HeadlessEvent, CancellationToken, Task>? watching = null,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         await _process.Input.WriteLineAsync(_protocol.EncodeUserMessage(message).AsMemory(), ct).ConfigureAwait(false);
         await _process.Input.FlushAsync(ct).ConfigureAwait(false);
 
-        return await ReadTurnAsync(ct).ConfigureAwait(false);
+        return await ReadTurnAsync(watching, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -83,7 +94,11 @@ public sealed class HeadlessSession : IAsyncDisposable
     /// turn the agent started on its own, or the tail of one after a
     /// message was sent another way.
     /// </summary>
-    public async Task<HeadlessTurn> ReadTurnAsync(CancellationToken ct = default)
+    /// <param name="watching">Called with each event as it arrives, as in <see cref="TurnAsync"/>.</param>
+    /// <param name="ct">Cancels the read.</param>
+    public async Task<HeadlessTurn> ReadTurnAsync(
+        Func<HeadlessEvent, CancellationToken, Task>? watching = null,
+        CancellationToken ct = default)
     {
         var events = new List<HeadlessEvent>();
         HeadlessResult? result = null;
@@ -114,6 +129,15 @@ public sealed class HeadlessSession : IAsyncDisposable
                     case HeadlessResult finished:
                         result = finished;
                         break;
+                }
+
+                if (watching is not null)
+                {
+                    // Awaited rather than left running, so the run's record
+                    // stays in the order things happened. Whoever is watching
+                    // is expected to be quick, and to decide for itself how
+                    // much of this is worth writing down.
+                    await watching(evt, ct).ConfigureAwait(false);
                 }
             }
         }

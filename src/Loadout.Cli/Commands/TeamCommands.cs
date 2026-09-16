@@ -428,6 +428,9 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 quietSeconds = (int)quiet.TotalSeconds,
                 cost = run.CostUsd,
                 run.Rounds,
+                roundLimit = run.RoundLimit,
+                elapsedSeconds = (int)run.Elapsed.TotalSeconds,
+                atMostRemainingSeconds = run.AtMostRemaining is { } remaining ? (int)remaining.TotalSeconds : (int?)null,
                 nodes = run.Nodes.Select(node => new
                 {
                     node.Node,
@@ -437,6 +440,9 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     cost = node.CostUsd,
                     node.Branch,
                     node.Denials,
+                    node.Doing,
+                    startedAt = node.Started,
+                    tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
                     lastSeen = node.LastSeen,
                 }),
                 run.Branches,
@@ -452,11 +458,21 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             + (run.Running
                 ? $"[yellow]running[/]  [dim]{Elapsed(quiet)} since it last said anything[/]"
                 : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
-            + $"  [dim]{run.Rounds} round(s), ${run.CostUsd:0.00}[/]");
+            + $"  [dim]{Rounds(run)}, {Elapsed(run.Elapsed)} so far, ${run.CostUsd:0.00}[/]");
 
         if (run.Goal is { Length: > 0 })
         {
             output.WriteLine($"  {Markup.Escape(run.Goal)}");
+        }
+
+        if (run.AtMostRemaining is { } left)
+        {
+            // A ceiling, said as one. At this rate and using every round it
+            // has left is the only claim the journal supports, and a bare
+            // "about 6m" would be read as a prediction.
+            output.WriteLine(
+                $"  [dim]at this rate, up to {Elapsed(left)} more if it uses all "
+                + $"{run.RoundLimit} rounds[/]");
         }
 
         output.WriteBlankLine();
@@ -466,7 +482,13 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             output.WriteLine(
                 $"  {Markup.Escape(node.Node),-16} {Markup.Escape(node.Role),-22} "
                 + $"{State(node.State),-18} [dim]{node.Turns,3} exchange(s)  ${node.CostUsd,6:0.00}[/]"
+                + (node.Took is { } took ? $"  [dim]{Elapsed(took)}[/]" : string.Empty)
                 + (node.Denials > 0 ? $"  [yellow]{node.Denials} denial(s)[/]" : string.Empty));
+
+            if (node.Doing is { Length: > 0 } doing)
+            {
+                output.WriteLine($"  {string.Empty,-16} [dim]{Markup.Escape(doing)}[/]");
+            }
 
             if (node.Branch is { Length: > 0 } branch)
             {
@@ -494,6 +516,10 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         "needs-decision" => "[yellow]needs a decision[/]",
         _ => Markup.Escape(state),
     };
+
+    private static string Rounds(RunSummary run) => run.RoundLimit > 0
+        ? $"round {run.Rounds} of {run.RoundLimit}"
+        : $"{run.Rounds} round(s)";
 
     private static string Elapsed(TimeSpan span) => span.TotalMinutes < 1
         ? $"{(int)span.TotalSeconds}s"

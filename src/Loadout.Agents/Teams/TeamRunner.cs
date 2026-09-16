@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Loadout.Core.Instructions;
+using Loadout.Core.Security;
 using Loadout.Core.Teams;
 using Loadout.Models;
 using Loadout.Models.Agents;
@@ -240,7 +241,7 @@ public sealed class TeamRunner : ITeamRunner
 
         var journal = new Journal(Path.Combine(directory, "journal.jsonl"), runId, _time);
 
-        await journal.WriteAsync("run.started", null, new { team = team.Name, goal = request.Goal, autonomy }, ct)
+        await journal.WriteAsync("run.started", null, new { team = team.Name, goal = request.Goal, autonomy, rounds = request.MaxRounds }, ct)
             .ConfigureAwait(false);
 
         if (!await GateAsync(autonomy, console, $"Brief the lead ({leadNode.Role}) with the goal", ct).ConfigureAwait(false))
@@ -288,7 +289,12 @@ public sealed class TeamRunner : ITeamRunner
             {
                 rounds++;
 
-                var turn = await NodeTurnAsync(lead, leadBrief, prompt, journal, ct).ConfigureAwait(false);
+                // Written as it starts rather than counted at the end, so a
+                // run still going can be told how far through it is.
+                await journal.WriteAsync("round.started", null, new { round = rounds, of = request.MaxRounds }, ct)
+                    .ConfigureAwait(false);
+
+                var turn = await NodeTurnAsync(lead, leadBrief, prompt, journal, _time, ct).ConfigureAwait(false);
                 var report = turn.Report;
                 cost += turn.Cost;
 
@@ -831,7 +837,7 @@ public sealed class TeamRunner : ITeamRunner
                 + "A branch the merge gate takes is cleared away with its tree; one it does not is left for you.");
         }
 
-        var turn = await NodeTurnAsync(launch, brief, Render(brief), journal, ct).ConfigureAwait(false);
+        var turn = await NodeTurnAsync(launch, brief, Render(brief), journal, _time, ct).ConfigureAwait(false);
 
         var (exit, killed) = await launch.Session!.EndAsync(EndGrace, CancellationToken.None).ConfigureAwait(false);
         var stderr = Tail(launch.Session.StandardError);
@@ -888,15 +894,17 @@ public sealed class TeamRunner : ITeamRunner
         Brief brief,
         string prompt,
         Journal journal,
+        TimeProvider time,
         CancellationToken ct)
     {
         var session = launch.Session!;
         var cost = 0m;
         var said = string.Empty;
+        var watching = new Progress(journal, brief.Node, time);
 
         for (var attempt = 1; attempt <= 2; attempt++)
         {
-            var turn = await session.TurnAsync(prompt, ct).ConfigureAwait(false);
+            var turn = await session.TurnAsync(prompt, watching.SawAsync, ct).ConfigureAwait(false);
             cost += turn.CostUsd;
 
             if (Tidy(turn.Text) is { Length: > 0 } text)
@@ -1258,6 +1266,137 @@ public sealed class TeamRunner : ITeamRunner
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // The journal is the record; a document beside it is a convenience.
+        }
+    }
+
+    /// <summary>
+    /// Turns what a node is doing into occasional journal lines.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A node's turn can run for minutes, and until this existed the run said
+    /// nothing at all in between: `team status` could say a node was working
+    /// and never what on, which is the difference between a progress report
+    /// and a spinner.
+    /// </para>
+    /// <para>
+    /// Throttled on purpose. An agent writes hundreds of events in a turn and
+    /// a line for each would bury the record it shares with everything else
+    /// that happened. One line when something starts, and one every few
+    /// seconds after that, is what a person reading along can use.
+    /// </para>
+    /// <para>
+    /// What it writes is a tool's name and, where the tool has one, the thing
+    /// it is pointed at, redacted and cut short. Never the call's arguments,
+    /// which carry file contents, and never the agent's own prose beyond its
+    /// first line.
+    /// </para>
+    /// </remarks>
+    private sealed class Progress
+    {
+        private static readonly TimeSpan Quiet = TimeSpan.FromSeconds(5);
+
+        private readonly Journal _journal;
+        private readonly string _node;
+        private readonly TimeProvider _time;
+        private DateTimeOffset _last = DateTimeOffset.MinValue;
+        private string _said = string.Empty;
+
+        public Progress(Journal journal, string node, TimeProvider time)
+        {
+            _journal = journal;
+            _node = node;
+            _time = time;
+        }
+
+        public async Task SawAsync(HeadlessEvent evt, CancellationToken ct)
+        {
+            if (Describe(evt) is not { Length: > 0 } doing)
+            {
+                return;
+            }
+
+            var now = _time.GetUtcNow();
+
+            // The same thing again is not progress, and a burst of them is
+            // not progress five times over.
+            if (string.Equals(doing, _said, StringComparison.Ordinal) || now - _last < Quiet)
+            {
+                return;
+            }
+
+            _last = now;
+            _said = doing;
+
+            await _journal.WriteAsync("node.doing", _node, new { doing }, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>What an event says the node is doing, or null for one that says nothing.</summary>
+        private static string? Describe(HeadlessEvent evt) => evt switch
+        {
+            HeadlessToolUse use => Cut($"{use.Tool}{Target(use.InputJson)}"
+                + (use.FromSubagent ? " (subagent)" : string.Empty)),
+            HeadlessText { FromSubagent: false } text => Cut(FirstLine(text.Text)),
+            _ => null,
+        };
+
+        /// <summary>
+        /// The one thing a tool call is pointed at, from the names tools
+        /// actually use for it.
+        /// </summary>
+        private static string Target(string inputJson)
+        {
+            if (string.IsNullOrWhiteSpace(inputJson))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(inputJson);
+
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    return string.Empty;
+                }
+
+                foreach (var name in (string[])["file_path", "path", "command", "pattern", "url", "description"])
+                {
+                    if (document.RootElement.TryGetProperty(name, out var value)
+                        && value.ValueKind == JsonValueKind.String
+                        && value.GetString() is { Length: > 0 } text)
+                    {
+                        return " " + FirstLine(text);
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // A tool whose input is not an object tells us nothing more
+                // than its name, which is already worth a line.
+            }
+
+            return string.Empty;
+        }
+
+        private static string FirstLine(string text)
+        {
+            var line = text.AsSpan().Trim();
+            var end = line.IndexOfAny('\r', '\n');
+
+            return (end < 0 ? line : line[..end]).ToString();
+        }
+
+        private static string? Cut(string text)
+        {
+            var trimmed = SecretRedactor.Redact(text).Trim();
+
+            return trimmed.Length switch
+            {
+                0 => null,
+                > 90 => trimmed[..90] + "...",
+                _ => trimmed,
+            };
         }
     }
 
