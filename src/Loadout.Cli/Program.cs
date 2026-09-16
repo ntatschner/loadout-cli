@@ -228,6 +228,7 @@ public static class Program
         // project.
         services.AddSingleton<ILauncherTui, Loadout.Tui.Terminal.TerminalLauncher>();
         services.AddSingleton<ISetupWizard, SetupWizard>();
+        services.AddSingleton<TextLauncher>();
         services.AddSingleton<WorkspaceSavePrompt>();
         services.AddSingleton<StatuslineTargets>();
         services.AddSingleton<SessionScope>();
@@ -467,7 +468,16 @@ public static class Program
                 return await wizard.RunAsync(new SetupRequest()).ConfigureAwait(false);
 
             default:
-                return await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
+                // A full-screen launcher cannot be announced by anything: no
+                // terminal toolkit has a screen-reader provider on Windows or
+                // macOS. Somebody whose profile says so gets the same commands
+                // as a numbered menu instead, rather than a screen that is
+                // keyboard-operable and silent.
+                var text = provider.GetRequiredService<TextLauncher>();
+
+                return text.IsWanted
+                    ? await text.RunAsync().ConfigureAwait(false)
+                    : await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
         }
     }
 
