@@ -106,6 +106,11 @@ picking one would flip the colours of a terminal you have already set up.
 - `loadout` with no arguments opens a text menu of the same commands instead of
   the full-screen launcher.
 
+The full-screen launcher, for somebody who can see it and needs it drawn
+differently: colour comes down to the sixteen your own terminal theme defines,
+the boxes go where you asked for ASCII, and the opening animation does not
+play where you asked for less movement.
+
 ## Bionic formatting
 
 `write-bionic` bolds the first half of each word in the agent's own prose. It
@@ -148,8 +153,8 @@ from listening to it. If you use one, what you find is worth more than any of
 the above, and an issue saying what you heard is the most useful thing you
 could send.
 
-**Not built yet:** speaking directly to a running screen reader, a self-voicing
-full-screen launcher, and the web dashboard.
+**Not built yet:** speaking directly to a running screen reader, and a
+self-voicing full-screen launcher.
 
 ## The rest
 
