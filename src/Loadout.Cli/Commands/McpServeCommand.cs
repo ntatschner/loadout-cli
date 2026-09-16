@@ -568,9 +568,16 @@ public sealed class LoadoutTools
     /// </para>
     /// <para>
     /// A session with no policy denies everything it is asked about. That is
-    /// the safe direction: this is only reached when nobody is at the
-    /// keyboard, and a launcher that guessed "yes" on behalf of an absent
-    /// person would be the worst thing here.
+    /// the safe direction, and a launcher that guessed "yes" on behalf of an
+    /// absent person would be the worst thing here.
+    /// </para>
+    /// <para>
+    /// Where the run says somebody is watching, a call no rule covers is put to
+    /// them instead of refused, through two files in the run's directory: this
+    /// is a different process from the coordinator - the agent started it - so
+    /// the directory the run already writes to is the only channel there is.
+    /// A deny rule is never asked about, because a role that forbids something
+    /// has already decided.
     /// </para>
     /// <para>
     /// Every question is recorded beside the policy, so the run can say what
@@ -584,7 +591,7 @@ public sealed class LoadoutTools
         "Answers whether the session may make a tool call it stopped to ask about, from the "
         + "policy of the team node it is running as. The agent calls this itself; there is no "
         + "reason for you to call it.")]
-    public string Permission(
+    public async Task<string> Permission(
         [Description("The tool being asked about.")] string tool_name,
         [Description("The call's input, as the agent would make it.")] JsonElement? input = null,
         [Description("The agent's own identifier for the call.")] string? tool_use_id = null)
@@ -592,6 +599,14 @@ public sealed class LoadoutTools
         var policy = _scope.PolicyPath is { Length: > 0 } path ? NodePermissions.Read(path) : null;
         var inputJson = input?.ValueKind is JsonValueKind.Object ? input.Value.GetRawText() : null;
         var decision = NodePermissions.Decide(policy, tool_name, inputJson);
+
+        // Only what nothing covered, and only where somebody is there. The
+        // condition is Askable's, not spelled out again here: a boundary
+        // written twice is written differently the second time.
+        if (policy is not null && NodePermissions.Askable(policy, decision))
+        {
+            decision = await AskedAsync(policy, tool_name, inputJson, tool_use_id).ConfigureAwait(false);
+        }
 
         Record(policy, tool_name, inputJson, decision, tool_use_id);
 
@@ -611,6 +626,57 @@ public sealed class LoadoutTools
                 ["behavior"] = "deny",
                 ["message"] = decision.Reason,
             });
+    }
+
+    /// <summary>
+    /// Puts one call to whoever is running the team, and turns what they said
+    /// into the answer the agent gets.
+    /// </summary>
+    /// <remarks>
+    /// Nobody answering is its own outcome and says so. "Nobody answered" and
+    /// "your role forbids this" are different things to the node reading them
+    /// and to whoever reads the run afterwards, and a refusal that blamed the
+    /// role for an unattended terminal would send somebody looking in the wrong
+    /// place.
+    /// </remarks>
+    private async Task<PermissionDecision> AskedAsync(
+        NodePolicy policy,
+        string tool,
+        string? inputJson,
+        string? toolUseId)
+    {
+        var directory = Path.GetDirectoryName(_scope.PolicyPath!);
+
+        if (directory is not { Length: > 0 })
+        {
+            return new PermissionDecision(
+                false, "There is nowhere to put this question, so it cannot be asked.");
+        }
+
+        var ask = new PendingAsk(
+            Id: $"{policy.Node}-{toolUseId ?? Guid.NewGuid().ToString("N")[..8]}",
+            Node: policy.Node,
+            Role: policy.Role,
+            Tool: tool,
+
+            // Redacted before it is written, because this file is read by a
+            // screen and a secret in a command line is a secret on it.
+            Target: Loadout.Core.Security.SecretRedactor.Redact(NodePermissions.Target(inputJson) ?? string.Empty) is { Length: > 0 } shown
+                ? shown
+                : null,
+            At: _time.GetUtcNow());
+
+        var answer = await NodePermissions
+            .AskAsync(directory, ask, _time)
+            .ConfigureAwait(false);
+
+        return answer is null
+            ? new PermissionDecision(
+                false,
+                $"Nobody answered whether you may use {tool} within "
+                + $"{NodePermissions.Patience.TotalMinutes:F0} minutes, so it is refused. "
+                + "Report what you needed and why rather than finding another way to do it.")
+            : new PermissionDecision(answer.Allowed, answer.Reason);
     }
 
     /// <summary>Keeps what was asked, beside the policy it was answered from.</summary>

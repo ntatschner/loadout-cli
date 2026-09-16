@@ -8,12 +8,63 @@ namespace Loadout.Core.Teams;
 /// <param name="Role">The role it is playing, for the reason given back to it.</param>
 /// <param name="Allow">Rules that permit, in the agent's own spelling.</param>
 /// <param name="Deny">Rules that forbid, in the agent's own spelling. Deny wins.</param>
+/// <param name="Ask">
+/// Whether a call no rule covers may be put to the person rather than refused.
+/// </param>
+/// <remarks>
+/// <para>
+/// <paramref name="Ask"/> is false unless the run knows somebody is watching
+/// it. An autonomous run has nobody; a run down a pipe has nobody; and a
+/// question nobody answers is a node sitting still and spending until it gives
+/// up, which is worse than the refusal it would otherwise have had.
+/// </para>
+/// <para>
+/// It never reaches a rule in <see cref="Deny"/>. A role that forbids something
+/// has already decided, and asking anyway would make every deny list a
+/// suggestion.
+/// </para>
+/// </remarks>
 public sealed record NodePolicy(
     string Run,
     string Node,
     string Role,
     IReadOnlyList<string> Allow,
-    IReadOnlyList<string> Deny);
+    IReadOnlyList<string> Deny,
+    bool Ask = false);
+
+/// <summary>
+/// A call a node stopped on that no rule covers, waiting for a person.
+/// </summary>
+/// <param name="Id">Names the pair of files this and its answer live in.</param>
+/// <param name="Node">The node that stopped.</param>
+/// <param name="Role">What it is playing, so the question can say who is asking.</param>
+/// <param name="Tool">The tool it asked about.</param>
+/// <param name="Target">The one thing the call is pointed at, where there is one.</param>
+/// <param name="At">When it asked.</param>
+public sealed record PendingAsk(
+    string Id,
+    string Node,
+    string Role,
+    string Tool,
+    string? Target,
+    DateTimeOffset At)
+{
+    /// <summary>The question, as a person reads it.</summary>
+    /// <remarks>
+    /// Names the node, the role and what it is pointed at, because "may it run
+    /// Bash?" is not a question anybody can answer. The target is already
+    /// redacted by the time it is written.
+    /// </remarks>
+    public string Question =>
+        $"{Node} ({Role}) wants to use {Tool}"
+        + (Target is { Length: > 0 } ? $" for '{Target}'" : string.Empty)
+        + ". Nothing in its role allows that. Let it?";
+}
+
+/// <summary>What a person said about one call.</summary>
+/// <param name="Allowed">Whether it may.</param>
+/// <param name="Reason">What to tell the node, whichever way it went.</param>
+public sealed record AskAnswer(bool Allowed, string Reason);
 
 /// <summary>An answer to "may I do this", and why.</summary>
 /// <param name="Allowed">Whether it may.</param>
@@ -51,6 +102,163 @@ public static class NodePermissions
 
     /// <summary>Where the answerer records what it was asked.</summary>
     public static string AskedFileName(string node) => $"asked-{Safe(node)}.jsonl";
+
+    /// <summary>How long a node waits for a person before giving up.</summary>
+    /// <remarks>
+    /// A node waiting is a node spending nothing and doing nothing, so this is
+    /// not about cost. It is about a run that somebody walked away from ending
+    /// in a refusal it can report rather than sitting there until the agent's
+    /// own timeout kills it with nothing written down.
+    /// </remarks>
+    public static readonly TimeSpan Patience = TimeSpan.FromMinutes(5);
+
+    /// <summary>How often each side looks for the other's file.</summary>
+    public static readonly TimeSpan Glance = TimeSpan.FromMilliseconds(250);
+
+    private static string AskPath(string directory, string id) =>
+        Path.Combine(directory, $"ask-{Safe(id)}.json");
+
+    private static string AnswerPath(string directory, string id) =>
+        Path.Combine(directory, $"answer-{Safe(id)}.json");
+
+    /// <summary>
+    /// Puts a call to whoever is running the team, and waits for the answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two files in the run's own directory rather than anything cleverer. The
+    /// answerer is a different process from the coordinator - the agent starts
+    /// it, not us - so they have no channel between them but the directory the
+    /// run already writes to, and a directory is a channel that survives either
+    /// side restarting.
+    /// </para>
+    /// <para>
+    /// Null when nobody answered in time. The caller refuses and says that is
+    /// why, which is a different thing from the role refusing and reads
+    /// differently to whoever picks the run up afterwards.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Writes the question where the run will find it, and says whether it got
+    /// there.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the waiting because they fail differently and are worth
+    /// telling apart: a question that could not be written is one nobody will
+    /// ever see, and a question that was written and not answered is one
+    /// somebody walked away from.
+    /// </remarks>
+    public static async Task<bool> PutAsync(
+        string directory,
+        PendingAsk ask,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ask);
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+
+            await File.WriteAllTextAsync(
+                AskPath(directory, ask.Id), JsonSerializer.Serialize(ask), ct).ConfigureAwait(false);
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    public static async Task<AskAnswer?> AskAsync(
+        string directory,
+        PendingAsk ask,
+        TimeProvider time,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ask);
+        ArgumentNullException.ThrowIfNull(time);
+
+        if (!await PutAsync(directory, ask, ct).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var until = time.GetUtcNow() + Patience;
+        var answer = AnswerPath(directory, ask.Id);
+
+        while (time.GetUtcNow() < until)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (File.Exists(answer))
+            {
+                try
+                {
+                    return JsonSerializer.Deserialize<AskAnswer>(
+                        await File.ReadAllTextAsync(answer, ct).ConfigureAwait(false));
+                }
+                catch (Exception ex) when (ex is JsonException or IOException)
+                {
+                    // Half written: the other side is still putting it there.
+                }
+            }
+
+            await Task.Delay(Glance, time, ct).ConfigureAwait(false);
+        }
+
+        return null;
+    }
+
+    /// <summary>Questions in this run that nobody has answered yet.</summary>
+    public static IReadOnlyList<PendingAsk> Pending(string directory)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        var waiting = new List<PendingAsk>();
+
+        foreach (var file in Directory.EnumerateFiles(directory, "ask-*.json"))
+        {
+            try
+            {
+                if (JsonSerializer.Deserialize<PendingAsk>(File.ReadAllText(file)) is not { } ask
+                    || File.Exists(AnswerPath(directory, ask.Id)))
+                {
+                    continue;
+                }
+
+                waiting.Add(ask);
+            }
+            catch (Exception ex) when (ex is JsonException or IOException)
+            {
+                // Being written as it was read. The next glance gets it.
+            }
+        }
+
+        return [.. waiting.OrderBy(ask => ask.At)];
+    }
+
+    /// <summary>Answers one question, for the node waiting on it to read.</summary>
+    public static async Task AnswerAsync(
+        string directory,
+        string id,
+        AskAnswer answer,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+
+        // Written beside, then moved into place, so the waiting side never
+        // reads half an answer and treats it as no answer.
+        var settled = AnswerPath(directory, id);
+        var writing = settled + ".writing";
+
+        await File.WriteAllTextAsync(writing, JsonSerializer.Serialize(answer), ct).ConfigureAwait(false);
+
+        File.Move(writing, settled, overwrite: true);
+    }
 
     /// <summary>A node name as a file name: instance names carry a slash.</summary>
     private static string Safe(string node) =>
@@ -130,6 +338,32 @@ public static class NodePermissions
             $"Nothing in the {policy.Role} role allows {tool}"
             + (target is { Length: > 0 } ? $" for '{target}'" : string.Empty)
             + ". Report what you needed and why, and let whoever briefed you decide.");
+    }
+
+    /// <summary>
+    /// Whether a call is worth putting to a person rather than answering from
+    /// the policy alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Three things have to be true, and each is load-bearing. The run has to
+    /// have said somebody is watching. The call has to have been refused,
+    /// because asking about one already allowed would stop a node on something
+    /// its role said yes to. And nothing may have matched it — a rule that
+    /// decided has decided, and a deny somebody could be asked past would make
+    /// every deny list a suggestion.
+    /// </para>
+    /// <para>
+    /// Here rather than at the answerer, because this is the boundary and the
+    /// boundary is one place. A condition spelled out at a call site is a
+    /// condition the next call site spells differently.
+    /// </para>
+    /// </remarks>
+    public static bool Askable(NodePolicy? policy, PermissionDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+
+        return policy is { Ask: true } && !decision.Allowed && decision.Rule is null;
     }
 
     /// <summary>

@@ -91,6 +91,68 @@ public interface ITeamConsole
 
     /// <summary>Something happened worth a line.</summary>
     void Note(string line);
+
+    /// <summary>
+    /// Whether there is somebody who could answer a question right now.
+    /// </summary>
+    /// <remarks>
+    /// Asked before a run tells its nodes they may stop and ask. Down a pipe,
+    /// in CI or from a schedule there is nobody, and a node that stopped there
+    /// would wait out the whole patience and be refused anyway — later, and
+    /// having done nothing in between.
+    /// </remarks>
+    bool CanAsk { get; }
+}
+
+/// <summary>
+/// One console, with only one question on it at a time.
+/// </summary>
+/// <remarks>
+/// A run asks the person from two places now: the coordinator at its gates,
+/// and the watcher that carries a node's permission question up from the
+/// answerer's file. Those happen on different threads and could otherwise land
+/// two prompts on one terminal, which reads as a single garbled question and
+/// takes one answer for both.
+/// </remarks>
+internal sealed class OneAtATime(ITeamConsole inner) : ITeamConsole, IDisposable
+{
+    private readonly SemaphoreSlim _turn = new(1, 1);
+
+    public bool CanAsk => inner.CanAsk;
+
+    public async Task<bool> ConfirmAsync(string what, CancellationToken ct = default)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await inner.ConfirmAsync(what, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    public async Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await inner.DecideAsync(question, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    // Not held. A line is not a question, and making notes wait behind one
+    // would stop a run saying what it was doing while somebody thought.
+    public void Note(string line) => inner.Note(line);
+
+    public void Dispose() => _turn.Dispose();
 }
 
 /// <summary>Runs a team against a project.</summary>
@@ -154,6 +216,16 @@ public sealed class TeamRunner : ITeamRunner
     /// kind. Without the task service a run is still recorded in its own
     /// journal, and only the project's task list goes without it.
     /// </summary>
+    /// <summary>
+    /// Whether this run may put a node's unmatched call to the person.
+    /// </summary>
+    /// <remarks>
+    /// Set once the posture is known and read when each node's policy is
+    /// written. A field rather than a parameter threaded through six methods,
+    /// because it is a fact about the run rather than about any one node.
+    /// </remarks>
+    private bool _asking;
+
     public TeamRunner(
         IAgentLauncher launcher,
         IPlatformPaths paths,
@@ -212,6 +284,16 @@ public sealed class TeamRunner : ITeamRunner
                 ExitCode.InvalidArguments);
         }
 
+        // Decided once, here, because it is a fact about the run: an
+        // autonomous run has nobody by definition, and a run down a pipe has
+        // nobody whatever its posture says.
+        _asking = autonomy != "autonomous" && console.CanAsk;
+
+        // From here on every question goes through one voice, because the
+        // watcher below asks from another thread.
+        using var one = new OneAtATime(console);
+        console = one;
+
         var runId = $"{_time.GetUtcNow():yyyyMMdd-HHmm}-{Guid.NewGuid().ToString("N")[..4]}";
         var warnings = new List<string>();
 
@@ -254,6 +336,14 @@ public sealed class TeamRunner : ITeamRunner
         Directory.CreateDirectory(directory);
 
         var journal = new Journal(Path.Combine(directory, "journal.jsonl"), runId, _time);
+
+        // Runs for the whole run rather than around each turn. A question only
+        // appears while a node is mid-turn, so a watcher that covered anything
+        // narrower would be four watchers with four chances to miss one. It
+        // stops however the run leaves, including the six places that return
+        // early.
+        await using var watching = Watching.Start(
+            _asking, token => WatchAsksAsync(directory, console, journal, token), ct);
 
         await journal.WriteAsync("run.started", null, new { team = team.Name, goal = request.Goal, autonomy, rounds = request.MaxRounds }, ct)
             .ConfigureAwait(false);
@@ -1368,7 +1458,13 @@ public sealed class TeamRunner : ITeamRunner
                     brief.Node,
                     role.Id,
                     definition.AllowedTools ?? [],
-                    definition.DeniedTools ?? []),
+                    definition.DeniedTools ?? [],
+
+                    // Only where somebody is watching. An autonomous run has
+                    // nobody, and a question nobody answers is a node sitting
+                    // still for five minutes and then being refused anyway -
+                    // worse than the refusal it would have had at once.
+                    Ask: _asking),
                 ct).ConfigureAwait(false);
 
         var options = new HeadlessOptions(
@@ -1490,6 +1586,117 @@ public sealed class TeamRunner : ITeamRunner
                 $"{brief.Node} asked for {refused.Count} thing(s) its role does not allow: "
                 + string.Join(", ", refused.Distinct(StringComparer.Ordinal))
                 + ". Either the role is narrower than the work, or the node was going somewhere it should not.");
+        }
+    }
+
+    /// <summary>
+    /// Carries a node's unanswerable permission question up to the person, for
+    /// as long as the run lasts.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The node is stopped inside a turn this process is awaiting, so the
+    /// question cannot come back up the way everything else does. It arrives as
+    /// a file in the run's directory, written by the answerer — a different
+    /// process, started by the agent — and the answer goes back the same way.
+    /// </para>
+    /// <para>
+    /// Both the question and the answer are journalled, because "the run was
+    /// allowed to do that" and "somebody allowed it" are different sentences to
+    /// whoever reads it afterwards, and only one of them is true here.
+    /// </para>
+    /// </remarks>
+    private async Task WatchAsksAsync(
+        string directory,
+        ITeamConsole console,
+        Journal journal,
+        CancellationToken ct)
+    {
+        var answered = new HashSet<string>(StringComparer.Ordinal);
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                foreach (var ask in NodePermissions.Pending(directory))
+                {
+                    if (!answered.Add(ask.Id))
+                    {
+                        continue;
+                    }
+
+                    await journal
+                        .WriteAsync("node.asked", ask.Node, new { ask.Tool, ask.Target }, ct)
+                        .ConfigureAwait(false);
+
+                    var allowed = await console.ConfirmAsync(ask.Question, ct).ConfigureAwait(false);
+
+                    await NodePermissions.AnswerAsync(
+                        directory,
+                        ask.Id,
+                        new AskAnswer(
+                            allowed,
+                            allowed
+                                ? "The person running this team allowed it, for this call only."
+                                : "The person running this team refused it. Report what you needed and "
+                                    + "why rather than finding another way to do it."),
+                        ct).ConfigureAwait(false);
+
+                    await journal
+                        .WriteAsync("node.answered", ask.Node, new { ask.Tool, allowed }, ct)
+                        .ConfigureAwait(false);
+                }
+
+                await Task.Delay(NodePermissions.Glance, _time, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The run ended. Anything still waiting is answered by the
+            // answerer's own patience running out, which says so.
+        }
+    }
+
+    /// <summary>
+    /// A background watch that stops when the run leaves, however it leaves.
+    /// </summary>
+    /// <remarks>
+    /// Its own type because <see cref="RunAsync"/> returns from six places, and
+    /// a cancel written at each of them is five places to forget it. Disposing
+    /// a token source does not cancel it, which is the trap this exists to
+    /// close.
+    /// </remarks>
+    private sealed class Watching : IAsyncDisposable
+    {
+        private readonly CancellationTokenSource _stop;
+        private readonly Task _task;
+
+        private Watching(CancellationTokenSource stop, Task task)
+        {
+            _stop = stop;
+            _task = task;
+        }
+
+        public static Watching Start(bool wanted, Func<CancellationToken, Task> watch, CancellationToken ct)
+        {
+            var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+            return new Watching(stop, wanted ? watch(stop.Token) : Task.CompletedTask);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _stop.CancelAsync().ConfigureAwait(false);
+
+            try
+            {
+                await _task.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            _stop.Dispose();
         }
     }
 

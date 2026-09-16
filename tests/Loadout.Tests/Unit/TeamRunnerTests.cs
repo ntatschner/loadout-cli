@@ -741,6 +741,31 @@ public sealed class TeamRunnerTests : IDisposable
         second.Requests[0].Request.Model.Should().Be("opus");
     }
 
+    [Theory]
+    [InlineData("supervised", true, true)]
+    [InlineData("manual", true, true)]
+    [InlineData("autonomous", true, false)]
+    [InlineData("supervised", false, false)]
+    public async Task A_node_may_stop_and_ask_only_where_somebody_could_answer(
+        string autonomy, bool anybodyThere, bool expected)
+    {
+        // Two ways there is nobody, and they are different: an autonomous run
+        // has nobody by design, and a run down a pipe has nobody whatever its
+        // posture claims. A node told it may ask in either case stops, waits
+        // out the whole patience, and is refused anyway - later, and having
+        // done nothing in between.
+        _console.CanAsk = anybodyThere;
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await RunAsync(autonomy: autonomy)).Value!;
+
+        var policy = NodePermissions.Read(
+            Path.Combine(outcome.Directory!, NodePermissions.FileName("lead")));
+
+        policy!.Ask.Should().Be(expected);
+    }
+
     [Fact]
     public async Task A_node_is_allowed_only_the_outward_actions_the_RUN_was_given()
     {
@@ -1180,6 +1205,12 @@ public sealed class TeamRunnerTests : IDisposable
 
     private sealed class FakeConsole : ITeamConsole
     {
+        /// <summary>
+        /// Somebody is there, by default. A test that wants nobody there says
+        /// so, because the interesting case is a run that may ask and does.
+        /// </summary>
+        public bool CanAsk { get; set; } = true;
+
         public Func<string, bool> Confirm { get; set; } = _ => true;
 
         public Func<ReportQuestion, string?> Decide { get; set; } = q => q.Recommendation;

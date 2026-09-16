@@ -947,6 +947,12 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             _reading = reading;
         }
 
+        /// <summary>
+        /// Whether anybody is there. The same answer every other prompt in the
+        /// launcher uses, so a run asks exactly where a command would.
+        /// </summary>
+        public bool CanAsk => _settings.AllowsPrompting;
+
         public Task<bool> ConfirmAsync(string what, CancellationToken ct = default)
         {
             if (!_settings.AllowsPrompting)

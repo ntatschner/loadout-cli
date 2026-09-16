@@ -114,8 +114,15 @@ edit it. So it may ask for things and it may never grant them.
   refused before anything starts, naming the action and both ways out. Matching
   is exact: agreeing to `git push` does not agree to `git push --force`.
 - **Each node's permissions come from its role**, not from the team file. They
-  are written out before the run starts, deny wins, and anything nothing matches
-  is denied.
+  are written out before the run starts, and deny wins.
+- **What no rule covers is put to you**, if you are there to answer — the
+  question names the node, its role and what the call is pointed at. You are
+  never asked about something a rule already settled, either way: a deny you
+  could be asked past would make every deny list a suggestion. Where nobody is
+  watching — an autonomous run, or any run down a pipe — nodes are not told they
+  may ask, and what no rule covers is refused as before. A question nobody
+  answers within five minutes is refused too, and says that is why rather than
+  blaming the role.
 - **A worker's settings are screened** exactly as a launch's are, by the same
   code: a node cannot be given a setting a launch could not.
 
@@ -217,8 +224,6 @@ worktree is made, no branch is written, and nothing is recorded.
 Said here rather than discovered:
 
 - Nodes cannot declare tasks of their own; one task is declared per run.
-- A node cannot ask *you* a permission question mid-turn. Its permissions are
-  decided from its role before it starts, and anything unmatched is denied.
 - There is no webhook: nothing outside this machine can start a run.
 - The machine's ceiling covers outward actions only. Everything else a node may
   do comes from its role and the agent's own permissions, checked when it tries
