@@ -8,6 +8,7 @@ using Loadout.Core.Instructions;
 using Loadout.Core.Manager;
 using Loadout.Core.Projects;
 using Loadout.Core.Sessions;
+using Loadout.Core.Teams;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
@@ -64,6 +65,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IEditorService _editors;
     private readonly ISessionHistoryService _sessions;
     private readonly IManagerInventory _manager;
+    private readonly IRunJournal _runs;
     private readonly IInstructionService _instructions;
     private readonly IGitManager _git;
     private readonly IUpdateNotice _updates;
@@ -101,6 +103,7 @@ public sealed class TerminalLauncher : ILauncherTui
         IEditorService editors,
         ISessionHistoryService sessions,
         IManagerInventory manager,
+        IRunJournal runs,
         IInstructionService instructions,
         IGitManager git,
         Loadout.Core.Tasks.ITaskService tasks,
@@ -109,6 +112,7 @@ public sealed class TerminalLauncher : ILauncherTui
     {
         _reading = reading;
         _instructions = instructions;
+        _runs = runs;
         _git = git;
         _updates = updates;
         _tasks = tasks;
@@ -483,6 +487,10 @@ public sealed class TerminalLauncher : ILauncherTui
                 await ShowManagerAsync(managed, ct).ConfigureAwait(false);
                 return null;
 
+            case LauncherAction.Teams:
+                await ShowTeamsAsync(ct).ConfigureAwait(false);
+                return null;
+
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
                 // Run against the project on screen. The launcher knew which
                 // one was selected and threw it away here, so a command that
@@ -743,6 +751,62 @@ public sealed class TerminalLauncher : ILauncherTui
             project.LocalPath is { Length: > 0 } local ? ["--repo", local] : [],
             ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Shows what the team runs are doing, and runs whatever was chosen there.
+    /// </summary>
+    /// <remarks>
+    /// The runs are machine-wide rather than a project's: a run names the team
+    /// it is, not the project it was started from, and filtering by a guess
+    /// would hide runs from somebody looking for them. Reading them is a read
+    /// of files this launcher wrote, so it happens here; everything the screen
+    /// offers to do about one is handed back as the command somebody would have
+    /// typed.
+    /// </remarks>
+    private async Task ShowTeamsAsync(CancellationToken ct)
+    {
+        string? chosen;
+
+        using (IApplication application = Application.Create())
+        {
+            application.InitLegibly(_reading.Profile);
+
+            using var window = new TeamsWindow(
+                await ReadRunsAsync(ct).ConfigureAwait(false),
+                ReadRunsAsync,
+                _reading.MayRefreshItself,
+                application);
+
+            await application.RunAsync(window, ct).ConfigureAwait(false);
+
+            chosen = window.Chosen;
+        }
+
+        if (chosen is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        await _catalogue.RunAsync(path, [], ct).ConfigureAwait(false);
+
+        Pause();
+    }
+
+    /// <summary>
+    /// The runs on this machine, newest first, each folded into where it got
+    /// to. A run whose journal cannot be read is left out rather than throwing:
+    /// one being written while it is read is the ordinary case.
+    /// </summary>
+    private Task<IReadOnlyList<RunSummary>> ReadRunsAsync(CancellationToken ct) =>
+        Task.Run<IReadOnlyList<RunSummary>>(
+            () =>
+            [
+                .. _runs.List()
+                    .Select(id => _runs.Summarise(id))
+                    .Where(read => read.Succeeded)
+                    .Select(read => read.Value!),
+            ],
+            ct);
 
     private async Task ShowSettingsAsync(CancellationToken ct)
     {

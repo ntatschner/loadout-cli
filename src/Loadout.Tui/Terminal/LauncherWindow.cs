@@ -445,6 +445,11 @@ internal sealed class LauncherWindow : Window
                 },
                 new MenuItem
                 {
+                    Title = "Team _runs…",
+                    Action = () => Close(new LauncherIntent(LauncherAction.Teams)),
+                },
+                new MenuItem
+                {
                     Title = "Configuration _drift",
                     Action = () => Close(new LauncherIntent(LauncherAction.Drift)),
                 },

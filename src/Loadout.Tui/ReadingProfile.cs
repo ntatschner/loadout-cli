@@ -44,6 +44,21 @@ public sealed record ReadingProfile(AccessibilitySettings? Profile)
     public bool Bell => Profile?.Display.Bell == true;
 
     /// <summary>
+    /// Whether a screen may redraw itself on a timer without being asked.
+    /// </summary>
+    /// <remarks>
+    /// A screen that repaints every couple of seconds is the thing the redraw
+    /// setting exists to refuse: a screen reader is handed the whole list again
+    /// on every pass and never reaches the end of it. Reduced motion asks for
+    /// the same thing in different words, so either answer is enough, and a
+    /// screen that cannot refresh itself offers the same key to do it once.
+    /// </remarks>
+    public bool MayRefreshItself =>
+        Profile is not { } profile
+        || (!string.Equals(profile.Display.Redraw, "never", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(profile.Display.Motion, "full", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     /// Asks the person to choose one of a set of things.
     /// </summary>
     /// <remarks>

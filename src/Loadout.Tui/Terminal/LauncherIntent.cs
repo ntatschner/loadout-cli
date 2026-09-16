@@ -67,6 +67,17 @@ internal enum LauncherAction
     /// drawing the launcher freezes it.
     /// </remarks>
     Manager,
+
+    /// <summary>
+    /// Watch what the team runs are doing, while they do it.
+    /// </summary>
+    /// <remarks>
+    /// A screen rather than a dialog, and a screen that refreshes rather than
+    /// one read once: a run takes minutes and the question somebody opens this
+    /// for is what it is doing now. Reading a run means opening a file per run,
+    /// which is fast and is still file access.
+    /// </remarks>
+    Teams,
 }
 
 /// <summary>
