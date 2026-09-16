@@ -19,18 +19,25 @@ namespace Loadout.Core.Teams.Daemon;
 /// somebody having to ask again every thirty seconds.
 /// </para>
 /// <para>
-/// Loopback only, and a token generated at start that every request must
-/// carry. Any page in any browser tab can reach a loopback port, so a server
-/// without one would let a web page somebody opened read what their agents are
-/// doing. The token goes in the address printed at start; nothing else knows
-/// it.
+/// Loopback unless the machine was told otherwise, and a token generated at
+/// start that every request must carry. Any page in any browser tab can reach a
+/// loopback port, so a server without one would let a web page somebody opened
+/// read what their agents are doing. The token goes in the address printed at
+/// start; nothing else knows it.
 /// </para>
 /// <para>
-/// Read-only, deliberately, for now. Approving a gate or stopping a run from
-/// here has to go through the same parser somebody would type at, which is the
-/// rule the launcher already follows, and there is nothing yet on the other
-/// end of it to receive that: a run is a process the command started, not
-/// something this can reach into. The daemon is where that arrives.
+/// Reading is all it does on its own. One thing can change something — a
+/// triggered run — and it is not implemented here: the server hands the request
+/// to whatever set <see cref="Trigger"/>, which today is the daemon, which
+/// starts it through the same parser somebody would type at. A server that
+/// started runs itself would be a second implementation of <c>team run</c>, and
+/// the one nobody is watching drifts furthest. Without a <see cref="Trigger"/>
+/// there is nothing to hand to, and every POST is refused as before.
+/// </para>
+/// <para>
+/// The trigger carries its own token, its own list of what may be started, and
+/// its own reason for each refusal. None of that is this type's to decide; see
+/// <see cref="Webhook"/>, which is where it is decided and where it is tested.
 /// </para>
 /// </remarks>
 public sealed class DashboardServer : IDisposable
@@ -64,18 +71,42 @@ public sealed class DashboardServer : IDisposable
     public int Answered { get; private set; }
 
     /// <summary>
+    /// What to do about a triggered run, or null to refuse every one.
+    /// </summary>
+    /// <remarks>
+    /// Set by whatever can actually start a run through the parser. Null is the
+    /// ordinary case and the safe one: <c>team dashboard</c> sets nothing, so a
+    /// dashboard somebody opened to watch a run cannot start one.
+    /// </remarks>
+    public Func<TriggerRequest, CancellationToken, Task<OperationResult>>? Trigger { get; set; }
+
+    /// <summary>
+    /// Answers whether a trigger may proceed, or null when none may.
+    /// </summary>
+    /// <remarks>
+    /// Asked per request rather than read once at start, so turning the webhook
+    /// off takes effect on the next request instead of the next restart.
+    /// </remarks>
+    public Func<string?, string, CancellationToken, Task<Webhook.Refusal?>>? Admits { get; set; }
+
+    /// <summary>
     /// Starts listening on a loopback address, or says why it could not.
     /// </summary>
     /// <param name="port">The port to listen on, or 0 to let the machine choose.</param>
-    public OperationResult Start(int port)
+    /// <param name="listen">
+    /// The address to bind. Loopback by default; anything else is a deliberate
+    /// act of putting a port on the network and is never inferred.
+    /// </param>
+    public OperationResult Start(int port, string listen = "127.0.0.1")
     {
         if (port is < 0 or > 65535)
         {
             return OperationResult.Fail($"{port} is not a port.", ExitCode.InvalidArguments);
         }
 
+        var where = string.IsNullOrWhiteSpace(listen) ? "127.0.0.1" : listen.Trim();
         var chosen = port == 0 ? Free() : port;
-        var prefix = $"http://127.0.0.1:{chosen.ToString(CultureInfo.InvariantCulture)}/";
+        var prefix = $"http://{where}:{chosen.ToString(CultureInfo.InvariantCulture)}/";
 
         _listener.Prefixes.Add(prefix);
 
@@ -85,9 +116,19 @@ public sealed class DashboardServer : IDisposable
         }
         catch (HttpListenerException ex)
         {
+            // Windows refuses a non-loopback prefix to anything unelevated, and
+            // the message it gives ("Access is denied") says nothing about why.
+            // Naming the reservation is the difference between a person fixing
+            // this in a minute and concluding the feature does not work.
+            var elevated = !IsLoopback(where)
+                ? $" Binding {where} needs a reservation on Windows: "
+                    + $"netsh http add urlacl url={prefix} user=%USERNAME%"
+                : string.Empty;
+
             return OperationResult.Fail(
                 $"Could not listen on {prefix}: {ex.Message}. Another dashboard may already be "
-                + "running, or the port may be in use.",
+                + "running, or the port may be in use."
+                + elevated,
                 ExitCode.GeneralFailure);
         }
 
@@ -95,6 +136,114 @@ public sealed class DashboardServer : IDisposable
 
         return OperationResult.Ok();
     }
+
+    /// <summary>
+    /// Starts a run something outside this machine asked for, or says why not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nothing here decides whether it may. <see cref="Admits"/> does, from a
+    /// token in the credential store and a list of teams this machine named in
+    /// advance, and <see cref="Trigger"/> does the starting through the same
+    /// parser somebody would type at.
+    /// </para>
+    /// <para>
+    /// The answer says the run started, not what it did. A caller that waited
+    /// for a team run to finish would be holding an HTTP request open for
+    /// minutes, and the run is watchable by every other means this serves.
+    /// </para>
+    /// </remarks>
+    private async Task TriggerAsync(HttpListenerContext context, string team, CancellationToken ct)
+    {
+        Answered++;
+
+        if (Trigger is null || Admits is null)
+        {
+            // Nothing on the other end. A dashboard opened to watch a run
+            // cannot start one, and says the route is not here rather than
+            // that it is switched off.
+            await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                "This server does not start runs.").ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "text/plain; charset=utf-8",
+                "Starting a run is a POST.").ConfigureAwait(false);
+
+            return;
+        }
+
+        string body;
+
+        using (var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8))
+        {
+            body = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
+        }
+
+        string? goal;
+        string? project;
+
+        try
+        {
+            JsonElement? asked = body.Length == 0
+                ? null
+                : JsonDocument.Parse(body).RootElement;
+
+            goal = Text(asked, "goal");
+            project = Text(asked, "project");
+        }
+        catch (JsonException)
+        {
+            await WriteAsync(context, 400, "text/plain; charset=utf-8",
+                "The body should be JSON with a 'goal'.").ConfigureAwait(false);
+
+            return;
+        }
+
+        if (goal is not { Length: > 0 })
+        {
+            await WriteAsync(context, 400, "text/plain; charset=utf-8",
+                "A run needs a goal: what the lead is for, in your words.").ConfigureAwait(false);
+
+            return;
+        }
+
+        var asking = new TriggerRequest(Uri.UnescapeDataString(team), goal, project);
+
+        if (await Admits(context.Request.Headers["X-Loadout-Token"], asking.Team, ct)
+            .ConfigureAwait(false) is { } refused)
+        {
+            await WriteAsync(context, refused.Status, "text/plain; charset=utf-8", refused.Detail)
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        var started = await Trigger(asking, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            started.Succeeded ? 202 : 500,
+            "text/plain; charset=utf-8",
+            started.Succeeded
+                ? $"Started {asking.Team}. Watch it with: loadout team status"
+                : started.Error ?? "The run could not be started.").ConfigureAwait(false);
+    }
+
+    /// <summary>One string out of a request body, or null.</summary>
+    private static string? Text(JsonElement? body, string name) =>
+        body is { ValueKind: JsonValueKind.Object } given
+            && given.TryGetProperty(name, out var value)
+            && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+
+    /// <summary>Whether an address is this machine talking to itself.</summary>
+    private static bool IsLoopback(string address) =>
+        address is "127.0.0.1" or "localhost" or "::1";
 
     /// <summary>A port nothing is using, asked of the machine rather than guessed.</summary>
     private static int Free()
@@ -180,6 +329,17 @@ public sealed class DashboardServer : IDisposable
     {
         var request = context.Request;
         var path = request.Url?.AbsolutePath ?? "/";
+
+        // Before the dashboard's own token, because a trigger carries a
+        // different one and is the only thing here a stranger is meant to be
+        // able to reach. The dashboard's token changes every start, which is
+        // right for a browser tab and useless to a git hook.
+        if (path.StartsWith("/api/trigger/", StringComparison.Ordinal))
+        {
+            await TriggerAsync(context, path["/api/trigger/".Length..], ct).ConfigureAwait(false);
+
+            return;
+        }
 
         if (!Allowed(request))
         {

@@ -4,6 +4,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams;
 using Loadout.Core.Teams.Daemon;
 using Loadout.Models;
+using Loadout.Models.Results;
 using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
 using Loadout.Tui;
@@ -55,10 +56,14 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Core.Projects.IProjectService _projects;
     private readonly Loadout.Core.Git.IGitManager _git;
     private readonly IProcessInspector _processes;
+    private readonly ISecretProvider _secrets;
+    private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
 
     public TeamDaemonCommand(
+        ISecretProvider secrets,
+        Loadout.Core.Configuration.IConfigurationService configuration,
         IScheduleService schedules,
         IRunJournal journal,
         ICommandCatalogue commands,
@@ -69,6 +74,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IAnsiConsole console,
         TimeProvider time)
     {
+        _secrets = secrets;
+        _configuration = configuration;
         _schedules = schedules;
         _journal = journal;
         _commands = commands;
@@ -125,14 +132,39 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         if (server is not null)
         {
-            var started = server.Start(settings.Port);
+            var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
+            var teams = machine.Value?.Teams;
+
+            var started = server.Start(settings.Port, Webhook.Listen(teams));
 
             if (started.Failed)
             {
                 return output.Fail(started);
             }
 
+            // Asked per request rather than read once here, so turning the
+            // webhook off with 'team webhook disable' takes effect on the next
+            // request rather than the next restart.
+            server.Admits = async (token, team, ct) => Webhook.Refuse(
+                token,
+                await Webhook.TokenAsync(_secrets, ct).ConfigureAwait(false),
+                team,
+                (await _configuration.LoadMachineAsync(ct).ConfigureAwait(false)).Value?.Teams.WebhookTeams);
+
+            // Through the same parser somebody would type at, exactly as the
+            // schedules go. This is the only reason the route lives on the
+            // daemon rather than on the dashboard: the dashboard has nothing
+            // that could start a run, and should not acquire one.
+            server.Trigger = (asking, ct) => TriggeredAsync(asking, output, ct);
+
             output.WriteLine($"[bold]{Markup.Escape(server.Address)}[/]");
+
+            if (await Webhook.TokenAsync(_secrets, cancellationToken).ConfigureAwait(false) is not null)
+            {
+                output.WriteLine(
+                    $"[dim]accepting triggered runs of: "
+                    + $"{Markup.Escape(teams?.WebhookTeams is { Count: > 0 } named ? string.Join(", ", named) : "nothing")}[/]");
+            }
         }
 
         await WriteStatusAsync(server?.Address, cancellationToken).ConfigureAwait(false);
@@ -171,6 +203,44 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Forget();
 
         return (int)ExitCode.Success;
+    }
+
+    /// <summary>
+    /// Starts a run something outside this machine asked for.
+    /// </summary>
+    /// <remarks>
+    /// The same command the schedules run, with the same flags, because a run
+    /// started from outside is not a different kind of run. Non-interactive,
+    /// which is the honest description and also what refuses a manual team:
+    /// manual means a person at every step, and a webhook is the case where
+    /// there is nobody.
+    /// </remarks>
+    private async Task<OperationResult> TriggeredAsync(
+        TriggerRequest asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        if (asking.Project is not { Length: > 0 } project)
+        {
+            return OperationResult.Fail(
+                "A triggered run needs a project: add \"project\" to the body.",
+                ExitCode.InvalidArguments);
+        }
+
+        output.WriteLine(
+            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] triggered: "
+            + $"{Markup.Escape(asking.Team)} on {Markup.Escape(project)}");
+
+        var code = await _commands.RunAsync(
+            "team run",
+            [asking.Team, asking.Goal, "--project", project, "--non-interactive"],
+            ct).ConfigureAwait(false);
+
+        return code == (int)ExitCode.Success
+            ? OperationResult.Ok()
+            : OperationResult.Fail(
+                $"The run ended with exit code {code}. Read it with: loadout team log",
+                ExitCode.GeneralFailure);
     }
 
     /// <summary>

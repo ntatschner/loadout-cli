@@ -213,6 +213,52 @@ the laptop at nine.
 looked. The first look never fires — it only records where the repository is —
 and a dry run records nothing, so previewing a trigger cannot arm it.
 
+## Runs started from outside
+
+Off until you turn it on, and then off again for anything you have not named.
+
+```sh
+loadout team webhook enable            # makes a token, prints it once
+loadout config set team-webhook-teams "docs-crew"
+loadout team daemon
+```
+
+Two separate acts on purpose. The token says **who** may ask; the teams list
+says **what** they may ask for. A token on its own starts nothing, because the
+mistake worth designing against is turning the webhook on to try it and
+forgetting that you did.
+
+```sh
+curl -X POST http://127.0.0.1:8321/api/trigger/docs-crew   -H "X-Loadout-Token: <your token>"   -d '{"goal":"check the docs against the code","project":"loadout-cli"}'
+```
+
+It answers as soon as the run has started, not when it finishes — a caller
+waiting for a team run would hold a request open for minutes, and the run is
+watchable by every other means here. Team names match the way you would type
+them, allowing for case and stray spaces, but never by prefix: naming
+`docs-crew` does not name `docs-crew-extra`.
+
+The token lives in your operating system's credential store, never in a file,
+and is shown once. Nothing reads it back out afterwards — one that can be
+re-read is one in every screenshot of the machine it is on. Lost it, run
+`enable` again; the old one stops working immediately.
+`loadout team webhook show` says whether there is one and which teams it may
+start, and never what it is. `loadout team webhook disable` forgets it, which
+refuses every trigger whatever the teams list still says.
+
+**Reaching it from another machine is a separate decision again.** The server
+binds loopback until you say otherwise:
+
+```sh
+loadout config set team-webhook-listen "0.0.0.0"
+```
+
+On Windows a non-loopback binding needs a URL reservation, and the daemon says
+so with the `netsh` line to run if it cannot bind. Nothing here is hardened for
+a hostile network: the token is compared in fixed time and that is the whole of
+it. Put it behind something that is, or leave it on loopback and let a local git
+hook be what calls it.
+
 ## Previewing
 
 `--dry-run` on a run says what it would do — which nodes, on which agent, with
@@ -224,7 +270,8 @@ worktree is made, no branch is written, and nothing is recorded.
 Said here rather than discovered:
 
 - Nodes cannot declare tasks of their own; one task is declared per run.
-- There is no webhook: nothing outside this machine can start a run.
+- The machine's ceiling covers what a *webhook* may start and what a team may
+  allow. It does not cover everything else a node may do.
 - The machine's ceiling covers outward actions only. Everything else a node may
   do comes from its role and the agent's own permissions, checked when it tries
   rather than before the run starts.

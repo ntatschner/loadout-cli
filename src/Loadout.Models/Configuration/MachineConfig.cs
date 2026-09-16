@@ -52,6 +52,29 @@ public sealed class MachineTeams
     /// anything unattended because a file somebody else edited said it could.
     /// </remarks>
     public List<string> OutwardAllowed { get; set; } = [];
+
+    /// <summary>
+    /// Teams something outside this machine may start, each named exactly.
+    /// </summary>
+    /// <remarks>
+    /// Empty by default, and empty means none. Turning the webhook on grants
+    /// nothing by itself: a token says who is asking, and this says what they
+    /// may ask for. Two separate acts, because "let my git hook start the docs
+    /// crew" and "let anything with the token start anything" are different
+    /// decisions and only one of them is usually meant.
+    /// </remarks>
+    public List<string> WebhookTeams { get; set; } = [];
+
+    /// <summary>
+    /// The address the dashboard and its webhook listen on.
+    /// </summary>
+    /// <remarks>
+    /// Loopback unless somebody changed it, and changing it is the deliberate
+    /// act of putting a port on the network. Never inferred from the webhook
+    /// being on: a machine that accepts triggered runs from its own git hook
+    /// wants nothing bound outside itself.
+    /// </remarks>
+    public string WebhookListen { get; set; } = "127.0.0.1";
 }
 
 /// <summary>This machine's view of one project.</summary>

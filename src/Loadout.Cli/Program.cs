@@ -650,6 +650,13 @@ public static class Program
                 schedule.AddCommand<TeamScheduleListCommand>("list");
                 schedule.AddCommand<TeamScheduleRemoveCommand>("remove");
             });
+
+            team.AddBranch("webhook", webhook =>
+            {
+                webhook.AddCommand<TeamWebhookEnableCommand>("enable");
+                webhook.AddCommand<TeamWebhookDisableCommand>("disable");
+                webhook.AddCommand<TeamWebhookShowCommand>("show");
+            });
         });
 
         TopBranch(config, "spend", spend =>
