@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Security;
 using Loadout.Core.Teams;
@@ -563,9 +564,16 @@ public sealed class TeamRunner : ITeamRunner
             }
         }
 
+        // A node asked to resolve a conflict spends money like any other, and
+        // the run's total is written after the merge, so it is still in time
+        // to count it.
+        var afterwards = new List<decimal>();
+
         var merged = await MergeAsync(
-            request, team, autonomy, ended, branches, decisions, console, journal, warnings, ct)
+            request, team, runId, autonomy, ended, branches, decisions, console, journal, warnings, afterwards, ct)
             .ConfigureAwait(false);
+
+        cost += afterwards.Sum();
 
         await journal.WriteAsync("run.finished", null, new { ended, cost, rounds, merged }, ct).ConfigureAwait(false);
 
@@ -720,6 +728,7 @@ public sealed class TeamRunner : ITeamRunner
     private async Task<IReadOnlyList<string>> MergeAsync(
         TeamRunRequest request,
         TeamDefinition team,
+        string runId,
         string autonomy,
         string ended,
         IReadOnlyDictionary<string, string> branches,
@@ -727,6 +736,7 @@ public sealed class TeamRunner : ITeamRunner
         ITeamConsole console,
         Journal journal,
         List<string> warnings,
+        List<decimal> spent,
         CancellationToken ct)
     {
         var merged = new List<string>();
@@ -835,18 +845,47 @@ public sealed class TeamRunner : ITeamRunner
 
             if (!result.Value!.Merged)
             {
-                warnings.Add(
-                    $"{branch} conflicts with {target} in {string.Join(", ", result.Value.Conflicts)}, so nothing was "
-                    + "merged and the repository is as it was. Resolving it is not something this does for you.");
-
                 await journal.WriteAsync("merge.conflicted", node, new { branch, result.Value.Conflicts }, ct).ConfigureAwait(false);
 
-                continue;
+                // Back to whoever wrote it. The node still has its worktree,
+                // it knows why it made the change, and it is better placed to
+                // reconcile the two than a person reading a list of file
+                // names afterwards.
+                //
+                // Once only. A node that cannot resolve its own conflict on a
+                // second look will not on a third, and the person needs to
+                // hear about it rather than watch it spend.
+                var second = await ResolveAsync(
+                    request, team, runId, node, branch, target, result.Value.Conflicts,
+                    autonomy, repository, console, journal, warnings, spent, ct).ConfigureAwait(false);
+
+                if (second is null)
+                {
+                    warnings.Add(
+                        $"{branch} conflicts with {target} in {string.Join(", ", result.Value.Conflicts)}, so nothing "
+                        + "was merged and the repository is as it was.");
+
+                    continue;
+                }
+
+                if (!second.Merged)
+                {
+                    warnings.Add(
+                        $"{branch} still conflicts with {target} in {string.Join(", ", second.Conflicts)}, after "
+                        + $"{node} was asked to resolve it. Nothing was merged and the repository is as it was.");
+
+                    await journal.WriteAsync("merge.conflicted", node, new { branch, second.Conflicts, again = true }, ct)
+                        .ConfigureAwait(false);
+
+                    continue;
+                }
+
+                result = OperationResult<GitMerge>.Ok(second);
             }
 
             merged.Add(branch);
 
-            await journal.WriteAsync("merge.done", node, new { branch, target, result.Value.FastForward }, ct)
+            await journal.WriteAsync("merge.done", node, new { branch, target, result.Value!.FastForward }, ct)
                 .ConfigureAwait(false);
 
             console.Note(
@@ -908,6 +947,94 @@ public sealed class TeamRunner : ITeamRunner
         {
             warnings.Add($"The branch {branch} was kept: {deleted.Error}");
         }
+    }
+
+    /// <summary>
+    /// Asks the node that wrote a branch to reconcile it with the target, and
+    /// tries the merge once more.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Null when nobody was asked: the node is not in the team any more, its
+    /// role is gone, a person said no, or it came back without doing the
+    /// work. The caller then reports the first conflict as it stands.
+    /// </para>
+    /// <para>
+    /// The node is briefed under the same instance name, which resolves to
+    /// the same branch and therefore the same worktree it was working in.
+    /// It is a fresh session with no memory of the first one, so the brief
+    /// has to carry everything: which branch, which target, which files.
+    /// </para>
+    /// </remarks>
+    private async Task<GitMerge?> ResolveAsync(
+        TeamRunRequest request,
+        TeamDefinition team,
+        string runId,
+        string nodeName,
+        string branch,
+        string target,
+        IReadOnlyList<string> conflicts,
+        string autonomy,
+        string repository,
+        ITeamConsole console,
+        Journal journal,
+        List<string> warnings,
+        List<decimal> spent,
+        CancellationToken ct)
+    {
+        if (!team.Nodes.TryGetValue(BaseNode(nodeName), out var node)
+            || request.Specialists.Find(node.Role) is not { } role)
+        {
+            return null;
+        }
+
+        var files = string.Join(", ", conflicts);
+
+        var task =
+            $"Your branch '{branch}' cannot be merged into '{target}': the two changed {files}. "
+            + $"In your own worktree, merge '{target}' into '{branch}' and resolve every conflict, "
+            + "keeping what both sides were trying to do. Do not change "
+            + $"'{target}' itself, and do not merge your branch anywhere. Commit the resolution on "
+            + "your own branch and report that commit.";
+
+        if (!await GateAsync(autonomy, console, $"Ask {nodeName} to resolve the conflict between {branch} and {target}", ct)
+            .ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        await journal.WriteAsync("conflict.briefed", nodeName, new { branch, target, conflicts }, ct).ConfigureAwait(false);
+
+        var brief = MakeBrief(
+            runId, nodeName, team.Lead, node, role, task, conflicts,
+            doneWhen: [$"'{branch}' merges into '{target}' with no conflict"],
+            team, autonomy, request.Specialists.Find);
+
+        var ask = new ReportRequest(nodeName, task, DeliverableKind.Commit);
+
+        using var alone = new SemaphoreSlim(1, 1);
+
+        var outcome = await RunWorkerAsync(
+            request, team, new Briefed(ask, node, role, brief), journal, alone, ct).ConfigureAwait(false);
+
+        warnings.AddRange(outcome.Warnings);
+        spent.Add(outcome.Cost);
+
+        if (outcome.Report is not { Status: ReportStatus.Done })
+        {
+            return null;
+        }
+
+        var again = await _git!.MergeAsync(repository, branch, ct).ConfigureAwait(false);
+
+        if (again.Failed)
+        {
+            warnings.Add($"{branch} could not be merged after {nodeName} resolved it: {again.Error}");
+
+            return null;
+        }
+
+        return again.Value;
     }
 
     /// <summary>A request that passed its gate and has a brief waiting.</summary>

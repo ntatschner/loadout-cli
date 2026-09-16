@@ -3,6 +3,7 @@ using Loadout.Agents;
 using Loadout.Agents.Claude;
 using Loadout.Agents.Teams;
 using Loadout.Core.Diagnostics;
+using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Teams;
 using Loadout.Models.Agents;
@@ -86,9 +87,17 @@ public sealed class TeamRunnerTests : IDisposable
         string autonomy = "supervised",
         bool dryRun = false,
         IChildLifetime? lifetime = null,
-        Loadout.Core.Tasks.ITaskService? tasks = null)
+        Loadout.Core.Tasks.ITaskService? tasks = null,
+        FakeGit? git = null)
     {
-        return await new TeamRunner(_launcher, _paths, TimeProvider.System, lifetime: lifetime, tasks: tasks).RunAsync(
+        return await new TeamRunner(
+            _launcher,
+            _paths,
+            TimeProvider.System,
+            git is null ? null : new FakeProjects("demo", Path.Combine(_root, "repo")),
+            git,
+            lifetime,
+            tasks).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, Offline: true),
             _console);
@@ -757,6 +766,101 @@ public sealed class TeamRunnerTests : IDisposable
 
         var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
         journal.Should().Contain(l => l.Contains("\"kind\":\"gate.refused\""));
+    }
+
+    /// <summary>A lead that gets one implementer through the full merge gate.</summary>
+    private void ScriptAGatedRun()
+    {
+        var accepted = new Report(
+            "reviewer", ReportStatus.Done, "Fine.",
+            [new ReportDeliverable(DeliverableKind.Decision, "accept", "a4f21c9")], [Passed], []);
+
+        var verified = new Report(
+            "verifier", ReportStatus.Done, "Ran it.",
+            [new ReportDeliverable(DeliverableKind.Decision, "accept", "a4f21c9")], [Passed], []);
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadRequests(
+                new ReportRequest("reviewer", "review it", DeliverableKind.Decision),
+                new ReportRequest("verifier", "verify it", DeliverableKind.Decision)), 0.06m),
+            Result(LeadDone(), 0.09m),
+            Result(LeadDone(), 0.09m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+        _launcher.Script("role.reviewer", Init("rev-1"), Result(accepted, 0.02m));
+        _launcher.Script("role.verifier", Init("ver-1"), Result(verified, 0.02m));
+    }
+
+    [Fact]
+    public async Task A_branch_that_conflicts_goes_back_to_the_node_that_wrote_it()
+    {
+        // Reported and dropped, before this. The node still has its worktree
+        // and knows why it made the change, which is more than a person
+        // reading a list of file names afterwards has.
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        git.NextMerge(new GitMerge(Merged: false, FastForward: false, ["docs/commands.md"]));
+
+        ScriptAGatedRun();
+
+        // The implementer is briefed a second time, to resolve.
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone(), 0.04m));
+
+        var outcome = (await RunAsync(git: git)).Value!;
+
+        git.Merges.Should().Equal("teams/" + outcome.RunId + "/implementer", "teams/" + outcome.RunId + "/implementer");
+        outcome.Merged.Should().ContainSingle();
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+        journal.Should().Contain(l => l.Contains("\"kind\":\"conflict.briefed\""));
+
+        var second = _launcher.Written("role.implementer")[1];
+        second.Should().Contain("cannot be merged").And.Contain("docs/commands.md").And.Contain("main");
+    }
+
+    [Fact]
+    public async Task A_branch_that_conflicts_twice_is_left_alone_and_said_so()
+    {
+        // Once only. A node that cannot resolve its own conflict on a second
+        // look will not on a third, and the person needs to hear about it
+        // rather than watch it spend.
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        git.NextMerge(new GitMerge(Merged: false, FastForward: false, ["docs/commands.md"]));
+        git.NextMerge(new GitMerge(Merged: false, FastForward: false, ["docs/commands.md"]));
+
+        ScriptAGatedRun();
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone(), 0.04m));
+
+        var outcome = (await RunAsync(git: git)).Value!;
+
+        git.Merges.Should().HaveCount(2, "it is tried again after the resolution and never a third time");
+        outcome.Merged.Should().BeEmpty();
+        git.Deleted.Should().BeEmpty("nothing landed, so nothing is cleared away");
+
+        outcome.Warnings.Should().ContainSingle(w => w.Contains("still conflicts"))
+            .Which.Should().Contain("after implementer was asked to resolve it");
+    }
+
+    [Fact]
+    public async Task What_a_resolving_node_spends_is_in_the_run_total()
+    {
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        git.NextMerge(new GitMerge(Merged: false, FastForward: false, ["docs/commands.md"]));
+
+        ScriptAGatedRun();
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone(), 0.04m));
+
+        var quiet = (await RunAsync(git: new FakeGit(Path.Combine(_root, "repo")))).Value!;
+
+        _launcher.Requests.Clear();
+        ScriptAGatedRun();
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone(), 0.04m));
+
+        var conflicted = (await RunAsync(git: git)).Value!;
+
+        conflicted.CostUsd.Should().Be(quiet.CostUsd + 0.04m, "the resolving node's turn is money the run spent");
     }
 
     [Fact]
