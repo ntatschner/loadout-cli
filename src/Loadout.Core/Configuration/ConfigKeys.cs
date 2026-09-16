@@ -375,6 +375,12 @@ public static class ConfigKeys
             Group: Groups.Accessibility,
             IsFlag: true),
 
+        new("ask-before-risky", "Restate what will happen before anything that cannot be undone",
+            (c, _) => Boolean(c.Accessibility.Output.ConfirmBeforeIrreversible),
+            (c, _, v) => c.Accessibility.Output.ConfirmBeforeIrreversible = Flag(v), false,
+            Group: Groups.Accessibility,
+            IsFlag: true),
+
         new("write-verbosity", "concise, standard or full",
             (c, _) => c.Accessibility.Output.Verbosity,
             (c, _, v) => c.Accessibility.Output.Verbosity = OneOf(v, "concise", "standard", "full"), false,
@@ -421,12 +427,6 @@ public static class ConfigKeys
             (c, _) => Boolean(c.Accessibility.Output.SameWord),
             (c, _, v) => c.Accessibility.Output.SameWord = Flag(v), false,
             Group: Groups.Writing,
-            IsFlag: true),
-
-        new("ask-before-risky", "Restate what will happen before anything that cannot be undone",
-            (c, _) => Boolean(c.Accessibility.Output.ConfirmBeforeIrreversible),
-            (c, _, v) => c.Accessibility.Output.ConfirmBeforeIrreversible = Flag(v), false,
-            Group: Groups.Accessibility,
             IsFlag: true),
 
         // Offered with its evidence: every controlled study of this finds no
