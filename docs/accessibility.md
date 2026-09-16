@@ -111,6 +111,19 @@ differently: colour comes down to the sixteen your own terminal theme defines,
 the boxes go where you asked for ASCII, and the opening animation does not
 play where you asked for less movement.
 
+### The dashboard
+
+`loadout team dashboard` serves a page showing what the team runs are doing. It
+was built to WCAG 2.2 AA from its first commit rather than fixed afterwards: a
+live region present from the first paint, every state written as a word and not
+only as a colour, real headings and lists, a skip link, focus outlines that
+survive a forced-colours mode, targets no smaller than 40 pixels, and both
+`prefers-reduced-motion` and `forced-colors` honoured. Following a run moves
+focus to the heading of what you asked for.
+
+It has not been checked with a screen reader or with axe-core, and no
+keyboard-only pass by a person has been recorded.
+
 ## Bionic formatting
 
 `write-bionic` bolds the first half of each word in the agent's own prose. It
