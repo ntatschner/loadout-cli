@@ -181,6 +181,93 @@ public sealed class AccessibleModeTests
         console.Profile.Capabilities.Interactive.Should().BeTrue();
     }
 
+    [Fact]
+    public void A_table_becomes_lines_that_each_carry_their_own_heading()
+    {
+        // A table read aloud is a column of values with no idea which column
+        // each one is in: the headings were said once, at the top, and by the
+        // fourth row nobody is holding them.
+        var console = New(ColorSystem.TrueColor, unicode: true);
+
+        AccessibleMode.Resolve(["--accessible"], null, null).Apply(console, noColour: null);
+
+        var table = new Table();
+        table.AddColumn("Project");
+        table.AddColumn("Agent");
+        table.AddRow("loadout-cli", "claude");
+        table.AddRow("starstats", "codex");
+
+        console.Write(table);
+
+        var lines = console.Output
+            .Split('\n')
+            .Select(line => line.TrimEnd())
+            .Where(line => line.Length > 0)
+            .ToList();
+
+        lines.Should().Equal(
+            "Project: loadout-cli",
+            "Agent: claude",
+            "Project: starstats",
+            "Agent: codex");
+    }
+
+    [Fact]
+    public void A_column_with_no_heading_carries_its_value_alone()
+    {
+        // The project list has one: a marker column whose heading is empty on
+        // purpose, where ": *" would be worse than the asterisk by itself.
+        var console = New(ColorSystem.TrueColor, unicode: true);
+
+        AccessibleMode.Resolve(["--accessible"], null, null).Apply(console, noColour: null);
+
+        var table = new Table();
+        table.AddColumn(string.Empty);
+        table.AddColumn("Project");
+        table.AddRow("*", "loadout-cli");
+
+        console.Write(table);
+
+        console.Output.Should().Contain("*").And.Contain("Project: loadout-cli");
+        console.Output.Should().NotContain(": *");
+    }
+
+    [Fact]
+    public void A_long_value_is_not_broken_in_the_middle()
+    {
+        // The table wrapped a path across two rows to fit its column. On one
+        // line per value there is no column to fit, and a path split down the
+        // middle is one nobody can copy.
+        var console = New(ColorSystem.TrueColor, unicode: true);
+        console.Profile.Width = 200;
+
+        AccessibleMode.Resolve(["--accessible"], null, null).Apply(console, noColour: null);
+
+        var table = new Table();
+        table.AddColumn("Location");
+        table.AddRow("D:/git/RSIStarCitizenTools/StarStats/src/deep/nested/place");
+
+        console.Write(table);
+
+        console.Output.Should().Contain("Location: D:/git/RSIStarCitizenTools/StarStats/src/deep/nested/place");
+    }
+
+    [Fact]
+    public void A_person_who_wants_tables_keeps_them()
+    {
+        var console = New(ColorSystem.TrueColor, unicode: true);
+
+        AccessibleMode.Resolve(["--accessible=dyslexia"], null, null).Apply(console, noColour: null);
+
+        var table = new Table();
+        table.AddColumn("Project");
+        table.AddRow("loadout-cli");
+
+        console.Write(table);
+
+        console.Output.Should().NotContain("Project: loadout-cli", "nothing asked for lists");
+    }
+
     private static Spectre.Console.Testing.TestConsole New(ColorSystem colours, bool unicode)
     {
         var console = new Spectre.Console.Testing.TestConsole();

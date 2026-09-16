@@ -195,6 +195,16 @@ public sealed record AccessibleMode(bool IsOn, string Name, AccessibilitySetting
             console.Pipeline.Attach(new AsciiOnly());
         }
 
+        if (string.Equals(Profile.Display.Tables, "lists", StringComparison.OrdinalIgnoreCase))
+        {
+            // Attached after the glyph fold, and so running before it: the
+            // pipeline hands each renderable to the last hook attached first,
+            // and this one has to meet the table itself rather than something
+            // already wrapped. The lines it produces are folded on the way
+            // out, which is the order they need.
+            console.Pipeline.Attach(new ListsNotTables());
+        }
+
         if (string.Equals(Profile.Display.Redraw, "never", StringComparison.OrdinalIgnoreCase))
         {
             // What redraws is what Spectre calls interactive: a status that
@@ -301,6 +311,98 @@ public sealed record AccessibleMode(bool IsOn, string Name, AccessibilitySetting
         }
 
         return changed || folded.Length != text.Length ? folded.ToString() : text;
+    }
+
+    /// <summary>
+    /// Turns a table into labelled lines on its way to the console.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A table read aloud is a column of values with no idea which column each
+    /// one is in: the headings were said once, at the top, and by the fourth
+    /// row nobody is holding them. "Project: loadout-cli" carries its own
+    /// heading and can be read in any order.
+    /// </para>
+    /// <para>
+    /// Here rather than at each of the seven places a table is built, for the
+    /// same reason the capabilities are: this reaches the tables nobody has
+    /// written yet, and a table added later cannot forget to do it.
+    /// </para>
+    /// </remarks>
+    private sealed class ListsNotTables : IRenderHook
+    {
+        public IEnumerable<IRenderable> Process(RenderOptions options, IEnumerable<IRenderable> renderables) =>
+            renderables.Select(renderable => renderable is Table table ? Rewrite(table) : renderable);
+
+        private static IRenderable Rewrite(Table table)
+        {
+            var headings = table.Columns.Select(column => Flatten(column.Header)).ToList();
+            var lines = new List<string>();
+
+            foreach (var row in table.Rows)
+            {
+                if (lines.Count > 0)
+                {
+                    lines.Add(string.Empty);
+                }
+
+                for (var i = 0; i < row.Count; i++)
+                {
+                    var value = Flatten(row[i]);
+
+                    if (value.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    var heading = i < headings.Count ? headings[i] : string.Empty;
+
+                    // A column with no heading carries the value alone. The
+                    // project list has one: a marker column whose heading is
+                    // empty on purpose, and "': *" would be worse than the
+                    // asterisk by itself.
+                    lines.Add(heading.Length > 0 ? $"{heading}: {value}" : value);
+                }
+            }
+
+            return new Rows(lines.Select(line => new Text(line)));
+        }
+
+        /// <summary>One cell as the words in it, with its styling dropped.</summary>
+        /// <remarks>
+        /// Rendered wide so nothing is wrapped into the middle of a value: the
+        /// line this produces is wrapped once, afterwards, by the console that
+        /// is about to write it.
+        /// </remarks>
+        private static string Flatten(IRenderable cell)
+        {
+            var text = string.Concat(cell
+                .Render(new RenderOptions(new NoCapabilities(), new Size(1000, 1000)), 1000)
+                .Where(segment => !segment.IsControlCode)
+                .Select(segment => segment.Text));
+
+            return text.Replace("\n", " ", StringComparison.Ordinal).Trim();
+        }
+
+        /// <summary>A console that can do nothing, for measuring words rather than drawing them.</summary>
+        private sealed class NoCapabilities : IReadOnlyCapabilities
+        {
+            public ColorSystem ColorSystem => ColorSystem.NoColors;
+
+            public bool Ansi => false;
+
+            public bool Links => false;
+
+            public bool Legacy => false;
+
+            public bool IsTerminal => false;
+
+            public bool Interactive => false;
+
+            public bool Unicode => false;
+
+            public bool AlternateBuffer => false;
+        }
     }
 
     /// <summary>Folds every drawing on its way to the console.</summary>
