@@ -651,6 +651,13 @@ public static class Program
                 schedule.AddCommand<TeamScheduleRemoveCommand>("remove");
             });
 
+            team.AddBranch("autostart", autostart =>
+            {
+                autostart.AddCommand<TeamAutostartEnableCommand>("enable");
+                autostart.AddCommand<TeamAutostartDisableCommand>("disable");
+                autostart.AddCommand<TeamAutostartShowCommand>("show");
+            });
+
             team.AddBranch("webhook", webhook =>
             {
                 webhook.AddCommand<TeamWebhookEnableCommand>("enable");

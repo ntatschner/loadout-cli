@@ -56,6 +56,7 @@ public static class PlatformServices
         services.AddSingleton<IClipboardProvider>(clipboard);
         services.AddSingleton<IApplicationLauncher>(opener);
         services.AddSingleton<IDesktopIntegration>(desktop);
+        services.AddSingleton<IAutostart>(CreateAutostart(processes, resolver));
         services.AddSingleton(secrets);
         services.AddSingleton<IPlatformCapabilities>(capabilities);
 
@@ -165,6 +166,21 @@ public static class PlatformServices
 
         return new LinuxTerminalProvider(processes, resolver);
     }
+
+    /// <summary>
+    /// What starts this launcher at login, for whichever desktop this is.
+    /// </summary>
+    /// <remarks>
+    /// Only the Windows one has been logged into. The Unix pair writes the
+    /// documented shapes and is covered by tests of what it writes, which is a
+    /// different claim from working.
+    /// </remarks>
+    private static IAutostart CreateAutostart(
+        IProcessLauncher processes,
+        IExecutableResolver resolver) =>
+        OperatingSystem.IsWindows()
+            ? new Windows.WindowsAutostart(processes, resolver)
+            : new Unix.UnixAutostart(OperatingSystem.IsMacOS());
 
     private static IDesktopIntegration CreateDesktopIntegration(
         IEnvironmentProvider environment,

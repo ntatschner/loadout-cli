@@ -70,6 +70,7 @@
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout team daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
+| `loadout team autostart enable\|disable\|show` | Start the daemon when you log in, per user |
 | `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
 | `loadout pack list\|add\|approve\|update\|remove` | Sets of specialists, roles and teams fetched from a Git remote, approved per machine |
 | `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |

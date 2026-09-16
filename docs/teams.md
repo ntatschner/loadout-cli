@@ -200,9 +200,26 @@ loadout team schedule add bug-hunt "look at what the suite is failing" --on comm
 loadout team daemon
 ```
 
-Nothing fires unless the daemon is running. It is not installed as a service and
-does not start itself — `doctor` tells you when you have schedules and nothing
-firing them, which is the case a restarted machine looks exactly like.
+Nothing fires unless the daemon is running, and `doctor` tells you when you have
+schedules and nothing firing them — the case a restarted machine looks exactly
+like. To stop that happening:
+
+```sh
+loadout team autostart enable     # --dry-run first says which file it would write
+loadout team autostart show
+loadout team autostart disable
+```
+
+Per user, never for the machine, so it needs no administrator rights and can
+always be undone by whoever set it. On Windows it is a shortcut in your Startup
+folder, started minimised — the daemon is a console process you stop with
+Ctrl+C, so it needs a window, but not one that takes focus at every login. On
+macOS it is a launch agent, on other Unixes a desktop entry under
+`~/.config/autostart`; **neither of those has been logged into**, only the files
+they write are covered.
+
+It records the launcher as it was invoked, so run it again after updating
+Loadout if the launcher moved.
 
 A schedule is machine-local. It may not name a manual team, nothing may repeat
 faster than five minutes, and a missed one is not made up for: a run that should
