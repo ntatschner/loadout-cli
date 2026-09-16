@@ -621,6 +621,7 @@ public static class Program
             team.AddCommand<TeamRunsCommand>("runs");
             team.AddCommand<TeamStatusCommand>("status");
             team.AddCommand<TeamLogCommand>("log");
+            team.AddCommand<TeamDashboardCommand>("dashboard");
         });
 
         TopBranch(config, "spend", spend =>
