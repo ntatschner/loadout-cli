@@ -41,7 +41,8 @@ public static class ServiceRegistration
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<Core.Projects.IProjectService>(),
             provider.GetRequiredService<Core.Git.IGitManager>(),
-            provider.GetRequiredService<IChildLifetime>()));
+            provider.GetRequiredService<IChildLifetime>(),
+            provider.GetRequiredService<Core.Tasks.ITaskService>()));
         services.AddSingleton<IDiagnosticContributor, AgentDiagnosticContributor>();
 
         return services;

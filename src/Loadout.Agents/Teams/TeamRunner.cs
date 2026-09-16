@@ -7,6 +7,7 @@ using Loadout.Models;
 using Loadout.Models.Agents;
 using Loadout.Models.Instructions;
 using Loadout.Models.Results;
+using Loadout.Models.Tasks;
 using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
 
@@ -131,13 +132,15 @@ public sealed class TeamRunner : ITeamRunner
     private readonly Core.Projects.IProjectService? _projects;
     private readonly Core.Git.IGitManager? _git;
     private readonly IChildLifetime? _lifetime;
+    private readonly Core.Tasks.ITaskService? _tasks;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
     /// only drives nodes needs neither; without them a run cannot merge and
     /// says so rather than appearing to. The child lifetime is optional for
     /// the same reason, and a run that has one says so when it is the weaker
-    /// kind.
+    /// kind. Without the task service a run is still recorded in its own
+    /// journal, and only the project's task list goes without it.
     /// </summary>
     public TeamRunner(
         IAgentLauncher launcher,
@@ -145,7 +148,8 @@ public sealed class TeamRunner : ITeamRunner
         TimeProvider time,
         Core.Projects.IProjectService? projects = null,
         Core.Git.IGitManager? git = null,
-        IChildLifetime? lifetime = null)
+        IChildLifetime? lifetime = null,
+        Core.Tasks.ITaskService? tasks = null)
     {
         _launcher = launcher;
         _paths = paths;
@@ -153,6 +157,7 @@ public sealed class TeamRunner : ITeamRunner
         _projects = projects;
         _git = git;
         _lifetime = lifetime;
+        _tasks = tasks;
     }
 
     /// <inheritdoc />
@@ -244,6 +249,8 @@ public sealed class TeamRunner : ITeamRunner
         await journal.WriteAsync("run.started", null, new { team = team.Name, goal = request.Goal, autonomy, rounds = request.MaxRounds }, ct)
             .ConfigureAwait(false);
 
+        var slug = await SlugAsync(request, ct).ConfigureAwait(false);
+
         if (!await GateAsync(autonomy, console, $"Brief the lead ({leadNode.Role}) with the goal", ct).ConfigureAwait(false))
         {
             await journal.WriteAsync("run.finished", null, new { ended = "stopped before the lead was briefed" }, ct).ConfigureAwait(false);
@@ -267,6 +274,12 @@ public sealed class TeamRunner : ITeamRunner
         warnings.AddRange(lead.Warnings);
 
         await journal.WriteAsync("node.launched", team.Lead, new { launch = lead.LaunchId, role = leadNode.Role }, ct).ConfigureAwait(false);
+
+        // Once the lead is actually going, and not before: a run somebody
+        // stopped at the first gate did nothing, and a task list that
+        // recorded it would be recording an intention.
+        await DeclareAsync(slug, runId, team, TaskState.Doing, request.Goal, $"{autonomy}, running", ct)
+            .ConfigureAwait(false);
 
         var cost = 0m;
         var rounds = 0;
@@ -541,6 +554,11 @@ public sealed class TeamRunner : ITeamRunner
 
         await journal.WriteAsync("run.finished", null, new { ended, cost, rounds, merged }, ct).ConfigureAwait(false);
 
+        await DeclareAsync(
+            slug, runId, team, Landed(ended), request.Goal,
+            $"{ended}; {rounds} round(s), ${cost:0.00}. loadout team status {runId}", ct)
+            .ConfigureAwait(false);
+
         if (final is not null)
         {
             await WriteDocumentAsync(directory, "final-report.json", ReportReader.Write(final), ct).ConfigureAwait(false);
@@ -553,6 +571,87 @@ public sealed class TeamRunner : ITeamRunner
             runId, directory, ended, final, cost, rounds,
             warnings.Distinct(StringComparer.Ordinal).ToList(), branches, merged));
     }
+
+    /// <summary>
+    /// The project's slug, or the handle as given when it cannot be resolved.
+    /// </summary>
+    private async Task<string> SlugAsync(TeamRunRequest request, CancellationToken ct)
+    {
+        if (_projects is null)
+        {
+            return request.ProjectHandle;
+        }
+
+        var resolution = await _projects.ResolveAsync(request.ProjectHandle, ct).ConfigureAwait(false);
+
+        return resolution.Value?.Entry.Slug ?? request.ProjectHandle;
+    }
+
+    /// <summary>
+    /// Puts the run in the project's task list, so what a team is doing shows
+    /// up beside everything else the project is working on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One task for the run, not one per node. The list is a shared file that
+    /// travels with the workspace and is meant to hold tens of things; a
+    /// row per node would put hundreds there within a few runs, and the
+    /// per-node view already exists in <c>team status</c>, which reads the
+    /// run's own journal.
+    /// </para>
+    /// <para>
+    /// A failure here is not the run's failure. The task list is a
+    /// convenience beside the journal, which is the record, so this reports
+    /// nothing and stops nothing.
+    /// </para>
+    /// </remarks>
+    private async Task DeclareAsync(
+        string slug,
+        string runId,
+        TeamDefinition team,
+        TaskState state,
+        string goal,
+        string note,
+        CancellationToken ct)
+    {
+        if (_tasks is null)
+        {
+            return;
+        }
+
+        await _tasks.DeclareAsync(
+            slug,
+            $"team-{runId}",
+            state,
+            $"team {team.Name}",
+            Cut(goal),
+            note,
+            ct).ConfigureAwait(false);
+    }
+
+    /// <summary>A goal short enough to read in a list.</summary>
+    private static string Cut(string goal)
+    {
+        var trimmed = goal.Trim();
+
+        return trimmed.Length > 120 ? trimmed[..120] + "..." : trimmed;
+    }
+
+    /// <summary>
+    /// Where a run's ending leaves the task.
+    /// </summary>
+    /// <remarks>
+    /// Only a lead that said it was done gets Done. Everything else - a
+    /// blocked lead, a halt, a round limit, a person stopping it - leaves
+    /// something unfinished, and calling that done is the one thing a task
+    /// list must not do.
+    /// </remarks>
+    private static TaskState Landed(string ended) => ended switch
+    {
+        "done" => TaskState.Done,
+        "blocked" => TaskState.Blocked,
+        _ => TaskState.Doing,
+    };
 
     /// <summary>
     /// The one word each reviewing role is told to hand back when it is

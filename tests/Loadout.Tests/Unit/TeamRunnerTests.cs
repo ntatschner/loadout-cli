@@ -8,6 +8,7 @@ using Loadout.Core.Teams;
 using Loadout.Models.Agents;
 using Loadout.Models.Platform;
 using Loadout.Models.Results;
+using Loadout.Models.Tasks;
 using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
 using Loadout.Platform.Linux;
@@ -84,9 +85,10 @@ public sealed class TeamRunnerTests : IDisposable
         TeamDefinition? team = null,
         string autonomy = "supervised",
         bool dryRun = false,
-        IChildLifetime? lifetime = null)
+        IChildLifetime? lifetime = null,
+        Loadout.Core.Tasks.ITaskService? tasks = null)
     {
-        return await new TeamRunner(_launcher, _paths, TimeProvider.System, lifetime: lifetime).RunAsync(
+        return await new TeamRunner(_launcher, _paths, TimeProvider.System, lifetime: lifetime, tasks: tasks).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, Offline: true),
             _console);
@@ -302,6 +304,56 @@ public sealed class TeamRunnerTests : IDisposable
         (await RunAsync(autonomy: "autonomous")).Value!.Ended.Should().Be("done");
 
         _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **yes**");
+    }
+
+    [Fact]
+    public async Task A_run_shows_up_in_the_project_that_is_working_on_it()
+    {
+        // One row for the run, not one per node: the list is a shared file
+        // meant for tens of things, and the per-node view is team status.
+        var tasks = new FakeTasks();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync(tasks: tasks)).Value!;
+
+        tasks.Declared.Should().HaveCount(2, "once when it began, once with how it ended");
+
+        tasks.Declared[0].Id.Should().Be($"team-{outcome.RunId}");
+        tasks.Declared[0].State.Should().Be(TaskState.Doing);
+        tasks.Declared[0].Title.Should().Be("Add --since to loadout usage.");
+        tasks.Declared[0].By.Should().Be("team iterating-project");
+
+        tasks.Declared[1].Id.Should().Be($"team-{outcome.RunId}");
+        tasks.Declared[1].State.Should().Be(TaskState.Done);
+        tasks.Declared[1].Note.Should().Contain($"loadout team status {outcome.RunId}");
+    }
+
+    [Fact]
+    public async Task A_run_that_did_not_finish_is_not_recorded_as_finished()
+    {
+        // The one thing a task list must not do. This lead is blocked when
+        // the rounds run out, which is unfinished work, not done work.
+        var tasks = new FakeTasks();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(), 0.05m));
+
+        await RunAsync(tasks: tasks);
+
+        tasks.Declared[^1].State.Should().NotBe(TaskState.Done);
+    }
+
+    [Fact]
+    public async Task A_run_stopped_before_it_began_records_nothing()
+    {
+        // Nothing happened, so there is nothing for the project to be
+        // working on. A row here would be recording an intention.
+        var tasks = new FakeTasks();
+        _console.Confirm = _ => false;
+
+        await RunAsync(autonomy: "manual", tasks: tasks);
+
+        tasks.Declared.Should().BeEmpty();
     }
 
     [Fact]
@@ -766,6 +818,27 @@ public sealed class TeamRunnerTests : IDisposable
                 new HeadlessSession(pipe, ClaudeHeadlessProtocol.Instance),
                 (exit, _) => { Completed.Add(exit); return Task.CompletedTask; })));
         }
+    }
+
+    /// <summary>The project's task list, as the run writes to it.</summary>
+    private sealed class FakeTasks : Loadout.Core.Tasks.ITaskService
+    {
+        public List<(string Slug, string Id, TaskState State, string By, string? Title, string? Note)> Declared { get; } = [];
+
+        public Task<OperationResult<TaskItem>> DeclareAsync(
+            string projectSlug, string id, TaskState state, string declaredBy,
+            string? title = null, string? note = null, CancellationToken ct = default)
+        {
+            Declared.Add((projectSlug, id, state, declaredBy, title, note));
+
+            return Task.FromResult(OperationResult<TaskItem>.Ok(new TaskItem { Id = id, State = state }));
+        }
+
+        public Task<OperationResult<IReadOnlyList<TaskItem>>> ListAsync(string projectSlug, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<IReadOnlyList<TaskItem>>.Ok([]));
+
+        public Task<OperationResult> RemoveAsync(string projectSlug, string id, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult.Ok());
     }
 
     private sealed class FakeConsole : ITeamConsole

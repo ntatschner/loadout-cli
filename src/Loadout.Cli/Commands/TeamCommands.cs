@@ -361,7 +361,7 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
 }
 
 /// <summary>Where one run got to.</summary>
-[Description("Show one team run: where each node got to, what it cost, and what it left behind.")]
+[Description("Show one team run: what each node is doing now, where it got to, what it cost, and what it left behind.")]
 [CommandMeta(CommandCategory.Start, Intent = "team status run progress nodes cost what is happening")]
 public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
 {
