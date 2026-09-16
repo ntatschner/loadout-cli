@@ -742,6 +742,65 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_node_is_allowed_only_the_outward_actions_the_RUN_was_given()
+    {
+        // The whole of the boundary, from the runner's side. A team file lives
+        // in a workspace anybody on the team can push to, so the list in it is
+        // a request; what the run was handed is the answer, decided before it
+        // started. A runner reading the team's own list would make the file the
+        // decision, which is the thing this exists to prevent.
+        var team = await IteratingProjectAsync();
+        team.Rules.Gates.OutwardAllowedWhenAutonomous = ["git push --tags"];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest(
+                "demo", team, await SpecialistsAsync(), "goal", "autonomous", Offline: true),
+            _console);
+
+        _launcher.Written("role.project-lead")[0]
+            .Should().Contain("outward actions allowed: none",
+                "the team asked and nothing on this run agreed");
+    }
+
+    [Fact]
+    public async Task A_node_gets_an_outward_action_once_the_run_carries_it()
+    {
+        var team = await IteratingProjectAsync();
+        team.Rules.Gates.OutwardAllowedWhenAutonomous = ["git push --tags"];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest(
+                "demo", team, await SpecialistsAsync(), "goal", "autonomous", Offline: true,
+                OutwardAllowed: ["git push --tags"]),
+            _console);
+
+        _launcher.Written("role.project-lead")[0].Should().Contain("git push --tags");
+    }
+
+    [Fact]
+    public async Task An_outward_action_the_run_carries_still_means_nothing_outside_autonomous()
+    {
+        var team = await IteratingProjectAsync();
+        team.Rules.Gates.OutwardAllowedWhenAutonomous = ["git push --tags"];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest(
+                "demo", team, await SpecialistsAsync(), "goal", "supervised", Offline: true,
+                OutwardAllowed: ["git push --tags"]),
+            _console);
+
+        _launcher.Written("role.project-lead")[0]
+            .Should().Contain("outward actions allowed: none",
+                "in a supervised run the person is asked, so the list is not read at all");
+    }
+
+    [Fact]
     public async Task A_node_with_no_model_leaves_the_choice_to_the_project()
     {
         _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));

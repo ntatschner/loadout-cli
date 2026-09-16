@@ -26,6 +26,12 @@ namespace Loadout.Agents.Teams;
 /// <param name="MaxRounds">How many times the lead may come back with more requests before the run stops.</param>
 /// <param name="Offline">Skip the network for every launch.</param>
 /// <param name="NoSync">Skip the workspace sync for every launch.</param>
+/// <param name="OutwardAllowed">
+/// Outward actions this machine has agreed a team may allow its nodes,
+/// already decided against the team's request. Null or empty means none, which
+/// is what a caller that has not decided gets: a team file may only ask, and a
+/// run that granted what it was asked for would be no boundary at all.
+/// </param>
 public sealed record TeamRunRequest(
     string ProjectHandle,
     TeamDefinition Team,
@@ -37,7 +43,8 @@ public sealed record TeamRunRequest(
     int MaxRounds = 5,
     bool Offline = false,
     bool NoSync = false,
-    string? Model = null);
+    string? Model = null,
+    IReadOnlyList<string>? OutwardAllowed = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -224,7 +231,7 @@ public sealed class TeamRunner : ITeamRunner
         var leadBrief = MakeBrief(
             runId, team.Lead, parent: null, leadNode, leadRole, request.Goal, inputs: [],
             doneWhen: ["the goal is met, with the evidence cited from your nodes' reports"],
-            team, autonomy, request.Specialists.Find);
+            team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find);
 
         if (request.DryRun)
         {
@@ -434,7 +441,7 @@ public sealed class TeamRunner : ITeamRunner
                     var role = request.Specialists.Find(node.Role)!;
                     var brief = MakeBrief(
                         runId, ask.Node, team.Lead, node, role, ask.Task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
-                        request.Specialists.Find);
+                        request.OutwardAllowed ?? [], request.Specialists.Find);
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
@@ -1013,7 +1020,7 @@ public sealed class TeamRunner : ITeamRunner
         var brief = MakeBrief(
             runId, nodeName, team.Lead, node, role, task, conflicts,
             doneWhen: [$"'{branch}' merges into '{target}' with no conflict"],
-            team, autonomy, request.Specialists.Find);
+            team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find);
 
         var ask = new ReportRequest(nodeName, task, DeliverableKind.Commit);
 
@@ -1503,13 +1510,16 @@ public sealed class TeamRunner : ITeamRunner
         IReadOnlyList<string> doneWhen,
         TeamDefinition team,
         string autonomy,
+        IReadOnlyList<string> allowed,
         Func<string, SpecialistDocument?> specialistsOf)
     {
         var definition = role.Role;
 
-        var outwardAllowed = autonomy == "autonomous"
-            ? team.Rules.Gates.OutwardAllowedWhenAutonomous
-            : [];
+        // What this machine agreed to, not what the team file asked for. A
+        // team file is shared and may only ask; the decision is made before the
+        // run starts and arrives here already made, so forgetting to make it
+        // grants nothing rather than everything.
+        var outwardAllowed = autonomy == "autonomous" ? allowed : [];
 
         var delegates = node.Delegates.Count == 0
             ? null

@@ -173,13 +173,17 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
     private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
 
+    private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
+
     public TeamShowCommand(
         ITeamCatalogue teams,
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
         IProjectService projects,
+        Loadout.Core.Configuration.IConfigurationService configuration,
         IAnsiConsole console)
     {
+        _configuration = configuration;
         _teams = teams;
         _library = library;
         _workspace = workspace;
@@ -287,6 +291,20 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
         if (team.Rules.Gates.OutwardAllowedWhenAutonomous.Count > 0)
         {
             output.WriteLine($"  outward, autonomous only: {Markup.Escape(string.Join("; ", team.Rules.Gates.OutwardAllowedWhenAutonomous))}");
+
+            // What the team asks for, then what this machine says to it. A list
+            // shown without the answer reads as a grant, which is the one thing
+            // a team file can never be.
+            var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
+
+            var ceiling = TeamCeiling.Decide(
+                team.Rules.Gates.OutwardAllowedWhenAutonomous,
+                machine.Value?.Teams.OutwardAllowed);
+
+            output.WriteLine(ceiling.IsShort
+                ? $"  [yellow]this machine allows none of that[/]: {Markup.Escape(string.Join("; ", ceiling.Refused))}. "
+                    + "An autonomous run is refused until 'loadout config set team-outward-allowed' agrees to it."
+                : "  this machine allows all of it in an autonomous run");
         }
 
         foreach (var finding in problems)
@@ -686,6 +704,7 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
 public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 {
     private readonly ITeamRunner _runner;
+    private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
     private readonly ITeamCatalogue _teams;
     private readonly ISpecialistLibrary _library;
     private readonly IWorkspaceManager _workspace;
@@ -696,6 +715,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
     public TeamRunCommand(
         ITeamRunner runner,
+        Loadout.Core.Configuration.IConfigurationService configuration,
         ITeamCatalogue teams,
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
@@ -704,6 +724,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         ReadingProfile reading)
     {
         _runner = runner;
+        _configuration = configuration;
         _teams = teams;
         _library = library;
         _workspace = workspace;
@@ -785,6 +806,24 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
                 "Manual mode asks a person at every step, and nobody can answer here. "
                 + "Run it from a terminal, or choose --autonomy supervised.",
                 ExitCode.TerminalRequired);
+        }
+
+        // What this machine lets a team allow, decided against what the team
+        // asked for. Refused up front rather than narrowed quietly: a narrowed
+        // run spends money for minutes and then fails at the one step it was
+        // started for, reporting that a node could not push rather than that
+        // this machine never let it.
+        var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
+
+        var ceiling = autonomy == "autonomous"
+            ? TeamCeiling.Decide(
+                team.Rules.Gates.OutwardAllowedWhenAutonomous,
+                machine.Value?.Teams.OutwardAllowed)
+            : TeamCeiling.Nothing;
+
+        if (ceiling.IsShort)
+        {
+            return output.Fail(TeamCeiling.Explain(team.Name, ceiling), ExitCode.PolicyViolation);
         }
 
         var request = new TeamRunRequest(

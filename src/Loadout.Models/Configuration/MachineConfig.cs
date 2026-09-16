@@ -25,6 +25,33 @@ public sealed class MachineConfig
 
     /// <summary>Local path and launch history per project, keyed by project slug.</summary>
     public Dictionary<string, MachineProjectEntry> Projects { get; set; } = [];
+
+    /// <summary>What a team run may do here, whatever a team file asks for.</summary>
+    public MachineTeams Teams { get; set; } = new();
+}
+
+/// <summary>
+/// This machine's ceiling on team runs.
+/// </summary>
+/// <remarks>
+/// Machine-local because it is a decision, and the file a team is described in
+/// is shared: anybody who can push to the workspace can edit a team, so a team
+/// file may ask and only this may grant. The same split as command policy and
+/// as specialist packs, and worth having a third time because the failure it
+/// prevents is the same one — a change that reaches your machine because it
+/// reached somebody else's repository.
+/// </remarks>
+public sealed class MachineTeams
+{
+    /// <summary>
+    /// Outward actions a team may allow its nodes in an autonomous run, each
+    /// named exactly as the team file names it.
+    /// </summary>
+    /// <remarks>
+    /// Empty by default, and empty means none. A fresh machine does not push
+    /// anything unattended because a file somebody else edited said it could.
+    /// </remarks>
+    public List<string> OutwardAllowed { get; set; } = [];
 }
 
 /// <summary>This machine's view of one project.</summary>

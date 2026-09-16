@@ -302,6 +302,15 @@ public static class ConfigKeys
             (_, m, v) => m.DefaultCloneRoot = v, true,
             Group: Groups.Machine),
 
+        new("team-outward-allowed",
+            "Comma-separated outward actions a team may allow its nodes in an autonomous run",
+            (_, m) => string.Join(", ", m.Teams.OutwardAllowed),
+            (_, m, v) => m.Teams.OutwardAllowed = SplitActions(v),
+            true,
+            Sample: "git push --tags",
+            Group: Groups.Machine,
+            WhenUnset: "a team may allow nothing; every outward action is held for you"),
+
         new("discovery-roots", "Comma-separated directories scanned for repositories",
             (_, m) => string.Join(", ", m.DiscoveryRoots),
             (_, m, v) => m.DiscoveryRoots = SplitDirectories(v),
@@ -510,6 +519,19 @@ public static class ConfigKeys
     /// two roots that are each nonsense.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Splits a list of commands on commas only.
+    /// </summary>
+    /// <remarks>
+    /// Not on semicolons, which directories are split on: a shell command may
+    /// contain one, and splitting there would turn one action somebody agreed
+    /// to into two they did not.
+    /// </remarks>
+    private static List<string> SplitActions(string value) =>
+        [.. value.Split(
+            ',',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
     private static List<string> SplitDirectories(string value) =>
         [.. value.Split(
             [',', ';'],

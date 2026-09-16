@@ -71,8 +71,9 @@ and no progress is a stop condition like any other.
 - **supervised** is the default: the run proceeds, and holds for you at the
   gates the team names.
 - **autonomous** holds for nothing, within its budget and its permissions. It is
-  the only posture where a team's named outward actions apply: in manual and
-  supervised runs that list is ignored entirely.
+  the only posture where a team's named outward actions apply — and then only
+  the ones this machine has agreed to. In manual and supervised runs that list
+  is ignored entirely.
 
 ## What a run may spend
 
@@ -100,6 +101,18 @@ edit it. So it may ask for things and it may never grant them.
   is a finding, and `team show` says so. What a team *may* name is a list of
   outward actions allowed in autonomous runs — and that list is ignored in every
   other posture.
+- **That list is a request, and this machine answers it.** Nothing in it applies
+  until you agree to it here:
+
+  ```sh
+  loadout config set team-outward-allowed "git push --tags"
+  ```
+
+  Unset means none, which is why the shipped `release-crew` — which asks to push
+  a tag unattended — will not do so on a machine that has not said it may. An
+  autonomous run of a team asking for something this machine has not granted is
+  refused before anything starts, naming the action and both ways out. Matching
+  is exact: agreeing to `git push` does not agree to `git push --force`.
 - **Each node's permissions come from its role**, not from the team file. They
   are written out before the run starts, deny wins, and anything nothing matches
   is denied.
@@ -207,9 +220,9 @@ Said here rather than discovered:
 - A node cannot ask *you* a permission question mid-turn. Its permissions are
   decided from its role before it starts, and anything unmatched is denied.
 - There is no webhook: nothing outside this machine can start a run.
-- A team declaring more than this machine would allow is **not** refused up
-  front. What stops it is the node's own permissions and the agent's, at the
-  moment it tries.
+- The machine's ceiling covers outward actions only. Everything else a node may
+  do comes from its role and the agent's own permissions, checked when it tries
+  rather than before the run starts.
 
 ## See also
 
