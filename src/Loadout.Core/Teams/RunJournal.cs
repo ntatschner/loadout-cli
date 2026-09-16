@@ -423,6 +423,10 @@ public sealed class RunJournal : IRunJournal
             "run.finished" => $"finished: {entry.Text("ended")}",
             "round.started" => $"round {entry.Number("round")} of {entry.Number("of")}",
             "node.doing" => entry.Text("doing") ?? "working",
+            "permission.asked" => (entry.Data.TryGetProperty("allowed", out var yes)
+                    && yes.ValueKind == JsonValueKind.True ? "allowed " : "refused ")
+                + entry.Text("tool")
+                + (entry.Text("target") is { Length: > 0 } at ? $" {at}" : string.Empty),
             "node.launched" => $"launched as {entry.Text("role")}"
                 + (entry.Text("worktree") is { Length: > 0 } tree ? $" on {tree}" : string.Empty),
             "node.turn" => $"turn {entry.Number("attempt")}: {entry.Number("turns")} exchange(s), "

@@ -240,7 +240,7 @@ public sealed class TeamRunner : ITeamRunner
                 runId, null, "dry run", null, 0m, 0, warnings, LeadPlan: plan.Plan));
         }
 
-        var directory = Path.Combine(_paths.Paths.State, "teams", "runs", runId);
+        var directory = RunDirectory(runId);
         Directory.CreateDirectory(directory);
 
         var journal = new Journal(Path.Combine(directory, "journal.jsonl"), runId, _time);
@@ -552,6 +552,8 @@ public sealed class TeamRunner : ITeamRunner
 
             await journal.WriteAsync("node.ended", team.Lead, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
             await lead.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
+
+            await FoldQuestionsAsync(leadBrief, journal, warnings, CancellationToken.None).ConfigureAwait(false);
 
             // A node that produced no report and said why on its error
             // stream has explained itself, and that explanation must reach
@@ -1188,6 +1190,8 @@ public sealed class TeamRunner : ITeamRunner
         await journal.WriteAsync("node.ended", brief.Node, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
         await launch.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
 
+        await FoldQuestionsAsync(brief, journal, warnings, CancellationToken.None).ConfigureAwait(false);
+
         if (turn.Report is null)
         {
             // Both halves of what it left behind: what it wrote to the
@@ -1341,11 +1345,31 @@ public sealed class TeamRunner : ITeamRunner
     {
         var definition = role.Role ?? new RoleDefinition(null, null, null, [], []);
 
+        // Written before the node starts, because whatever answers its
+        // permission questions is a separate process with nothing else to
+        // answer from: the agent calls the launcher's own server, and the
+        // server reads this. A dry run writes none, as it writes nothing.
+        var policy = dryRun
+            ? null
+            : await NodePermissions.WriteAsync(
+                RunDirectory(brief.Run),
+                new NodePolicy(
+                    brief.Run,
+                    brief.Node,
+                    role.Id,
+                    definition.AllowedTools ?? [],
+                    definition.DeniedTools ?? []),
+                ct).ConfigureAwait(false);
+
         var options = new HeadlessOptions(
             Permission: Tier(definition.Mode),
             AllowedTools: definition.AllowedTools,
             DeniedTools: definition.DeniedTools,
-            PermissionAnswerer: null,
+
+            // Named as the agent addresses a tool on the launcher's own
+            // server. Reached only where the agent asks at all, which its
+            // posture decides: one that asks nothing never calls it.
+            PermissionAnswerer: policy is null ? null : "mcp__loadout__loadout_permission",
             MaxTurns: team.Rules.Budget.TurnsPerNode,
             BudgetUsd: null,
             OutputSchemaJson: ReportSchema.Version1,
@@ -1374,9 +1398,89 @@ public sealed class TeamRunner : ITeamRunner
             // whatever the repository has checked out, and the reviewer
             // after it reads a change already on that branch.
             Worktree: brief.Constraints.Worktree,
-            CreateWorktree: brief.Constraints.Worktree is { Length: > 0 });
+            CreateWorktree: brief.Constraints.Worktree is { Length: > 0 },
+            PermissionPolicyPath: policy);
 
         return await _launcher.StartHeadlessAsync(launch, options, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Where a run keeps everything it writes.</summary>
+    private string RunDirectory(string runId) =>
+        Path.Combine(_paths.Paths.State, "teams", "runs", runId);
+
+    /// <summary>
+    /// Takes what the answerer recorded into the run's own record, once the
+    /// node that asked has gone.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The answerer runs in another process, so it writes its own file rather
+    /// than appending to the journal: two processes appending to one file is
+    /// how a record acquires half lines. This is the fold, and it happens
+    /// after the node has ended, when nothing more can be written to it.
+    /// </para>
+    /// <para>
+    /// A refusal is worth telling the person about, because it is usually not
+    /// a node misbehaving. It is a role whose lists are narrower than the work
+    /// it was given, and nobody finds that out from a count of denials.
+    /// </para>
+    /// </remarks>
+    private async Task FoldQuestionsAsync(
+        Brief brief,
+        Journal journal,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        var path = Path.Combine(RunDirectory(brief.Run), NodePermissions.AskedFileName(brief.Node));
+
+        string[] lines;
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            lines = await File.ReadAllLinesAsync(path, ct).ConfigureAwait(false);
+
+            // Removed once folded, so a node briefed a second time in the
+            // same run does not have its first turn's questions counted
+            // again.
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var refused = new List<string>();
+
+        foreach (var line in lines)
+        {
+            if (RunJournal.Parse($$"""{"kind":"permission.asked","data":{{line}}}""") is not { } asked)
+            {
+                continue;
+            }
+
+            await journal.WriteAsync("permission.asked", brief.Node, asked.Data, ct).ConfigureAwait(false);
+
+            if (asked.Data.TryGetProperty("allowed", out var allowed) && allowed.ValueKind == JsonValueKind.False)
+            {
+                var what = asked.Text("tool") ?? "something";
+                var target = asked.Text("target");
+
+                refused.Add(target is { Length: > 0 } ? $"{what} ({target})" : what);
+            }
+        }
+
+        if (refused.Count > 0)
+        {
+            warnings.Add(
+                $"{brief.Node} asked for {refused.Count} thing(s) its role does not allow: "
+                + string.Join(", ", refused.Distinct(StringComparer.Ordinal))
+                + ". Either the role is narrower than the work, or the node was going somewhere it should not.");
+        }
     }
 
     /// <summary>The permission tier a posture gets: edits accepted only for one that changes the repository.</summary>

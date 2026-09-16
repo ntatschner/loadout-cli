@@ -63,6 +63,11 @@ namespace Loadout.Agents;
 /// let the project and then the agent decide. Written as the agent spells
 /// it: the launcher translates the flag, never the name.
 /// </param>
+/// <param name="PermissionPolicyPath">
+/// A team node's permission policy, which the launcher's own server answers
+/// the agent's permission questions from. Null for an ordinary session, where
+/// the person at the keyboard answers their own.
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -81,7 +86,8 @@ public sealed record LaunchRequest(
     string? RepositoryPath = null,
     bool DryRun = false,
     string? Model = null,
-    bool CreateWorktree = false);
+    bool CreateWorktree = false,
+    string? PermissionPolicyPath = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -693,7 +699,8 @@ public sealed class AgentLauncher : IAgentLauncher
             [
                 .. _mcp.ConfigFiles(project.Entry.Slug),
                 .. SelfServerConfig.Write(
-                    config.AgentTools.Enabled, project.Entry.Slug, runtimeDirectory, warnings),
+                    config.AgentTools.Enabled, project.Entry.Slug, runtimeDirectory, warnings,
+                    policyPath: request.PermissionPolicyPath),
             ],
 
             // Resolved here rather than in the adapter, because the two

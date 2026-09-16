@@ -1,8 +1,10 @@
 using System.Text;
+using System.Text.Json;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
+using Loadout.Core.Teams;
 using Loadout.Core.Workspace;
 using Loadout.Core.Git;
 using Loadout.Models.Instructions;
@@ -24,6 +26,10 @@ public sealed class McpServeSettings : GlobalSettings
     [CommandOption("--project <PROJECT>")]
     [Description("Project the tools answer about. Defaults to the repository the agent is in.")]
     public string? Project { get; init; }
+
+    [CommandOption("--policy <PATH>")]
+    [Description("A team node's permission policy, which this session answers its agent's permission questions from.")]
+    public string? Policy { get; init; }
 }
 
 /// <summary>
@@ -71,7 +77,7 @@ public sealed class McpServeCommand : AsyncCommand<McpServeSettings>
         var services = new ServiceCollection();
 
         services.AddPlatformServices().AddCoreServices();
-        services.AddSingleton(new LoadoutToolScope(settings.Project));
+        services.AddSingleton(new LoadoutToolScope(settings.Project, settings.Policy));
         services.AddSingleton<LoadoutTools>();
 
         using var provider = services.BuildServiceProvider();
@@ -116,9 +122,14 @@ public sealed class McpServeCommand : AsyncCommand<McpServeSettings>
         typeof(McpServeCommand).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 }
 
-/// <summary>Which project the served tools answer about.</summary>
+/// <summary>Which project the served tools answer about, and for whom.</summary>
 /// <param name="Project">Project handle, or null to work it out from the repository.</param>
-public sealed record LoadoutToolScope(string? Project);
+/// <param name="PolicyPath">
+/// The node policy this session answers permission questions from, or null
+/// when it is nobody's node - an ordinary session with a person at the
+/// keyboard, who answers their own.
+/// </param>
+public sealed record LoadoutToolScope(string? Project, string? PolicyPath = null);
 
 /// <summary>
 /// The launcher operations an agent may call for itself.
@@ -542,6 +553,110 @@ public sealed class LoadoutTools
         }
 
         return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>
+    /// Answers the agent's own permission question for a node of a team run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not a tool for a session to call. The agent calls it by itself when it
+    /// stops to ask, because the launcher named it with
+    /// <c>--permission-prompt-tool</c>, and the shape of the answer is the
+    /// agent's contract rather than this launcher's: a JSON object saying
+    /// allow or deny.
+    /// </para>
+    /// <para>
+    /// A session with no policy denies everything it is asked about. That is
+    /// the safe direction: this is only reached when nobody is at the
+    /// keyboard, and a launcher that guessed "yes" on behalf of an absent
+    /// person would be the worst thing here.
+    /// </para>
+    /// <para>
+    /// Every question is recorded beside the policy, so the run can say what
+    /// its nodes asked for and what they were told - which is the difference
+    /// between a role that was too narrow and a node that tried something it
+    /// should not have.
+    /// </para>
+    /// </remarks>
+    [McpServerTool(Name = "loadout_permission")]
+    [Description(
+        "Answers whether the session may make a tool call it stopped to ask about, from the "
+        + "policy of the team node it is running as. The agent calls this itself; there is no "
+        + "reason for you to call it.")]
+    public string Permission(
+        [Description("The tool being asked about.")] string tool_name,
+        [Description("The call's input, as the agent would make it.")] JsonElement? input = null,
+        [Description("The agent's own identifier for the call.")] string? tool_use_id = null)
+    {
+        var policy = _scope.PolicyPath is { Length: > 0 } path ? NodePermissions.Read(path) : null;
+        var inputJson = input?.ValueKind is JsonValueKind.Object ? input.Value.GetRawText() : null;
+        var decision = NodePermissions.Decide(policy, tool_name, inputJson);
+
+        Record(policy, tool_name, inputJson, decision, tool_use_id);
+
+        return JsonSerializer.Serialize(decision.Allowed
+            ? new Dictionary<string, object?>
+            {
+                ["behavior"] = "allow",
+
+                // Unchanged. Rewriting a call the agent asked about would
+                // make the answer a different question from the one put.
+                ["updatedInput"] = input?.ValueKind is JsonValueKind.Object
+                    ? JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(input.Value.GetRawText())
+                    : new Dictionary<string, JsonElement>(),
+            }
+            : new Dictionary<string, object?>
+            {
+                ["behavior"] = "deny",
+                ["message"] = decision.Reason,
+            });
+    }
+
+    /// <summary>Keeps what was asked, beside the policy it was answered from.</summary>
+    /// <remarks>
+    /// Its own file rather than the run's journal: the journal is appended to
+    /// by the coordinator, this is a different process, and two processes
+    /// appending to one file is how a record acquires half lines. The
+    /// coordinator folds these in when the node's turn is over.
+    /// </remarks>
+    private void Record(
+        NodePolicy? policy,
+        string tool,
+        string? inputJson,
+        PermissionDecision decision,
+        string? toolUseId)
+    {
+        if (_scope.PolicyPath is not { Length: > 0 } path || policy is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var line = JsonSerializer.Serialize(new
+            {
+                at = _time.GetUtcNow(),
+                node = policy.Node,
+                tool,
+                target = NodePermissions.Target(inputJson),
+                allowed = decision.Allowed,
+                rule = decision.Rule,
+                reason = decision.Reason,
+                toolUseId,
+            });
+
+            File.AppendAllText(
+                Path.Combine(
+                    Path.GetDirectoryName(path) ?? ".",
+                    NodePermissions.AskedFileName(policy.Node)),
+                line + "\n");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The answer matters more than the record of it, and there is
+            // nowhere to complain to from inside a protocol on stdout.
+        }
     }
 
     [McpServerTool(Name = "loadout_task_declare")]

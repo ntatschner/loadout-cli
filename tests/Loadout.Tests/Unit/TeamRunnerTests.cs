@@ -316,6 +316,66 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task Every_node_gets_a_policy_and_something_to_answer_from_it()
+    {
+        // Whatever answers a node's permission questions is another process
+        // and has nothing else to go on. Without the file it denies
+        // everything, which is safe and useless.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        var policy = Loadout.Core.Teams.NodePermissions.Read(
+            Path.Combine(outcome.Directory!, Loadout.Core.Teams.NodePermissions.FileName("lead")))!;
+
+        policy.Node.Should().Be("lead");
+        policy.Role.Should().Be("role.project-lead");
+        policy.Allow.Should().NotBeEmpty();
+
+        var (request, options) = _launcher.Requests[0];
+
+        options.PermissionAnswerer.Should().Be("mcp__loadout__loadout_permission");
+        request.PermissionPolicyPath.Should().EndWith("policy-lead.json");
+    }
+
+    [Fact]
+    public async Task A_dry_run_writes_no_policy_and_names_no_answerer()
+    {
+        var outcome = (await RunAsync(dryRun: true)).Value!;
+
+        outcome.Directory.Should().BeNull();
+        _launcher.Requests[0].Options.PermissionAnswerer.Should().BeNull();
+        _launcher.Requests[0].Request.PermissionPolicyPath.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task What_a_node_asked_for_reaches_the_run_and_the_person()
+    {
+        // The answerer writes its own file because it is another process, and
+        // two processes appending to one journal is how a record acquires
+        // half lines. This is the fold, after the node has gone.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        _launcher.BeforeStart = directory => File.AppendAllText(
+            Path.Combine(directory, Loadout.Core.Teams.NodePermissions.AskedFileName("lead")),
+            """{"at":"2026-09-16T10:00:00+00:00","node":"lead","tool":"WebFetch","target":"https://example.invalid","allowed":false,"rule":null,"reason":"nothing allows it"}"""
+                + "\n");
+
+        var outcome = (await RunAsync()).Value!;
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().ContainSingle(l => l.Contains("\"kind\":\"permission.asked\""))
+            .Which.Should().Contain("WebFetch");
+
+        outcome.Warnings.Should().ContainSingle(w => w.Contains("its role does not allow"))
+            .Which.Should().Contain("WebFetch (https://example.invalid)");
+
+        File.Exists(Path.Combine(outcome.Directory!, Loadout.Core.Teams.NodePermissions.AskedFileName("lead")))
+            .Should().BeFalse("folded questions are removed, or a second turn counts them twice");
+    }
+
+    [Fact]
     public async Task Two_nodes_the_lead_asked_for_together_run_together()
     {
         // Deterministic rather than timed: each implementer holds until both
@@ -958,6 +1018,12 @@ public sealed class TeamRunnerTests : IDisposable
 
         private readonly Dictionary<string, Func<Task>> _holds = new(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Called with the run's directory as each node starts, standing in
+        /// for whatever the node's own agent does out of process.
+        /// </summary>
+        public Action<string>? BeforeStart { get; set; }
+
         /// <summary>What a session of this role waits for before it says anything.</summary>
         /// <remarks>
         /// A scripted pipe answers instantly, so nothing overlaps for long
@@ -993,6 +1059,11 @@ public sealed class TeamRunnerTests : IDisposable
             Requests.Add((request, options));
 
             var role = request.Specialists![0];
+
+            if (BeforeStart is not null && request.PermissionPolicyPath is { Length: > 0 } policy)
+            {
+                BeforeStart(Path.GetDirectoryName(policy)!);
+            }
             var plan = new LaunchPlan("claude", ["-p", "--verbose"], "C:/work", [], [], null, 0, 0, null, null, request.Task, request.Mode);
             var preflight = new PreflightResult([], new Dictionary<string, string>());
 
