@@ -117,9 +117,12 @@ public interface ITeamRunner
 /// <para>
 /// Nodes the lead asks for in one report are briefed one at a time, run
 /// together within what each node allows, and read back in the order they
-/// were asked for. The answerer for permission prompts and the daemon are
-/// later pieces, and each is said in the outcome's warnings rather than
-/// implied.
+/// were asked for. Each node's permission questions are answered from its
+/// role, by the launcher's own server, and every one is recorded.
+/// </para>
+/// <para>
+/// The daemon is a later piece, and what is not built is said in the
+/// outcome's warnings rather than implied.
 /// </para>
 /// </remarks>
 public sealed class TeamRunner : ITeamRunner
