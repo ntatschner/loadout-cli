@@ -46,6 +46,20 @@ public sealed class TeamSchedule
     /// <summary>The local time of day it runs at, when it runs daily.</summary>
     public TimeOnly? At { get; set; }
 
+    /// <summary>
+    /// The thing that starts it, when a clock is not what does.
+    /// </summary>
+    /// <remarks>
+    /// One event so far: <c>commit</c>, meaning the project's repository has
+    /// moved. It is here rather than in a list of its own because a person
+    /// thinking "what starts runs for me" wants one list, not two, and the
+    /// daemon that fires them wants one loop.
+    /// </remarks>
+    public string On { get; set; } = string.Empty;
+
+    /// <summary>The commit this last saw, for an event that watches one.</summary>
+    public string LastCommit { get; set; } = string.Empty;
+
     /// <summary>When it last started, or null when it never has.</summary>
     public DateTimeOffset? LastRun { get; set; }
 

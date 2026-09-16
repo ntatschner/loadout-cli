@@ -4,6 +4,7 @@ using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams;
 using Loadout.Core.Teams.Daemon;
 using Loadout.Models;
+using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
 using Loadout.Tui;
 using Spectre.Console;
@@ -51,6 +52,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly IRunJournal _journal;
     private readonly ICommandCatalogue _commands;
     private readonly IPlatformPaths _paths;
+    private readonly Loadout.Core.Projects.IProjectService _projects;
+    private readonly Loadout.Core.Git.IGitManager _git;
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
 
@@ -59,6 +62,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IRunJournal journal,
         ICommandCatalogue commands,
         IPlatformPaths paths,
+        Loadout.Core.Projects.IProjectService projects,
+        Loadout.Core.Git.IGitManager git,
         IAnsiConsole console,
         TimeProvider time)
     {
@@ -66,6 +71,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         _journal = journal;
         _commands = commands;
         _paths = paths;
+        _projects = projects;
+        _git = git;
         _console = console;
         _time = time;
     }
@@ -93,15 +100,18 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         if (settings.DryRun)
         {
-            var due = await _schedules.DueAsync(_time.GetUtcNow(), cancellationToken).ConfigureAwait(false);
+            var ready = await ReadyAsync(_time.GetUtcNow(), record: false, cancellationToken)
+                .ConfigureAwait(false);
 
             output.WriteLine(
-                $"[dim]Dry run: nothing was started or served.[/] {due.Value?.Count ?? 0} schedule(s) "
+                $"[dim]Dry run: nothing was started or served.[/] {ready.Count} schedule(s) "
                 + "would start now.");
 
-            foreach (var schedule in due.Value ?? [])
+            foreach (var schedule in ready)
             {
-                output.WriteLine($"  {Markup.Escape(schedule.Id)}: {Markup.Escape(schedule.Team)} on {Markup.Escape(schedule.Project)}");
+                output.WriteLine(
+                    $"  {Markup.Escape(schedule.Id)}: {Markup.Escape(schedule.Team)} on "
+                    + Markup.Escape(schedule.Project));
             }
 
             return CommandOutput.Success();
@@ -174,9 +184,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         while (!ct.IsCancellationRequested)
         {
             var now = _time.GetUtcNow();
-            var due = await _schedules.DueAsync(now, ct).ConfigureAwait(false);
+            var ready = await ReadyAsync(now, record: true, ct).ConfigureAwait(false);
 
-            foreach (var schedule in due.Value ?? [])
+            foreach (var schedule in ready)
             {
                 if (ct.IsCancellationRequested)
                 {
@@ -216,6 +226,91 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             await Task.Delay(Interval, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Everything that should start now: what the clock says, and what has
+    /// happened.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A schedule watching for a commit is due when the project's repository
+    /// is not where it was last time this looked. The first look never fires:
+    /// writing down a trigger and having it go off immediately, against
+    /// whatever happened to be checked out, is not what anybody meant by "when
+    /// the repository moves".
+    /// </para>
+    /// <para>
+    /// <paramref name="record"/> is false for the preview, which must be able
+    /// to say what would happen without changing what happens next. A dry run
+    /// that wrote down the commit it saw would arm the trigger it was only
+    /// asked about.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<TeamSchedule>> ReadyAsync(
+        DateTimeOffset now,
+        bool record,
+        CancellationToken ct)
+    {
+        var listed = await _schedules.ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return [];
+        }
+
+        var ready = new List<TeamSchedule>();
+
+        foreach (var schedule in listed.Value!)
+        {
+            if (ScheduleService.IsDue(schedule, now))
+            {
+                ready.Add(schedule);
+
+                continue;
+            }
+
+            if (!schedule.Enabled || schedule.On.Length == 0)
+            {
+                continue;
+            }
+
+            if (await MovedAsync(schedule, record, ct).ConfigureAwait(false))
+            {
+                ready.Add(schedule);
+            }
+        }
+
+        return ready;
+    }
+
+    /// <summary>Whether the project this watches has moved since it last looked.</summary>
+    private async Task<bool> MovedAsync(TeamSchedule schedule, bool record, CancellationToken ct)
+    {
+        var resolution = await _projects.ResolveAsync(schedule.Project, ct).ConfigureAwait(false);
+
+        if (resolution.Failed || resolution.Value?.LocalPath is not { Length: > 0 } repository)
+        {
+            return false;
+        }
+
+        var state = await _git.GetStateAsync(repository, ct).ConfigureAwait(false);
+
+        if (state.Failed || state.Value?.HeadCommit is not { Length: > 0 } head)
+        {
+            return false;
+        }
+
+        var moved = ScheduleService.Moved(schedule, head);
+
+        if (record && !string.Equals(head, schedule.LastCommit, StringComparison.Ordinal))
+        {
+            // Written down whether or not it fires. The first look records
+            // where the repository is so that the next move is one.
+            await _schedules.SawAsync(schedule.Id, head, ct).ConfigureAwait(false);
+        }
+
+        return moved;
     }
 
     /// <summary>Where the daemon says it is, for whatever wants to find it.</summary>

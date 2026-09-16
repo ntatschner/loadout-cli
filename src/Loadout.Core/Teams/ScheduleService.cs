@@ -25,6 +25,9 @@ public interface IScheduleService
 
     /// <summary>Records that one has started, so it is not started again.</summary>
     Task<OperationResult> StartedAsync(string id, DateTimeOffset when, string runId, CancellationToken ct = default);
+
+    /// <summary>Records the commit an event-watching schedule has now seen.</summary>
+    Task<OperationResult> SawAsync(string id, string commit, CancellationToken ct = default);
 }
 
 /// <inheritdoc />
@@ -166,6 +169,30 @@ public sealed class ScheduleService : IScheduleService
             : OperationResult.Fail(written.Error!, written.ExitCode);
     }
 
+    /// <inheritdoc />
+    public async Task<OperationResult> SawAsync(string id, string commit, CancellationToken ct = default)
+    {
+        var written = await _yaml.UpdateAsync<TeamScheduleList>(
+            Path,
+            () => new TeamScheduleList(),
+            list =>
+            {
+                var schedule = list.Items.Find(item =>
+                    string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase));
+
+                if (schedule is not null)
+                {
+                    schedule.LastCommit = commit;
+                }
+            },
+            true,
+            ct).ConfigureAwait(false);
+
+        return written.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(written.Error!, written.ExitCode);
+    }
+
     /// <summary>
     /// Whether a schedule should start now.
     /// </summary>
@@ -198,6 +225,8 @@ public sealed class ScheduleService : IScheduleService
 
         if (schedule.At is not { } at)
         {
+            // An event is not a clock. Whether one has happened is the
+            // daemon's question, because answering it means asking git.
             return false;
         }
 
@@ -212,6 +241,39 @@ public sealed class ScheduleService : IScheduleService
         // Once a day, not once an hour: a schedule that already ran since the
         // moment it was due has had its turn.
         return schedule.LastRun is not { } ran || ran.ToLocalTime() < today;
+    }
+
+    /// <summary>
+    /// Whether a schedule watching a repository should start, given where that
+    /// repository is now.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The first look never fires. Writing down a trigger and having it go off
+    /// immediately, against whatever happened to be checked out, is not what
+    /// anybody means by "when the repository moves" - and on a machine with
+    /// several projects it would start every one of them at once the first
+    /// time the daemon ran.
+    /// </para>
+    /// <para>
+    /// Here rather than in the daemon because it is a rule, and the rules are
+    /// here. What the daemon knows that this does not is where the repository
+    /// actually is, which is why that arrives as an argument.
+    /// </para>
+    /// </remarks>
+    public static bool Moved(TeamSchedule schedule, string? head)
+    {
+        ArgumentNullException.ThrowIfNull(schedule);
+
+        if (!schedule.Enabled
+            || schedule.On.Length == 0
+            || head is not { Length: > 0 }
+            || string.Equals(head, schedule.LastCommit, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return schedule.LastCommit.Length > 0;
     }
 
     /// <summary>When it next comes round, for a person reading the list.</summary>
@@ -239,6 +301,15 @@ public sealed class ScheduleService : IScheduleService
 
         return IsDue(schedule, now) ? today : today <= local ? today.AddDays(1) : today;
     }
+
+    /// <summary>The events a schedule can wait for.</summary>
+    /// <remarks>
+    /// One, for now, and it is the one people ask for: the repository moved.
+    /// Whether it has moved is a question for whoever holds a git manager, so
+    /// the daemon answers it; this only says the word is one that means
+    /// something.
+    /// </remarks>
+    public static IReadOnlyList<string> Events { get; } = ["commit"];
 
     /// <summary>What is wrong with a schedule, or null when nothing is.</summary>
     private static string? Check(TeamSchedule schedule)
@@ -273,9 +344,15 @@ public sealed class ScheduleService : IScheduleService
                 + "read until morning. Use supervised or autonomous.";
         }
 
-        if (schedule.Every is null && schedule.At is null)
+        if (schedule.On is { Length: > 0 } on && !Events.Contains(on, StringComparer.OrdinalIgnoreCase))
         {
-            return "A schedule needs either how often it runs or the time of day it runs at.";
+            return $"'{on}' is not something this can watch for. It knows: {string.Join(", ", Events)}.";
+        }
+
+        if (schedule.Every is null && schedule.At is null && schedule.On.Length == 0)
+        {
+            return "A schedule needs how often it runs, the time of day it runs at, or something to "
+                + "watch for.";
         }
 
         if (schedule.Every is { } every && every < TimeSpan.FromMinutes(5))

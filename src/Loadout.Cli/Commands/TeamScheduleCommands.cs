@@ -78,6 +78,10 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
         [Description("The time of day it runs, as 09:00, in this machine's own time.")]
         public string? At { get; init; }
 
+        [CommandOption("--on <EVENT>")]
+        [Description("Something to watch for instead of a clock. Known: commit, meaning the repository moved.")]
+        public string? On { get; init; }
+
         [CommandOption("--autonomy <MODE>")]
         [Description("supervised or autonomous. Never manual: nobody is watching when it fires.")]
         public string? Autonomy { get; init; }
@@ -160,6 +164,7 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
             Autonomy = settings.Autonomy ?? team.Rules.Autonomy,
             Every = every,
             At = at,
+            On = settings.On ?? string.Empty,
         };
 
         if (settings.DryRun)
@@ -222,7 +227,9 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
             ? $"every {Spell(every)}"
             : schedule.At is { } at
                 ? $"daily at {at:HH:mm}"
-                : "never";
+                : schedule.On is { Length: > 0 } on
+                    ? $"on {on}"
+                    : "never";
 
         var next = ScheduleService.Next(schedule, now) is { } due
             ? $", next {due.ToLocalTime():yyyy-MM-dd HH:mm}"
@@ -285,6 +292,8 @@ public sealed class TeamScheduleListCommand : AsyncCommand<GlobalSettings>
                     schedule.Autonomy,
                     every = schedule.Every,
                     at = schedule.At?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    on = schedule.On,
+                    schedule.LastCommit,
                     schedule.Enabled,
                     lastRun = schedule.LastRun,
                     schedule.LastRunId,

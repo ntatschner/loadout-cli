@@ -225,6 +225,102 @@ public sealed class ScheduleTests : IDisposable
         ScheduleService.Next(daily, due).Should().BeNull();
     }
 
+    [Fact]
+    public async Task A_schedule_can_wait_for_something_instead_of_a_clock()
+    {
+        var watching = Nightly();
+        watching.At = null;
+        watching.On = "commit";
+
+        (await _schedules.SaveAsync(watching)).Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task An_event_nobody_knows_is_refused_with_the_ones_that_are_known()
+    {
+        var watching = Nightly();
+        watching.At = null;
+        watching.On = "sunrise";
+
+        var saved = await _schedules.SaveAsync(watching);
+
+        saved.Failed.Should().BeTrue();
+        saved.Error.Should().Contain("commit", "the refusal has to say what it does know");
+    }
+
+    [Fact]
+    public void An_event_is_not_a_clock()
+    {
+        // Whether a repository has moved is a question for whoever holds a git
+        // manager. This only knows about time, and says so by never calling an
+        // event due.
+        var watching = Nightly();
+        watching.At = null;
+        watching.On = "commit";
+
+        ScheduleService.IsDue(watching, DateTimeOffset.UtcNow).Should().BeFalse();
+        ScheduleService.Next(watching, DateTimeOffset.UtcNow).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task What_a_watching_schedule_has_seen_is_written_down()
+    {
+        var watching = Nightly();
+        watching.At = null;
+        watching.On = "commit";
+
+        await _schedules.SaveAsync(watching);
+
+        (await _schedules.SawAsync("nightly", "abc1234")).Succeeded.Should().BeTrue();
+
+        var listed = await _schedules.ListAsync();
+
+        listed.Value![0].LastCommit.Should().Be("abc1234");
+    }
+
+    [Fact]
+    public void The_first_look_at_a_repository_never_fires()
+    {
+        // Writing down a trigger and having it go off immediately, against
+        // whatever happened to be checked out, is not what anybody means by
+        // "when the repository moves" - and on a machine with several
+        // projects it would start every one of them at once.
+        var watching = Nightly();
+        watching.At = null;
+        watching.On = "commit";
+
+        ScheduleService.Moved(watching, "abc1234").Should().BeFalse();
+
+        watching.LastCommit = "abc1234";
+
+        ScheduleService.Moved(watching, "abc1234").Should().BeFalse("it has not moved");
+        ScheduleService.Moved(watching, "def5678").Should().BeTrue();
+    }
+
+    [Fact]
+    public void A_repository_nobody_could_read_does_not_fire_anything()
+    {
+        var watching = Nightly();
+        watching.At = null;
+        watching.On = "commit";
+        watching.LastCommit = "abc1234";
+
+        ScheduleService.Moved(watching, null).Should().BeFalse();
+        ScheduleService.Moved(watching, string.Empty).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_paused_watcher_watches_nothing()
+    {
+        var watching = Nightly();
+        watching.At = null;
+        watching.On = "commit";
+        watching.LastCommit = "abc1234";
+        watching.Enabled = false;
+
+        ScheduleService.Moved(watching, "def5678").Should().BeFalse();
+    }
+
     [Theory]
     [InlineData("30m", 30)]
     [InlineData("2h", 120)]
