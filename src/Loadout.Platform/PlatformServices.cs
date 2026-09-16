@@ -25,8 +25,9 @@ public static class PlatformServices
     public static IServiceCollection AddPlatformServices(this IServiceCollection services)
     {
         var environment = new SystemEnvironmentProvider();
-        var processes = new ProcessLauncher();
         var host = DetectHost(environment);
+        var lifetime = CreateChildLifetime();
+        var processes = new ProcessLauncher(lifetime);
 
         var permissions = CreateFilePermissions();
         var resolver = new ExecutableResolver(environment, StandardSearchPaths(environment, host));
@@ -39,11 +40,12 @@ public static class PlatformServices
         var secrets = CreateSecretProvider(processes, resolver);
 
         var capabilities = new PlatformCapabilities(
-            () => Probe(host, secrets, clipboard, opener, desktop, terminals));
+            () => Probe(host, secrets, clipboard, opener, desktop, terminals, lifetime));
 
         services.AddSingleton(host);
         services.AddSingleton<IEnvironmentProvider>(environment);
         services.AddSingleton<IProcessLauncher>(processes);
+        services.AddSingleton(lifetime);
         services.AddSingleton<IProcessInspector>(new ProcessInspector());
         services.AddSingleton<IFilePermissions>(permissions);
         services.AddSingleton<IExecutableResolver>(resolver);
@@ -275,15 +277,34 @@ public static class PlatformServices
         _ => "xdg-open",
     };
 
+    /// <summary>
+    /// How this platform keeps a driven child from outliving the launcher.
+    /// </summary>
+    /// <remarks>
+    /// Windows has a kernel-enforced answer and the others do not, so the
+    /// others get the portable one and say so. A Unix equivalent exists in
+    /// pieces — a process group the launcher signals, or PR_SET_PDEATHSIG,
+    /// which is Linux-only and has to be set by the child — and neither is
+    /// worth claiming until one has been written and run there.
+    /// </remarks>
+    private static IChildLifetime CreateChildLifetime() =>
+        OperatingSystem.IsWindows() ? new WindowsChildLifetime() : new TrackedChildLifetime();
+
     private static IReadOnlyList<CapabilityStatus> Probe(
         HostPlatform host,
         ISecretProvider secrets,
         CommandLineClipboardProvider clipboard,
         CommandLineApplicationLauncher opener,
         IDesktopIntegration desktop,
-        ITerminalProvider terminals)
+        ITerminalProvider terminals,
+        IChildLifetime lifetime)
     {
-        var statuses = new List<CapabilityStatus>();
+        var statuses = new List<CapabilityStatus>
+        {
+            lifetime.IsEnforced
+                ? CapabilityStatus.Supported(PlatformCapability.ChildProcessLifetime, lifetime.Detail)
+                : CapabilityStatus.Unsupported(PlatformCapability.ChildProcessLifetime, lifetime.Detail),
+        };
 
         var secretAvailability = secrets.IsAvailableAsync().GetAwaiter().GetResult();
         statuses.Add(secretAvailability.Succeeded

@@ -14,6 +14,20 @@ namespace Loadout.Platform.Common;
 /// </summary>
 public sealed class ProcessLauncher : IProcessLauncher
 {
+    private readonly IChildLifetime? _lifetime;
+
+    /// <summary>
+    /// A launcher whose piped children are tied to this process, or, with no
+    /// lifetime given, one whose children are nobody's responsibility.
+    /// </summary>
+    /// <remarks>
+    /// Optional because most of what starts a process here is a question that
+    /// answers in milliseconds, and because a test that runs git does not
+    /// want a process-wide exit handler. What needs it is the piped path,
+    /// where the child is an agent that would otherwise carry on alone.
+    /// </remarks>
+    public ProcessLauncher(IChildLifetime? lifetime = null) => _lifetime = lifetime;
+
     /// <inheritdoc />
     public async Task<OperationResult<ProcessOutcome>> RunAsync(
         ProcessRequest request,
@@ -189,6 +203,11 @@ public sealed class ProcessLauncher : IProcessLauncher
             return OperationResult<IPipedProcess>.Fail(
                 $"Could not start '{request.Executable}': {ex.Message}", ExitCode.AgentUnavailable);
         }
+
+        // Before anything is written to it: a child adopted after the first
+        // message is a child that could outlive the launcher for as long as
+        // that took.
+        _lifetime?.Adopt(process.Id);
 
         var piped = new PipedProcess(process);
 

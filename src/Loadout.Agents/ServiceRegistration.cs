@@ -40,7 +40,8 @@ public static class ServiceRegistration
             provider.GetRequiredService<IPlatformPaths>(),
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<Core.Projects.IProjectService>(),
-            provider.GetRequiredService<Core.Git.IGitManager>()));
+            provider.GetRequiredService<Core.Git.IGitManager>(),
+            provider.GetRequiredService<IChildLifetime>()));
         services.AddSingleton<IDiagnosticContributor, AgentDiagnosticContributor>();
 
         return services;

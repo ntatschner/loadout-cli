@@ -81,9 +81,12 @@ public sealed class TeamRunnerTests : IDisposable
         (await new TeamCatalogue().LoadAsync(null, null, await SpecialistsAsync())).Find("iterating-project")!;
 
     private async Task<OperationResult<TeamRunOutcome>> RunAsync(
-        TeamDefinition? team = null, string autonomy = "supervised", bool dryRun = false)
+        TeamDefinition? team = null,
+        string autonomy = "supervised",
+        bool dryRun = false,
+        IChildLifetime? lifetime = null)
     {
-        return await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+        return await new TeamRunner(_launcher, _paths, TimeProvider.System, lifetime: lifetime).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, Offline: true),
             _console);
@@ -295,6 +298,52 @@ public sealed class TeamRunnerTests : IDisposable
         (await RunAsync(autonomy: "autonomous")).Value!.Ended.Should().Be("done");
 
         _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **yes**");
+    }
+
+    [Fact]
+    public async Task A_run_says_when_its_nodes_would_survive_a_killed_coordinator()
+    {
+        // A coordinator killed rather than stopped once left a lead and a
+        // verifier running. Where the platform cannot prevent that, the run
+        // says so rather than letting an unattended run imply otherwise.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync(lifetime: new UnenforcedLifetime())).Value!;
+
+        outcome.Warnings.Should().ContainSingle(w => w.Contains("keep running and keep spending"))
+            .Which.Should().Contain("this machine has no job object");
+    }
+
+    [Fact]
+    public async Task A_run_whose_platform_enforces_the_promise_says_nothing_about_it()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync(lifetime: new EnforcedLifetime())).Value!;
+
+        outcome.Warnings.Should().NotContain(w => w.Contains("keep running and keep spending"));
+    }
+
+    private sealed class UnenforcedLifetime : IChildLifetime
+    {
+        public bool IsEnforced => false;
+
+        public string Detail => "this machine has no job object";
+
+        public void Adopt(int processId)
+        {
+        }
+    }
+
+    private sealed class EnforcedLifetime : IChildLifetime
+    {
+        public bool IsEnforced => true;
+
+        public string Detail => "a job object the kernel closes with the launcher";
+
+        public void Adopt(int processId)
+        {
+        }
     }
 
     [Fact]

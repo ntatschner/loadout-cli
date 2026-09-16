@@ -129,24 +129,29 @@ public sealed class TeamRunner : ITeamRunner
     private readonly TimeProvider _time;
     private readonly Core.Projects.IProjectService? _projects;
     private readonly Core.Git.IGitManager? _git;
+    private readonly IChildLifetime? _lifetime;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
     /// only drives nodes needs neither; without them a run cannot merge and
-    /// says so rather than appearing to.
+    /// says so rather than appearing to. The child lifetime is optional for
+    /// the same reason, and a run that has one says so when it is the weaker
+    /// kind.
     /// </summary>
     public TeamRunner(
         IAgentLauncher launcher,
         IPlatformPaths paths,
         TimeProvider time,
         Core.Projects.IProjectService? projects = null,
-        Core.Git.IGitManager? git = null)
+        Core.Git.IGitManager? git = null,
+        IChildLifetime? lifetime = null)
     {
         _launcher = launcher;
         _paths = paths;
         _time = time;
         _projects = projects;
         _git = git;
+        _lifetime = lifetime;
     }
 
     /// <inheritdoc />
@@ -194,6 +199,16 @@ public sealed class TeamRunner : ITeamRunner
         {
             "This runner briefs requests one at a time, so a node that could run beside another waits for it.",
         };
+
+        if (_lifetime is { IsEnforced: false })
+        {
+            // Said rather than implied: an unattended run is exactly where
+            // nobody would notice an agent still spending after the thing
+            // driving it had gone.
+            warnings.Add(
+                "If this coordinator is killed rather than stopped, its nodes keep running and keep spending, "
+                + $"because {_lifetime.Detail}.");
+        }
 
         var leadNode = team.Nodes[team.Lead];
         var leadRole = request.Specialists.Find(leadNode.Role)!;

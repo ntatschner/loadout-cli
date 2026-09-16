@@ -48,6 +48,20 @@ public enum PlatformCapability
 
     /// <summary>A graphical session is present. Headless servers report false (spec section 86).</summary>
     GraphicalSession,
+
+    /// <summary>
+    /// A child the launcher is driving is stopped even when the launcher is
+    /// terminated outright rather than asked to stop.
+    /// <para>
+    /// It matters for headless agents. One left running after the process
+    /// driving it has gone keeps spending and keeps editing, with nobody
+    /// reading what it says: a team run whose coordinator was killed left
+    /// two agents running until somebody noticed them. Where this is
+    /// unsupported an exit handler still covers an ordinary stop and Ctrl+C,
+    /// and a kill leaves orphans.
+    /// </para>
+    /// </summary>
+    ChildProcessLifetime,
 }
 
 /// <summary>Whether a capability is usable here, and if not, why not.</summary>
