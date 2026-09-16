@@ -158,6 +158,7 @@ public static class ServiceRegistration
         services.AddSingleton<Teams.ITeamCatalogue, Teams.TeamCatalogue>();
         services.AddSingleton<Teams.IRunJournal, Teams.RunJournal>();
         services.AddSingleton<Teams.IScheduleService, Teams.ScheduleService>();
+        services.AddSingleton<Diagnostics.IDiagnosticContributor, Teams.Daemon.DaemonDiagnosticContributor>();
 
         // The specialist layer: what an agent is told, and why. The library and
         // resolver hold no state of their own, so a singleton each is enough.

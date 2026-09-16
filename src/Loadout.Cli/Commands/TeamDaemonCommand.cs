@@ -54,6 +54,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly IPlatformPaths _paths;
     private readonly Loadout.Core.Projects.IProjectService _projects;
     private readonly Loadout.Core.Git.IGitManager _git;
+    private readonly IProcessInspector _processes;
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
 
@@ -64,6 +65,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IPlatformPaths paths,
         Loadout.Core.Projects.IProjectService projects,
         Loadout.Core.Git.IGitManager git,
+        IProcessInspector processes,
         IAnsiConsole console,
         TimeProvider time)
     {
@@ -73,6 +75,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         _paths = paths;
         _projects = projects;
         _git = git;
+        _processes = processes;
         _console = console;
         _time = time;
     }
@@ -314,8 +317,13 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     }
 
     /// <summary>Where the daemon says it is, for whatever wants to find it.</summary>
-    private string StatusPath => Path.Combine(_paths.Paths.State, "teams", "daemon.json");
+    private string StatusPath => DaemonNote.PathFor(_paths);
 
+    /// <remarks>
+    /// The process start time goes in beside the identifier, because
+    /// identifiers are reused: without it, doctor would eventually report
+    /// somebody else's process as a daemon of ours that is still going.
+    /// </remarks>
     private async Task WriteStatusAsync(string? address, CancellationToken ct)
     {
         try
@@ -324,12 +332,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             await File.WriteAllTextAsync(
                 StatusPath,
-                JsonSerializer.Serialize(new
-                {
-                    pid = Environment.ProcessId,
+                JsonSerializer.Serialize(new DaemonState(
+                    _processes.CurrentProcessId,
+                    _processes.CurrentProcessStartedAt,
                     address,
-                    since = _time.GetUtcNow(),
-                }),
+                    _time.GetUtcNow())),
                 ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
