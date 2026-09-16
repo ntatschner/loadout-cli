@@ -70,7 +70,7 @@
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout team daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
-| `loadout pack list\|add\|approve\|update\|remove` | Specialist packs fetched from a Git remote, approved per machine |
+| `loadout pack list\|add\|approve\|update\|remove` | Sets of specialists, roles and teams fetched from a Git remote, approved per machine |
 | `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |
 | `loadout spend refresh` | See and refresh where spending stands against your thresholds |
 

@@ -26,6 +26,24 @@ public class TeamSettings : GlobalSettings
 internal static class TeamLoading
 {
     /// <summary>
+    /// Where a team came from, for the end of a line, and nothing at all for
+    /// the ones that ship.
+    /// </summary>
+    /// <remarks>
+    /// The one worth saying is the pack: it is somebody else's repository, read
+    /// once and pinned at a commit, and a team file says which roles run with
+    /// which permissions. The built-ins are the default, and a row that says so
+    /// on every line teaches people to skim the lines that differ.
+    /// </remarks>
+    internal static string Whose(SpecialistOrigin origin) => origin switch
+    {
+        SpecialistOrigin.Pack => ", from a pack",
+        SpecialistOrigin.Workspace => ", from your workspace",
+        SpecialistOrigin.Project => ", from this project",
+        _ => string.Empty,
+    };
+
+    /// <summary>
     /// The teams and the library they draw on, for the project named or the
     /// one this directory is in. When neither resolves, the built-ins and the
     /// workspace's own still load, so a listing works from anywhere; a run
@@ -108,6 +126,7 @@ public sealed class TeamListCommand : AsyncCommand<TeamSettings>
                     t.Lead,
                     nodes = t.Nodes.Count,
                     autonomy = t.Rules.Autonomy,
+                    origin = catalogue.Origin(t.Name).ToString().ToLowerInvariant(),
                 }),
                 findings = catalogue.Findings.Select(f => new { team = f.Rule, f.Kind, f.Detail }),
             });
@@ -120,7 +139,8 @@ public sealed class TeamListCommand : AsyncCommand<TeamSettings>
             output.WriteLine(
                 $"[bold]{Markup.Escape(team.Name)}[/]"
                 + (team.Template ? "  [dim]template[/]" : string.Empty)
-                + $"  [dim]{team.Nodes.Count} node(s), {Markup.Escape(team.Rules.Autonomy)}[/]");
+                + $"  [dim]{team.Nodes.Count} node(s), {Markup.Escape(team.Rules.Autonomy)}"
+                + $"{TeamLoading.Whose(catalogue.Origin(team.Name))}[/]");
             output.WriteLine($"  {Markup.Escape(team.Description)}");
         }
 

@@ -27,8 +27,9 @@ public sealed class TeamCatalogueTests : IDisposable
     private static async Task<SpecialistCatalogue> SpecialistsAsync() =>
         _specialists ??= await new SpecialistLibrary().LoadAsync(workspaceRoot: null);
 
-    private async Task<TeamCatalogueResult> LoadAsync(string? slug = null) =>
-        await new TeamCatalogue().LoadAsync(Directory.Exists(_workspace) ? _workspace : null, slug, await SpecialistsAsync());
+    private async Task<TeamCatalogueResult> LoadAsync(string? slug = null, string? pack = null) =>
+        await new TeamCatalogue(_ => Task.FromResult<IReadOnlyList<string>>(pack is null ? [] : [pack]))
+            .LoadAsync(Directory.Exists(_workspace) ? _workspace : null, slug, await SpecialistsAsync());
 
     public void Dispose()
     {
@@ -109,6 +110,72 @@ public sealed class TeamCatalogueTests : IDisposable
     }
 
     [Fact]
+    public async Task A_pack_may_ship_a_team_and_a_team_of_your_own_still_wins()
+    {
+        // A pack is somebody else's repository, read once and pinned at a
+        // commit. It may add a team and it may replace a shipped one, because
+        // that is what the person approving it approved - but it layers under
+        // the workspace, so it can never take back a team this team wrote for
+        // itself.
+        var pack = Pack(
+            ("audit.yaml", "name: audit\ndescription: from the pack\nlead: a\nnodes: { a: { role: role.reviewer } }\n"),
+            ("docs-crew.yaml", "name: docs-crew\ndescription: the pack's\nlead: a\nnodes: { a: { role: role.reviewer } }\n"));
+
+        WriteTeam("global", "name: audit\ndescription: ours\nlead: a\nnodes: { a: { role: role.reviewer } }\n");
+
+        var catalogue = await LoadAsync(pack: pack);
+
+        catalogue.Find("audit")!.Description.Should().Be("ours", "the workspace layers over a pack");
+        catalogue.Find("docs-crew")!.Description.Should().Be("the pack's", "and a pack layers over the built-ins");
+    }
+
+    [Fact]
+    public async Task Each_team_says_which_layer_the_definition_that_survived_came_from()
+    {
+        // The question somebody deciding whether to run one is really asking:
+        // is this ours, or is it somebody else's repository that we read once?
+        var pack = Pack(
+            ("audit.yaml", "name: audit\ndescription: from the pack\nlead: a\nnodes: { a: { role: role.reviewer } }\n"),
+            ("docs-crew.yaml", "name: docs-crew\ndescription: the pack's\nlead: a\nnodes: { a: { role: role.reviewer } }\n"));
+
+        WriteTeam("global", "name: mine\ndescription: ours\nlead: a\nnodes: { a: { role: role.reviewer } }\n", "mine.yaml");
+        WriteTeam("project", "name: theirs\ndescription: this project's\nlead: a\nnodes: { a: { role: role.reviewer } }\n", "theirs.yaml");
+
+        var catalogue = await LoadAsync("demo", pack);
+
+        // Every fixture here is a team that loads. Without this, one that did
+        // not would read as a team whose origin is the built-in fallback.
+        catalogue.Findings.Should().BeEmpty();
+
+        catalogue.Origin("bug-hunt").Should().Be(SpecialistOrigin.BuiltIn);
+        catalogue.Origin("audit").Should().Be(SpecialistOrigin.Pack);
+        catalogue.Origin("docs-crew").Should().Be(
+            SpecialistOrigin.Pack, "the origin follows the definition that won, not the name");
+        catalogue.Origin("mine").Should().Be(SpecialistOrigin.Workspace);
+        catalogue.Origin("theirs").Should().Be(SpecialistOrigin.Project);
+    }
+
+    [Fact]
+    public async Task A_team_a_pack_ships_is_checked_like_any_other()
+    {
+        var findings = (await LoadAsync(pack: Pack(("broken.yaml", "name: broken\nlead: a\nnodes: { a: { role: role.wizard } }\n"))))
+            .Findings.Where(f => f.Rule == "broken").ToList();
+
+        findings.Should().ContainSingle(f => f.Kind == "team-role");
+    }
+
+    [Fact]
+    public async Task Nothing_from_a_pack_loads_unless_something_hands_the_directory_over()
+    {
+        // The gate decides which packs are approved and hands over only those
+        // directories. A catalogue asked for none reads none, whatever is on
+        // the disk beside it.
+        Pack(("audit.yaml", "name: audit\ndescription: from the pack\nlead: a\nnodes: { a: { role: role.reviewer } }\n"));
+
+        (await LoadAsync()).Find("audit").Should().BeNull();
+    }
+
+    [Fact]
     public async Task A_project_team_wins_over_a_workspace_one()
     {
         WriteTeam("global", "name: mine\ndescription: global\nlead: a\nnodes: { a: { role: role.project-lead } }\n");
@@ -150,6 +217,20 @@ public sealed class TeamCatalogueTests : IDisposable
         catalogue.Findings.Should().Contain(f => f.Kind == "team-yaml" && f.Detail.Contains("bad.yaml"));
         catalogue.Findings.Should().Contain(f => f.Kind == "team-name" && f.Detail.Contains("nameless.yaml"));
         catalogue.Find("iterating-project").Should().NotBeNull();
+    }
+
+    /// <summary>A pack's teams directory, written and returned.</summary>
+    private string Pack(params (string File, string Yaml)[] teams)
+    {
+        var directory = Path.Combine(_workspace, "packs", "standards", "teams");
+        Directory.CreateDirectory(directory);
+
+        foreach (var (file, yaml) in teams)
+        {
+            File.WriteAllText(Path.Combine(directory, file), yaml);
+        }
+
+        return directory;
     }
 
     private void WriteTeam(string layer, string yaml, string? file = null)

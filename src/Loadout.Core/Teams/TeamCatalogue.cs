@@ -11,23 +11,38 @@ namespace Loadout.Core.Teams;
 /// <summary>Every team this launcher can run, and what is wrong with any of them.</summary>
 /// <param name="Teams">By name, later origins having replaced earlier.</param>
 /// <param name="Findings">What did not load, or loaded with a problem, each naming the team.</param>
+/// <param name="Origins">Which layer each team's surviving definition came from.</param>
 public sealed record TeamCatalogueResult(
     IReadOnlyDictionary<string, TeamDefinition> Teams,
-    IReadOnlyList<RuleFinding> Findings)
+    IReadOnlyList<RuleFinding> Findings,
+    IReadOnlyDictionary<string, SpecialistOrigin> Origins)
 {
     /// <summary>A team by name, or null.</summary>
     public TeamDefinition? Find(string name) =>
         Teams.TryGetValue(name, out var team) ? team : null;
+
+    /// <summary>
+    /// Where a team came from, which a person deciding whether to run it wants
+    /// to know: a team from a pack is somebody else's repository, read once and
+    /// pinned, and it says which roles run with which permissions.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the teams rather than on <see cref="TeamDefinition"/>,
+    /// because that type is what a YAML file deserialises into and a file that
+    /// could set its own origin could call itself built in.
+    /// </remarks>
+    public SpecialistOrigin Origin(string name) =>
+        Origins.TryGetValue(name, out var origin) ? origin : SpecialistOrigin.BuiltIn;
 }
 
 /// <summary>Loads and checks the teams available to a project.</summary>
 public interface ITeamCatalogue
 {
     /// <summary>
-    /// The built-in teams, then the workspace's, then the project's, later
-    /// replacing earlier by name, each checked against the specialist
-    /// catalogue so a team naming a role that does not exist is a finding
-    /// here rather than a failure mid-run.
+    /// The built-in teams, then the approved packs', then the workspace's,
+    /// then the project's, later replacing earlier by name, each checked
+    /// against the specialist catalogue so a team naming a role that does not
+    /// exist is a finding here rather than a failure mid-run.
     /// </summary>
     Task<TeamCatalogueResult> LoadAsync(
         string? workspaceRoot,
@@ -40,6 +55,25 @@ public interface ITeamCatalogue
 public sealed class TeamCatalogue : ITeamCatalogue
 {
     private const string BuiltInPrefix = "Loadout.Core.Teams.Catalogue.";
+
+    /// <summary>
+    /// Where the teams of approved packs live, asked for at load time.
+    /// </summary>
+    /// <remarks>
+    /// A delegate rather than the pack service itself, so the catalogue keeps
+    /// no opinion about remotes, approvals or Git - it is handed directories
+    /// that have already passed the gate, the same way the specialist library
+    /// is.
+    /// </remarks>
+    private readonly Func<CancellationToken, Task<IReadOnlyList<string>>> _packs;
+
+    /// <param name="packs">
+    /// The teams directory of each approved pack. A pack that is declared but
+    /// unapproved must never reach here: a team file says which roles run with
+    /// which permissions, so it is content somebody has to have read.
+    /// </param>
+    public TeamCatalogue(Func<CancellationToken, Task<IReadOnlyList<string>>>? packs = null) =>
+        _packs = packs ?? (_ => Task.FromResult<IReadOnlyList<string>>([]));
 
     private static readonly IDeserializer Yaml = new DeserializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance)
@@ -62,18 +96,30 @@ public sealed class TeamCatalogue : ITeamCatalogue
 
         var teams = new Dictionary<string, TeamDefinition>(StringComparer.OrdinalIgnoreCase);
         var findings = new List<RuleFinding>();
+        var origins = new Dictionary<string, SpecialistOrigin>(StringComparer.OrdinalIgnoreCase);
 
-        LoadBuiltIn(teams, findings);
+        LoadBuiltIn(teams, origins, findings);
+
+        // Packs layer over the built-ins and under the workspace, so a team a
+        // pack ships can be replaced by one of your own of the same name, and
+        // never the other way round.
+        foreach (var directory in await _packs(ct).ConfigureAwait(false))
+        {
+            await LoadDirectoryAsync(directory, SpecialistOrigin.Pack, teams, origins, findings, ct)
+                .ConfigureAwait(false);
+        }
 
         if (workspaceRoot is { Length: > 0 })
         {
-            await LoadDirectoryAsync(Path.Combine(workspaceRoot, "global", "teams"), teams, findings, ct)
-                .ConfigureAwait(false);
+            await LoadDirectoryAsync(
+                Path.Combine(workspaceRoot, "global", "teams"),
+                SpecialistOrigin.Workspace, teams, origins, findings, ct).ConfigureAwait(false);
 
             if (slug is { Length: > 0 })
             {
-                await LoadDirectoryAsync(Path.Combine(workspaceRoot, "projects", slug, "teams"), teams, findings, ct)
-                    .ConfigureAwait(false);
+                await LoadDirectoryAsync(
+                    Path.Combine(workspaceRoot, "projects", slug, "teams"),
+                    SpecialistOrigin.Project, teams, origins, findings, ct).ConfigureAwait(false);
             }
         }
 
@@ -82,7 +128,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
             findings.AddRange(Check(team, specialists));
         }
 
-        return new TeamCatalogueResult(teams, findings);
+        return new TeamCatalogueResult(teams, findings, origins);
     }
 
     /// <summary>Reads one team from its text, or says why the text is not one.</summary>
@@ -197,7 +243,10 @@ public sealed class TeamCatalogue : ITeamCatalogue
         return findings;
     }
 
-    private static void LoadBuiltIn(Dictionary<string, TeamDefinition> teams, List<RuleFinding> findings)
+    private static void LoadBuiltIn(
+        Dictionary<string, TeamDefinition> teams,
+        Dictionary<string, SpecialistOrigin> origins,
+        List<RuleFinding> findings)
     {
         var assembly = typeof(TeamCatalogue).Assembly;
 
@@ -221,13 +270,16 @@ public sealed class TeamCatalogue : ITeamCatalogue
             if (Parse(reader.ReadToEnd(), resource, findings) is { } team)
             {
                 teams[team.Name] = team;
+                origins[team.Name] = SpecialistOrigin.BuiltIn;
             }
         }
     }
 
     private static async Task LoadDirectoryAsync(
         string directory,
+        SpecialistOrigin origin,
         Dictionary<string, TeamDefinition> teams,
+        Dictionary<string, SpecialistOrigin> origins,
         List<RuleFinding> findings,
         CancellationToken ct)
     {
@@ -258,8 +310,11 @@ public sealed class TeamCatalogue : ITeamCatalogue
             if (Parse(text, file, findings) is { } team)
             {
                 // Later replaces earlier, whole: a workspace team of the same
-                // name is that team, not a mixture of it and the built-in.
+                // name is that team, not a mixture of it and the built-in. The
+                // origin is replaced with it, because the surviving definition
+                // is the one a person is being told about.
                 teams[team.Name] = team;
+                origins[team.Name] = origin;
             }
         }
     }
