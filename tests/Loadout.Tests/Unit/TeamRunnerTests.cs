@@ -307,6 +307,96 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task Two_nodes_the_lead_asked_for_together_run_together()
+    {
+        // Deterministic rather than timed: each implementer holds until both
+        // have arrived. Run one after the other, the first waits for a
+        // second that has not started, and the rendezvous times out.
+        var both = new TaskCompletionSource();
+        var arrived = 0;
+
+        _launcher.Hold("role.implementer", async () =>
+        {
+            if (Interlocked.Increment(ref arrived) == 2)
+            {
+                both.SetResult();
+            }
+
+            await both.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        });
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(
+                AskImplementer() with { Node = "implementer/1" },
+                AskImplementer() with { Node = "implementer/2" }), 0.05m),
+            Result(LeadDone(), 0.09m),
+            Result(LeadDone(), 0.09m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone() with { Node = "implementer/1" }, 0.03m));
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone() with { Node = "implementer/2" }, 0.03m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Ended.Should().Be("done");
+        arrived.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task A_node_that_may_only_run_once_at_a_time_runs_once_at_a_time()
+    {
+        // The limit the team sets and the lead is told about.
+        //
+        // Each implementer holds the door open until the other arrives or a
+        // grace passes. With a limit of one the second cannot arrive, so the
+        // most that were ever inside together is one. The grace is two
+        // seconds against a start measured in microseconds, so a runner that
+        // ignored the limit would be caught with room to spare.
+        var team = await IteratingProjectAsync();
+        team.Nodes["implementer"].Parallel = 1;
+
+        var together = new TaskCompletionSource();
+        var inside = 0;
+        var most = 0;
+
+        _launcher.Hold("role.implementer", async () =>
+        {
+            var now = Interlocked.Increment(ref inside);
+
+            lock (team)
+            {
+                most = Math.Max(most, now);
+            }
+
+            if (now == 2)
+            {
+                together.SetResult();
+            }
+
+            await Task.WhenAny(together.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+
+            Interlocked.Decrement(ref inside);
+        });
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(
+                AskImplementer() with { Node = "implementer/1" },
+                AskImplementer() with { Node = "implementer/2" }), 0.05m),
+            Result(LeadDone(), 0.09m),
+            Result(LeadDone(), 0.09m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone() with { Node = "implementer/1" }, 0.03m));
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone() with { Node = "implementer/2" }, 0.03m));
+
+        await RunAsync(team);
+
+        most.Should().Be(1);
+    }
+
+    [Fact]
     public async Task A_run_shows_up_in_the_project_that_is_working_on_it()
     {
         // One row for the run, not one per node: the list is a shared file
@@ -762,6 +852,16 @@ public sealed class TeamRunnerTests : IDisposable
 
         private readonly Dictionary<string, string> _errors = new(StringComparer.Ordinal);
 
+        private readonly Dictionary<string, Func<Task>> _holds = new(StringComparer.Ordinal);
+
+        /// <summary>What a session of this role waits for before it says anything.</summary>
+        /// <remarks>
+        /// A scripted pipe answers instantly, so nothing overlaps for long
+        /// enough to be observed. Holding one open is the only way to ask
+        /// whether two nodes were running at the same moment.
+        /// </remarks>
+        public void Hold(string role, Func<Task> until) => _holds[role] = until;
+
         /// <summary>What the next session of a role writes to its error stream.</summary>
         public void Error(string role, string text) => _errors[role] = text;
 
@@ -804,7 +904,10 @@ public sealed class TeamRunnerTests : IDisposable
             }
 
             var pipe = new StubProcessLauncher.StubPipedProcess(
-                string.Join("\n", queue.Dequeue()) + "\n", 0, _errors.TryGetValue(role, out var error) ? error : string.Empty);
+                string.Join("\n", queue.Dequeue()) + "\n",
+                0,
+                _errors.TryGetValue(role, out var error) ? error : string.Empty,
+                _holds.TryGetValue(role, out var hold) ? hold : null);
 
             if (!_pipes.TryGetValue(role, out var pipes))
             {

@@ -79,9 +79,21 @@ public sealed class StubProcessLauncher : IProcessLauncher
     /// <summary>The scripted conversation a stubbed pipe holds.</summary>
     public sealed class StubPipedProcess : IPipedProcess
     {
-        public StubPipedProcess(string output, int exitCode, string error = "")
+        /// <param name="output">Every line the child will write, readable at once.</param>
+        /// <param name="exitCode">What it exits with.</param>
+        /// <param name="error">What it writes to its error stream.</param>
+        /// <param name="beforeFirstLine">
+        /// Awaited before this child says anything, and only the first time.
+        /// A scripted pipe answers instantly, which is right for reading its
+        /// output and useless for asking whether two of them were running at
+        /// the same moment. This is where a test can hold one open.
+        /// </param>
+        public StubPipedProcess(string output, int exitCode, string error = "", Func<Task>? beforeFirstLine = null)
         {
-            Output = new StringReader(output);
+            Output = beforeFirstLine is null
+                ? new StringReader(output)
+                : new HeldReader(output, beforeFirstLine);
+
             Error = new StringReader(error);
             Exited = Task.FromResult(exitCode);
         }
@@ -115,6 +127,44 @@ public sealed class StubProcessLauncher : IProcessLauncher
         public void Kill() => Killed = true;
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        /// <summary>Scripted output that waits once before it starts.</summary>
+        private sealed class HeldReader : TextReader
+        {
+            private readonly StringReader _lines;
+            private readonly Func<Task> _hold;
+            private bool _held;
+
+            public HeldReader(string output, Func<Task> hold)
+            {
+                _lines = new StringReader(output);
+                _hold = hold;
+            }
+
+            public override async ValueTask<string?> ReadLineAsync(CancellationToken ct)
+            {
+                if (!_held)
+                {
+                    _held = true;
+
+                    await _hold().ConfigureAwait(false);
+                }
+
+                return await _lines.ReadLineAsync(ct).ConfigureAwait(false);
+            }
+
+            public override string? ReadLine() => _lines.ReadLine();
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    _lines.Dispose();
+                }
+
+                base.Dispose(disposing);
+            }
+        }
     }
 
     /// <summary>What was last started detached, for a test to inspect.</summary>

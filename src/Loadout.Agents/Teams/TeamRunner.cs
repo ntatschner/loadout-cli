@@ -95,9 +95,9 @@ public interface ITeamRunner
 }
 
 /// <summary>
-/// The coordinator: briefs the lead, briefs whoever the lead asks for one
-/// at a time, judges every report, and gives the lead the floor again until
-/// it finishes or a rule stops the run.
+/// The coordinator: briefs the lead, briefs whoever the lead asks for,
+/// judges every report, and gives the lead the floor again until it
+/// finishes or a rule stops the run.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -114,10 +114,11 @@ public interface ITeamRunner
 /// before it is acted on.
 /// </para>
 /// <para>
-/// This first runner briefs requests one at a time, so a node that could
-/// have run beside another waits for it. Running them together, the merge
-/// gate, the answerer for permission prompts and the daemon are later
-/// pieces, and each is said in the outcome's warnings rather than implied.
+/// Nodes the lead asks for in one report are briefed one at a time, run
+/// together within what each node allows, and read back in the order they
+/// were asked for. The answerer for permission prompts and the daemon are
+/// later pieces, and each is said in the outcome's warnings rather than
+/// implied.
 /// </para>
 /// </remarks>
 public sealed class TeamRunner : ITeamRunner
@@ -201,10 +202,7 @@ public sealed class TeamRunner : ITeamRunner
         }
 
         var runId = $"{_time.GetUtcNow():yyyyMMdd-HHmm}-{Guid.NewGuid().ToString("N")[..4]}";
-        var warnings = new List<string>
-        {
-            "This runner briefs requests one at a time, so a node that could run beside another waits for it.",
-        };
+        var warnings = new List<string>();
 
         if (_lifetime is { IsEnforced: false })
         {
@@ -398,6 +396,13 @@ public sealed class TeamRunner : ITeamRunner
                 var reports = new List<Report>();
                 var refused = new List<string>();
 
+                // Briefed one at a time, run together, read back in the order
+                // the lead asked. Only the middle of those three is worth
+                // overlapping: a person cannot answer two gates at once, and
+                // a record that arrived in whatever order the nodes finished
+                // would read differently every time the same run happened.
+                var accepted = new List<Briefed>();
+
                 foreach (var ask in requests)
                 {
                     // "implementer/1" asks for an instance of the node called
@@ -434,8 +439,18 @@ public sealed class TeamRunner : ITeamRunner
                         branches[ask.Node] = made;
                     }
 
-                    var workerReport = await RunWorkerAsync(request, team, node, role, brief, journal, warnings, ct).ConfigureAwait(false);
+                    accepted.Add(new Briefed(ask, node, role, brief));
+                }
+
+                var ran = await RunTogetherAsync(request, team, accepted, journal, ct).ConfigureAwait(false);
+
+                for (var index = 0; index < accepted.Count; index++)
+                {
+                    var ask = accepted[index].Ask;
+                    var workerReport = ran[index];
+
                     cost += workerReport.Cost;
+                    warnings.AddRange(workerReport.Warnings);
 
                     if (workerReport.Report is { } decided)
                     {
@@ -895,26 +910,128 @@ public sealed class TeamRunner : ITeamRunner
         }
     }
 
-    private sealed record WorkerOutcome(Report? Report, decimal Cost, bool Halted, string? Failure);
+    /// <summary>A request that passed its gate and has a brief waiting.</summary>
+    private sealed record Briefed(ReportRequest Ask, TeamNode Node, SpecialistDocument Role, Brief Brief);
+
+    private sealed record WorkerOutcome(
+        Report? Report,
+        decimal Cost,
+        bool Halted,
+        string? Failure,
+        IReadOnlyList<string> Warnings);
+
+    /// <summary>
+    /// Runs briefed nodes together, within what the team allows.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each node says how many of itself may run at once, and that is the
+    /// limit honoured here - the same number the lead is told in its brief,
+    /// so what it was promised and what it gets are the same thing.
+    /// </para>
+    /// <para>
+    /// Starting is serialised even while the turns overlap. A node with a
+    /// worktree of its own has one made for it at launch, and two of those
+    /// at once are two gits writing the same repository's index.
+    /// </para>
+    /// <para>
+    /// Results come back in the order asked for, not the order finished, so
+    /// the same run twice reads the same way.
+    /// </para>
+    /// </remarks>
+    private async Task<IReadOnlyList<WorkerOutcome>> RunTogetherAsync(
+        TeamRunRequest request,
+        TeamDefinition team,
+        IReadOnlyList<Briefed> briefed,
+        Journal journal,
+        CancellationToken ct)
+    {
+        if (briefed.Count <= 1)
+        {
+            return briefed.Count == 0
+                ? []
+                : [await RunWorkerAsync(request, team, briefed[0], journal, new SemaphoreSlim(1, 1), ct).ConfigureAwait(false)];
+        }
+
+        using var starting = new SemaphoreSlim(1, 1);
+
+        var limits = new Dictionary<string, SemaphoreSlim>(StringComparer.Ordinal);
+
+        foreach (var one in briefed)
+        {
+            var name = BaseNode(one.Ask.Node);
+
+            if (!limits.ContainsKey(name))
+            {
+                limits[name] = new SemaphoreSlim(Math.Max(1, one.Node.Parallel));
+            }
+        }
+
+        try
+        {
+            var running = briefed.Select(async one =>
+            {
+                var limit = limits[BaseNode(one.Ask.Node)];
+
+                await limit.WaitAsync(ct).ConfigureAwait(false);
+
+                try
+                {
+                    return await RunWorkerAsync(request, team, one, journal, starting, ct).ConfigureAwait(false);
+                }
+                finally
+                {
+                    limit.Release();
+                }
+            });
+
+            return await Task.WhenAll(running).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var limit in limits.Values)
+            {
+                limit.Dispose();
+            }
+        }
+    }
 
     /// <summary>One brief, one report, and the session is gone.</summary>
+    /// <remarks>
+    /// Its warnings are its own rather than added to the run's list, because
+    /// several of these run at once and a shared list would be written from
+    /// more than one thread. The caller folds them in, in the order the lead
+    /// asked for the nodes.
+    /// </remarks>
     private async Task<WorkerOutcome> RunWorkerAsync(
         TeamRunRequest request,
         TeamDefinition team,
-        TeamNode node,
-        SpecialistDocument role,
-        Brief brief,
+        Briefed briefed,
         Journal journal,
-        List<string> warnings,
+        SemaphoreSlim starting,
         CancellationToken ct)
     {
-        var started = await StartNodeAsync(request, team, node, role, brief, dryRun: false, ct).ConfigureAwait(false);
+        var (node, role, brief) = (briefed.Node, briefed.Role, briefed.Brief);
+        var warnings = new List<string>();
+
+        await starting.WaitAsync(ct).ConfigureAwait(false);
+
+        OperationResult<HeadlessLaunch> started;
+
+        try
+        {
+            started = await StartNodeAsync(request, team, node, role, brief, dryRun: false, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            starting.Release();
+        }
 
         if (started.Failed)
         {
             await journal.WriteAsync("node.failed", brief.Node, new { error = started.Error }, ct).ConfigureAwait(false);
 
-            return new WorkerOutcome(null, 0m, false, started.Error);
+            return new WorkerOutcome(null, 0m, false, started.Error, warnings);
         }
 
         await using var launch = started.Value!;
@@ -968,7 +1085,8 @@ public sealed class TeamRunner : ITeamRunner
                 ? $"The node ended without a report (exit code {exit})."
                     + (turn.Said.Length > 0 ? $" It said: {turn.Said}" : string.Empty)
                     + (stderr.Length > 0 ? $" It wrote to its error stream: {stderr}" : string.Empty)
-                : null);
+                : null,
+            warnings);
     }
 
     /// <summary>One exchange with a node, judged.</summary>
