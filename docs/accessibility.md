@@ -121,8 +121,23 @@ survive a forced-colours mode, targets no smaller than 40 pixels, and both
 `prefers-reduced-motion` and `forced-colors` honoured. Following a run moves
 focus to the heading of what you asked for.
 
-It has not been checked with a screen reader or with axe-core, and no
-keyboard-only pass by a person has been recorded.
+**axe-core finds nothing wrong with it.** Version 4.10.2, against WCAG 2.0,
+2.1 and 2.2 at A and AA plus its best-practice rules: 33 rules pass on the run
+list and 34 once a run is followed, with no violations and nothing left
+incomplete. The rules that pass are the ones the paragraph above claims —
+`color-contrast`, `target-size`, `skip-link`, `bypass`, `landmark-one-main`,
+`heading-order`, `region`, `list`, `listitem`, `page-has-heading-one`. Following
+a run was confirmed to move focus to the heading of what was asked for, and the
+live region is `role="status"` with `aria-live="polite"`.
+
+The audit ran against a copy of the page served without its content security
+policy, because that policy says `connect-src 'self'` and correctly stops a
+browser pulling axe-core in from anywhere. The markup is the same file the
+server embeds and the data was stubbed so every part of it rendered; axe reads
+the DOM rather than the response headers.
+
+It has still not been heard with a screen reader, and no keyboard-only pass by
+a person has been recorded.
 
 ## Bionic formatting
 
