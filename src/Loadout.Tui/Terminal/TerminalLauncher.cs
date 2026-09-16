@@ -79,6 +79,8 @@ public sealed class TerminalLauncher : ILauncherTui
     /// <summary>Agents detected on this machine, once the first screen has asked.</summary>
     private IReadOnlyList<string> _installed = [];
 
+    private readonly ReadingProfile _reading;
+
     public TerminalLauncher(
         IAnsiConsole console,
         IProjectService projects,
@@ -102,8 +104,10 @@ public sealed class TerminalLauncher : ILauncherTui
         IInstructionService instructions,
         IGitManager git,
         Loadout.Core.Tasks.ITaskService tasks,
-        IUpdateNotice updates)
+        IUpdateNotice updates,
+        ReadingProfile reading)
     {
+        _reading = reading;
         _instructions = instructions;
         _git = git;
         _updates = updates;
@@ -249,7 +253,7 @@ public sealed class TerminalLauncher : ILauncherTui
     {
         using IApplication application = Application.Create();
 
-        application.InitLegibly();
+        application.InitLegibly(_reading.Profile);
 
         // Started first, deliberately. Detecting agents and resolving the
         // current repository both shell out, and running them behind the
@@ -257,7 +261,13 @@ public sealed class TerminalLauncher : ILauncherTui
         // than beginning to think once it has.
         var loading = load();
 
-        SplashScreen.Play(application, "reading your projects", opening && Watching);
+        // Not for somebody who asked their machine for less movement. The
+        // animation says "it is thinking" to a person who can see it and
+        // nothing at all to anybody else.
+        SplashScreen.Play(
+            application,
+            "reading your projects",
+            opening && Watching && _reading.Profile?.Display.Motion is null or "full");
 
         var (projects, here, agents, recent) = await loading.ConfigureAwait(false);
 
@@ -620,7 +630,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using (IApplication application = Application.Create())
         {
-            application.InitLegibly();
+            application.InitLegibly(_reading.Profile);
 
             using var window = new ProblemsWindow(heading, findings, offered, application);
 
@@ -714,7 +724,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using (IApplication application = Application.Create())
         {
-            application.InitLegibly();
+            application.InitLegibly(_reading.Profile);
 
             using var window = new ManagerWindow(project.Entry.Slug, read.Value!, application);
 
@@ -778,7 +788,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using (IApplication application = Application.Create())
         {
-            application.InitLegibly();
+            application.InitLegibly(_reading.Profile);
 
             var editor = _editors.Describe(config);
 
@@ -1048,7 +1058,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using IApplication application = Application.Create();
 
-        application.InitLegibly();
+        application.InitLegibly(_reading.Profile);
 
         using var sheet = new LaunchOptionsDialog(
             project,

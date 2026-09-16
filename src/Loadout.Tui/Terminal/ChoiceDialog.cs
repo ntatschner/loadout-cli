@@ -32,7 +32,7 @@ internal sealed class ChoiceDialog : Window
         _application = application;
 
         Title = question;
-        BorderStyle = LineStyle.Rounded;
+        BorderStyle = LauncherTheme.Lines;
 
         _choices = new ListView
         {

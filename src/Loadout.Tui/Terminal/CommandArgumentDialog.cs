@@ -45,7 +45,7 @@ internal sealed class CommandArgumentDialog : Window
         Title = command;
         Width = Dim.Percent(70);
         Height = 9;
-        BorderStyle = LineStyle.Rounded;
+        BorderStyle = LauncherTheme.Lines;
 
         Add(new Label { X = 1, Y = 0, Text = $"{command} needs a {argument.ToLowerInvariant()}." });
 
