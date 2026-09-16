@@ -58,7 +58,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     /// has not asked for their keyboard to be read; a script has closed the
     /// pipe precisely to say it is finished.
     /// </remarks>
-    private static async Task Ends(CancellationTokenSource stopping)
+    internal static async Task Ends(CancellationTokenSource stopping)
     {
         if (!Console.IsInputRedirected)
         {

@@ -642,6 +642,8 @@ public static class Program
             team.AddCommand<TeamLogCommand>("log");
             team.AddCommand<TeamDashboardCommand>("dashboard");
 
+            team.AddCommand<TeamDaemonCommand>("daemon");
+
             team.AddBranch("schedule", schedule =>
             {
                 schedule.AddCommand<TeamScheduleAddCommand>("add");
