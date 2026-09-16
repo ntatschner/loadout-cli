@@ -57,6 +57,7 @@ public static class PlatformServices
         services.AddSingleton<IApplicationLauncher>(opener);
         services.AddSingleton<IDesktopIntegration>(desktop);
         services.AddSingleton<IAutostart>(CreateAutostart(processes, resolver));
+        services.AddSingleton<ISpeech>(CreateSpeech(processes, resolver));
         services.AddSingleton(secrets);
         services.AddSingleton<IPlatformCapabilities>(capabilities);
 
@@ -181,6 +182,20 @@ public static class PlatformServices
         OperatingSystem.IsWindows()
             ? new Windows.WindowsAutostart(processes, resolver)
             : new Unix.UnixAutostart(OperatingSystem.IsMacOS());
+
+    /// <summary>
+    /// What says something out loud here, if anything can.
+    /// </summary>
+    /// <remarks>
+    /// Only the Windows voice has been heard. The NVDA route and both Unix
+    /// routes are written from documented entry points and have never answered.
+    /// </remarks>
+    private static ISpeech CreateSpeech(
+        IProcessLauncher processes,
+        IExecutableResolver resolver) =>
+        OperatingSystem.IsWindows()
+            ? new Windows.WindowsSpeech()
+            : new Unix.UnixSpeech(processes, resolver, OperatingSystem.IsMacOS());
 
     private static IDesktopIntegration CreateDesktopIntegration(
         IEnvironmentProvider environment,

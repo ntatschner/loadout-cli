@@ -155,6 +155,26 @@ public sealed class AccessibilityDisplay
     /// <summary>allowed or never. A spinner or an in-place edit is re-read on every frame.</summary>
     public string Redraw { get; set; } = "allowed";
 
+    /// <summary>
+    /// Whether the full-screen launcher says what it is showing: <c>off</c>,
+    /// or <c>screen-reader</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off by default and opt-in even under the screen-reader preset, which
+    /// keeps giving somebody the text launcher instead. A full-screen
+    /// application that speaks is the established way round a terminal toolkit
+    /// with no accessibility provider, and it is also a thing that has never
+    /// been heard by anybody here: offering it by default would be offering an
+    /// unverified experience to exactly the people who cannot check it.
+    /// </para>
+    /// <para>
+    /// It speaks to a screen reader that is already running, and to the
+    /// system's own voice when none is. Loadout never starts one.
+    /// </para>
+    /// </remarks>
+    public string Speech { get; set; } = "off";
+
     /// <summary>tables or lists.</summary>
     public string Tables { get; set; } = "tables";
 

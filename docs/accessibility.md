@@ -139,6 +139,35 @@ the DOM rather than the response headers.
 It has still not been heard with a screen reader, and no keyboard-only pass by
 a person has been recorded.
 
+### The launcher speaking
+
+```sh
+loadout config set show-speech screen-reader
+```
+
+Off by default, and **off even under the `screen-reader` preset**, which keeps
+giving you the text launcher instead. The text launcher is the answer people
+have actually used; this one has been heard by nobody, and offering it by
+default would be offering an unverified experience to exactly the people who
+cannot check it.
+
+With it on, the full-screen launcher says each row as the cursor lands on it —
+the project's name first, because you hear the first word and interrupt as soon
+as it is the wrong row, then whether it is on this machine. What the columns
+say, and nothing that only the colours say.
+
+It speaks to a screen reader that is already running, and to the system's own
+voice when none is. Loadout never starts one. On Windows that means NVDA if it
+answers and the Windows voice otherwise; on macOS `say`; on other Unixes
+`spd-say`, which is speech-dispatcher, which is what Orca is already using — so
+it reaches the same voice rather than starting a second.
+
+**Only the Windows system voice is verified**, and only as far as "the route
+answers": this machine has two voices installed and the COM object is reachable.
+The NVDA path is written from its documented entry points and has never
+answered, because there is no NVDA here. Neither Unix route has been heard.
+JAWS has an equivalent route and is deliberately not claimed.
+
 ## Bionic formatting
 
 `write-bionic` bolds the first half of each word in the agent's own prose. It

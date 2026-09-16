@@ -66,6 +66,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly ISessionHistoryService _sessions;
     private readonly IManagerInventory _manager;
     private readonly IRunJournal _runs;
+    private readonly ISpeech _speech;
     private readonly IInstructionService _instructions;
     private readonly IGitManager _git;
     private readonly IUpdateNotice _updates;
@@ -104,6 +105,7 @@ public sealed class TerminalLauncher : ILauncherTui
         ISessionHistoryService sessions,
         IManagerInventory manager,
         IRunJournal runs,
+        ISpeech speech,
         IInstructionService instructions,
         IGitManager git,
         Loadout.Core.Tasks.ITaskService tasks,
@@ -113,6 +115,7 @@ public sealed class TerminalLauncher : ILauncherTui
         _reading = reading;
         _instructions = instructions;
         _runs = runs;
+        _speech = speech;
         _git = git;
         _updates = updates;
         _tasks = tasks;
@@ -289,7 +292,8 @@ public sealed class TerminalLauncher : ILauncherTui
             (project, token) => OverviewAsync(project, token),
             w => ShowPalette(w, application),
             recent,
-            application);
+            application,
+            Speaking());
 
         Announce(_updateNotice, window, application);
 
@@ -763,6 +767,41 @@ public sealed class TerminalLauncher : ILauncherTui
     /// offers to do about one is handed back as the command somebody would have
     /// typed.
     /// </remarks>
+    /// <summary>
+    /// How the launcher says what it is showing, or null where it should not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Null unless somebody asked for it in as many words. A profile that says
+    /// "screen reader" gets the text launcher, which is the answer that has
+    /// been tried by people; this one has been heard by nobody, so it is opted
+    /// into rather than inferred.
+    /// </para>
+    /// <para>
+    /// Fire and forget, and deliberately. Speaking goes through a screen reader
+    /// or a COM object, either of which can take a moment, and a launcher that
+    /// waited for a sentence to finish would stop answering the arrow key that
+    /// started it. A line nobody hears is worth less than a launcher that keeps
+    /// moving.
+    /// </para>
+    /// </remarks>
+    private Action<string>? Speaking() =>
+        _reading.Speaks
+            ? line => _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _speech.SayAsync(line).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
+                {
+                    // Somebody who cannot hear the launcher can still read it.
+                    // A screen that stopped because speech failed would be a
+                    // worse answer than a quiet one.
+                }
+            })
+            : null;
+
     private async Task ShowTeamsAsync(CancellationToken ct)
     {
         string? chosen;

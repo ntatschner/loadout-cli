@@ -311,6 +311,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "a team may allow nothing; every outward action is held for you"),
 
+        new("show-speech",
+            "Whether the full-screen launcher speaks what it shows: off, screen-reader",
+            (c, _) => c.Accessibility.Display.Speech,
+            (c, _, v) => c.Accessibility.Display.Speech = OneOf(v, "show-speech", "off", "screen-reader"),
+            false,
+            Sample: "off",
+            Group: Groups.Display,
+            WhenUnset: "the launcher says nothing; a screen reader reads the terminal as it always has"),
+
         new("team-webhook-teams",
             "Comma-separated teams something outside this machine may start",
             (_, m) => string.Join(", ", m.Teams.WebhookTeams),

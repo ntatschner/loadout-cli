@@ -44,6 +44,20 @@ public sealed record ReadingProfile(AccessibilitySettings? Profile)
     public bool Bell => Profile?.Display.Bell == true;
 
     /// <summary>
+    /// Whether the full-screen launcher should say what it is showing.
+    /// </summary>
+    /// <remarks>
+    /// Never derived from anything else, unlike every other question here. A
+    /// profile asking for a screen reader gets the text launcher, which is the
+    /// answer that has been tried; speaking is opt-in on its own words because
+    /// nobody has heard it yet, and inferring it would hand an unverified
+    /// experience to the people least able to check it.
+    /// </remarks>
+    public bool Speaks =>
+        Profile is { } profile
+        && string.Equals(profile.Display.Speech, "screen-reader", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Whether a screen may redraw itself on a timer without being asked.
     /// </summary>
     /// <remarks>
