@@ -367,7 +367,13 @@ public sealed class DashboardServer : IDisposable
         // Nothing here is for anybody else's page to read or embed.
         response.Headers["X-Content-Type-Options"] = "nosniff";
         response.Headers["Referrer-Policy"] = "no-referrer";
-        response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'";
+        // connect-src is what the page's own fetch and event stream need, and
+        // leaving it out is not a theoretical tightening: default-src 'none'
+        // covers it, so the page loaded, looked right and said "Failed to
+        // fetch". Nothing in the tests could see that - they check the markup
+        // and the endpoints separately, and a browser is what joins them.
+        response.Headers["Content-Security-Policy"] =
+            "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'";
 
         await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
 

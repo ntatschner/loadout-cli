@@ -124,6 +124,19 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_page_is_allowed_to_ask_the_server_things()
+    {
+        // The one a browser found and nothing here could. The policy said
+        // default-src none, which covers connect-src, so the page loaded,
+        // looked right, and said "Failed to fetch" - every assertion in this
+        // file passed while the dashboard showed nothing at all.
+        var answer = await GetAsync("/");
+
+        answer.Headers.GetValues("Content-Security-Policy").Should()
+            .ContainSingle().Which.Should().Contain("connect-src 'self'");
+    }
+
+    [Fact]
     public async Task The_runs_come_back_as_the_page_needs_them()
     {
         var json = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync());
