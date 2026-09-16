@@ -66,6 +66,9 @@
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
 | `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
 | `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |
+| `loadout team dashboard` | A page on this machine showing every run at once, live. Reads only |
+| `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
+| `loadout team daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
 | `loadout pack list\|add\|approve\|update\|remove` | Specialist packs fetched from a Git remote, approved per machine |
 | `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |
