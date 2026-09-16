@@ -57,7 +57,7 @@ internal sealed class ProblemsWindow : Window
         // are a list of findings, some of which can be put right, and building
         // two screens for that would be building the second one twice.
         Title = heading;
-        BorderStyle = LineStyle.Rounded;
+        BorderStyle = LauncherTheme.Lines;
 
         // Info-level findings are not problems, and listing them here would
         // bury the ones that are.
@@ -72,7 +72,7 @@ internal sealed class ProblemsWindow : Window
             Width = Dim.Fill(),
             Height = Dim.Percent(45),
             Title = worth.Count == 0 ? "Nothing wrong" : "Found",
-            BorderStyle = LineStyle.Single,
+            BorderStyle = LauncherTheme.Inner,
         };
 
         var findingsList = new ListView { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
@@ -92,7 +92,7 @@ internal sealed class ProblemsWindow : Window
             Width = Dim.Percent(50),
             Height = Dim.Fill(2),
             Title = "Can be put right",
-            BorderStyle = LineStyle.Single,
+            BorderStyle = LauncherTheme.Inner,
         };
 
         // Ticked rather than applied on selection, so nothing is changed by
@@ -129,7 +129,7 @@ internal sealed class ProblemsWindow : Window
             Width = Dim.Fill(),
             Height = Dim.Fill(2),
             Title = "What it would change",
-            BorderStyle = LineStyle.Single,
+            BorderStyle = LauncherTheme.Inner,
         };
 
         _preview = new Label { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };

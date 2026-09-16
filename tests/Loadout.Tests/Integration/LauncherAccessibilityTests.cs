@@ -45,6 +45,7 @@ public sealed class LauncherAccessibilityTests
         LauncherTheme.Apply(null);
 
         LauncherTheme.Lines.Should().Be(LineStyle.Rounded);
+        LauncherTheme.Inner.Should().Be(LineStyle.Single, "a frame inside a window is plainer than the window");
     }
 
     [Fact]
@@ -56,6 +57,7 @@ public sealed class LauncherAccessibilityTests
         LauncherTheme.Apply(For(AccessibilityPresets.ScreenReader));
 
         LauncherTheme.Lines.Should().Be(LineStyle.None);
+        LauncherTheme.Inner.Should().Be(LineStyle.None, "a frame inside one is still a box");
 
         // Put back, because this is static and the next screen drawn anywhere
         // in the suite uses it.

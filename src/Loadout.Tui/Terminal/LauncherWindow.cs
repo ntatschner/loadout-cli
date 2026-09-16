@@ -174,7 +174,7 @@ internal sealed class LauncherWindow : Window
             Width = columnWidth,
             Height = Dim.Fill(2 + recentHeight),
             Title = "Projects",
-            BorderStyle = LineStyle.Rounded,
+            BorderStyle = LauncherTheme.Lines,
         };
 
         listFrame.Add(_list);
@@ -222,7 +222,7 @@ internal sealed class LauncherWindow : Window
                 Width = columnWidth,
                 Height = recentHeight,
                 Title = $"Recent ({_recent.Count})",
-                BorderStyle = LineStyle.Rounded,
+                BorderStyle = LauncherTheme.Lines,
             };
 
             recentFrame.Add(_recentList);
@@ -833,7 +833,7 @@ internal sealed class LauncherWindow : Window
         Width = 58,
         Height = 15,
         Title = "Keys",
-        BorderStyle = LineStyle.Rounded,
+        BorderStyle = LauncherTheme.Lines,
         Visible = false,
     };
 

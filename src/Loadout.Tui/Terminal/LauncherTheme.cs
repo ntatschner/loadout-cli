@@ -83,12 +83,20 @@ internal static class LauncherTheme
     /// </remarks>
     internal static LineStyle Lines { get; private set; } = LineStyle.Rounded;
 
+    /// <summary>
+    /// The lines a frame inside a window is drawn with: plainer than the
+    /// window's own, so the two read as nested, and none at all where the
+    /// person asked for no box drawing.
+    /// </summary>
+    internal static LineStyle Inner { get; private set; } = LineStyle.Single;
+
     internal static void Apply(Models.Configuration.AccessibilitySettings? profile = null)
     {
-        Lines = profile is not null
-            && string.Equals(profile.Display.Glyphs, "ascii", StringComparison.OrdinalIgnoreCase)
-                ? LineStyle.None
-                : LineStyle.Rounded;
+        var plain = profile is not null
+            && string.Equals(profile.Display.Glyphs, "ascii", StringComparison.OrdinalIgnoreCase);
+
+        Lines = plain ? LineStyle.None : LineStyle.Rounded;
+        Inner = plain ? LineStyle.None : LineStyle.Single;
 
         // Flat. A button with a shadow under it is drawn in two colours the
         // font has to have block glyphs for, and in the documentation image
