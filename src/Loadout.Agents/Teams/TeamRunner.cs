@@ -1587,6 +1587,46 @@ public sealed class TeamRunner : ITeamRunner
                 + string.Join(", ", refused.Distinct(StringComparer.Ordinal))
                 + ". Either the role is narrower than the work, or the node was going somewhere it should not.");
         }
+
+        await FoldProgressAsync(brief, journal, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Folds a node's own account of what it was doing into the journal.
+    /// </summary>
+    /// <remarks>
+    /// Kept as its own kind of entry rather than merged with what the run
+    /// observed. Two accounts, and neither corrects the other: the run's is
+    /// precise about what happened and says nothing about why, the node's says
+    /// why and may be wrong. Merging them would lose whichever disagreed.
+    /// </remarks>
+    private async Task FoldProgressAsync(Brief brief, Journal journal, CancellationToken ct)
+    {
+        var path = Path.Combine(RunDirectory(brief.Run), NodeProgress.FileName(brief.Node));
+
+        var said = NodeProgress.Read(path);
+
+        if (said.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var one in said)
+        {
+            await journal
+                .WriteAsync("node.said", brief.Node, new { one.Step, one.Of, one.Doing, one.Line }, ct)
+                .ConfigureAwait(false);
+        }
+
+        try
+        {
+            // Removed once folded, so a node briefed twice in one run does not
+            // have its first turn's account replayed into the second.
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

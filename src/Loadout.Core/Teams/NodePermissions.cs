@@ -261,6 +261,8 @@ public static class NodePermissions
     }
 
     /// <summary>A node name as a file name: instance names carry a slash.</summary>
+    public static string FileSafe(string node) => Safe(node);
+
     private static string Safe(string node) =>
         string.Concat(node.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-'));
 

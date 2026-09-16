@@ -259,6 +259,13 @@
 
         row.textContent = text;
 
+        if (node.said) {
+          var says = document.createElement("span");
+          says.className = "doing";
+          says.textContent = " - says: " + node.said;
+          row.appendChild(says);
+        }
+
         if (node.doing) {
           var doing = document.createElement("span");
           doing.className = "doing";

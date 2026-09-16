@@ -725,6 +725,56 @@ public sealed class LoadoutTools
         }
     }
 
+    /// <summary>
+    /// Lets a node of a team run say what it is doing, in its own words.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Beside what the run already observes, never instead of it. The run's own
+    /// line says which tool was called and what it was pointed at, which is
+    /// precise and says nothing about why; this says why and may be wrong.
+    /// Somebody watching a run that has gone quiet needs both, because a node
+    /// looping on one file and a node carefully reading forty look identical
+    /// from outside.
+    /// </para>
+    /// <para>
+    /// The identity is stamped from the policy this session was started with,
+    /// not taken from the caller. A node cannot report as another node, and one
+    /// that is not part of a run cannot report at all.
+    /// </para>
+    /// </remarks>
+    [McpServerTool(Name = "loadout_progress")]
+    [Description(
+        "Say what you are doing now, as one present-tense sentence, with which step of how many. "
+        + "For a node of a team run; your identity is stamped from your own brief.")]
+    public async Task<string> ProgressAsync(
+        [Description("Which piece of work you are on.")] int step,
+        [Description("How many you expect. 0 if you do not know yet.")] int of,
+        [Description("One present-tense sentence about what you are doing.")] string doing,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(doing);
+
+        if (_scope.PolicyPath is not { Length: > 0 } path
+            || NodePermissions.Read(path) is not { } policy
+            || Path.GetDirectoryName(path) is not { Length: > 0 } directory)
+        {
+            return "This session is not a node of a team run, so there is nowhere to report progress to.";
+        }
+
+        if (step < 1)
+        {
+            return "A step is counted from 1.";
+        }
+
+        await NodeProgress.AppendAsync(
+            directory,
+            new NodeSaid(_time.GetUtcNow(), policy.Node, policy.Role, step, Math.Max(0, of), doing),
+            ct).ConfigureAwait(false);
+
+        return $"Recorded, as {policy.Node}.";
+    }
+
     [McpServerTool(Name = "loadout_task_declare")]
     [Description(
         "Record where a task stands: open, doing, done, blocked or dropped. Adds it when the id "

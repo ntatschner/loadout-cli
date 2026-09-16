@@ -479,6 +479,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     node.Branch,
                     node.Denials,
                     node.Doing,
+                    node.Said,
                     startedAt = node.Started,
                     tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
                     lastSeen = node.LastSeen,
@@ -526,6 +527,15 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             if (node.Doing is { Length: > 0 } doing)
             {
                 output.WriteLine($"  {string.Empty,-16} [dim]{Markup.Escape(doing)}[/]");
+            }
+
+            // Under it, not instead of it, and marked as the node's own words.
+            // The two disagree sometimes and that is the useful part: a node
+            // saying it is writing tests while every call it makes is a read
+            // is the shape of one that has lost the thread.
+            if (node.Said is { Length: > 0 } said)
+            {
+                output.WriteLine($"  {string.Empty,-16} [dim]says: {Markup.Escape(said)}[/]");
             }
 
             if (node.Branch is { Length: > 0 } branch)

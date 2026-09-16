@@ -331,6 +331,13 @@ internal sealed class TeamsWindow : Window
             lines.Add(
                 $"{Shorten(node.Node, 16),-16} {Shorten(node.Role, 20),-20} {node.State,-10}"
                 + $" {node.Turns} turn(s){doing}");
+
+            // The node's own words on their own line, marked as such. Two
+            // accounts, and the useful part is where they differ.
+            if (node.Said is { Length: > 0 } said)
+            {
+                lines.Add($"{string.Empty,-16} says: {said}");
+            }
         }
 
         if (run.Nodes.Count == 0)

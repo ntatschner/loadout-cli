@@ -57,6 +57,14 @@ The words below have one meaning each, and no synonyms:
   the readings lead to materially different work or one of them is unsafe.
 - You SHOULD stop when `done_when` is met. Continuing past it costs budget and
   buys nothing.
+- You MUST report progress with the `loadout_progress` tool when you start a
+  piece of work, when you finish one, and when what you are doing changes:
+  `step`, `of`, and one present-tense sentence. The tool stamps your identity;
+  you cannot report as anyone else. What you report is shown beside what the
+  coordinator observes, and neither corrects the other.
+- You MUST move the run's task with `loadout_task_declare` to `doing` when you
+  start. The coordinator moves it to its final state from your validated
+  report; you do not mark it `done` yourself.
 
 ## What the coordinator does with your report
 

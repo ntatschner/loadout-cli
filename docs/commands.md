@@ -371,6 +371,7 @@ Nine tools, each making the same call its command makes:
 | `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
 | `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
+| `loadout_progress` | For a node of a team run: say what you are doing, in your own words |
 
 `loadout_recall` exists because only the memory index reaches the context — one
 line per topic — and a session deciding from that alone either opens six files

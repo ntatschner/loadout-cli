@@ -292,6 +292,7 @@ public sealed class DashboardServer : IDisposable
             node.Branch,
             node.Denials,
             node.Doing,
+            node.Said,
             tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
         }),
     };

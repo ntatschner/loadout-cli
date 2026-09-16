@@ -38,10 +38,21 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 /// <param name="Denials">Tool calls its own permission rules refused.</param>
 /// <param name="Started">When it was launched, for how long it has been at it.</param>
 /// <param name="Doing">
-/// The last thing it said it was doing. Emptied once it reports, because a
-/// node that has answered is not still doing the last thing anybody saw, and
-/// leaving it there is how a finished run looks busy.
+/// The last thing it was seen doing: the tool it called and the one thing that
+/// call was pointed at. Emptied once it reports, because a node that has
+/// answered is not still doing the last thing anybody saw, and leaving it there
+/// is how a finished run looks busy.
 /// </param>
+/// <param name="Said">
+/// The last thing it said <em>about itself</em>, in its own words.
+/// </param>
+/// <remarks>
+/// <paramref name="Doing"/> and <paramref name="Said"/> are two accounts and
+/// neither corrects the other. The first is precise about what happened and
+/// says nothing about why; the second says why and may be wrong. A node looping
+/// on one file and a node carefully reading forty look identical in the first
+/// and quite different in the second.
+/// </remarks>
 public sealed record RunNode(
     string Node,
     string Role,
@@ -53,7 +64,8 @@ public sealed record RunNode(
     string? Decision = null,
     int Denials = 0,
     DateTimeOffset? Started = null,
-    string? Doing = null)
+    string? Doing = null,
+    string? Said = null)
 {
     /// <summary>How long it has been going, or how long it took.</summary>
     public TimeSpan? Took =>
@@ -354,6 +366,13 @@ public sealed class RunJournal : IRunJournal
                     Set(busy, node => node with { Doing = entry.Text("doing"), LastSeen = entry.At });
                     break;
 
+                // Kept beside what was observed rather than replacing it. The
+                // node's account of itself says why and may be wrong; the
+                // run's says what happened and says nothing about why.
+                case "node.said" when entry.Node is { Length: > 0 } saying:
+                    Set(saying, node => node with { Said = entry.Text("line"), LastSeen = entry.At });
+                    break;
+
                 case "node.turn" when entry.Node is { Length: > 0 } turned:
                     Set(turned, node => node with
                     {
@@ -423,6 +442,7 @@ public sealed class RunJournal : IRunJournal
             "run.finished" => $"finished: {entry.Text("ended")}",
             "round.started" => $"round {entry.Number("round")} of {entry.Number("of")}",
             "node.doing" => entry.Text("doing") ?? "working",
+            "node.said" => entry.Text("line") ?? "working",
             "permission.asked" => (entry.Data.TryGetProperty("allowed", out var yes)
                     && yes.ValueKind == JsonValueKind.True ? "allowed " : "refused ")
                 + entry.Text("tool")
