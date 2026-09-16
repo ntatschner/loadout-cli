@@ -102,12 +102,61 @@ public sealed class CodexAdapter : AgentAdapterBase
 
         AddSecurityProfile(context, descriptor, arguments, warnings);
         AddModel(context, descriptor, arguments, warnings);
+        AddReading(context, arguments, warnings);
         ReportProjectSkills(context, warnings);
 
         arguments.AddRange(context.PassthroughArguments);
 
         return OperationResult<AgentInvocation>.Ok(
             new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));
+    }
+
+    /// <summary>
+    /// Switches off what Codex offers for an accessibility profile, and says
+    /// what it does not offer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Codex has one setting here, <c>tui.animations</c>, and reads the
+    /// operating system's reduced-motion preference by itself. It has no
+    /// screen-reader mode at all, so a person who asked for no redraws gets
+    /// the animations off and is told plainly that the rest of its display
+    /// will still repaint.
+    /// </para>
+    /// <para>
+    /// Said rather than hidden, and said here rather than in the
+    /// documentation, because the person it matters to is the one launching
+    /// it now. A gap that is not reported is indistinguishable from a
+    /// setting that did not take.
+    /// </para>
+    /// </remarks>
+    private static void AddReading(
+        AgentLaunchContext context,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Headless is not null || context.Accessibility is not { } profile)
+        {
+            return;
+        }
+
+        var still = string.Equals(profile.Display.Motion, "full", StringComparison.OrdinalIgnoreCase);
+        var quiet = string.Equals(profile.Display.Redraw, "never", StringComparison.OrdinalIgnoreCase);
+
+        if (!still || quiet)
+        {
+            // A configuration override rather than a flag: this is how Codex
+            // takes a setting for one run.
+            arguments.Add("-c");
+            arguments.Add("tui.animations=false");
+        }
+
+        if (quiet)
+        {
+            warnings.Add(
+                "Codex has no screen-reader mode, so its display will still repaint while it "
+                + "works; its animations are off. Everything Loadout prints follows your profile.");
+        }
     }
 
     /// <summary>

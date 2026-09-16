@@ -99,6 +99,12 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             // work on that build by driving a session with it.
             [PermissionAnswerer] = ["--permission-prompt-tool"],
             [OutputSchema] = ["--json-schema"],
+
+            // Claude Code's own no-redraw mode. Detected rather than assumed,
+            // because a build that does not have it must say so: a person who
+            // set a screen-reader profile and silently got animations back
+            // would have no way to tell.
+            [ScreenReaderMode] = ["--ax-screen-reader"],
             [StrictMcp] = ["--strict-mcp-config"],
         };
 
@@ -107,6 +113,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
     /// <summary>Capability key for constraining the final answer to a schema.</summary>
     private const string OutputSchema = "output_schema";
+
+    /// <summary>Capability key for the agent's own mode for a screen reader.</summary>
+    private const string ScreenReaderMode = "screen_reader";
 
     /// <summary>Capability key for connecting only the MCP servers the launcher names.</summary>
     private const string StrictMcp = "strict_mcp";
@@ -145,6 +154,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         AddSecurityProfile(context, descriptor, arguments, warnings);
         AddModel(context, descriptor, arguments, warnings);
         AddHeadless(context, descriptor, arguments, warnings);
+        AddReading(context, descriptor, arguments, warnings);
 
         // Everything after a bare -- belongs to the agent untouched
         // (spec section 36), so it is appended last and never inspected.
@@ -292,20 +302,27 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         List<string> warnings,
         CancellationToken ct)
     {
-        if (context.WorkspacePath is null || context.Manifest is null)
+        // What the person's own accessibility profile asks of Claude's own
+        // interface. Settled first, because a person who has set one gets a
+        // settings file whether or not their project has one.
+        var reading = Reading(context);
+
+        var settingsPath = context.WorkspacePath is null || context.Manifest is null
+            ? null
+            : Path.Combine(
+                context.WorkspacePath,
+                "projects",
+                context.Manifest.Slug,
+                "agents",
+                "claude",
+                "settings.json");
+
+        if (settingsPath is not null && !File.Exists(settingsPath))
         {
-            return;
+            settingsPath = null;
         }
 
-        var settingsPath = Path.Combine(
-            context.WorkspacePath,
-            "projects",
-            context.Manifest.Slug,
-            "agents",
-            "claude",
-            "settings.json");
-
-        if (!File.Exists(settingsPath))
+        if (settingsPath is null && reading.Count == 0)
         {
             return;
         }
@@ -313,23 +330,32 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         if (!descriptor.Supports(AgentCapabilities.ExternalSettings))
         {
             warnings.Add(
-                "This build of Claude Code does not advertise --settings, so the project's "
-                + "settings.json was not applied.");
+                settingsPath is null
+                    ? "This build of Claude Code does not advertise --settings, so how you asked to "
+                        + "be shown things was not passed to it."
+                    : "This build of Claude Code does not advertise --settings, so the project's "
+                        + "settings.json was not applied.");
 
             return;
         }
 
-        string text;
+        // An empty document when the project has no settings of its own: the
+        // screening below has nothing to screen, and the accessibility keys
+        // have somewhere to go.
+        var text = "{}";
 
-        try
+        if (settingsPath is not null)
         {
-            text = await File.ReadAllTextAsync(settingsPath, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            warnings.Add($"The project's settings.json could not be read, so it was not applied: {ex.Message}");
+            try
+            {
+                text = await File.ReadAllTextAsync(settingsPath, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                warnings.Add($"The project's settings.json could not be read, so it was not applied: {ex.Message}");
 
-            return;
+                return;
+            }
         }
 
         var launcher = Core.Agents.LauncherInvocation.Current() ?? "loadout";
@@ -353,7 +379,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             return;
         }
 
-        var slug = context.Manifest.Slug;
+        var slug = context.Manifest?.Slug ?? "this project";
 
         foreach (var dropped in screened.DroppedHooks)
         {
@@ -391,7 +417,15 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             screened.Document["disableAllHooks"] = true;
         }
 
-        if (screened.Changed || disableHooks)
+        foreach (var (key, value) in reading)
+        {
+            // The person's own preference, and the last word: a project that
+            // turned animation on does not get to turn it back on for
+            // somebody who asked for none.
+            screened.Document[key] = value;
+        }
+
+        if (screened.Changed || disableHooks || reading.Count > 0 || path is null)
         {
             path = Path.Combine(context.RuntimeDirectory, "settings.json");
 
@@ -411,7 +445,95 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         }
 
         arguments.Add("--settings");
-        arguments.Add(path);
+        arguments.Add(path!);
+    }
+
+    /// <summary>
+    /// Switches on Claude's own mode for somebody using a screen reader.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only for a session somebody is watching, and only where the profile
+    /// asks for no redraws, which is what that mode is: no spinners, no
+    /// timers, no in-place edits. A terminal screen reader reads every one of
+    /// those aloud again on every frame.
+    /// </para>
+    /// <para>
+    /// A build that does not advertise the flag is said out loud rather than
+    /// quietly left animated. Somebody who set the profile and got a spinner
+    /// anyway would have nothing to go on.
+    /// </para>
+    /// </remarks>
+    private static void AddReading(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Headless is not null
+            || context.Accessibility is not { } profile
+            || !string.Equals(profile.Display.Redraw, "never", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (descriptor.Supports(ScreenReaderMode))
+        {
+            arguments.Add("--ax-screen-reader");
+
+            return;
+        }
+
+        warnings.Add(
+            "This build of Claude Code does not advertise --ax-screen-reader, so it will still "
+            + "redraw its own display while it works. Everything Loadout prints follows your "
+            + "profile either way.");
+    }
+
+    /// <summary>
+    /// What the person's accessibility profile asks of Claude's own interface.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only for a session somebody is watching. A node has no terminal to
+    /// animate, no spinner to re-read and nobody to hear a bell, so none of
+    /// this is set for one.
+    /// </para>
+    /// <para>
+    /// The theme is deliberately left alone. Claude ships colour-blind-safe
+    /// themes in a light and a dark variant, and which of the two somebody
+    /// wants is not knowable from here; choosing one would flip the colours
+    /// of a terminal that was already set up the way they like it. What
+    /// Loadout can do about colour is in its own output.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<string, System.Text.Json.Nodes.JsonNode?> Reading(AgentLaunchContext context)
+    {
+        var keys = new Dictionary<string, System.Text.Json.Nodes.JsonNode?>(StringComparer.Ordinal);
+
+        if (context.Headless is not null || context.Accessibility is not { } profile)
+        {
+            return keys;
+        }
+
+        if (!string.Equals(profile.Display.Motion, "full", StringComparison.OrdinalIgnoreCase))
+        {
+            keys["prefersReducedMotion"] = true;
+        }
+
+        if (string.Equals(profile.Display.Redraw, "never", StringComparison.OrdinalIgnoreCase))
+        {
+            // A tip that appears and disappears inside a spinner is a redraw
+            // in the place a screen reader is most likely to be listening.
+            keys["spinnerTipsEnabled"] = false;
+        }
+
+        if (profile.Display.Bell)
+        {
+            keys["preferredNotifChannel"] = "terminal_bell";
+        }
+
+        return keys;
     }
 
     /// <summary>

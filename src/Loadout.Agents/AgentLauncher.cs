@@ -732,7 +732,14 @@ public sealed class AgentLauncher : IAgentLauncher
                 ? hooks
                 : null,
 
-            headless);
+            headless,
+
+            // The person's own, from config.yaml, with their preset already
+            // applied. Null when they have set nothing, so an adapter has
+            // one question to ask rather than a dozen.
+            Core.Instructions.AccessibilityProfile.IsSet(config.Accessibility)
+                ? Core.Instructions.AccessibilityProfile.Resolve(config.Accessibility)
+                : null);
 
         var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
         if (invocationResult.Failed)

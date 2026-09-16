@@ -62,6 +62,11 @@ namespace Loadout.Agents;
 /// settings a node needs, all explicitly; nothing about a headless session
 /// is left to the machine's interactive defaults.
 /// </param>
+/// <param name="Accessibility">
+/// How the person has asked to be written to and shown things, with their
+/// preset already applied, or null when they have set nothing. An adapter
+/// switches on whatever its own agent offers for it.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -77,7 +82,8 @@ public sealed record AgentLaunchContext(
     IReadOnlyList<string>? PreApprovedCommands = null,
     string? Model = null,
     IReadOnlyList<string>? AllowedHooks = null,
-    HeadlessOptions? Headless = null);
+    HeadlessOptions? Headless = null,
+    Models.Configuration.AccessibilitySettings? Accessibility = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>
