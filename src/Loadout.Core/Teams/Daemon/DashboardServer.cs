@@ -564,6 +564,16 @@ public sealed class DashboardServer : IDisposable
         // stopped on a question look identical until one is called what it is,
         // and this is the one that says the next move is yours.
         run.WaitingForYou,
+
+        // Why it wants somebody, each saying what would clear it. Computed
+        // fresh every read and never remembered, because a rail that only
+        // grows is worse than no rail.
+        attention = RunAttention.For(run, DateTimeOffset.UtcNow).Select(reason => new
+        {
+            kind = reason.Kind.ToString().ToLowerInvariant(),
+            reason.Detail,
+            reason.Clears,
+        }),
         run.Project,
         cost = run.CostUsd,
         run.Rounds,

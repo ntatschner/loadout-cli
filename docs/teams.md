@@ -212,6 +212,32 @@ there is one account of what happened rather than three that can disagree.
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
 
+### What needs you
+
+A run that wants you is in the **Needs you** rail at the top of the dashboard,
+and the tab itself says how many — `(3) Loadout teams` — so a buried tab still
+tells you. `team status` says the same things.
+
+Four reasons put a run there, and **each one clears itself**:
+
+| Reason | Clears when |
+| --- | --- |
+| It has stopped and asked you something | you answer it |
+| The lead took a round without asking for anything (another ends the run) | it asks for a node, or finishes |
+| A node has said nothing for three times its own usual turn | it says anything at all |
+| It has spent its budget, or is projected to overrun it | it slows, finishes, or you stop it |
+
+Nothing is remembered and nothing is dismissed by hand: every reason is
+recomputed on each read, so one that has gone is gone. A list that only grows
+is worse than no list — it teaches you to skim the one thing meant to be
+unskimmable.
+
+Quiet is measured against each node's **own** average turn, not a fixed time,
+because a reviewer reading one diff and an implementer running a suite have
+nothing in common — with a two-minute floor, so a node whose turns take four
+seconds is not reported after twelve. A node on its first turn is never called
+quiet: nothing is known yet about how long that one takes.
+
 ### Answering, steering and stopping
 
 A run that has stopped to ask you something is **waiting for you** — its own

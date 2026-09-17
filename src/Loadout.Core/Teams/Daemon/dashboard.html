@@ -108,6 +108,16 @@
   .said { flex-basis: 100%; }
   #said { font-weight: 700; margin: 0.25rem 0 0; }
 
+  /* The rail. Bordered rather than coloured in, so it reads as a thing that
+     needs doing under forced colours as well as in either theme. */
+  #rail { border: 2px solid var(--stopped); padding: 0.5rem 0.75rem; margin: 0.75rem 0; }
+  #rail h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+  #rail ul { list-style: none; margin: 0; padding: 0; }
+  #rail li { padding: 0.4rem 0; border-top: 1px solid var(--line); }
+  #rail li:first-child { border-top: 0; }
+  #rail .which { font-weight: 700; }
+  #rail .clears { color: var(--quiet); }
+
   .log {
     background: var(--card);
     border: 1px solid var(--line);
@@ -146,6 +156,11 @@
   -->
   <p id="status" role="status" aria-live="polite"></p>
   <p id="said" role="status" aria-live="assertive"></p>
+
+  <section id="rail" hidden aria-labelledby="rail-heading">
+    <h2 id="rail-heading">Needs you</h2>
+    <ul id="rail-list"></ul>
+  </section>
 
   <h2 id="runs">Runs on this machine</h2>
   <ul class="runs" id="list" aria-describedby="status"></ul>
@@ -247,6 +262,82 @@
 
   // The word first, the colour second. Nothing here is carried by colour
   // alone, so a screenshot in greyscale says the same thing.
+  // Everything wanting somebody, across every run, newest first. Rebuilt on
+  // every read: nothing here is remembered, so a reason that has gone is gone.
+  function drawRail(runs) {
+    var rail = document.getElementById("rail");
+    var list = document.getElementById("rail-list");
+    var wanted = [];
+
+    runs.forEach(function (run) {
+      (run.attention || []).forEach(function (reason) {
+        wanted.push({ run: run, reason: reason });
+      });
+    });
+
+    list.textContent = "";
+    rail.hidden = wanted.length === 0;
+
+    wanted.forEach(function (item) {
+      var li = document.createElement("li");
+
+      var which = document.createElement("span");
+      which.className = "which";
+      which.textContent = item.run.team + " · " + item.run.id + " — ";
+      li.appendChild(which);
+
+      li.appendChild(document.createTextNode(item.reason.detail + " "));
+
+      var clears = document.createElement("span");
+      clears.className = "clears";
+      clears.textContent = "(clears when " + item.reason.clears + ")";
+      li.appendChild(clears);
+
+      // Straight to the run it is about. A line that tells you something is
+      // wrong and leaves you to find it is half a line.
+      var go = document.createElement("button");
+      go.type = "button";
+      go.textContent = "Open";
+      go.addEventListener("click", function () { watch(item.run); });
+      li.appendChild(document.createTextNode(" "));
+      li.appendChild(go);
+
+      list.appendChild(li);
+    });
+
+    mark(wanted.length);
+
+    return wanted.length;
+  }
+
+  // The tab itself says how many. Free, needs no permission, and it works
+  // while the tab is buried behind thirty others - which is the case this is
+  // for.
+  var titled = "Loadout teams";
+
+  function mark(count) {
+    document.title = count > 0 ? "(" + count + ") " + titled : titled;
+
+    var link = document.querySelector("link[rel='icon']");
+
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+
+    // Drawn rather than fetched, so the page still fetches nothing.
+    var svg =
+      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>" +
+      "<rect width='16' height='16' rx='3' fill='" + (count > 0 ? "#7a3b00" : "#0b4f9e") + "'/>" +
+      (count > 0
+        ? "<circle cx='8' cy='8' r='3' fill='#fff'/>"
+        : "<rect x='4' y='7' width='8' height='2' rx='1' fill='#fff'/>") +
+      "</svg>";
+
+    link.href = "data:image/svg+xml," + encodeURIComponent(svg);
+  }
+
   function state(run) {
     // Its own state, above running, because a run stopped on a question and a
     // run working look identical until one of them is called what it is - and
@@ -355,6 +446,8 @@
       item.appendChild(follow);
       list.appendChild(item);
     });
+
+    drawRail(runs);
 
     // The one being followed may have stopped to ask something since the
     // last read, or had it answered at a terminal.

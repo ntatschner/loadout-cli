@@ -694,6 +694,15 @@ public sealed class TeamRunner : ITeamRunner
                 // one report, and one that asks round after round is stuck.
                 quietRounds = requests.Count == 0 ? quietRounds + 1 : 0;
 
+                // Written down, because a run heading for this is something
+                // somebody would want to know before it gets there - and the
+                // journal had no way to say "that round asked for nothing".
+                await journal.WriteAsync(
+                    "round.ended",
+                    null,
+                    new { round = rounds, requests = requests.Count, quiet = quietRounds },
+                    ct).ConfigureAwait(false);
+
                 if (quietRounds >= 2)
                 {
                     ended = "no progress: two rounds without a request or a finish";

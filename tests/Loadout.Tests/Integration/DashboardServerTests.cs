@@ -209,7 +209,17 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         // Nothing off this machine. A dashboard that pulled a stylesheet from
         // the internet would fail on the machine it is most wanted on.
-        text.Should().NotContain("http://").And.NotContain("https://");
+        //
+        // An XML namespace is not a fetch: `xmlns="http://www.w3.org/2000/svg"`
+        // is an identifier a browser never resolves, and the inline SVG
+        // favicon needs it to render at all. So it is removed before asking,
+        // rather than the question being softened - everything that could
+        // actually be fetched is still banned outright.
+        var fetchable = text.Replace(
+            "xmlns='http://www.w3.org/2000/svg'", string.Empty, StringComparison.Ordinal)
+            .Replace("xmlns=\"http://www.w3.org/2000/svg\"", string.Empty, StringComparison.Ordinal);
+
+        fetchable.Should().NotContain("http://").And.NotContain("https://");
     }
 
     [Fact]

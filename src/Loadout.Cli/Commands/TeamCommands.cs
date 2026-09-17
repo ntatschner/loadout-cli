@@ -509,6 +509,16 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
             + $"  [dim]{Rounds(run)}, {Elapsed(run.Elapsed)} so far, ${run.CostUsd:0.00}[/]");
 
+        // Everything wanting attention that is not a question - the
+        // questions get their own block below, with how to answer them.
+        foreach (var reason in RunAttention.For(run, _time.GetUtcNow())
+            .Where(reason => reason.Kind != AttentionKind.Asking))
+        {
+            output.WriteBlankLine();
+            output.WriteLine($"  [yellow]needs you[/] {Markup.Escape(reason.Detail)}");
+            output.WriteLine($"    [dim]clears when {Markup.Escape(reason.Clears)}[/]");
+        }
+
         // What it has stopped to ask, and how to answer it. The same questions
         // the dashboard shows, because they are the same files.
         foreach (var gate in run.Waiting)

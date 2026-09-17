@@ -99,7 +99,8 @@ public sealed record RunSummary(
     string? Project = null,
     string? Path = null,
     IReadOnlyList<PendingAsk>? Gates = null,
-    decimal? BudgetUsd = null)
+    decimal? BudgetUsd = null,
+    int QuietRounds = 0)
 {
     /// <summary>
     /// What the run has stopped and asked a person, and not yet been told.
@@ -324,6 +325,7 @@ public sealed class RunJournal : IRunJournal
         string? project = null;
         string? path = null;
         decimal? budget = null;
+        var quiet = 0;
         var started = events.Count > 0 ? events[0].At : DateTimeOffset.MinValue;
         DateTimeOffset? finished = null;
         string? ended = null;
@@ -360,6 +362,12 @@ public sealed class RunJournal : IRunJournal
                     path = entry.Text("path");
                     budget = entry.Number("budget");
                     started = entry.At;
+                    break;
+
+                // How many rounds in a row have asked for nothing. Two ends
+                // the run; one is worth somebody knowing about.
+                case "round.ended":
+                    quiet = (int)(entry.Number("quiet") ?? 0);
                     break;
 
                 case "round.started":
@@ -477,7 +485,8 @@ public sealed class RunJournal : IRunJournal
             // From the directory, not from the events: a question is answered
             // by a file appearing, and the journal hears about it after.
             NodePermissions.Pending(directory),
-            budget);
+            budget,
+            quiet);
     }
 
     /// <summary>One event as a line somebody can read.</summary>
