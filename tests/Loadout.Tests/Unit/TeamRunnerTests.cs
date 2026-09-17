@@ -742,6 +742,77 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Theory]
+    [InlineData(true, "allowed", true)]
+    [InlineData(false, "refused", false)]
+    public async Task A_node_stopped_on_a_permission_question_is_answered_by_the_person(
+        bool says, string _, bool expected)
+    {
+        // The coordinator's half of the exchange, end to end. The node is
+        // stopped inside a turn this process is awaiting, so the only way its
+        // question reaches anybody is the watcher: it reads the run directory,
+        // puts the question to the console, and writes the answer back where
+        // the node is waiting for it.
+        //
+        // The fake node here does exactly what a real one's answerer does -
+        // write a question and wait - which is why this proves the half that
+        // lives in this process, and nothing about the agent's own half.
+        var directory = string.Empty;
+
+        _launcher.BeforeStart = where => directory = where;
+
+        _console.Confirm = _ => says;
+
+        _launcher.Hold("role.project-lead", async () =>
+        {
+            var asked = await NodePermissions
+                .AskAsync(directory, new PendingAsk(
+                    "lead-1", "lead", "role.project-lead", "Bash", "dotnet test", DateTimeOffset.UtcNow),
+                    TimeProvider.System)
+                .WaitAsync(TimeSpan.FromSeconds(30));
+
+            // Fails rather than hangs if nothing answered: a watcher that
+            // never saw the file would otherwise sit here until the suite's
+            // own timeout, minutes later and nowhere near the cause.
+            asked.Should().NotBeNull("the coordinator never answered the question");
+            asked!.Allowed.Should().Be(expected);
+        });
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        // Asked in words naming who wants what, because "may it run Bash?" is
+        // not a question anybody can answer.
+        _console.Confirmations.Should().Contain(c => c.Contains("lead") && c.Contains("dotnet test"));
+
+        // And written down on both sides, because "the run was allowed to do
+        // that" and "somebody allowed it" are different sentences.
+        var journal = await File.ReadAllLinesAsync(
+            Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain(l => l.Contains("\"kind\":\"node.asked\""));
+        journal.Should().Contain(l => l.Contains("\"kind\":\"node.answered\""));
+    }
+
+    [Fact]
+    public async Task A_question_nobody_could_answer_is_never_asked_in_the_first_place()
+    {
+        // An autonomous run tells its nodes they may not ask, so nothing
+        // should ever write one. This is the other side of the same rule:
+        // a watcher that ran anyway would be asking a console nobody is at.
+        _console.CanAsk = false;
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await RunAsync(autonomy: "autonomous")).Value!;
+
+        _console.Confirmations.Should().BeEmpty();
+
+        NodePermissions.Read(Path.Combine(outcome.Directory!, NodePermissions.FileName("lead")))!
+            .Ask.Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData("supervised", true, true)]
     [InlineData("manual", true, true)]
     [InlineData("autonomous", true, false)]
@@ -853,13 +924,16 @@ public sealed class TeamRunnerTests : IDisposable
         leadRequest.Worktree.Should().BeNull("a lead changes nothing, so it works where the project is");
         leadRequest.CreateWorktree.Should().BeFalse();
 
-        workerRequest.Worktree.Should().Be($"teams/{outcome.RunId}/implementer");
+        // Flat, with hyphens. A branch called teams/a/b needs refs/heads/teams
+        // to be a directory, which it is not on a repository whose own branch
+        // is called teams - and a real run found that out.
+        workerRequest.Worktree.Should().Be($"teams-{outcome.RunId}-implementer");
         workerRequest.CreateWorktree.Should().BeTrue();
 
         // The node is told where it is, because a node that switches branch
         // or commits elsewhere undoes the point of the tree.
         _launcher.Written("role.implementer")[0].Should()
-            .Contain($"worktree: you are in a git worktree of your own, on branch `teams/{outcome.RunId}/implementer`")
+            .Contain($"worktree: you are in a git worktree of your own, on branch `teams-{outcome.RunId}-implementer`")
             .And.Contain("do not merge");
 
         outcome.Warnings.Should().ContainSingle(w => w.Contains("worked in a new worktree"))
@@ -954,7 +1028,9 @@ public sealed class TeamRunnerTests : IDisposable
 
         var outcome = (await RunAsync(git: git)).Value!;
 
-        git.Merges.Should().Equal("teams/" + outcome.RunId + "/implementer", "teams/" + outcome.RunId + "/implementer");
+        git.Merges.Should().Equal(
+            "teams-" + outcome.RunId + "-implementer",
+            "teams-" + outcome.RunId + "-implementer");
         outcome.Merged.Should().ContainSingle();
 
         var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));

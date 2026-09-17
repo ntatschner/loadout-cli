@@ -80,6 +80,56 @@ public sealed class GitMergeTests : IAsyncLifetime
     }
 
     /// <summary>A branch with one commit on it, made in a worktree so the repository's own tree is untouched.</summary>
+    [Fact]
+    public async Task A_run_can_make_its_worktree_on_a_repository_whose_branch_is_called_teams()
+    {
+        // The exact failure from the first real run, which happened on a
+        // branch called "teams":
+        //
+        //   fatal: cannot lock ref 'refs/heads/teams/20260917-1036-16f5/implementer-1':
+        //   'refs/heads/teams' exists
+        //
+        // Git refs are files. refs/heads/teams being a file means nothing can
+        // live under it, so every hierarchical run branch was impossible on
+        // the one branch this feature was written on.
+        await GitAsync("branch", "teams");
+
+        var branch = Loadout.Agents.Teams.TeamRunner.BranchFor("20260917-1036-16f5", "implementer/1");
+
+        var made = await _git.AddWorktreeAsync(
+            _repository, Path.Combine(_root, "tree"), branch);
+
+        made.Succeeded.Should().BeTrue(made.Error ?? "the worktree should have been created");
+
+        (await GitAsync("branch", "--list", branch)).Trim().Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_run_does_not_stop_anybody_creating_a_branch_called_teams_afterwards()
+    {
+        // The other half, and the worse one: a hierarchical run branch would
+        // have made refs/heads/teams a directory, so an ordinary name would be
+        // taken for good by a feature nobody asked to name their branches.
+        var branch = Loadout.Agents.Teams.TeamRunner.BranchFor("20260917-1036-16f5", "implementer/1");
+
+        (await _git.AddWorktreeAsync(_repository, Path.Combine(_root, "tree"), branch))
+            .Succeeded.Should().BeTrue();
+
+        await GitAsync("branch", "teams");
+
+        (await GitAsync("branch", "--list", "teams")).Trim().Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void A_run_branch_has_no_path_in_it_at_all()
+    {
+        // The rule, said once: no slash means no ref that has to be a
+        // directory, which is the whole of the fix.
+        Loadout.Agents.Teams.TeamRunner.BranchFor("20260917-1036-16f5", "implementer/1")
+            .Should().NotContain("/")
+            .And.Be("teams-20260917-1036-16f5-implementer-1");
+    }
+
     private async Task<string> BranchAsync(string branch, string file, string content)
     {
         var path = Path.Combine(_root, "trees", branch.Replace('/', '-'));

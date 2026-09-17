@@ -1740,6 +1740,36 @@ public sealed class TeamRunner : ITeamRunner
         }
     }
 
+    /// <summary>
+    /// What a node's own branch is called.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Flat, with hyphens, and that is the whole point. Git refs are files, so
+    /// a branch called <c>teams/a/b</c> is a file at <c>refs/heads/teams/a/b</c>
+    /// and needs <c>refs/heads/teams</c> to be a directory. A repository whose
+    /// current branch is called <c>teams</c> therefore cannot create one, and
+    /// says so in the middle of a run:
+    /// </para>
+    /// <code>
+    /// fatal: cannot lock ref 'refs/heads/teams/20260917-1036-16f5/implementer-1':
+    /// 'refs/heads/teams' exists
+    /// </code>
+    /// <para>
+    /// Found by the first real run on the branch this feature was written on,
+    /// which was called <c>teams</c>. The collision is symmetric and that is
+    /// the worse half: a hierarchical run branch also stops anybody creating a
+    /// branch called <c>teams</c> ever again, so every run would quietly
+    /// poison an ordinary name in somebody's repository.
+    /// </para>
+    /// <para>
+    /// A prefix and no slashes costs the grouping that <c>git branch --list
+    /// 'teams/*'</c> gave, and <c>'teams-*'</c> groups them just as well.
+    /// </para>
+    /// </remarks>
+    internal static string BranchFor(string runId, string nodeName) =>
+        $"teams-{runId}-{Safe(nodeName)}";
+
     /// <summary>The permission tier a posture gets: edits accepted only for one that changes the repository.</summary>
     private static HeadlessPermission Tier(string? mode) =>
         string.Equals(mode, "implement", StringComparison.OrdinalIgnoreCase)
@@ -1795,7 +1825,7 @@ public sealed class TeamRunner : ITeamRunner
                 // A branch of its own, named after the run and the node, so
                 // two runs of the same team never meet and a person reading
                 // the branch list can tell which run made what.
-                Worktree: node.Worktree ? $"teams/{runId}/{Safe(nodeName)}" : null,
+                Worktree: node.Worktree ? BranchFor(runId, nodeName) : null,
                 OutwardAllowed: outwardAllowed),
             doneWhen,
             node.Parameters.Count > 0 ? node.Parameters : null,
