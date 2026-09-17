@@ -25,96 +25,6 @@ Your repository goes back to being code.
 It runs natively on Windows, Linux and macOS. No VM, no container, no "works
 on Linux, should be fine elsewhere".
 
-![Your repository feeds Loadout, which holds instructions, memory, token
-accounting, repo hygiene, sessions and the launcher, and starts your
-agent](docs/images/features.jpg)
-
-## Agents and editors
-
-| Agent | What you get |
-| --- | --- |
-| **Claude Code** | The compiled context as a system prompt, session listing and resume, MCP servers per project, and a status line with project, branch and context usage |
-| **Codex** | The compiled context as `AGENTS.md` in an ephemeral `CODEX_HOME`, session listing and resume. No status line, because Codex has no equivalent |
-| **Anything else** | Define it under `custom_agents` in `config.yaml` — executable, arguments and environment. No code change needed, and no wait for us |
-
-Editor handoff is `loadout code <project>`, which opens the repo in the editor
-under the profile you've mapped to that agent, so opening a project for Claude
-and for Codex can give you different extensions and settings.
-
-**VS Code**, **VS Code Insiders**, **VSCodium** and **Cursor** are recognised by
-name, but open in their default profile: they won't open a folder and a profile
-in the same launch, and `loadout code` tells you so rather than leaving you to
-work out why nothing changed. **Neovim** is recognised too, and its profiles do
-apply — `NVIM_APPNAME` names the configuration directory it loads, so the
-mapping works end to end.
-
-Any other editor works — `loadout config set editor-command <command>` — and if
-it takes a profile, say how under `custom_editors` in `config.yaml`.
-
-More agents and editors are coming. The generic adapter means you don't have to
-wait for one: if it takes a directory and starts from a command, you can wire it
-up today.
-
-## Install
-
-Grab your platform's archive from the
-[latest release](https://github.com/ntatschner/loadout-cli/releases/latest).
-
-### Linux and macOS
-
-```sh
-tar -xzf loadout-0.33.3-linux-x64.tar.gz
-./install.sh          # goes to ~/.local/bin, no root
-loadout setup
-```
-
-`install.sh` checks the SHA-256 first and won't install if it doesn't match.
-There are `.deb` and `.rpm` packages if you'd rather.
-
-### Windows
-
-```powershell
-msiexec /i loadout-0.33.3-win-x64.msi    # per-user, no elevation
-loadout setup
-```
-
-That puts it in `%LOCALAPPDATA%\Programs\loadout`, adds it to your `PATH` and
-makes a Start Menu entry. There's a plain `.zip` too.
-
-[Installing](docs/installing.md) covers verification, system-wide installs and
-the macOS Gatekeeper situation.
-
-## Getting started
-
-```sh
-loadout setup                  # set up the workspace on this machine
-loadout project add .          # register the repo you're standing in
-loadout protect                # keep agent files out of it
-loadout                        # launcher opens, pick a project, go
-```
-
-Run `loadout` with nothing after it and you get the launcher: a project list,
-what a session there would start with, and Enter to open the launch sheet.
-`loadout here` launches the agent for whatever repo you're in. `loadout
-<project>` skips straight to a registered one, and takes the same choices as
-flags: `--agent`, `--task`, `--mode`, `--profile`, `--worktree`. Add
-`--dry-run` to see the whole launch described and start nothing.
-
-## How it works
-
-Two repositories instead of one. Yours holds source. The workspace holds
-everything your agent needs to work on it, so a teammate who's never installed
-Loadout sees a clean diff.
-
-When you launch, Loadout reads your repo to see what it's made of, works out
-which instructions apply to what you said you're doing, and builds one context
-file for that session. The file goes in a directory only you can read and is
-deleted when the agent exits.
-
-Nothing is guessed silently. The launch sheet shows the set and why each part
-was picked before you start; `loadout instructions explain` shows the same
-from the command line. The rest is in **[what you get](docs/features.md)**.
-
 ## Features
 
 Everything that's in the box, grouped by the problem it exists for. Each line is
@@ -290,6 +200,92 @@ a thing that ships, not a plan.
   and nothing updates without being asked.
 - **Packages** — `.msi`, `.deb`, `.rpm`, and archives with a checked install
   script.
+
+## Agents and editors
+
+| Agent | What you get |
+| --- | --- |
+| **Claude Code** | The compiled context as a system prompt, session listing and resume, MCP servers per project, and a status line with project, branch and context usage |
+| **Codex** | The compiled context as `AGENTS.md` in an ephemeral `CODEX_HOME`, session listing and resume. No status line, because Codex has no equivalent |
+| **Anything else** | Define it under `custom_agents` in `config.yaml` — executable, arguments and environment. No code change needed, and no wait for us |
+
+Editor handoff is `loadout code <project>`, which opens the repo in the editor
+under the profile you've mapped to that agent, so opening a project for Claude
+and for Codex can give you different extensions and settings.
+
+**VS Code**, **VS Code Insiders**, **VSCodium** and **Cursor** are recognised by
+name, but open in their default profile: they won't open a folder and a profile
+in the same launch, and `loadout code` tells you so rather than leaving you to
+work out why nothing changed. **Neovim** is recognised too, and its profiles do
+apply — `NVIM_APPNAME` names the configuration directory it loads, so the
+mapping works end to end.
+
+Any other editor works — `loadout config set editor-command <command>` — and if
+it takes a profile, say how under `custom_editors` in `config.yaml`.
+
+More agents and editors are coming. The generic adapter means you don't have to
+wait for one: if it takes a directory and starts from a command, you can wire it
+up today.
+
+## Install
+
+Grab your platform's archive from the
+[latest release](https://github.com/ntatschner/loadout-cli/releases/latest).
+
+### Linux and macOS
+
+```sh
+tar -xzf loadout-0.33.3-linux-x64.tar.gz
+./install.sh          # goes to ~/.local/bin, no root
+loadout setup
+```
+
+`install.sh` checks the SHA-256 first and won't install if it doesn't match.
+There are `.deb` and `.rpm` packages if you'd rather.
+
+### Windows
+
+```powershell
+msiexec /i loadout-0.33.3-win-x64.msi    # per-user, no elevation
+loadout setup
+```
+
+That puts it in `%LOCALAPPDATA%\Programs\loadout`, adds it to your `PATH` and
+makes a Start Menu entry. There's a plain `.zip` too.
+
+[Installing](docs/installing.md) covers verification, system-wide installs and
+the macOS Gatekeeper situation.
+
+## Getting started
+
+```sh
+loadout setup                  # set up the workspace on this machine
+loadout project add .          # register the repo you're standing in
+loadout protect                # keep agent files out of it
+loadout                        # launcher opens, pick a project, go
+```
+
+Run `loadout` with nothing after it and you get the launcher: a project list,
+what a session there would start with, and Enter to open the launch sheet.
+`loadout here` launches the agent for whatever repo you're in. `loadout
+<project>` skips straight to a registered one, and takes the same choices as
+flags: `--agent`, `--task`, `--mode`, `--profile`, `--worktree`. Add
+`--dry-run` to see the whole launch described and start nothing.
+
+## How it works
+
+Two repositories instead of one. Yours holds source. The workspace holds
+everything your agent needs to work on it, so a teammate who's never installed
+Loadout sees a clean diff.
+
+When you launch, Loadout reads your repo to see what it's made of, works out
+which instructions apply to what you said you're doing, and builds one context
+file for that session. The file goes in a directory only you can read and is
+deleted when the agent exits.
+
+Nothing is guessed silently. The launch sheet shows the set and why each part
+was picked before you start; `loadout instructions explain` shows the same
+from the command line. The rest is in **[what you get](docs/features.md)**.
 
 ## Documentation
 
