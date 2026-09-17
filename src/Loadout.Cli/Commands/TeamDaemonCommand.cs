@@ -309,6 +309,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         arguments.Add("--answer");
         arguments.Add(action.Answer ?? "no");
+        arguments.Add("--by");
+        arguments.Add("dashboard");
 
         if (action.Reason is { Length: > 0 } reason)
         {

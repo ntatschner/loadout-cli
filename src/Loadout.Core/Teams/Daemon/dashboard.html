@@ -106,6 +106,7 @@
   .controls { margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .controls input { flex: 1 1 14rem; min-width: 8rem; }
   .said { flex-basis: 100%; }
+  #said { font-weight: 700; margin: 0.25rem 0 0; }
 
   .log {
     background: var(--card);
@@ -144,6 +145,7 @@
     the page later is one a screen reader never started watching.
   -->
   <p id="status" role="status" aria-live="polite"></p>
+  <p id="said" role="status" aria-live="assertive"></p>
 
   <h2 id="runs">Runs on this machine</h2>
   <ul class="runs" id="list" aria-describedby="status"></ul>
@@ -201,9 +203,21 @@
 
   // Said out loud rather than only shown, because the person who just changed
   // a run is the person who most needs to know whether it took.
+  // Its own region, because the status line above is rewritten twice a second
+  // by the poll - an answer to something somebody clicked lasted less than
+  // half a second there, and a screen reader could miss it entirely.
+  var saidTimer = null;
+
   function announce(said) {
-    var status = document.getElementById("status");
-    if (status) { status.textContent = said; }
+    var box = document.getElementById("said");
+
+    if (!box) { return; }
+
+    box.textContent = said;
+
+    // Cleared after a while so it does not read as the current state for ever.
+    if (saidTimer) { clearTimeout(saidTimer); }
+    saidTimer = setTimeout(function () { box.textContent = ""; }, 20000);
   }
 
   function api(path) {

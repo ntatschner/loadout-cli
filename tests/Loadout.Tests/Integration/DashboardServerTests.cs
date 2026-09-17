@@ -153,6 +153,23 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task What_you_just_did_is_said_somewhere_the_refresh_does_not_overwrite()
+    {
+        // Found by clicking the buttons: the confirmation went into the same
+        // live region the runs list rewrites twice a second, so it survived
+        // under half a second and a screen reader could miss it entirely.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("id=\"said\"");
+        text.Should().Contain("aria-live=\"assertive\"",
+            "a reply to something somebody clicked is not ambient status");
+
+        // And the ambient one is still there and still polite.
+        text.Should().Contain("id=\"status\"");
+        text.Should().Contain("aria-live=\"polite\"");
+    }
+
+    [Fact]
     public async Task Reading_a_run_is_still_reading_it()
     {
         // The route split is by verb, and two of them are not verbs at all.

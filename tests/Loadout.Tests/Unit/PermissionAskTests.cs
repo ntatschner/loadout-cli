@@ -188,6 +188,35 @@ public sealed class PermissionAskTests : IDisposable
     }
 
     [Fact]
+    public async Task An_answer_records_where_it_came_from()
+    {
+        // "Somebody allowed this" and "somebody allowed this from a browser on
+        // the other side of the house" are different sentences to whoever
+        // reads the run back. The first real click through the dashboard wrote
+        // "terminal", because the command that the daemon runs is the same one
+        // a terminal runs and nothing told it otherwise.
+        await PutAsync(Ask());
+
+        await NodePermissions.AnswerAsync(
+            _directory, "impl-1-abc", new AskAnswer(true, "go on", Chosen: "yes", By: "dashboard"));
+
+        // Read back the way the waiting node reads it.
+        var written = System.Text.Json.JsonSerializer.Deserialize<AskAnswer>(
+            await File.ReadAllTextAsync(Path.Combine(_directory, "answer-impl-1-abc.json")))!;
+
+        written.By.Should().Be("dashboard");
+        written.Chosen.Should().Be("yes");
+    }
+
+    [Fact]
+    public void An_answer_that_does_not_say_where_it_came_from_is_a_terminal()
+    {
+        // The default, because that is where all of them came from until a
+        // browser could answer one.
+        new AskAnswer(true, "go on").By.Should().Be("terminal");
+    }
+
+    [Fact]
     public void A_policy_says_nothing_may_be_asked_unless_the_run_said_so()
     {
         // The default, and it matters: a policy written by anything that has

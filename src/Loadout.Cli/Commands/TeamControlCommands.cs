@@ -72,6 +72,10 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         [CommandOption("--reason <WHY>")]
         [Description("Why, in your words. The node is told.")]
         public string? Reason { get; init; }
+
+        [CommandOption("--by <WHERE>")]
+        [Description("Where the answer came from: terminal or dashboard. For the daemon.")]
+        public string? By { get; init; }
     }
 
     /// <inheritdoc />
@@ -149,7 +153,11 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
                         : "The person running this team refused it. Report what you needed and why "
                             + "rather than finding another way to do it.",
                 Chosen: answer,
-                By: "terminal"),
+
+                // Recorded because "somebody allowed this" and "somebody
+                // allowed this from a browser on the other side of the house"
+                // are different sentences to whoever reads the run back.
+                By: settings.By is { Length: > 0 } where ? where : "terminal"),
             cancellationToken).ConfigureAwait(false);
 
         output.WriteLine($"[green]+[/] Told run {Markup.Escape(run)}: {Markup.Escape(answer)}.");
