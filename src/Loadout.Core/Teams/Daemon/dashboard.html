@@ -118,6 +118,9 @@
   #rail .which { font-weight: 700; }
   #rail .clears { color: var(--quiet); }
 
+  .prefs { display: flex; gap: 0.75rem; align-items: center; margin: 0.5rem 0; }
+  .prefs label { color: var(--quiet); }
+
   .log {
     background: var(--card);
     border: 1px solid var(--line);
@@ -156,6 +159,11 @@
   -->
   <p id="status" role="status" aria-live="polite"></p>
   <p id="said" role="status" aria-live="assertive"></p>
+
+  <div class="prefs">
+    <button type="button" id="notify">Tell me when a run needs me</button>
+    <label><input type="checkbox" id="sound"> Sound</label>
+  </div>
 
   <section id="rail" hidden aria-labelledby="rail-heading">
     <h2 id="rail-heading">Needs you</h2>
@@ -262,6 +270,103 @@
 
   // The word first, the colour second. Nothing here is carried by colour
   // alone, so a screenshot in greyscale says the same thing.
+  // What has already been said out loud. Keyed by run, kind AND what it says,
+  // because one run can be waiting on three different questions at once and
+  // they are all kind "asking" - keyed on the kind alone, somebody would be
+  // told about the first and never about the other two.
+  //
+  // A reason that clears and comes back is news again, because the key is
+  // rebuilt from what is true now rather than remembered.
+  var told = {};
+
+  function keyOf(item) {
+    return item.run.id + "/" + item.reason.kind + "/" + item.reason.detail;
+  }
+
+  // Per-viewer conveniences, in this browser only. Wrapped because a private
+  // window throws rather than returning nothing.
+  function remembered(name, fallback) {
+    try {
+      var value = window.localStorage.getItem(name);
+      return value === null ? fallback : value === "1";
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function remember(name, on) {
+    try { window.localStorage.setItem(name, on ? "1" : "0"); } catch (e) { /* fine */ }
+  }
+
+  // Synthesised rather than fetched, so the page still fetches nothing: a
+  // short two-tone chime, quiet enough not to make somebody jump.
+  function chime() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+
+      if (!Ctx) { return; }
+
+      var ctx = new Ctx();
+      var now = ctx.currentTime;
+
+      [880, 1174].forEach(function (hz, i) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.value = hz;
+        gain.gain.setValueAtTime(0.0001, now + i * 0.14);
+        gain.gain.exponentialRampToValueAtTime(0.09, now + i * 0.14 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.14 + 0.13);
+
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + i * 0.14);
+        osc.stop(now + i * 0.14 + 0.14);
+      });
+
+      setTimeout(function () { try { ctx.close(); } catch (e) { /* fine */ } }, 600);
+    } catch (e) {
+      // A browser that will not make a sound is not a reason to stop.
+    }
+  }
+
+  function tell(items) {
+    var fresh = items.filter(function (item) { return !told[keyOf(item)]; });
+
+    // Rebuilt from what is true now, so a reason that has cleared is
+    // forgotten and will be told again if it comes back.
+    var next = {};
+    items.forEach(function (item) { next[keyOf(item)] = true; });
+    told = next;
+
+    if (fresh.length === 0) { return; }
+
+    if (document.getElementById("sound").checked) { chime(); }
+
+    if (!("Notification" in window) || Notification.permission !== "granted") { return; }
+
+    fresh.forEach(function (item) {
+      try {
+        var note = new Notification(item.run.team + " needs you", {
+          body: item.reason.detail,
+
+          // One notification per run and reason: a browser replaces a
+          // notification carrying a tag it already has, so a page left open
+          // for hours does not stack forty of them.
+          tag: keyOf(item),
+        });
+
+        note.addEventListener("click", function () {
+          window.focus();
+          watch(item.run);
+          note.close();
+        });
+      } catch (e) {
+        // Some browsers refuse the constructor outside a service worker.
+      }
+    });
+  }
+
   // Everything wanting somebody, across every run, newest first. Rebuilt on
   // every read: nothing here is remembered, so a reason that has gone is gone.
   function drawRail(runs) {
@@ -306,6 +411,7 @@
     });
 
     mark(wanted.length);
+    tell(wanted);
 
     return wanted.length;
   }
@@ -588,7 +694,57 @@
   }
 
   function refresh() {
-    api("/api/runs")
+    (function () {
+    var sound = document.getElementById("sound");
+    sound.checked = remembered("loadout.sound", false);
+    sound.addEventListener("change", function () {
+      remember("loadout.sound", sound.checked);
+
+      // So somebody knows what they just switched on, before a run needs
+      // them at three in the morning.
+      if (sound.checked) { chime(); }
+    });
+
+    var ask = document.getElementById("notify");
+
+    function showPermission() {
+      if (!("Notification" in window)) {
+        ask.textContent = "This browser cannot show notifications";
+        ask.disabled = true;
+        return;
+      }
+
+      if (Notification.permission === "granted") {
+        ask.textContent = "Notifications are on";
+        ask.disabled = true;
+      } else if (Notification.permission === "denied") {
+        ask.textContent = "Notifications are blocked for this page";
+        ask.disabled = true;
+      }
+    }
+
+    // Asked from a click rather than on load: a page that demands permission
+    // the moment it opens is the reason people refuse it.
+    ask.addEventListener("click", function () {
+      Notification.requestPermission().then(function () {
+        showPermission();
+
+        // Everything already wanting somebody counts as new now. Without
+        // this, saying yes would tell you about the next thing and never
+        // about the three already waiting - which is the opposite of what
+        // clicking it means.
+        if (Notification.permission === "granted") { told = {}; }
+
+        announce(Notification.permission === "granted"
+          ? "You will be told when a run needs you."
+          : "Notifications were not allowed. The tab title still says.");
+      });
+    });
+
+    showPermission();
+  })();
+
+  api("/api/runs")
       .then(function (answer) {
         draw(answer.runs);
       })

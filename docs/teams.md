@@ -238,6 +238,27 @@ nothing in common — with a two-minute floor, so a node whose turns take four
 seconds is not reported after twelve. A node on its first turn is never called
 quiet: nothing is known yet about how long that one takes.
 
+### Being told
+
+The tab title says how many runs need you — `(3) Loadout teams` — and the
+favicon changes with it. That costs nothing and needs no permission, so a tab
+buried behind thirty others still tells you.
+
+**Tell me when a run needs me** asks the browser for notification permission,
+once, from a click rather than on load. Saying yes announces whatever is
+already waiting, not just the next thing. **Sound** is a short chime,
+synthesised rather than fetched, off by default; switching it on plays it once
+so you know what you have agreed to. Both settings live in that browser only.
+
+You are told once per reason. A reason that clears and comes back is news
+again; three different questions on one run are three different tellings.
+
+**Not verified.** The notification itself has not been seen to appear: the
+browser automation used to test the rest of this cannot observe an operating
+system notification, and could not stub the browser's own API convincingly
+enough to prove the path. The counting, the title, the favicon and the
+self-clearing all were.
+
 ### Answering, steering and stopping
 
 A run that has stopped to ask you something is **waiting for you** — its own
