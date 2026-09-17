@@ -436,6 +436,7 @@ public sealed class DashboardServer : IDisposable
         finished = run.Finished,
         run.Ended,
         run.Running,
+        run.Project,
         cost = run.CostUsd,
         run.Rounds,
         run.RoundLimit,

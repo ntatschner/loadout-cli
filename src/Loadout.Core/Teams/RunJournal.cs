@@ -87,7 +87,9 @@ public sealed record RunSummary(
     IReadOnlyList<RunNode> Nodes,
     IReadOnlyList<string> Merged,
     IReadOnlyList<string> Branches,
-    int RoundLimit = 0)
+    int RoundLimit = 0,
+    string? Project = null,
+    string? Path = null)
 {
     /// <summary>Whether the run is still going, as far as its journal knows.</summary>
     /// <remarks>
@@ -287,6 +289,8 @@ public sealed class RunJournal : IRunJournal
         var team = string.Empty;
         var goal = string.Empty;
         var autonomy = string.Empty;
+        string? project = null;
+        string? path = null;
         var started = events.Count > 0 ? events[0].At : DateTimeOffset.MinValue;
         DateTimeOffset? finished = null;
         string? ended = null;
@@ -315,6 +319,12 @@ public sealed class RunJournal : IRunJournal
                     goal = entry.Text("goal") ?? goal;
                     autonomy = entry.Text("autonomy") ?? autonomy;
                     limit = (int)(entry.Number("rounds") ?? limit);
+
+                    // Null for runs written before this was recorded, which is
+                    // why everything downstream treats it as optional rather
+                    // than as missing.
+                    project = entry.Text("project");
+                    path = entry.Text("path");
                     started = entry.At;
                     break;
 
@@ -426,7 +436,9 @@ public sealed class RunJournal : IRunJournal
             nodes.Values.ToList(),
             merged,
             nodes.Values.Where(node => node.Branch is { Length: > 0 }).Select(node => node.Branch!).ToList(),
-            limit);
+            limit,
+            project,
+            path);
     }
 
     /// <summary>One event as a line somebody can read.</summary>
@@ -438,7 +450,9 @@ public sealed class RunJournal : IRunJournal
 
         var what = entry.Kind switch
         {
-            "run.started" => $"started {entry.Text("team")}, {entry.Text("autonomy")}: {entry.Text("goal")}",
+            "run.started" => $"started {entry.Text("team")}"
+                + (entry.Text("project") is { Length: > 0 } on ? $" on {on}" : string.Empty)
+                + $", {entry.Text("autonomy")}: {entry.Text("goal")}",
             "run.finished" => $"finished: {entry.Text("ended")}",
             "round.started" => $"round {entry.Number("round")} of {entry.Number("of")}",
             "node.doing" => entry.Text("doing") ?? "working",

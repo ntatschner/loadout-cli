@@ -229,7 +229,12 @@
       line.appendChild(word);
 
       var rest = document.createTextNode(
-        ". " + run.autonomy + ", round " + run.rounds +
+        ". " +
+        // Which project it worked on, first, because a machine with several
+        // showed a list of runs nothing could attribute. Absent on runs
+        // recorded before it was written down.
+        (run.project ? run.project + ", " : "") +
+        run.autonomy + ", round " + run.rounds +
         (run.roundLimit ? " of " + run.roundLimit : "") +
         ", " + minutes(run.elapsedSeconds) + ", $" + run.cost.toFixed(2) + ". " +
         (run.goal || ""));

@@ -176,6 +176,27 @@ A pack carrying teams goes through the same gate as one carrying specialists: it
 is pinned to a commit, and somebody on this machine approves that commit having
 read it. See [Specialists and skills](specialists.md).
 
+## Which tree it works on
+
+A run works on the **project's registered path**, not on wherever you typed the
+command. Those are often the same and sometimes not — a git worktree of the same
+repository, on a different branch, is the case that catches people.
+
+So a run says where it is going before it spends anything:
+
+```
+Working on loadout-cli at D:\gitilauncher on docs-features-and-guides
+You are in D:\gitilauncher-teams, which is not where this will run.
+```
+
+The second line only appears when they differ. The branch is the part worth
+reading: a path you half-recognise looks right, and a branch you are not on
+looks wrong at a glance.
+
+Every run records which project and path it used, so `team status`, the
+dashboard and the launcher's screen can all say it afterwards. Runs recorded
+before that was written down simply do not show it.
+
 ## Watching a run
 
 Three views of one thing. Each run writes one journal, and all three read it, so

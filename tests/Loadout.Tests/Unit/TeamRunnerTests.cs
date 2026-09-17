@@ -778,6 +778,54 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_run_writes_down_which_project_it_worked_on()
+    {
+        // A machine runs teams against several projects, and until this was
+        // recorded every view of them - team status, the dashboard, the
+        // launcher's screen - listed runs nothing could attribute. It also
+        // hides the trap that cost a real run: a team works on the project's
+        // registered path, which is not necessarily where somebody typed the
+        // command.
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await RunAsync(git: git)).Value!;
+
+        var summary = new RunJournal(_paths).Summarise(outcome.RunId).Value!;
+
+        summary.Project.Should().Be("demo");
+        summary.Path.Should().Be(Path.Combine(_root, "repo"));
+    }
+
+    [Fact]
+    public async Task A_run_recorded_before_any_of_that_still_reads_back()
+    {
+        // Every run already on somebody's machine was written without these,
+        // and a reader that needed them would turn the whole history into an
+        // error. Null is the answer, and every view treats it as absent
+        // rather than as broken.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        var journal = Path.Combine(outcome.Directory!, "journal.jsonl");
+
+        // The old shape: a run.started with none of it.
+        var lines = await File.ReadAllLinesAsync(journal);
+        lines[0] = "{\"at\":\"2026-09-01T00:00:00+00:00\",\"run\":\"" + outcome.RunId
+            + "\",\"node\":null,\"kind\":\"run.started\","
+            + "\"data\":{\"team\":\"iterating-project\",\"goal\":\"old\",\"autonomy\":\"supervised\",\"rounds\":5}}";
+        await File.WriteAllLinesAsync(journal, lines);
+
+        var summary = new RunJournal(_paths).Summarise(outcome.RunId).Value!;
+
+        summary.Project.Should().BeNull();
+        summary.Path.Should().BeNull();
+        summary.Team.Should().Be("iterating-project", "the rest of it still reads");
+    }
+
+    [Fact]
     public void A_question_leaves_the_question_mark_to_whoever_asks_it()
     {
         // The first real run asked somebody "Let it??", because this ended

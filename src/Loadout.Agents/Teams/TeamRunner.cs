@@ -345,10 +345,26 @@ public sealed class TeamRunner : ITeamRunner
         await using var watching = Watching.Start(
             _asking, token => WatchAsksAsync(directory, console, journal, token), ct);
 
-        await journal.WriteAsync("run.started", null, new { team = team.Name, goal = request.Goal, autonomy, rounds = request.MaxRounds }, ct)
-            .ConfigureAwait(false);
-
+        // Resolved before the run is written down rather than after, because
+        // which project a run worked on is the first thing somebody reading it
+        // back needs and the journal had no way to say it. A machine with
+        // several projects showed a list of runs nothing could attribute.
         var slug = await SlugAsync(request, ct).ConfigureAwait(false);
+        var where = await PathAsync(request, ct).ConfigureAwait(false);
+
+        await journal.WriteAsync(
+            "run.started",
+            null,
+            new
+            {
+                team = team.Name,
+                goal = request.Goal,
+                autonomy,
+                rounds = request.MaxRounds,
+                project = slug,
+                path = where,
+            },
+            ct).ConfigureAwait(false);
 
         if (!await GateAsync(autonomy, console, $"Brief the lead ({leadNode.Role}) with the goal", ct).ConfigureAwait(false))
         {
@@ -706,6 +722,27 @@ public sealed class TeamRunner : ITeamRunner
     /// <summary>
     /// The project's slug, or the handle as given when it cannot be resolved.
     /// </summary>
+    /// <summary>
+    /// Where on this machine the run works, or null when nothing can say.
+    /// </summary>
+    /// <remarks>
+    /// Recorded beside the project rather than derived from it later: a
+    /// project's registered path can be changed afterwards, and a run that
+    /// said where it went is worth more than one that says where it would go
+    /// today.
+    /// </remarks>
+    private async Task<string?> PathAsync(TeamRunRequest request, CancellationToken ct)
+    {
+        if (_projects is null)
+        {
+            return null;
+        }
+
+        var resolution = await _projects.ResolveAsync(request.ProjectHandle, ct).ConfigureAwait(false);
+
+        return resolution.Value?.LocalPath;
+    }
+
     private async Task<string> SlugAsync(TeamRunRequest request, CancellationToken ct)
     {
         if (_projects is null)

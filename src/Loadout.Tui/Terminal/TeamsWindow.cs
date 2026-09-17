@@ -296,7 +296,9 @@ internal sealed class TeamsWindow : Window
         runs.Count == 0
             ? ["Nothing has been run yet. Start one with: loadout team run <team> \"<goal>\""]
             : runs.Select(run =>
-                $"{run.RunId,-22} {Shorten(run.Team, 18),-18} {State(run),-12} {Length(run.Elapsed)}");
+                $"{run.RunId,-22} {Shorten(run.Team, 16),-16} "
+                + $"{Shorten(run.Project ?? string.Empty, 14),-14} "
+                + $"{State(run),-12} {Length(run.Elapsed)}");
 
     /// <summary>
     /// Where a run got to, as a word.

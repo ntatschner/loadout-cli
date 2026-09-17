@@ -354,6 +354,7 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
                 {
                     run = run.RunId,
                     run.Team,
+                    run.Project,
                     run.Autonomy,
                     run.Goal,
                     ended = run.Ended,
@@ -380,6 +381,7 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
         {
             output.WriteLine(
                 $"{Markup.Escape(run.RunId),-22} {Markup.Escape(run.Team),-20} "
+                + $"[dim]{Markup.Escape(run.Project ?? string.Empty),-16}[/] "
                 + (run.Running ? "[yellow]running[/]" : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
                 + $"  [dim]${run.CostUsd:0.00}[/]");
 
@@ -457,6 +459,8 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 run = run.RunId,
                 run.Team,
                 run.Goal,
+                run.Project,
+                run.Path,
                 run.Autonomy,
                 run.Directory,
                 started = run.Started,
@@ -493,6 +497,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
 
         output.WriteLine(
             $"[bold]{Markup.Escape(run.RunId)}[/]  {Markup.Escape(run.Team)}  "
+            + (run.Project is { Length: > 0 } on ? $"{Markup.Escape(on)}  " : string.Empty)
             + $"{Markup.Escape(run.Autonomy)}  "
             + (run.Running
                 ? $"[yellow]running[/]  [dim]{Elapsed(quiet)} since it last said anything[/]"
@@ -714,6 +719,7 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
 public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 {
     private readonly ITeamRunner _runner;
+    private readonly Loadout.Core.Git.IGitManager _git;
     private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
     private readonly ITeamCatalogue _teams;
     private readonly ISpecialistLibrary _library;
@@ -725,6 +731,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
     public TeamRunCommand(
         ITeamRunner runner,
+        Loadout.Core.Git.IGitManager git,
         Loadout.Core.Configuration.IConfigurationService configuration,
         ITeamCatalogue teams,
         ISpecialistLibrary library,
@@ -734,6 +741,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         ReadingProfile reading)
     {
         _runner = runner;
+        _git = git;
         _configuration = configuration;
         _teams = teams;
         _library = library;
@@ -851,6 +859,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
         var console = new TerminalTeamConsole(_console, settings, _reading);
 
+        await SayWhereAsync(output, project, cancellationToken).ConfigureAwait(false);
+
         var result = await _runner.RunAsync(request, console, cancellationToken).ConfigureAwait(false);
 
         if (result.Failed)
@@ -939,6 +949,76 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
         return CommandOutput.Success();
     }
+
+    /// <summary>
+    /// Says which tree the run will work on, before it spends anything.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A run works on the project's registered path, which is not necessarily
+    /// where somebody typed the command. The first real run of this feature was
+    /// started from one worktree and worked on another, on a different branch,
+    /// and neither the person nor the run said so - it cost a lead, a planner,
+    /// an implementer, a reviewer and a verifier before anybody noticed the
+    /// work had landed somewhere else.
+    /// </para>
+    /// <para>
+    /// The branch is the part that matters. A path somebody half-recognises
+    /// reads as right; a branch name they are not on reads as wrong at a
+    /// glance, which is the whole point of saying it before rather than after.
+    /// </para>
+    /// <para>
+    /// Best-effort: a repository that cannot be read still runs. This is a
+    /// courtesy before an expensive thing, not a gate.
+    /// </para>
+    /// </remarks>
+    private async Task SayWhereAsync(
+        CommandOutput output,
+        Loadout.Models.Projects.ProjectResolution project,
+        CancellationToken ct)
+    {
+        if (output.IsJson || project.LocalPath is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        var state = await _git.GetStateAsync(path, ct).ConfigureAwait(false);
+
+        var branch = state.Succeeded && state.Value?.Branch is { Length: > 0 } named
+            ? $" on [bold]{Markup.Escape(named)}[/]"
+            : string.Empty;
+
+        output.WriteLine(
+            $"[dim]Working on[/] {Markup.Escape(project.Entry.Slug)} "
+            + $"[dim]at[/] {Markup.Escape(path)}{branch}");
+
+        // Only when it is not where they are. Said every time it would be
+        // noise, and noise is what somebody skims past on the run that
+        // mattered.
+        var here = Directory.GetCurrentDirectory();
+
+        if (Elsewhere(here, path))
+        {
+            output.WriteLine($"[dim]You are in[/] {Markup.Escape(here)}[dim], which is not where this will run.[/]");
+        }
+    }
+
+    /// <summary>
+    /// Whether the run will happen somewhere other than where the person is.
+    /// </summary>
+    /// <remarks>
+    /// Compared as full paths with any trailing separator removed, because
+    /// <c>D:\git\x</c> and <c>D:\git\x\</c> are the same place and saying they
+    /// are not would put this warning on every run, which is how a warning
+    /// stops being read. Case-insensitively on Windows only, where the file
+    /// system is: two paths differing in case are one directory there and two
+    /// directories elsewhere.
+    /// </remarks>
+    internal static bool Elsewhere(string here, string there) =>
+        !string.Equals(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(here)),
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(there)),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>The person at the terminal, as the run sees them.</summary>
     private sealed class TerminalTeamConsole : ITeamConsole
