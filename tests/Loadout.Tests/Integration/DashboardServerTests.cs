@@ -94,18 +94,90 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Nothing_can_be_changed_through_it()
+    public async Task A_server_that_only_watches_changes_nothing()
     {
-        // Every change goes through the same parser somebody would type at.
-        // Two implementations of one behaviour drift, and the one nobody is
-        // watching drifts furthest.
+        // This server has no Act, which is what `team dashboard` gives you: a
+        // page opened to watch a run must not be able to stop one. The daemon
+        // sets Act, and that is the only thing that can.
         var answer = await _client.PostAsync(
             new Uri(_root + "api/runs/r/stop?token=" + _server.Token),
             new StringContent(string.Empty));
 
-        answer.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
+        answer.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
-        (await answer.Content.ReadAsStringAsync()).Should().Contain("command line");
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("only reads");
+    }
+
+    [Fact]
+    public async Task Changing_a_run_needs_the_token_like_everything_else()
+    {
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/r/stop"),
+            new StringContent(string.Empty));
+
+        // Before it even asks whether anything could act: a stranger is told
+        // about the token, never about what this server can do.
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task What_the_page_asks_for_is_handed_over_rather_than_done_here()
+    {
+        // The rule the launcher has kept since its first screen: the surface
+        // never implements command behaviour. What this proves is that the ask
+        // arrives intact - which run, which verb, which answer - because
+        // whatever receives it is going to type it.
+        RunAction? asked = null;
+
+        _server.Act = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/20260917-1116-ed59/gates?token=" + _server.Token),
+            new StringContent(
+                "{\"gate\":\"g1\",\"answer\":\"yes\",\"reason\":\"it needs the suite\"}",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked!.Run.Should().Be("20260917-1116-ed59");
+        asked.Verb.Should().Be("gates");
+        asked.Gate.Should().Be("g1");
+        asked.Answer.Should().Be("yes");
+        asked.Reason.Should().Be("it needs the suite");
+    }
+
+    [Fact]
+    public async Task Reading_a_run_is_still_reading_it()
+    {
+        // The route split is by verb, and two of them are not verbs at all.
+        // Getting this wrong would turn following a run into an action.
+        _server.Act = (_, _) => Task.FromResult(OperationResult.Ok());
+
+        (await GetAsync("/api/runs/r")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
+        (await GetAsync("/api/runs/r/events")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
+    }
+
+    [Fact]
+    public async Task Something_nobody_implemented_is_refused_by_whoever_would_do_it()
+    {
+        // The server does not keep a list of verbs. It hands the word over and
+        // the thing that types commands decides there is no such command,
+        // which is the only place that knows.
+        _server.Act = (action, _) => Task.FromResult(
+            OperationResult.Fail($"There is nothing called '{action.Verb}' to do to a run."));
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/r/incinerate?token=" + _server.Token),
+            new StringContent(string.Empty));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("incinerate");
     }
 
     [Fact]

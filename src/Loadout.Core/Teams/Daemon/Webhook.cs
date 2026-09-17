@@ -13,6 +13,26 @@ namespace Loadout.Core.Teams.Daemon;
 /// <param name="Project">Which project it works on, as the registry names it.</param>
 public sealed record TriggerRequest(string Team, string Goal, string? Project = null);
 
+/// <summary>Something the page asked be done to a run.</summary>
+/// <param name="Run">Which run, as the journal names it.</param>
+/// <param name="Verb">gates, message, pause, resume or stop.</param>
+/// <param name="Gate">Which question is being answered, for a gate.</param>
+/// <param name="Answer">What was chosen: an option, or yes or no.</param>
+/// <param name="Reason">Why, where somebody gave one. Reaches the node.</param>
+/// <param name="Message">What to say to the lead, for a message.</param>
+/// <remarks>
+/// One shape for all five because they all end the same way: the daemon runs
+/// the command somebody would have typed. Nothing here decides what any of
+/// them mean.
+/// </remarks>
+public sealed record RunAction(
+    string Run,
+    string Verb,
+    string? Gate = null,
+    string? Answer = null,
+    string? Reason = null,
+    string? Message = null);
+
 /// <summary>
 /// Letting something outside this machine start a run.
 /// </summary>

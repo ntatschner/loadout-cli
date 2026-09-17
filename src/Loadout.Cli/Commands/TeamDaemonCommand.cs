@@ -157,6 +157,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // that could start a run, and should not acquire one.
             server.Trigger = (asking, ct) => TriggeredAsync(asking, output, ct);
 
+            // Everything the page can do to a run, done by running the command
+            // somebody would have typed. The page decides nothing; this maps
+            // its ask onto a command line and the parser does the rest.
+            server.Act = (action, ct) => ActedOnAsync(action, output, ct);
+
             output.WriteLine($"[bold]{Markup.Escape(server.Address)}[/]");
 
             if (await Webhook.TokenAsync(_secrets, cancellationToken).ConfigureAwait(false) is not null)
@@ -241,6 +246,77 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             : OperationResult.Fail(
                 $"The run ended with exit code {code}. Read it with: loadout team log",
                 ExitCode.GeneralFailure);
+    }
+
+    /// <summary>
+    /// Does what the page asked of a run, through the command line.
+    /// </summary>
+    /// <remarks>
+    /// Every verb here is a command that exists and that somebody could type.
+    /// Nothing about answering a gate, saying something to a lead or stopping a
+    /// run is implemented twice: the page asks, this types it, and whatever the
+    /// terminal would have done happens.
+    /// </remarks>
+    private async Task<OperationResult> ActedOnAsync(
+        RunAction action,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        var (command, arguments) = action.Verb switch
+        {
+            "gates" or "gate" => ("team gate", Gate(action)),
+            "message" => ("team message", new List<string> { action.Run, "--message", action.Message ?? string.Empty }),
+            "stop" => ("team halt", [action.Run]),
+            "pause" => ("team halt", [action.Run, "--pause"]),
+            "resume" => ("team halt", [action.Run, "--resume"]),
+            _ => (string.Empty, []),
+        };
+
+        if (command.Length == 0)
+        {
+            return OperationResult.Fail(
+                $"There is nothing called '{action.Verb}' to do to a run.", ExitCode.InvalidArguments);
+        }
+
+        if (action.Verb == "message" && action.Message is not { Length: > 0 })
+        {
+            return OperationResult.Fail("Say something to say.", ExitCode.InvalidArguments);
+        }
+
+        output.WriteLine(
+            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"{Markup.Escape(command)} {Markup.Escape(action.Run)}");
+
+        var code = await _commands
+            .RunAsync(command, [.. arguments, "--non-interactive"], ct)
+            .ConfigureAwait(false);
+
+        return code == (int)ExitCode.Success
+            ? OperationResult.Ok()
+            : OperationResult.Fail($"'{command}' ended with exit code {code}.", ExitCode.GeneralFailure);
+    }
+
+    /// <summary>The command line for answering one gate.</summary>
+    private static List<string> Gate(RunAction action)
+    {
+        var arguments = new List<string> { action.Run };
+
+        if (action.Gate is { Length: > 0 } gate)
+        {
+            arguments.Add("--gate");
+            arguments.Add(gate);
+        }
+
+        arguments.Add("--answer");
+        arguments.Add(action.Answer ?? "no");
+
+        if (action.Reason is { Length: > 0 } reason)
+        {
+            arguments.Add("--reason");
+            arguments.Add(reason);
+        }
+
+        return arguments;
     }
 
     /// <summary>

@@ -12,6 +12,14 @@ namespace Loadout.Core.Teams;
 public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, JsonElement Data)
 {
     /// <summary>A string from the event's data, or null.</summary>
+    /// <remarks>
+    /// Names are matched exactly, so an event's data has to be written with the
+    /// names its readers ask for: lower case, as every event here uses. C#
+    /// anonymous-object shorthand does not do that - <c>new { one.Line }</c>
+    /// writes <c>"Line"</c> and this returns null for <c>"line"</c>, silently,
+    /// which is how a node's own account of itself was written to every
+    /// journal and displayed by nothing for a day.
+    /// </remarks>
     public string? Text(string name) =>
         Data.ValueKind == JsonValueKind.Object && Data.TryGetProperty(name, out var value)
         && value.ValueKind == JsonValueKind.String
@@ -89,8 +97,32 @@ public sealed record RunSummary(
     IReadOnlyList<string> Branches,
     int RoundLimit = 0,
     string? Project = null,
-    string? Path = null)
+    string? Path = null,
+    IReadOnlyList<PendingAsk>? Gates = null,
+    decimal? BudgetUsd = null)
 {
+    /// <summary>
+    /// What the run has stopped and asked a person, and not yet been told.
+    /// </summary>
+    /// <remarks>
+    /// Read from the run's directory rather than from its events, because a
+    /// question is answered by a file appearing and the journal only learns
+    /// about it afterwards. Somebody watching needs to see it while it is
+    /// still true.
+    /// </remarks>
+    public IReadOnlyList<PendingAsk> Waiting => Gates ?? [];
+
+    /// <summary>
+    /// Whether the run has stopped and is waiting for a person.
+    /// </summary>
+    /// <remarks>
+    /// Its own state rather than a kind of running, and the reason is somebody
+    /// managing several teams: a run working and a run stopped on a question
+    /// look identical until one of them is called what it is. This is the one
+    /// state that says the next move is yours.
+    /// </remarks>
+    public bool WaitingForYou => Running && Waiting.Count > 0;
+
     /// <summary>Whether the run is still going, as far as its journal knows.</summary>
     /// <remarks>
     /// A run whose coordinator was killed says nothing more and still reads
@@ -291,6 +323,7 @@ public sealed class RunJournal : IRunJournal
         var autonomy = string.Empty;
         string? project = null;
         string? path = null;
+        decimal? budget = null;
         var started = events.Count > 0 ? events[0].At : DateTimeOffset.MinValue;
         DateTimeOffset? finished = null;
         string? ended = null;
@@ -325,6 +358,7 @@ public sealed class RunJournal : IRunJournal
                     // than as missing.
                     project = entry.Text("project");
                     path = entry.Text("path");
+                    budget = entry.Number("budget");
                     started = entry.At;
                     break;
 
@@ -438,7 +472,12 @@ public sealed class RunJournal : IRunJournal
             nodes.Values.Where(node => node.Branch is { Length: > 0 }).Select(node => node.Branch!).ToList(),
             limit,
             project,
-            path);
+            path,
+
+            // From the directory, not from the events: a question is answered
+            // by a file appearing, and the journal hears about it after.
+            NodePermissions.Pending(directory),
+            budget);
     }
 
     /// <summary>One event as a line somebody can read.</summary>

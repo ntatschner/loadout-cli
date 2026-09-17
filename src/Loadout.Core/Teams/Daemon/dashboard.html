@@ -100,6 +100,12 @@
   .nodes { list-style: none; margin: 0.75rem 0 0; padding: 0; }
   .nodes li { padding: 0.35rem 0; border-top: 1px solid var(--line); }
   .doing { color: var(--quiet); }
+  .gate { border: 2px solid var(--stopped); padding: 0.75rem; margin: 0.75rem 0; }
+  .gate .asked { font-weight: 700; margin: 0 0 0.5rem; }
+  .gate button { margin: 0 0.5rem 0 0; }
+  .controls { margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .controls input { flex: 1 1 14rem; min-width: 8rem; }
+  .said { flex-basis: 100%; }
 
   .log {
     background: var(--card);
@@ -144,6 +150,18 @@
 
   <section id="detail" hidden>
     <h2 id="detail-heading">Run</h2>
+
+    <div id="gates"></div>
+
+    <div id="controls" class="controls">
+      <button type="button" id="pause">Hold it</button>
+      <button type="button" id="resume">Let it carry on</button>
+      <button type="button" id="stop">Stop it</button>
+      <label for="say" class="said">Say something to the lead</label>
+      <input type="text" id="say" placeholder="read after its current round">
+      <button type="button" id="send">Send</button>
+    </div>
+
     <div class="log" id="log" role="log" aria-labelledby="detail-heading"></div>
   </section>
 </main>
@@ -163,6 +181,29 @@
 
   function say(text) {
     status.textContent = text;
+  }
+
+  // Everything that changes a run. The page never decides what any of these
+  // mean: the daemon runs the command a person would have typed.
+  function act(run, verb, body) {
+    return fetch("/api/runs/" + encodeURIComponent(run) + "/" + verb +
+                 "?token=" + encodeURIComponent(token), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body || {})
+    }).then(function (r) {
+      return r.text().then(function (said) {
+        if (!r.ok) { throw new Error(said || ("HTTP " + r.status)); }
+        return said;
+      });
+    });
+  }
+
+  // Said out loud rather than only shown, because the person who just changed
+  // a run is the person who most needs to know whether it took.
+  function announce(said) {
+    var status = document.getElementById("status");
+    if (status) { status.textContent = said; }
   }
 
   function api(path) {
@@ -193,6 +234,13 @@
   // The word first, the colour second. Nothing here is carried by colour
   // alone, so a screenshot in greyscale says the same thing.
   function state(run) {
+    // Its own state, above running, because a run stopped on a question and a
+    // run working look identical until one of them is called what it is - and
+    // this is the one where the next move is yours.
+    if (run.waitingForYou) {
+      return { word: "waiting for you", css: "stopped" };
+    }
+
     if (run.running) {
       return { word: "running", css: "going" };
     }
@@ -294,7 +342,107 @@
       list.appendChild(item);
     });
 
+    // The one being followed may have stopped to ask something since the
+    // last read, or had it answered at a terminal.
+    if (watching) {
+      var followed = runs.filter(function (r) { return r.id === watching; })[0];
+
+      if (followed) {
+        drawGates(followed);
+      }
+    }
+
     say(runs.length + (runs.length === 1 ? " run" : " runs") + ", updated just now.");
+  }
+
+  // What a run has stopped to ask, with the buttons to answer it. Rebuilt
+  // whenever the runs are read again, so an answer given anywhere - here, or
+  // at a terminal - takes the question off the page.
+  function drawGates(run) {
+    var box = document.getElementById("gates");
+    box.textContent = "";
+
+    (run.gates || []).forEach(function (gate) {
+      var card = document.createElement("div");
+      card.className = "gate";
+
+      var asked = document.createElement("p");
+      asked.className = "asked";
+      asked.textContent = gate.question + "?";
+      card.appendChild(asked);
+
+      if (gate.recommendation) {
+        var hint = document.createElement("p");
+        hint.className = "doing";
+        hint.textContent = "The lead recommends: " + gate.recommendation;
+        card.appendChild(hint);
+      }
+
+      (gate.options || ["yes", "no"]).forEach(function (option) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.textContent = option;
+
+        button.addEventListener("click", function () {
+          // The second confirmation, and the reason it exists: the token got
+          // somebody to this page, and answering a gate spends money or
+          // changes a repository. It names what is being agreed to.
+          if (!window.confirm("Answer \u201c" + gate.question + "?\u201d with \u201c" + option + "\u201d?")) {
+            return;
+          }
+
+          button.disabled = true;
+
+          act(run.id, "gates", { gate: gate.id, answer: option })
+            .then(function () {
+              announce("Told " + run.id + ": " + option + ".");
+              card.remove();
+            })
+            .catch(function (e) {
+              button.disabled = false;
+              announce("That did not go through: " + e.message);
+            });
+        });
+
+        card.appendChild(button);
+      });
+
+      box.appendChild(card);
+    });
+  }
+
+  function wire(run) {
+    document.getElementById("pause").onclick = function () {
+      act(run.id, "pause", {}).then(function () { announce(run.id + " holds before its next round."); })
+        .catch(function (e) { announce(e.message); });
+    };
+
+    document.getElementById("resume").onclick = function () {
+      act(run.id, "resume", {}).then(function () { announce(run.id + " carries on."); })
+        .catch(function (e) { announce(e.message); });
+    };
+
+    document.getElementById("stop").onclick = function () {
+      // Named in the question, because "stop" is the one nobody can undo.
+      if (!window.confirm("Stop " + run.id + " after the round it is in?")) { return; }
+
+      act(run.id, "stop", {})
+        .then(function () { announce(run.id + " ends when its current round comes back."); })
+        .catch(function (e) { announce(e.message); });
+    };
+
+    document.getElementById("send").onclick = function () {
+      var box = document.getElementById("say");
+
+      if (!box.value.trim()) { return; }
+
+      act(run.id, "message", { message: box.value.trim() })
+        .then(function () {
+          announce("The lead reads that at the start of its next round.");
+          box.value = "";
+        })
+        .catch(function (e) { announce(e.message); });
+    };
   }
 
   function watch(run) {
@@ -306,6 +454,9 @@
     log.textContent = "";
     heading.textContent = "What " + run.id + " is doing";
     detail.hidden = false;
+
+    drawGates(run);
+    wire(run);
 
     stream = new EventSource("/api/runs/" + encodeURIComponent(run.id) +
       "/events?token=" + encodeURIComponent(token));

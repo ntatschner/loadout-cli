@@ -33,21 +33,44 @@ public sealed record NodePolicy(
     bool Ask = false);
 
 /// <summary>
-/// A call a node stopped on that no rule covers, waiting for a person.
+/// Something a run has stopped on, waiting for a person.
 /// </summary>
 /// <param name="Id">Names the pair of files this and its answer live in.</param>
-/// <param name="Node">The node that stopped.</param>
+/// <param name="Node">The node that stopped, or the run's lead for a run-level gate.</param>
 /// <param name="Role">What it is playing, so the question can say who is asking.</param>
-/// <param name="Tool">The tool it asked about.</param>
+/// <param name="Tool">The tool it asked about, for a permission.</param>
 /// <param name="Target">The one thing the call is pointed at, where there is one.</param>
 /// <param name="At">When it asked.</param>
+/// <param name="Kind">
+/// <c>permission</c> for a call no rule covers, <c>confirm</c> for a step a
+/// manual run holds, <c>question</c> for a decision a lead may not make.
+/// </param>
+/// <param name="Asked">
+/// The question in the run's own words, for the kinds that have one. A
+/// permission builds its own from the node, the tool and the target.
+/// </param>
+/// <param name="Options">
+/// What may be chosen. Empty means yes or no, which is what a permission and a
+/// confirm are.
+/// </param>
+/// <param name="Recommendation">What the lead would choose, for a question.</param>
+/// <remarks>
+/// One shape for all three because they are one thing to whoever is answering:
+/// the run has stopped and wants a person. They were separate while only a
+/// terminal could answer - a terminal can block on each in its own way - and a
+/// browser cannot block on anything, so it needs them written down.
+/// </remarks>
 public sealed record PendingAsk(
     string Id,
     string Node,
     string Role,
     string Tool,
     string? Target,
-    DateTimeOffset At)
+    DateTimeOffset At,
+    string Kind = "permission",
+    string? Asked = null,
+    IReadOnlyList<string>? Options = null,
+    string? Recommendation = null)
 {
     /// <summary>The question, as a person reads it.</summary>
     /// <remarks>
@@ -61,15 +84,32 @@ public sealed record PendingAsk(
     /// </para>
     /// </remarks>
     public string Question =>
-        $"{Node} ({Role}) wants to use {Tool}"
-        + (Target is { Length: > 0 } ? $" for '{Target}'" : string.Empty)
-        + ". Nothing in its role allows that. Let it";
+        Asked is { Length: > 0 } said
+            ? said
+            : $"{Node} ({Role}) wants to use {Tool}"
+                + (Target is { Length: > 0 } ? $" for '{Target}'" : string.Empty)
+                + ". Nothing in its role allows that. Let it";
+
+    /// <summary>What may be chosen, with yes and no as the default pair.</summary>
+    public IReadOnlyList<string> Choices =>
+        Options is { Count: > 0 } given ? given : ["yes", "no"];
 }
 
 /// <summary>What a person said about one call.</summary>
-/// <param name="Allowed">Whether it may.</param>
+/// <param name="Allowed">Whether it may. For a question, whether one was chosen at all.</param>
 /// <param name="Reason">What to tell the node, whichever way it went.</param>
-public sealed record AskAnswer(bool Allowed, string Reason);
+/// <param name="Chosen">The option picked, for a question that had several.</param>
+/// <param name="By">
+/// Where the answer came from: <c>terminal</c> or <c>dashboard</c>. Kept
+/// because "somebody allowed this" and "somebody allowed this from a browser
+/// on the other side of the house" are different sentences to whoever reads
+/// the run back.
+/// </param>
+public sealed record AskAnswer(
+    bool Allowed,
+    string Reason,
+    string? Chosen = null,
+    string By = "terminal");
 
 /// <summary>An answer to "may I do this", and why.</summary>
 /// <param name="Allowed">Whether it may.</param>

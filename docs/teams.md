@@ -210,7 +210,46 @@ there is one account of what happened rather than three that can disagree.
   [The launcher](launcher.md).
 
 `loadout team runs` lists what has run; `loadout team log` prints everything one
-wrote down, and `--follow` keeps reading as it writes. Both `status` and `log`
+wrote down, and `--follow` keeps reading as it writes.
+
+### Answering, steering and stopping
+
+A run that has stopped to ask you something is **waiting for you** — its own
+state, not a kind of running, so a list of several teams shows at a glance
+which ones need you.
+
+```sh
+loadout team gate            # what it is waiting on, and how to answer
+loadout team gate --answer yes --reason "it needs the suite"
+loadout team message --message "leave the tests alone"
+loadout team halt --pause    # hold it before its next round
+loadout team halt --resume
+loadout team halt            # stop it after the round it is in
+```
+
+The same things are on the dashboard, as buttons, and they are the same
+questions — answering in one place takes it off the other, because both write
+the same file.
+
+**Stopping is cooperative, and the wording matters.** A run checks between
+rounds, so a stop lands when the turn it is in comes back. The alternative is
+killing a headless agent mid-turn, which throws away the turn and what was paid
+for it. Nothing here kills anything.
+
+A message reaches the lead at the start of its next round, once. It is mid-turn
+when you send it and cannot hear anything until it comes back.
+
+### Runs that ask a browser
+
+A run started by hand answers at your terminal. A run with nobody at one — from
+a schedule, a commit, or the webhook — sends its questions to the dashboard
+instead, if a daemon is serving one. That is new capability, not just a
+different screen: those runs used to have to decide everything themselves or
+refuse.
+
+Which one can answer is decided once, when the run starts, rather than per
+question. Two places able to answer one question is a race whose loser leaves a
+dead prompt on somebody's screen. Both `status` and `log`
 take a run identifier and use the most recent one when you leave it out.
 
 ## Runs that start without you

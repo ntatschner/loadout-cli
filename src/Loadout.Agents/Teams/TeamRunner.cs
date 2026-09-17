@@ -93,6 +93,19 @@ public interface ITeamConsole
     void Note(string line);
 
     /// <summary>
+    /// Told where the run is writing, before anything is asked.
+    /// </summary>
+    /// <remarks>
+    /// A console that answers from a terminal ignores this. One that answers
+    /// from somewhere else - a browser, through the daemon - needs to know
+    /// where to leave the question, and the run directory is the only channel
+    /// between a run and anything outside the process driving it.
+    /// </remarks>
+    void Starting(string runDirectory)
+    {
+    }
+
+    /// <summary>
     /// Whether there is somebody who could answer a question right now.
     /// </summary>
     /// <remarks>
@@ -119,6 +132,8 @@ internal sealed class OneAtATime(ITeamConsole inner) : ITeamConsole, IDisposable
     private readonly SemaphoreSlim _turn = new(1, 1);
 
     public bool CanAsk => inner.CanAsk;
+
+    public void Starting(string runDirectory) => inner.Starting(runDirectory);
 
     public async Task<bool> ConfirmAsync(string what, CancellationToken ct = default)
     {
@@ -335,6 +350,10 @@ public sealed class TeamRunner : ITeamRunner
         var directory = RunDirectory(runId);
         Directory.CreateDirectory(directory);
 
+        // Before anything can be asked, so a console that answers from
+        // elsewhere knows where to leave the question.
+        console.Starting(directory);
+
         var journal = new Journal(Path.Combine(directory, "journal.jsonl"), runId, _time);
 
         // Runs for the whole run rather than around each turn. A question only
@@ -363,6 +382,10 @@ public sealed class TeamRunner : ITeamRunner
                 rounds = request.MaxRounds,
                 project = slug,
                 path = where,
+
+                // What it may spend, so a page watching it can say where the
+                // spend stands rather than only what it has cost.
+                budget = team.Rules.Budget.Usd,
             },
             ct).ConfigureAwait(false);
 
@@ -425,6 +448,56 @@ public sealed class TeamRunner : ITeamRunner
                 {
                     ended = $"round limit: {request.MaxRounds} rounds";
                     break;
+                }
+
+                // Asked to stop. Between rounds rather than mid-turn, because
+                // a node is a headless agent in the middle of one and the only
+                // ways to end that sooner are to kill it - losing the turn and
+                // what was paid for it - or to ask it, which it cannot hear.
+                if (RunControl.Stopped(directory))
+                {
+                    ended = "stopped by request";
+                    break;
+                }
+
+                // Or asked to hold. Nothing is spent while it waits, and it
+                // carries on the moment the hold is lifted.
+                if (RunControl.Paused(directory))
+                {
+                    await journal.WriteAsync("run.paused", null, new { round = rounds + 1 }, ct)
+                        .ConfigureAwait(false);
+
+                    console.Note("Held. It carries on when you let it.");
+
+                    while (RunControl.Paused(directory) && !ct.IsCancellationRequested)
+                    {
+                        await Task.Delay(NodePermissions.Glance, _time, ct).ConfigureAwait(false);
+                    }
+
+                    if (RunControl.Stopped(directory))
+                    {
+                        ended = "stopped by request";
+                        break;
+                    }
+
+                    await journal.WriteAsync("run.resumed", null, new { round = rounds + 1 }, ct)
+                        .ConfigureAwait(false);
+                }
+
+                // Anything said to the lead while it was working, handed over
+                // before it takes its next turn, in the order it was said.
+                if (RunControl.TakeMessages(directory) is { Count: > 0 } messages)
+                {
+                    foreach (var message in messages)
+                    {
+                        await journal.WriteAsync("run.told", team.Lead, new { message }, ct)
+                            .ConfigureAwait(false);
+                    }
+
+                    prompt = "The person running this team says:\n\n"
+                        + string.Join("\n\n", messages)
+                        + "\n\n"
+                        + prompt;
                 }
 
                 rounds++;
@@ -546,7 +619,7 @@ public sealed class TeamRunner : ITeamRunner
                             + string.Join(", ", leadNode.Delegates) + ".";
                         warnings.Add(reason);
                         refused.Add(reason);
-                        await journal.WriteAsync("request.refused", team.Lead, new { ask.Node, reason }, ct).ConfigureAwait(false);
+                        await journal.WriteAsync("request.refused", team.Lead, new { node = ask.Node, reason }, ct).ConfigureAwait(false);
                         continue;
                     }
 
@@ -1019,7 +1092,7 @@ public sealed class TeamRunner : ITeamRunner
                         $"{branch} still conflicts with {target} in {string.Join(", ", second.Conflicts)}, after "
                         + $"{node} was asked to resolve it. Nothing was merged and the repository is as it was.");
 
-                    await journal.WriteAsync("merge.conflicted", node, new { branch, second.Conflicts, again = true }, ct)
+                    await journal.WriteAsync("merge.conflicted", node, new { branch, conflicts = second.Conflicts, again = true }, ct)
                         .ConfigureAwait(false);
 
                     continue;
@@ -1423,7 +1496,7 @@ public sealed class TeamRunner : ITeamRunner
 
             if (read.Failed)
             {
-                await journal.WriteAsync("report.unreadable", brief.Node, new { read.Error, said }, ct).ConfigureAwait(false);
+                await journal.WriteAsync("report.unreadable", brief.Node, new { error = read.Error, said }, ct).ConfigureAwait(false);
 
                 if (attempt == 2)
                 {
@@ -1657,7 +1730,7 @@ public sealed class TeamRunner : ITeamRunner
         foreach (var one in said)
         {
             await journal
-                .WriteAsync("node.said", brief.Node, new { one.Step, one.Of, one.Doing, one.Line }, ct)
+                .WriteAsync("node.said", brief.Node, new { step = one.Step, of = one.Of, doing = one.Doing, line = one.Line }, ct)
                 .ConfigureAwait(false);
         }
 
@@ -1709,7 +1782,7 @@ public sealed class TeamRunner : ITeamRunner
                     }
 
                     await journal
-                        .WriteAsync("node.asked", ask.Node, new { ask.Tool, ask.Target }, ct)
+                        .WriteAsync("node.asked", ask.Node, new { tool = ask.Tool, target = ask.Target }, ct)
                         .ConfigureAwait(false);
 
                     var allowed = await console.ConfirmAsync(ask.Question, ct).ConfigureAwait(false);
@@ -1726,7 +1799,7 @@ public sealed class TeamRunner : ITeamRunner
                         ct).ConfigureAwait(false);
 
                     await journal
-                        .WriteAsync("node.answered", ask.Node, new { ask.Tool, allowed }, ct)
+                        .WriteAsync("node.answered", ask.Node, new { tool = ask.Tool, allowed }, ct)
                         .ConfigureAwait(false);
                 }
 
@@ -2004,7 +2077,7 @@ public sealed class TeamRunner : ITeamRunner
                 answer = await console.DecideAsync(question, ct).ConfigureAwait(false);
             }
 
-            await journal.WriteAsync("decision", null, new { question.Question, answer, by = autonomy == "autonomous" ? "recommendation" : "person" }, ct)
+            await journal.WriteAsync("decision", null, new { question = question.Question, answer, by = autonomy == "autonomous" ? "recommendation" : "person" }, ct)
                 .ConfigureAwait(false);
 
             if (answer is null)

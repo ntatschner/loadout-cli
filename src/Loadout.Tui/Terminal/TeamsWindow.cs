@@ -309,7 +309,9 @@ internal sealed class TeamsWindow : Window
     /// read at all.
     /// </remarks>
     private static string State(RunSummary run) =>
-        run.Running ? "running" : run.Ended is { Length: > 0 } ended ? ended : "ended";
+        run.WaitingForYou ? "waiting for you"
+            : run.Running ? "running"
+            : run.Ended is { Length: > 0 } ended ? ended : "ended";
 
     /// <summary>The nodes of the selected run, and what each is doing.</summary>
     private void ShowDetail()

@@ -651,6 +651,10 @@ public static class Program
                 schedule.AddCommand<TeamScheduleRemoveCommand>("remove");
             });
 
+            team.AddCommand<TeamGateCommand>("gate");
+            team.AddCommand<TeamMessageCommand>("message");
+            team.AddCommand<TeamHaltCommand>("halt");
+
             team.AddBranch("autostart", autostart =>
             {
                 autostart.AddCommand<TeamAutostartEnableCommand>("enable");

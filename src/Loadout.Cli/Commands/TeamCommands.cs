@@ -8,6 +8,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Instructions;
 using Loadout.Models.Teams;
+using Loadout.Platform.Abstractions;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -382,7 +383,9 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
             output.WriteLine(
                 $"{Markup.Escape(run.RunId),-22} {Markup.Escape(run.Team),-20} "
                 + $"[dim]{Markup.Escape(run.Project ?? string.Empty),-16}[/] "
-                + (run.Running ? "[yellow]running[/]" : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
+                + (run.WaitingForYou
+                    ? "[yellow]waiting for you[/]"
+                    : run.Running ? "[yellow]running[/]" : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
                 + $"  [dim]${run.CostUsd:0.00}[/]");
 
             if (run.Goal is { Length: > 0 })
@@ -499,10 +502,23 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             $"[bold]{Markup.Escape(run.RunId)}[/]  {Markup.Escape(run.Team)}  "
             + (run.Project is { Length: > 0 } on ? $"{Markup.Escape(on)}  " : string.Empty)
             + $"{Markup.Escape(run.Autonomy)}  "
-            + (run.Running
-                ? $"[yellow]running[/]  [dim]{Elapsed(quiet)} since it last said anything[/]"
-                : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
+            + (run.WaitingForYou
+                ? "[yellow]waiting for you[/]"
+                : run.Running
+                    ? $"[yellow]running[/]  [dim]{Elapsed(quiet)} since it last said anything[/]"
+                    : $"[dim]{Markup.Escape(run.Ended ?? "ended")}[/]")
             + $"  [dim]{Rounds(run)}, {Elapsed(run.Elapsed)} so far, ${run.CostUsd:0.00}[/]");
+
+        // What it has stopped to ask, and how to answer it. The same questions
+        // the dashboard shows, because they are the same files.
+        foreach (var gate in run.Waiting)
+        {
+            output.WriteBlankLine();
+            output.WriteLine($"  [yellow]waiting[/] {Markup.Escape(gate.Question)}?");
+            output.WriteLine(
+                $"    [dim]loadout team gate {Markup.Escape(run.RunId)} --gate {Markup.Escape(gate.Id)} "
+                + $"--answer {Markup.Escape(gate.Choices[0])}[/]");
+        }
 
         if (run.Goal is { Length: > 0 })
         {
@@ -719,6 +735,8 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
 public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 {
     private readonly ITeamRunner _runner;
+    private readonly IPlatformPaths _paths;
+    private readonly IProcessInspector _processes;
     private readonly Loadout.Core.Git.IGitManager _git;
     private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
     private readonly ITeamCatalogue _teams;
@@ -731,6 +749,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
     public TeamRunCommand(
         ITeamRunner runner,
+        IPlatformPaths paths,
+        IProcessInspector processes,
         Loadout.Core.Git.IGitManager git,
         Loadout.Core.Configuration.IConfigurationService configuration,
         ITeamCatalogue teams,
@@ -741,6 +761,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         ReadingProfile reading)
     {
         _runner = runner;
+        _paths = paths;
+        _processes = processes;
         _git = git;
         _configuration = configuration;
         _teams = teams;
@@ -857,7 +879,15 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             settings.NoSync,
             settings.Model);
 
-        var console = new TerminalTeamConsole(_console, settings, _reading);
+        // Where the run's questions go. A terminal answers its own; a run with
+        // nobody at one sends them to the dashboard, if a daemon is serving it.
+        // Decided once rather than per question, because two places able to
+        // answer one question is a race whose loser leaves a dead prompt.
+        ITeamConsole console = settings.AllowsPrompting
+            ? new TerminalTeamConsole(_console, settings, _reading)
+            : Serving()
+                ? new DashboardTeamConsole(TimeProvider.System, line => output.WriteLine($"[dim]{Markup.Escape(line)}[/]"))
+                : new TerminalTeamConsole(_console, settings, _reading);
 
         await SayWhereAsync(output, project, cancellationToken).ConfigureAwait(false);
 
@@ -949,6 +979,19 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
         return CommandOutput.Success();
     }
+
+    /// <summary>
+    /// Whether a daemon is actually serving a dashboard right now.
+    /// </summary>
+    /// <remarks>
+    /// The note alone is not enough: identifiers are reused, and a machine that
+    /// restarted leaves one behind that looks exactly like a daemon. Asking
+    /// whether that process is still the one that wrote it is the difference
+    /// between sending a question somewhere and sending it nowhere.
+    /// </remarks>
+    private bool Serving() =>
+        Loadout.Core.Teams.Daemon.DaemonNote.Read(_paths) is { } note
+        && _processes.IsRunning(note.Pid, note.StartedAt);
 
     /// <summary>
     /// Says which tree the run will work on, before it spends anything.

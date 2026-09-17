@@ -81,6 +81,17 @@ public sealed class DashboardServer : IDisposable
     public Func<TriggerRequest, CancellationToken, Task<OperationResult>>? Trigger { get; set; }
 
     /// <summary>
+    /// What to do about a run: answer a gate, say something, or stop it.
+    /// </summary>
+    /// <remarks>
+    /// Set by whatever can run a command through the parser. Null refuses
+    /// every one of them, which is what <c>team dashboard</c> does: a page
+    /// opened to watch a run must not be able to change it, and the daemon is
+    /// the thing that can.
+    /// </remarks>
+    public Func<RunAction, CancellationToken, Task<OperationResult>>? Act { get; set; }
+
+    /// <summary>
     /// Answers whether a trigger may proceed, or null when none may.
     /// </summary>
     /// <remarks>
@@ -241,6 +252,99 @@ public sealed class DashboardServer : IDisposable
                 ? value.GetString()
                 : null;
 
+    /// <summary>
+    /// Splits <c>/api/runs/{id}/{verb}</c>, or says there is no verb.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not a route table. There are five of these and a table
+    /// would be a framework; what matters is that <c>/api/runs/{id}</c> and
+    /// <c>/api/runs/{id}/events</c> keep reading and everything else is an
+    /// action.
+    /// </remarks>
+    private static (string Run, string? Verb) Doing(string path)
+    {
+        var rest = path["/api/runs/".Length..].Trim('/');
+        var slash = rest.IndexOf('/', StringComparison.Ordinal);
+
+        if (slash < 0)
+        {
+            return (rest, null);
+        }
+
+        var verb = rest[(slash + 1)..];
+
+        // Reading, not acting, whatever else is bolted on later.
+        return verb is "events" ? (rest[..slash], null) : (rest[..slash], verb);
+    }
+
+    /// <summary>
+    /// Does something to a run, through whatever can run a command.
+    /// </summary>
+    /// <remarks>
+    /// Nothing here implements any of it. The page asks, this hands the ask to
+    /// the daemon, and the daemon runs the command somebody would have typed -
+    /// the rule the launcher has kept since its first screen, because two
+    /// implementations of one behaviour drift and the one nobody watches
+    /// drifts furthest.
+    /// </remarks>
+    private async Task ActOnAsync(HttpListenerContext context, string run, string verb, CancellationToken ct)
+    {
+        Answered++;
+
+        if (Act is null)
+        {
+            await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                "This server only reads. Run the daemon to act on a run from here.").ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "text/plain; charset=utf-8",
+                "Changing a run is a POST.").ConfigureAwait(false);
+
+            return;
+        }
+
+        string body;
+
+        using (var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8))
+        {
+            body = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
+        }
+
+        JsonElement? asked;
+
+        try
+        {
+            asked = body.Length == 0 ? null : JsonDocument.Parse(body).RootElement;
+        }
+        catch (JsonException)
+        {
+            await WriteAsync(context, 400, "text/plain; charset=utf-8", "The body should be JSON.")
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        var action = new RunAction(
+            Uri.UnescapeDataString(run),
+            verb,
+            Text(asked, "gate"),
+            Text(asked, "answer"),
+            Text(asked, "reason"),
+            Text(asked, "message"));
+
+        var done = await Act(action, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 202 : 400,
+            "text/plain; charset=utf-8",
+            done.Succeeded ? "Done." : done.Error ?? "That could not be done.").ConfigureAwait(false);
+    }
+
     /// <summary>Whether an address is this machine talking to itself.</summary>
     private static bool IsLoopback(string address) =>
         address is "127.0.0.1" or "localhost" or "::1";
@@ -341,6 +445,25 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // Everything that changes a run. Behind the dashboard's own token,
+        // unlike a trigger, because these are for whoever has the page open
+        // rather than for a machine somewhere else.
+        if (path.StartsWith("/api/runs/", StringComparison.Ordinal)
+            && Doing(path) is var (run, verb) && verb is { Length: > 0 })
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await ActOnAsync(context, run, verb, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         if (!Allowed(request))
         {
             // Said plainly rather than as a puzzle. Whoever sees this is
@@ -436,6 +559,11 @@ public sealed class DashboardServer : IDisposable
         finished = run.Finished,
         run.Ended,
         run.Running,
+
+        // Its own state rather than a kind of running. A run working and a run
+        // stopped on a question look identical until one is called what it is,
+        // and this is the one that says the next move is yours.
+        run.WaitingForYou,
         run.Project,
         cost = run.CostUsd,
         run.Rounds,
@@ -443,6 +571,28 @@ public sealed class DashboardServer : IDisposable
         elapsedSeconds = (int)run.Elapsed.TotalSeconds,
         atMostRemainingSeconds = run.AtMostRemaining is { } left ? (int)left.TotalSeconds : (int?)null,
         merged = run.Merged,
+        // Everything the run has stopped and asked, so a page can offer to
+        // answer it. Empty on a run that is working, which is most of them.
+        gates = run.Waiting.Select(gate => new
+        {
+            gate.Id,
+            gate.Kind,
+            gate.Node,
+            gate.Role,
+            question = gate.Question,
+            options = gate.Choices,
+            gate.Recommendation,
+            gate.At,
+        }),
+
+        // Where the spend stands, which the design asked for and the list
+        // never carried: what it has cost, and the cap if the team set one.
+        budget = new
+        {
+            spent = run.CostUsd,
+            cap = run.BudgetUsd,
+        },
+
         nodes = run.Nodes.Select(node => new
         {
             node.Node,

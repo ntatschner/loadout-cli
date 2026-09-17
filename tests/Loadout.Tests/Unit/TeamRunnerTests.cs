@@ -826,6 +826,115 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_run_asked_to_stop_ends_after_the_round_it_is_in()
+    {
+        // The contract, and it is a contract rather than a limitation: a node
+        // is a headless agent mid-turn, and the only ways to end that sooner
+        // are to kill it - losing the turn and what was paid for it - or to
+        // ask it, which it cannot hear.
+        // Written as the implementer starts, which is inside round one: the
+        // lead has already been given the floor and is mid-round.
+        var started = 0;
+
+        _launcher.BeforeStart = where =>
+        {
+            if (Interlocked.Increment(ref started) == 2)
+            {
+                RunControl.StopAsync(where).GetAwaiter().GetResult();
+            }
+        };
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.01m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(rounds: 5)).Value!;
+
+        outcome.Ended.Should().Be("stopped by request");
+
+        // The round it was in finished. Stopping is not killing, and the turn
+        // that was already paid for is not thrown away.
+        outcome.Rounds.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_run_stopped_before_it_began_never_gives_the_lead_the_floor()
+    {
+        _launcher.BeforeStart = where => RunControl.StopAsync(where).GetAwaiter().GetResult();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.01m));
+
+        var outcome = (await RunAsync(rounds: 5)).Value!;
+
+        outcome.Ended.Should().Be("stopped by request");
+        outcome.Rounds.Should().Be(0, "nothing was asked of it");
+    }
+
+    [Fact]
+    public async Task What_somebody_says_to_a_lead_reaches_it_before_its_next_round()
+    {
+        _launcher.BeforeStart = where =>
+            RunControl.SayAsync(where, "leave the tests alone").GetAwaiter().GetResult();
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.01m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        await RunAsync(rounds: 3);
+
+        // In the second thing the lead reads, not the first: it was mid-turn
+        // when this was said, and nothing can reach it until it comes back.
+        var written = _launcher.Written("role.project-lead");
+
+        written.Should().HaveCountGreaterThan(1);
+        written[1].Should().Contain("leave the tests alone");
+        written[1].Should().Contain("The person running this team says");
+    }
+
+    [Fact]
+    public async Task A_run_stopped_on_a_question_says_that_rather_than_that_it_is_running()
+    {
+        // The state somebody managing several teams most needs: a run working
+        // and a run stopped on a question are identical until one of them is
+        // called what it is.
+        var directory = string.Empty;
+
+        _launcher.BeforeStart = where => directory = where;
+
+        _console.Confirm = _ => true;
+
+        _launcher.Hold("role.project-lead", async () =>
+        {
+            await NodePermissions.PutAsync(
+                directory,
+                new PendingAsk("g1", "lead", "role.project-lead", "Bash", "dotnet test", DateTimeOffset.UtcNow));
+
+            var summary = new RunJournal(_paths).Summarise(Path.GetFileName(directory)).Value!;
+
+            summary.WaitingForYou.Should().BeTrue();
+            summary.Waiting.Should().ContainSingle().Which.Id.Should().Be("g1");
+
+            // And once answered it is working again, not waiting.
+            await NodePermissions.AnswerAsync(directory, "g1", new AskAnswer(true, "go on"));
+
+            new RunJournal(_paths).Summarise(Path.GetFileName(directory)).Value!
+                .WaitingForYou.Should().BeFalse();
+        });
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        (await RunAsync()).Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
     public void A_question_leaves_the_question_mark_to_whoever_asks_it()
     {
         // The first real run asked somebody "Let it??", because this ended
