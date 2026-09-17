@@ -63,7 +63,22 @@ made them, constraints, the traps that keep catching people. The useful bit is
 `memory compress`, which pulls facts out of always-loaded instruction files and
 into the memory store. What every session pays for gets smaller; what it can
 look up stays the same. `memory audit` goes looking for secrets, duplicates and
-stale entries.
+stale entries — and a fact pinned to the day it was written, or already past its
+own date, is a warning rather than an aside, because those are the two kinds
+that turn from true into misleading with nothing in the store to catch them.
+
+Only the index reaches a session, so the question is which topic to open.
+`loadout memory find "why did the release not publish to winget"` answers it
+with the same ranking the agent's own `loadout_recall` uses. Two rules keep it
+honest: repetition saturates against how much a topic says, so the longest topic
+can't accumulate its way to the top of every question; and a term in a curated
+name or description outweighs the same term buried in prose, because mentioning
+a subject is not being about it.
+
+`memory import` compares topics on what they say rather than on their bytes, so
+two stores that keep the same names and disagree get told apart. A copy that
+differs is named and left exactly where it is — which of two accounts is right
+is a judgement, not a merge.
 
 ### Where the tokens went
 
@@ -111,6 +126,21 @@ starts the session. Underneath, the sheet shows which specialists that task
 would load and what they cost, re-resolved as you type, by asking the same
 resolver the launch asks. What it shows is what the session gets.
 
+The task line — the field that decides most of what a session gets — is filled
+in from what the project has already declared with `loadout task declare`. It
+was typed twice in 122 launches here, because a blank line asking for a sentence
+gets answered by starting work instead. Correcting a line somebody already wrote
+is a much lower bar than composing one, so what's on record goes in the field as
+editable text and anything else is named beneath it. Only when the field is
+empty: a task you typed first is never overwritten.
+
+The corner says which build you're running, and whether there's a newer one —
+`v1.2.0 · 1.3.0 available`. The launcher on your PATH can quietly fall three
+releases behind the one you think you're running, which is an afternoon lost to
+a feature that isn't in the binary yet. The check happens once a day in the
+background, never delays the screen opening, and never puts a failed lookup on
+screen.
+
 `Ctrl+P` opens a palette over every command the CLI has, and it finds them by
 what they're for. Search `undo` and you get `backup restore`. Search `broken`
 and you get `doctor`. Nobody looking to undo a mistake searches for the words
@@ -126,6 +156,21 @@ operations as MCP tools: read a specialist in full, ask what it was given and
 why, search what the project already knows before working it out again, write
 down one fact worth having next time, and change its own mode when the work
 changes shape.
+
+Being able to look something up and choosing to are different things. The memory
+index sat in every compiled context for months and was acted on once in twelve
+thousand turns, because "read the ones that bear on the task" leaves a session
+to notice mid-work that one of twenty-four titles might have applied. So the
+context now names the occasions: before diagnosing a failure, before an
+unfamiliar error, before anything about how this project builds, tests, releases
+or is configured, and before writing down a fact of its own, so an existing
+topic gets extended rather than contradicted by a second one beside it.
+
+The other way round was tried first — a hook that searched memory on every
+prompt and put the matches in front of the session unasked. Measured against 322
+real prompts it spoke on 56% of them when 18% had anything relevant to say, and
+it was removed. A fact arriving unasked reads as though the launcher vouched for
+it, so being wrong a third of the time costs more than saying nothing.
 
 It isn't offered anything that changes your machine or pushes to a remote, and
 the context says so rather than leaving it to be worked out. Ask an agent to

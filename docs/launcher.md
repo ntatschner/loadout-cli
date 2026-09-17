@@ -21,6 +21,21 @@ count, and says how much of the registry a filter is showing. None of that is
 load-bearing: the same words and marks are there in a terminal with no colour
 at all.
 
+The build you're running sits in the top-right corner, on the menu bar's own
+row. It's there because the `loadout` on your PATH can fall behind the one you
+think you're running — three releases behind, on one occasion, with the feature
+being discussed missing from the binary and nothing on screen saying so.
+
+When there's something newer it says so too: `v1.2.0 · 1.3.0 available`. That
+lookup never delays the launcher opening and never puts a failed check on
+screen. It runs once in the background per session, the answer is cached for a
+day against the version that asked for it — so the build that replaces yours
+can't inherit a cache announcing itself — and a failure is cached as "nothing"
+so an offline machine asks once a day rather than on every start. No command is
+offered beside it: the corner of a screen is no place to teach one, and
+`loadout update` is in the menu under Tools. `loadout config set updates-source
+off` switches the lookup itself off, not just the mention.
+
 The pictures here are drawn by the tests, using the same headless driver they
 assert on, so they're the real widgets rather than someone's drawing of them.
 Redraw them after a change with:
@@ -94,6 +109,22 @@ preview, which is a good trade.
 
 **Agent** lists every agent installed on this machine, the project's own first,
 so switching is a keystroke rather than a quit and a retyped command line.
+
+**The task line is filled in for you when the project has said what it's doing.**
+It's the field that decides most of what a session is given, and it's the one
+nobody fills in: across 122 recorded launches here it was typed twice, both the
+same sentence. A blank line asking for a sentence gets answered by starting work
+instead. So the sheet reads what `loadout task declare` already recorded — work
+in progress first, then what hasn't been started, then what's waiting — puts the
+first into the field as editable text, and names up to two others beneath it as
+*also recorded*. Finished and abandoned work is left out, because the line
+describes what a session is about to do.
+
+Offered, never imposed. The field is only filled when it's empty, so a task you
+typed before the choices arrived is never overwritten, and what lands there is
+text you can correct rather than a selection you have to accept. Correcting a
+line is a much lower bar than composing one, which is the whole reason the field
+sat empty 120 times out of 122.
 
 **Task and mode** are what choose the specialists. **Profile** and **Worktree**
 show up front when the project has more than one, under the same names
