@@ -20,7 +20,12 @@ namespace Loadout.Tests.Contract;
 /// It is not enough on its own, and the reason is that this collection can only
 /// see its own processes. The integration tests are not serialised and drive
 /// real Git, so three of them spawn alongside whichever contract test holds this
-/// collection, and 0xC0000142 comes back for a process that never started.
+/// collection, and 0xC0000142 comes back for a process that never started. That
+/// half is answered by <see cref="Loadout.Tests.Fakes.ThrottledProcessLauncher"/>,
+/// which every test that starts a process goes through — this collection
+/// included, since a second cap that could not see the first was how a
+/// four-core runner came to allow six at once and fail forty-three starts.
+/// One gate, counting everything, bounding the peak rather than the ordering.
 /// <c>maxParallelThreads</c> in <c>xunit.runner.json</c> is therefore 2 rather
 /// than the default: measured on one machine, four threads failed 43 and 48
 /// tests on consecutive runs and took 4m54s, two threads passed three times

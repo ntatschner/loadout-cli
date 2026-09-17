@@ -34,6 +34,45 @@
                   DowngradeErrorMessage="A newer version of Loadout is already installed." />
 
     <!--
+      Whether closing the launcher would end somebody's session.
+
+      A session runs inside the launcher process: the agent inherits its
+      terminal, so the launcher stays alive for as long as the session does and
+      is its parent. Which means the action below, which closes every launcher
+      so the binary can be replaced, ends live sessions — the very thing its own
+      comment sets out to protect. It spares the process tree beneath a
+      launcher and then kills the launcher the session is inside.
+
+      Nothing here can read the session records to find out: they are one file
+      per session and answering "is any of them still alive" means checking a
+      process, which is code, and an immediate action that could run code is the
+      thing this file already established cannot be scheduled in time. What MSI
+      can do unaided is look for a file with a known name, so the launcher keeps
+      one that exists for exactly as long as a session is running.
+
+      Refused rather than closed, when one is found. There is no third option:
+      Windows will not replace a running image, so either the session dies or
+      the install stops, and only one of those is somebody's work.
+    -->
+    <Property Id="LOADOUTSESSIONRUNNING">
+      <DirectorySearch Id="LoadoutLocalRoot" Path="[LocalAppDataFolder]Loadout">
+        <DirectorySearch Id="LoadoutLaunches" Path="launches">
+          <DirectorySearch Id="LoadoutRunning" Path="running">
+            <FileSearch Id="LoadoutInProgress" Name="in-progress" />
+          </DirectorySearch>
+        </DirectorySearch>
+      </DirectorySearch>
+    </Property>
+
+    <!--
+      Evaluated by LaunchConditions, which runs after AppSearch has set the
+      property above and before InstallValidate reaches the file-in-use dialog,
+      so this is said instead of that dialog rather than after it.
+    -->
+    <Launch Condition="NOT LOADOUTSESSIONRUNNING"
+            Message="Loadout is running an agent session. Installing now would close the launcher that session is running inside and end it. Close your Loadout sessions and run this installer again." />
+
+    <!--
       The launcher is closed before its own file is replaced.
 
       Windows normally does this itself. The Restart Manager notices which
@@ -110,7 +149,14 @@
       before, when the exit code was ignored anyway.
     -->
     <InstallExecuteSequence>
-      <Custom Action="CloseRunningLoadout" Before="InstallValidate" />
+      <!--
+        Conditioned as well as guarded by the launch condition above. The
+        condition already stops the install, but a kill that would end a
+        session should not be one line of sequencing away from running anyway.
+      -->
+      <Custom Action="CloseRunningLoadout"
+              Before="InstallValidate"
+              Condition="NOT LOADOUTSESSIONRUNNING" />
     </InstallExecuteSequence>
 
     <MediaTemplate EmbedCab="yes" />

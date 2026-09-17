@@ -60,3 +60,63 @@ public sealed record UpdateCheck(
     bool IsNewer,
     ReleaseArtifact? Artifact,
     string? Notes);
+
+/// <summary>
+/// Where <c>loadout update</c> looks, and what it means to say "nowhere".
+/// </summary>
+/// <remarks>
+/// Here rather than on the updater because three assemblies need the same
+/// answer: the service that reads the feed, first-run setup that offers it, and
+/// the configuration key that describes it.
+/// </remarks>
+public static class ReleaseSource
+{
+    /// <summary>
+    /// Where updates come from when nobody has said otherwise: this project's
+    /// own releases.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A default rather than a required setting, because the setting being
+    /// empty is the state every install starts in and the command's answer to
+    /// it was "no release source is configured" — so `loadout update` did
+    /// nothing at all until somebody found a URL to give it, and there was no
+    /// URL to find: the release published archives and a manifest, never a
+    /// feed. Both halves are fixed together or neither is.
+    /// </para>
+    /// <para>
+    /// `/releases/latest/download/` always redirects to the newest release, so
+    /// this URL does not need updating when one is cut.
+    /// </para>
+    /// <para>
+    /// Nothing reads this on its own account: the only caller is
+    /// <c>loadout update</c>, so the network is touched when somebody asks and
+    /// at no other time.
+    /// </para>
+    /// </remarks>
+    public const string Default =
+        "https://github.com/ntatschner/loadout-cli/releases/latest/download/feed.json";
+
+    /// <summary>
+    /// What <c>updates-source</c> is set to by somebody who wants no update
+    /// checking at all.
+    /// </summary>
+    /// <remarks>
+    /// Spelled several ways because the setting is typed by hand and refusing
+    /// all but one spelling would be pedantry. Distinct from empty, which now
+    /// means the default: turning something off has to be something you can
+    /// say, not something you say by deleting.
+    /// </remarks>
+    private static readonly string[] Off = ["off", "none", "no", "disabled", "false"];
+
+    /// <summary>Whether a configured value means "do not check at all".</summary>
+    public static bool IsDisabled(string? source) =>
+        source is not null
+        && Off.Contains(source.Trim(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The feed a configured value points at, with empty meaning the default.
+    /// </summary>
+    public static string Resolve(string? source) =>
+        string.IsNullOrWhiteSpace(source) ? Default : source.Trim();
+}

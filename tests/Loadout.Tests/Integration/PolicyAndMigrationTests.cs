@@ -30,7 +30,7 @@ namespace Loadout.Tests.Integration;
 public sealed class PolicyAndMigrationTests : IAsyncLifetime
 {
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IPolicyService _policies = null!;
     private IGitManager _git = null!;

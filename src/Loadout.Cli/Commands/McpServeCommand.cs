@@ -138,6 +138,7 @@ public sealed class LoadoutTools
     private readonly IProjectService _projects;
     private readonly Core.Tasks.ITaskService _tasks;
     private readonly IGitManager _git;
+    private readonly ISymbolIndexService _symbols;
     private readonly TimeProvider _time;
     private readonly LoadoutToolScope _scope;
 
@@ -148,6 +149,7 @@ public sealed class LoadoutTools
         IProjectService projects,
         Core.Tasks.ITaskService tasks,
         IGitManager git,
+        ISymbolIndexService symbols,
         TimeProvider time,
         LoadoutToolScope scope)
     {
@@ -157,6 +159,7 @@ public sealed class LoadoutTools
         _projects = projects;
         _tasks = tasks;
         _git = git;
+        _symbols = symbols;
         _time = time;
         _scope = scope;
     }
@@ -193,7 +196,7 @@ public sealed class LoadoutTools
         var resolved = await _instructions.ResolveAsync(
             new InstructionRequest(
                 manifest.Value,
-                RepositoryPath: null,
+                await RepositoryPathAsync(slug, ct).ConfigureAwait(false),
                 _workspace.LocalPath,
                 manifest.Value?.Agents.Default ?? "claude"),
             ct).ConfigureAwait(false);
@@ -209,12 +212,18 @@ public sealed class LoadoutTools
     }
 
     [McpServerTool(Name = "loadout_recall")]
+    // Written around the occasions to call it rather than around what it does.
+    // The old description explained the mechanism accurately and was acted on
+    // once in twelve thousand turns; a tool nothing calls is a tool that is not
+    // there.
     [Description(
-        "Look for what this project already knows about something, before working it out again. "
-        + "The context carries only a one-line index of memory topics; this searches what is "
-        + "inside them. Matches words rather than meanings, so try the words the project would "
-        + "use. Ask before recording a fact, so an existing topic is extended rather than "
-        + "contradicted by a second one beside it.")]
+        "Search what this project has already learned: past failures, environment quirks, "
+        + "decisions and the reasons behind them. Use it BEFORE investigating anything that "
+        + "could have been hit before - a build or test failure, an unfamiliar error, a tool "
+        + "behaving oddly on this machine, a release or packaging step, or any question that "
+        + "starts 'why does'. Use it before recording a fact of your own, so an existing topic "
+        + "is extended rather than contradicted by a second one beside it. Matches words rather "
+        + "than meanings, so try the words the project would use.")]
     public async Task<string> RecallAsync(
         [Description("What you want to know, in your own words.")] string query,
         CancellationToken ct = default)
@@ -325,6 +334,133 @@ public sealed class LoadoutTools
         return written.Succeeded
             ? $"Recorded under '{topic}'."
             : written.Error ?? "It could not be recorded.";
+    }
+
+    [McpServerTool(Name = "loadout_locate")]
+    [Description(
+        "Where a type or member is declared, as file and line, from an index kept in step with "
+        + "the repository. Use it instead of searching the tree when you know a name. It matches "
+        + "names rather than meanings, whole or in part, in the mainstream languages by file "
+        + "extension: a thing called something else, or in a language it does not read, is "
+        + "not found rather than absent.")]
+    public async Task<string> LocateAsync(
+        [Description("A type or member name, whole or in part. Case does not matter.")]
+        string name,
+        [Description("How many to return. Defaults to 10.")] int limit = 10,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here, so there is nothing to look in.";
+        }
+
+        var resolved = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+        // The tree the agent is in when the project was worked out from it,
+        // which for a worktree is not the registered checkout.
+        var path = resolved.Succeeded
+            ? SymbolTree.Of(
+                resolved.Value!,
+                _scope.Project is { Length: > 0 } ? null : Directory.GetCurrentDirectory())
+            : null;
+
+        if (path is null)
+        {
+            return $"'{slug}' is not on this machine, so there is nothing to look in.";
+        }
+
+        // The same call 'loadout docs find' makes, cache and all.
+        var found = await _symbols
+            .FindAsync(path, slug, name, limit > 0 ? limit : 10, rescan: false, ct)
+            .ConfigureAwait(false);
+
+        if (found.Failed)
+        {
+            return found.Error ?? "The index could not be read.";
+        }
+
+        var lookup = found.Value!;
+
+        if (lookup.Matches.Count == 0)
+        {
+            // Said plainly, for the same reason recall says it: an agent told
+            // "nothing" will otherwise conclude the thing does not exist.
+            return $"Nothing named like '{name}' among {lookup.Indexed} symbol(s). It matches "
+                + "names rather than meanings; try a shorter fragment. It reads "
+                + $"{SymbolLanguages.Names}.";
+        }
+
+        var answer = new StringBuilder();
+
+        foreach (var match in lookup.Matches)
+        {
+            answer.Append(match.Symbol.File).Append(':').Append(match.Symbol.Line)
+                .Append('\t').Append(match.Symbol.Kind.ToString().ToLowerInvariant())
+                .Append('\t').Append(match.Symbol.Name);
+
+            if (match.Symbol.Summary.Length > 0)
+            {
+                answer.Append(" - ").Append(match.Symbol.Summary);
+            }
+
+            answer.AppendLine();
+        }
+
+        return answer.ToString().TrimEnd();
+    }
+
+    [McpServerTool(Name = "loadout_code_map")]
+    [Description(
+        "A map of the code as it stands now: one line per directory naming the types it holds. "
+        + "Use it to choose where to look, and to refresh a map you were given at launch after "
+        + "the tree has changed. For any one name, loadout_locate gives the file and line.")]
+    public async Task<string> CodeMapAsync(CancellationToken ct = default)
+    {
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here, so there is nothing to map.";
+        }
+
+        var resolved = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+        var path = resolved.Succeeded
+            ? SymbolTree.Of(
+                resolved.Value!,
+                _scope.Project is { Length: > 0 } ? null : Directory.GetCurrentDirectory())
+            : null;
+
+        if (path is null)
+        {
+            return $"'{slug}' is not on this machine, so there is nothing to map.";
+        }
+
+        // The same digest the compiled context inlines when a project asks
+        // for it, from the same cache; pulled here rather than pushed, which
+        // is what an agent with no after-edit hook has.
+        var digest = await _symbols.DigestAsync(path, slug, ct).ConfigureAwait(false);
+
+        if (digest.Failed)
+        {
+            return digest.Error ?? "The map could not be drawn.";
+        }
+
+        var map = digest.Value!;
+
+        if (map.Indexed == 0)
+        {
+            return $"Nothing in '{slug}' is in a language the scan reads, so there is no map.";
+        }
+
+        var at = map.Head is { Length: >= 7 } head ? $" at {head[..7]}" : string.Empty;
+
+        return $"{map.Indexed} symbol(s){at} in {string.Join(", ", map.Languages)}."
+            + Environment.NewLine + Environment.NewLine + map.Text.TrimEnd();
     }
 
     /// <summary>A named scope, defaulting to the project when it is not one we know.</summary>
@@ -527,7 +663,7 @@ public sealed class LoadoutTools
         var resolved = await _instructions.ResolveAsync(
             new InstructionRequest(
                 manifest.Value,
-                RepositoryPath: null,
+                await RepositoryPathAsync(slug, ct).ConfigureAwait(false),
                 _workspace.LocalPath,
                 manifest.Value?.Agents.Default ?? "claude",
                 Task: task,
@@ -556,6 +692,29 @@ public sealed class LoadoutTools
             allows: a reviewing skill is offered in investigate, advise and review, and
             withheld from implement.
             """;
+    }
+
+    /// <summary>
+    /// Where the project's repository is, for a resolution that has to see it.
+    /// </summary>
+    /// <remarks>
+    /// Both tools that resolve instructions passed null here, and null means
+    /// the repository is never read: no language, no framework, none of the
+    /// specialists chosen from what the repository is made of. The reply named
+    /// the foundations and the mode and stopped, which is not what the session
+    /// was given — and the mode tool went on to tell the agent, in the same
+    /// breath, that the language and framework specialists come from the
+    /// repository. Null when the project is not on this machine, which the
+    /// resolver already treats as "no evidence" rather than an error.
+    /// </remarks>
+    private async Task<string?> RepositoryPathAsync(string slug, CancellationToken ct)
+    {
+        var resolved = await _projects.ResolveAsync(slug, ct).ConfigureAwait(false);
+
+        return resolved.Succeeded && resolved.Value!.LocalPath is { Length: > 0 } path
+            && Directory.Exists(path)
+                ? path
+                : null;
     }
 
     private async Task<string?> SlugAsync(CancellationToken ct)

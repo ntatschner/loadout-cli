@@ -350,11 +350,21 @@ public sealed class DoctorCommand : AsyncCommand<DoctorSettings>
         output.WriteBlankLine();
         output.WriteLine($"Overall: [{verdictColour}]{report.Verdict}[/]");
 
-        if (report.Remedies.Count > 0)
+        // Counted apart, because "put right" is the wrong verb for turning on
+        // something optional that was never broken, and one number covering
+        // both tells you neither how much is wrong nor how much is available.
+        if (report.Repairs.Count > 0)
         {
             output.WriteLine(
-                $"[dim]{report.Remedies.Count} of these can be put right for you: "
+                $"[dim]{report.Repairs.Count} of these can be put right for you: "
                 + "loadout doctor --fix[/]");
+        }
+
+        if (report.Suggestions.Count > 0)
+        {
+            output.WriteLine(
+                $"[dim]{report.Suggestions.Count} thing(s) here are available and switched off. "
+                + "Nothing is wrong with them: loadout doctor --fix[/]");
         }
     }
 }

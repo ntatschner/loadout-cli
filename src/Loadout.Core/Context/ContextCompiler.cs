@@ -2,6 +2,7 @@ using System.Text;
 using Loadout.Core.Instructions;
 using Loadout.Models;
 using Loadout.Models.Projects;
+using Loadout.Models.Tasks;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 
@@ -25,15 +26,33 @@ internal sealed class ContextCompiler : IContextCompiler
     private readonly IFilePermissions _permissions;
     private readonly IRuleService _rules;
     private readonly IMemoryService _memory;
+    private readonly Instructions.ISymbolIndexService? _symbols;
+    private readonly Tasks.ITaskService? _tasks;
 
+    /// <param name="permissions">Restricts the compiled file to its owner.</param>
+    /// <param name="rules">Where scoped rules come from.</param>
+    /// <param name="memory">Where the memory index comes from.</param>
+    /// <param name="symbols">
+    /// Where the map of the code comes from. Optional, and null means the
+    /// layer is simply never written: a compiler built without it compiles
+    /// exactly what it compiled before.
+    /// </param>
+    /// <param name="tasks">
+    /// Where the open tasks come from, on the projects that ask for them.
+    /// Optional for the same reason as the symbol index.
+    /// </param>
     public ContextCompiler(
         IFilePermissions permissions,
         IRuleService rules,
-        IMemoryService memory)
+        IMemoryService memory,
+        Instructions.ISymbolIndexService? symbols = null,
+        Tasks.ITaskService? tasks = null)
     {
         _permissions = permissions;
         _rules = rules;
         _memory = memory;
+        _symbols = symbols;
+        _tasks = tasks;
     }
 
     /// <inheritdoc />
@@ -45,6 +64,7 @@ internal sealed class ContextCompiler : IContextCompiler
         string? profileName = null,
         string? handoffPath = null,
         Models.Instructions.EffectiveInstructions? instructions = null,
+        string? repositoryPath = null,
         CancellationToken ct = default)
     {
         if (!Directory.Exists(runtimeDirectory))
@@ -82,7 +102,7 @@ internal sealed class ContextCompiler : IContextCompiler
         var missing = new List<string>();
 
         WriteHeader(builder, manifest, agentName, profileName);
-        WriteToolAccess(builder);
+        WriteToolAccess(builder, instructions);
 
         // Specialists come before the project's own material, because they are
         // the more general half: the C# specialist says what C# code should
@@ -136,6 +156,17 @@ internal sealed class ContextCompiler : IContextCompiler
 
         await AppendMemoryAsync(builder, sources, workspacePath, manifest.Slug, ct)
             .ConfigureAwait(false);
+
+        if (manifest.Context.CodeMap)
+        {
+            await AppendCodeMapAsync(builder, sources, manifest.Slug, repositoryPath, ct)
+                .ConfigureAwait(false);
+        }
+
+        if (manifest.Context.Tasks)
+        {
+            await AppendTasksAsync(builder, sources, manifest.Slug, ct).ConfigureAwait(false);
+        }
 
         var outputPath = Path.Combine(runtimeDirectory, CompiledFileName);
 
@@ -326,11 +357,27 @@ internal sealed class ContextCompiler : IContextCompiler
         builder.AppendLine();
         builder.AppendLine($"<!-- source: {relative}/MEMORY.md -->");
         builder.AppendLine();
+        // Imperative, and naming the occasions. The index has been carried in
+        // every compiled context for months and was acted on once in twelve
+        // thousand turns: "read the ones that bear on the task" leaves a
+        // session to notice, mid-task, that one of twenty-four titles might
+        // have applied. Telling it when to look is the whole difference, and
+        // is how the memory tool this is modelled on gets called at all.
         builder.AppendLine(
-            "Durable facts recorded from earlier sessions. Each entry is a file under "
-            + $"`{relative}/`; read the ones that bear on the task. The repository is "
-            + "authoritative: where memory and the code disagree, the code is right and the "
-            + "memory needs correcting.");
+            "Durable facts recorded from earlier sessions of this project: past failures, "
+            + "environment quirks, and decisions with the reasons behind them. Below are "
+            + $"titles only; each is a file under `{relative}/`.");
+        builder.AppendLine();
+        builder.AppendLine(
+            "**Check this before you investigate.** Call `loadout_recall`, or read the file, "
+            + "before diagnosing a failure, before an unfamiliar error, before anything about "
+            + "how this project builds, tests, releases or is configured, and before recording "
+            + "a fact of your own so an existing topic is extended rather than contradicted. "
+            + "The store is small and a miss costs one call.");
+        builder.AppendLine();
+        builder.AppendLine(
+            "The repository is authoritative: where memory and the code disagree, the code is "
+            + "right and the memory needs correcting.");
         builder.AppendLine();
         builder.AppendLine(index.Value.TrimEnd());
         builder.AppendLine();
@@ -340,6 +387,168 @@ internal sealed class ContextCompiler : IContextCompiler
             "Project memory",
             Encoding.UTF8.GetByteCount(index.Value)));
     }
+
+    /// <summary>
+    /// Appends what the project is working on, for a project that keeps a task
+    /// record and has asked for it.
+    /// </summary>
+    /// <remarks>
+    /// The tools to read and write this have been served to the agent since
+    /// they existed, and nothing ever told it they were there: no specialist
+    /// mentioned them, the context did not carry a task, and an agent does not
+    /// call a tool it has no reason to think is relevant. So the record was
+    /// only ever written by a person, and "what were we doing" was answered
+    /// from whatever happened to still be in the conversation.
+    /// <para>
+    /// Open and doing only. A finished task is in the record for the audit
+    /// trail, and putting it in front of every later session is paying for
+    /// something nobody has to act on.
+    /// </para>
+    /// </remarks>
+    private async Task AppendTasksAsync(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        string slug,
+        CancellationToken ct)
+    {
+        if (_tasks is null)
+        {
+            return;
+        }
+
+        var listed = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return;
+        }
+
+        var open = listed.Value!
+            .Where(t => t.State is TaskState.Open or TaskState.Doing or TaskState.Blocked)
+            .OrderBy(t => t.State)
+            .ToList();
+
+        if (open.Count == 0)
+        {
+            // A heading over nothing is a heading somebody reads and learns
+            // nothing from, paid for on every launch.
+            return;
+        }
+
+        var section = new StringBuilder();
+
+        section.AppendLine(
+            "What this project is working on, as somebody last said. These are claims with a "
+            + "name and a date on them, not established facts: check one against the repository "
+            + "before relying on it. Change one with the `loadout_task_declare` tool, or "
+            + "`loadout task declare <id> <state>`, when the work moves — a record nobody "
+            + "updates is worse than none, because it is believed.");
+        section.AppendLine();
+
+        foreach (var task in open)
+        {
+            var title = task.Title.Length > 0 ? task.Title : task.Id;
+
+            section.AppendLine(
+                $"- **{task.Id}** ({task.State.ToString().ToLowerInvariant()}) — {title}");
+            section.AppendLine(
+                $"  {task.DeclaredBy}, {task.DeclaredUtc:yyyy-MM-dd}");
+
+            // The note, which is where the work actually is. Leaving it out
+            // put a heading and a one-line title in front of the session and
+            // nothing it could act on: a project registered before it had a
+            // repository arrived carrying a careful explanation of what to do
+            // about that, and the compiler dropped every word of it.
+            if (task.Note is { Length: > 0 } note)
+            {
+                foreach (var line in note.Split('\n'))
+                {
+                    section.AppendLine($"  {line.TrimEnd()}");
+                }
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## Open tasks");
+        builder.AppendLine();
+        builder.AppendLine($"<!-- source: projects/{slug}/tasks.yaml -->");
+        builder.AppendLine();
+        builder.Append(section);
+
+        sources.Add(new ContextSource(
+            $"projects/{slug}/tasks.yaml",
+            "Open tasks",
+            Encoding.UTF8.GetByteCount(section.ToString())));
+    }
+
+    /// <summary>
+    /// Appends the map of the code: one line per directory, naming its types.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The digest half of the machine index and nothing more. The index half —
+    /// one line per symbol — is what <c>loadout docs find</c> answers from, and
+    /// inlining it would cost more than the searching it saves. The digest is
+    /// the part worth paying for up front: it lets a session pick a directory
+    /// to open instead of reading the tree to find one.
+    /// </para>
+    /// <para>
+    /// Accounted as a source like everything else, so the budget report can
+    /// show what the project chose to spend. Absent without a word when the
+    /// repository is not on this machine or the scan finds nothing: a project
+    /// in a language the scan does not read has asked for a map that cannot
+    /// be drawn, and an empty heading would be noise where the map should be.
+    /// </para>
+    /// </remarks>
+    private async Task AppendCodeMapAsync(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        string slug,
+        string? repositoryPath,
+        CancellationToken ct)
+    {
+        if (_symbols is null || repositoryPath is null)
+        {
+            return;
+        }
+
+        var digest = await _symbols.DigestAsync(repositoryPath, slug, ct).ConfigureAwait(false);
+
+        if (digest.Failed || digest.Value!.Indexed == 0)
+        {
+            return;
+        }
+
+        var map = digest.Value!;
+        var at = map.Head is { Length: >= 7 } head ? $" at {head[..7]}" : string.Empty;
+
+        builder.AppendLine();
+        builder.AppendLine("## Where the code is");
+        builder.AppendLine();
+        builder.AppendLine($"<!-- source: symbols/{slug} -->");
+        builder.AppendLine();
+        builder.AppendLine(
+            $"One line per directory, from a scan of the tree{at}: {map.Indexed} symbol(s) in "
+            + $"{Listed(map.Languages)}. Use it to choose where to look. For any one name, "
+            + "`loadout docs find <name>` gives the file and line without a search.");
+        builder.AppendLine();
+        builder.AppendLine(map.Text.TrimEnd());
+        builder.AppendLine();
+
+        sources.Add(new ContextSource(
+            $"symbols/{slug}",
+            "Where the code is",
+            Encoding.UTF8.GetByteCount(map.Text)));
+    }
+
+    /// <summary>"C#", "C# and Python", "C#, Python and Go".</summary>
+    private static string Listed(IReadOnlyList<string> names) =>
+        names.Count switch
+        {
+            0 => "no language the scan reads",
+            1 => names[0],
+            _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
+        };
 
     /// <summary>
     /// Shows a rule by its path inside the workspace rather than its absolute
@@ -508,7 +717,9 @@ internal sealed class ContextCompiler : IContextCompiler
     /// Short because it is paid for on every launch, whatever the task.
     /// </para>
     /// </remarks>
-    private static void WriteToolAccess(StringBuilder builder)
+    private static void WriteToolAccess(
+        StringBuilder builder,
+        Models.Instructions.EffectiveInstructions? instructions)
     {
         builder.AppendLine("## The launcher is also a command");
         builder.AppendLine();
@@ -519,6 +730,23 @@ internal sealed class ContextCompiler : IContextCompiler
             "- `loadout instructions show <id>` - the full text of a specialist named above");
         builder.AppendLine(
             "- `loadout instructions explain --project <slug>` - what this session was given, and why");
+
+        // Only where it can answer. A language specialist is selected by the
+        // files in the tree, and the index behind this reads the same
+        // languages, so a selected specialist the scan knows is the honest
+        // test. A project in nothing the scan reads would pay for a line
+        // naming a command that finds nothing.
+        var readable = Instructions.SymbolLanguages.SpecialistIds;
+
+        if (instructions?.Selected.Any(selection =>
+                readable.Contains(selection.Specialist.Id, StringComparer.Ordinal)) == true)
+        {
+            builder.AppendLine(
+                "- `loadout docs find <name>` - where a type or member is declared, as file and "
+                + "line, from an index kept in step with the repository; cheaper than searching "
+                + "the tree when you know the name");
+        }
+
         builder.AppendLine(
             "- `loadout memory find <query>` - search what this project already knows, before "
             + "working it out again; only the index above reaches this context, not the topics");

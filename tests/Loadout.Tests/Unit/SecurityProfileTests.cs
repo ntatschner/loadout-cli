@@ -149,7 +149,7 @@ public sealed class SecurityProfileTests
 
     private static async Task<AgentInvocation?> BuildClaudeAsync(SecurityProfile? profile)
     {
-        var adapter = new ClaudeAdapter(Resolver(), new ProcessLauncher(), []);
+        var adapter = new ClaudeAdapter(Resolver(), new ThrottledProcessLauncher(), []);
 
         var result = await adapter.BuildInvocationAsync(Context(profile));
 
@@ -158,7 +158,7 @@ public sealed class SecurityProfileTests
 
     private static async Task<AgentInvocation?> BuildCodexAsync(SecurityProfile? profile)
     {
-        var adapter = new CodexAdapter(Resolver(), new ProcessLauncher(), []);
+        var adapter = new CodexAdapter(Resolver(), new ThrottledProcessLauncher(), []);
 
         var result = await adapter.BuildInvocationAsync(Context(profile));
 

@@ -8,11 +8,11 @@
 | `loadout here` | Launch the agent for the current repository |
 | `loadout doctor` | Platform, Git, workspace, secret and agent diagnostics |
 | `loadout status` | Summary of workspace, projects and agents |
-| `loadout project add\|list\|| `loadout instructions list|show|explain` | Read the specialists, and see which ones a task would load |
-| `loadout instructions explain --against-mode|--against-task` | Show only what changes between two ways of asking ||remove\|discover\|open` | Manage project registration |
+| `loadout project add\|list\|remove\|discover\|open` | Manage project registration. A directory with no repository yet is registered, and discovered, as one still to be set up |
 | `loadout project clone\|relocate <project>` | Get a registered project onto this machine |
 | `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `loadout project link [project]` | Record inside a repository which project it belongs to |
+| `loadout project context [key] [on\|off]` | Show or change what the project carries into every session: its open tasks, its code map |
 | `loadout code [project]` | Open a project in the editor, under the profile its agent uses |
 | `loadout config list\|get\|set\|edit` | Read and write launcher settings, and say where they live |
 | `loadout workspace status\|sync\|save\|open` | Manage the central workspace clone |
@@ -27,6 +27,9 @@
 | `loadout doctor --fix` | Put right the findings the doctor can fix itself |
 | `loadout doctor --bundle [path]` | Write the findings to one file to send somebody, screened first |
 | `loadout docs audit [project]` | Report where the documentation has come adrift from the repository |
+| `loadout docs find <name>` | Say where a type or member is declared, from an index kept in step with the repository |
+| `loadout docs refresh <file>` | Bring the symbol index up to date for the files named, after an edit; `--hook` is the form an after-edit hook runs, `--dialect generic` for one that is not Claude's |
+| `loadout protect --refresh-hook [project]` | Install that hook in the project's Claude settings, or `--remove` it |
 | `loadout protect` | Install a pre-commit hook, or `--global` Git excludes |
 | `loadout migrate` | Move existing AI tooling files into the workspace |
 | `loadout project worktrees <project>` | List a project's working trees |
@@ -46,20 +49,37 @@
 | `loadout launches [project]` | What this machine launched, and what each launch was given |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
 | `loadout instructions list\|show\|explain` | Read the specialists, and see which ones a task would load |
+| `loadout instructions explain --against-mode\|--against-task` | Show only what changes between two ways of asking |
 | `loadout instructions audit\|validate` | Check a project against what its specialists ask for, or check the library itself |
 | `loadout instructions new <id>` | Draft a specialist or skill in the workspace, or in one project |
 | `loadout instructions stats` | Say which specialists launches actually reached, and which none did |
+| `loadout instructions probe [specialist]` | Say how often sessions did what a specialist asks for, week by week |
 | `loadout usage [--days|--by|--project]` | What the agents have spent, by project, day, model or agent |
-| `loadout usage --format markdown|csv` | The same report written to send somebody, or to open in a spreadsheet ||--by\|--project]` | What the agents have spent, by project, day, model or agent |
+| `loadout usage --format markdown\|csv` | The same report written to send somebody, or to open in a spreadsheet |
 | `loadout telemetry serve\|status` | Receive, locally, what launched agents report about their own usage |
 | `loadout statusline install\|uninstall\|show` | Put the project, branch and context spent in the agent's status line |
 | `loadout backup list\|restore` | Undo an operation that changed files |
 | `loadout completion <shell>` | Emit a completion script |
+| `loadout commands` | List everything the launcher can do, grouped by what it is for |
+| `loadout list` | List registered projects |
+| `loadout running` | The sessions running now, and how long each has been quiet |
+| `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
+| `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
+| `loadout pack list\|add\|approve\|update\|remove` | Specialist packs fetched from a Git remote, approved per machine |
+| `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |
+| `loadout spend refresh` | See and refresh where spending stands against your thresholds |
 
 **Every command that can change something accepts `--dry-run`,** and it always
 means the same thing: show what would happen and change nothing. Several
 commands have their own older spelling — `--apply` on some, `--fix` on others —
 and those still work; where both are given, the more cautious wins.
+
+For a launch, the dry run is the whole launch described: the agent and its
+executable, the working directory, the compiled context and where it went, the
+MCP configuration files, the environment variables by name, the full command
+line, and every specialist chosen with the reason for each and what it costs.
+`--json` writes the same thing as one document. Values are never printed —
+a resolved secret is exactly what a variable can hold.
 
 Every command accepts `--json`, and everything after a bare `--` is passed to
 the agent untouched:
@@ -69,15 +89,20 @@ loadout starstats --agent claude --profile database -- --verbose
 ```
 
 Exit codes are stable and documented in
-[`ExitCode.cs`](../src/Loadout.Models/ExitCode.cs).
+[`ExitCode.cs`](../src/Loadout.Models/ExitCode.cs). One is worth knowing before
+you script against it: `loadout` with no arguments and nowhere to draw exits
+**11**, not 0. It's the documented way to open the launcher, so the arguments
+were fine — what was missing was a terminal. A script that reaches that has
+asked for the interactive launcher by mistake, and saying so beats succeeding
+quietly.
 
 ## Editors
 
 VS Code keeps settings, extensions and keybindings in named profiles, and
 working with an agent usually wants a different set from working without one.
-`loadout code` opens a project under the profile that suits it, so the same
-repository opened for Claude and opened for Codex can put the editor in two
-different states.
+`loadout code` opens a project under the profile that suits it, so opening the
+same repository for Claude and for Codex can put the editor in two different
+states.
 
 ```yaml
 # config.yaml
@@ -88,8 +113,8 @@ editor:
     codex: Codex
 ```
 
-The profile used is the project's own if it names one, then the one configured
-for the agent it uses, then none — so if you do not use profiles you get the
+It uses the project's own profile if it names one, then whatever's configured
+for the agent it uses, then none. So if you don't use profiles, you get the
 editor you always get.
 
 ```bash
@@ -123,13 +148,32 @@ attributes them:
 ```
 
 `loadout resume` opens a picker, or takes a session id or `--last`. Resuming
-goes through the launcher rather than the agent directly, so the workspace
-synchronises and the context recompiles instead of a bare transcript being
-reopened. The interactive launcher offers the same picker per project.
+goes through the launcher rather than straight to the agent, so the workspace
+syncs and the context recompiles instead of just reopening a bare transcript.
+The task, mode, profile and worktree the session launched with are read back
+from the launch ledger and carried over, so it reopens with the specialists it
+had. `--task` and `--mode` replace them when the work has changed shape. The
+interactive launcher offers the same picker per project.
 
-Neither storage format is a published contract, so both readers are
-best-effort by construction: a transcript that cannot be understood costs that
-one session and never the listing.
+Neither storage format is a published contract, so both readers are best-effort
+by design: a transcript nobody can make sense of costs you that one session,
+never the listing.
+
+What a session *isn't* is anything the agent spawned inside one. Claude Code
+grew a folder of subagent transcripts beside each session's own, and reading
+every `.jsonl` under a project folder turned all of them into resumable rows:
+39 subagent files against 13 real sessions here, a picker full of research
+prompts, and the real sessions pushed off the end by the limit. The listing now
+reads each project folder's own files and goes no deeper, with a name guard
+beside that, because the layout has already moved once and nothing inside such a
+file marks it out. The limit is also applied after the read rather than before,
+so it's spent on sessions rather than on whatever happened to be newest.
+
+Rows are escaped before they're drawn, too. A session is named after the first
+thing said in it, and whoever said it was writing prose — a title opening with
+`[SYSTEM NOTIFICATION]` was read as a style tag and took the whole picker down
+with it, which looks like Resume crashing rather than like one row being
+unprintable.
 
 ## Launches, which are not sessions
 
@@ -156,12 +200,12 @@ Composed  3
   language.csharp
 ```
 
-They are separate lists on purpose, and neither can be turned into the other: an
-agent picks its own session identifier and the launcher never learns it. Nor
-does this say what a launch spent — token counts are aggregated by directory and
-day, so attributing them to one of three launches that day would be arithmetic
-dressed as fact. The tokens shown are the instruction tokens the launcher
-estimated and recorded, which really are per launch.
+They're separate lists on purpose, and neither turns into the other: an agent
+picks its own session identifier and the launcher never learns it. This also
+won't tell you what a launch spent. Token counts are aggregated by directory and
+day, so pinning them on one of the three launches you made that day would be
+arithmetic dressed up as fact. The tokens shown are the instruction tokens the
+launcher estimated and recorded, and those really are per launch.
 
 A launch has three outcomes rather than two. `unclosed` means no ending was
 recorded — killed, terminal closed, or still going — and `never ran` means it
@@ -170,12 +214,13 @@ neither has.
 
 ## Documentation that still describes the code
 
-Loadout has checked its own documentation for a while, by hand, three times
-over: a test that every command the docs name exists, one that the install
-examples name the version that ships, one that the specialist count is the
-count. Each was written after the drift it now catches — a table left naming the
-old sub-commands, a count left at 71, a download link left at 0.9.2 through five
-releases. `loadout docs audit` is that habit offered to any repository.
+Loadout checks its own documentation three ways, by hand: a test that every
+command the docs name exists, one that the install examples name the version
+that ships, one that the specialist count is the count. Each guards a way prose
+rots while still reading perfectly — a table naming sub-commands that were
+renamed, a total left behind by the thing it counts, a download link pointing at
+a version no longer at the top of the releases page. `loadout docs audit` is
+that habit offered to any repository.
 
 ```console
 $ loadout docs audit
@@ -207,24 +252,23 @@ root: docs
 counts:
   specialist: "src/Loadout.Core/Specialists/**/*.md"
 counts_exclude:
-  # A survey of a proposed external bundle, written before implementation.
-  # Its numbers are about that bundle, not about this repository.
-  - specialists-architecture.md
+  # A page whose figures are about somebody else's library rather than yours.
+  - vendor-comparison.md
 ```
 
 This is the drift that rots invisibly, because the sentence still reads
-perfectly. "There are 73 specialists" sat at 71 while the library grew, and
-nothing about the page looked wrong. Keyed by the singular; the plural is
+perfectly. A page can claim a total the library passed months ago and nothing
+about it will look wrong. Keyed by the singular; the plural is
 derived, because writing both out is configuration nobody keeps in step. The
 number one is never read as a total — "the full text of one specialist" is a
 quantity in a sentence, and prose is full of them.
 
-`counts_exclude` is there because counting assumes a noun means the same thing on
-every page, and sometimes it doesn't. Without it, this project's own
-`specialists-architecture.md` reports as stale on every number it contains: it's
-a survey of somebody else's library, and every one of those numbers is correct
-about that library. A project with no policy still gets all the checks above,
-which need nothing configured.
+`counts_exclude` is there because counting assumes a noun means the same thing
+on every page, and sometimes it doesn't. A page comparing your library against
+somebody else's, or quoting figures from a specification, reports as stale on
+every number it contains — and every one of those numbers is right about the
+thing it actually describes. A project with no policy still gets all the checks
+above, which need nothing configured.
 
 ## Saving what a session produced
 
@@ -252,12 +296,11 @@ Take the value out and put it in the credential store with 'loadout secret set',
 then save again.
 ```
 
-Memory has been screened at the point of writing since it existed. This is the
-same answer applied to everything else the policy commits — handoffs, project
-instructions, context notes, profiles, MCP definitions — and to anything an agent
-wrote into the workspace directly, which no check at the point of writing can
-see. Binary files are left alone; a file that can't be read is reported rather
-than passed, because "clean" is the one thing a scan must not say about
+Memory is screened as it's written. The same screening applies to everything
+else the policy commits — handoffs, project instructions, context notes,
+profiles, MCP definitions — and to anything an agent wrote into the workspace
+directly, which no check at the point of writing can see. Binary files are left alone. A file that can't be read gets reported rather
+than passed, because "clean" is the one thing a scan must never say about
 something it never opened.
 
 Commits follow the format in spec section 46, so a workspace history reads as a
@@ -271,15 +314,15 @@ Agent: claude
 Machine: DEV-PC
 ```
 
-A session that only read produces no commit. If a push fails the commit has
-already happened, and the message says so rather than implying the work went
-nowhere. The fourth option is deliberately "leave them uncommitted" rather than
-"discard": the launcher has no business deleting work somebody just did.
+A session that only read produces no commit. If a push fails, the commit has
+already happened, and the message says so rather than implying your work went
+nowhere. The fourth option is deliberately "leave them uncommitted" and not
+"discard" — the launcher has no business deleting work somebody just did.
 
-The prompt lives in the CLI, not in core. Core decides whether a person needs
-to be asked; it never asks, because spec section 37 forbids a menu appearing in
-a pipe or a CI job. Non-interactively the changes are left in place and
-`loadout workspace save` is suggested.
+The prompt lives in the CLI, not in core. Core decides whether somebody needs to
+be asked; it never asks, because spec section 37 forbids a menu turning up in a
+pipe or a CI job. With nobody there, the changes are left in place and it
+suggests `loadout workspace save`.
 
 ## MCP servers
 
@@ -298,10 +341,10 @@ claude.ai Context7, context7  the same service under more than one name, so ever
 tool it offers is loaded twice and the model sees each one twice
 ```
 
-Servers the workspace declares are held there rather than in the repository, and
-handed to the agent with `--mcp-config` at launch — so they are the same on
-every machine that clones the workspace, instead of on whichever one happened to
-have them configured.
+Servers the workspace declares live there rather than in the repository, and get
+handed to the agent with `--mcp-config` at launch. So they're the same on every
+machine that clones the workspace, instead of on whichever one happened to have
+them configured.
 
 Three things are reported:
 
@@ -322,19 +365,22 @@ is not happening.
 
 ### The launcher's own server
 
-The handoff used to run one way: the launcher composed a context, started an
-agent and heard nothing more. Every launch now also declares Loadout itself as
-an MCP server, so a session can ask it things rather than parse console output
+Every launch declares Loadout itself as an MCP server, so the handoff runs both
+ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Five tools, each making the same call its command makes:
+Nine tools, each making the same call its command makes:
 
 | | |
 |---|---|
 | `loadout_specialist` | The full text of one specialist, as `instructions show` prints it |
 | `loadout_effective_instructions` | What this session was given, and what triggered each part |
 | `loadout_recall` | Search what the project already knows, as `memory find` does |
+| `loadout_locate` | Where a type or member is declared, as `docs find` says |
+| `loadout_code_map` | The map of the code as it stands now, one line per directory |
 | `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
+| `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
+| `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
 
 `loadout_recall` exists because only the memory index reaches the context — one
@@ -342,6 +388,21 @@ line per topic — and a session deciding from that alone either opens six files
 or opens none. It searches inside them. It matches words rather than meanings,
 which it says when it finds nothing, so an agent doesn't conclude a fact is
 unrecorded when it is recorded in other words.
+
+Its description is written around *when* to call it rather than around what it
+does — before diagnosing a failure, before an unfamiliar error, before anything
+about how the project builds, tests, releases or is configured, and before
+recording a fact of its own. The accurate mechanical description it used to
+carry was acted on once in twelve thousand turns, and a tool nothing calls is a
+tool that isn't there. The memory index in the compiled context now says the
+same thing in the same words; see [Memory](memory.md#telling-a-session-when-to-look).
+
+`loadout_locate` answers the question an agent asks most often and most
+expensively — where is this thing declared — with one line each, from a symbol
+index cached against the commit it was built at. It matches names rather than
+meanings, in whichever of the languages the scan reads each file turns out to
+be in, and says so when it finds nothing, so an agent doesn't conclude a thing
+is absent when it is merely called something else.
 
 `loadout_mode` is there because a mode is a session-wide directive and work
 changes shape: a session that started out investigating a bug ends up fixing it.

@@ -1,3 +1,4 @@
+using Loadout.Tests.Fakes;
 using FluentAssertions;
 using Loadout.Platform.Abstractions;
 using Loadout.Platform.Common;
@@ -41,7 +42,7 @@ public sealed class ProcessEnvironmentTests : IDisposable
     [Fact]
     public async Task A_child_inherits_the_environment_by_default()
     {
-        var result = await new ProcessLauncher().RunAsync(Echo(remove: null));
+        var result = await new ThrottledProcessLauncher().RunAsync(Echo(remove: null));
 
         // The control. Without it, the test below could pass because the child
         // never ran rather than because the variable was withheld.
@@ -52,7 +53,7 @@ public sealed class ProcessEnvironmentTests : IDisposable
     [Fact]
     public async Task A_withheld_prefix_does_not_reach_the_child()
     {
-        var result = await new ProcessLauncher().RunAsync(Echo(remove: ["VSCODE_"]));
+        var result = await new ThrottledProcessLauncher().RunAsync(Echo(remove: ["VSCODE_"]));
 
         result.Succeeded.Should().BeTrue(result.Error ?? string.Empty);
         result.Value!.StandardOutput.Should().NotContain("poison");
@@ -73,7 +74,7 @@ public sealed class ProcessEnvironmentTests : IDisposable
                 Environment: new Dictionary<string, string> { [Marker] = "kept" },
                 RemoveEnvironmentPrefixes: ["VSCODE_"]);
 
-        var result = await new ProcessLauncher().RunAsync(request);
+        var result = await new ThrottledProcessLauncher().RunAsync(request);
 
         // Asking for a prefix to be withheld and then setting one variable under
         // it means the one that was set. Removing it anyway would be a trap.

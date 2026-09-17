@@ -54,6 +54,10 @@ public enum WorkspaceHost
 /// <param name="Migrate">Apply the migration plan rather than only showing it.</param>
 /// <param name="IncludeIgnored">Include files Git already ignores in that plan.</param>
 /// <param name="InstallGlobalExcludes">Configure the global Git exclude file.</param>
+/// <param name="UpdateFeed">
+/// Where <c>loadout update</c> should look. Null means ask; empty means the
+/// project's own releases, which is the default; "off" means do not check.
+/// </param>
 /// <param name="Interactive">Whether the wizard may prompt for anything left unanswered.</param>
 public sealed record SetupRequest(
     WorkspaceMode Mode = WorkspaceMode.Ask,
@@ -65,6 +69,7 @@ public sealed record SetupRequest(
     bool Migrate = false,
     bool IncludeIgnored = false,
     bool? InstallGlobalExcludes = null,
+    string? UpdateFeed = null,
     bool Interactive = true)
 {
     /// <summary>A fully interactive run, which is what a person gets.</summary>

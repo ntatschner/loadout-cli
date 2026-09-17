@@ -1,5 +1,15 @@
 name: Release
 
+# The run's title says which of two things it is. A run from the Actions page
+# builds every package and publishes none of them — the publish, verify,
+# Homebrew and winget jobs are all gated on the ref being a tag — and it came
+# out green, titled "Release", with four jobs skipped. Somebody who had just
+# pressed the button read that as a release. Now the list says what happened.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+      && format('Build only {0} — nothing is published from the Actions page; push tag v{0} to release', inputs.version)
+      || format('Release {0}', github.ref_name) }}
+
 # Spec section 92 requires every release to be built against all Tier-1
 # platforms. Each archive is produced on the operating system it targets, so the
 # Unix executable bit and the macOS binaries come out right without the
@@ -11,7 +21,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to build, without the leading v
+        description: >-
+          Version to BUILD, without the leading v. This checks the packaging and
+          publishes nothing. To release, push an annotated tag vX.Y.Z instead.
         required: true
         default: 0.1.0
 
@@ -79,6 +91,23 @@ jobs:
             echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # Once, on one leg of the matrix, so the run's summary page says it too
+      # for anyone who opens the run rather than reading its title.
+      - name: Say that this run publishes nothing
+        if: github.event_name == 'workflow_dispatch' && matrix.rid == 'linux-x64'
+        shell: bash
+        run: |
+          {
+            echo "## Build only — nothing is published"
+            echo
+            echo "This run was started from the Actions page. It builds every package so the"
+            echo "packaging can be checked, and then stops: the publish, verify, Homebrew and"
+            echo "winget jobs only run for a tag."
+            echo
+            echo "To release ${{ inputs.version }}: bump the version, commit, then push an annotated tag —"
+            echo '`git tag -a v${{ inputs.version }} -F notes && git push origin main v${{ inputs.version }}`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # pwsh is present on every GitHub runner, which is why the packaging
       # script is PowerShell: one command works on all three legs.
       # Placed immediately before the step that signs, and deliberately not
@@ -88,7 +117,7 @@ jobs:
       # AADSTS700024, "Client assertion is not within its valid time range".
       - name: Azure login for signing
         if: startsWith(matrix.rid, 'win-') && env.ARTIFACT_SIGNING_ACCOUNT != ''
-        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -253,7 +282,7 @@ jobs:
       # AADSTS700024, "Client assertion is not within its valid time range".
       - name: Azure login for signing
         if: startsWith(matrix.rid, 'win-') && env.ARTIFACT_SIGNING_ACCOUNT != ''
-        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -281,67 +310,6 @@ jobs:
 
       # Installing it is the only way to know it installs, and until now that
       # was true of the .deb and not of the MSI — the one people double-click.
-      # An upgrade that could not complete shipped twice and was found by a
-      # user both times, which is what this is here to stop.
-      #
-      # The runner is disposable, so this costs nothing but the minute it takes.
-      - name: Install, upgrade and uninstall it
-        if: matrix.rid == 'win-x64'
-        # Below the job's own timeout on purpose. A job that runs out of time is
-        # cancelled and keeps no logs, which is how two stalls here left nothing
-        # to read; a step that runs out of time fails, the job finishes, and the
-        # log is uploaded. The difference is the whole reason the last two
-        # failures were undiagnosable.
-        timeout-minutes: 20
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $msi = Get-ChildItem artifacts/*win-x64.msi | Select-Object -First 1
-
-          # Which release to upgrade from is worked out inside the script, not
-          # here. Asked for inline it was an unbounded network call sitting in
-          # front of everything the script bounds, and five releases stalled in
-          # it: the job timed out, was cancelled, uploaded no logs, and the
-          # phase file was empty because the script had never started.
-          ./build/verify-windows-install.ps1 `
-            -Msi $msi.FullName `
-            -Repository '${{ github.repository }}' `
-            -CurrentTag '${{ github.ref_name }}'
-
-      # Runs even when the step above was cancelled, which is the only way a
-      # stall there leaves anything behind. Four releases have stalled in it and
-      # not one produced a readable log, including the release where that step
-      # had its own timeout: the runner asks a stuck step to stop, whatever is
-      # stuck does not answer, and the job is cancelled with its logs discarded.
-      #
-      # The script writes each phase to a file as it reaches it. This reads the
-      # file back, so the next stall names the phase it never came out of.
-      - name: What the install check got through
-        if: always() && matrix.rid == 'win-x64'
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $logs = Join-Path ([System.IO.Path]::GetTempPath()) 'loadout-install-logs'
-          $progress = Join-Path $logs 'progress.log'
-
-          if (Test-Path $progress) {
-              Write-Host '--- phases reached ---'
-              Get-Content $progress
-          }
-          else {
-              Write-Host 'No progress file, so the check stopped before its first phase.'
-          }
-
-          # The msiexec logs alongside it, tail only: they are verbose and the
-          # end is where a failure says what it was doing.
-          Get-ChildItem $logs -Filter '*.log' -ErrorAction SilentlyContinue |
-              Where-Object { $_.Name -ne 'progress.log' } |
-              ForEach-Object {
-                  Write-Host "--- $($_.Name), last 25 lines ---"
-                  Get-Content $_.FullName -Encoding Unicode -Tail 25 -ErrorAction SilentlyContinue
-              }
-
       - name: Check the package holds what it should
         shell: bash
         run: |
@@ -469,6 +437,38 @@ jobs:
 
           cat SHA256SUMS
 
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The document 'loadout update' reads. Until this step existed the
+      # setting pointed at nothing: every release published archives and a
+      # manifest, and the updater wants one JSON file naming, per platform,
+      # where the archive is and what it hashes to. So the command refused
+      # on every machine, whatever it was configured with.
+      #
+      # Built from SHA256SUMS rather than by hashing again, so the feed
+      # cannot disagree with the checksums people are told to verify.
+      - name: Build the release feed
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+
+          base="${{ github.server_url }}/${{ github.repository }}/releases"
+
+          pwsh ./build/feed.ps1 -Version "$VERSION" -Directory downloaded \
+            -BaseUrl "$base/download/v$VERSION" \
+            -Notes "$base/tag/v$VERSION"
+
+          cat downloaded/feed.json
+
       # What changed in this version, which until now was written into the
       # tag and read by nobody: the release body below is the same paragraph
       # for every version, so the notes never reached the page people
@@ -489,24 +489,50 @@ jobs:
             echo "No notes were written for this version." > notes.md
           fi
 
-          # The standing paragraph every release carries, after what is
-          # particular to this one.
-          cat >> notes.md <<'STANDING'
+          # The standing part every release carries, after what is particular
+          # to this one. Written as a page somebody has landed on wanting to
+          # install this: the commands first, the small print after. The
+          # version is substituted so the commands can be copied as they are
+          # rather than edited first.
+          version="${{ github.ref_name }}"
+          version="${version#v}"
 
-          ---
+          cat >> notes.md <<STANDING
 
-          Self-contained builds of `loadout`. No .NET installation required.
+          ## Install
 
-          Archives work anywhere; the `.msi`, `.deb` and `.rpm` install
-          `loadout` onto `PATH` for the current user or machine.
+          **Linux and macOS**
 
-          Tested on Windows x64, Linux x64, macOS Apple Silicon, Windows arm64
-          and Linux arm64. The arm64 binaries are cross-compiled from x64,
-          though the suite is executed on arm64 runners. macOS packages are not
-          signed or notarised.
+          \`\`\`bash
+          tar -xzf loadout-${version}-linux-x64.tar.gz
+          ./install.sh
+          loadout setup
+          \`\`\`
 
-          Verify a download against `SHA256SUMS`, then see the README for
-          installation.
+          \`install.sh\` verifies the SHA-256 before extracting anything, installs
+          to \`~/.local/bin\`, and needs no root. On macOS it also clears the
+          download quarantine from the installed binary.
+
+          **Windows**
+
+          \`\`\`powershell
+          msiexec /i loadout-${version}-win-x64.msi
+          loadout setup
+          \`\`\`
+
+          Per-user, no elevation, and puts \`loadout\` on your \`PATH\`. Or take the
+          zip and place \`loadout.exe\` wherever you like.
+
+          There is a \`.deb\` and an \`.rpm\` below too.
+
+          ## The small print
+
+          Self-contained builds — no .NET installation required. Verify any
+          download against \`SHA256SUMS\`.
+
+          Built for Windows, Linux and macOS on x64, and Windows and Linux on
+          arm64. The arm64 binaries are cross-compiled, though the test suite
+          runs on arm64 machines. macOS packages are not signed or notarised.
           STANDING
 
 
@@ -515,7 +541,7 @@ jobs:
       # Pinned like every other action here. This is the one step with
       # contents: write, so a moved tag upstream would be a moved tag with
       # permission to publish.
-      - uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             downloaded/*.zip
@@ -524,6 +550,7 @@ jobs:
             downloaded/*.deb
             downloaded/*.rpm
             downloaded/SHA256SUMS
+            downloaded/feed.json
           # What changed, then the standing paragraph. arm64 Windows and
           # Linux are cross-compiled and never executed in CI, because GitHub
           # offers no hosted runner for either, and that is said there rather
@@ -544,16 +571,131 @@ jobs:
     secrets:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-  # Called for the same reason Homebrew is, and independent of it: neither
-  # channel should be able to keep the other from publishing.
-  aur:
-    name: AUR
+  # Independent of the other two, and allowed to fail without them. This one
+  # opens a pull request into somebody else's repository and waits on a
+  # validation pipeline and a person, so it is the one channel whose outcome
+  # is not known by the time the release is done.
+  winget:
+    name: winget
     needs: release
     if: github.ref_type == 'tag'
-    uses: ./.github/workflows/aur.yml
+    uses: ./.github/workflows/winget.yml
     with:
       tag: ${{ github.ref_name }}
     secrets:
-      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-      AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
-      AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+  # Off the publish path on purpose, and this is the change that matters.
+  #
+  # An upgrade that could not complete shipped twice and was found by a user
+  # both times, so the check earns its place. But it ran inside the installer
+  # job, ahead of that job's Upload step, and it stalls: six releases now, and
+  # bounding every msiexec call and then the Windows Installer COM call did not
+  # stop it. A stall there took the whole job down with it, so the win-x64
+  # installer was never uploaded and the release could not be published at all
+  # — 0.17.1 was tagged with nothing behind it twice in a row.
+  #
+  # A gate that hangs blocks every release rather than the bad ones. So the
+  # installer is built and uploaded first, this downloads it and checks it
+  # afterwards, and `release` does not wait on the answer. A bad upgrade now
+  # shows as one red job beside a published release, which is the trade made
+  # deliberately: the check reports, it no longer gates.
+  verify-windows:
+    name: Verify the Windows install
+    runs-on: windows-latest
+    timeout-minutes: 20
+    needs: installer
+    if: github.ref_type == 'tag'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: loadout-installer-win-x64
+          path: artifacts
+
+      - name: Install, upgrade and uninstall it
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $msi = Get-ChildItem artifacts/*win-x64.msi | Select-Object -First 1
+
+          # Run in a child job and hold a deadline over it out here. The step's
+          # own timeout-minutes has never worked on this: the runner asks a
+          # stuck step to stop, whatever is stuck does not answer, and the job
+          # is cancelled with its logs discarded — which is why five stalls left
+          # nothing to read. A parent that is not itself blocked can kill what
+          # is, and then this fails with its output instead of vanishing.
+          $work = Start-Job -ArgumentList `
+            "$PWD/build/verify-windows-install.ps1", $msi.FullName, `
+            '${{ github.repository }}', '${{ github.ref_name }}' -ScriptBlock {
+              param($script, $msi, $repository, $tag)
+
+              # -DisableRestartManager is the whole reason this is worth
+              # running here. The failure it checks for only happens where the
+              # Restart Manager is off, which is a policy on managed Windows
+              # builds and a default on no runner, so every release until now
+              # was verified against the easy path and reported as the hard
+              # one. The runner is disposable, so writing the policy onto it
+              # costs nothing.
+              & $script -Msi $msi -Repository $repository -CurrentTag $tag -DisableRestartManager
+            }
+
+          if (-not (Wait-Job $work -Timeout 480)) {
+            # Report, then leave. Nothing here touches the wedged job, and that
+            # ordering is the whole point.
+            #
+            # Both runs of 0.28.0 ended at exactly 25m0s, which is this job's
+            # 20 minute timeout plus the five minutes the runner allows for
+            # cleanup before it kills the process — so the step never exited
+            # under its own power, and a cancelled job has its logs discarded.
+            # That is why eight stalls have left nothing to read, including the
+            # two that happened after this guard was written to prevent exactly
+            # that.
+            #
+            # The guard almost certainly fired on time and then blocked putting
+            # its own house in order: Stop-Job on a job wedged inside the
+            # installer service hangs the same way Kill does one level down,
+            # which the verification script already documents. So the tidying
+            # is gone. An exiting step does not need to tidy up after itself —
+            # the runner tears the process tree down either way, and a leaked
+            # msiexec on a machine that is about to be discarded costs nothing.
+            #
+            # Whether this is right is answerable by watching: the next stall
+            # either fails at eight minutes with output, or it does not.
+            Write-Host "::error::The Windows install check stalled for eight minutes."
+
+            # Whatever the job managed to say before it stuck. Non-blocking:
+            # this takes what is already buffered rather than waiting for more.
+            Receive-Job $work -ErrorAction SilentlyContinue
+
+            exit 1
+          }
+
+          Receive-Job $work
+          Remove-Job $work -Force -ErrorAction SilentlyContinue
+
+          if ($work.State -eq 'Failed') { exit 1 }
+
+      # The script writes each phase to a file as it reaches it, so a stall can
+      # name the phase it never came out of. Worth more now than it was: the
+      # step above fails rather than being cancelled, so this actually runs.
+      - name: What the install check got through
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $logs = Join-Path ([System.IO.Path]::GetTempPath()) 'loadout-install-logs'
+
+          if (Test-Path $logs) {
+            Get-ChildItem $logs -Recurse | ForEach-Object {
+              Write-Host "--- $($_.Name)"
+              Get-Content $_.FullName -Tail 50
+            }
+          }
+          else {
+            Write-Host 'The check wrote no phase file, so it stopped before it started.'
+          }
+

@@ -357,7 +357,10 @@ internal sealed class SettingsWindow : Window
             {
                 if (e.NewValue)
                 {
-                    _hint.Text = entry.Description;
+                    // An empty box and a box holding a deliberate blank look
+                    // identical, so a setting that still does something while
+                    // unset says what, rather than reading as switched off.
+                    _hint.Text = Hint(entry, _fields.TryGetValue(entry.Key, out var f) ? f.Text : null);
                 }
             };
 
@@ -365,6 +368,25 @@ internal sealed class SettingsWindow : Window
         }
 
         return page;
+    }
+
+    /// <summary>
+    /// What the hint line says for one setting: its description, and where the
+    /// box is empty and being empty still does something, what that is.
+    /// </summary>
+    /// <remarks>
+    /// Internal so a test can hold the wording against the registry rather than
+    /// against a screenshot.
+    /// </remarks>
+    internal static string Hint(ConfigKeys.Entry entry, string? current)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var empty = string.IsNullOrWhiteSpace(current);
+
+        return empty && entry.WhenUnset is { Length: > 0 } behaviour
+            ? $"{entry.Description}  (empty: {behaviour})"
+            : entry.Description;
     }
 
     /// <summary>

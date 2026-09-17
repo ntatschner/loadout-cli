@@ -168,7 +168,12 @@ public sealed class InstructionsStatsCommand : AsyncCommand<InstructionsStatsSet
 
         foreach (var usage in statistics.Loaded)
         {
-            var share = usage.Launches * 100.0 / statistics.Launches;
+            // Against the launches it could have reached, not against every
+            // launch in the window. A specialist added part-way through read as
+            // failing to load on the launches that happened before it existed.
+            var share = usage.Eligible == 0
+                ? 0
+                : usage.Launches * 100.0 / usage.Eligible;
 
             output.WriteLine(
                 $"  {Markup.Escape(usage.Id).PadRight(34)} "

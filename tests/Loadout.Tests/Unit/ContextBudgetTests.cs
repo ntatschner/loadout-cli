@@ -17,6 +17,27 @@ namespace Loadout.Tests.Unit;
 public sealed class ContextBudgetTests
 {
     [Fact]
+    public void The_skills_on_offer_are_counted_like_every_other_layer()
+    {
+        var budget = ContextBudget.From(
+            Instructions(estimatedTokens: 1000),
+            alwaysLoadedRuleBytes: 0,
+            scopedRuleBytes: 0,
+            memoryIndexBytes: 0,
+            codeMapBytes: 0,
+            openTaskBytes: 0,
+            skillBytes: 4000);
+
+        // They reach the session as a plugin rather than inside the compiled
+        // context, which is exactly why they were missing from this report
+        // while a launch paid for them anyway. A layer that loads and is not
+        // in the accounting is the drift the report exists to prevent.
+        budget.Layers.Should().Contain(layer => layer.Name == "Skills" && layer.EveryLaunch);
+
+        budget.EveryLaunchTokens.Should().Be(2000, "1,000 for the specialists and 1,000 for these");
+    }
+
+    [Fact]
     public void Every_layer_paid_for_on_a_launch_is_added_into_one_figure()
     {
         var budget = ContextBudget.From(

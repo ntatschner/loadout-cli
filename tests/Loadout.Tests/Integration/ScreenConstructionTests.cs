@@ -511,6 +511,31 @@ public sealed class ScreenConstructionTests
     }
 
     [Fact]
+    public void An_empty_setting_that_still_does_something_says_what_it_does()
+    {
+        // "(unset)" covers two different situations and reads as neither: an
+        // empty updates-source follows this project's own releases, and an
+        // empty telemetry-endpoint really is nothing. A screen that draws both
+        // as a blank box says the second about the first.
+        var behaving = ConfigKeys.All
+            .Where(entry => entry.WhenUnset is { Length: > 0 })
+            .ToList();
+
+        behaving.Should().NotBeEmpty("some settings do something while unset");
+
+        foreach (var entry in behaving)
+        {
+            SettingsWindow.Hint(entry, string.Empty)
+                .Should().Contain(entry.WhenUnset!,
+                    $"an empty {entry.Key} still does something and the screen has to say so");
+
+            SettingsWindow.Hint(entry, "a value")
+                .Should().NotContain(entry.WhenUnset!,
+                    $"{entry.Key} is set, so what it would do while empty is not the question");
+        }
+    }
+
+    [Fact]
     public void The_agent_to_editor_profile_map_gets_a_row_per_agent_rather_than_a_syntax()
     {
         using IApplication app = Application.Create();
@@ -638,6 +663,87 @@ public sealed class ScreenConstructionTests
         // options. Requiring them to tab to a button first is not the same
         // thing, and neither is silently doing nothing.
         choice.ChosenIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void Selecting_a_project_does_not_open_another_screen()
+    {
+        using var window = Launcher(out var app);
+
+        using (app)
+        {
+            var list = FindProjectList(window);
+            list.SetFocus();
+
+            _ = list;
+
+            // Terminal.Gui's own words for Activate: "Activates the View or an
+            // item in the View ... e.g. toggling a checkbox, selecting a list
+            // item, focusing". It is ordinary interaction, raised by clicking
+            // about the screen, so nothing that opens a different screen may
+            // hang off it. F4 did, and clicking a project opened the manager.
+            //
+            // Enter raises Accept, not Activate, which is why the launch test
+            // below stayed green throughout.
+            // Activate is the one that broke; the others are the same family
+            // and would break the same way, so the whole vocabulary is held to
+            // the rule rather than the single member that caught us out.
+            foreach (var ordinary in new[] { Command.Activate, Command.Accept, Command.HotKey })
+            {
+                window.InvokeCommand(ordinary);
+
+                window.Intent?.Action.Should().NotBe(
+                    LauncherAction.Manager,
+                    $"{ordinary} is how a view is selected or focused, not a request for a screen");
+            }
+        }
+    }
+
+    [Fact]
+    public void The_manager_key_still_opens_the_manager()
+    {
+        using var window = Launcher(out var app);
+
+        using (app)
+        {
+            window.KeyBindings.TryGet(Key.F4, out var binding)
+                .Should().BeTrue("F4 opens the manager");
+
+            foreach (var command in binding.Commands)
+            {
+                window.InvokeCommand(command);
+            }
+
+            window.Intent!.Action.Should().Be(LauncherAction.Manager);
+        }
+    }
+
+    /// <summary>A launcher with one project on it, drawn and ready to poke.</summary>
+    private static LauncherWindow Launcher(out IApplication app)
+    {
+        app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var project = new ProjectResolution(
+            new ProjectRegistryEntry { Slug = "alpha", Name = "Alpha" },
+            Path.GetTempPath(), null, 0, false);
+
+        var window = new LauncherWindow(
+            [project],
+            null,
+            "workspace ready",
+            ["claude"],
+            (_, _) => Task.FromResult<ProjectOverview?>(null),
+            _ => { },
+            [],
+            app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        return window;
     }
 
     [Fact]
@@ -965,97 +1071,11 @@ public sealed class ScreenConstructionTests
     [Fact]
     public void The_launch_options_dialog_can_be_built_and_drawn()
     {
-        Drawn(app => new LaunchOptionsDialog("Alpha", app));
+        Drawn(app => new LaunchOptionsDialog(
+            new ProjectResolution(
+                new ProjectRegistryEntry { Slug = "alpha", Name = "Alpha" }, Path.GetTempPath(), null, 0, false),
+            ["claude"],
+            app));
     }
 
-    [Fact]
-    public void Launching_carries_the_task_and_the_mode_that_were_chosen()
-    {
-        using IApplication app = Application.Create();
-
-        app.Init(DriverRegistry.Names.ANSI);
-        app.Screen = new Rectangle(0, 0, Width, Height);
-
-        using var dialog = new LaunchOptionsDialog("Alpha", app);
-
-        app.Begin(dialog);
-        app.LayoutAndDraw();
-
-        var task = AllViews(dialog).OfType<TextField>().Single();
-        task.Text = "why is this query so slow";
-
-        // Index zero is "let the task decide", so this picks investigate.
-        var modes = AllViews(dialog).OfType<ListView>().Single();
-        modes.SelectedItem = 3;
-
-        var offline = AllViews(dialog).OfType<CheckBox>()
-            .Single(c => (c.Text ?? string.Empty).Contains("offline", StringComparison.OrdinalIgnoreCase));
-
-        offline.Value = CheckState.Checked;
-
-        var launch = AllViews(dialog).OfType<Button>()
-            .Single(b => (b.Text ?? string.Empty).Contains("Launch", StringComparison.Ordinal));
-
-        launch.SetFocus();
-        launch.NewKeyDownEvent(Key.Enter);
-
-        // These two are the point of the dialog: they are what the resolver
-        // reads to choose specialists, and neither could be reached from a
-        // screen before.
-        dialog.Chosen.Should().NotBeNull();
-        dialog.Chosen!.Task.Should().Be("why is this query so slow");
-        dialog.Chosen.Mode.Should().Be("investigate");
-        dialog.Chosen.Offline.Should().BeTrue();
-        dialog.Chosen.NoSync.Should().BeFalse();
-    }
-
-    [Fact]
-    public void An_empty_task_is_no_task_rather_than_an_empty_one()
-    {
-        using IApplication app = Application.Create();
-
-        app.Init(DriverRegistry.Names.ANSI);
-        app.Screen = new Rectangle(0, 0, Width, Height);
-
-        using var dialog = new LaunchOptionsDialog("Alpha", app);
-
-        app.Begin(dialog);
-        app.LayoutAndDraw();
-
-        var launch = AllViews(dialog).OfType<Button>()
-            .Single(b => (b.Text ?? string.Empty).Contains("Launch", StringComparison.Ordinal));
-
-        launch.SetFocus();
-        launch.NewKeyDownEvent(Key.Enter);
-
-        // An empty string would be a task, and the resolver would go looking
-        // for specialists matching nothing.
-        dialog.Chosen.Should().NotBeNull();
-        dialog.Chosen!.Task.Should().BeNull();
-        dialog.Chosen.Mode.Should().BeNull("index zero means no mode was chosen");
-    }
-
-    [Fact]
-    public void Dismissing_the_dialog_launches_nothing()
-    {
-        using IApplication app = Application.Create();
-
-        app.Init(DriverRegistry.Names.ANSI);
-        app.Screen = new Rectangle(0, 0, Width, Height);
-
-        using var dialog = new LaunchOptionsDialog("Alpha", app);
-
-        app.Begin(dialog);
-        app.LayoutAndDraw();
-
-        var cancel = AllViews(dialog).OfType<Button>()
-            .Single(b => (b.Text ?? string.Empty).Contains("ance", StringComparison.Ordinal));
-
-        cancel.SetFocus();
-        cancel.NewKeyDownEvent(Key.Enter);
-
-        // Starting a session with the defaults because a dialog was closed
-        // would be starting one nobody asked for.
-        dialog.Chosen.Should().BeNull();
-    }
 }

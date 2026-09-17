@@ -393,7 +393,21 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
                 $"  [{colour}]skip[/]    {Markup.Escape(name)}  [dim]{Markup.Escape(reason)}[/]");
         }
 
-        if (import.Imported.Count == 0 && import.Skipped.Count == 0)
+        if (import.Drifted.Count > 0)
+        {
+            // Said before anything else that could be mistaken for an all
+            // clear: nothing was copied, so this is the only notice that the
+            // two stores disagree.
+            output.WriteBlankLine();
+            output.WriteLine(
+                $"[yellow]{import.Drifted.Count} topic(s) say something different here "
+                + "than in the workspace.[/]");
+
+            output.WriteLine(
+                "[dim]Nothing was overwritten. Compare each and settle which copy is "
+                + "right.[/]");
+        }
+        else if (import.Imported.Count == 0 && import.Skipped.Count == 0)
         {
             output.WriteLine("[dim]There is nothing there to import.[/]");
         }
@@ -412,5 +426,6 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
             facts = import.Facts,
             imported = import.Imported.Select(t => new { t.Name, t.Description, facts = t.Facts.Count }),
             skipped = import.Skipped,
+            drifted = import.Drifted,
         });
 }

@@ -27,7 +27,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
     private const string Slug = "starstats";
 
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IProjectOverviewService _overviews = null!;
     private readonly Loadout.Tests.Fakes.QuietSessionRegistry _running = new();
@@ -221,7 +221,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
         // difference between protection people think they have and protection
         // they do.
         overview.Value!.Protected.Should().BeFalse();
-        LauncherTui.Warnings(overview.Value).Should().Contain(w => w.Contains("pre-commit"));
+        Loadout.Tui.Terminal.ProjectDetailView.Warnings(overview.Value).Should().Contain(w => w.Contains("pre-commit"));
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
 
         // Whatever the recency ordering says, the repository you are standing in
         // is almost always the one you meant.
-        LauncherTui.Order([first, here], here)
+        Loadout.Tui.Terminal.LauncherWindow.Order([first, here], here)
             .Select(p => p.Entry.Slug).Should().Equal("omega", "alpha");
     }
 
@@ -263,7 +263,7 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
         var second = new ProjectResolution(
             new ProjectRegistryEntry { Slug = "omega", Name = "Omega" }, "/o", null, 0, false);
 
-        LauncherTui.Order([first, second], null)
+        Loadout.Tui.Terminal.LauncherWindow.Order([first, second], null)
             .Select(p => p.Entry.Slug).Should().Equal("alpha", "omega");
     }
 
@@ -298,17 +298,14 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
         // Not in the warnings, deliberately. A session running is a fact about
         // right now, not a problem with the project, and putting it under
         // "needs attention" would train somebody to ignore that list.
-        // Both surfaces, because there are two Warnings methods — the plain
-        // listing's and the panel's — and a rule enforced in one of them is
-        // enforced nowhere in particular.
-        LauncherTui.Warnings(Overview(running: 2))
-            .Should().NotContain(w => w.Contains("running", StringComparison.OrdinalIgnoreCase));
-
         Loadout.Tui.Terminal.ProjectDetailView.Warnings(Overview(running: 2))
             .Should().NotContain(w => w.Contains("running", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static ProjectOverview Overview(int running) =>
+    private static ProjectOverview Overview(
+        int running,
+        bool tasks = false,
+        bool codeMap = false) =>
         new(
             new ProjectResolution(
                 new ProjectRegistryEntry { Slug = Slug, Name = "StarStats" }, null, null, 0, false),
@@ -322,7 +319,59 @@ public sealed class ProjectOverviewTests : IAsyncLifetime
             0,
             false,
             null,
-            running);
+            running,
+            tasks,
+            codeMap);
+
+    [Fact]
+    public async Task What_a_project_carries_is_read_from_its_manifest()
+    {
+        await _workspace.WriteProjectAsync(new ProjectManifest
+        {
+            Slug = Slug,
+            Name = "StarStats",
+            Context = new ProjectContext { Tasks = true },
+        });
+
+        var overview = await _overviews.DescribeAsync(Project());
+
+        // Read, not assumed. The panel is the only place the state of these
+        // switches is visible, and the menu entry beside it flips whatever the
+        // panel is showing — so a stale answer here turns the entry the wrong
+        // way round.
+        overview.Value!.CarriesTasks.Should().BeTrue();
+        overview.Value.CarriesCodeMap.Should().BeFalse();
+    }
+
+    [Fact]
+    public void The_context_line_says_what_else_a_session_is_given()
+    {
+        // Silent in the ordinary case: the line is about what a session costs,
+        // and "carrying nothing extra" is not worth a word on every project.
+        Loadout.Tui.Terminal.ProjectDetailView.Carried(Overview(running: 0))
+            .Should().BeEmpty();
+
+        Loadout.Tui.Terminal.ProjectDetailView.Carried(Overview(running: 0, tasks: true))
+            .Should().Be(", plus open tasks");
+
+        Loadout.Tui.Terminal.ProjectDetailView
+            .Carried(Overview(running: 0, tasks: true, codeMap: true))
+            .Should().Be(", plus open tasks and the code map");
+    }
+
+    [Fact]
+    public void The_menu_entry_flips_the_switch_the_panel_is_showing()
+    {
+        // Composed as a command line and run through the parser. A screen that
+        // wrote the manifest itself would be a second implementation of
+        // 'project context' — including its dry run, which is the half that
+        // gets forgotten.
+        Loadout.Tui.Terminal.LauncherWindow.ContextToggle(Slug, "tasks", on: false)
+            .Should().Be($"project context tasks on --project {Slug}");
+
+        Loadout.Tui.Terminal.LauncherWindow.ContextToggle(Slug, "code-map", on: true)
+            .Should().Be($"project context code-map off --project {Slug}");
+    }
 
     [Fact]
     public async Task Sessions_open_against_this_project_are_counted_and_others_are_not()

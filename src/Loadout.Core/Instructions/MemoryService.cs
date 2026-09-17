@@ -80,6 +80,24 @@ public interface IMemoryService
         CancellationToken ct = default);
 
     /// <summary>
+    /// The refusals <see cref="WriteAsync"/> makes, without making the write.
+    /// </summary>
+    /// <remarks>
+    /// Here so a caller previewing a write is told what a real one would say.
+    /// Both refusals lived inside the write, past the point a dry run returned
+    /// from, so <c>--dry-run</c> reported a write that could not have happened —
+    /// on a credential, of all things. The write still makes them itself: this
+    /// is the same decision offered earlier, not a replacement for it.
+    /// </remarks>
+    /// <param name="name">Topic name, as given.</param>
+    /// <param name="description">The one line that reaches a session's context.</param>
+    /// <param name="facts">The facts about to be recorded.</param>
+    OperationResult ValidateWrite(
+        string name,
+        string description,
+        IReadOnlyList<string> facts);
+
+    /// <summary>
     /// Rewrites the index from the topics actually present, which is also how a
     /// missing or drifted index gets repaired.
     /// </summary>
@@ -309,7 +327,7 @@ internal sealed partial class MemoryService : IMemoryService
                 }
 
                 var key = line[..separator].Trim().ToLowerInvariant();
-                var value = line[(separator + 1)..].Trim().Trim('"', '\'');
+                var value = Unquote(line[(separator + 1)..].Trim());
 
                 if (key == "description")
                 {
@@ -358,7 +376,7 @@ internal sealed partial class MemoryService : IMemoryService
     private static List<string> ExtractFacts(string text, string body)
     {
         var facts = Bullet().Matches(text)
-            .Select(m => m.Groups["text"].Value.Trim())
+            .Select(m => WhiteSpace().Replace(m.Groups["text"].Value, " ").Trim())
             .Where(value => value.Length > 0)
             .ToList();
 
@@ -521,8 +539,10 @@ internal sealed partial class MemoryService : IMemoryService
                     "has no description, so the index cannot say what it is for."));
             }
 
-            foreach (var fact in topic.Facts)
+            for (var index = 0; index < topic.Facts.Count; index++)
             {
+                var fact = topic.Facts[index];
+
                 var patterns = SecretScanner.Match(fact);
 
                 if (patterns.Count > 0)
@@ -537,7 +557,21 @@ internal sealed partial class MemoryService : IMemoryService
 
                 var verdict = MemoryFactClassifier.Classify(fact);
 
-                if (verdict != FactVerdict.Durable)
+                // A labelled elaboration, a cross-reference or a fenced block
+                // beneath a claim is that claim's reasoning rather than a claim
+                // of its own, and reading each as though it stood alone drew a
+                // finding for every line of a well-written topic. Only beneath
+                // something, though: first in a topic it elaborates nothing, and
+                // the reader is left with a "why" and no "what".
+                //
+                // By position rather than by searching for the text, so a topic
+                // that repeats a line is judged on where each copy sits.
+                var elaborates = index > 0 && MemoryFactClassifier.IsElaboration(fact);
+
+                // Narrowed to this one finding. Everything else here still
+                // applies: a credential in an elaboration is a credential, and
+                // a date in one goes stale exactly as fast.
+                if (verdict != FactVerdict.Durable && !elaborates)
                 {
                     // Reported rather than removed. The classifier is a good
                     // filter and not an oracle, and silently deleting somebody's
@@ -545,7 +579,14 @@ internal sealed partial class MemoryService : IMemoryService
                     // would be a worse failure than keeping a weak one.
                     findings.Add(new MemoryFinding(
                         topic.Name,
-                        MemoryFindingSeverity.Info,
+                        // A fact pinned to the moment it was written is the one
+                        // kind that turns from true into misleading on its own,
+                        // with nothing in the store to catch it. The others are
+                        // matters of phrasing: worth saying, not worth holding
+                        // up the verdict for.
+                        verdict == FactVerdict.TimeSensitive
+                            ? MemoryFindingSeverity.Warning
+                            : MemoryFindingSeverity.Info,
                         verdict.ToString().ToLowerInvariant(),
                         $"\"{Truncate(fact)}\" {MemoryFactClassifier.Explain(verdict)}"));
                 }
@@ -556,7 +597,11 @@ internal sealed partial class MemoryService : IMemoryService
                     && DateTimeOffset.TryParse(dated.Value, out var when)
                     && when < staleBefore)
                 {
-                    findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Info, "stale",
+                    // Past its own date and never rechecked. A memory that said
+                    // a submission was blocked on a signature it had already
+                    // received sat here for two days behind a HEALTHY verdict,
+                    // which is the whole reason this is not an aside.
+                    findings.Add(new MemoryFinding(topic.Name, MemoryFindingSeverity.Warning, "stale",
                         $"dated {when:yyyy-MM-dd}: \"{Truncate(fact)}\". Check it still holds."));
                 }
             }
@@ -664,41 +709,11 @@ internal sealed partial class MemoryService : IMemoryService
                 "A topic name is required.", ExitCode.InvalidArguments);
         }
 
-        // Refuses to write a credential rather than writing it and flagging it
-        // afterwards. Once it is on disk and committed it is disclosed, and an
-        // audit finding does not undo that.
-        //
-        // First of the two refusals, and the order matters: a write carrying
-        // both a credential and a weak description has to be turned away for the
-        // credential. Told to fix its description instead, the caller fixes it
-        // and writes the credential on the second attempt.
-        foreach (var fact in facts)
+        // Made here as well as wherever the caller made them. A validation the
+        // write trusts a caller to have done is a validation that is not there.
+        if (ValidateWrite(name, description, facts) is { Failed: true } refused)
         {
-            var patterns = SecretScanner.Match(fact);
-
-            if (patterns.Count > 0)
-            {
-                return OperationResult<MemoryTopic>.Fail(
-                    $"That looks like it contains a credential ({string.Join(", ", patterns)}). "
-                    + "Memory is committed to the workspace repository, so it will not be written.",
-                    ExitCode.PolicyViolation);
-            }
-        }
-
-        // Only the index reaches a compiled context, so this one line is all a
-        // session has to decide whether the topic is worth opening. Refused
-        // here, where whoever is writing it still has the subject in mind:
-        // afterwards it is a chore nobody comes back for, and the topic goes
-        // unread rather than being found to be wrong.
-        var indexLine = MemoryDescriptionClassifier.Classify(safeName, description);
-
-        if (indexLine != DescriptionVerdict.Decidable)
-        {
-            return OperationResult<MemoryTopic>.Fail(
-                $"That description will not do: {MemoryDescriptionClassifier.Explain(indexLine)}. "
-                + "Only this line reaches a session's context, so say what question the topic "
-                + "answers, as in \"why installers fail with 1603 over a running app\".",
-                ExitCode.InvalidArguments);
+            return OperationResult<MemoryTopic>.Fail(refused.Error!, refused.ExitCode);
         }
 
         if (DirectoryFor(workspaceRoot, slug, scope) is not { } directory)
@@ -1112,8 +1127,53 @@ internal sealed partial class MemoryService : IMemoryService
         _ => "## Also true of this machine only, and not of any other",
     };
 
-    private static string Truncate(string value) =>
-        value.Length <= 70 ? value : value[..70] + "...";
+    /// <summary>
+    /// Quotes part of a fact back in a finding, with anything credential-shaped
+    /// taken out of it first.
+    /// </summary>
+    /// <remarks>
+    /// The audit refuses to name a credential it finds and then quoted the fact
+    /// holding it two lines later, under a different finding about the same
+    /// fact. Redacting before truncating rather than after, because cutting a
+    /// token in half leaves something the pattern no longer matches and the
+    /// redactor would then wave through.
+    /// </remarks>
+    private static string Truncate(string value)
+    {
+        var safe = SecretRedactor.Redact(value);
+
+        return safe.Length <= 70 ? safe : safe[..70] + "...";
+    }
+
+    /// <summary>
+    /// Strips one layer of YAML quoting from a frontmatter value.
+    /// <para>
+    /// Trimming quote characters off both ends is not the same thing, and the
+    /// difference is visible: a description ending in a quoted phrase was
+    /// written as <c>"... added as \"Other issuer\""</c> and reached the index
+    /// as <c>... added as \"Other issuer\</c> — the closing quotes eaten, a
+    /// stray backslash left, and the sentence cut off mid-phrase. The index
+    /// line is the only part of a topic a session is given, so a line that
+    /// stops early is a fact half delivered.
+    /// </para>
+    /// </summary>
+    private static string Unquote(string value)
+    {
+        if (value.Length < 2)
+        {
+            return value;
+        }
+
+        if (value[0] == '"' && value[^1] == '"')
+        {
+            return value[1..^1].Replace("\\\"", "\"").Replace("\\\\", "\\");
+        }
+
+        // Single quotes carry no escapes in YAML beyond a doubled quote.
+        return value[0] == '\'' && value[^1] == '\''
+            ? value[1..^1].Replace("''", "'")
+            : value;
+    }
 
     /// <summary>
     /// Reduces a fact to a comparison key: case and punctuation differences
@@ -1121,6 +1181,51 @@ internal sealed partial class MemoryService : IMemoryService
     /// </summary>
     private static string Normalise(string value) =>
         NonComparable().Replace(value.ToLowerInvariant(), " ").Trim();
+
+    /// <inheritdoc />
+    public OperationResult ValidateWrite(
+        string name,
+        string description,
+        IReadOnlyList<string> facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+
+        // Refuses to write a credential rather than writing it and flagging it
+        // afterwards. Once it is on disk and committed it is disclosed, and an
+        // audit finding does not undo that.
+        //
+        // First of the two refusals, and the order matters: a write carrying
+        // both a credential and a weak description has to be turned away for the
+        // credential. Told to fix its description instead, the caller fixes it
+        // and writes the credential on the second attempt.
+        foreach (var fact in facts)
+        {
+            var patterns = SecretScanner.Match(fact);
+
+            if (patterns.Count > 0)
+            {
+                return OperationResult.Fail(
+                    $"That looks like it contains a credential ({string.Join(", ", patterns)}). "
+                    + "Memory is committed to the workspace repository, so it will not be written.",
+                    ExitCode.PolicyViolation);
+            }
+        }
+
+        // Only the index reaches a compiled context, so this one line is all a
+        // session has to decide whether the topic is worth opening. Refused
+        // here, where whoever is writing it still has the subject in mind:
+        // afterwards it is a chore nobody comes back for, and the topic goes
+        // unread rather than being found to be wrong.
+        var indexLine = MemoryDescriptionClassifier.Classify(Slugify(name), description);
+
+        return indexLine != DescriptionVerdict.Decidable
+            ? OperationResult.Fail(
+                $"That description will not do: {MemoryDescriptionClassifier.Explain(indexLine)}. "
+                + "Only this line reaches a session's context, so say what question the topic "
+                + "answers, as in \"why installers fail with 1603 over a running app\".",
+                ExitCode.InvalidArguments)
+            : OperationResult.Ok();
+    }
 
     internal static string Slugify(string value)
     {
@@ -1135,7 +1240,25 @@ internal sealed partial class MemoryService : IMemoryService
     [GeneratedRegex(@"\A---\r?\n(?<front>.*?)\r?\n---[ \t]*\r?\n", RegexOptions.Singleline, 1000)]
     private static partial Regex Frontmatter();
 
-    [GeneratedRegex(@"(?m)^[ \t]*[-*][ \t]+(?<text>.+)$", RegexOptions.None, 1000)]
+    /// <summary>
+    /// A bullet and the indented lines that continue it.
+    /// <para>
+    /// Taking only the bullet's first line cut every wrapped fact in half at
+    /// whatever column the author happened to wrap at. A topic saying
+    /// "`WINGET_TOKEN` was added on 9 September 2026, so a release that skips
+    /// winget is not evidence the secret is missing" was read as ending at
+    /// "so a" — which is also why the audit reported that fact as making no
+    /// standing claim. It did not; it had been cut before it made one.
+    /// </para>
+    /// <para>
+    /// A line that starts its own bullet is not a continuation, so nested
+    /// bullets stay separate facts.
+    /// </para>
+    /// </summary>
+    [GeneratedRegex(
+        @"(?m)^[ \t]*[-*][ \t]+(?<text>.+(?:\r?\n[ \t]+(?![-*][ \t]).+)*)",
+        RegexOptions.None,
+        1000)]
     private static partial Regex Bullet();
 
     [GeneratedRegex(@"\[\[(?<name>[^\]]+)\]\]", RegexOptions.None, 1000)]

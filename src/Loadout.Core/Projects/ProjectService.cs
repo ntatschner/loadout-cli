@@ -4,6 +4,7 @@ using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
 using Loadout.Models.Projects;
+using Loadout.Models.Tasks;
 using Loadout.Models.Results;
 using Loadout.Platform.Abstractions;
 
@@ -23,17 +24,29 @@ internal sealed class ProjectService : IProjectService
     private readonly IWorkspaceManager _workspace;
     private readonly IGitManager _git;
     private readonly IPathSemantics _paths;
+    private readonly Tasks.ITaskService? _tasks;
+
+    /// <summary>
+    /// The task seeded for a project registered before it has a repository.
+    /// </summary>
+    /// <remarks>
+    /// A fixed id so registering the same directory twice extends the record
+    /// rather than laying a second identical task beside the first.
+    /// </remarks>
+    internal const string SetupTaskId = "setup-repository";
 
     public ProjectService(
         IConfigurationService configuration,
         IWorkspaceManager workspace,
         IGitManager git,
-        IPathSemantics paths)
+        IPathSemantics paths,
+        Tasks.ITaskService? tasks = null)
     {
         _configuration = configuration;
         _workspace = workspace;
         _git = git;
         _paths = paths;
+        _tasks = tasks;
     }
 
     /// <inheritdoc />
@@ -98,9 +111,18 @@ internal sealed class ProjectService : IProjectService
         CancellationToken ct = default)
     {
         var rootResult = await _git.FindRepositoryRootAsync(directory, ct).ConfigureAwait(false);
+
         if (rootResult.Failed)
         {
-            return OperationResult<ProjectResolution>.Fail(rootResult.Error!, rootResult.ExitCode);
+            // Not a repository. That is still a project if somebody registered
+            // this directory before putting it under version control, and the
+            // session that is supposed to do the initialising has to be able to
+            // start here — refusing would make the setup task unreachable from
+            // the directory it is about.
+            var unversioned = await ResolveUnversionedAsync(directory, ct).ConfigureAwait(false);
+
+            return unversioned ?? OperationResult<ProjectResolution>.Fail(
+                rootResult.Error!, rootResult.ExitCode);
         }
 
         var root = rootResult.Value!;
@@ -156,30 +178,163 @@ internal sealed class ProjectService : IProjectService
             ExitCode.ProjectNotFound);
     }
 
+    /// <summary>
+    /// Matches a directory that is not a repository against the projects
+    /// registered as not being one yet. Null when none of them is this
+    /// directory, which leaves the caller free to report the Git error it
+    /// already had.
+    /// </summary>
+    /// <remarks>
+    /// Path only. The other two ways a directory is attributed — the marker in
+    /// its Git config, and its remote — both need a repository to read, so
+    /// neither exists here yet. Matching only a project that says it is
+    /// unversioned keeps this from quietly answering for a registered
+    /// repository somebody has deleted the <c>.git</c> directory out of, which
+    /// is a different problem and should not look like a working project.
+    /// <para>
+    /// Walks up from the directory given, the way finding a repository root
+    /// does, so this behaves the same from a subdirectory as from the top. An
+    /// exact match only would have meant <c>loadout here</c> working at the
+    /// root of an unversioned project and failing one directory into it, which
+    /// is the sort of difference nobody would think to look for.
+    /// </para>
+    /// </remarks>
+    private async Task<OperationResult<ProjectResolution>?> ResolveUnversionedAsync(
+        string directory,
+        CancellationToken ct)
+    {
+        var listed = await ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return null;
+        }
+
+        // Nearest first: walking outwards means the innermost project wins,
+        // which is what somebody standing in it means.
+        for (var here = new DirectoryInfo(Path.GetFullPath(directory));
+            here is not null;
+            here = here.Parent)
+        {
+            foreach (var candidate in listed.Value!)
+            {
+                if (candidate.LocalPath is null
+                    || !_paths.PathsEqual(candidate.LocalPath, here.FullName))
+                {
+                    continue;
+                }
+
+                var manifest = await _workspace.ReadProjectAsync(candidate.Entry.Slug, ct)
+                    .ConfigureAwait(false);
+
+                if (manifest.Succeeded && !manifest.Value!.Repository.Versioned)
+                {
+                    return OperationResult<ProjectResolution>.Ok(candidate);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<AddPreview>> ValidateAddAsync(
+        string repositoryPath,
+        string? slug = null,
+        CancellationToken ct = default)
+    {
+        var target = await TargetAsync(repositoryPath, ct).ConfigureAwait(false);
+
+        if (target.Failed)
+        {
+            return OperationResult<AddPreview>.Fail(target.Error!, target.ExitCode);
+        }
+
+        var derived = DeriveSlug(target.Value!, slug);
+
+        return derived.Failed
+            ? OperationResult<AddPreview>.Fail(derived.Error!, derived.ExitCode)
+            : OperationResult<AddPreview>.Ok(
+                new AddPreview(derived.Value!, target.Value!.Versioned));
+    }
+
+    /// <summary>
+    /// What is at a path: a repository, or a directory that is not one yet.
+    /// </summary>
+    /// <remarks>
+    /// A directory with no repository in it is registered rather than refused,
+    /// because "there is code here and no repository yet" is a thing worth
+    /// handing to an agent rather than a mistake to correct first. What is
+    /// still refused is a path that does not exist: that is a typo, and
+    /// registering it would create a project pointing at nothing.
+    /// </remarks>
+    private async Task<OperationResult<AddTarget>> TargetAsync(
+        string repositoryPath,
+        CancellationToken ct)
+    {
+        var stateResult = await _git.GetStateAsync(repositoryPath, ct).ConfigureAwait(false);
+
+        if (stateResult.Succeeded)
+        {
+            var state = stateResult.Value!;
+
+            return OperationResult<AddTarget>.Ok(
+                new AddTarget(state.Root, state.RemoteUrl, state.Branch, Versioned: true));
+        }
+
+        if (!Directory.Exists(repositoryPath))
+        {
+            return OperationResult<AddTarget>.Fail(stateResult.Error!, stateResult.ExitCode);
+        }
+
+        return OperationResult<AddTarget>.Ok(
+            new AddTarget(
+                Path.GetFullPath(repositoryPath),
+                RemoteUrl: null,
+                Branch: null,
+                Versioned: false));
+    }
+
+    /// <summary>A path about to be registered, however it is versioned.</summary>
+    private sealed record AddTarget(string Root, string? RemoteUrl, string? Branch, bool Versioned);
+
+    /// <summary>
+    /// The slug a registration would use, or why one cannot be worked out.
+    /// </summary>
+    private static OperationResult<string> DeriveSlug(AddTarget target, string? slug)
+    {
+        var resolved = NormaliseSlug(
+            slug
+            ?? GitRemote.InferRepositoryName(target.RemoteUrl)
+            ?? Path.GetFileName(target.Root));
+
+        return resolved.Length == 0
+            ? OperationResult<string>.Fail(
+                "A project slug could not be derived; pass one explicitly.", ExitCode.InvalidArguments)
+            : OperationResult<string>.Ok(resolved);
+    }
+
     /// <inheritdoc />
     public async Task<OperationResult<ProjectResolution>> AddAsync(
         string repositoryPath,
         string? slug = null,
         CancellationToken ct = default)
     {
-        var stateResult = await _git.GetStateAsync(repositoryPath, ct).ConfigureAwait(false);
-        if (stateResult.Failed)
+        var targetResult = await TargetAsync(repositoryPath, ct).ConfigureAwait(false);
+        if (targetResult.Failed)
         {
-            return OperationResult<ProjectResolution>.Fail(stateResult.Error!, stateResult.ExitCode);
+            return OperationResult<ProjectResolution>.Fail(targetResult.Error!, targetResult.ExitCode);
         }
 
-        var state = stateResult.Value!;
+        var state = targetResult.Value!;
 
-        var resolvedSlug = NormaliseSlug(
-            slug
-            ?? GitRemote.InferRepositoryName(state.RemoteUrl)
-            ?? Path.GetFileName(state.Root));
-
-        if (resolvedSlug.Length == 0)
+        var slugResult = DeriveSlug(state, slug);
+        if (slugResult.Failed)
         {
-            return OperationResult<ProjectResolution>.Fail(
-                "A project slug could not be derived; pass one explicitly.", ExitCode.InvalidArguments);
+            return OperationResult<ProjectResolution>.Fail(slugResult.Error!, slugResult.ExitCode);
         }
+
+        var resolvedSlug = slugResult.Value!;
 
         var registryResult = await _workspace.ReadRegistryAsync(ct).ConfigureAwait(false);
         if (registryResult.Failed)
@@ -238,7 +393,14 @@ internal sealed class ProjectService : IProjectService
                         {
                             Remote = entry.Remote,
                             DefaultBranch = state.Branch ?? "main",
+                            Versioned = state.Versioned,
                         },
+
+                        // Turned on here, and only here, for the reason on the
+                        // property: the setup task below is the whole purpose
+                        // of registering something unversioned, and a task the
+                        // agent is never shown is a note to nobody.
+                        Context = new ProjectContext { Tasks = !state.Versioned },
                     },
                     ct).ConfigureAwait(false);
 
@@ -277,7 +439,49 @@ internal sealed class ProjectService : IProjectService
             return OperationResult<ProjectResolution>.Fail(mapResult.Error!, mapResult.ExitCode);
         }
 
+        if (!state.Versioned)
+        {
+            await SeedSetupTaskAsync(entry.Slug, state.Root, ct).ConfigureAwait(false);
+        }
+
         return await ResolveAsync(entry.Slug, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Records that the repository still has to be created, so the first
+    /// session is told rather than left to notice.
+    /// </summary>
+    /// <remarks>
+    /// The handoff this registration exists for. Registering an unversioned
+    /// directory and saying nothing would leave the agent to work out for
+    /// itself that there is no repository — which it would do by running
+    /// something and reading an error, having already started other work.
+    /// <para>
+    /// Best effort: a workspace that cannot take a task is not a reason to
+    /// fail a registration that has already been written. The project is
+    /// registered either way, and the state of the directory is still true
+    /// whether or not anything recorded it.
+    /// </para>
+    /// </remarks>
+    private async Task SeedSetupTaskAsync(string slug, string root, CancellationToken ct)
+    {
+        if (_tasks is null)
+        {
+            return;
+        }
+
+        await _tasks.DeclareAsync(
+            slug,
+            SetupTaskId,
+            TaskState.Open,
+            declaredBy: "loadout project add",
+            title: "Put this project under version control",
+            note: $"'{root}' was registered before it had a Git repository. Initialising it, "
+                + "making the first commit and setting a remote are the work here, and other "
+                + "changes are hard to review until they are done. Close this with "
+                + "'loadout task declare setup-repository done' once there is a repository, "
+                + "and consider 'loadout protect' after it.",
+            ct).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -386,15 +590,21 @@ internal sealed class ProjectService : IProjectService
         {
             ct.ThrowIfCancellationRequested();
 
-            foreach (var repository in FindRepositories(root, DiscoveryDepth))
+            foreach (var (repository, versioned) in FindProjects(root, DiscoveryDepth))
             {
                 if (!seen.Add(_paths.Canonicalise(repository)))
                 {
                     continue;
                 }
 
-                var stateResult = await _git.GetStateAsync(repository, ct).ConfigureAwait(false);
-                var remote = stateResult.Succeeded ? stateResult.Value!.RemoteUrl : null;
+                // Only asked of a repository. Running git against a directory
+                // that is not one costs a process to be told what the walk
+                // already established.
+                var remote = versioned
+                    && await _git.GetStateAsync(repository, ct).ConfigureAwait(false)
+                        is { Succeeded: true } state
+                    ? state.Value!.RemoteUrl
+                    : null;
 
                 var match = known.FirstOrDefault(p =>
                     (p.LocalPath is not null && _paths.PathsEqual(p.LocalPath, repository))
@@ -405,7 +615,8 @@ internal sealed class ProjectService : IProjectService
                     Path.GetFileName(repository),
                     remote,
                     match is not null,
-                    match?.Entry.Slug));
+                    match?.Entry.Slug,
+                    versioned));
             }
         }
 
@@ -680,54 +891,162 @@ internal sealed class ProjectService : IProjectService
     }
 
     /// <summary>
-    /// Walks a configured root looking for repository directories, bounded by
-    /// depth and never following a repository into itself.
+    /// Whether a directory is a working tree, linked worktrees included.
     /// </summary>
-    private static IEnumerable<string> FindRepositories(string root, int remainingDepth)
+    /// <remarks>
+    /// A linked worktree keeps a <c>.git</c> file holding a pointer, where an
+    /// ordinary clone keeps a <c>.git</c> directory. Discovery asked only
+    /// whether the directory existed, so every worktree under a discovery root
+    /// looked like a plain folder and was walked straight past — and the
+    /// launcher offers <c>project worktrees</c>, so it plainly meant to know
+    /// about them.
+    /// </remarks>
+    private static bool IsWorkingTree(string directory)
+    {
+        var git = Path.Combine(directory, ".git");
+
+        return Directory.Exists(git) || File.Exists(git);
+    }
+
+    /// <summary>
+    /// Walks a configured root for things worth registering, bounded by depth
+    /// and never following a repository into itself.
+    /// </summary>
+    /// <remarks>
+    /// Repositories, and directories holding code that is not under version
+    /// control yet. The second kind exists because <c>project add</c> takes
+    /// one: leaving them out meant the only way to register such a directory
+    /// was to already know its path and type it, and the launcher's own Add
+    /// Project list could not show the thing it is able to add.
+    /// <para>
+    /// An unversioned candidate is the shallowest directory with no repository
+    /// anywhere beneath it, which is what keeps the answer useful. Offering the
+    /// deepest instead would list <c>courtfinances/docs</c> and not
+    /// <c>courtfinances</c>; offering every level would list a parent that
+    /// merely holds two repositories, which is a folder rather than a project.
+    /// </para>
+    /// </remarks>
+    private static IEnumerable<(string Path, bool Versioned)> FindProjects(
+        string root,
+        int remainingDepth,
+        bool isConfiguredRoot = true)
     {
         if (remainingDepth <= 0 || !Directory.Exists(root))
         {
             yield break;
         }
 
-        if (Directory.Exists(Path.Combine(root, ".git")))
+        if (IsWorkingTree(root))
         {
             // Found a repository. Its subdirectories are source code, not more
             // projects, so the walk stops here rather than descending into
             // vendored dependencies.
-            yield return root;
+            yield return (root, true);
             yield break;
         }
 
-        IEnumerable<string> children;
-        try
+        var children = Readable(root);
+
+        // Nothing versioned under here, so this directory is the project rather
+        // than a folder on the way to one. Never the configured root itself: a
+        // discovery root is where projects live, not a project.
+        if (!isConfiguredRoot
+            && !children.Any(child => HoldsRepository(child, remainingDepth - 1))
+            && HoldsFiles(root)
+            && !IsLikelyOutput(Path.GetFileName(root)))
         {
-            children = Directory.EnumerateDirectories(root);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // An unreadable directory is skipped rather than aborting the scan.
-            // On macOS this is what a protected location looks like when the
-            // launcher has not been granted access, and spec section 85 says
-            // normal permission behaviour should simply apply.
+            yield return (root, false);
             yield break;
         }
 
         foreach (var child in children)
         {
-            var name = Path.GetFileName(child);
-
-            // Hidden directories are dotfile stores and caches, not project
-            // roots, and descending into them is how a scan becomes slow.
-            if (name.StartsWith('.') || name is "node_modules" or "bin" or "obj")
+            foreach (var found in FindProjects(child, remainingDepth - 1, isConfiguredRoot: false))
             {
-                continue;
+                yield return found;
             }
+        }
+    }
 
-            foreach (var repository in FindRepositories(child, remainingDepth - 1))
+    /// <summary>Whether a repository sits at or under a directory.</summary>
+    private static bool HoldsRepository(string root, int remainingDepth)
+    {
+        if (remainingDepth <= 0 || !Directory.Exists(root))
+        {
+            return false;
+        }
+
+        return IsWorkingTree(root)
+            || Readable(root).Any(child => HoldsRepository(child, remainingDepth - 1));
+    }
+
+    /// <summary>
+    /// Whether a directory name says it holds output, cache or artefacts
+    /// rather than somebody's code.
+    /// </summary>
+    /// <remarks>
+    /// Applied only to the unversioned offer, never to the walk. Skipping a
+    /// name while descending would hide a real repository that happens to sit
+    /// under a directory called <c>build</c>, and hiding a repository is a
+    /// worse failure than listing a folder somebody has to scroll past.
+    /// <para>
+    /// The list earned itself on a real machine: a first run offered
+    /// <c>__pycache__</c>, <c>test-results</c>, <c>test-screenshots</c> and a
+    /// screenshots folder among the genuine candidates. Names only, because
+    /// looking inside to guess whether something is code is a heuristic that
+    /// would be wrong more interestingly.
+    /// </para>
+    /// </remarks>
+    private static bool IsLikelyOutput(string name) =>
+        name is "__pycache__" or "dist" or "build" or "out" or "target" or "vendor"
+            or "packages" or "coverage" or "TestResults" or "test-results"
+            or "screenshots" or "test-screenshots" or "logs" or "tmp" or "temp"
+        || name.EndsWith("-results", StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith("-screenshots", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Whether a directory holds any file of its own.</summary>
+    /// <remarks>
+    /// An empty directory is not a project somebody forgot to initialise, it
+    /// is an empty directory, and offering it would fill the list with noise.
+    /// </remarks>
+    private static bool HoldsFiles(string root)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(root).Any();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Subdirectories worth descending into, or nothing when the directory
+    /// cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// An unreadable directory is skipped rather than aborting the scan. On
+    /// macOS this is what a protected location looks like when the launcher
+    /// has not been granted access, and spec section 85 says normal permission
+    /// behaviour should simply apply.
+    /// </remarks>
+    private static List<string> Readable(string root)
+    {
+        try
+        {
+            return [.. Directory.EnumerateDirectories(root).Where(child =>
             {
-                yield return repository;
-            }
+                var name = Path.GetFileName(child);
+
+                // Hidden directories are dotfile stores and caches, not project
+                // roots, and descending into them is how a scan becomes slow.
+                return !name.StartsWith('.') && name is not ("node_modules" or "bin" or "obj");
+            })];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
         }
     }
 }

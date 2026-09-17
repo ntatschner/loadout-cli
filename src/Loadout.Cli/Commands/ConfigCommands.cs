@@ -83,9 +83,20 @@ public sealed class ConfigListCommand : AsyncCommand<GlobalSettings>
 
         foreach (var value in values)
         {
+            // Two different empties, told apart in one word. "(unset)" alone
+            // reads as nothing happening, and for several of these something
+            // is: an empty updates-source follows this project's own releases.
+            // The sentence saying what belongs in --explain, not in a column
+            // that would truncate it.
+            var shown = value.value.Length > 0
+                ? Markup.Escape(value.value)
+                : ConfigKeys.Unset(value.key) is { Length: > 0 }
+                    ? "[dim](default)[/]"
+                    : "[dim](unset)[/]";
+
             table.AddRow(
                 Markup.Escape(value.key),
-                value.value.Length == 0 ? "[dim](unset)[/]" : Markup.Escape(value.value),
+                shown,
                 value.machineLocal ? "[dim]this machine[/]" : string.Empty);
         }
 
@@ -175,9 +186,11 @@ public sealed class ConfigGetCommand : AsyncCommand<ConfigGetCommand.Settings>
         }
 
         output.WriteLine($"[bold]{Markup.Escape(entry.Key)}[/]");
-        output.WriteLine(value.Length == 0
-            ? "  [dim](unset)[/]"
-            : $"  {Markup.Escape(value)}");
+        output.WriteLine(value.Length > 0
+            ? $"  {Markup.Escape(value)}"
+            : entry.WhenUnset is { Length: > 0 } behaviour
+                ? $"  [dim](unset) — {Markup.Escape(behaviour)}[/]"
+                : "  [dim](unset)[/]");
 
         output.WriteBlankLine();
         output.WriteLine($"  {Markup.Escape(entry.Description)}");

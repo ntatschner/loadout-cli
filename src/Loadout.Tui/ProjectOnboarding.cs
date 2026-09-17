@@ -79,7 +79,7 @@ public sealed class ProjectOnboarding : IProjectOnboarding
         if (unregistered.Count == 0)
         {
             _console.MarkupLine(
-                "[dim]No unregistered repositories were found under the folders being scanned.[/]");
+                "[dim]Nothing unregistered was found under the folders being scanned.[/]");
 
             _console.MarkupLine(
                 "[dim]Add a folder to scan with:[/] loadout config set discovery-roots <paths>");
@@ -88,13 +88,17 @@ public sealed class ProjectOnboarding : IProjectOnboarding
         }
 
         _console.WriteLine();
-        _console.MarkupLine($"[bold]{unregistered.Count} repositories found[/]");
+        _console.MarkupLine($"[bold]{unregistered.Count} found[/]");
 
         IReadOnlyList<string> chosen;
 
         if (options.RegisterEverything)
         {
-            chosen = unregistered.Select(r => r.Path).ToList();
+            // Repositories only. Registering everything means everything that
+            // was cloned, not every folder under a discovery root that happens
+            // to hold a file — a scratch directory does not become a project
+            // because somebody asked to register their repositories.
+            chosen = unregistered.Where(r => r.Versioned).Select(r => r.Path).ToList();
         }
         else if (!options.Interactive)
         {
@@ -109,13 +113,16 @@ public sealed class ProjectOnboarding : IProjectOnboarding
         else
         {
             chosen = _console.Prompt(
-                new MultiSelectionPrompt<string>()
+                new MultiSelectionPrompt<DiscoveredRepository>()
                     .Title("Register any of these now? [dim](space to select, enter to confirm)[/]")
                     .NotRequired()
                     .PageSize(15)
                     .MoreChoicesText("[dim](move up and down for more)[/]")
                     .InstructionsText("[dim]Nothing is registered unless you pick it.[/]")
-                    .AddChoices(unregistered.Select(r => r.Path)));
+                    .UseConverter(Label)
+                    .AddChoices(unregistered))
+                .Select(found => found.Path)
+                .ToList();
         }
 
         var registered = new List<ProjectResolution>();
@@ -140,6 +147,21 @@ public sealed class ProjectOnboarding : IProjectOnboarding
 
         return registered;
     }
+
+    /// <summary>
+    /// How a discovered directory is offered for selection.
+    /// </summary>
+    /// <remarks>
+    /// A directory with no repository in it is registerable and listing it
+    /// unmarked would be a trap: it looks exactly like the repositories beside
+    /// it, and registering one is a different decision. Rendered through a
+    /// converter rather than by decorating the path and cutting the decoration
+    /// off afterwards, which a path containing the separator would have broken.
+    /// </remarks>
+    private static string Label(DiscoveredRepository found) =>
+        found.Versioned
+            ? Markup.Escape(found.Path)
+            : Markup.Escape(found.Path) + "  [dim](no Git repository yet)[/]";
 
     /// <inheritdoc />
     public async Task<ProjectResolution?> AddPathAsync(

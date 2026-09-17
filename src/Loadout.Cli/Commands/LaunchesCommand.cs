@@ -156,9 +156,9 @@ public sealed class LaunchesCommand : AsyncCommand<LaunchesCommand.Settings>
         {
             output.WriteLine(
                 $"{When(launch.StartedAt),-14} "
-                + $"{Markup.Escape(launch.ProjectSlug),-18} "
-                + $"{Markup.Escape(launch.Agent),-8} "
-                + $"{Markup.Escape(launch.Mode ?? "-"),-11} "
+                + $"{Column(launch.ProjectSlug, 18)} "
+                + $"{Column(launch.Agent, 8)} "
+                + $"{Column(launch.Mode ?? "-", 11)} "
                 + $"{Outcome(launch),-11} "
                 + $"[dim]{Markup.Escape(Label(launch))}[/]");
         }
@@ -295,6 +295,26 @@ public sealed class LaunchesCommand : AsyncCommand<LaunchesCommand.Settings>
             : launch.TaskWithheld is { Length: > 0 } pattern
                 ? $"(withheld: looked like a {pattern})"
                 : "(no task given)";
+
+    /// <summary>
+    /// Fits a value to a fixed column, then escapes it.
+    /// </summary>
+    /// <remarks>
+    /// Both halves matter and both were wrong. Padding alone does not shorten,
+    /// so a slug longer than its column pushed every later column along on that
+    /// row and the listing stopped lining up — 'thecodesaiyan-web-app' is
+    /// twenty-one characters against a column of eighteen. And padding the
+    /// escaped text pads to the escaped length, so a value containing a bracket
+    /// would have come out short by one for every bracket in it.
+    /// </remarks>
+    internal static string Column(string value, int width)
+    {
+        var fitted = value.Length <= width
+            ? value.PadRight(width)
+            : value[..(width - 1)] + "…";
+
+        return Markup.Escape(fitted);
+    }
 
     private static string When(DateTimeOffset when) =>
         when.ToLocalTime().ToString("dd MMM HH:mm", CultureInfo.InvariantCulture);

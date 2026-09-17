@@ -30,7 +30,7 @@ public sealed class InstructionsTests : IAsyncLifetime
     private const string Slug = "starstats";
 
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IWorkspaceManager _workspace = null!;
     private IRuleService _rules = null!;
@@ -262,6 +262,100 @@ public sealed class InstructionsTests : IAsyncLifetime
         audit.Value!.Verdict.Should().Be("ACTION REQUIRED");
         audit.Value.Errors.Should().ContainSingle(f => f.Kind == "credential");
         audit.Value.Errors.Single().Detail.Should().NotContain("sk-ant-api03");
+
+        // Every finding, not only the one about the credential. One fact draws
+        // more than one finding, and the others quote it to say which fact they
+        // mean — so the audit named the pattern carefully in one line and
+        // printed the value two lines below it, about the same fact.
+        audit.Value.Findings.Should().OnlyContain(
+            f => !f.Detail.Contains("sk-ant-api03", StringComparison.Ordinal),
+            "no finding may quote a credential, whatever it is a finding about");
+    }
+
+    [Fact]
+    public async Task An_elaboration_beneath_a_claim_is_not_judged_as_a_claim_itself()
+    {
+        WriteTopic("shaped", "---\ndescription: why the palette uses Accepting rather than Accepted\n---\n"
+            + "- Terminal.Gui raises Accepting on the command palette's list, and never Accepted.\n"
+            + "- **Why:** a quirk of the widget hierarchy, found the hard way over four attempts.\n"
+            + "- **How to apply:** prefer the earlier hook, and open the framework source first.\n"
+            + "- Related: [[terminal-gui-command-slots-collide]].\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // The three lines under the claim are structure: two labelled
+        // elaborations and a cross-reference. None is a standalone assertion and
+        // none was written to be read as one, so judging each as though it were
+        // produced three findings about one well-formed topic — which is how an
+        // audit teaches people to stop reading it.
+        audit.Value!.Findings
+            .Where(f => f.Topic == "shaped" && f.Kind == "noassertion")
+            .Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task The_same_elaboration_with_nothing_above_it_is_still_a_fragment()
+    {
+        WriteTopic("dangling", "---\ndescription: what the palette does about the Accepting event\n---\n"
+            + "- **Why:** a quirk of the widget hierarchy, found the hard way over four attempts.\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // The other half of the rule, and what stops it becoming a way to put
+        // anything past the check by prefixing it. The line is word for word the
+        // one exempted above: an elaboration elaborates something, and alone at
+        // the top of a topic it explains nothing, leaving a "why" with no "what".
+        audit.Value!.Findings
+            .Should().Contain(f => f.Topic == "dangling" && f.Kind == "noassertion");
+    }
+
+    [Fact]
+    public async Task A_fact_that_is_only_true_today_holds_up_the_verdict()
+    {
+        WriteTopic("MEMORY", "# Index\n\n- [today](today.md) - which SDK the build uses for now\n");
+        WriteTopic("today", "---\ndescription: which SDK the build uses for now\n---\n"
+            + "- We are currently using the preview SDK until the release build lands.\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // This is the one class that turns from true into misleading with
+        // nothing in the store to catch it, so it cannot sit behind a word that
+        // says the memory is fine.
+        audit.Value!.Warnings.Should().Contain(f => f.Topic == "today" && f.Kind == "timesensitive");
+        audit.Value.Verdict.Should().Be("NEEDS ATTENTION");
+    }
+
+    [Fact]
+    public async Task A_fact_past_its_own_date_holds_up_the_verdict()
+    {
+        WriteTopic("MEMORY", "# Index\n\n- [dated](dated.md) - how far the submission got\n");
+        WriteTopic("dated", "---\ndescription: how far the submission got\n---\n"
+            + "- The submission passed every validation stage on 2024-01-15.\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // A memory saying a submission was blocked on a signature it had
+        // already received sat behind a HEALTHY verdict for two days. The audit
+        // had spotted it and filed it as an aside.
+        audit.Value!.Warnings.Should().Contain(f => f.Topic == "dated" && f.Kind == "stale");
+        audit.Value.Verdict.Should().Be("NEEDS ATTENTION");
+    }
+
+    [Fact]
+    public async Task A_badly_phrased_fact_does_not_hold_up_the_verdict()
+    {
+        WriteTopic("MEMORY", "# Index\n\n- [dangling](dangling.md) - what the palette does here\n");
+        WriteTopic("dangling", "---\ndescription: what the palette does here\n---\n"
+            + "- **Why:** a quirk of the widget hierarchy, found the hard way over four attempts.\n");
+
+        var audit = await _memory.AuditAsync(_workspace.LocalPath, Slug);
+
+        // The other half of the rule. Phrasing is worth reporting and is not
+        // worth stopping for, and an audit that demands attention for every
+        // weak sentence is one people stop reading — which costs more than the
+        // sentences do.
+        audit.Value!.Findings.Should().Contain(f => f.Topic == "dangling" && f.Kind == "noassertion");
+        audit.Value.Verdict.Should().Be("HEALTHY");
     }
 
     [Fact]
@@ -360,6 +454,30 @@ corruption.
     }
 
     [Fact]
+    public async Task A_bullet_that_wraps_is_one_fact_and_not_half_of_one()
+    {
+        WriteTopic(
+            "wrapped",
+            "---\ndescription: what the token does and does not explain\n---\n\n"
+            + "- **Not the token any more.** The secret was added in September, so a\n"
+            + "  release that skips the step is not evidence the secret is missing. The\n"
+            + "  gate checks the token first and the package second.\n"
+            + "- A second bullet, which must stay a second fact rather than joining the first.\n");
+
+        var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
+
+        // Reading only a bullet's first line cut every wrapped fact off at
+        // whatever column its author happened to wrap at, which is also why the
+        // audit reported such facts as making no standing claim: they had been
+        // cut before they made one.
+        var facts = topics.Value!.Single().Facts;
+
+        facts.Should().HaveCount(2);
+        facts[0].Should().EndWith("the package second.").And.Contain("not evidence the secret is missing");
+        facts[1].Should().StartWith("A second bullet");
+    }
+
+    [Fact]
     public async Task A_topic_with_only_frontmatter_still_holds_nothing()
     {
         WriteTopic("bare", "---\ndescription: nothing\n---\n");
@@ -367,6 +485,24 @@ corruption.
         var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
 
         topics.Value!.Single().Facts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_quoted_description_keeps_the_quotes_that_are_inside_it()
+    {
+        WriteTopic(
+            "quoted",
+            "---\ndescription: \"Add the credential as \\\"Other issuer\\\", not the preset\"\n---\n"
+            + "\n- The portal preset writes a subject that never matches the issued token.");
+
+        var topics = await _memory.ListAsync(_workspace.LocalPath, Slug);
+
+        // Trimming quote characters off both ends is not unquoting. It ate the
+        // closing pair, left a stray backslash and cut the sentence short, and
+        // the index line is the only part of a topic a session is ever given —
+        // so half a line is half a fact.
+        topics.Value!.Single().Description
+            .Should().Be("Add the credential as \"Other issuer\", not the preset");
     }
 
     [Theory]
@@ -456,6 +592,68 @@ corruption.
             Path.Combine(_workspace.LocalPath, "projects", Slug, "memory", "build-quirks.md"));
 
         kept.Should().Contain("The workspace copy.");
+    }
+
+    [Fact]
+    public async Task An_import_reports_a_topic_that_says_something_different()
+    {
+        WriteTopic(
+            "build-quirks",
+            "---\ndescription: the build\n---\n\n- Cap the concurrent starts with a semaphore.");
+
+        var source = Path.Combine(_root, "drifted");
+        Directory.CreateDirectory(source);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(source, "build-quirks.md"),
+            "---\ndescription: the build\n---\n\n- The cap did not hold. Set maxParallelThreads.");
+
+        var importer = new MemoryImporter(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()), _memory);
+
+        var imported = await importer.ImportAsync(_workspace.LocalPath, Slug, source, apply: true);
+
+        // A name-only check reports this as "already in the workspace" and the
+        // summary then says there is nothing left to bring across, which is how
+        // a superseded copy survives in one store while the correction sits in
+        // the other.
+        imported.Value!.Drifted.Should().ContainSingle().Which.Should().Be("build-quirks");
+        imported.Value.Skipped["build-quirks"].Should().Contain("differs");
+
+        var kept = await File.ReadAllTextAsync(
+            Path.Combine(_workspace.LocalPath, "projects", Slug, "memory", "build-quirks.md"));
+
+        // Reported, never overwritten: which copy is right is not the
+        // importer's to decide.
+        kept.Should().Contain("semaphore");
+    }
+
+    [Fact]
+    public async Task An_import_does_not_call_a_topic_drifted_for_its_timestamp_alone()
+    {
+        WriteTopic(
+            "build-quirks",
+            "---\ndescription: the build\nmetadata:\n  modified: 2026-08-30T14:13:55.207Z\n---\n"
+            + "\n- The first build takes four minutes.");
+
+        var source = Path.Combine(_root, "restamped");
+        Directory.CreateDirectory(source);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(source, "build-quirks.md"),
+            "---\ndescription: the build\nmetadata:\n  modified: 2026-09-01T20:47:40.827Z\n---\n"
+            + "\n- The first build takes four minutes.");
+
+        var importer = new MemoryImporter(
+            new FakeEnvironmentProvider(_root, new Dictionary<string, string>()), _memory);
+
+        var imported = await importer.ImportAsync(_workspace.LocalPath, Slug, source, apply: true);
+
+        // The frontmatter carries a stamp that changes on every write. Compare
+        // the files and every topic reads as drifted, which is a warning nobody
+        // can act on and everybody learns to ignore.
+        imported.Value!.Drifted.Should().BeEmpty();
+        imported.Value.Skipped["build-quirks"].Should().Be("already in the workspace");
     }
 
     [Fact]

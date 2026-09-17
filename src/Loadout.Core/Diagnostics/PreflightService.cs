@@ -120,6 +120,26 @@ internal sealed class PreflightService : IPreflightService
     /// </remarks>
     private static void CheckProtection(List<DiagnosticCheck> checks, PreflightContext context)
     {
+        // A project registered before it was initialised. Said on the way in
+        // for the same reason the hook is: it is the moment it can be acted on,
+        // and the session about to start is the one that will act.
+        //
+        // The hook check is skipped rather than answered, because there is no
+        // repository to install a pre-commit hook into. "Not installed in this
+        // clone; install it with loadout protect" would be true of nothing and
+        // send somebody at a problem they cannot fix yet.
+        if (context.Manifest is { Repository.Versioned: false })
+        {
+            checks.Add(DiagnosticCheck.Warn(
+                "Repository",
+                "Version control",
+                "there is no Git repository here yet. Initialising it, the first commit and "
+                + "the remote are the work; 'loadout task list' has the detail, and "
+                + "'loadout protect' comes after."));
+
+            return;
+        }
+
         if (context.Hook is not { } hook)
         {
             return;

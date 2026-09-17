@@ -52,8 +52,36 @@ public abstract class AgentAdapterBase : IAgentAdapter
     /// </summary>
     protected abstract IReadOnlyDictionary<string, string[]> CapabilityMarkers { get; }
 
+    /// <summary>
+    /// The detection in progress or finished, so it runs once per adapter.
+    /// </summary>
+    /// <remarks>
+    /// Detecting runs the agent twice, for its version and its help, with a
+    /// twenty-second ceiling on each. A launch asked for it once itself and
+    /// once more inside the adapter building the invocation, so every session
+    /// began by starting the agent four times to learn what one start would
+    /// have. An adapter lives as long as the process that made it, and an
+    /// agent installed while the launcher is open is found on the next start.
+    /// </remarks>
+    private Task<AgentDescriptor>? _detection;
+
+    private readonly object _detectionLock = new();
+
     /// <inheritdoc />
-    public virtual async Task<AgentDescriptor> DetectAsync(CancellationToken ct = default)
+    public Task<AgentDescriptor> DetectAsync(CancellationToken ct = default)
+    {
+        lock (_detectionLock)
+        {
+            // Cancellation is not applied to a shared probe: cancelling one
+            // caller's wait must not poison the answer for the next. A probe
+            // has its own timeout, so a wait is bounded either way.
+            _detection ??= DetectOnceAsync();
+
+            return _detection;
+        }
+    }
+
+    private async Task<AgentDescriptor> DetectOnceAsync()
     {
         var executable = Resolver.Resolve(ExecutableName, ConfiguredSearchPaths);
 
@@ -62,34 +90,10 @@ public abstract class AgentAdapterBase : IAgentAdapter
             return AgentDescriptor.NotInstalled(Name, DisplayName);
         }
 
-        var version = await ReadVersionAsync(executable, ct).ConfigureAwait(false);
-        var capabilities = await ProbeCapabilitiesAsync(executable, ct).ConfigureAwait(false);
+        var version = await ReadVersionAsync(executable, CancellationToken.None).ConfigureAwait(false);
+        var capabilities = await ProbeCapabilitiesAsync(executable, CancellationToken.None).ConfigureAwait(false);
 
         return new AgentDescriptor(Name, DisplayName, true, executable, version, capabilities);
-    }
-
-    /// <inheritdoc />
-    public virtual async Task<OperationResult> ValidateAsync(
-        AgentLaunchContext context,
-        CancellationToken ct = default)
-    {
-        var descriptor = await DetectAsync(ct).ConfigureAwait(false);
-
-        if (!descriptor.IsInstalled)
-        {
-            return OperationResult.Fail(
-                $"{DisplayName} is not installed, or its executable is not on PATH.",
-                Models.ExitCode.AgentUnavailable);
-        }
-
-        if (!Directory.Exists(context.WorkingDirectory))
-        {
-            return OperationResult.Fail(
-                $"The working directory '{context.WorkingDirectory}' does not exist.",
-                Models.ExitCode.RepositoryUnavailable);
-        }
-
-        return OperationResult.Ok();
     }
 
     /// <inheritdoc />

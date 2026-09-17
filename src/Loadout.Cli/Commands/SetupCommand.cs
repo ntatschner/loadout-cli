@@ -86,6 +86,14 @@ public sealed class SetupCommand : AsyncCommand<SetupCommand.Settings>
         [CommandOption("--global-excludes")]
         [Description("Configure the global Git exclude file without asking.")]
         public bool GlobalExcludes { get; init; }
+
+        [CommandOption("--update-feed <URL>")]
+        [Description("Where to look for new versions, instead of this project's own releases.")]
+        public string? UpdateFeed { get; init; }
+
+        [CommandOption("--no-update-feed")]
+        [Description("Never check for new versions on this machine.")]
+        public bool NoUpdateFeed { get; init; }
     }
 
     /// <inheritdoc />
@@ -100,6 +108,13 @@ public sealed class SetupCommand : AsyncCommand<SetupCommand.Settings>
         {
             return output.Fail(
                 "Choose one of --use-existing, --create-new or --local-only.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (settings.NoUpdateFeed && settings.UpdateFeed is { Length: > 0 })
+        {
+            return output.Fail(
+                "Choose one of --update-feed <url> or --no-update-feed.",
                 ExitCode.InvalidArguments);
         }
 
@@ -132,6 +147,12 @@ public sealed class SetupCommand : AsyncCommand<SetupCommand.Settings>
             Migrate: settings.Migrate,
             IncludeIgnored: settings.IncludeIgnored,
             InstallGlobalExcludes: settings.GlobalExcludes ? true : null,
+
+            // Null means the question still gets asked. Empty is a real answer
+            // — "the default feed" — which is why declining cannot be spelled
+            // by leaving the value out.
+            UpdateFeed: settings.NoUpdateFeed ? "off" : settings.UpdateFeed,
+
             Interactive: settings.AllowsPrompting);
 
         if (!settings.AllowsPrompting && request.MissingAnswer() is { } missing)

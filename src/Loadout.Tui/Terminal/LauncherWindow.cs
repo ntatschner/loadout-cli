@@ -32,9 +32,14 @@ internal sealed class LauncherWindow : Window
     private readonly IReadOnlyList<string> _agents;
 
     private readonly TextField _filter;
+    private readonly Label _placeholder;
     private readonly KeyedListView _list;
+    private readonly FrameView _listFrame;
     private readonly ProjectDetailView _detail;
-    private readonly Label _summary;
+    private readonly KeyLine _footer;
+
+    /// <summary>Which build this is, top right; grows a suffix when a newer one exists.</summary>
+    private readonly Label _build;
 
     /// <summary>Projects currently shown, after the filter has been applied.</summary>
     private List<ProjectResolution> _shown;
@@ -84,18 +89,67 @@ internal sealed class LauncherWindow : Window
         _shown = [.. projects];
 
         Title = "Loadout";
-        BorderStyle = LineStyle.Rounded;
+
+        // No frame round the whole screen. A border round a window says
+        // "this is a window", and there is nothing on the screen for the
+        // launcher to be a window in front of. The frames that remain are
+        // the panels, and there is one for each thing the eye has to find.
+        BorderStyle = LineStyle.None;
+
+        // Thirty-eight per cent left the detail pane two thirds empty while
+        // the list beside it was cutting names in half. The detail pane holds
+        // five short labelled lines and a row of buttons; it does not need
+        // most of the screen, and the list does.
+        var columnWidth = Dim.Percent(46);
 
         // Typed into rather than searched for. A list long enough to need
         // searching is a list where the search box should already be visible.
+        //
+        // Over the list rather than across the screen, because it filters the
+        // list and nothing else, and the state of the machine sits beside it
+        // where a label used to.
         _filter = new TextField
         {
-            X = 9,
+            X = 1,
             Y = 1,
-            Width = Dim.Fill(1),
+            Width = columnWidth - 1,
         };
 
-        var filterLabel = new Label { X = 1, Y = 1, Text = "Filter" };
+        // What the field is for, written in it until something is typed.
+        // The label that used to sit beside it said the same thing at a
+        // permanent cost of nine columns.
+        _placeholder = new Label { X = 2, Y = 1, Text = "Filter projects" };
+        _placeholder.SetScheme(LauncherTheme.Muted);
+
+        // One line that says what state the machine is in, so it is answered
+        // before it is asked rather than hidden behind a menu.
+        var state = new Label
+        {
+            X = Pos.Right(_filter) + 2,
+            Y = 1,
+            Width = Dim.Fill(1),
+            Text = Describe(projects.Count, workspaceState, agents),
+        };
+
+        state.SetScheme(LauncherTheme.MutedOnGround);
+
+        // Top right, on the menu bar's own row. The state line beside the
+        // filter was the obvious home and is already three parts long; a
+        // fourth pushed it past the edge of an 80-column terminal, and the
+        // end is what gets cut. The menu row has empty space to the right at
+        // every width the launcher supports.
+        var version = RunningVersion();
+
+        _build = new Label
+        {
+            X = Pos.AnchorEnd(version.Length + 1),
+            Y = 0,
+            Text = version,
+        };
+
+        _build.SetScheme(LauncherTheme.MutedOnGround);
+
+        var build = _build;
 
         _list = new KeyedListView
         {
@@ -113,12 +167,6 @@ internal sealed class LauncherWindow : Window
         // noticed, because nothing tested it.
         var recentHeight = _recent.Count == 0 ? 0 : Math.Min(_recent.Count + 2, 7);
 
-        // Thirty-eight per cent left the detail pane two thirds empty while
-        // the list beside it was cutting names in half. The detail pane holds
-        // five short labelled lines and a row of buttons; it does not need
-        // most of the screen, and the list does.
-        var columnWidth = Dim.Percent(46);
-
         var listFrame = new FrameView
         {
             X = 0,
@@ -130,6 +178,10 @@ internal sealed class LauncherWindow : Window
         };
 
         listFrame.Add(_list);
+
+        LauncherTheme.Quieten(listFrame);
+
+        _listFrame = listFrame;
 
         if (recentHeight > 0)
         {
@@ -169,48 +221,57 @@ internal sealed class LauncherWindow : Window
                 Y = Pos.Bottom(listFrame),
                 Width = columnWidth,
                 Height = recentHeight,
-                Title = "Recent",
+                Title = $"Recent ({_recent.Count})",
                 BorderStyle = LineStyle.Rounded,
             };
 
             recentFrame.Add(_recentList);
+
+            LauncherTheme.Quieten(recentFrame);
 
             _recentFrame = recentFrame;
         }
 
         _detail = new ProjectDetailView
         {
-            X = Pos.Right(listFrame),
+            X = Pos.Right(listFrame) + 1,
             Y = 3,
-            Width = Dim.Fill(),
+            Width = Dim.Fill(1),
             Height = Dim.Fill(2),
         };
 
-        // One line that says what state the machine is in, so it is answered
-        // before it is asked rather than hidden behind a menu.
-        _summary = new Label
+        // The keys somebody would reach for, along the bottom, with the part
+        // to press picked out. The menu key is asked for rather than written
+        // down, for the reason given at KeyList.
+        _footer = new KeyLine(
+        [
+            ("Enter", "launch"),
+            ("Ctrl+P", "commands"),
+            ("Ctrl+N", "add"),
+            ("F2", "settings"),
+            ("?", "keys"),
+            ($"{MenuBar.DefaultKey}", "menu"),
+            ("Ctrl+Q", "quit"),
+        ])
         {
             X = 1,
             Y = Pos.AnchorEnd(1),
-            Width = Dim.Fill(1),
-            Text = Describe(projects.Count, workspaceState, agents),
         };
-
-        // Kept, so that anything said along the bottom can be taken back when
-        // the cursor moves off whatever it was about.
-        _state = _summary.Text;
 
         // Added between the project list and the detail, so tabbing follows
         // the way the screen reads: down the left column, then across. Adding
         // it last put it behind every button in the detail pane, which is four
         // stops past where somebody would look for it.
+        //
+        // The placeholder is added after the field it sits in, because views
+        // draw in the order they were added and it has to be on top.
         if (_recentFrame is not null)
         {
-            Add(BuildMenu(), filterLabel, _filter, listFrame, _recentFrame, _detail, _summary);
+            Add(BuildMenu(), _filter, _placeholder, state, listFrame, _recentFrame, _detail, _footer, build);
         }
         else
         {
-            Add(BuildMenu(), filterLabel, _filter, listFrame, _detail, _summary);
+            Add(BuildMenu(), _filter, _placeholder, state, listFrame, _detail, _footer, build);
         }
 
         // A row cannot be laid out against a width the list does not have
@@ -223,9 +284,16 @@ internal sealed class LauncherWindow : Window
 
         Add(_keys);
 
+        LauncherTheme.Light(_keys);
+
         SubViewsLaidOut += (_, _) => FitToLayout();
 
-        _filter.TextChanged += (_, _) => ApplyFilter();
+        _filter.TextChanged += (_, _) =>
+        {
+            _placeholder.Visible = string.IsNullOrEmpty(_filter.Text);
+
+            ApplyFilter();
+        };
 
         _list.ValueChanged += (_, _) =>
         {
@@ -288,15 +356,7 @@ internal sealed class LauncherWindow : Window
     private MenuBar BuildMenu() =>
         new([
             new MenuBarItem("_Project", [
-                new MenuItem { Title = "_Launch", Action = LaunchSelected },
-                new MenuItem
-                {
-                    // The options a launch can carry that Enter cannot. Task
-                    // and mode are what select the specialists, so this is the
-                    // only way from a screen to say what a session is for.
-                    Title = "Launch with _options...",
-                    Action = LaunchWithOptions,
-                },
+                new MenuItem { Title = "_Launch...", Action = LaunchSelected },
                 new MenuItem
                 {
                     Title = "_Resume a session",
@@ -335,6 +395,16 @@ internal sealed class LauncherWindow : Window
                     Title = "Explain _instructions",
                     Action = () => WithSelected(p =>
                         RunCommand($"{LauncherCommands.Instructions} --project {p.Entry.Slug}")),
+                },
+                _carryTasks = new MenuItem
+                {
+                    Title = ContextTitle(CarryTasks, on: false),
+                    Action = () => WithSelected(p => RunCommand(ContextToggleFor(p, "tasks"))),
+                },
+                _inlineCodeMap = new MenuItem
+                {
+                    Title = ContextTitle(InlineCodeMap, on: false),
+                    Action = () => WithSelected(p => RunCommand(ContextToggleFor(p, "code-map"))),
                 },
                 new Line(),
                 new MenuItem
@@ -453,9 +523,19 @@ internal sealed class LauncherWindow : Window
 
         // F4, beside F2 and F3. The function keys are the family that
         // survived a real Windows console, where Ctrl+comma did nothing at all.
-        this.BindEverywhere(Key.F4, Command.Activate);
+        //
+        // Refresh rather than Activate. The slot is chosen for being inert,
+        // not for reading well: Terminal.Gui describes Activate as "activates
+        // the View or an item in the View ... e.g. toggling a checkbox,
+        // selecting a list item, focusing", so a handler on it fires when
+        // somebody clicks about the screen. Hanging the manager there meant
+        // clicking a project opened the manager instead of launching it.
+        //
+        // Enter raises Accept, not Activate, so every launch test stayed green
+        // while the launcher's most ordinary action was broken.
+        this.BindEverywhere(Key.F4, Command.Refresh);
 
-        AddCommand(Command.Activate, () =>
+        AddCommand(Command.Refresh, () =>
         {
             Close(new LauncherIntent(LauncherAction.Manager, Selected));
             return true;
@@ -818,6 +898,110 @@ internal sealed class LauncherWindow : Window
     }
 
     /// <summary>
+    /// The command that flips one of the switches deciding what a project
+    /// carries into every session.
+    /// </summary>
+    /// <remarks>
+    /// Composed and then run through the parser, never applied here: a screen
+    /// that wrote the manifest itself would be a second implementation of
+    /// <c>project context</c>, and the two would drift.
+    /// </remarks>
+    internal static string ContextToggle(string slug, string key, bool on) =>
+        $"{LauncherCommands.ProjectContext} {key} {(on ? "off" : "on")} --project {slug}";
+
+    /// <summary>
+    /// The same, for the project on screen.
+    /// </summary>
+    /// <remarks>
+    /// The state comes from the overview the panel is showing, so the entry
+    /// flips what somebody is looking at. A project whose overview has not
+    /// arrived yet reads as off, which is what a manifest that has never been
+    /// asked about defaults to — and the command reports what it did either
+    /// way, so a wrong guess is visible rather than silent.
+    /// </remarks>
+    /// <summary>The two menu items whose label has to say where the switch stands.</summary>
+    private MenuItem? _carryTasks;
+    private MenuItem? _inlineCodeMap;
+
+    internal const string CarryTasks = "Carry open _tasks into sessions";
+    internal const string InlineCodeMap = "Inline the code _map into sessions";
+
+    /// <summary>
+    /// The two context switch labels as they currently read.
+    /// </summary>
+    /// <remarks>
+    /// Exposed because a menu bar does not put its items in the view tree until
+    /// somebody opens it, so a test walking subviews finds nothing and reads as
+    /// though the items are missing. This asserts on what the item says, which
+    /// is the thing under test.
+    /// </remarks>
+    internal (string Tasks, string CodeMap) ContextLabels =>
+        (_carryTasks?.Title ?? string.Empty, _inlineCodeMap?.Title ?? string.Empty);
+
+    /// <summary>
+    /// A context switch's menu label, with where it currently stands.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The label itself never changes, so the item stays in the same place and
+    /// reads the same way whichever state it is in — a menu whose wording moves
+    /// under you is one you have to read again every time. What changes is the
+    /// word after it.
+    /// </para>
+    /// <para>
+    /// Written out rather than ticked. Terminal.Gui decorates with characters a
+    /// stock console font may have no glyph for, and a missing glyph is decided
+    /// by the font long after the character has left this program — which the
+    /// ANSI test harness cannot see, because the text it asserts on is correct
+    /// either way. Seven of the toolkit's glyphs already render blank in
+    /// Cascadia Mono. "(on)" cannot.
+    /// </para>
+    /// </remarks>
+    internal static string ContextTitle(string label, bool on) =>
+        $"{label}  ({(on ? "on" : "off")})";
+
+    /// <summary>
+    /// Puts the current state of the selected project's context switches into
+    /// their menu labels.
+    /// </summary>
+    /// <remarks>
+    /// Called wherever the answer can change: the cursor moving to another
+    /// project, and an overview arriving for the one already under it. The menu
+    /// is built once, so this updates the items rather than rebuilding it —
+    /// rebuilding a Terminal.Gui menu re-registers every handler on it, and
+    /// this application has twice shipped a defect from handlers being
+    /// registered more than once.
+    /// </remarks>
+    private void RefreshContextMenu()
+    {
+        var carried = Selected is { } project
+            && _carried.TryGetValue(project.Entry.Slug, out var known)
+            ? known
+            : (Tasks: false, CodeMap: false);
+
+        if (_carryTasks is not null)
+        {
+            _carryTasks.Title = ContextTitle(CarryTasks, carried.Tasks);
+        }
+
+        if (_inlineCodeMap is not null)
+        {
+            _inlineCodeMap.Title = ContextTitle(InlineCodeMap, carried.CodeMap);
+        }
+    }
+
+    private string ContextToggleFor(ProjectResolution project, string key)
+    {
+        var carried = _carried.TryGetValue(project.Entry.Slug, out var known)
+            ? known
+            : (Tasks: false, CodeMap: false);
+
+        var on = key == "tasks" ? carried.Tasks : carried.CodeMap;
+
+        return ContextToggle(project.Entry.Slug, key, on);
+    }
+
+    /// <summary>
     /// Runs a command from the palette, which means leaving the screen: a
     /// command writes to the terminal the toolkit is drawing on.
     /// </summary>
@@ -832,8 +1016,62 @@ internal sealed class LauncherWindow : Window
             ? "no agents installed"
             : string.Join(", ", agents);
 
-        return $"{projects}  ·  {workspace}  ·  {installed}"
-            + $"      Ctrl+P commands   Ctrl+N add   {MenuBar.DefaultKey} menu   Ctrl+Q quit";
+        return $"{projects}  ·  {workspace}  ·  {installed}";
+    }
+
+    /// <summary>
+    /// Which build of the launcher this is, for the top right of the screen.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same assembly version <c>--version</c> reports, so the two cannot
+    /// disagree. It earns its corner because the launcher on PATH can be
+    /// several releases behind the working tree, and a feature missing from
+    /// that build reports nothing at all — it simply does not happen, which
+    /// reads as a defect in the feature rather than an old binary.
+    /// </para>
+    /// <para>
+    /// A development build is run as <c>dotnet loadout.dll</c> and is told
+    /// apart the way <see cref="Loadout.Core.Agents.LauncherInvocation"/> tells
+    /// it apart, by the host's name. It carries the same version as the release
+    /// it was branched from, so the number alone cannot distinguish them and
+    /// saying only the number would be worse than saying nothing: it would look
+    /// like an answer.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// Says a newer launcher exists, beside the version that is running.
+    /// </summary>
+    /// <remarks>
+    /// Called on the main loop, after the answer arrives from wherever it was
+    /// being fetched: the screen is never held open waiting for it, and a
+    /// launcher that could not find out simply never calls this. What is
+    /// shown is the number and the word, not a command, because the command
+    /// is <c>loadout update</c> and the corner of a screen is no place to
+    /// teach it — anyone who wants it will find it under Tools.
+    /// </remarks>
+    internal void ShowUpdate(string available)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(available);
+
+        var text = $"{RunningVersion()} · {available} available";
+
+        _build.Text = text;
+        _build.X = Pos.AnchorEnd(text.Length + 1);
+
+        SetNeedsLayout();
+        SetNeedsDraw();
+    }
+
+    internal static string RunningVersion()
+    {
+        var version = typeof(LauncherWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
+        var host = Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? string.Empty);
+
+        return host.Equals("dotnet", StringComparison.OrdinalIgnoreCase)
+            ? $"v{version} dev"
+            : $"v{version}";
     }
 
     /// <summary>
@@ -843,15 +1081,26 @@ internal sealed class LauncherWindow : Window
     /// </summary>
     private void Populate()
     {
-        if (_here is not null)
+        _shown = Order(_projects, _here);
+        Render();
+    }
+
+    /// <summary>
+    /// The repository somebody is standing in first, and the rest as given.
+    /// </summary>
+    internal static List<ProjectResolution> Order(
+        IReadOnlyList<ProjectResolution> projects,
+        ProjectResolution? here)
+    {
+        if (here is null)
         {
-            _shown = [
-                .. _projects.Where(p => p.Entry.Slug == _here.Entry.Slug),
-                .. _projects.Where(p => p.Entry.Slug != _here.Entry.Slug),
-            ];
+            return [.. projects];
         }
 
-        Render();
+        return [
+            .. projects.Where(p => p.Entry.Slug == here.Entry.Slug),
+            .. projects.Where(p => p.Entry.Slug != here.Entry.Slug),
+        ];
     }
 
     /// <summary>
@@ -902,6 +1151,13 @@ internal sealed class LauncherWindow : Window
             _shown.Select(project => Row(project, RowWidth)));
 
         _list.SetSource(rows);
+
+        // The count in the title, because a list that fills its panel gives
+        // no other sign of how much of it is out of sight, and a filtered
+        // list should say how much of the registry it is showing.
+        _listFrame.Title = _shown.Count == _projects.Count
+            ? $"Projects ({_projects.Count})"
+            : $"Projects ({_shown.Count} of {_projects.Count})";
 
         if (_shown.Count > 0)
         {
@@ -1059,6 +1315,13 @@ internal sealed class LauncherWindow : Window
     private readonly Dictionary<string, Readiness> _readiness = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// What each project carries into a session, as the last overview reported
+    /// it, so a menu entry can flip what the panel beside it is showing.
+    /// </summary>
+    private readonly Dictionary<string, (bool Tasks, bool CodeMap)> _carried =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Notes a project's readiness and redraws the list.
     /// </summary>
     /// <remarks>
@@ -1069,6 +1332,15 @@ internal sealed class LauncherWindow : Window
     /// </remarks>
     private void Record(ProjectResolution project, ProjectOverview? overview)
     {
+        if (overview is not null)
+        {
+            _carried[project.Entry.Slug] = (overview.CarriesTasks, overview.CarriesCodeMap);
+        }
+
+        // The menu labels say where this project's switches stand, so they move
+        // when the answer does rather than only when the cursor does.
+        RefreshContextMenu();
+
         _readiness[project.Entry.Slug] = ProjectReadinessRules.Of(
             overview,
             project.IsAvailableLocally,
@@ -1155,19 +1427,13 @@ internal sealed class LauncherWindow : Window
             return;
         }
 
+        // No options: the launcher puts the launch sheet up next, with the
+        // terminal to itself, and asks everything there. The screen only says
+        // which project.
         Close(new LauncherIntent(
             LauncherAction.Launch, project, project.Entry.DefaultAgent));
     }
 
-    /// <summary>
-    /// Asks what the session is for, then launches with the answer.
-    /// </summary>
-    /// <remarks>
-    /// A launch carries fourteen things and Enter fills three. The task and the
-    /// mode are what choose the specialists an agent is given, so without this
-    /// the screen could start a session but never say what it was for, while
-    /// the command line could — which made the screen a subset of it.
-    /// </remarks>
     /// <summary>
     /// Asks what to create, then hands the answer to the command line.
     /// </summary>
@@ -1206,52 +1472,11 @@ internal sealed class LauncherWindow : Window
         RunCommand(command);
     }
 
-    private void LaunchWithOptions()
-    {
-        if (Selected is not { } project)
-        {
-            return;
-        }
-
-        if (!project.IsAvailableLocally)
-        {
-            Say($"{project.Entry.Name} is not on this machine. "
-                + "Registry ▸ Clone onto this machine.");
-
-            return;
-        }
-
-        using var dialog = new LaunchOptionsDialog(project.Entry.Name, _application);
-
-        _application.Run(dialog);
-
-        // Dismissed means dismissed. Launching with the defaults because a
-        // dialog was closed would start a session nobody asked for.
-        if (dialog.Chosen is not { } options)
-        {
-            return;
-        }
-
-        Close(new LauncherIntent(
-            LauncherAction.Launch,
-            project,
-            project.Entry.DefaultAgent,
-            Options: options));
-    }
-
     /// <summary>
     /// Says something along the bottom, until the cursor moves off whatever it
     /// was about.
     /// </summary>
-    private void Say(string message)
-    {
-        _summary.Text = message;
-
-        SetNeedsDraw();
-    }
-
-    /// <summary>What the bottom line says when it has nothing else to say.</summary>
-    private readonly string _state = string.Empty;
+    private void Say(string message) => _footer.Say(message);
 
     /// <summary>
     /// Shows what is known about the selected project, reading the parts that
@@ -1262,12 +1487,14 @@ internal sealed class LauncherWindow : Window
     {
         // Whatever was said about the last project stops being true the moment
         // the cursor leaves it.
-        if (_summary.Text != _state)
+        if (_footer.Message is not null)
         {
-            _summary.Text = _state;
+            _footer.Say(null);
         }
 
         var project = Selected;
+
+        RefreshContextMenu();
 
         if (project is null)
         {
@@ -1353,7 +1580,7 @@ internal sealed class LauncherWindow : Window
 
         _pulseStep = 0;
 
-        _detail.ShowHeading(Selected!, Wordmark.Pulse(_pulseStep));
+        _detail.ShowHeading(Selected!, Wordmark.Pulse(_pulseStep, glyphs: PulseGlyphs));
 
         _pulse = _application.AddTimeout(PulseInterval, () =>
         {
@@ -1362,11 +1589,20 @@ internal sealed class LauncherWindow : Window
                 return false;
             }
 
-            _detail.SetStatus(Wordmark.Pulse(++_pulseStep));
+            _detail.SetStatus(Wordmark.Pulse(++_pulseStep, glyphs: PulseGlyphs));
 
             return true;
         });
     }
+
+    /// <summary>
+    /// What the reading indicator is drawn in: bars, unless this is a console
+    /// whose font cannot draw them. Decided once; the terminal does not change
+    /// while the screen is up.
+    /// </summary>
+    private static readonly string PulseGlyphs = Wordmark.PulseGlyphsFor(
+        OperatingSystem.IsWindows(),
+        Environment.GetEnvironmentVariable("WT_SESSION") is { Length: > 0 });
 
     private void StopPulsing()
     {

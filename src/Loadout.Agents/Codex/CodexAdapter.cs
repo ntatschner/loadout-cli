@@ -102,11 +102,57 @@ public sealed class CodexAdapter : AgentAdapterBase
 
         AddSecurityProfile(context, descriptor, arguments, warnings);
         AddModel(context, descriptor, arguments, warnings);
+        ReportProjectSkills(context, warnings);
 
         arguments.AddRange(context.PassthroughArguments);
 
         return OperationResult<AgentInvocation>.Ok(
             new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));
+    }
+
+    /// <summary>
+    /// Says that the skills the workspace holds for this project are not being
+    /// loaded, where there are any.
+    /// </summary>
+    /// <remarks>
+    /// Reported rather than passed over. Codex manages plugins by installing
+    /// them from a marketplace into its own configuration, and offers nothing
+    /// that loads one for a single session — so unlike Claude there is no
+    /// ephemeral way to hand these over, and installing into somebody's Codex
+    /// on their behalf is not this launcher's business.
+    /// <para>
+    /// Saying so is the whole of the fix available here. A skill written under
+    /// <c>agents/codex/skills</c> that quietly never loads is the state this was
+    /// all about, and being unable to close it is not a reason to hide it.
+    /// </para>
+    /// </remarks>
+    private static void ReportProjectSkills(AgentLaunchContext context, List<string> warnings)
+    {
+        if (context.WorkspacePath is null || context.Manifest is null)
+        {
+            return;
+        }
+
+        var source = Path.Combine(
+            context.WorkspacePath, "projects", context.Manifest.Slug, "agents", "codex", "skills");
+
+        if (!Directory.Exists(source))
+        {
+            return;
+        }
+
+        var skills = Directory.EnumerateDirectories(source)
+            .Count(directory => File.Exists(Path.Combine(directory, "SKILL.md")));
+
+        if (skills == 0)
+        {
+            return;
+        }
+
+        warnings.Add(
+            $"The workspace holds {skills} skill(s) for {context.Manifest.Slug} under "
+            + "agents/codex/skills, and Codex has no way to load a plugin for one session, so "
+            + "they were not handed over.");
     }
 
     /// <summary>

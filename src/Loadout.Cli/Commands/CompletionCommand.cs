@@ -22,10 +22,21 @@ namespace Loadout.Cli.Commands;
 [CommandMeta(CommandCategory.Integration, Intent = "shell tab complete bash zsh fish", Example = "zsh")]
 public sealed class CompletionCommand : Command<CompletionCommand.Settings>
 {
-    private static readonly string[] TopLevelCommands =
-    [
-        "doctor", "status", "list", "here", "launch", "project", "workspace", "secret", "completion",
-    ];
+    /// <summary>
+    /// Every top-level command, taken from the set the parser fills as it
+    /// registers them.
+    /// </summary>
+    /// <remarks>
+    /// This was a hand-written array of nine, and stayed nine while the command
+    /// line grew to about forty: <c>memory</c>, <c>instructions</c>,
+    /// <c>usage</c>, <c>sessions</c>, <c>task</c>, <c>mcp</c>, <c>config</c> and
+    /// the rest never completed, and nothing said so. It is the same second
+    /// list the launcher's catalogue exists to avoid — the parity tests were
+    /// written for exactly this failure on the screens, and the completions
+    /// were a third copy nobody had looked at.
+    /// </remarks>
+    internal static IEnumerable<string> TopLevelCommands =>
+        Program.CommandNames().Order(StringComparer.Ordinal);
 
     private readonly IShellProvider _shells;
     private readonly IAnsiConsole _console;
@@ -91,6 +102,15 @@ public sealed class CompletionCommand : Command<CompletionCommand.Settings>
         "fish" => ShellKind.Fish,
         _ => null,
     };
+
+    /// <summary>
+    /// The script for a shell named as the command line names it, so a test can
+    /// read what a user would actually be given.
+    /// </summary>
+    internal static string ScriptFor(string shell) =>
+        ParseShell(shell) is { } kind
+            ? Render(kind)
+            : throw new ArgumentException($"'{shell}' is not a shell.", nameof(shell));
 
     private static string Render(ShellKind shell)
     {

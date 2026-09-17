@@ -281,4 +281,32 @@ public sealed class LaunchLedgerTests : IDisposable
 
         public override DateTimeOffset GetUtcNow() => Now;
     }
+
+    [Fact]
+    public void A_long_project_name_does_not_shift_the_columns()
+    {
+        // Every row has to be the same width up to the task, or the listing
+        // stops being a table. 'thecodesaiyan-web-app' is twenty-one characters
+        // against a column of eighteen, and it pushed the agent, the mode and
+        // the outcome three characters right on its own row.
+        var wide = Loadout.Cli.Commands.LaunchesCommand.Column("thecodesaiyan-web-app", 18);
+        var narrow = Loadout.Cli.Commands.LaunchesCommand.Column("clawbound", 18);
+
+        wide.Should().HaveLength(18);
+        narrow.Should().HaveLength(18);
+        wide.Should().EndWith("…", "a name that had to be cut should say so");
+    }
+
+    [Fact]
+    public void A_value_carrying_markup_is_still_the_width_it_claims()
+    {
+        // Escaping happens after fitting, so the column is ten characters of
+        // what a reader sees. The returned string is longer than ten because
+        // '[[' renders as one '[' — escaping first would have padded to the
+        // escaped length, and every bracket would have cost a visible column.
+        var fitted = Loadout.Cli.Commands.LaunchesCommand.Column("a[b]c", 10);
+
+        fitted.Should().Be("a[[b]]c     ");
+        fitted.Replace("[[", "[").Replace("]]", "]").Should().HaveLength(10);
+    }
 }

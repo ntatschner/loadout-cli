@@ -42,6 +42,34 @@ public static class ServiceRegistration
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>()
                 .Paths.State));
+        // Under the cache root, not the state root: the symbol index is derived
+        // from one checkout at one commit and can be thrown away at any moment.
+        services.AddSingleton<ISymbolTagger>(provider => new CtagsTagger(
+            provider.GetRequiredService<Loadout.Platform.Abstractions.IProcessLauncher>(),
+            provider.GetRequiredService<Loadout.Platform.Abstractions.IExecutableResolver>()));
+        services.AddSingleton<ISymbolIndexService>(provider =>
+        {
+            var workspace = provider.GetRequiredService<IWorkspaceManager>();
+
+            return new SymbolIndexService(
+                provider.GetRequiredService<IGitManager>(),
+                provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>().Paths.Cache,
+                provider.GetRequiredService<ISymbolTagger>(),
+
+                // The manifest's say on how its code is read. A project with
+                // no workspace, or no manifest, gets the defaults.
+                async (slug, ct) =>
+                {
+                    if (!workspace.IsAvailable())
+                    {
+                        return SymbolScanOptions.Default;
+                    }
+
+                    var manifest = await workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+                    return SymbolScanOptions.From(manifest.Value?.Symbols);
+                });
+        });
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<Instructions.MemoryCompressor>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();
@@ -57,6 +85,8 @@ public static class ServiceRegistration
 
         services.AddSingleton<Editors.IEditorService, Editors.EditorService>();
         services.AddSingleton<IDiagnosticContributor, Editors.EditorDiagnosticContributor>();
+        services.AddSingleton<IDiagnosticContributor, Sessions.SessionDiagnosticContributor>();
+        services.AddSingleton<IDiagnosticContributor, Tasks.TaskContextDiagnosticContributor>();
         services.AddSingleton<IDoctorService, DoctorService>();
         services.AddSingleton<IRemediationService, RemediationService>();
 
@@ -87,6 +117,8 @@ public static class ServiceRegistration
         // Written by the launcher rather than reconstructed afterwards, because
         // a launch nobody recorded cannot be recovered later.
         services.AddSingleton<Sessions.ILaunchLedger, Sessions.LaunchLedger>();
+        services.AddSingleton<Sessions.IRuntimeReaper, Sessions.RuntimeReaper>();
+        services.AddSingleton<Instructions.IProbeService, Instructions.ProbeService>();
 
         // And which of them are still going. Separate from the ledger because
         // the questions differ: one is a history that is only ever added to,
@@ -171,6 +203,15 @@ public static class ServiceRegistration
             provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
             provider.GetRequiredService<Platform.Abstractions.IFilePermissions>(),
             provider.GetRequiredService<HttpClient>()));
+
+        // In front of the service, for the launcher's corner: cached for a day
+        // and never an error, where the service is fresh every time and says
+        // what went wrong.
+        services.AddSingleton<IUpdateNotice>(provider => new UpdateNotice(
+            provider.GetRequiredService<IConfigurationService>(),
+            provider.GetRequiredService<IUpdateService>(),
+            provider.GetRequiredService<Platform.Abstractions.IPlatformPaths>(),
+            provider.GetRequiredService<TimeProvider>()));
 
         return services;
     }

@@ -65,10 +65,14 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
 
         try
         {
+            // One level down and no further. A session's transcript sits
+            // directly in its project's folder; anything deeper belongs to the
+            // subfolders Claude keeps beside it, and those are not sessions.
             files = new DirectoryInfo(Root)
-                .EnumerateFiles("*.jsonl", SearchOption.AllDirectories)
+                .EnumerateDirectories()
+                .SelectMany(project => project.EnumerateFiles("*.jsonl", SearchOption.TopDirectoryOnly))
+                .Where(file => !IsSubagent(file.Name))
                 .OrderByDescending(f => f.LastWriteTimeUtc)
-                .Take(limit)
                 .ToList();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -77,11 +81,19 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
                 $"Could not read Claude's session history at {Root}: {ex.Message}");
         }
 
-        var sessions = new List<AgentSession>(files.Count);
+        var sessions = new List<AgentSession>(Math.Min(limit, files.Count));
 
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
+
+            // The limit counts sessions, not files. Applied before the read it
+            // was spent on whatever happened to be newest, which after an
+            // afternoon of subagents was nothing resumable at all.
+            if (sessions.Count >= limit)
+            {
+                break;
+            }
 
             var session = await ReadAsync(file, ct).ConfigureAwait(false);
 
@@ -93,6 +105,27 @@ internal sealed class ClaudeSessionHistory : ISessionHistory
 
         return OperationResult<IReadOnlyList<AgentSession>>.Ok(sessions);
     }
+
+    /// <summary>
+    /// Whether a transcript belongs to a subagent rather than to a session.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Belt and braces beside the directory rule above, and worth the few
+    /// lines: the layout has already moved once. Claude grew a
+    /// <c>&lt;session-id&gt;/subagents/</c> folder per session, and because the
+    /// listing recursed, thirty-nine subagent transcripts joined thirteen real
+    /// sessions in one project — twenty were shown and eighteen of those could
+    /// not be resumed, because 'agent-a2feab3bbb1dc3a34' is not a session id.
+    /// </para>
+    /// <para>
+    /// Nothing inside the file says which it is: a subagent transcript has a
+    /// working directory and a first prompt like any other. The name is the
+    /// only signal, so the name is what is read.
+    /// </para>
+    /// </remarks>
+    private static bool IsSubagent(string fileName) =>
+        fileName.StartsWith("agent-", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Builds one session from its transcript, or null when the file does not

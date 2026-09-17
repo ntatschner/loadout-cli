@@ -87,10 +87,10 @@ public sealed class SpecialistCountTests
 
         var found = 0;
 
-        // Named rather than scanned, because docs/specialists-architecture.md
-        // says "52 specialists" and is right to: it is the survey of the
-        // external bundle this library was written instead of, not a claim
-        // about what ships. A blanket scan would fail on a historical figure.
+        // Named rather than scanned. A page can state a number that is right
+        // about something other than what ships — a comparison against another
+        // library, a figure quoted from a specification — and a blanket scan
+        // would read every one of those as a stale claim about this repository.
         string[] pages =
         [
             "README.md",

@@ -39,7 +39,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     private const string ProjectSlug = "starstats";
 
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
+    private readonly SpyReaper _reaper = new();
 
     private IAgentLauncher _launcher = null!;
     private IProjectService _projects = null!;
@@ -141,7 +142,22 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             new Loadout.Tests.Fakes.QuietSpendWatch(),
             new Loadout.Core.Statusline.LoadedSpecialistStore(
                 _paths, new Loadout.Core.Configuration.YamlStore(new Loadout.Tests.Fakes.NoOpFilePermissions()),
-                TimeProvider.System));
+                TimeProvider.System),
+            _reaper);
+    }
+
+    /// <summary>Records whether the launch asked for a collection.</summary>
+    private sealed class SpyReaper : Loadout.Core.Sessions.IRuntimeReaper
+    {
+        public int Calls { get; private set; }
+
+        public Task<Loadout.Models.Results.OperationResult<int>> ReapAsync(
+            CancellationToken ct = default)
+        {
+            Calls++;
+
+            return Task.FromResult(Loadout.Models.Results.OperationResult<int>.Ok(0));
+        }
     }
 
     public Task DisposeAsync()
@@ -164,6 +180,103 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         }
 
         return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task A_launch_collects_what_earlier_ones_left_behind()
+    {
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        // The only reliable moment. A session that ends cleans up after itself;
+        // one that is killed never reaches the code that would.
+        _reaper.Calls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_dry_run_changes_nothing_at_all()
+    {
+        // The general form of a defect this launcher keeps shipping. The dry
+        // run returns from a branch about two hundred lines below where the
+        // launch starts doing things, so anything added above that branch runs
+        // during a dry run unless somebody remembers it must not. That has gone
+        // wrong three times in shipped commands — 'workspace save' committed and
+        // pushed, 'memory write' wrote the topic, 'project add' promised a
+        // registration the real run refuses — and once more in review, when
+        // collecting abandoned runtime directories was added above the branch.
+        //
+        // Each was fixed where it was found, which fixes an instance and not the
+        // class. This asserts the property instead: everything the launcher owns
+        // on this machine, and the repository itself, byte for byte either side
+        // of a dry run. A write added above the branch fails here whatever it
+        // writes, without anybody having thought of it in advance.
+        //
+        // Writes only. A collaborator that deletes rather than writes is stubbed
+        // in this fixture and so cannot be seen from here — the collector is
+        // covered by the test below, which counts whether it was asked at all.
+        var before = Snapshot();
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        Snapshot().Should().Equal(
+            before,
+            "a dry run must leave the workspace, the launcher's state and the "
+            + "repository exactly as it found them");
+    }
+
+    /// <summary>
+    /// Every file the launcher could touch, by path and content.
+    /// </summary>
+    /// <remarks>
+    /// Content rather than a timestamp, because a rewrite with the same length
+    /// and a coarse clock would pass a comparison of sizes and dates. The tree
+    /// is a handful of small files, so reading all of it costs nothing.
+    /// </remarks>
+    private SortedDictionary<string, string> Snapshot()
+    {
+        var files = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var file in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories))
+        {
+            string content;
+
+            try
+            {
+                content = Convert.ToHexString(
+                    System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file)));
+            }
+            catch (IOException)
+            {
+                // Held open by something else in the fixture. Recorded as such
+                // so it is still compared, rather than silently skipped.
+                content = "unreadable";
+            }
+
+            files[Path.GetRelativePath(_root, file)] = content;
+        }
+
+        return files;
+    }
+
+    [Fact]
+    public async Task A_dry_run_collects_nothing()
+    {
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        // The dry run reaches the line that reaps: it compiles a real context
+        // into a real directory and returns well after that point. Reaping
+        // there would have the one command whose whole promise is changing
+        // nothing delete other sessions' contexts — which is the defect this
+        // launcher has already shipped twice in other commands.
+        _reaper.Calls.Should().Be(0);
     }
 
     [Fact]

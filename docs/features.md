@@ -5,7 +5,7 @@ the commands.
 
 ### Instructions picked for the job
 
-There are 75 specialists built into the binary: foundations, modes, languages,
+There are 77 specialists built into the binary: foundations, modes, languages,
 frameworks, databases, platforms, clouds, functional areas and skills. Instead
 of one enormous prompt that's mostly irrelevant, Loadout works out which ones
 your task needs from the repo you're in and the words you used, then tells you
@@ -51,10 +51,10 @@ $ loadout instructions explain "why is this postgres query so slow" \
   Estimated  2,403 to 1,655 (-748)
 ```
 
-The lines both sides share are counted rather than listed — they are not the
-question — and the costliest change comes first, because somebody comparing
-configurations is usually trying to get under a budget. If it picked something daft you
-can rule it out with `--without`.
+Lines both sides share get counted rather than listed, since they aren't the
+question, and the costliest change comes first, because anyone comparing
+configurations is usually trying to get under a budget. If it picks something
+daft, rule it out with `--without`.
 
 ### Memory that doesn't grow forever
 
@@ -63,7 +63,22 @@ made them, constraints, the traps that keep catching people. The useful bit is
 `memory compress`, which pulls facts out of always-loaded instruction files and
 into the memory store. What every session pays for gets smaller; what it can
 look up stays the same. `memory audit` goes looking for secrets, duplicates and
-stale entries.
+stale entries — and a fact pinned to the day it was written, or already past its
+own date, is a warning rather than an aside, because those are the two kinds
+that turn from true into misleading with nothing in the store to catch them.
+
+Only the index reaches a session, so the question is which topic to open.
+`loadout memory find "why did the release not publish to winget"` answers it
+with the same ranking the agent's own `loadout_recall` uses. Two rules keep it
+honest: repetition saturates against how much a topic says, so the longest topic
+can't accumulate its way to the top of every question; and a term in a curated
+name or description outweighs the same term buried in prose, because mentioning
+a subject is not being about it.
+
+`memory import` compares topics on what they say rather than on their bytes, so
+two stores that keep the same names and disagree get told apart. A copy that
+differs is named and left exactly where it is — which of two accounts is right
+is a judgement, not a merge.
 
 ### Where the tokens went
 
@@ -105,6 +120,27 @@ Run `loadout` on its own. Every row tells you whether you can work on that
 project, and the panel on the right shows what a session would start with, so
 you know before you spend one.
 
+Enter opens the launch sheet: which agent, what the task is, how to work, and
+which profile or worktree, all filled in with the defaults so Enter again
+starts the session. Underneath, the sheet shows which specialists that task
+would load and what they cost, re-resolved as you type, by asking the same
+resolver the launch asks. What it shows is what the session gets.
+
+The task line — the field that decides most of what a session gets — is filled
+in from what the project has already declared with `loadout task declare`. It
+was typed twice in 122 launches here, because a blank line asking for a sentence
+gets answered by starting work instead. Correcting a line somebody already wrote
+is a much lower bar than composing one, so what's on record goes in the field as
+editable text and anything else is named beneath it. Only when the field is
+empty: a task you typed first is never overwritten.
+
+The corner says which build you're running, and whether there's a newer one —
+`v1.2.0 · 1.3.0 available`. The launcher on your PATH can quietly fall three
+releases behind the one you think you're running, which is an afternoon lost to
+a feature that isn't in the binary yet. The check happens once a day in the
+background, never delays the screen opening, and never puts a failed lookup on
+screen.
+
 `Ctrl+P` opens a palette over every command the CLI has, and it finds them by
 what they're for. Search `undo` and you get `backup restore`. Search `broken`
 and you get `doctor`. Nobody looking to undo a mistake searches for the words
@@ -121,10 +157,52 @@ why, search what the project already knows before working it out again, write
 down one fact worth having next time, and change its own mode when the work
 changes shape.
 
+Being able to look something up and choosing to are different things. The memory
+index sat in every compiled context for months and was acted on once in twelve
+thousand turns, because "read the ones that bear on the task" leaves a session
+to notice mid-work that one of twenty-four titles might have applied. So the
+context now names the occasions: before diagnosing a failure, before an
+unfamiliar error, before anything about how this project builds, tests, releases
+or is configured, and before writing down a fact of its own, so an existing
+topic gets extended rather than contradicted by a second one beside it.
+
+The other way round was tried first — a hook that searched memory on every
+prompt and put the matches in front of the session unasked. Measured against 322
+real prompts it spoke on 56% of them when 18% had anything relevant to say, and
+it was removed. A fact arriving unasked reads as though the launcher vouched for
+it, so being wrong a third of the time costs more than saying nothing.
+
 It isn't offered anything that changes your machine or pushes to a remote, and
 the context says so rather than leaving it to be worked out. Ask an agent to
 review a repository and it has a procedure to follow — `skill.repository-review`
 — and somewhere to put what it finds.
+
+It can also read and update what the project is working on. `loadout task`
+keeps that record — open, doing, done, blocked or dropped, each with who said
+so and when — and checks it against the repository, which is how "called done,
+and nothing has been committed since" gets said out loud. A project that sets
+`tasks: true` under `context` puts the open entries in front of every session,
+so the answer to "where were we" comes from the record rather than from
+whatever is still in the conversation. They are observations, never verdicts:
+corroboration can say a claim is unsupported and can never say one is wrong.
+
+### Code that isn't a repository yet
+
+`loadout project add` takes a directory with no Git repository in it. It
+registers as one still to be set up, with a task saying so, and the launch says
+so too — the first session gets told on the way in instead of finding out by
+running something and reading an error. Initialising it, the first commit and
+the remote are the work. `loadout protect` comes after, and isn't suggested
+before there's anything to protect. A path that doesn't exist is still refused,
+because that's a typo rather than a plan.
+
+`loadout project discover` and the launcher's Add Project list offer these too,
+marked as not repositories, because a list of things you can register that
+leaves out a kind you can register isn't a list you can trust. They're never
+swept up by a bulk registration: a scratch folder doesn't become a project
+because somebody asked to register everything they'd cloned. Build output —
+`__pycache__`, `dist`, a screenshots folder — stays out of the offer, though
+it's still walked through in case a repository is buried in one.
 
 ### Undo
 

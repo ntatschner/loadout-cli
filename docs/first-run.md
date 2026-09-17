@@ -133,13 +133,20 @@ loadout docs export --type machine-index --out docs/index.txt
 loadout docs export --type user-guide    --out docs/guide.md
 ```
 
-**The four are not equally derivable, and the output says which is which.** The
+The language of each file comes from its extension, and the scan reads C#,
+TypeScript and JavaScript, Python, Go, Rust, Java, Kotlin, Swift, Ruby, PHP, C
+and C++, PowerShell, shell, Terraform and SQL. It is lexical — a pair of line
+patterns per language and the comment style that documents a declaration — so
+where it is wrong it leaves something out rather than inventing it. A file in a
+language it doesn't know is skipped, not guessed at.
+
+**The four aren't equally derivable, and the output says which is which.** The
 reference and machine index fall out of the code — always true, always dull,
 never need a person. The technical guide is the prose already sitting in your
 doc comments, arranged by module. The user guide is barely derivable at all,
 because what somebody wants to *do* isn't in the source.
 
-So the user guide is emitted as a **scaffold that says it is one**, and the
+So the user guide comes out as a **scaffold that says it's one**, and the
 command says so again on the way out. Generating it from symbols would produce
 something that reads like documentation, teaches nobody anything, and — worst of
 the three — looks finished enough that nobody writes the real thing.
@@ -153,6 +160,161 @@ meet it rather than in a guide read end to end.
 The **machine index** opens with a digest of the modules and what each holds, so
 a session can pick a file to open instead of reading the tree, and follows it
 with one tab-separated line per symbol.
+
+### Which files, and which languages
+
+The files come from git: everything tracked, plus anything present that
+`.gitignore` doesn't exclude. A hand-kept list of directories to skip is always
+one short — it misses source under a name nobody thought of, and sweeps in a
+parked virtual environment under another. Your project has already written down
+what's its own, and git applies that exactly. Outside a repository, the tree is
+walked with the old rules.
+
+Where [Universal Ctags](https://ctags.io) is on `PATH`, it reads the files the
+built-in table can't — well over a hundred languages — and the two halves get
+joined by file, so nothing is counted twice. The table keeps the languages it
+knows, because it also reads the comment documenting a declaration, and ctags
+doesn't. A machine without ctags gets the table, and no message about a tool it
+never had.
+
+A project can say more in its manifest, under `symbols`:
+
+```yaml
+symbols:
+  ignore:
+    - generated/**
+  extensions:
+    .pyw: python
+  languages:
+    - id: elixir
+      name: Elixir
+      extensions: [ex, exs]
+      types: '^\s*defmodule\s+(?<name>[\w.]+)'
+      members: '^\s*def(?:p)?\s+(?<name>\w+)'
+      docs: hash
+```
+
+`ignore` takes globs the scan leaves out even though git lists them.
+`extensions` maps an extension onto a language the table knows. `languages`
+describes one it doesn't: a pattern for a line declaring a type (optional) and
+one for a function or member, each with a `name` group, plus how the language
+documents a declaration — `hash`, `double_slash`, `slashes`, `double_dash`,
+`block` or `docstring_below`. Run `loadout docs find` once after writing one. A
+pattern that doesn't compile drops its own language rather than failing every
+lookup.
+
+### Finding one thing
+
+```
+loadout docs find PreflightService
+```
+
+The same scan, kept rather than written out. `docs find` says where a type or
+member is declared, as file and line, and is what the compiled context points
+an agent at when it knows a name — one line back instead of
+a search across the tree and whatever it opened on the way. An agent launched
+with the launcher's own tools gets it as `loadout_locate`, through the same
+code, so the two can't drift.
+
+The index is cached under the machine's cache directory against the commit it
+was built at, and thrown away when the commit moves. That's a coarse key — a
+session's edits don't move it — so two rules keep the answer right about the
+tree as it stands. Every file a cached hit names gets read again before it's
+reported, and a cached miss is checked against a fresh scan before it's reported
+as one. The cache can make a hit faster. It can't make an answer wrong, and
+`--rescan` reads the tree regardless.
+
+A lookup copes with edits on its own: it re-reads any file it names, and a name
+the index has never seen sends it back to the tree. `loadout docs refresh
+<file>` does better for a file you've just changed, replacing that file's
+entries in the index at the cost of
+reading one file, so a name added a minute ago is found without a rescan and
+the directory map is corrected as the edits happen. It is made to be run by an
+agent's after-edit hook; with no index yet it builds one, so the index is warm
+by the time the agent asks.
+
+`loadout protect --refresh-hook` installs that hook, in the project's own
+Claude settings file in the workspace rather than the user's, since it
+refreshes one project's index. It writes the launcher by name, never by path:
+the file syncs between machines, and the launcher substitutes its own location
+when it hands the file to Claude.
+
+That hand-over is now screened, by the rule pre-approvals already follow: a
+file that travels between people and machines may only tighten, and anything
+that loosens comes from `config.yaml`, which stays on this machine. Three
+things in the project's settings file loosen, and each is read at launch.
+
+- **Hooks** run a command after every edit. The launcher's own is kept and
+  pointed at this machine's launcher; anything named under
+  `commands.allowed_hooks.<slug>` is kept as written, by whole command or a
+  prefix ending at a word, so `prettier` allows `prettier --write`; the rest is
+  dropped.
+- **`permissions.allow`** removes an approval prompt. An entry is kept only
+  where `commands.pre_approved.<slug>` already says the same, spelled either as
+  the command or as the specifier Claude sees; the rest is dropped. `deny` and
+  `ask` only tighten and pass untouched.
+- **`permissions.defaultMode`** may only be `default` or `plan`; a mode that
+  skips prompts is dropped, as is `additionalDirectories`, because nothing
+  local can put either back.
+
+Every dropped entry is named in a warning that says which config key allows it
+here. Everything else in the file passes as it always did, a file with nothing
+that loosens is handed over untouched, and the screened copy lives in the
+launch's own runtime directory and goes when the session does.
+
+```yaml
+# config.yaml, this machine only
+commands:
+  pre_approved:
+    starstats:
+      - git status
+  allowed_hooks:
+    starstats:
+      - prettier
+      - npm test
+``` In hook mode the command reads the edited file
+from what Claude sends it and says nothing back unless a directory's line on
+the map changed — a type added, removed or renamed. An edit inside a method,
+which is most of them, passes in silence. That one line is the only way a change
+made during a session reaches a running agent. The compiled context is read once
+at launch, so the map inside it can't be rewritten in place — but a line added
+to the conversation can correct it. The file lives in the workspace, so the hook
+travels with the next `loadout workspace save`. Codex has no such hook, so there
+the lookup's own re-reading is the whole answer.
+
+### From other agents and editors
+
+Everything above is served over MCP as well as on the command line, and the
+server needs nothing but a registered project: `loadout mcp serve --project
+<slug>` in any MCP client's configuration — Cursor, VS Code, Codex — gives that
+client `loadout_locate` and `loadout_code_map`. The map tool returns the digest
+as it stands now, pulled rather than pushed, which is what an agent with no
+after-edit hook has instead of the hook. The hook command itself reads the
+payloads agents actually send — Claude's `tool_input.file_path`, Cursor's
+top-level `file_path`, or a plain `files` list — and `--dialect generic` makes
+it write plain text for a hook that shows or ignores stdout rather than the
+document Claude reads back. Only the Claude entry is installed by
+`loadout protect --refresh-hook`; a Cursor hook lives in a file the repository
+policy keeps out of the repository, so that one is yours to write.
+
+A project that wants the map itself in every session, rather than one lookup
+at a time, runs `loadout project context code-map on`, which writes
+`code_map: true` under `context` in its manifest. That inlines one line per
+directory naming the types it holds, at a cost of a few thousand tokens on
+every launch; [the context budget](context-budget.md) says when that is worth
+paying, and `loadout instructions explain` shows the figure.
+
+`loadout project context tasks on`, which is `tasks: true` in the same place,
+puts the project's open work in front of every session — what
+`loadout task list` shows, with who said so and when. Off until asked for,
+because the task record is a claim rather than a fact about the code and a
+project that keeps none should not pay for a heading saying so.
+The agent moves an entry on with `loadout_task_declare`, or
+`loadout task declare <id> <state>`, and the context tells it to.
+
+It isn't memory, and that's deliberate. Memory holds what the code doesn't say,
+and travels with the workspace. A symbol index comes from one checkout at one
+commit, and would fail `memory audit` the day it was written.
 
 ### Publishing it
 
@@ -367,9 +529,9 @@ otherwise you'd wait a quarter of an hour to find out whether you're over it.
 
 The status line shows the composed specialist count the same way — `12 spec` or
 `12 spec/review` — read from what the launch wrote down. Resolving the library
-takes about half a second, and half a second per keystroke is not a status line.
-A session started outside the launcher has nothing written, so the segment is
-absent rather than claiming zero.
+takes about half a second, and half a second per keystroke isn't a status line.
+A session started outside the launcher has nothing written down, so the segment
+just isn't there rather than claiming zero.
 
 ## Sharing what belongs to everybody
 
@@ -410,7 +572,7 @@ loadout pack update house       # moves the pin, and costs the approval
 loadout pack remove house
 ```
 
-**Fetching is not approving, and that split is the whole feature.** A pack's
+**Fetching isn't approving, and that split is the whole feature.** A pack's
 content becomes instructions an agent follows, and the declaration lives in a
 workspace anybody on your team can edit. So the declaration *proposes* and your
 machine *decides* — the same rule command policy uses, guarding the same

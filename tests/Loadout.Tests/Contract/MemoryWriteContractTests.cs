@@ -94,6 +94,67 @@ public sealed class MemoryWriteContractTests
             path.EndsWith("build-quirks.md", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Shaped like a GitHub token and belonging to nobody. Built rather than
+    /// written out so the literal never sits in the file as one long string.
+    /// </summary>
+    private static readonly string Credential = "ghp_" + new string('A', 36);
+
+    [BuiltCliFact]
+    public async Task A_credential_is_refused_and_never_echoed()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var project = await Registered(loadout);
+
+        var run = await loadout.RunAsync(
+            "memory", "write", "deploy-notes", "--project", project,
+            "--fact", "The deploy uses token " + Credential + " for CI",
+            "--description", "how the deploy authenticates against the registry");
+
+        var said = run.StandardOutput + run.StandardError;
+
+        run.ExitCode.Should().NotBe(0, "a credential must not be written to memory");
+
+        // Naming the pattern is the point of the refusal: it tells somebody
+        // what to go and rotate.
+        said.Should().Contain("GitHub token");
+
+        // And the value is the one thing that must not appear. The refusal was
+        // careful about this; the advisory printed alongside it quoted the fact
+        // verbatim before any screening had run, which put most of the token
+        // into the terminal and from there into scrollback and any transcript.
+        said.Should().NotContain(Credential);
+        said.Should().NotContain(Credential[..30],
+            "a truncated quote of a credential is still a disclosed credential");
+    }
+
+    [BuiltCliFact]
+    public async Task A_dry_run_refuses_what_the_real_run_would_refuse()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var project = await Registered(loadout);
+
+        var run = await loadout.RunAsync(
+            "memory", "write", "deploy-notes", "--project", project, "--dry-run",
+            "--fact", "The deploy uses token " + Credential + " for CI",
+            "--description", "how the deploy authenticates against the registry");
+
+        var said = run.StandardOutput + run.StandardError;
+
+        // The preview ran ahead of both screens and reported the write it could
+        // not have made. A dry run that predicts success for something the real
+        // run refuses is worse than no dry run: it is the case somebody uses it
+        // to check.
+        said.Should().NotContain("Would record",
+            "the real run refuses this, so the preview of it must not promise a write");
+
+        run.ExitCode.Should().NotBe(0);
+        said.Should().Contain("GitHub token");
+        said.Should().NotContain(Credential);
+    }
+
     /// <summary>Registers a repository so the write path can be reached.</summary>
     private static async Task<string> Registered(LoadoutProcess loadout)
     {

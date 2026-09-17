@@ -30,6 +30,12 @@ namespace Loadout.Core.Projects;
 /// <param name="RunningSessions">
 /// How many sessions are running against this project right now.
 /// </param>
+/// <param name="CarriesTasks">
+/// Whether the project puts its open tasks in front of every session.
+/// </param>
+/// <param name="CarriesCodeMap">
+/// Whether the project inlines a map of its code into every session.
+/// </param>
 /// <remarks>
 /// The one line here that changes what somebody does next rather than telling
 /// them how things stand. Everything else on the panel is a fact about the
@@ -49,7 +55,9 @@ public sealed record ProjectOverview(
     int TrackedAgentFiles,
     bool HookNeedsUpgrade = false,
     IReadOnlyList<SpecialistSelection>? DetectedSpecialists = null,
-    int RunningSessions = 0)
+    int RunningSessions = 0,
+    bool CarriesTasks = false,
+    bool CarriesCodeMap = false)
 {
     /// <summary>
     /// The point past which the always-loaded instructions are worth a look.
@@ -166,7 +174,13 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
             scoped = rules.Value!.Count(rule => !rule.AlwaysApply && !rule.IsUnscoped);
         }
 
-        alwaysLoaded += await CoreInstructionBytesAsync(slug, ct).ConfigureAwait(false);
+        // Read once and used twice: the instruction sizes below and the
+        // switches deciding what else the session carries both come out of it,
+        // and reading the same small file twice per redraw is a cost the panel
+        // pays on every keystroke that moves the selection.
+        var manifest = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+        alwaysLoaded += CoreInstructionBytes(slug, manifest.Succeeded ? manifest.Value : null);
 
         var topics = await _memory.ListAsync(_workspace.LocalPath, slug, ct).ConfigureAwait(false);
 
@@ -188,7 +202,9 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
             await _instructions
                 .DetectAsync(path, _workspace.LocalPath, slug, ct)
                 .ConfigureAwait(false),
-            await RunningAsync(slug, ct).ConfigureAwait(false)));
+            await RunningAsync(slug, ct).ConfigureAwait(false),
+            manifest.Succeeded && manifest.Value!.Context.Tasks,
+            manifest.Succeeded && manifest.Value!.Context.CodeMap));
     }
 
     /// <summary>How many sessions are open against a project.</summary>
@@ -219,11 +235,9 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
     /// per-agent one the compiler adds implicitly and a migrated CLAUDE.md
     /// lands in.
     /// </summary>
-    private async Task<long> CoreInstructionBytesAsync(string slug, CancellationToken ct)
+    private long CoreInstructionBytes(string slug, ProjectManifest? manifest)
     {
-        var manifest = await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
-
-        if (manifest.Failed)
+        if (manifest is null)
         {
             return 0;
         }
@@ -231,13 +245,13 @@ internal sealed class ProjectOverviewService : IProjectOverviewService
         var root = _workspace.LocalPath;
         var projectRoot = Path.Combine(root, "projects", slug);
 
-        var paths = manifest.Value!.Context.Global
+        var paths = manifest.Context.Global
             .Select(relative => Path.Combine(root, ToNative(relative)))
-            .Concat(manifest.Value.Context.Project
+            .Concat(manifest.Context.Project
                 .Select(relative => Path.Combine(projectRoot, ToNative(relative))))
             .ToList();
 
-        var agent = manifest.Value.Agents.Default;
+        var agent = manifest.Agents.Default;
 
         if (!string.IsNullOrWhiteSpace(agent))
         {

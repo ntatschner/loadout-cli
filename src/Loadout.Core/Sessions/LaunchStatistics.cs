@@ -12,7 +12,24 @@ namespace Loadout.Core.Sessions;
 /// history would have to be invented. This one is measured, and is only a guide
 /// to what dropping the specialist would save from here on.
 /// </param>
-public sealed record SpecialistUsage(string Id, int Launches, int TokensNow);
+/// <param name="Eligible">
+/// Launches it could have been composed into: the ones since it first appeared.
+/// </param>
+/// <remarks>
+/// The two counts are separate because dividing by every launch in the window
+/// makes a specialist added part-way through look like one that is failing to
+/// load. 'foundation.forward-motion' read as 27 of 45 — 60%, beside four
+/// foundations at 100% — on the day it had loaded on every launch since it
+/// existed, and that number is what sent somebody looking for a fault there
+/// was not.
+/// <para>
+/// From the first launch that reached it rather than from anything it declares
+/// about itself: the ledger already knows, and a date written into a specialist
+/// would be one more thing to keep true. Every launch after that counts, so one
+/// that stops being reached is not flattered back up to a hundred.
+/// </para>
+/// </remarks>
+public sealed record SpecialistUsage(string Id, int Launches, int Eligible, int TokensNow);
 
 /// <summary>What was launched in one mode.</summary>
 /// <param name="Mode">The mode, or "none" for launches that named none.</param>
@@ -91,17 +108,31 @@ public sealed record LaunchStatistics(
         ArgumentNullException.ThrowIfNull(library);
 
         var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var firstSeen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var id in records.SelectMany(record => record.Specialists.Distinct(
-            StringComparer.OrdinalIgnoreCase)))
+        // Oldest first, so "when did this first appear" is a position in the
+        // list. The ledger is written in launch order, but a report that
+        // depended on that would break quietly the day anything reordered it.
+        var ordered = records.OrderBy(record => record.StartedAt).ToList();
+
+        for (var index = 0; index < ordered.Count; index++)
         {
-            counts[id] = counts.GetValueOrDefault(id) + 1;
+            foreach (var id in ordered[index].Specialists.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                counts[id] = counts.GetValueOrDefault(id) + 1;
+
+                if (!firstSeen.ContainsKey(id))
+                {
+                    firstSeen[id] = index;
+                }
+            }
         }
 
         var loaded = counts
             .Select(entry => new SpecialistUsage(
                 entry.Key,
                 entry.Value,
+                ordered.Count - firstSeen[entry.Key],
                 library.GetValueOrDefault(entry.Key)))
             .OrderByDescending(usage => usage.Launches)
             .ThenBy(usage => usage.Id, StringComparer.Ordinal)

@@ -214,6 +214,11 @@ public sealed class ProjectShowCommand : AsyncCommand<ProjectShowCommand.Setting
                 launchCount = project.LaunchCount,
                 lastLaunched = project.LastLaunchedUtc,
                 profiles = manifest?.Profiles.Keys,
+                context = manifest is null
+                    ? null
+                    : ContextSwitch.All.ToDictionary(
+                        entry => entry.Key,
+                        entry => entry.Read(manifest.Context)),
             });
 
             return CommandOutput.Success();
@@ -246,6 +251,24 @@ public sealed class ProjectShowCommand : AsyncCommand<ProjectShowCommand.Setting
         if (manifest is not null && manifest.Profiles.Count > 0)
         {
             output.WriteLine($"Profiles   {string.Join(", ", manifest.Profiles.Keys)}");
+        }
+
+        // Always, including when both are off. What a session is given is the
+        // question this command is asked, and a line that appears only when
+        // something is switched on cannot answer it: an absent line reads as
+        // "this project has no such thing" rather than "off".
+        if (manifest is not null)
+        {
+            var on = ContextSwitch.All
+                .Where(entry => entry.Read(manifest.Context))
+                .Select(entry => entry.Key)
+                .ToList();
+
+            var carried = on.Count > 0
+                ? Markup.Escape(string.Join(", ", on))
+                : "[dim]nothing beyond the usual[/]";
+
+            output.WriteLine($"Context    {carried}");
         }
 
         return CommandOutput.Success();

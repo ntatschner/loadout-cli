@@ -70,11 +70,29 @@ public sealed record ContextBudget(IReadOnlyList<ContextLayer> Layers, int Token
     /// The memory index, which is the only part of memory a session pays for:
     /// topics stay on disk and are read when something makes them relevant.
     /// </param>
+    /// <param name="codeMapBytes">
+    /// The map of the code, when the project has asked for it. Zero otherwise,
+    /// and shown either way: a layer somebody can switch on ought to be visible
+    /// at its price of nothing before it is switched on.
+    /// </param>
+    /// <param name="openTaskBytes">
+    /// The open tasks, on a project that puts them in front of every session.
+    /// Zero otherwise, and shown either way for the same reason as the map.
+    /// </param>
+    /// <param name="skillBytes">
+    /// What the skills on offer cost a session that never invokes one: their
+    /// descriptions, which an agent keeps in front of itself so it can tell
+    /// when one applies. The bodies are paid for on use and are not counted
+    /// here.
+    /// </param>
     public static ContextBudget From(
         Models.Instructions.EffectiveInstructions instructions,
         long alwaysLoadedRuleBytes,
         long scopedRuleBytes,
-        long memoryIndexBytes)
+        long memoryIndexBytes,
+        long codeMapBytes = 0,
+        long openTaskBytes = 0,
+        long skillBytes = 0)
     {
         ArgumentNullException.ThrowIfNull(instructions);
 
@@ -83,6 +101,18 @@ public sealed record ContextBudget(IReadOnlyList<ContextLayer> Layers, int Token
             new("Specialists", instructions.Budget.Bytes, instructions.Budget.EstimatedTokens, true),
             new("Instructions and rules", alwaysLoadedRuleBytes, Tokens(alwaysLoadedRuleBytes), true),
             new("Memory index", memoryIndexBytes, Tokens(memoryIndexBytes), true),
+            new("Code map", codeMapBytes, Tokens(codeMapBytes), true),
+
+            // Counted like the rest. A layer that loads and is not in the
+            // accounting is the drift this report exists to prevent, and it
+            // would understate every launch on a project that keeps tasks.
+            new("Open tasks", openTaskBytes, Tokens(openTaskBytes), true),
+
+            // Counted for the same reason, and it took saying out loud: the
+            // skills reach the session as a plugin rather than inside the
+            // compiled context, so every earlier version of this report was
+            // silent about them while a launch paid for them anyway.
+            new("Skills", skillBytes, Tokens(skillBytes), true),
             new("Scoped rules", scopedRuleBytes, Tokens(scopedRuleBytes), false),
         };
 

@@ -22,6 +22,7 @@ internal sealed class ProjectDetailView : FrameView
     /// <summary>Width of the label column, so the values line up down the panel.</summary>
     private const int LabelWidth = 12;
 
+    private readonly Label _name;
     private readonly Label _path;
     private readonly Label _running;
     private readonly Label _branch;
@@ -30,7 +31,7 @@ internal sealed class ProjectDetailView : FrameView
     private readonly Label _memory;
     private readonly Label _specialists;
     private readonly ListView _warnings;
-    private readonly FrameView _warningsFrame;
+    private readonly Label _warningsHeading;
     private readonly Button _launch;
     private readonly Button _resume;
     private readonly Button _shell;
@@ -50,48 +51,75 @@ internal sealed class ProjectDetailView : FrameView
 
     internal ProjectDetailView()
     {
-        Title = "Details";
-        BorderStyle = LineStyle.Rounded;
+        // A surface rather than a box. The list beside this is framed because
+        // it is something to move through; this is something to read, and it
+        // sits a shade above the ground with a margin of its own instead of a
+        // line round it. The project's name is its heading, in the place a
+        // frame's title used to be.
+        BorderStyle = LineStyle.None;
+        SetScheme(LauncherTheme.RaisedSurface);
 
-        _path = new Label { X = 1, Y = 0, Width = Dim.Fill(1) };
+        if (Padding is { } padding)
+        {
+            padding.Thickness = new Thickness(2, 1, 1, 1);
+        }
+
+        _name = new Label { X = 0, Y = 0, Width = Dim.Fill() };
+        _name.SetScheme(LauncherTheme.Heading);
+
+        _path = new Label { X = 0, Y = 1, Width = Dim.Fill() };
+        _path.SetScheme(LauncherTheme.Muted);
 
         // Directly under the path, above every fact about the project,
         // because this is the only line here that changes what somebody does
         // next rather than describing how things stand. Empty when nothing is
         // running, which is the ordinary case and should cost no attention.
-        _running = new Label { X = 1, Y = 1, Width = Dim.Fill(1) };
+        _running = new Label { X = 0, Y = 2, Width = Dim.Fill() };
 
-        _branch = Field("Branch", 2);
-        _context = Field("Context", 3);
-        _rules = Field("Rules", 4);
-        _memory = Field("Memory", 5);
-        _specialists = Field("Uses", 6);
+        _branch = Field("Branch", 3);
+        _context = Field("Context", 4);
+        _rules = Field("Rules", 5);
+        _memory = Field("Memory", 6);
+        _specialists = Field("Uses", 7);
 
-        _warnings = new ListView { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
-
-        _warningsFrame = new FrameView
+        // A heading and a list, not a box in a box. The list already says
+        // what it is by starting every line with a mark.
+        //
+        // Placed under the last fact rather than on a fixed row, because the
+        // Uses line wraps when a project is built from many things, and a
+        // heading on a fixed row was then hard against the wrapped line with
+        // the blank row that separates sections eaten. Seen in a photograph
+        // of a real console, not in the headless tests, whose projects are
+        // built from nothing.
+        _warningsHeading = new Label
         {
-            X = 1,
-            Y = 7,
-            Width = Dim.Fill(1),
-            Height = Dim.Fill(4),
-            Title = "Needs attention",
-            BorderStyle = LineStyle.Single,
+            X = 0,
+            Y = Pos.Bottom(_specialists) + 1,
+            Text = "Needs attention",
             Visible = false,
         };
 
-        _warningsFrame.Add(_warnings);
+        _warningsHeading.SetScheme(LauncherTheme.Alert);
 
-        _launch = new Button { X = 1, Y = Pos.AnchorEnd(2), Text = "_Launch" };
-        _resume = new Button { X = Pos.Right(_launch) + 1, Y = Pos.AnchorEnd(2), Text = "_Resume" };
-        _shell = new Button { X = Pos.Right(_resume) + 1, Y = Pos.AnchorEnd(2), Text = "_Shell" };
+        _warnings = new ListView
+        {
+            X = 0,
+            Y = Pos.Bottom(_warningsHeading),
+            Width = Dim.Fill(),
+            Height = Dim.Fill(2),
+            Visible = false,
+        };
+
+        _launch = new Button { X = 0, Y = Pos.AnchorEnd(1), Text = "_Launch" };
+        _resume = new Button { X = Pos.Right(_launch) + 1, Y = Pos.AnchorEnd(1), Text = "_Resume" };
+        _shell = new Button { X = Pos.Right(_resume) + 1, Y = Pos.AnchorEnd(1), Text = "_Shell" };
 
         // Only offered when there is something to look at, so its presence is
         // itself the signal that something needs attention.
         _problems = new Button
         {
             X = Pos.Right(_shell) + 1,
-            Y = Pos.AnchorEnd(2),
+            Y = Pos.AnchorEnd(1),
             Text = "_Problems",
             Visible = false,
         };
@@ -101,7 +129,7 @@ internal sealed class ProjectDetailView : FrameView
         _shell.Accepting += (_, e) => { e.Handled = true; Shell?.Invoke(this, EventArgs.Empty); };
         _problems.Accepting += (_, e) => { e.Handled = true; Problems?.Invoke(this, EventArgs.Empty); };
 
-        Add(_path, _running, _warningsFrame, _launch, _resume, _shell, _problems);
+        Add(_name, _path, _running, _warningsHeading, _warnings, _launch, _resume, _shell, _problems);
     }
 
     /// <summary>The agent the launch button would start.</summary>
@@ -112,9 +140,13 @@ internal sealed class ProjectDetailView : FrameView
     /// </summary>
     private Label Field(string name, int row)
     {
-        Add(new Label { X = 1, Y = row, Text = name });
+        var label = new Label { X = 0, Y = row, Text = name };
 
-        var value = new Label { X = 1 + LabelWidth, Y = row, Width = Dim.Fill(1) };
+        label.SetScheme(LauncherTheme.Muted);
+
+        Add(label);
+
+        var value = new Label { X = LabelWidth, Y = row, Width = Dim.Fill() };
 
         Add(value);
 
@@ -126,11 +158,18 @@ internal sealed class ProjectDetailView : FrameView
     {
         ArgumentNullException.ThrowIfNull(project);
 
-        Title = project.Entry.Name;
+        _name.Text = project.Entry.Name;
         _agent = project.Entry.DefaultAgent;
         _launch.Text = $"_Launch {project.Entry.DefaultAgent}";
 
         _path.Text = project.LocalPath ?? "not on this machine";
+
+        // Cleared with the rest. This line was left alone while a project was
+        // read, so the previous project's "a session is running here" sat
+        // under the next project's name until its own answer arrived — seen
+        // in a photograph taken mid-read, and a wrong answer to the one
+        // question on this pane that changes what somebody does next.
+        _running.Text = string.Empty;
 
         _branch.Text = status;
         _context.Text = string.Empty;
@@ -138,7 +177,7 @@ internal sealed class ProjectDetailView : FrameView
         _memory.Text = string.Empty;
         _specialists.Text = string.Empty;
 
-        _warningsFrame.Visible = false;
+        ShowWarnings(false);
         _problems.Visible = false;
 
         SetEnabled(project.IsAvailableLocally);
@@ -178,9 +217,11 @@ internal sealed class ProjectDetailView : FrameView
 
         var budget = FormatBytes(overview.AlwaysLoadedBytes);
 
+        var carried = Carried(overview);
+
         _context.Text = overview.IsOverBudget
-            ? $"{budget} every session — larger than it needs to be"
-            : $"{budget} every session";
+            ? $"{budget} every session — larger than it needs to be{carried}"
+            : $"{budget} every session{carried}";
 
         _rules.Text = overview.ScopedRules == 1
             ? "1 scoped rule, loaded on demand"
@@ -197,13 +238,42 @@ internal sealed class ProjectDetailView : FrameView
 
         var warnings = Warnings(overview).ToList();
 
-        _warningsFrame.Visible = warnings.Count > 0;
+        ShowWarnings(warnings.Count > 0);
         _problems.Visible = warnings.Count > 0;
 
         if (warnings.Count > 0)
         {
             _warnings.SetSource(new ObservableCollection<string>(warnings.Select(w => $"! {w}")));
         }
+    }
+
+    /// <summary>
+    /// What this project carries beyond its instructions, appended to the
+    /// context line rather than given a row of its own.
+    /// </summary>
+    /// <remarks>
+    /// Shown because the menu can switch these on and off, and a toggle whose
+    /// current state is nowhere on the screen is a guess. Silent when both are
+    /// off, which is the ordinary case: the line is about what a session costs,
+    /// and "carrying nothing extra" costs nothing to say and nothing to know.
+    /// </remarks>
+    internal static string Carried(ProjectOverview overview)
+    {
+        ArgumentNullException.ThrowIfNull(overview);
+
+        var carried = new List<string>();
+
+        if (overview.CarriesTasks)
+        {
+            carried.Add("open tasks");
+        }
+
+        if (overview.CarriesCodeMap)
+        {
+            carried.Add("the code map");
+        }
+
+        return carried.Count == 0 ? string.Empty : ", plus " + string.Join(" and ", carried);
     }
 
     /// <summary>
@@ -239,17 +309,24 @@ internal sealed class ProjectDetailView : FrameView
     /// than a statement of fact.</param>
     internal void ShowNothing(string because = "No project selected.")
     {
-        Title = "Details";
+        _name.Text = string.Empty;
         _path.Text = because;
+        _running.Text = string.Empty;
         _branch.Text = string.Empty;
         _context.Text = string.Empty;
         _rules.Text = string.Empty;
         _memory.Text = string.Empty;
         _specialists.Text = string.Empty;
-        _warningsFrame.Visible = false;
+        ShowWarnings(false);
         _problems.Visible = false;
 
         SetEnabled(false);
+    }
+
+    private void ShowWarnings(bool shown)
+    {
+        _warningsHeading.Visible = shown;
+        _warnings.Visible = shown;
     }
 
     private void SetEnabled(bool enabled)

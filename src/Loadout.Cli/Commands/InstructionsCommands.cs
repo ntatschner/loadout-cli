@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Git;
 using Loadout.Core.Instructions;
@@ -450,6 +451,8 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
 {
     private readonly IRuleService _rules;
     private readonly IMemoryService _memory;
+    private readonly ISymbolIndexService _symbols;
+    private readonly Loadout.Core.Tasks.ITaskService _tasks;
 
     public InstructionsExplainCommand(
         IInstructionService instructions,
@@ -458,11 +461,15 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
         IGitManager git,
         IRuleService rules,
         IMemoryService memory,
+        ISymbolIndexService symbols,
+        Loadout.Core.Tasks.ITaskService tasks,
         IAnsiConsole console)
         : base(instructions, workspace, projects, git, console)
     {
         _rules = rules;
         _memory = memory;
+        _symbols = symbols;
+        _tasks = tasks;
     }
 
     /// <summary>
@@ -474,13 +481,15 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     /// missing layer counts as nothing rather than as unknown: a session with no
     /// memory really is paying nothing for it.
     /// </remarks>
-    private async Task<(long Always, long Scoped, long MemoryIndex)> LayersAsync(
+    private async Task<(long Always, long Scoped, long MemoryIndex, long CodeMap, long Tasks, long Skills)> LayersAsync(
         string? slug,
+        ProjectManifest? manifest,
+        string? repositoryPath,
         CancellationToken ct)
     {
         if (slug is null || WorkspacePath is null)
         {
-            return (0, 0, 0);
+            return (0, 0, 0, 0, 0, 0);
         }
 
         var always = 0L;
@@ -501,7 +510,43 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
 
         var index = await _memory.ReadIndexAsync(WorkspacePath, slug, ct).ConfigureAwait(false);
 
-        return (always, scoped, index.Value?.Length ?? 0);
+        // Counted only when the project has asked for it, because that is the
+        // only time a session pays for it. The same digest the compiler
+        // writes, from the same cache, so the figure is the figure.
+        var codeMap = 0L;
+
+        if (manifest?.Context.CodeMap == true && repositoryPath is not null)
+        {
+            var digest = await _symbols.DigestAsync(repositoryPath, slug, ct).ConfigureAwait(false);
+
+            codeMap = digest.Succeeded ? Encoding.UTF8.GetByteCount(digest.Value!.Text) : 0;
+        }
+
+        // Same rule as the map above: counted only where the project asked
+        // for it, and measured the way the compiler measures it.
+        var tasks = 0L;
+
+        if (manifest?.Context.Tasks == true)
+        {
+            var open = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+            if (open.Succeeded)
+            {
+                tasks = open.Value!
+                    .Where(t => t.State is Models.Tasks.TaskState.Open
+                        or Models.Tasks.TaskState.Doing
+                        or Models.Tasks.TaskState.Blocked)
+                    .Sum(t => Encoding.UTF8.GetByteCount(t.Id + t.Title + t.DeclaredBy));
+            }
+        }
+
+        // Asked of the same enumeration the launch hands over, so the figure
+        // here and the skills a session actually gets cannot disagree. The
+        // agent decides which are offered, so it decides what is counted.
+        var skills = SkillExport.StandingBytes(
+            SkillExport.Offered(WorkspacePath, slug, manifest?.Agents.Default ?? "claude"));
+
+        return (always, scoped, index.Value?.Length ?? 0, codeMap, tasks, skills);
     }
 
     /// <inheritdoc />
@@ -520,9 +565,11 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             ? (await Workspace.ReadProjectAsync(project.Entry.Slug).ConfigureAwait(false)).Value
             : null;
 
+        var repository = await RepositoryAsync(project, settings.Repo).ConfigureAwait(false);
+
         var resolved = await Instructions.ResolveAsync(new InstructionRequest(
             manifest,
-            await RepositoryAsync(project, settings.Repo).ConfigureAwait(false),
+            repository,
             WorkspacePath,
             settings.Agent ?? manifest?.Agents.Default ?? "claude",
             ProfileName: settings.Profile,
@@ -582,13 +629,16 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             return CommandOutput.Success();
         }
 
-        var counted = await LayersAsync(project?.Entry.Slug, cancellationToken).ConfigureAwait(false);
+        var counted = await LayersAsync(project?.Entry.Slug, manifest, repository, cancellationToken)
+            .ConfigureAwait(false);
 
         Render(
             output,
             effective,
             settings.Task,
-            ContextBudget.From(effective, counted.Always, counted.Scoped, counted.MemoryIndex));
+            ContextBudget.From(
+                effective, counted.Always, counted.Scoped, counted.MemoryIndex, counted.CodeMap,
+                    counted.Tasks, counted.Skills));
 
         return CommandOutput.Success();
     }

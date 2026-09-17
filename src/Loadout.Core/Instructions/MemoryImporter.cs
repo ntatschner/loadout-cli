@@ -103,6 +103,7 @@ internal sealed class MemoryImporter : IMemoryImporter
 
         var imported = new List<MemoryTopic>();
         var skipped = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var drifted = new List<string>();
 
         foreach (var file in Directory.EnumerateFiles(sourceDirectory, "*.md").Order())
         {
@@ -151,9 +152,26 @@ internal sealed class MemoryImporter : IMemoryImporter
                 continue;
             }
 
-            if (File.Exists(Path.Combine(destination, name + ".md")))
+            var existing = Path.Combine(destination, name + ".md");
+
+            if (File.Exists(existing))
             {
-                skipped[name] = "already in the workspace";
+                // Never overwrite: the workspace copy may well be the curated
+                // one. But a copy saying something *different* is the case
+                // worth reporting, and a name-only check cannot see it. Three
+                // topics were called "already in the workspace" while one of
+                // them was two corrections behind, and the import summary
+                // said there was nothing left to bring across.
+                if (await SaysTheSameAsync(existing, topic, ct).ConfigureAwait(false))
+                {
+                    skipped[name] = "already in the workspace";
+                }
+                else
+                {
+                    skipped[name] = "differs from the workspace copy";
+                    drifted.Add(name);
+                }
+
                 continue;
             }
 
@@ -186,6 +204,34 @@ internal sealed class MemoryImporter : IMemoryImporter
         }
 
         return OperationResult<MemoryImport>.Ok(
-            new MemoryImport(sourceDirectory, imported, skipped, apply));
+            new MemoryImport(sourceDirectory, imported, skipped, apply) { Drifted = drifted });
+    }
+
+    /// <summary>
+    /// Whether the workspace copy makes the same claims as the incoming one.
+    /// <para>
+    /// Compared on what the topic says, not on its bytes: the frontmatter
+    /// carries a modified timestamp that changes on every write, so comparing
+    /// the files would report every topic as drifted.
+    /// </para>
+    /// </summary>
+    private static async Task<bool> SaysTheSameAsync(
+        string existingPath,
+        MemoryTopic incoming,
+        CancellationToken ct)
+    {
+        var parsed = await MemoryService.ParseAsync(existingPath, ct).ConfigureAwait(false);
+
+        // Unreadable here but readable there is a difference worth surfacing,
+        // not a reason to call the two copies the same.
+        if (parsed.Failed)
+        {
+            return false;
+        }
+
+        var existing = parsed.Value!;
+
+        return string.Equals(existing.Description, incoming.Description, StringComparison.Ordinal)
+            && existing.Facts.SequenceEqual(incoming.Facts, StringComparer.Ordinal);
     }
 }

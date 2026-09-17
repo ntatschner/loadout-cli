@@ -64,6 +64,9 @@ public sealed class ProjectManifest
     /// narrow or replace it; neither forces a specialist to load.
     /// </summary>
     public SpecialistPreferences Specialists { get; set; } = new();
+
+    /// <summary>How the symbol index should read this project's code, where the defaults are not right.</summary>
+    public ProjectSymbols Symbols { get; set; } = new();
 }
 
 /// <summary>Where the application source lives, described independently of any machine.</summary>
@@ -73,6 +76,24 @@ public sealed class ProjectRepository
     public string Remote { get; set; } = string.Empty;
 
     public string DefaultBranch { get; set; } = "main";
+
+    /// <summary>
+    /// Whether there is a Git repository here yet.
+    /// </summary>
+    /// <remarks>
+    /// True for every project that has ever been registered, which is why it
+    /// defaults to true: a manifest written before this existed describes a
+    /// repository, and reading it must not turn it into something else.
+    /// <para>
+    /// False says the directory was registered deliberately before it was
+    /// versioned — code somebody wants an agent to work on, where initialising
+    /// the repository is the first piece of that work rather than a
+    /// precondition for asking. Everything that reads Git has to check this
+    /// rather than assume, and say nothing instead of reporting a repository
+    /// that is missing on purpose.
+    /// </para>
+    /// </remarks>
+    public bool Versioned { get; set; } = true;
 }
 
 /// <summary>Which agents this project supports and how each is configured.</summary>
@@ -123,6 +144,94 @@ public sealed class ProjectContext
 
     /// <summary>Workspace-relative paths under this project, e.g. <c>context/architecture.md</c>.</summary>
     public List<string> Project { get; set; } = [];
+
+    /// <summary>
+    /// Whether to inline a map of the code — one line per directory, naming
+    /// the types it holds — into every session's context.
+    /// </summary>
+    /// <remarks>
+    /// Off unless asked for, because it is paid for on every launch whether or
+    /// not the session needed it: a few thousand tokens on a mid-sized
+    /// repository, which is roughly what everything else in the context costs
+    /// put together. It earns that on a session that explores widely and loses
+    /// it on a one-line fix. The lookup behind <c>loadout docs find</c> is
+    /// there either way and costs nothing until it is asked.
+    /// <para>
+    /// Changed with <c>loadout project context code-map on</c>.
+    /// </para>
+    /// </remarks>
+    public bool CodeMap { get; set; }
+
+    /// <summary>
+    /// Whether the project's open tasks are put in front of every session.
+    /// </summary>
+    /// <remarks>
+    /// Off until it is turned on for a project, rather than on by default.
+    /// The task record is a claim somebody made, not a fact about the code,
+    /// and a project that does not keep one would otherwise pay for a heading
+    /// saying so on every launch. Turned on automatically for a project
+    /// registered before it has a repository, because there the whole point of
+    /// registering it is to hand the setup work to the agent, and a task the
+    /// agent is never shown is a note to nobody.
+    /// <para>
+    /// Changed with <c>loadout project context tasks on</c>. That command
+    /// exists because this switch spent its first releases with no way to reach
+    /// it: the assignment above was the only one anywhere, so a project
+    /// registered from a repository was stuck off, and the tasks its sessions
+    /// recorded were shown to nobody.
+    /// </para>
+    /// </remarks>
+    public bool Tasks { get; set; }
+}
+
+/// <summary>
+/// How this project's code should be read for the symbol index, where the
+/// defaults are not right for it.
+/// </summary>
+/// <remarks>
+/// The built-in table reads the mainstream languages and git says which
+/// files are the project's own. This is the escape hatch for the rest: an
+/// extension the table does not map, a directory that is the project's but
+/// should not be indexed, or a language nobody has written a grammar for
+/// yet. Run <c>loadout docs find</c> once after writing one: a pattern that
+/// does not compile drops its language rather than failing every lookup.
+/// </remarks>
+public sealed class ProjectSymbols
+{
+    /// <summary>Globs, repository-relative, for files to leave out: <c>generated/**</c>.</summary>
+    public List<string> Ignore { get; set; } = [];
+
+    /// <summary>Extra extensions mapped onto a language the scan knows: <c>.pyw: python</c>.</summary>
+    public Dictionary<string, string> Extensions { get; set; } = [];
+
+    /// <summary>Languages described here, read ahead of the built-in table.</summary>
+    public List<ProjectSymbolLanguage> Languages { get; set; } = [];
+}
+
+/// <summary>One language a project has described itself.</summary>
+public sealed class ProjectSymbolLanguage
+{
+    /// <summary>Short name, such as <c>elixir</c>.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>What to call it to a person. Defaults to the id.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>File extensions, with or without the dot.</summary>
+    public List<string> Extensions { get; set; } = [];
+
+    /// <summary>A .NET regular expression matching a line that declares a type, with a <c>name</c> group. Optional.</summary>
+    public string Types { get; set; } = string.Empty;
+
+    /// <summary>A .NET regular expression matching a line that declares a function or member, with a <c>name</c> group.</summary>
+    public string Members { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How the language documents a declaration: <c>hash</c>, <c>double_slash</c>,
+    /// <c>slashes</c>, <c>double_dash</c>, <c>block</c> or <c>docstring_below</c>.
+    /// Defaults to <c>hash</c>.
+    /// </summary>
+    public string Docs { get; set; } = string.Empty;
 }
 
 /// <summary>How the agent process is started.</summary>

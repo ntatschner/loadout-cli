@@ -62,6 +62,11 @@ public interface IContextCompiler
     /// depends on the task and the agent, and the compiler's job is to assemble
     /// what it is given in the right order.
     /// </param>
+    /// <param name="repositoryPath">
+    /// Where the project's source is on this machine, for the map of the code
+    /// a project may ask for. Null when it is not on this machine, in which
+    /// case there is no code to map.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     Task<OperationResult<CompiledContext>> CompileAsync(
         ProjectManifest manifest,
@@ -71,6 +76,7 @@ public interface IContextCompiler
         string? profileName = null,
         string? handoffPath = null,
         Models.Instructions.EffectiveInstructions? instructions = null,
+        string? repositoryPath = null,
         CancellationToken ct = default);
 
     /// <summary>

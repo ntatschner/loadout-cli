@@ -9,12 +9,21 @@ namespace Loadout.Core.Projects;
 /// <param name="RemoteUrl">Origin remote, or null when the repository has none.</param>
 /// <param name="IsRegistered">True when this repository already maps to a registered project.</param>
 /// <param name="MatchedSlug">Slug it matched, when it is already registered.</param>
+/// <param name="Versioned">
+/// Whether there is a Git repository there. False is a directory holding code
+/// that has never been initialised — offered because <c>project add</c> takes
+/// one, and leaving it out of the list meant the only way to reach it was to
+/// know the path and type it. It is never swept up by a bulk registration: a
+/// scratch folder under a discovery root is not a project because somebody
+/// asked to register everything they had cloned.
+/// </param>
 public sealed record DiscoveredRepository(
     string Path,
     string Name,
     string? RemoteUrl,
     bool IsRegistered,
-    string? MatchedSlug);
+    string? MatchedSlug,
+    bool Versioned = true);
 
 /// <summary>What removing a project registration did, and what it did not.</summary>
 /// <param name="Slug">The project that was removed.</param>
@@ -96,6 +105,21 @@ public interface IProjectService
         CancellationToken ct = default);
 
     /// <summary>
+    /// What a registration would do, without doing it.
+    /// </summary>
+    /// <remarks>
+    /// For the preview. <c>--dry-run</c> reported "Would register" for any path
+    /// at all, whatever the real run would say. A preview that says yes where
+    /// the command says no is worse than no preview: it is confidently wrong
+    /// about the case somebody ran it to check. So this answers the same
+    /// questions the registration asks, and the two have to agree.
+    /// </remarks>
+    Task<OperationResult<AddPreview>> ValidateAddAsync(
+        string repositoryPath,
+        string? slug = null,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Removes a project registration. Never touches the source repository:
     /// spec section 75 requires deleting code to be a separate, explicit act.
     /// <para>
@@ -139,3 +163,16 @@ public interface IProjectService
         string? destination = null,
         CancellationToken ct = default);
 }
+
+/// <summary>
+/// What registering a path would produce.
+/// </summary>
+/// <param name="Slug">The handle the project would be registered under.</param>
+/// <param name="Versioned">
+/// Whether there is a Git repository at the path. False is a registration that
+/// will still go ahead: a directory somebody wants an agent to work on before
+/// it has been initialised. The caller is expected to say so rather than
+/// register it silently, because it is the unusual case and the one where
+/// somebody may simply be standing in the wrong directory.
+/// </param>
+public sealed record AddPreview(string Slug, bool Versioned);

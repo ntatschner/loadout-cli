@@ -28,7 +28,30 @@ public static class ConfigKeys
         bool IsMachineLocal,
         string? Sample = null,
         string Group = Groups.General,
-        bool IsFlag = false);
+        bool IsFlag = false,
+        string? WhenUnset = null);
+
+    /// <summary>
+    /// What a setting does when nobody has set it, for the settings where that
+    /// is a behaviour rather than an absence.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An empty value is shown as "(unset)" everywhere, and that word covers
+    /// two different situations. <c>updates-source</c> unset means the launcher
+    /// follows this project's own releases, which is something happening;
+    /// <c>agent-search-paths</c> unset means the usual places are searched. Both
+    /// read as though nothing is configured and nothing is going on.
+    /// </para>
+    /// <para>
+    /// Named here rather than worked out from the reader, because the behaviour
+    /// lives in whatever consumes the setting and cannot be recovered from a
+    /// null. A setting where unset genuinely means "off" leaves this alone, and
+    /// "(unset)" is then the whole truth.
+    /// </para>
+    /// </remarks>
+    public static string? Unset(string key) =>
+        All.FirstOrDefault(e => string.Equals(e.Key, key, StringComparison.Ordinal))?.WhenUnset;
 
     /// <summary>
     /// <c>IsFlag</c> marks a setting whose whole vocabulary is yes and no, so
@@ -53,7 +76,6 @@ public static class ConfigKeys
         public const string Agents = "Agents";
         public const string Editor = "Editor";
         public const string Syncing = "Syncing";
-        public const string Terminal = "Terminal";
         public const string Secrets = "Secrets";
         public const string Updates = "Updates";
         public const string Statusline = "Agent status line";
@@ -64,7 +86,7 @@ public static class ConfigKeys
         /// <summary>In the order a screen should show them.</summary>
         public static IReadOnlyList<string> InOrder =>
         [
-            Workspace, Agents, Editor, Syncing, Terminal, Secrets, Updates,
+            Workspace, Agents, Editor, Syncing, Secrets, Updates,
             Statusline, Instructions, Telemetry, Machine, General,
         ];
     }
@@ -124,23 +146,27 @@ public static class ConfigKeys
         new("onboarding-agent", "Agent a newly registered project launches",
             (c, _) => c.Onboarding.Agent,
             (c, _, v) => c.Onboarding.Agent = v, false,
-            Group: Groups.Agents),
+            Group: Groups.Agents,
+            WhenUnset: "new projects take default-agent"),
 
         new("onboarding-model", "Model a newly registered project pins",
             (c, _) => c.Onboarding.Model,
             (c, _, v) => c.Onboarding.Model = v, false,
-            Group: Groups.Agents),
+            Group: Groups.Agents,
+            WhenUnset: "new projects pin no model, so the agent picks"),
 
         new("onboarding-models", "Model per mode for a new project, as review=small;implement=big",
             (c, _) => FormatProfiles(c.Onboarding.ModelByMode),
             (c, _, v) => WriteProfiles(c.Onboarding.ModelByMode, v), false,
             Sample: "review=small-model;implement=big-model",
-            Group: Groups.Agents),
+            Group: Groups.Agents,
+            WhenUnset: "every mode uses onboarding-model"),
 
         new("onboarding-editor", "Editor profile a newly registered project opens under",
             (c, _) => c.Onboarding.EditorProfile,
             (c, _, v) => c.Onboarding.EditorProfile = v, false,
-            Group: Groups.Editor),
+            Group: Groups.Editor,
+            WhenUnset: "new projects open in the editor's default profile"),
 
         new("editor-command", "Editor opened by 'loadout code': code, code-insiders, codium, cursor",
             (c, _) => c.Editor.Command,
@@ -177,24 +203,12 @@ public static class ConfigKeys
             (c, _, v) => c.Secrets.Provider = v, false,
             Group: Groups.Secrets),
 
-        // Nothing reads this yet. ITerminalProvider is implemented for all
-        // three platforms, registered for injection, and injected nowhere —
-        // so an agent always launches in the terminal the launcher was
-        // started from, whatever this says. Said in the description because
-        // that is the one place every surface shows: config list, config get,
-        // and the hint under the field on the settings screen, which is where
-        // it became a problem. A setting that can be changed and does nothing
-        // is worse the more prominent it is.
-        new("terminal",
-            "Preferred terminal. Not yet honoured: agents launch in the current one",
-            (c, _) => c.Terminal.Preferred,
-            (c, _, v) => c.Terminal.Preferred = v, false,
-            Group: Groups.Terminal),
-
-        new("updates-source", "Release feed URL",
+        new("updates-source",
+            "Release feed URL. Empty means this project's own releases; 'off' means never check",
             (c, _) => c.Updates.Source,
             (c, _, v) => c.Updates.Source = v, false,
-            Group: Groups.Updates),
+            Group: Groups.Updates,
+            WhenUnset: "follows this project's own releases"),
 
         new("agent-tools", "Serve the launcher's own tools to the agent it starts",
             (c, _) => Boolean(c.AgentTools.Enabled),
@@ -279,20 +293,38 @@ public static class ConfigKeys
 
         new("discovery-roots", "Comma-separated directories scanned for repositories",
             (_, m) => string.Join(", ", m.DiscoveryRoots),
-            (_, m, v) => m.DiscoveryRoots = v
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToList(),
+            (_, m, v) => m.DiscoveryRoots = SplitDirectories(v),
             true,
             Group: Groups.Machine),
 
         new("agent-search-paths", "Comma-separated extra directories searched for agent executables",
             (c, _) => string.Join(", ", c.AgentSearchPaths),
-            (c, _, v) => c.AgentSearchPaths = v
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .ToList(),
+            (c, _, v) => c.AgentSearchPaths = SplitDirectories(v),
             false,
-            Group: Groups.Agents),
+            Group: Groups.Agents,
+            WhenUnset: "agents are looked for on PATH and their usual install directories"),
     ];
+
+    /// <summary>
+    /// Splits a list of directories on either separator somebody might type.
+    /// </summary>
+    /// <remarks>
+    /// A comma is what the help says. A semicolon is what separates paths in
+    /// <c>PATH</c> on Windows, so it is what gets typed anyway — and taken as
+    /// part of a path it made one root that could not exist. Discovery then
+    /// reported no repositories at all, including the root that had been
+    /// working before the second one was added, and said only "no repositories
+    /// found": a true sentence about a machine full of code.
+    /// <para>
+    /// Safe on both separators because neither is legal in a Windows path, and
+    /// a colon is deliberately not among them: <c>C:\git</c> would split into
+    /// two roots that are each nonsense.
+    /// </para>
+    /// </remarks>
+    private static List<string> SplitDirectories(string value) =>
+        [.. value.Split(
+            [',', ';'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
 
     /// <summary>How a flag is shown, in the spelling the setter accepts back.</summary>
     private static string Boolean(bool value) => value ? "true" : "false";
@@ -319,7 +351,12 @@ public static class ConfigKeys
     /// whichever of these came to mind, and refusing all but one spelling
     /// would be pedantry rather than validation.
     /// </summary>
-    private static bool Flag(string value) =>
+    /// <remarks>
+    /// Public because the project switches in <c>project context</c> accept the
+    /// same words, and two vocabularies for yes would drift the moment one of
+    /// them learned a new spelling.
+    /// </remarks>
+    public static bool Flag(string value) =>
         value.Trim().ToLowerInvariant() switch
         {
             "true" or "yes" or "on" or "1" => true,

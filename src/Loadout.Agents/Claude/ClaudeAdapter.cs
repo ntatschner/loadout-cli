@@ -32,6 +32,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// <summary>Capability key for the file-based system prompt option.</summary>
     private const string SystemPromptFile = "external_prompt_file";
 
+    /// <summary>How the screened settings copy is written: readable, since somebody may open it to see what was dropped.</summary>
+    private static readonly System.Text.Json.JsonSerializerOptions SettingsLayout = new() { WriteIndented = true };
+
     public ClaudeAdapter(
         IExecutableResolver resolver,
         IProcessLauncher processes,
@@ -75,6 +78,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             [SystemPromptFile] = ["--append-system-prompt-file", "--append-system-prompt[-file]"],
 
             [AgentCapabilities.AdditionalDirectories] = ["--add-dir"],
+            [AgentCapabilities.ProjectSkills] = ["--plugin-dir"],
             [AgentCapabilities.McpConfig] = ["--mcp-config"],
             [AgentCapabilities.SessionResume] = ["--resume", "--continue"],
             [PermissionMode] = ["--permission-mode"],
@@ -109,9 +113,10 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         AddResume(context, descriptor, arguments, warnings);
         AddMcpServers(context, descriptor, arguments, warnings);
-        AddSettings(context, descriptor, arguments, warnings);
+        await AddSettingsAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
+        AddProjectSkills(context, descriptor, arguments, warnings);
         AddSecurityProfile(context, descriptor, arguments, warnings);
         AddModel(context, descriptor, arguments, warnings);
 
@@ -198,13 +203,36 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     /// <summary>
     /// Points Claude at the project's settings file in the workspace, so the
     /// application repository needs no .claude directory of its own
-    /// (spec section 9).
+    /// (spec section 9) — screened first, because the workspace travels.
     /// </summary>
-    private static void AddSettings(
+    /// <remarks>
+    /// <para>
+    /// The file went to Claude as it was from the first commit, as the way of
+    /// moving a repository's own <c>.claude/settings.json</c> out of the
+    /// repository. That predates the rule the security profile follows — a
+    /// shared file may only tighten — and was never weighed against it. A
+    /// hook in this file is a command run after every edit, on whichever
+    /// machine pulls the workspace next, so the hooks are now screened: the
+    /// launcher's own is kept and pointed at this machine's launcher,
+    /// anything <c>commands.allowed_hooks</c> in config.yaml names is kept,
+    /// and the rest is dropped and said. Everything else in the file passes
+    /// untouched, as it did.
+    /// </para>
+    /// <para>
+    /// The screened copy is written into the runtime directory, which is
+    /// owner-only and deleted when the launch ends, and that is the path
+    /// Claude is given. A file with no hooks is passed as it is; nothing is
+    /// copied for nothing. A file that cannot be read as JSON is not passed
+    /// at all, because a file this cannot see into is a file this cannot
+    /// vouch for.
+    /// </para>
+    /// </remarks>
+    private static async Task AddSettingsAsync(
         AgentLaunchContext context,
         AgentDescriptor descriptor,
         List<string> arguments,
-        List<string> warnings)
+        List<string> warnings,
+        CancellationToken ct)
     {
         if (context.WorkspacePath is null || context.Manifest is null)
         {
@@ -233,8 +261,88 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             return;
         }
 
+        string text;
+
+        try
+        {
+            text = await File.ReadAllTextAsync(settingsPath, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            warnings.Add($"The project's settings.json could not be read, so it was not applied: {ex.Message}");
+
+            return;
+        }
+
+        var launcher = Core.Agents.LauncherInvocation.Current() ?? "loadout";
+
+        // Both forms of a pre-approval: as written, and as this adapter sends
+        // it to Claude, so an allow entry the file and the machine agree on
+        // survives whichever way somebody spelled it.
+        var preApproved = new List<string>(context.PreApprovedCommands ?? []);
+
+        preApproved.AddRange(Specifiers(context.PreApprovedCommands));
+
+        var screened = Core.Policies.SettingsScreen.Screen(
+            text, context.AllowedHooks ?? [], preApproved, launcher);
+
+        if (screened is null)
+        {
+            warnings.Add(
+                "The project's settings.json is not a JSON object, so it was not applied: a file "
+                + "the launcher cannot read is one it cannot vouch for.");
+
+            return;
+        }
+
+        var slug = context.Manifest.Slug;
+
+        foreach (var dropped in screened.DroppedHooks)
+        {
+            warnings.Add(
+                $"The hook '{dropped}' in the project's settings.json was not applied. A shared "
+                + "settings file may only tighten, and a hook runs a command after every edit. "
+                + $"Allow it on this machine under commands.allowed_hooks.{slug} in config.yaml.");
+        }
+
+        foreach (var dropped in screened.DroppedApprovals)
+        {
+            warnings.Add(
+                $"The approval '{dropped}' in the project's settings.json was not applied. A shared "
+                + "settings file may only tighten, and an approval removes a prompt. Pre-approve it "
+                + $"on this machine under commands.pre_approved.{slug} in config.yaml.");
+        }
+
+        foreach (var dropped in screened.DroppedSettings)
+        {
+            warnings.Add(
+                $"'{dropped}' in the project's settings.json was not applied: a shared settings "
+                + "file may only tighten, and nothing on this machine can put that back.");
+        }
+
+        var path = settingsPath;
+
+        if (screened.Changed)
+        {
+            path = Path.Combine(context.RuntimeDirectory, "settings.json");
+
+            try
+            {
+                await File.WriteAllTextAsync(
+                    path, screened.Document.ToJsonString(SettingsLayout), ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                warnings.Add(
+                    $"The screened settings could not be written, so the project's settings.json "
+                    + $"was not applied: {ex.Message}");
+
+                return;
+            }
+        }
+
         arguments.Add("--settings");
-        arguments.Add(settingsPath);
+        arguments.Add(path);
     }
 
     /// <summary>
@@ -434,10 +542,15 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     }
 
     /// <summary>
-    /// Grants read access to the project's workspace directory so the agent can
-    /// reach prompts and skills that were deliberately kept out of the
-    /// application repository.
+    /// Grants read access to the project's workspace directory, so the agent
+    /// can open prompts and other files kept out of the application repository.
     /// </summary>
+    /// <remarks>
+    /// Read access only. A skill sitting under this directory is a file the
+    /// session can open if it already knows the path, and nothing more: it is
+    /// not a command anybody can reach and nothing announces it. Skills are
+    /// handed over separately, by <see cref="AddProjectSkills"/>.
+    /// </remarks>
 
     /// <summary>
     /// Asks for the model the project pinned, where the agent can be told.
@@ -492,6 +605,168 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         {
             arguments.Add("--add-dir");
             arguments.Add(projectWorkspace);
+        }
+    }
+
+    /// <summary>
+    /// Hands the session the skills the workspace holds for this project, as
+    /// commands it can actually reach.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The workspace keeps them at <c>agents/&lt;agent&gt;/skills/&lt;name&gt;/SKILL.md</c>,
+    /// which is not where the agent looks, so until now they were authored and
+    /// never loaded: nothing named them and nothing could invoke them.
+    /// </para>
+    /// <para>
+    /// Written into the per-launch runtime directory and passed with
+    /// <c>--plugin-dir</c>, which loads for that session only. That is the same
+    /// bargain the compiled context makes, and it is what keeps this out of
+    /// both the application repository, where agent state does not belong, and
+    /// the agent's own configuration home, where it would outlive the session
+    /// and collide with the next project's.
+    /// </para>
+    /// <para>
+    /// A manifest is written rather than relying on a bare directory of skills
+    /// being accepted. Both shapes may work; only this one is known to.
+    /// </para>
+    /// </remarks>
+    private static void AddProjectSkills(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.WorkspacePath is null || context.Manifest is null)
+        {
+            return;
+        }
+
+        // The launcher's own, then the workspace's, then this project's, with
+        // a later one of the same name replacing the earlier. Asked of the same
+        // enumeration the budget counts, so what a session is handed and what
+        // it was told that would cost cannot disagree — two answers to one
+        // question is the drift this whole report exists to prevent.
+        var offered = Loadout.Core.Instructions.SkillExport.Offered(
+            context.WorkspacePath, context.Manifest.Slug, "claude");
+
+        if (offered.Count == 0)
+        {
+            return;
+        }
+
+        // Said rather than skipped. A skill somebody wrote and cannot reach is
+        // exactly the state this exists to end, and a build that cannot take
+        // them should not leave that looking like it worked.
+        if (!descriptor.Supports(AgentCapabilities.ProjectSkills))
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise --plugin-dir, so the "
+                + $"{offered.Count} skill(s) available to "
+                + $"{context.Manifest.Slug} were not loaded.");
+
+            return;
+        }
+
+        var plugin = Path.Combine(context.RuntimeDirectory, "skills", $"loadout-{context.Manifest.Slug}");
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(plugin, ".claude-plugin"));
+
+            File.WriteAllText(
+                Path.Combine(plugin, ".claude-plugin", "plugin.json"),
+                $$"""
+                {
+                  "name": "loadout-{{context.Manifest.Slug}}",
+                  "version": "0.0.0",
+                  "description": "Skills for {{context.Manifest.Slug}}, for this session only."
+                }
+                """);
+
+            // The resolved set, already narrowed: one name is one skill, and
+            // whichever layer won has won by the time it gets here.
+            foreach (var (name, content) in offered)
+            {
+                var into = Path.Combine(plugin, "skills", name);
+
+                Directory.CreateDirectory(into);
+                File.WriteAllText(Path.Combine(into, "SKILL.md"), content);
+            }
+
+            // The files a skill on disk brings with it — the scripts it tells
+            // the session to run. A shipped skill is a single document by
+            // construction and has none. Copied after the text above, so a
+            // skill that won on name keeps its own companions.
+            foreach (var (name, from) in OnDisk(context))
+            {
+                if (offered.ContainsKey(name))
+                {
+                    CopyDirectory(from, Path.Combine(plugin, "skills", name));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            warnings.Add(
+                $"The skills for {context.Manifest.Slug} could not be prepared, so none were "
+                + $"loaded: {ex.Message}");
+
+            return;
+        }
+
+        arguments.Add("--plugin-dir");
+        arguments.Add(plugin);
+    }
+
+    /// <summary>
+    /// The skills this project has as directories, so their companion files
+    /// can be carried over. Keyed by name, narrower last.
+    /// </summary>
+    private static IEnumerable<(string Name, string From)> OnDisk(AgentLaunchContext context)
+    {
+        if (context.WorkspacePath is null || context.Manifest is null)
+        {
+            yield break;
+        }
+
+        string[] roots =
+        [
+            Path.Combine(context.WorkspacePath, "global", "agents", "claude", "skills"),
+            Path.Combine(
+                context.WorkspacePath, "projects", context.Manifest.Slug, "agents", "claude", "skills"),
+        ];
+
+        foreach (var root in roots.Where(Directory.Exists))
+        {
+            foreach (var directory in Directory.EnumerateDirectories(root))
+            {
+                if (File.Exists(Path.Combine(directory, "SKILL.md")))
+                {
+                    yield return (Path.GetFileName(directory), directory);
+                }
+            }
+        }
+    }
+
+    /// <summary>Copies a skill and whatever it brings with it.</summary>
+    /// <remarks>
+    /// Everything, not just the <c>SKILL.md</c>. A skill routinely ships the
+    /// scripts it tells the session to run, and one copied without them is a
+    /// skill that fails at the first instruction it gives.
+    /// </remarks>
+    private static void CopyDirectory(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+
+        foreach (var file in Directory.EnumerateFiles(from))
+        {
+            File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(from))
+        {
+            CopyDirectory(directory, Path.Combine(to, Path.GetFileName(directory)));
         }
     }
 }

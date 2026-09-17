@@ -21,11 +21,23 @@ namespace Loadout.Core.Instructions;
 /// rather than take the ranking on trust. Empty when the match was on the name
 /// or description alone, which is an ordinary and often better match.
 /// </param>
+/// <param name="Curated">
+/// Whether any word of the query landed in the topic's name or description
+/// rather than only in its prose.
+/// <para>
+/// The difference between a topic that declares the subject and one that
+/// happens to mention it. It matters wherever a match is acted on without
+/// somebody reading it first: asked "what did you have for breakfast", a real
+/// store returns three topics, one of them on two words of the question, all of
+/// them on prose alone. A caller that spoke on that would speak on anything.
+/// </para>
+/// </param>
 public sealed record MemoryMatch(
     MemoryTopic Topic,
     double Score,
     IReadOnlyList<string> Matched,
-    int Terms);
+    int Terms,
+    bool Curated);
 
 /// <summary>
 /// Finds the topics that answer a question, without asking anything.
@@ -69,12 +81,51 @@ public static class MemorySearch
         "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from",
         "has", "have", "in", "is", "it", "its", "of", "on", "or", "that", "the",
         "there", "they", "this", "to", "was", "were", "will", "with",
+
+        // The words a question is made of rather than about. Rarity cannot
+        // discount these: it measures how rare a word is in this store, not how
+        // empty it is in English, and a word that appears in exactly one topic
+        // scores as though it were the whole answer.
+        //
+        // Measured rather than guessed at. Over 248 questions taken from this
+        // project's own transcripts, "what did i need to get for winget again"
+        // returned mutation-reverts-*need*-copies above the topic named for
+        // winget publishing: both matched one word of the question in their
+        // name, and "need" was the rarer of the two.
+        //
+        // Kept to words that cannot name anything technical. "when", "before"
+        // and "after" stay out of this list deliberately — they carry meaning
+        // in a note about ordering, which is what the shorter list above was
+        // protecting.
+        "about", "all", "also", "am", "another", "any", "anything", "back",
+        "been", "both", "can", "could", "did", "do", "does", "doing", "done",
+        "each", "either", "else", "enough", "even", "ever", "every", "get",
+        "gets", "getting", "give", "go", "going", "got", "he", "her", "him",
+        "his", "how", "i", "if", "into", "just", "know", "let", "lets", "like",
+        "look", "made", "make", "many", "may", "me", "might", "more", "most",
+        "much", "must", "my", "need", "needs", "new", "next", "not", "now",
+        "one", "only", "option", "options", "other", "our", "out", "over",
+        "own", "please", "put", "really", "rest", "same", "say", "see", "she",
+        "should", "show", "so", "some", "something", "still", "such", "sure",
+        "take", "tell", "than", "thanks", "their", "them", "then", "these",
+        "thing", "things", "think", "those", "through", "too", "two", "up",
+        "us", "use", "used", "very", "want", "way", "we", "well", "what",
+        "where", "which", "while", "who", "whom", "whose", "why", "would",
+        "you", "your",
     };
 
     /// <summary>The name and description are curated; a fact is prose.</summary>
     private const double NameWeight = 3.0;
     private const double DescriptionWeight = 2.0;
     private const double FactWeight = 1.0;
+
+    /// <summary>
+    /// How much of the saturation constant a topic's length accounts for, from
+    /// 0 for not at all to 1 for entirely. The usual ranking value: enough that
+    /// a long topic cannot win on incidental mentions, not so much that a
+    /// thorough topic is punished for being thorough.
+    /// </summary>
+    private const double LengthInfluence = 0.75;
 
     /// <summary>
     /// The topics a query reaches, best first.
@@ -106,23 +157,26 @@ public static class MemorySearch
             .ToList();
 
         var matches = new List<MemoryMatch>();
+        var averageLength = documents.Average(document => document.Length);
 
         foreach (var document in documents)
         {
             var score = 0.0;
             var hits = 0;
+            var curated = false;
 
             foreach (var term in terms)
             {
-                var weight = document.Weight(term);
+                var found = document.Where(term);
 
-                if (weight <= 0)
+                if (!found.Anywhere)
                 {
                     continue;
                 }
 
                 hits++;
-                score += Saturate(weight) * Rarity(term, documents);
+                curated |= found.InName || found.InDescription;
+                score += document.Weight(term, averageLength) * Rarity(term, documents);
             }
 
             if (score <= 0)
@@ -136,7 +190,8 @@ public static class MemorySearch
                 document.Topic.Facts
                     .Where(fact => terms.Any(term => Terms(fact).Contains(term, StringComparer.Ordinal)))
                     .ToList(),
-                hits));
+                hits,
+                curated));
         }
 
         return matches
@@ -165,8 +220,70 @@ public static class MemorySearch
     /// constant is small because the weights here are small — a topic has one
     /// name, one description and a handful of facts, not a page of prose.
     /// </para>
+    /// <para>
+    /// Scaled by how long the topic is, because without that the longest topic
+    /// wins any question of several words. Asking a real store "why did the
+    /// release not publish to winget" put the topic about a stalling install
+    /// check first and the one named for winget publishing third: the install
+    /// topic is the longest in the store and happens to say "release",
+    /// "publish" and "winget" somewhere in it, and three weak hits outscored
+    /// one topic that is actually about the subject.
+    /// </para>
+    /// <para>
+    /// A topic of average length is saturated exactly as before, so the
+    /// constant above still means what it meant. A topic twice that length has
+    /// to say a term more often to be worth the same, which is the whole point:
+    /// mentioning something in passing is not being about it.
+    /// </para>
     /// </remarks>
-    private static double Saturate(double weight) => weight / (weight + 2.0);
+    private static double Saturate(double weight, double length, double averageLength)
+    {
+        var scale = averageLength <= 0
+            ? 1.0
+            : 1.0 - LengthInfluence + (LengthInfluence * length / averageLength);
+
+        return weight / (weight + (2.0 * scale));
+    }
+
+    /// <summary>
+    /// A word reduced to the form a differently-inflected one also reaches.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Without this a question saying "test" cannot reach a topic named
+    /// <c>contract-tests-spawn-the-real-exe</c>, and one letter decides the
+    /// answer: "the test suite is hanging" returned a topic about running
+    /// suites in Docker, and "the tests suite is hanging" returned the one
+    /// about suite failures. That is not a question of weighting — the match
+    /// never happened.
+    /// </para>
+    /// <para>
+    /// Crude on purpose, and safe because it is crude in the same way on both
+    /// sides. Query and topic are stemmed by the same rules, so a stem that is
+    /// not a word — "kubernete" — still matches itself and costs nothing. The
+    /// only real risk is merging two distinct words, which the length guards
+    /// keep to words short enough that the store is unlikely to hold both.
+    /// </para>
+    /// </remarks>
+    private static string Stem(string term)
+    {
+        if (term.Length > 5 && term.EndsWith("ing", StringComparison.Ordinal))
+        {
+            return term[..^3];
+        }
+
+        if (term.Length > 4 && term.EndsWith("ed", StringComparison.Ordinal))
+        {
+            return term[..^2];
+        }
+
+        // "ss" is not a plural: process, class, address.
+        return term.Length > 3
+            && term.EndsWith('s')
+            && !term.EndsWith("ss", StringComparison.Ordinal)
+                ? term[..^1]
+                : term;
+    }
 
     /// <summary>
     /// How much one term is worth, given how many topics use it.
@@ -234,38 +351,100 @@ public static class MemorySearch
             // One-character words carry nothing and match everywhere.
             if (term.Length > 1 && !Ignored.Contains(term))
             {
-                into.Add(term);
+                into.Add(Stem(term));
             }
         }
     }
 
-    private static IReadOnlyDictionary<string, double> Fields(MemoryTopic topic)
+    /// <summary>
+    /// Where one term appears in a topic, kept apart rather than added up.
+    /// </summary>
+    /// <remarks>
+    /// A name and a description are curated and said once: a topic named for
+    /// winget publishing declares its subject, and saying "winget" twice in the
+    /// name would not make it more so. Facts are prose, where a term can repeat
+    /// for reasons that have nothing to do with what the topic is about. Adding
+    /// the two together made them indistinguishable — a term once in the name
+    /// scored exactly what a term three times in the body scored — which is how
+    /// a long account of something else outranked the topic named for the
+    /// subject.
+    /// </remarks>
+    private readonly record struct Occurrence(bool InName, bool InDescription, double Facts)
     {
-        var weights = new Dictionary<string, double>(StringComparer.Ordinal);
+        public bool Anywhere => InName || InDescription || Facts > 0;
+    }
 
-        Add(topic.Name, NameWeight);
-        Add(topic.Description, DescriptionWeight);
+    private static IReadOnlyDictionary<string, Occurrence> Fields(MemoryTopic topic)
+    {
+        var weights = new Dictionary<string, Occurrence>(StringComparer.Ordinal);
+
+        foreach (var term in Terms(topic.Name))
+        {
+            weights[term] = weights.GetValueOrDefault(term) with { InName = true };
+        }
+
+        foreach (var term in Terms(topic.Description))
+        {
+            weights[term] = weights.GetValueOrDefault(term) with { InDescription = true };
+        }
 
         foreach (var fact in topic.Facts)
         {
-            Add(fact, FactWeight);
+            foreach (var term in Terms(fact))
+            {
+                var seen = weights.GetValueOrDefault(term);
+
+                weights[term] = seen with { Facts = seen.Facts + 1 };
+            }
         }
 
         return weights;
-
-        void Add(string? text, double weight)
-        {
-            foreach (var term in Terms(text))
-            {
-                weights[term] = weights.GetValueOrDefault(term) + weight;
-            }
-        }
     }
 
-    private sealed record Document(MemoryTopic Topic, IReadOnlyDictionary<string, double> Weights)
+    private sealed record Document(MemoryTopic Topic, IReadOnlyDictionary<string, Occurrence> Weights)
     {
         public bool Contains(string term) => Weights.ContainsKey(term);
 
-        public double Weight(string term) => Weights.GetValueOrDefault(term);
+        public Occurrence Where(string term) => Weights.GetValueOrDefault(term);
+
+        /// <summary>
+        /// What one term is worth here: the curated fields count once each for
+        /// saying it at all, and the prose is saturated and length-scaled so
+        /// repetition cannot stand in for being the subject.
+        /// </summary>
+        public double Weight(string term, double averageLength)
+        {
+            var found = Where(term);
+
+            var value = 0.0;
+
+            if (found.InName)
+            {
+                value += NameWeight;
+            }
+
+            if (found.InDescription)
+            {
+                value += DescriptionWeight;
+            }
+
+            // Prose is saturated before it is added, not after. Said once a
+            // term is worth most of a mention; said eight times it is worth
+            // barely more, so a long topic cannot accumulate its way past one
+            // that declares the subject in its name. The curated fields are
+            // counted as they were, which is what keeps the balance between
+            // them and rarity where it was.
+            value += FactWeight * (found.Facts / (found.Facts + 1.0));
+
+            return Saturate(value, Length, averageLength);
+        }
+
+        /// <summary>
+        /// How much the topic says altogether, as the weights already measure
+        /// it. Derived from the same numbers the scoring uses rather than from
+        /// the file size, so a topic is judged long for saying a lot, not for
+        /// being stored verbosely.
+        /// </summary>
+        public double Length { get; } = Weights.Values.Sum(found => found.Facts);
     }
 }

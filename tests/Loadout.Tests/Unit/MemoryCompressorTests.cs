@@ -446,6 +446,10 @@ internal abstract class StubMemoryService : IMemoryService
         CancellationToken ct = default) =>
         throw new NotSupportedException();
 
+    public virtual OperationResult ValidateWrite(
+        string name, string description, IReadOnlyList<string> facts) =>
+        throw new NotSupportedException();
+
     public Task<OperationResult<IReadOnlyList<MemoryTopic>>> ListAsync(
         string workspaceRoot, string slug, CancellationToken ct = default) =>
         throw new NotSupportedException();

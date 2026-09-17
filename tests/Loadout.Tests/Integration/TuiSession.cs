@@ -52,7 +52,22 @@ internal sealed class TuiSession : IDisposable
         // about what is on screen quietly pass against an empty string.
         _application.Screen = new Rectangle(0, 0, width, height);
 
+        // Begin installs the toolkit's synchronisation context on this thread
+        // and leaves it there: only Run or End puts the caller's back, and the
+        // harness runs neither, so from here every await in the test would
+        // resume by posting to the toolkit — which, with no loop iterating,
+        // queues the continuation on a timer list nothing drains. The test
+        // then never finishes and nothing is blocked, so nothing names it.
+        // That is what hung three Unix legs on 14 September 2026 under
+        // Terminal.Gui 2.5.0, whose Begin was the first to install anything.
+        // The context the test arrived with goes back as soon as the screen
+        // is up; the session's own Run installs and restores it properly.
+        var ambient = SynchronizationContext.Current;
+
         _application.Begin(window);
+
+        SynchronizationContext.SetSynchronizationContext(ambient);
+
         _application.LayoutAndDraw();
 
         // Checked, because it is not always obeyed. Two sizes asked for in one
@@ -226,6 +241,16 @@ internal sealed class TuiSession : IDisposable
         do
         {
             _application.RaiseIteration();
+
+            // Timers as well, which RaiseIteration does not run. A result that
+            // arrives from another thread reaches the screen through
+            // Application.Invoke, and off the main thread that is queued as a
+            // zero-length timeout — so until this line, nothing a background
+            // task handed to the screen could ever have shown up in a test, and
+            // the one test that appeared to cover that path used a task that
+            // never completed.
+            _application.TimedEvents?.RunTimers();
+
             _application.LayoutAndDraw();
 
             screen = Screen;

@@ -61,17 +61,21 @@ internal sealed class UpdateService : IUpdateService
             return OperationResult<UpdateCheck>.Fail(configResult.Error!, configResult.ExitCode);
         }
 
-        var source = configResult.Value!.Updates.Source;
+        var configured = configResult.Value!.Updates.Source;
 
-        if (string.IsNullOrWhiteSpace(source))
+        if (ReleaseSource.IsDisabled(configured))
         {
+            // Not a failure. Somebody who switched this off is not asking to be
+            // told they switched it off; they are asking what the answer is,
+            // and the honest answer is that this machine does not look.
             return OperationResult<UpdateCheck>.Fail(
-                "No release source is configured. Set one with: "
-                + "loadout config set updates-source <url>",
+                "Update checking is switched off on this machine. Turn it back on with: "
+                + "loadout config set updates-source \"\"",
                 ExitCode.ConfigurationInvalid);
         }
 
-        var feedResult = await ReadFeedAsync(source, ct).ConfigureAwait(false);
+        var feedResult = await ReadFeedAsync(
+            ReleaseSource.Resolve(configured), ct).ConfigureAwait(false);
         if (feedResult.Failed)
         {
             return OperationResult<UpdateCheck>.Fail(feedResult.Error!, feedResult.ExitCode);

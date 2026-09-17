@@ -385,7 +385,7 @@ public static class Program
                     "loadout was run with no arguments and no interactive terminal. "
                     + "Run 'loadout --help' for the available commands.");
 
-                return (int)ExitCode.InvalidArguments;
+                return (int)ExitCode.TerminalRequired;
 
             case LauncherEntry.Setup:
                 // A machine that has never been configured gets the wizard
@@ -620,6 +620,7 @@ public static class Program
             instructions.AddCommand<InstructionsExplainCommand>("explain");
             instructions.AddCommand<InstructionsAuditCommand>("audit");
             instructions.AddCommand<InstructionsStatsCommand>("stats");
+            instructions.AddCommand<InstructionsProbeCommand>("probe");
             instructions.AddCommand<InstructionsExportCommand>("export");
             instructions.AddCommand<InstructionsValidateCommand>("validate");
             instructions.AddCommand<InstructionsNewCommand>("new");
@@ -633,6 +634,8 @@ public static class Program
                 "docs documentation stale links broken references audit");
             docs.AddCommand<DocsAuditCommand>("audit");
             docs.AddCommand<DocsExportCommand>("export");
+            docs.AddCommand<DocsFindCommand>("find");
+            docs.AddCommand<DocsRefreshCommand>("refresh");
             docs.AddCommand<DocsCiCommand>("ci");
         });
 
@@ -702,6 +705,7 @@ public static class Program
             project.AddCommand<ProjectShowCommand>("show");
             project.AddCommand<ProjectSurveyCommand>("survey");
             project.AddCommand<ProjectLinkCommand>("link");
+            project.AddCommand<ProjectContextCommand>("context");
         });
 
         TopBranch(config, "workspace", workspace =>

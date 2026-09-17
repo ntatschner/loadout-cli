@@ -197,13 +197,65 @@ public static partial class MemoryFactClassifier
     /// Words that make a standing claim: how something behaves, what it needs,
     /// what must not happen, or why.
     /// </summary>
+    /// <remarks>
+    /// A whitelist of verbs is always shorter than the language, and this one
+    /// was short enough to reject ordinary statements of fact: "the build pins
+    /// the SDK", "the tokens carry numeric identifiers", "this overrides the
+    /// default". Every one of those is a standing claim, and an audit that
+    /// says otherwise about eleven of seventeen topics is one people stop
+    /// reading — which costs the findings that were right.
+    /// <para>
+    /// Widening is safe because the positive test is the last thing tried. Noise,
+    /// time-sensitivity and change-log phrasing are all decided before it, so a
+    /// line that reads as an account of a change is still read as one however
+    /// many everyday verbs it happens to contain.
+    /// </para>
+    /// </remarks>
     [GeneratedRegex(
         @"(?i)\b(?:is|are|was designed|lives?\s+(?:in|under|at|alongside)|requires?|depends? on|"
         + @"must|must not|never|always|cannot|only|because|root cause|responsible for|enforces?|"
         + @"expects?|assumes?|defaults? to|returns?|throws?|fails? when|breaks? when|owns?|"
-        + @"handles?|survives?)\b",
+        + @"handles?|survives?|"
+        // Everyday declarative verbs. Each earned its place by appearing in a
+        // real fact this classifier turned away.
+        + @"applies|apply|carr(?:y|ies)|holds?|keeps?|pins?|points?|rewrites?|recurs?|"
+        + @"overrides?|wants?|needs?|uses?|sets?|stores?|writes?|reads?|runs?|takes?|"
+        + @"treats?|contains?|causes?|prevents?|blocks?|ignores?|skips?|wins?|"
+        + @"disables?|enables?|produces?|makes?|names?|means?|matters?|costs?|"
+        + @"reports?|goes|comes|gets?|gives?|shows?|says?)\b",
         RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex Assertion();
+
+    /// <summary>
+    /// Whether a line is structure attached to the claim above it rather than a
+    /// claim of its own: a labelled elaboration, a cross-reference, or a fenced
+    /// block.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A shape test, not a judgement. Whether such a line is acceptable depends
+    /// on what sits above it, which one line cannot see — so the caller decides
+    /// that, and this only says what the line looks like.
+    /// </para>
+    /// <para>
+    /// Nothing here is any one tool's convention. Loadout prescribes no format
+    /// for a fact and this does not start: it recognises the shapes prose takes
+    /// when it elaborates, which is why the labels are matched by their form
+    /// rather than by a list of the ones seen so far. The audit was reading each
+    /// bullet as a standalone assertion, so a topic written as a claim followed
+    /// by its reasoning drew a finding for every line of the reasoning.
+    /// </para>
+    /// </remarks>
+    public static bool IsElaboration(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && Elaboration().IsMatch(text.Trim());
+
+    /// <summary>
+    /// A bolded label, a cross-reference, or the start of a fenced block.
+    /// </summary>
+    [GeneratedRegex(
+        @"^(?:\*\*[A-Za-z][^*\n]{0,40}:\*\*|(?i:related|see also|see)\s*:|```)",
+        RegexOptions.None, MatchTimeoutMilliseconds)]
+    private static partial Regex Elaboration();
 
     /// <summary>
     /// Nouns that name the kind of knowledge worth keeping, for facts phrased

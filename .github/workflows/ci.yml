@@ -108,14 +108,47 @@ jobs:
           echo "Found $found"
 
       - name: Test
-        run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx"
+        # The hang detector names the tests in flight when the suite stops
+        # making progress, in a Sequence file beside the results. Without it a
+        # hung suite sits silent until the job timeout kills it, and the kill
+        # discards everything: three Unix legs did exactly that on 14
+        # September 2026 and left no way to tell which test had stopped. The
+        # timeout is per test, renewed as each one finishes, and ten minutes
+        # is longer than a whole healthy run, so it cannot fire on a slow
+        # test; when it does fire, two-thirds of the job's allowance is still
+        # left to write the file. The first catch named the test and showed
+        # every other test finished, which the name alone cannot explain, so a
+        # mini dump comes with it: the thread stacks are the only thing that
+        # says where inside that test the wait is.
+        run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=results.trx" --blame-hang --blame-hang-timeout 10m --blame-hang-dump-type mini
+
+      # Only after a failure, and only on Windows, where the recurring one is
+      # every spawned process exiting 0xC0000142 from some point in the run to
+      # its end. That code is a process that could not connect to its console
+      # or desktop while starting, which is a condition of the session, and
+      # the suite's log carries nothing that says which condition. This reads
+      # the window station and desktop heap, counts the console hosts still
+      # alive, looks for the event Windows logs when the desktop heap runs
+      # out and for console-host crashes, and tries a spawn of its own to say
+      # whether the condition outlived the test host. Nothing here changes
+      # the machine; it exists so the next occurrence is evidence rather than
+      # another re-run.
+      - name: Describe the session after a Windows failure
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: ./build/spawn-diagnostics.ps1
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}
-          path: '**/results.trx'
+          path: |
+            **/results.trx
+            **/Sequence_*.xml
+            **/*.dmp
+            **/spawn-refusal-probe.txt
+            **/spawn-probe-healthy.txt
 
   publish:
     name: Publish ${{ matrix.rid }}

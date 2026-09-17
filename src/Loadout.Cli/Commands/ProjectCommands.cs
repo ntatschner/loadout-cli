@@ -130,15 +130,38 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
         var output = new CommandOutput(_console, settings);
         var path = settings.Path ?? settings.Repo ?? Directory.GetCurrentDirectory();
 
-        // Registering writes the registry, so a preview that ran it would have registered it.
+        // Asked once, for both paths. Registering writes the registry, so a
+        // preview that ran it would have registered it — but the questions the
+        // registration asks first are all reads, and asking them here is what
+        // stops the preview and the real run disagreeing. This said "Would
+        // register" about anything at all, and named no slug to check it by.
+        var preview = await _projects
+            .ValidateAddAsync(path, settings.Slug, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (preview.Failed)
+        {
+            return output.Fail(preview);
+        }
+
+        var versioned = preview.Value!.Versioned;
+
         if (settings.DryRun)
         {
             output.WriteLine(
-                $"[bold]Would register[/] {Markup.Escape(path)} as a project. "
-                + "Nothing was changed.");
-        
+                $"[bold]Would register[/] {Markup.Escape(path)} as "
+                + $"'{Markup.Escape(preview.Value.Slug)}'. Nothing was changed.");
+
+            if (!versioned)
+            {
+                output.WriteLine(
+                    "  [yellow]There is no Git repository there yet.[/] It would be registered "
+                    + "as one still to be set up, with a task saying so.");
+            }
+
             return CommandOutput.Success();
         }
+
         var result = await _projects.AddAsync(path, settings.Slug).ConfigureAwait(false);
         if (result.Failed)
         {
@@ -165,6 +188,19 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
             output.WriteLine(
                 $"[green]Registered[/] {Markup.Escape(project.Entry.Name)} "
                 + $"[dim]({Markup.Escape(project.Entry.Slug)})[/]");
+
+            // Said plainly, because it is the unusual case and because
+            // somebody who meant to register a repository has typed a path one
+            // level out. The alternative — registering it silently — is how
+            // you end up with a project pointing at a directory nobody meant.
+            if (!versioned)
+            {
+                output.WriteLine(
+                    "  [yellow]There is no Git repository here yet.[/] Recorded as a task, "
+                    + "so the next session is told to set one up before other work.");
+                output.WriteLine(
+                    $"  [dim]loadout task list {Markup.Escape(project.Entry.Slug)}[/]");
+            }
 
             foreach (var choice in applied)
             {
@@ -360,6 +396,12 @@ public sealed class ProjectDiscoverCommand : AsyncCommand<GlobalSettings>
                     remote = r.RemoteUrl,
                     registered = r.IsRegistered,
                     slug = r.MatchedSlug,
+
+                    // Added rather than inferred from an absent remote: a
+                    // repository with no remote is not the same thing as a
+                    // directory that is not a repository, and a script cannot
+                    // tell them apart without this.
+                    versioned = r.Versioned,
                 }),
             });
 
@@ -373,15 +415,21 @@ public sealed class ProjectDiscoverCommand : AsyncCommand<GlobalSettings>
             return CommandOutput.Success();
         }
 
-        output.WriteLine($"[bold]Repositories discovered[/] [dim]({found.Count})[/]");
+        output.WriteLine($"[bold]Projects discovered[/] [dim]({found.Count})[/]");
         output.WriteBlankLine();
 
         foreach (var repository in found)
         {
             var marker = repository.IsRegistered ? "[green]+[/]" : "[yellow]?[/]";
+
+            // Said on the row rather than left to be inferred from a missing
+            // remote. Registering one of these is a different decision from
+            // registering a repository, and somebody should make it knowingly.
             var suffix = repository.IsRegistered
                 ? $"[dim]registered as {Markup.Escape(repository.MatchedSlug!)}[/]"
-                : "[dim]not registered[/]";
+                : repository.Versioned
+                    ? "[dim]not registered[/]"
+                    : "[dim]not registered, and not a Git repository yet[/]";
 
             output.WriteLine($"{marker} {Markup.Escape(repository.Path)}  {suffix}");
         }

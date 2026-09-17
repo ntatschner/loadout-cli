@@ -30,7 +30,7 @@ namespace Loadout.Tests.Integration;
 public sealed class RemediationTests : IAsyncLifetime
 {
     private readonly string _root;
-    private readonly ProcessLauncher _processes = new();
+    private readonly ThrottledProcessLauncher _processes = new();
 
     private IRemediationService _remediation = null!;
     private IPolicyService _policies = null!;

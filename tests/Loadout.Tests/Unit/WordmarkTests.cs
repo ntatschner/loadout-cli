@@ -106,6 +106,47 @@ public sealed class WordmarkTests
     }
 
     [Fact]
+    public void The_reading_indicator_has_a_form_a_plain_console_font_can_draw()
+    {
+        // The stock Windows console font draws the code page 437 blocks and
+        // shades and nothing else from the block range. The bars came out as
+        // a row of boxes there in a photograph, and no headless test could
+        // have seen that: a missing glyph is decided by the font, after the
+        // character has left the program. The bars stay where they can be
+        // drawn; this is the fallback, and it has to stay drawable.
+        const string CodePage437Blocks = " ░▒▓█▄▀";
+
+        for (var step = 0; step < 24; step++)
+        {
+            Wordmark.Pulse(step, glyphs: Wordmark.Shades).ToCharArray()
+                .Should().OnlyContain(c => CodePage437Blocks.Contains(c));
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false, Wordmark.Bars)]
+    [InlineData(false, true, Wordmark.Bars)]
+    [InlineData(true, true, Wordmark.Bars)]
+    [InlineData(true, false, Wordmark.Shades)]
+    public void The_plain_windows_console_is_the_only_host_that_gets_shades(
+        bool onWindows, bool inWindowsTerminal, string expected)
+    {
+        // Decided from the host rather than from the driver's legacy flag,
+        // which is false on a Windows 11 console that still cannot draw an
+        // eighth block: the flag is about escape sequences, not fonts.
+        Wordmark.PulseGlyphsFor(onWindows, inWindowsTerminal).Should().Be(expected);
+    }
+
+    [Fact]
+    public void The_reading_indicator_is_bars_unless_told_otherwise()
+    {
+        Enumerable.Range(0, 24)
+            .SelectMany(step => Wordmark.Pulse(step))
+            .Distinct()
+            .Should().Contain(c => "▁▂▃▅▆▇".Contains(c), "the bars are the preferred form");
+    }
+
+    [Fact]
     public void The_reading_indicator_refuses_a_width_it_cannot_draw()
     {
         var act = () => Wordmark.Pulse(0, 0);
