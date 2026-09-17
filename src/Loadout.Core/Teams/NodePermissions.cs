@@ -54,11 +54,16 @@ public sealed record PendingAsk(
     /// Names the node, the role and what it is pointed at, because "may it run
     /// Bash?" is not a question anybody can answer. The target is already
     /// redacted by the time it is written.
+    /// <para>
+    /// No question mark: whoever asks adds one, which is the convention every
+    /// other gate here follows. Having one too meant the first real run asked
+    /// somebody "Let it??".
+    /// </para>
     /// </remarks>
     public string Question =>
         $"{Node} ({Role}) wants to use {Tool}"
         + (Target is { Length: > 0 } ? $" for '{Target}'" : string.Empty)
-        + ". Nothing in its role allows that. Let it?";
+        + ". Nothing in its role allows that. Let it";
 }
 
 /// <summary>What a person said about one call.</summary>

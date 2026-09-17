@@ -399,6 +399,18 @@ public sealed class TeamRunner : ITeamRunner
 
             while (true)
             {
+                // Checked here rather than at the end of the loop, because the
+                // end is not the only way back to the top. The merge-gate
+                // reminder continues past it, which bought a fourth round on a
+                // run that asked for three - a real lead turn, real money, and
+                // a summary that said "round limit: 3 rounds ... 4 rounds" in
+                // one breath. Found by the first run that reached the reminder.
+                if (rounds >= request.MaxRounds)
+                {
+                    ended = $"round limit: {request.MaxRounds} rounds";
+                    break;
+                }
+
                 rounds++;
 
                 // Written as it starts rather than counted at the end, so a
@@ -602,12 +614,6 @@ public sealed class TeamRunner : ITeamRunner
                 if (team.Rules.Budget.Usd is { } budget && cost >= budget)
                 {
                     ended = $"budget spent: {cost:0.00} of {budget:0.00} USD";
-                    break;
-                }
-
-                if (rounds >= request.MaxRounds)
-                {
-                    ended = $"round limit: {request.MaxRounds} rounds";
                     break;
                 }
 

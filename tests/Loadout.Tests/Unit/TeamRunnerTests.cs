@@ -88,7 +88,8 @@ public sealed class TeamRunnerTests : IDisposable
         bool dryRun = false,
         IChildLifetime? lifetime = null,
         Loadout.Core.Tasks.ITaskService? tasks = null,
-        FakeGit? git = null)
+        FakeGit? git = null,
+        int rounds = 5)
     {
         return await new TeamRunner(
             _launcher,
@@ -99,7 +100,7 @@ public sealed class TeamRunnerTests : IDisposable
             lifetime,
             tasks).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
-                "Add --since to loadout usage.", autonomy, dryRun, Offline: true),
+                "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true),
             _console);
     }
 
@@ -739,6 +740,51 @@ public sealed class TeamRunnerTests : IDisposable
             _console);
 
         second.Requests[0].Request.Model.Should().Be("opus");
+    }
+
+    [Fact]
+    public async Task The_merge_gate_reminder_does_not_buy_the_lead_an_extra_round()
+    {
+        // The first real run of this asked for three rounds and took four. The
+        // reminder loops back to the top of the round loop, and the limit was
+        // checked at the bottom, so the one path that skipped it was the one
+        // that fires exactly when a lead is being difficult. A round is a lead
+        // turn and a lead turn is money.
+        var team = await IteratingProjectAsync();
+        team.Rules.Gates.Merge = ["reviewer"];
+
+        // Done every time, with a branch nothing has reviewed, so the reminder
+        // fires and the lead says done again.
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.01m),
+            Result(LeadDone(), 0.01m),
+            Result(LeadDone(), 0.01m),
+            Result(LeadDone(), 0.01m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(team: team, rounds: 2)).Value!;
+
+        outcome.Rounds.Should().Be(2, "two means two, whatever happened inside them");
+        outcome.Ended.Should().Contain("round limit");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        // The line that gave it away: a run cannot be on round 4 of 3.
+        journal.Should().NotContain(l => l.Contains("\"round\":3"));
+    }
+
+    [Fact]
+    public void A_question_leaves_the_question_mark_to_whoever_asks_it()
+    {
+        // The first real run asked somebody "Let it??", because this ended
+        // with one and the console adds one. Every other gate here hands over
+        // a sentence without it.
+        new PendingAsk("id", "implementer/1", "role.implementer", "Bash", "dotnet test", DateTimeOffset.UtcNow)
+            .Question.Should().EndWith("Let it").And.NotContain("?");
     }
 
     [Theory]
