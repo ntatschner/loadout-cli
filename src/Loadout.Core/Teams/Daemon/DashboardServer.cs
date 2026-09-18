@@ -57,7 +57,7 @@ public sealed class DashboardServer : IDisposable
     /// is a 400 somebody notices, and a change routed as a read is a change
     /// that skipped the check.
     /// </remarks>
-    private static readonly string[] Reads = ["events", "documents", "diff", "stream"];
+    private static readonly string[] Reads = ["events", "documents", "diff", "stream", "spent"];
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -744,6 +744,13 @@ public sealed class DashboardServer : IDisposable
                 return;
             }
 
+            if (rest.EndsWith("/spent", StringComparison.Ordinal))
+            {
+                await SpentAsync(context, rest[..^"/spent".Length]).ConfigureAwait(false);
+
+                return;
+            }
+
             if (rest.EndsWith("/documents", StringComparison.Ordinal))
             {
                 await PapersAsync(context, rest[..^"/documents".Length]).ConfigureAwait(false);
@@ -1073,6 +1080,60 @@ public sealed class DashboardServer : IDisposable
             total = NodeStream.Count(directory, node),
             steps,
         }, Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Where each node's time went, from its own stream.
+    /// </summary>
+    /// <remarks>
+    /// Its own endpoint rather than part of the run, because answering it means
+    /// reading every node's whole stream and the list is polled every few
+    /// seconds. This is asked for when somebody opens the page that shows it.
+    /// </remarks>
+    private async Task SpentAsync(HttpListenerContext context, string runId)
+    {
+        var read = _journal.Summarise(runId);
+
+        if (read.Failed)
+        {
+            await WriteAsync(context, 404, "application/json; charset=utf-8",
+                JsonSerializer.Serialize(new { error = read.Error }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var run = read.Value!;
+        var nodes = new List<object>();
+
+        foreach (var node in run.Nodes)
+        {
+            var steps = NodeStream.Read(run.Directory, node.Node);
+
+            if (steps.Failed || steps.Value is not { Count: > 1 } walked)
+            {
+                continue;
+            }
+
+            var spent = NodeStream.Spent(walked);
+
+            if (!spent.Any)
+            {
+                continue;
+            }
+
+            nodes.Add(new
+            {
+                node.Node,
+                node.Role,
+                thinking = (int)spent.Thinking.TotalSeconds,
+                tools = (int)spent.Tools.TotalSeconds,
+                writing = (int)spent.Writing.TotalSeconds,
+                idle = (int)spent.Idle.TotalSeconds,
+            });
+        }
+
+        await WriteAsync(context, 200, "application/json; charset=utf-8",
+            JsonSerializer.Serialize(new { nodes }, Json)).ConfigureAwait(false);
     }
 
     /// <summary>What one node changed, as a patch.</summary>

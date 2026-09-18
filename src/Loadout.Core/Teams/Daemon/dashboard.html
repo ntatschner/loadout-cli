@@ -2031,6 +2031,8 @@
       }));
     }
 
+    drawSpent(panel);
+
     if (numbers.trouble.any) {
       var went = document.createElement("h3");
 
@@ -2065,6 +2067,98 @@
       line.textContent = said.join(", ") + ".";
       panel.appendChild(line);
     }
+  }
+
+  // Which run's time split is on screen, so reading every node's whole stream
+  // happens when somebody opens this and not four times a minute.
+  var spentShown = null;
+
+  /*
+    Where each node's time went, from the gaps between the things it did. Each
+    gap is put down to whatever ended it: one ending in a tool call is the
+    model deciding to make it, one ending in a tool's answer is that tool
+    running, one ending in the node saying something is the model writing it.
+
+    An account of when things arrived rather than of what a model was doing,
+    and the difference is worth saying rather than glossing - which is why the
+    heading says "roughly".
+  */
+  function drawSpent(panel) {
+    if (!opened) { return; }
+
+    var box = document.createElement("div");
+
+    box.id = "spent";
+    panel.appendChild(box);
+
+    if (spentShown === opened.id && spentShown !== null) {
+      // Already asked for this run; the answer lands in the box below.
+      box.appendChild(spentFor(lastSpent));
+
+      return;
+    }
+
+    var id = opened.id;
+
+    api("/api/runs/" + encodeURIComponent(id) + "/spent")
+      .then(function (got) {
+        if (!opened || opened.id !== id) { return; }
+
+        spentShown = id;
+        lastSpent = got.nodes;
+
+        var into = document.getElementById("spent");
+
+        if (into) {
+          into.textContent = "";
+          into.appendChild(spentFor(got.nodes));
+        }
+      })
+      .catch(function () {
+        // Runs from before a node kept a stream have none, which is ordinary
+        // rather than worth a line of its own.
+        spentShown = id;
+        lastSpent = [];
+      });
+  }
+
+  var lastSpent = [];
+
+  function spentFor(nodes) {
+    var box = document.createElement("div");
+
+    if (!nodes || !nodes.length) { return box; }
+
+    var heading = document.createElement("h3");
+
+    heading.textContent = "Roughly where each node's time went";
+    box.appendChild(heading);
+
+    nodes.forEach(function (node) {
+      var name = document.createElement("p");
+
+      name.className = "facts";
+      name.textContent = node.node;
+      box.appendChild(name);
+
+      bars(box, [
+        { name: "deciding", amount: node.thinking, said: spell(node.thinking) },
+        { name: "tools running", amount: node.tools, said: spell(node.tools) },
+        { name: "writing", amount: node.writing, said: spell(node.writing) },
+        { name: "waiting", amount: node.idle, said: spell(node.idle) }
+      ].filter(function (row) { return row.amount > 0; }));
+    });
+
+    var note = document.createElement("p");
+
+    note.className = "facts";
+    note.textContent = "From when things arrived rather than from what the model was doing: "
+      + "deciding includes the time an answer took to arrive, and gaps longer than two "
+      + "minutes are counted as waiting rather than as any of the others.";
+
+    box.appendChild(note);
+
+    return box;
   }
 
   function drawTurns() {
@@ -2628,6 +2722,7 @@
     watching = run.id;
     opened = run;
     roomShown = null;
+    spentShown = null;
 
     showDepth(depth, false);
     heading.textContent = (run.room ? run.room + ": " : "") + "what " + run.id + " is doing";

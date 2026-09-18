@@ -420,9 +420,20 @@ Read when you open it rather than on every refresh: it walks every journal on
 the machine, and nobody needs that four times a minute behind a fold they have
 not opened.
 
-**Not built yet.** Splitting a node's time into thinking, tool calls and
-waiting on a person. It wants per-step timings that are only now being written
-down, so it will mean something once there are runs that carry them.
+**Where each node's time went** sits under the same tab, from the gaps between
+the things the node did: a gap ending in a tool call is the model deciding to
+make it, one ending in that tool's answer is the tool running, one ending in
+the node saying something is the model writing it. Gaps longer than two minutes
+are counted as waiting rather than as any of those, because a node waiting on a
+person would otherwise read as one that spent two hours thinking.
+
+It is an account of **when things arrived** rather than of what a model was
+doing, and the heading says "roughly" for that reason: deciding includes the
+time an answer took to arrive, because nothing outside the model can tell those
+apart. It answers "where did the twenty minutes go", which is the question, and
+not "how long did it reason for", which nothing here can answer.
+
+Only runs whose nodes kept a stream have it, which means runs from here on.
 
 ### Being told
 

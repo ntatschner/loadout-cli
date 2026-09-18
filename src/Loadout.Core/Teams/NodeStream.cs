@@ -254,6 +254,102 @@ public static class NodeStream
         }
     }
 
+    /// <summary>The longest gap between two steps that is counted as work.</summary>
+    /// <remarks>
+    /// A node waiting on a person, or on a tool that has hung, leaves a gap of
+    /// minutes or hours. Counting that as thinking would say a node spent two
+    /// hours thinking when it spent two hours waiting, so anything longer is
+    /// counted as neither - the same trick Tokdash uses for the same reason.
+    /// </remarks>
+    public static readonly TimeSpan Longest = TimeSpan.FromMinutes(2);
+
+    /// <summary>Where a node's time went, as far as its own stream can say.</summary>
+    /// <param name="Thinking">Time that ended in the node deciding to do something.</param>
+    /// <param name="Tools">Time that ended in a tool answering.</param>
+    /// <param name="Writing">Time that ended in the node saying something.</param>
+    /// <param name="Idle">Gaps too long to be any of those.</param>
+    public sealed record Spending(
+        TimeSpan Thinking,
+        TimeSpan Tools,
+        TimeSpan Writing,
+        TimeSpan Idle)
+    {
+        /// <summary>Everything that was accounted for as work.</summary>
+        public TimeSpan Working => Thinking + Tools + Writing;
+
+        /// <summary>Whether there is anything worth showing.</summary>
+        public bool Any => Working > TimeSpan.Zero || Idle > TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// Where a node's time went, from the gaps between the things it did.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each gap is put down to whatever ended it: a gap ending in a tool call
+    /// is the model deciding to make it, a gap ending in a tool's answer is
+    /// that tool running, and a gap ending in the node saying something is the
+    /// model writing it.
+    /// </para>
+    /// <para>
+    /// This is an account of when things arrived rather than of what a model
+    /// was doing, and the difference is worth stating rather than glossing:
+    /// "thinking" here includes the time the answer took to stream, because
+    /// nothing outside the model can tell those apart. It answers "where did
+    /// the twenty minutes go", which is the question, and not "how long did it
+    /// reason for", which nothing here can answer.
+    /// </para>
+    /// </remarks>
+    public static Spending Spent(IReadOnlyList<NodeStep> steps)
+    {
+        ArgumentNullException.ThrowIfNull(steps);
+
+        var thinking = TimeSpan.Zero;
+        var tools = TimeSpan.Zero;
+        var writing = TimeSpan.Zero;
+        var idle = TimeSpan.Zero;
+
+        for (var i = 1; i < steps.Count; i++)
+        {
+            var gap = steps[i].At - steps[i - 1].At;
+
+            if (gap <= TimeSpan.Zero)
+            {
+                continue;
+            }
+
+            if (gap > Longest)
+            {
+                idle += gap;
+
+                continue;
+            }
+
+            switch (steps[i].Kind)
+            {
+                case "tool":
+                    thinking += gap;
+                    break;
+
+                case "answered":
+                case "failed":
+                case "refused":
+                    tools += gap;
+                    break;
+
+                case "said":
+                    writing += gap;
+                    break;
+
+                default:
+                    idle += gap;
+                    break;
+            }
+        }
+
+        return new Spending(thinking, tools, writing, idle);
+    }
+
     /// <summary>One line back into a step, or null where it will not parse.</summary>
     public static NodeStep? Parse(string line)
     {

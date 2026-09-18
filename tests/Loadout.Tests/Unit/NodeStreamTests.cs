@@ -162,6 +162,65 @@ public sealed class NodeStreamTests : IDisposable
     }
 
     [Fact]
+    public void Where_a_nodes_time_went_is_put_down_to_whatever_ended_each_gap()
+    {
+        var spent = NodeStream.Spent(
+        [
+            new NodeStep(Noon, "started"),
+
+            // Twenty seconds, then it decided to call a tool.
+            new NodeStep(Noon.AddSeconds(20), "tool", "Bash", "dotnet test"),
+
+            // Forty seconds of that tool running.
+            new NodeStep(Noon.AddSeconds(60), "answered", null, null, "9 failed"),
+
+            // Ten seconds writing about it.
+            new NodeStep(Noon.AddSeconds(70), "said", null, null, "Nine tests fail."),
+        ]);
+
+        spent.Thinking.Should().Be(TimeSpan.FromSeconds(20));
+        spent.Tools.Should().Be(TimeSpan.FromSeconds(40));
+        spent.Writing.Should().Be(TimeSpan.FromSeconds(10));
+        spent.Working.Should().Be(TimeSpan.FromSeconds(70));
+    }
+
+    [Fact]
+    public void A_gap_too_long_to_be_work_is_waiting_rather_than_thinking()
+    {
+        // A node waiting on a person leaves a gap of minutes or hours.
+        // Counting that as thinking would say it spent two hours thinking when
+        // it spent two hours waiting.
+        var spent = NodeStream.Spent(
+        [
+            new NodeStep(Noon, "tool", "Bash", "dotnet test"),
+            new NodeStep(Noon.AddHours(2), "tool", "Read", "one.txt"),
+        ]);
+
+        spent.Thinking.Should().Be(TimeSpan.Zero);
+        spent.Idle.Should().Be(TimeSpan.FromHours(2));
+    }
+
+    [Fact]
+    public void A_stream_of_one_step_has_no_gaps_and_says_nothing()
+    {
+        NodeStream.Spent([new NodeStep(Noon, "started")]).Any.Should().BeFalse();
+        NodeStream.Spent([]).Any.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Two_things_recorded_at_the_same_moment_are_no_time_at_all()
+    {
+        // Events arrive in bursts, and a burst is not negative time.
+        var spent = NodeStream.Spent(
+        [
+            new NodeStep(Noon, "tool", "Read", "one.txt"),
+            new NodeStep(Noon, "tool", "Read", "two.txt"),
+        ]);
+
+        spent.Any.Should().BeFalse();
+    }
+
+    [Fact]
     public void A_run_from_before_this_existed_says_so_rather_than_showing_nothing()
     {
         var read = NodeStream.Read(_directory, "lead");
