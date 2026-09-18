@@ -24,9 +24,17 @@ internal static class RunControlling
     {
         var run = asked ?? journal.List(1).FirstOrDefault();
 
-        return run is { Length: > 0 }
+        if (run is not { Length: > 0 })
+        {
+            return (null, "No team has run on this machine yet.");
+        }
+
+        // Said here as well as enforced in the journal, because a sentence
+        // about what a run identifier looks like is more use to whoever typed
+        // one than "no such run" would be.
+        return RunJournal.Names(run)
             ? (run, null)
-            : (null, "No team has run on this machine yet.");
+            : (null, $"'{run}' is not a run identifier. They look like 20260918-1436-ed59.");
     }
 }
 

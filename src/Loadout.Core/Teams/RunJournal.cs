@@ -264,7 +264,46 @@ public sealed class RunJournal : IRunJournal
     private string Root => Path.Combine(_paths.Paths.State, "teams", "runs");
 
     /// <inheritdoc />
-    public string DirectoryOf(string runId) => Path.Combine(Root, runId);
+    public string DirectoryOf(string runId) =>
+        Path.Combine(Root, Names(runId) ? runId : Nowhere);
+
+    /// <summary>
+    /// Whether that is a run identifier, as opposed to a path.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A run is called 20260918-1436-ed59: a date, a time and four hex
+    /// characters. Anything else is somebody's idea rather than a run's name,
+    /// and the reason to say so here is that a run identifier becomes a
+    /// directory - so an identifier carrying a separator or a <c>..</c> becomes
+    /// a directory somewhere else entirely.
+    /// </para>
+    /// <para>
+    /// That is not theoretical. <c>team message '..\probe' --message x</c>
+    /// created a directory outside the runs root, wrote a file in it and
+    /// reported success; the same thing was reachable from the dashboard, which
+    /// can be on a network. Nothing downstream was at fault: everything that
+    /// takes a run identifier joins it to a path, so the check belongs where
+    /// the joining happens.
+    /// </para>
+    /// <para>
+    /// Deliberately a shape rather than a lookup. A run being on this machine
+    /// is a different question with a different answer - a journal from another
+    /// machine is a run somebody may legitimately be reading - and conflating
+    /// the two would make this refuse things that are fine.
+    /// </para>
+    /// </remarks>
+    public static bool Names(string? runId) =>
+        runId is { Length: > 0 and <= 64 }
+        && runId.All(one => char.IsAsciiLetterOrDigit(one) || one == '-');
+
+    /// <summary>Where an identifier that is not one is sent.</summary>
+    /// <remarks>
+    /// A name nothing can be, so the read that follows fails as "no such run"
+    /// rather than reaching anything. Returning the root itself would make a
+    /// malformed identifier read the runs directory as though it were a run.
+    /// </remarks>
+    private const string Nowhere = "not-a-run";
 
     /// <inheritdoc />
     public IReadOnlyList<string> List(int limit = 20)
@@ -287,6 +326,12 @@ public sealed class RunJournal : IRunJournal
     /// <inheritdoc />
     public OperationResult<IReadOnlyList<RunEvent>> Read(string runId)
     {
+        if (!Names(runId))
+        {
+            return OperationResult<IReadOnlyList<RunEvent>>.Fail(
+                $"'{runId}' is not a run identifier.", Models.ExitCode.InvalidArguments);
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
 
         var path = Path.Combine(DirectoryOf(runId), "journal.jsonl");
