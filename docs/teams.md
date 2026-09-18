@@ -373,6 +373,29 @@ A reason that clears and comes back is news again. A daemon that restarts
 repeats whatever is still outstanding, once — what has been said is held in
 memory rather than in a file nobody would ever read.
 
+### Reaching it from something other than this machine
+
+The dashboard listens on `127.0.0.1` by default, which is this machine and
+nothing else. `--listen 0.0.0.0` puts it on whatever network you are on, so a
+phone on the sofa can answer a gate:
+
+```sh
+loadout team dashboard --listen 0.0.0.0
+loadout team daemon --listen 0.0.0.0        # overrides teams.webhook_listen
+```
+
+It prints an address per way in rather than the wildcard, because `0.0.0.0` is
+not something anybody can type into a phone, and it says plainly what has
+changed: **anyone on that network who has the address can answer gates, stop
+runs and start teams.** The token is the only thing in the way and it is part
+of the address, so the address *is* the credential — treat it as one.
+
+On Windows, binding anything other than loopback needs a reservation and fails
+with "Access is denied" without one. The failure says which `netsh http add
+urlacl` line to run rather than leaving somebody to conclude the feature does
+not work. Loadout never runs it: adding a URL reservation changes the machine,
+and that is yours to do.
+
 ### Starting one from the page
 
 **Start a team** on the dashboard takes the same things `team run` does: a

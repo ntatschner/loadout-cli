@@ -95,11 +95,40 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         }).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Says out loud when the page is reachable from more than this machine.
+    /// </summary>
+    /// <remarks>
+    /// The token is the whole of the protection. On loopback the only thing
+    /// that can reach the port is already running as the person who started
+    /// it; off loopback that stops being true, and whoever holds the address
+    /// can answer a gate, stop a run and start a team. Said plainly, every
+    /// time, rather than left in the documentation.
+    /// </remarks>
+    internal static void Warn(CommandOutput output, DashboardServer server)
+    {
+        if (!server.Beyond)
+        {
+            return;
+        }
+
+        output.WriteLine(
+            "[yellow]Anyone on this network who has that address can answer gates, stop runs "
+            + "and start teams.[/] The token is the only thing in the way, and it is in the "
+            + "address - so treat the address as the credential it is.");
+    }
+
     public sealed class Settings : GlobalSettings
     {
         [CommandOption("--port <PORT>")]
         [Description("The port to listen on. One the machine chooses when omitted.")]
         public int Port { get; init; }
+
+        [CommandOption("--listen <ADDRESS>")]
+        [Description(
+            "The address to listen on. 127.0.0.1 by default, which is this machine only. "
+            + "0.0.0.0 reaches the network you are on.")]
+        public string Listen { get; init; } = "127.0.0.1";
 
         [CommandOption("--open")]
         [Description("Open the page in a browser once it is listening.")]
@@ -123,12 +152,12 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             output.WriteLine(
                 "[dim]Dry run: nothing was served.[/] A dashboard would listen on "
                 + (settings.Port == 0 ? "a port this machine chose" : $"port {settings.Port}")
-                + ", on 127.0.0.1 only, with a token in its address.");
+                + $", on {settings.Listen}, with a token in its address.");
 
             return CommandOutput.Success();
         }
 
-        var started = server.Start(settings.Port);
+        var started = server.Start(settings.Port, settings.Listen);
 
         if (started.Failed)
         {
@@ -143,10 +172,17 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         }
         else
         {
-            output.WriteLine($"[bold]{Markup.Escape(server.Address)}[/]");
-            output.WriteLine(
-                "[dim]On this machine only, and only with that token. Anything it changes "
-                + "runs the command you would have typed.[/]");
+            foreach (var address in server.Reachable())
+            {
+                output.WriteLine($"[bold]{Markup.Escape(address)}[/]");
+            }
+
+            output.WriteLine(server.Beyond
+                ? "[dim]Anything it changes runs the command you would have typed.[/]"
+                : "[dim]On this machine only, and only with that token. Anything it changes runs "
+                    + "the command you would have typed.[/]");
+
+            Warn(output, server);
             output.WriteLine(Console.IsInputRedirected
                 ? "[dim]It stops when whatever started it closes its input.[/]"
                 : "[dim]Press Ctrl+C to stop.[/]");

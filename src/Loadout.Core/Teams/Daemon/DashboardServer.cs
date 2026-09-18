@@ -181,8 +181,87 @@ public sealed class DashboardServer : IDisposable
         }
 
         Address = $"{prefix}?token={Token}";
+        Beyond = !IsLoopback(where);
 
         return OperationResult.Ok();
+    }
+
+    /// <summary>Whether it is listening on more than this machine.</summary>
+    /// <remarks>
+    /// Worth saying out loud wherever it is true. The token is the whole of
+    /// the protection, and on loopback the only thing that can reach the port
+    /// is already running as the person who started it; off loopback that is
+    /// no longer so.
+    /// </remarks>
+    public bool Beyond { get; private set; }
+
+    /// <summary>
+    /// Addresses on this machine that something else could actually type.
+    /// </summary>
+    /// <remarks>
+    /// A server bound to 0.0.0.0 prints an address nothing can open. What
+    /// somebody wants is the one to type into a phone, so the wildcard is
+    /// turned back into whatever this machine is called on its network.
+    /// </remarks>
+    public IReadOnlyList<string> Reachable() => Spread(Address, Beyond, Here);
+
+    /// <summary>The wildcards a listener can be bound to.</summary>
+    private static readonly string[] Everywhere = ["//0.0.0.0:", "//+:", "//*:"];
+
+    /// <summary>
+    /// One address per way in, given what this machine is called.
+    /// </summary>
+    /// <remarks>
+    /// Separated from the lookup so it can be tested without a network: what
+    /// is worth being sure of is that a wildcard becomes something typeable
+    /// and that everything else is left exactly as it was.
+    /// </remarks>
+    internal static IReadOnlyList<string> Spread(
+        string address,
+        bool beyond,
+        Func<IReadOnlyList<string>> hosts)
+    {
+        ArgumentNullException.ThrowIfNull(hosts);
+
+        if (string.IsNullOrEmpty(address))
+        {
+            return [];
+        }
+
+        if (!beyond || !Everywhere.Any(one => address.Contains(one, StringComparison.Ordinal)))
+        {
+            return [address];
+        }
+
+        var found = hosts()
+            .Select(host => Everywhere.Aggregate(
+                address,
+                (so, wildcard) => so.Replace(wildcard, $"//{host}:", StringComparison.Ordinal)))
+            .ToList();
+
+        // A machine that cannot say what it is called on its own network is
+        // unusual rather than broken, and the wildcard is still true even when
+        // nobody can type it.
+        return found.Count > 0 ? found : [address];
+    }
+
+    /// <summary>What this machine is called on whatever network it is on.</summary>
+    private static IReadOnlyList<string> Here()
+    {
+        try
+        {
+            return
+            [
+                .. System.Net.Dns.GetHostAddresses(System.Net.Dns.GetHostName())
+                    .Where(one => one.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                    .Where(one => !System.Net.IPAddress.IsLoopback(one))
+                    .Select(one => one.ToString()),
+            ];
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or ArgumentException)
+        {
+            return [];
+        }
     }
 
     /// <summary>

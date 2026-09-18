@@ -96,6 +96,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         [Description("The port the dashboard listens on. One the machine chooses when omitted.")]
         public int Port { get; init; }
 
+        [CommandOption("--listen <ADDRESS>")]
+        [Description(
+            "The address to listen on, overriding teams.webhook_listen. 127.0.0.1 is this "
+            + "machine only; 0.0.0.0 reaches the network you are on.")]
+        public string? Listen { get; init; }
+
         [CommandOption("--no-dashboard")]
         [Description("Fire the schedules and serve nothing.")]
         public bool NoDashboard { get; init; }
@@ -138,7 +144,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
             var teams = machine.Value?.Teams;
 
-            var started = server.Start(settings.Port, Webhook.Listen(teams));
+            // The flag wins over the configured address, because somebody
+            // typing one means it for this run and not for ever.
+            var started = server.Start(
+                settings.Port,
+                settings.Listen is { Length: > 0 } asked ? asked : Webhook.Listen(teams));
 
             if (started.Failed)
             {
@@ -172,7 +182,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             _address = server.Address;
 
-            output.WriteLine($"[bold]{Markup.Escape(server.Address)}[/]");
+            foreach (var address in server.Reachable())
+            {
+                output.WriteLine($"[bold]{Markup.Escape(address)}[/]");
+            }
+
+            TeamDashboardCommand.Warn(output, server);
 
             if (await Webhook.TokenAsync(_secrets, cancellationToken).ConfigureAwait(false) is not null)
             {

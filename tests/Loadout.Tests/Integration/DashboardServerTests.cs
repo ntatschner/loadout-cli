@@ -655,6 +655,61 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public void A_dashboard_on_this_machine_says_it_is_on_this_machine()
+    {
+        // The fixture's own server, bound to loopback like every other one in
+        // this file.
+        _server.Beyond.Should().BeFalse();
+        _server.Reachable().Should().ContainSingle().Which.Should().Be(_server.Address);
+    }
+
+    [Fact]
+    public void A_wildcard_becomes_an_address_somebody_could_type()
+    {
+        // A server bound to 0.0.0.0 prints an address nothing can open. What
+        // somebody wants is the one to type into a phone.
+        var spread = DashboardServer.Spread(
+            "http://0.0.0.0:8477/?token=abc", beyond: true, () => ["192.168.1.9", "10.0.0.4"]);
+
+        spread.Should().Equal(
+            "http://192.168.1.9:8477/?token=abc",
+            "http://10.0.0.4:8477/?token=abc");
+    }
+
+    [Theory]
+    [InlineData("http://+:8477/?token=abc")]
+    [InlineData("http://*:8477/?token=abc")]
+    public void Every_shape_of_wildcard_a_listener_takes(string address)
+    {
+        DashboardServer.Spread(address, beyond: true, () => ["192.168.1.9"])
+            .Should().ContainSingle().Which.Should().Be("http://192.168.1.9:8477/?token=abc");
+    }
+
+    [Fact]
+    public void An_address_that_is_already_typeable_is_left_exactly_as_it_was()
+    {
+        const string Given = "http://192.168.1.9:8477/?token=abc";
+
+        DashboardServer.Spread(Given, beyond: true, () => ["10.0.0.4"])
+            .Should().ContainSingle().Which.Should().Be(Given);
+    }
+
+    [Fact]
+    public void A_machine_that_cannot_say_what_it_is_called_still_says_something()
+    {
+        // Unusual rather than broken, and the wildcard is still true even when
+        // nobody can type it. Silence would read as "it is not listening".
+        DashboardServer.Spread("http://0.0.0.0:8477/?token=abc", beyond: true, () => [])
+            .Should().ContainSingle().Which.Should().Be("http://0.0.0.0:8477/?token=abc");
+    }
+
+    [Fact]
+    public void A_server_that_never_started_offers_no_address_at_all()
+    {
+        DashboardServer.Spread(string.Empty, beyond: false, () => ["10.0.0.4"]).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_run_nobody_has_is_a_404_rather_than_an_empty_one()
     {
         var answer = await GetAsync("/api/runs/no-such-run");
