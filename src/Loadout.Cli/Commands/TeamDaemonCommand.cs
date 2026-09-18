@@ -392,6 +392,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             "name" => ("team name", action.Room is { Length: > 0 } room
                 ? [action.Run, "--room", room]
                 : [action.Run, "--clear"]),
+
+            "pr" => ("team pr", action.Node is { Length: > 0 } whose
+                ? [action.Run, "--node", whose]
+                : [action.Run]),
             _ => (string.Empty, []),
         };
 

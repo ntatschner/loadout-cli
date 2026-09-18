@@ -310,6 +310,25 @@ felt like printing. Anything one step said is cut to a readable length: a node
 that reads a large file and quotes it back would otherwise put the whole file in
 there several times over, and the file is on disk already.
 
+Beside each node's patch is **Open a pull request**, which is the thing
+anybody does next after reading one:
+
+```sh
+loadout team pr 20260918-1436-ed59 --node implementer/1 --draft
+```
+
+It pushes the branch and opens the pull request with `gh`, using whatever
+GitHub login you already have. The body carries what a reviewer would otherwise
+have to ask for — what the run was for, which node did it, what the checker
+made of its report, what it cost, and the node's own words. The title is the
+run's goal unless you give one.
+
+This is the one button on the page that reaches a remote, so it asks first and
+names the branch, and `--dry-run` says what it would push and open without
+doing either. `gh` is checked for and checked as signed in *before* the push,
+because an installed but unauthenticated `gh` offers a route that fails after
+the branch has already gone.
+
 A patch is measured from the commit the node's branch started at, which the run
 writes down when it makes the worktree. Not from wherever the repository is now:
 once a node's branch has been merged and tidied away, a diff against the current

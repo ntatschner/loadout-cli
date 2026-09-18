@@ -655,6 +655,7 @@ public static class Program
             team.AddCommand<TeamMessageCommand>("message");
             team.AddCommand<TeamHaltCommand>("halt");
             team.AddCommand<TeamNameCommand>("name");
+            team.AddCommand<TeamPrCommand>("pr");
 
             team.AddBranch("autostart", autostart =>
             {

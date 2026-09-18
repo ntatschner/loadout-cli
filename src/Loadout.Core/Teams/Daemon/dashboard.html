@@ -2386,6 +2386,35 @@
       });
 
       li.appendChild(open);
+
+      // Beside the diff rather than anywhere else, because the thing somebody
+      // does after reading a diff is publish it - and this is the one button
+      // here that pushes to a remote, so it asks first and names the branch.
+      var pr = document.createElement("button");
+
+      pr.type = "button";
+      pr.textContent = "Open a pull request";
+
+      pr.addEventListener("click", function () {
+        if (!window.confirm("Push " + node.branch
+          + " to origin and open a pull request for what " + node.node + " did?")) {
+          return;
+        }
+
+        pr.disabled = true;
+
+        act(id, "pr", { node: node.node })
+          .then(function () {
+            pr.disabled = false;
+            announce("Pushed " + node.branch + " and opened a pull request.");
+          })
+          .catch(function (e) {
+            pr.disabled = false;
+            announce(e.message);
+          });
+      });
+
+      li.appendChild(pr);
       choices.appendChild(li);
     });
 
