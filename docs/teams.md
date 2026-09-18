@@ -216,11 +216,11 @@ there is one account of what happened rather than three that can disagree.
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
 
-### Three ways of looking at the same thing
+### Four ways of looking at the same thing
 
-**List**, **Office** and **Graph** across the top of the runs pane. The state
-is the same; how you look at it is a choice, and the three answer different
-questions.
+**List**, **Office**, **Graph** and **Timeline** across the top of the runs
+pane. The state is the same; how you look at it is a choice, and the four
+answer different questions.
 
 - **List** — dense and complete. The working view, and the default.
 - **Office** — one room per run, a desk per node. The glanceable one, the thing
@@ -229,6 +229,16 @@ questions.
 - **Graph** — who asked whom, as the delegation tree. This is what a list
   cannot show — the *shape* of a run — and it is the one to reach for when
   something is stuck. Every box is focusable in tree order and opens the run.
+- **Timeline** — where the minutes and the money went, across the machine
+  rather than inside one run. A strip per day with that day's totals, each
+  scaled to the hours the day actually used.
+
+The timeline collapses the empty days on purpose. One scale across everything
+was tried first and is useless: runs span days and each lasts minutes, so every
+bar came out at the minimum width and they all piled against the left edge — a
+correct chart that said nothing. Real time is kept *inside* a day, which is
+where overlap lives and the only place it matters: two teams running at once
+are two teams running at once on an afternoon, never across a week.
 
 **None of them can do anything.** Every control lives in the detail pane, so
 answering a gate is implemented once rather than three times. Clicking anybody
@@ -261,8 +271,7 @@ it afterwards is not that, and putting it there would mean renaming a run by
 appending to its history. Emptying the box on the page is the same as
 `--clear`.
 
-**Not built yet.** The art and the movement that goes with it, and a timeline
-view. Where the time went is answered for now by the bars in *What it cost*.
+**Not built yet.** The art for the office and the movement that goes with it.
 
 ### Four depths of one run
 

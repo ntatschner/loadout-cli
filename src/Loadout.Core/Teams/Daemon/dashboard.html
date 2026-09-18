@@ -242,6 +242,42 @@
     margin: 0 0 0.25rem;
   }
 
+  /*
+    The timeline. One row per run, placed by when it started and stretched by
+    how long it took, so a machine's afternoon reads at a glance: what
+    overlapped, what sat there, and what the day cost.
+  */
+  .when { list-style: none; margin: 0; padding: 0; font-size: 0.9rem; }
+
+  .when li { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0; }
+  .when .name { flex: 0 0 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .when .track { flex: 1 1 auto; position: relative; height: 1.6rem; }
+  .when .spent { flex: 0 0 4rem; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .when .span {
+    position: absolute;
+    top: 0.3rem;
+    height: 1rem;
+    min-width: 3px;
+    border: 1px solid var(--line);
+    border-radius: 0.15rem;
+    background: var(--done);
+    font: inherit;
+    color: inherit;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  /* The word is in the accessible name; the colour is the second encoding. */
+  .when .span.going { background: var(--going); }
+  .when .span.stopped { background: var(--stopped); }
+  .when .span:focus { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  /* Three marks across the day's own window, so the bars have something to
+     be read against rather than being widths with no scale. */
+  .when + .ruler, .ruler { display: flex; justify-content: space-between; color: var(--quiet); font-size: 0.8rem; margin: 0 0 1rem; }
+  .when .ruler span { flex: 0 0 auto; }
+
   .graph { width: 100%; height: auto; }
   .graph .edge { stroke: var(--line); stroke-width: 2; fill: none; }
   .graph .edge.live { stroke: var(--going); }
@@ -405,6 +441,7 @@
     .bars .bar { background: CanvasText; }
     .views button, .room, .desk { border: 1px solid CanvasText; }
     .views button[aria-pressed="true"] { border: 3px solid CanvasText; }
+    .when .span { background: CanvasText; border: 1px solid CanvasText; }
     .graph .box { stroke: CanvasText; fill: Canvas; }
     .graph .edge { stroke: CanvasText; }
     .graph text { fill: CanvasText; }
@@ -486,6 +523,7 @@
       <button type="button" id="view-list" aria-pressed="true">List</button>
       <button type="button" id="view-office" aria-pressed="false">Office</button>
       <button type="button" id="view-graph" aria-pressed="false">Graph</button>
+      <button type="button" id="view-when" aria-pressed="false">Timeline</button>
     </div>
 
     <ul class="runs" id="list" aria-describedby="status"></ul>
@@ -493,6 +531,8 @@
     <ul class="rooms" id="office" hidden></ul>
 
     <div id="graph" hidden></div>
+
+    <div id="when" hidden></div>
   </section>
 
   <section id="detail" class="pane" hidden aria-labelledby="detail-heading">
@@ -935,7 +975,8 @@
   var views = [
     { button: "view-list", box: "list", draw: drawList },
     { button: "view-office", box: "office", draw: drawOffice },
-    { button: "view-graph", box: "graph", draw: drawGraph }
+    { button: "view-graph", box: "graph", draw: drawGraph },
+    { button: "view-when", box: "when", draw: drawWhen }
   ];
 
   var view = 0;
@@ -1110,6 +1151,164 @@
       box.appendChild(name);
       box.appendChild(treeOf(run));
     });
+  }
+
+  /*
+    Where the minutes and the money went, across the machine rather than inside
+    one run. One row per run, placed by when it started and stretched by how
+    long it took: what overlapped, what sat there waiting for somebody, and
+    what the afternoon cost.
+
+    Positioned elements rather than a picture, like everything else here. Each
+    span is a button whose accessible name is the whole sentence, so the row
+    reads without the bar being seen at all.
+  */
+  function drawWhen(runs) {
+    var box = document.getElementById("when");
+
+    box.textContent = "";
+
+    var placed = runs.map(function (run) {
+      var began = Date.parse(run.started);
+      var ended = run.finished ? Date.parse(run.finished) : Date.now();
+
+      return { run: run, began: began, ended: ended };
+    }).filter(function (one) {
+      return !isNaN(one.began) && !isNaN(one.ended);
+    });
+
+    if (!placed.length) {
+      var none = document.createElement("p");
+
+      none.className = "facts";
+      none.textContent = "No team has run on this machine yet.";
+      box.appendChild(none);
+
+      return;
+    }
+
+    /*
+      A strip per day, each scaled to the hours that day actually used.
+
+      The obvious thing - one scale across everything - was tried and is
+      useless: these runs span two days and each lasts minutes, so every bar
+      came out at the minimum width and they all piled up against the left
+      edge. It was a correct chart that said nothing.
+
+      Collapsing the empty days keeps real time inside a day, which is where
+      overlap lives and the only place it matters: two teams running at once
+      are two teams running at once on an afternoon, never across a week.
+    */
+    var days = {};
+
+    placed.forEach(function (one) {
+      var day = new Date(one.began).toDateString();
+
+      (days[day] = days[day] || []).push(one);
+    });
+
+    Object.keys(days).sort(function (a, b) {
+      return Date.parse(a) - Date.parse(b);
+    }).forEach(function (day) {
+      var mine = days[day].slice().sort(function (a, b) { return a.began - b.began; });
+
+      var first = Math.min.apply(null, mine.map(function (one) { return one.began; }));
+      var last = Math.max.apply(null, mine.map(function (one) { return one.ended; }));
+
+      // A day with one short run in it would otherwise be scaled to that run
+      // and read as if it had taken all day. An hour is the shortest window
+      // worth drawing.
+      var across = Math.max(60 * 60 * 1000, last - first);
+
+      var heading = document.createElement("h3");
+
+      heading.textContent = new Date(first).toLocaleDateString(undefined,
+        { weekday: "long", day: "numeric", month: "long" });
+
+      box.appendChild(heading);
+
+      var spent = mine.reduce(function (sum, one) { return sum + one.run.cost; }, 0);
+
+      var sums = document.createElement("p");
+
+      sums.className = "facts";
+      sums.textContent = many(mine.length, "run", "runs") + ", "
+        + spell(Math.round(mine.reduce(function (sum, one) {
+          return sum + (one.ended - one.began);
+        }, 0) / 1000)) + " of running, $" + spent.toFixed(2) + " in all.";
+
+      box.appendChild(sums);
+
+      var list = document.createElement("ul");
+
+      list.className = "when";
+
+      mine.forEach(function (one) { list.appendChild(row(one, first, across)); });
+
+      box.appendChild(list);
+
+      var ruler = document.createElement("p");
+
+      ruler.className = "ruler";
+
+      [first, first + (across / 2), first + across].forEach(function (at) {
+        var mark = document.createElement("span");
+
+        mark.textContent = new Date(at).toLocaleTimeString(undefined,
+          { hour: "2-digit", minute: "2-digit" });
+
+        ruler.appendChild(mark);
+      });
+
+      box.appendChild(ruler);
+    });
+  }
+
+  function row(one, first, across) {
+    var li = document.createElement("li");
+    var how = state(one.run);
+
+    var name = document.createElement("span");
+
+    name.className = "name";
+    name.textContent = one.run.room || one.run.id;
+    li.appendChild(name);
+
+    var track = document.createElement("span");
+
+    track.className = "track";
+
+    var span = document.createElement("button");
+    var took = Math.max(0, one.ended - one.began);
+
+    span.type = "button";
+    span.className = "span " + how.css;
+    span.style.left = ((one.began - first) / across * 100) + "%";
+
+    // Never narrower than something that can be clicked, and never so wide
+    // that it runs off the end of the day it is in.
+    span.style.width = Math.min(
+      100 - ((one.began - first) / across * 100),
+      Math.max(1.5, took / across * 100)) + "%";
+
+    // The whole sentence, because the bar says nothing at all to anybody who
+    // cannot see where it starts.
+    span.setAttribute("aria-label", (one.run.room || one.run.id) + ", " + one.run.team
+      + ", " + how.word + ", started " + new Date(one.began).toLocaleTimeString()
+      + ", " + spell(Math.round(took / 1000)) + ", $" + one.run.cost.toFixed(2));
+
+    span.addEventListener("click", function () { watch(one.run); });
+
+    track.appendChild(span);
+    li.appendChild(track);
+
+    var money = document.createElement("span");
+
+    money.className = "spent";
+    money.textContent = "$" + one.run.cost.toFixed(2);
+    li.appendChild(money);
+
+    return li;
   }
 
   function svg(name, into) {

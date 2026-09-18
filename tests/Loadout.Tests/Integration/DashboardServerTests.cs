@@ -721,13 +721,13 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task There_are_three_ways_to_look_at_the_same_state()
+    public async Task There_are_four_ways_to_look_at_the_same_state()
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
         text.Should().Contain("<div class=\"views\" role=\"group\" aria-label=\"How to look at them\">");
 
-        foreach (var view in new[] { "list", "office", "graph" })
+        foreach (var view in new[] { "list", "office", "graph", "when" })
         {
             text.Should().Contain($"id=\"view-{view}\"");
         }
@@ -735,11 +735,11 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // One of them is on, the other two are not. A group where every button
         // claims to be pressed announces as three pressed buttons.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
-            .Should().HaveCount(2);
+            .Should().HaveCount(3);
     }
 
     [Fact]
-    public async Task None_of_the_three_views_can_do_anything_to_a_run()
+    public async Task None_of_the_other_views_can_do_anything_to_a_run()
     {
         // Every control lives in the detail pane, so answering a gate is
         // implemented once rather than three times. The office and the graph
@@ -748,6 +748,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         text.Should().Contain("<ul class=\"rooms\" id=\"office\" hidden></ul>");
         text.Should().Contain("<div id=\"graph\" hidden></div>");
+        text.Should().Contain("<div id=\"when\" hidden></div>");
     }
 
     [Fact]
