@@ -500,6 +500,20 @@ public sealed class TeamRunner : ITeamRunner
                     break;
                 }
 
+                // And the money, here for exactly the reason above. It was at
+                // the end of the loop, where the reminder's way back to the
+                // top does not pass, so a lead that reported done over budget
+                // was told about the gate and given another turn to answer -
+                // spending past a ceiling the run had already reached. One
+                // turn, once, which is small; it is also the only check
+                // standing between an unattended run and its budget, and a
+                // ceiling with a way round it is not one.
+                if (team.Rules.Budget.Usd is { } ceiling && cost >= ceiling)
+                {
+                    ended = $"budget spent: {cost:0.00} of {ceiling:0.00} USD";
+                    break;
+                }
+
                 // Asked to stop. Between rounds rather than mid-turn, because
                 // a node is a headless agent in the middle of one and the only
                 // ways to end that sooner are to kill it - losing the turn and
@@ -785,12 +799,6 @@ public sealed class TeamRunner : ITeamRunner
                 if (quietRounds >= 2)
                 {
                     ended = "no progress: two rounds without a request or a finish";
-                    break;
-                }
-
-                if (team.Rules.Budget.Usd is { } budget && cost >= budget)
-                {
-                    ended = $"budget spent: {cost:0.00} of {budget:0.00} USD";
                     break;
                 }
 

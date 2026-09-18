@@ -1415,6 +1415,50 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_lead_told_about_the_gate_is_not_given_a_turn_the_run_cannot_afford()
+    {
+        /*
+          The round limit is checked at the top of the loop because the end of
+          a round is not the only way back to it: the merge-gate reminder goes
+          round again without passing the end. The budget was left at the end,
+          so it had the hole the round limit had already been fixed for.
+
+          A lead that reports done over budget is told about the gate and
+          given another turn to answer - a real lead turn, past a ceiling the
+          run had already reached. One turn, once, so this is small; it is
+          also the only thing standing between an unattended run and its
+          budget, and a ceiling with a way round it is not one.
+        */
+        var team = await IteratingProjectAsync();
+
+        team.Rules.Budget.Usd = 0.10m;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+
+            // Reports done, and in the same turn takes the run past its
+            // ceiling: 0.05 to 0.20 is a step of 0.15.
+            Result(LeadDone(), 0.20m),
+
+            // Scripted so that taking the turn is possible. Taking it is the
+            // bug.
+            Result(LeadDone(), 0.30m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync(team)).Value!;
+
+        outcome.Ended.Should().StartWith("budget spent");
+        outcome.CostUsd.Should().Be(0.23m, "the turn that went over is paid for; the one after it is not taken");
+
+        // Two prompts: the brief, and the reminder the lead answered. A third
+        // is the turn this is about.
+        _launcher.Written("role.project-lead").Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task A_run_that_did_not_finish_merges_nothing_and_says_where_the_work_is()
     {
         _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
