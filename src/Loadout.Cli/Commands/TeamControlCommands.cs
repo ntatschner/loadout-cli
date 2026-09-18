@@ -69,6 +69,10 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         [Description("yes, no, or one of the options the question offered.")]
         public string? Answer { get; init; }
 
+        [CommandOption("--instead <TEXT>")]
+        [Description("For a brief: the one to send instead of the one the lead wrote.")]
+        public string? Instead { get; init; }
+
         [CommandOption("--reason <WHY>")]
         [Description("Why, in your words. The node is told.")]
         public string? Reason { get; init; }
@@ -157,7 +161,11 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
                 // Recorded because "somebody allowed this" and "somebody
                 // allowed this from a browser on the other side of the house"
                 // are different sentences to whoever reads the run back.
-                By: settings.By is { Length: > 0 } where ? where : "terminal"),
+                By: settings.By is { Length: > 0 } where ? where : "terminal",
+
+                // Only meaningful for a brief, and harmless on anything else:
+                // whatever asked decides whether it has anywhere to put this.
+                Instead: settings.Instead),
             cancellationToken).ConfigureAwait(false);
 
         output.WriteLine($"[green]+[/] Told run {Markup.Escape(run)}: {Markup.Escape(answer)}.");

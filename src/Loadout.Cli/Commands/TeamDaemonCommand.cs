@@ -450,6 +450,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         arguments.Add("--by");
         arguments.Add("dashboard");
 
+        if (action.Instead is { Length: > 0 } instead)
+        {
+            arguments.Add("--instead");
+            arguments.Add(instead);
+        }
+
         if (action.Reason is { Length: > 0 } reason)
         {
             arguments.Add("--reason");

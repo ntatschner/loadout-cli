@@ -105,11 +105,16 @@ public sealed record PendingAsk(
 /// on the other side of the house" are different sentences to whoever reads
 /// the run back.
 /// </param>
+/// <param name="Instead">
+/// For a brief offered for changing: the one to send instead. Null leaves it
+/// alone, which is what happens almost every time.
+/// </param>
 public sealed record AskAnswer(
     bool Allowed,
     string Reason,
     string? Chosen = null,
-    string By = "terminal");
+    string By = "terminal",
+    string? Instead = null);
 
 /// <summary>An answer to "may I do this", and why.</summary>
 /// <param name="Allowed">Whether it may.</param>

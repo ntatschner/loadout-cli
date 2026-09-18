@@ -497,6 +497,30 @@ the whole point of a gate is that a person decided. Stopping a run and
 answering its question stay with the dashboard and the command line, and a test
 asserts that no tool here is named for either.
 
+### Changing a brief before it goes out
+
+In **manual** mode every worker's brief is a checkpoint, and it is the one
+question with a third answer. The lead wrote that task and the lead can be
+wrong about it in a way that is obvious to whoever is watching and expensive to
+find out any other way: the worker goes off and does the wrong thing,
+competently, for ten minutes. Yes and no would make you choose between the
+wrong brief and no brief.
+
+On the dashboard the brief arrives in a box rather than behind two buttons —
+change it and press yes, and that is what the worker is given. From a terminal:
+
+```sh
+loadout team gate --answer yes --instead "Add --since, and leave the tests alone"
+```
+
+Both halves go in the journal: what the lead wrote and what was sent instead. A
+run where somebody quietly replaced a brief and the record only kept the
+replacement is a record that cannot answer "why did it do that".
+
+Supervised and autonomous runs are not offered this. A supervised run is
+watched rather than driven, and offering every brief for changing would make it
+manual mode under another name.
+
 ### Saying something to a node while it is still working
 
 The lead reads messages between its rounds, which is the right place for

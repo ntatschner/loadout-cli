@@ -257,8 +257,103 @@ public sealed class TeamRunnerTests : IDisposable
         _console.Confirmations.Should().Equal(
             "Brief the lead (role.project-lead) with the goal",
             "Act on the lead's report (round 1, blocked)",
-            "Brief implementer (role.implementer): Add --since to loadout usage; a test fails without it and passes with it.",
             "Hand implementer's report (done) to the lead");
+
+        // A worker's brief is the one checkpoint that offers a third answer,
+        // so it is asked as a revision rather than as a yes or no.
+        _console.Revisions.Should().ContainSingle()
+            .Which.Should().Be(
+                "Add --since to loadout usage; a test fails without it and passes with it.");
+    }
+
+    [Fact]
+    public async Task In_manual_mode_a_brief_can_be_changed_before_it_goes_out()
+    {
+        // The lead wrote that task and the lead can be wrong about it in a way
+        // that is obvious to whoever is watching and expensive to find out any
+        // other way: the worker goes off and does the wrong thing, competently,
+        // for ten minutes. Yes or no makes somebody choose between the wrong
+        // brief and no brief.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        _console.Revise = _ => "Add --since to loadout usage, and do not touch the tests.";
+
+        var outcome = (await RunAsync(autonomy: "manual")).Value!;
+
+        outcome.Ended.Should().Be("done");
+
+        // The brief the node was actually given, not the one the lead wrote.
+        var brief = File.ReadAllText(
+            Path.Combine(outcome.Directory!, "brief-implementer-1.json"));
+
+        brief.Should().Contain("do not touch the tests");
+        brief.Should().NotContain("a test fails without it");
+    }
+
+    [Fact]
+    public async Task A_brief_that_was_changed_says_so_and_says_what_it_was()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        _console.Revise = _ => "Something else entirely.";
+
+        var outcome = (await RunAsync(autonomy: "manual")).Value!;
+
+        var journal = File.ReadAllText(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        // Both halves. A run where somebody quietly replaced a brief and the
+        // record only kept the replacement is a record that cannot answer
+        // "why did it do that".
+        journal.Should().Contain("brief.revised");
+        journal.Should().Contain("Something else entirely");
+        journal.Should().Contain("a test fails without it");
+    }
+
+    [Fact]
+    public async Task A_brief_left_alone_is_not_recorded_as_a_change()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync(autonomy: "manual")).Value!;
+
+        File.ReadAllText(Path.Combine(outcome.Directory!, "journal.jsonl"))
+            .Should().NotContain("brief.revised");
+
+        _console.Revisions.Should().ContainSingle()
+            .Which.Should().Contain("Add --since to loadout usage");
+    }
+
+    [Fact]
+    public async Task Refusing_a_brief_still_stops_the_run()
+    {
+        // Null is the third answer, and it means the same as no.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.09m));
+
+        _console.Revise = _ => null;
+
+        (await RunAsync(autonomy: "manual")).Value!.Ended.Should().Be("stopped by the person");
+    }
+
+    [Fact]
+    public async Task Nothing_outside_manual_mode_is_offered_a_brief_to_change()
+    {
+        // A supervised run is watched, not driven. Offering every brief for
+        // changing would make it manual mode under another name.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        await RunAsync(autonomy: "supervised");
+
+        _console.Revisions.Should().BeEmpty();
+        _console.Notes.Should().Contain(note => note.StartsWith("Brief implementer", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1494,6 +1589,15 @@ public sealed class TeamRunnerTests : IDisposable
 
         public Func<ReportQuestion, string?> Decide { get; set; } = q => q.Recommendation;
 
+        /// <summary>
+        /// What a brief becomes on the way out. The same thing by default,
+        /// because leaving it alone is what happens almost every time.
+        /// </summary>
+        public Func<string, string?> Revise { get; set; } = task => task;
+
+        /// <summary>Every brief that was offered for changing, as it arrived.</summary>
+        public List<string> Revisions { get; } = [];
+
         public List<string> Confirmations { get; } = [];
 
         public List<string> Notes { get; } = [];
@@ -1503,6 +1607,13 @@ public sealed class TeamRunnerTests : IDisposable
             Confirmations.Add(what);
 
             return Task.FromResult(Confirm(what));
+        }
+
+        public Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default)
+        {
+            Revisions.Add(task);
+
+            return Task.FromResult(Revise(task));
         }
 
         public Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default) =>

@@ -83,6 +83,54 @@ public sealed class DashboardTeamConsole : ITeamConsole
         return answer?.Allowed ?? false;
     }
 
+    /// <summary>
+    /// Puts the brief a worker would be given in front of somebody, for
+    /// changing before it goes.
+    /// </summary>
+    /// <remarks>
+    /// The lead wrote that task and can be wrong about it in a way that is
+    /// obvious to whoever is watching and expensive to find out any other way.
+    /// A checkpoint that only says yes or no makes somebody choose between the
+    /// wrong brief and no brief.
+    /// </remarks>
+    public async Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(task);
+
+        if (_directory is not { Length: > 0 } directory)
+        {
+            return null;
+        }
+
+        _note($"Waiting for somebody at the dashboard: {what}");
+
+        var answer = await NodePermissions.AskAsync(
+            directory,
+            new PendingAsk(
+                Id: $"gate-{Guid.NewGuid().ToString("N")[..8]}",
+                Node: "run",
+                Role: "the run",
+                Tool: string.Empty,
+                Target: null,
+                At: _time.GetUtcNow(),
+
+                // Its own kind, so a page can offer a box rather than two
+                // buttons. Anything that does not know the kind falls back to
+                // yes and no, which is the answer it had before.
+                Kind: "brief",
+                Asked: what,
+                Recommendation: task),
+            _time,
+            ct).ConfigureAwait(false);
+
+        if (answer is null || !answer.Allowed)
+        {
+            return null;
+        }
+
+        return answer.Instead is { Length: > 0 } instead ? instead : task;
+    }
+
     /// <inheritdoc />
     public async Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default)
     {

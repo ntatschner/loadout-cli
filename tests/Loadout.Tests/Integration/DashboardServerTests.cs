@@ -772,7 +772,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         await _client.PostAsync(
             new Uri(_root + "api/runs/r/anything?token=" + _server.Token),
             new StringContent(
-                """{"gate":"toolu_1","answer":"yes","reason":"it needs the suite","message":"leave the tests alone","room":"The Haunted Meeting Room","node":"implementer/1"}""",
+                """{"gate":"toolu_1","answer":"yes","reason":"it needs the suite","message":"leave the tests alone","room":"The Haunted Meeting Room","node":"implementer/1","instead":"do something else"}""",
                 System.Text.Encoding.UTF8,
                 "application/json"));
 
@@ -784,6 +784,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         asked.Message.Should().Be("leave the tests alone");
         asked.Room.Should().Be("The Haunted Meeting Room");
         asked.Node.Should().Be("implementer/1");
+        asked.Instead.Should().Be("do something else");
     }
 
     [Fact]
@@ -800,6 +801,20 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         // And it carries the second credential rather than the first.
         text.Should().Contain("X-Loadout-Attach");
+    }
+
+    [Fact]
+    public async Task A_brief_offered_for_changing_gets_a_box_rather_than_two_buttons()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // The one question with a third answer. Yes and no would make somebody
+        // choose between the wrong brief and no brief.
+        text.Should().Contain("gate.kind === \"brief\"");
+        text.Should().Contain("createElement(\"textarea\")");
+
+        // And the box is labelled, like every other box on the page.
+        text.Should().Contain("label.htmlFor = \"instead-\" + gate.id");
     }
 
     [Fact]

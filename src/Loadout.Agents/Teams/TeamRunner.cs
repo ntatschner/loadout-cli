@@ -86,6 +86,31 @@ public interface ITeamConsole
     /// </summary>
     Task<bool> ConfirmAsync(string what, CancellationToken ct = default);
 
+    /// <summary>
+    /// In manual mode, before a worker's brief goes out: the task it would be
+    /// given, for changing before it does.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The lead wrote that task, and the lead can be wrong about it in a way
+    /// that is obvious to whoever is watching and expensive to find out any
+    /// other way - the worker goes off and does the wrong thing, competently,
+    /// for ten minutes. A checkpoint that only says yes or no makes somebody
+    /// choose between the wrong brief and no brief.
+    /// </para>
+    /// <para>
+    /// Null stops the run, like refusing. Anything else is the task the worker
+    /// is given, whether or not it is the one that came in.
+    /// </para>
+    /// </remarks>
+    Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default) =>
+        ConfirmAsync($"{what}: {task}", ct)
+            .ContinueWith(
+                answered => answered.Result ? task : null,
+                ct,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
     /// <summary>A question the lead could not decide. The option chosen, or null to stop the run.</summary>
     Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default);
 
@@ -142,6 +167,27 @@ internal sealed class OneAtATime(ITeamConsole inner) : ITeamConsole, IDisposable
         try
         {
             return await inner.ConfirmAsync(what, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    /// <remarks>
+    /// Forwarded rather than left to the interface's own default, which is not
+    /// an optimisation: the default asks this wrapper's ConfirmAsync, so a
+    /// console that offers a brief for changing would never be asked and
+    /// everything would carry on working, quietly, with the lead's own words.
+    /// That is what happened.
+    /// </remarks>
+    public async Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await inner.ReviseAsync(what, task, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -632,15 +678,44 @@ public sealed class TeamRunner : ITeamRunner
                         continue;
                     }
 
-                    if (!await GateAsync(autonomy, console, $"Brief {ask.Node} ({node.Role}): {ask.Task}", ct).ConfigureAwait(false))
+                    // The one checkpoint that offers a third answer. Yes and no
+                    // make somebody choose between the wrong brief and no brief,
+                    // and the lead being wrong about a task is both ordinary and
+                    // expensive: the worker goes off and does the wrong thing,
+                    // competently, for ten minutes.
+                    var task = ask.Task;
+
+                    if (autonomy == "manual")
                     {
-                        ended = "stopped by the person";
-                        goto finished;
+                        var revised = await console
+                            .ReviseAsync($"Brief {ask.Node} ({node.Role})", task, ct)
+                            .ConfigureAwait(false);
+
+                        if (revised is null)
+                        {
+                            ended = "stopped by the person";
+                            goto finished;
+                        }
+
+                        if (!string.Equals(revised, task, StringComparison.Ordinal))
+                        {
+                            await journal.WriteAsync(
+                                "brief.revised",
+                                ask.Node,
+                                new { was = task, now = revised },
+                                ct).ConfigureAwait(false);
+
+                            task = revised;
+                        }
+                    }
+                    else
+                    {
+                        console.Note($"Brief {ask.Node} ({node.Role}): {task}");
                     }
 
                     var role = request.Specialists.Find(node.Role)!;
                     var brief = MakeBrief(
-                        runId, ask.Node, team.Lead, node, role, ask.Task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
+                        runId, ask.Node, team.Lead, node, role, task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
                         request.OutwardAllowed ?? [], request.Specialists.Find);
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);

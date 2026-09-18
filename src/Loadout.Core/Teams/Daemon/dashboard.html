@@ -129,6 +129,7 @@
   .gate { border: 2px solid var(--stopped); padding: 0.75rem; margin: 0.75rem 0; }
   .gate .asked { font-weight: 700; margin: 0 0 0.5rem; }
   .gate button { margin: 0 0.5rem 0 0; }
+  .gate textarea { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem; margin: 0 0 0.5rem; }
   .controls { margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .controls input { flex: 1 1 14rem; min-width: 8rem; }
   .said { flex-basis: 100%; }
@@ -1695,7 +1696,30 @@
       asked.textContent = gate.question + "?";
       card.appendChild(asked);
 
-      if (gate.recommendation) {
+      /*
+        A brief is the one question with a third answer. The lead wrote that
+        task and can be wrong about it in a way that is obvious from here and
+        expensive to find out any other way - the worker goes off and does the
+        wrong thing, competently, for ten minutes. Yes and no would make
+        somebody choose between the wrong brief and no brief.
+      */
+      var instead = null;
+
+      if (gate.kind === "brief") {
+        var label = document.createElement("label");
+
+        label.className = "said";
+        label.htmlFor = "instead-" + gate.id;
+        label.textContent = "The brief it would be sent. Change it if it is wrong.";
+        card.appendChild(label);
+
+        instead = document.createElement("textarea");
+
+        instead.id = "instead-" + gate.id;
+        instead.rows = 3;
+        instead.value = gate.recommendation || "";
+        card.appendChild(instead);
+      } else if (gate.recommendation) {
         var hint = document.createElement("p");
         hint.className = "doing";
         hint.textContent = "The lead recommends: " + gate.recommendation;
@@ -1711,13 +1735,28 @@
           // The second confirmation, and the reason it exists: the token got
           // somebody to this page, and answering a gate spends money or
           // changes a repository. It names what is being agreed to.
-          if (!window.confirm("Answer \u201c" + gate.question + "?\u201d with \u201c" + option + "\u201d?")) {
+          // Named in the question, and for a brief it names what is actually
+          // being sent rather than the word on the button.
+          var asking = instead
+            ? "Send this brief?\n\n" + (instead.value.trim() || "(nothing)")
+            : "Answer \u201c" + gate.question + "?\u201d with \u201c" + option + "\u201d?";
+
+          if (option !== "no" && !window.confirm(asking)) {
+            return;
+          }
+
+          if (option === "no" && !window.confirm(
+            "Refuse \u201c" + gate.question + "\u201d? That stops the run.")) {
             return;
           }
 
           button.disabled = true;
 
-          act(run.id, "gates", { gate: gate.id, answer: option })
+          var changed = instead && instead.value.trim() !== (gate.recommendation || "").trim()
+            ? instead.value.trim()
+            : null;
+
+          act(run.id, "gates", { gate: gate.id, answer: option, instead: changed })
             .then(function () {
               announce("Told " + run.id + ": " + option + ".");
               card.remove();

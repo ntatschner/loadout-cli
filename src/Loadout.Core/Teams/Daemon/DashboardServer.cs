@@ -466,7 +466,8 @@ public sealed class DashboardServer : IDisposable
             Text(asked, "reason"),
             Text(asked, "message"),
             Text(asked, "room"),
-            Text(asked, "node"));
+            Text(asked, "node"),
+            Text(asked, "instead"));
 
         var done = await Act(action, ct).ConfigureAwait(false);
 
