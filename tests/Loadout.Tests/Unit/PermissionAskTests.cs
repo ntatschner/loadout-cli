@@ -101,6 +101,58 @@ public sealed class PermissionAskTests : IDisposable
     }
 
     [Fact]
+    public async Task A_question_is_redacted_before_anybody_is_shown_it()
+    {
+        /*
+          A lead writes its own questions, having spent the last ten minutes
+          reading a repository, and quoting what it found is how it asks about
+          it. This file is then read by the dashboard, the launcher's screen,
+          two commands, the MCP tool and the notice that goes to somebody's
+          phone - so the one place worth doing this is on the way in, which is
+          the rule a node's progress line already follows.
+        */
+        await PutAsync(Ask() with
+        {
+            Kind = "question",
+            Asked = "The deploy script has ANTHROPIC_API_KEY=sk-ant-not-a-real-key in it. Remove it",
+            Recommendation = "yes, and rotate sk-ant-not-a-real-key",
+            Target = "grep -r ANTHROPIC_API_KEY=sk-ant-not-a-real-key .",
+        });
+
+        var pending = NodePermissions.Pending(_directory).Single();
+
+        pending.Asked.Should().NotContain("sk-ant-not-a-real-key");
+        pending.Recommendation.Should().NotContain("sk-ant-not-a-real-key");
+        pending.Target.Should().NotContain("sk-ant-not-a-real-key");
+
+        // Still a question somebody can answer: only the value goes.
+        pending.Asked.Should().Contain("The deploy script");
+
+        // Read back off the disk rather than from the record handed in, since
+        // what is on the disk is what every one of those surfaces opens.
+        var written = await File.ReadAllTextAsync(
+            Directory.GetFiles(_directory, "ask-*.json").Single());
+
+        written.Should().NotContain("sk-ant-not-a-real-key");
+    }
+
+    [Fact]
+    public async Task The_options_are_left_alone_because_the_answer_is_matched_against_them()
+    {
+        // Not an oversight. An option is compared with what comes back, so a
+        // changed one is a question nobody can answer.
+        await PutAsync(Ask() with
+        {
+            Kind = "question",
+            Asked = "Which way",
+            Options = ["keep the key in the file", "move it to the store"],
+        });
+
+        NodePermissions.Pending(_directory).Single()
+            .Choices.Should().Equal("keep the key in the file", "move it to the store");
+    }
+
+    [Fact]
     public void A_question_the_lead_wrote_keeps_the_punctuation_it_came_with()
     {
         // The lead writes its own questions and writes them as questions, so

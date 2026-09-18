@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using Loadout.Core.Security;
 
 namespace Loadout.Core.Teams;
 
@@ -234,15 +236,42 @@ public static class NodePermissions
 
         try
         {
+            // Redacted on the way in, the same rule a node's progress line
+            // follows and for the same reason. This file is read by the
+            // dashboard, the launcher's screen, `team status`, `team gate`,
+            // the MCP tool and the notice that goes to somebody's phone, and
+            // the words in it were written by a model that had spent the last
+            // ten minutes reading a repository. A lead quoting what it found
+            // in order to ask about it is exactly where a token ends up.
+            //
+            // The options are left as they are: they are matched against the
+            // answer that comes back rather than only shown, and a changed
+            // one is a question nobody can answer.
+            var safe = ask with
+            {
+                Target = Clean(ask.Target),
+                Asked = Clean(ask.Asked),
+                Recommendation = Clean(ask.Recommendation),
+            };
+
             Directory.CreateDirectory(directory);
 
             await File.WriteAllTextAsync(
-                AskPath(directory, ask.Id), JsonSerializer.Serialize(ask), ct).ConfigureAwait(false);
+                AskPath(directory, ask.Id), JsonSerializer.Serialize(safe), ct).ConfigureAwait(false);
 
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            return false;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // The redactor gives up on a long unbroken run of characters, and
+            // the only two answers are to write text nothing has checked or to
+            // write none. Nothing here is worth the first: the caller reads a
+            // false as "it could not be asked", which ends the wait the way
+            // nobody answering does.
             return false;
         }
     }
@@ -286,6 +315,10 @@ public static class NodePermissions
 
         return null;
     }
+
+    /// <summary>Text with anything credential-shaped taken out, or null as it was.</summary>
+    private static string? Clean(string? text) =>
+        text is { Length: > 0 } said ? SecretRedactor.Redact(said) : text;
 
     /// <summary>Questions in this run that nobody has answered yet.</summary>
     public static IReadOnlyList<PendingAsk> Pending(string directory)
