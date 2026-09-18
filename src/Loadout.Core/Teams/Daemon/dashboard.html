@@ -169,6 +169,88 @@
     justify-self: start;
   }
 
+  /*
+    Three ways of looking at the same state. The list is dense and sortable and
+    is the working view; the office is glanceable and is the one left on a
+    spare screen; the graph shows the shape of a run, which is what a list
+    cannot. None of them can do anything: every control is in the detail pane,
+    so there is one implementation of answering a gate rather than three.
+  */
+  .views { display: flex; gap: 0.25rem; margin: 0 0 0.75rem; }
+
+  .views button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+  }
+
+  .views button[aria-pressed="true"] { font-weight: 700; box-shadow: inset 0 -3px 0 var(--going); }
+
+  /*
+    The office. Shape first and no art at all: every desk is a real element
+    carrying its name and its state as words, and a sprite - when there is one
+    - becomes a background on the same element rather than replacing it. That
+    ordering is what keeps this inside the accessibility bar rather than beside
+    it.
+  */
+  .rooms { list-style: none; margin: 0; padding: 0; }
+
+  .room {
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    margin: 0 0 0.75rem;
+    padding: 0.6rem 0.9rem;
+  }
+
+  .room h3 { margin: 0; font-size: 1rem; }
+  .room .where { color: var(--quiet); font-size: 0.85rem; margin: 0 0 0.5rem; }
+  .room.empty { border-style: dashed; }
+
+  .desks { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; }
+
+  .desk {
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    padding: 0.4rem 0.6rem;
+    min-width: 8rem;
+    min-height: 2.5rem;
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* The word first and the colour second, here as everywhere else. */
+  .desk .who { display: block; font-weight: 700; }
+  .desk .state { display: block; font-size: 0.85rem; }
+  .desk.gone { opacity: 0.65; border-style: dashed; }
+
+  /* Where a sprite goes when there is one: a background on the desk, with the
+     words still in it. Nothing here needs art to work. */
+  .desk .sprite {
+    display: block;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--line);
+    border-radius: 0.2rem;
+    margin: 0 0 0.25rem;
+  }
+
+  .graph { width: 100%; height: auto; }
+  .graph .edge { stroke: var(--line); stroke-width: 2; fill: none; }
+  .graph .edge.live { stroke: var(--going); }
+  .graph text { fill: var(--ink); font-size: 11px; }
+  .graph .box { fill: var(--card); stroke: var(--line); stroke-width: 1; }
+  .graph .box.going { stroke: var(--going); stroke-width: 2; }
+  .graph .box.stuck { stroke: var(--stopped); stroke-width: 3; }
+  .graph a:focus .box { stroke: var(--going); stroke-width: 3; }
+
   .prefs { display: flex; gap: 0.75rem; align-items: center; margin: 0.5rem 0; }
   .prefs label { color: var(--quiet); }
 
@@ -321,6 +403,11 @@
     .run, .log, .run button, .depths button, .papers button, .paper { border: 1px solid CanvasText; }
     .add, .drop, .hunk { color: CanvasText; }
     .bars .bar { background: CanvasText; }
+    .views button, .room, .desk { border: 1px solid CanvasText; }
+    .views button[aria-pressed="true"] { border: 3px solid CanvasText; }
+    .graph .box { stroke: CanvasText; fill: Canvas; }
+    .graph .edge { stroke: CanvasText; }
+    .graph text { fill: CanvasText; }
     .depths button[aria-selected="true"], .papers button[aria-pressed="true"] { border: 3px solid CanvasText; }
     .state { color: CanvasText; }
   }
@@ -395,7 +482,17 @@
         <button type="button" id="start">Start it</button>
       </div>
     </details>
+    <div class="views" role="group" aria-label="How to look at them">
+      <button type="button" id="view-list" aria-pressed="true">List</button>
+      <button type="button" id="view-office" aria-pressed="false">Office</button>
+      <button type="button" id="view-graph" aria-pressed="false">Graph</button>
+    </div>
+
     <ul class="runs" id="list" aria-describedby="status"></ul>
+
+    <ul class="rooms" id="office" hidden></ul>
+
+    <div id="graph" hidden></div>
   </section>
 
   <section id="detail" class="pane" hidden aria-labelledby="detail-heading">
@@ -825,9 +922,294 @@
       : { word: run.ended || "stopped", css: "stopped" };
   }
 
-  function draw(runs) {
-    suggest(runs);
+  /*
+    Three ways of looking at the same state, and none of them can do anything.
+    Every control is in the detail pane, so answering a gate is implemented
+    once rather than three times, and clicking anybody anywhere takes you
+    there.
+  */
+  var views = [
+    { button: "view-list", box: "list", draw: drawList },
+    { button: "view-office", box: "office", draw: drawOffice },
+    { button: "view-graph", box: "graph", draw: drawGraph }
+  ];
 
+  var view = 0;
+
+  function showView(which) {
+    view = which;
+
+    views.forEach(function (one, i) {
+      document.getElementById(one.button).setAttribute("aria-pressed", i === which ? "true" : "false");
+      document.getElementById(one.box).hidden = i !== which;
+    });
+
+    if (shown) { views[which].draw(shown); }
+  }
+
+  // The runs as they were last drawn, so switching view does not have to wait
+  // four seconds for the next refresh to show anything.
+  var shown = null;
+
+  (function () {
+    views.forEach(function (one, i) {
+      document.getElementById(one.button).addEventListener("click", function () {
+        showView(i);
+      });
+    });
+  }());
+
+  /*
+    A desk. Its name and its state are words on the element, so a sprite - when
+    there is art to put there - is a second encoding on top of a first rather
+    than the only one. That ordering is the whole reason this is elements and
+    not a canvas.
+  */
+  function desk(run, node) {
+    var li = document.createElement("li");
+    var button = document.createElement("button");
+    var gone = node.state === "done" || node.state === "reported" || node.state === "failed";
+
+    button.type = "button";
+    button.className = "desk" + (gone ? " gone" : "");
+
+    var sprite = document.createElement("span");
+
+    // Decorative, and empty until there is art. Announced as nothing, which is
+    // what a picture of a person at a desk is worth saying about.
+    sprite.className = "sprite";
+    sprite.setAttribute("aria-hidden", "true");
+    button.appendChild(sprite);
+
+    var who = document.createElement("span");
+
+    who.className = "who";
+    who.textContent = node.node;
+    button.appendChild(who);
+
+    var state = document.createElement("span");
+
+    state.className = "state";
+    state.textContent = node.role.replace(/^role\./, "") + ", " + (gone ? "left" : node.state);
+    button.appendChild(state);
+
+    if (node.doing) {
+      var doing = document.createElement("span");
+
+      doing.className = "state doing";
+      doing.textContent = node.doing;
+      button.appendChild(doing);
+    }
+
+    // Said as a sentence rather than left to whatever a reader makes of three
+    // stacked spans: "lead project-lead, blocked" is what those run together
+    // as, and a comma is the difference between a name and a mumble.
+    button.setAttribute("aria-label", node.node + ", " + state.textContent
+      + (node.doing ? ", " + node.doing : ""));
+
+    button.addEventListener("click", function () { watch(run); });
+
+    li.appendChild(button);
+
+    return li;
+  }
+
+  function drawOffice(runs) {
+    var box = document.getElementById("office");
+
+    box.textContent = "";
+
+    runs.forEach(function (run) {
+      var li = document.createElement("li");
+      var how = state(run);
+
+      li.className = "room" + (run.running ? "" : " empty");
+
+      var name = document.createElement("h3");
+
+      name.textContent = run.room || run.id;
+      li.appendChild(name);
+
+      var where = document.createElement("p");
+
+      where.className = "where";
+      where.textContent = run.team + (run.project ? " on " + run.project : "")
+        + " - " + how.word + ". " + (run.goal || "");
+
+      li.appendChild(where);
+
+      var desks = document.createElement("ul");
+
+      desks.className = "desks";
+
+      // The lead first and then its workers, so tabbing through a room follows
+      // the shape of the team rather than the order a journal happened to
+      // write things down in.
+      (run.nodes || []).slice().sort(function (a, b) {
+        return (a.role === "role.project-lead" ? 0 : 1) - (b.role === "role.project-lead" ? 0 : 1);
+      }).forEach(function (node) {
+        desks.appendChild(desk(run, node));
+      });
+
+      if (!(run.nodes || []).length) {
+        var nobody = document.createElement("li");
+
+        nobody.className = "where";
+        nobody.textContent = run.running ? "Nobody has been briefed yet." : "Everybody has gone home.";
+        desks.appendChild(nobody);
+      }
+
+      li.appendChild(desks);
+      box.appendChild(li);
+    });
+
+    if (!runs.length) {
+      var none = document.createElement("li");
+
+      none.className = "where";
+      none.textContent = "No team has run on this machine yet.";
+      box.appendChild(none);
+    }
+  }
+
+  /*
+    The delegation tree as it happens: the lead, its workers under it, each
+    carrying what it is and what it cost. This is the view that shows what a
+    list cannot - the shape of a run - and it is the one to reach for when
+    something is stuck.
+
+    Hand-drawn SVG, like the bars. Every node is a link so it is focusable in
+    tree order and reachable by keyboard without anything clever.
+  */
+  function drawGraph(runs) {
+    var box = document.getElementById("graph");
+
+    box.textContent = "";
+
+    var going = runs.filter(function (run) { return run.running; });
+    var wanted = going.length ? going : runs.slice(0, 3);
+
+    if (!wanted.length) {
+      var none = document.createElement("p");
+
+      none.className = "facts";
+      none.textContent = "No team has run on this machine yet.";
+      box.appendChild(none);
+
+      return;
+    }
+
+    wanted.forEach(function (run) {
+      var name = document.createElement("h3");
+
+      name.textContent = (run.room || run.id) + " - " + run.team;
+      box.appendChild(name);
+      box.appendChild(treeOf(run));
+    });
+  }
+
+  function svg(name, into) {
+    var made = document.createElementNS("http://www.w3.org/2000/svg", name);
+
+    if (into) { into.appendChild(made); }
+
+    return made;
+  }
+
+  function treeOf(run) {
+    var nodes = (run.nodes || []).slice();
+    var lead = nodes.filter(function (n) { return n.role === "role.project-lead"; })[0];
+    var workers = nodes.filter(function (n) { return n !== lead; });
+
+    var wide = Math.max(1, workers.length);
+    var width = Math.max(320, wide * 150);
+    var height = 190;
+
+    var picture = svg("svg");
+
+    picture.setAttribute("class", "graph");
+    picture.setAttribute("viewBox", "0 0 " + width + " " + height);
+    picture.setAttribute("role", "group");
+    picture.setAttribute("aria-label", "Who asked whom in " + (run.room || run.id));
+
+    // The edges first so the boxes sit on top of them.
+    workers.forEach(function (worker, i) {
+      var line = svg("path", picture);
+      var x = (i + 0.5) * (width / wide);
+
+      line.setAttribute("class", "edge" + (worker.state === "working" ? " live" : ""));
+      line.setAttribute("d", "M " + (width / 2) + " 62 C " + (width / 2) + " 100, " + x + " 90, " + x + " 118");
+    });
+
+    if (lead) { box(picture, lead, width / 2, 20, run); }
+
+    workers.forEach(function (worker, i) {
+      box(picture, worker, (i + 0.5) * (width / wide), 118, run);
+    });
+
+    return picture;
+  }
+
+  function box(picture, node, x, y, run) {
+    var link = svg("a", picture);
+    var rect = svg("rect", link);
+    var stuck = (run.gates || []).some(function (gate) { return gate.node === node.node; });
+
+    link.setAttribute("tabindex", "0");
+    link.setAttribute("role", "button");
+    link.setAttribute("aria-label", node.node + ", " + node.role.replace(/^role\./, "")
+      + ", " + node.state + ", $" + (node.cost || 0).toFixed(2)
+      + (stuck ? ", waiting for you" : ""));
+
+    rect.setAttribute("class", "box"
+      + (stuck ? " stuck" : node.state === "working" ? " going" : ""));
+    rect.setAttribute("x", x - 62);
+    rect.setAttribute("y", y);
+    rect.setAttribute("width", 124);
+    rect.setAttribute("height", 46);
+    rect.setAttribute("rx", 4);
+
+    [node.node, node.state + ", $" + (node.cost || 0).toFixed(2)].forEach(function (line, i) {
+      var text = svg("text", link);
+
+      text.setAttribute("x", x);
+      text.setAttribute("y", y + 19 + (i * 15));
+      text.setAttribute("text-anchor", "middle");
+      text.textContent = line;
+    });
+
+    function open() { watch(run); }
+
+    link.addEventListener("click", open);
+    link.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") {
+        open();
+        event.preventDefault();
+      }
+    });
+  }
+
+  function draw(runs) {
+    shown = runs;
+
+    suggest(runs);
+    drawRail(runs);
+
+    // Whatever is being followed keeps up whichever view is showing. This
+    // lived inside the list, so opening the office froze the detail pane at
+    // whatever was true when you left.
+    if (watching) {
+      var followed = runs.filter(function (one) { return one.id === watching; })[0];
+
+      if (followed) {
+        keepUp(followed);
+      }
+    }
+
+    views[view].draw(runs);
+  }
+
+  function drawList(runs) {
     list.textContent = "";
 
     if (runs.length === 0) {
@@ -837,10 +1219,6 @@
     }
 
     runs.forEach(function (run) {
-      if (run.id === watching) {
-        keepUp(run);
-      }
-
       var how = state(run);
       var item = document.createElement("li");
       item.className = "run";
@@ -923,19 +1301,7 @@
       list.appendChild(item);
     });
 
-    drawRail(runs);
-
-    // The one being followed may have stopped to ask something since the
-    // last read, or had it answered at a terminal.
-    if (watching) {
-      var followed = runs.filter(function (r) { return r.id === watching; })[0];
-
-      if (followed) {
-        drawGates(followed);
-      }
-    }
-
-    say(runs.length + (runs.length === 1 ? " run" : " runs") + ", updated just now.");
+    say(many(runs.length, "run", "runs") + ", updated just now.");
   }
 
   // What a run has stopped to ask, with the buttons to answer it. Rebuilt

@@ -730,6 +730,11 @@ public sealed class DashboardServer : IDisposable
     private static object Describe(RunSummary run) => new
     {
         id = run.RunId,
+
+        // Somewhere for the office to put it, and something a person can say
+        // out loud a week later. Worked out from the identifier rather than
+        // stored, so every machine reading this journal calls it the same.
+        room = RoomNames.For(run.RunId),
         run.Team,
         run.Goal,
         run.Autonomy,

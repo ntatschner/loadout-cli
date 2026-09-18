@@ -216,6 +216,42 @@ there is one account of what happened rather than three that can disagree.
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
 
+### Three ways of looking at the same thing
+
+**List**, **Office** and **Graph** across the top of the runs pane. The state
+is the same; how you look at it is a choice, and the three answer different
+questions.
+
+- **List** — dense and complete. The working view, and the default.
+- **Office** — one room per run, a desk per node. The glanceable one, the thing
+  you leave on a spare screen. A finished room stays and empties: the agents
+  leave, the name and the result remain, and you can walk back into it.
+- **Graph** — who asked whom, as the delegation tree. This is what a list
+  cannot show — the *shape* of a run — and it is the one to reach for when
+  something is stuck. Every box is focusable in tree order and opens the run.
+
+**None of them can do anything.** Every control lives in the detail pane, so
+answering a gate is implemented once rather than three times. Clicking anybody
+anywhere takes you there.
+
+Each run is also given a **room**, which is a name somebody might actually
+remember: *The Corner Office (Plant Died)*, *The Mezzanine (Lift Out of
+Order)*, *The Breakout Space (Double Booked)*. A run is called
+`20260918-1436-ed59`, which is precise, sortable and impossible to hold in your
+head — and a week later "the one in the haunted meeting room" is how anybody
+refers to it. Worked out from the identifier rather than stored, so the same
+run is the same room on every machine that reads its journal.
+
+**Built shape first.** The office is elements rather than a canvas: every desk
+carries its name, its role and its state as words, and the sprite is an empty
+square waiting for art. When the art arrives it becomes a second encoding on
+top of a first rather than the only one, which is the decision that keeps this
+inside the accessibility bar rather than beside it.
+
+**Not built yet.** The art, the movement that goes with it, renaming a room,
+and a timeline view. Where the time went is answered for now by the bars in
+*What it cost*.
+
 ### Four depths of one run
 
 Open a run and the pane on the right has four tabs, reached with <kbd>1</kbd>

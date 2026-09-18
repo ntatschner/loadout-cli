@@ -258,14 +258,14 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // Nothing off this machine. A dashboard that pulled a stylesheet from
         // the internet would fail on the machine it is most wanted on.
         //
-        // An XML namespace is not a fetch: `xmlns="http://www.w3.org/2000/svg"`
-        // is an identifier a browser never resolves, and the inline SVG
-        // favicon needs it to render at all. So it is removed before asking,
-        // rather than the question being softened - everything that could
-        // actually be fetched is still banned outright.
+        // The SVG namespace is not a fetch. http://www.w3.org/2000/svg is an
+        // identifier a browser never resolves - the inline favicon needs it as
+        // an xmlns to render at all, and createElementNS needs the same string
+        // to make an element that is an SVG rather than an unknown tag. So it
+        // is removed before asking, rather than the question being softened:
+        // everything that could actually be fetched is still banned outright.
         var fetchable = text.Replace(
-            "xmlns='http://www.w3.org/2000/svg'", string.Empty, StringComparison.Ordinal)
-            .Replace("xmlns=\"http://www.w3.org/2000/svg\"", string.Empty, StringComparison.Ordinal);
+            "http://www.w3.org/2000/svg", string.Empty, StringComparison.Ordinal);
 
         fetchable.Should().NotContain("http://").And.NotContain("https://");
     }
@@ -707,6 +707,47 @@ public sealed class DashboardServerTests : IAsyncLifetime
     public void A_server_that_never_started_offers_no_address_at_all()
     {
         DashboardServer.Spread(string.Empty, beyond: false, () => ["10.0.0.4"]).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Every_run_carries_a_room_to_be_in()
+    {
+        var json = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync());
+
+        var room = json.RootElement.GetProperty("runs")[0].GetProperty("room").GetString();
+
+        room.Should().Be(RoomNames.For("20260916-1200-aaaa"));
+        room.Should().StartWith("The ");
+    }
+
+    [Fact]
+    public async Task There_are_three_ways_to_look_at_the_same_state()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("<div class=\"views\" role=\"group\" aria-label=\"How to look at them\">");
+
+        foreach (var view in new[] { "list", "office", "graph" })
+        {
+            text.Should().Contain($"id=\"view-{view}\"");
+        }
+
+        // One of them is on, the other two are not. A group where every button
+        // claims to be pressed announces as three pressed buttons.
+        System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
+            .Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task None_of_the_three_views_can_do_anything_to_a_run()
+    {
+        // Every control lives in the detail pane, so answering a gate is
+        // implemented once rather than three times. The office and the graph
+        // are boxes to be filled in, and what fills them only ever opens a run.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("<ul class=\"rooms\" id=\"office\" hidden></ul>");
+        text.Should().Contain("<div id=\"graph\" hidden></div>");
     }
 
     [Fact]
