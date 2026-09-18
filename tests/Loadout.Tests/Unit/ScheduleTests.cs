@@ -298,6 +298,52 @@ public sealed class ScheduleTests : IDisposable
     }
 
     [Fact]
+    public async Task A_watcher_does_not_start_itself_over_what_its_own_run_did()
+    {
+        /*
+          The sequence the daemon follows, written out, because this is where
+          the rule lives and the bug was in the order rather than in any one
+          step.
+
+          A run merges its worker's branch into the checked-out branch, which
+          moves the head. The head was written down before the run and never
+          after, so a minute later the watcher saw a repository that had moved -
+          because of the run - and started another, which merged, which moved it
+          again. Unattended that is a loop costing a team run a minute, and
+          nothing in it would ever have said why.
+        */
+        var watching = Nightly();
+        watching.At = null;
+        watching.On = "commit";
+
+        await _schedules.SaveAsync(watching);
+
+        // The first look writes down where the repository is, and fires nothing.
+        await _schedules.SawAsync(watching.Id, "aaa1111");
+
+        watching = (await _schedules.ListAsync()).Value!.Single();
+        ScheduleService.Moved(watching, "aaa1111").Should().BeFalse();
+
+        // Somebody commits. That is a reason to run.
+        ScheduleService.Moved(watching, "bbb2222").Should().BeTrue();
+
+        await _schedules.SawAsync(watching.Id, "bbb2222");
+
+        // The run happens and merges, so the head moves again - this time
+        // because of the run. Taking the repository as seen afterwards is what
+        // makes that not a reason to run again.
+        await _schedules.SawAsync(watching.Id, "ccc3333");
+
+        watching = (await _schedules.ListAsync()).Value!.Single();
+
+        ScheduleService.Moved(watching, "ccc3333")
+            .Should().BeFalse("the run moved it, and a run is not a reason to run");
+
+        // And the next real commit still is.
+        ScheduleService.Moved(watching, "ddd4444").Should().BeTrue();
+    }
+
+    [Fact]
     public void A_repository_nobody_could_read_does_not_fire_anything()
     {
         var watching = Nightly();

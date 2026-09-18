@@ -265,32 +265,61 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// manual means a person at every step, and a webhook is the case where
     /// there is nobody.
     /// </remarks>
-    private async Task<OperationResult> TriggeredAsync(
+    internal Task<OperationResult> TriggeredAsync(
         TriggerRequest asking,
         CommandOutput output,
         CancellationToken ct)
     {
         if (asking.Project is not { Length: > 0 } project)
         {
-            return OperationResult.Fail(
+            return Task.FromResult(OperationResult.Fail(
                 "A triggered run needs a project: add \"project\" to the body.",
-                ExitCode.InvalidArguments);
+                ExitCode.InvalidArguments));
         }
 
         output.WriteLine(
             $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] triggered: "
             + $"{Markup.Escape(asking.Team)} on {Markup.Escape(project)}");
 
-        var code = await _commands.RunAsync(
-            "team run",
-            [asking.Team, asking.Goal, "--project", project, "--non-interactive"],
-            ct).ConfigureAwait(false);
+        /*
+          Answered as soon as the run is under way rather than when it finishes,
+          which is the same shape the page's own start takes and for a sharper
+          reason.
 
-        return code == (int)ExitCode.Success
-            ? OperationResult.Ok()
-            : OperationResult.Fail(
-                $"The run ended with exit code {code}. Read it with: loadout team log",
-                ExitCode.GeneralFailure);
+          This waited for the whole run - twenty minutes on a good day - and
+          then replied "Started". Whatever called it had given up long before:
+          a GitHub webhook waits ten seconds and then retries, and every retry
+          came through here as another run of the same team on the same
+          repository, merging into the same branch. The reply said 202 and
+          meant "finished", which is the one thing 202 does not mean.
+        */
+        _ = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    var code = await _commands.RunAsync(
+                        "team run",
+                        [asking.Team, asking.Goal, "--project", project, "--non-interactive"],
+                        ct).ConfigureAwait(false);
+
+                    if (code != (int)ExitCode.Success)
+                    {
+                        output.WriteLine(
+                            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                            + $"{Markup.Escape(asking.Team)} ended with exit code {code}.");
+                    }
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException)
+                {
+                    output.WriteLine(
+                        $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                        + $"{Markup.Escape(asking.Team)} could not be started: {Shown.Safely(ex.Message)}");
+                }
+            },
+            CancellationToken.None);
+
+        return Task.FromResult(OperationResult.Ok());
     }
 
     /// <summary>
@@ -310,7 +339,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// somebody sees when a schedule fails, rather than a new kind of silence.
     /// </para>
     /// </remarks>
-    private Task<OperationResult> BeganAsync(
+    internal Task<OperationResult> BeganAsync(
         StartRequest asking,
         CommandOutput output,
         CancellationToken ct)
@@ -578,6 +607,17 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                         .ConfigureAwait(false);
                 }
 
+                // And where the repository is NOW, which is the thing that
+                // stops a watcher starting itself for ever.
+                //
+                // A run that merges a worker's branch moves the checked-out
+                // branch. The head was written down before the run, so a minute
+                // later the watcher saw a repository that had moved - because
+                // of the run - and started another, which merged, which moved
+                // it again. Unattended, that is a loop that costs a team run a
+                // minute and nothing in it would ever have said why.
+                await SeenAsync(schedule, CancellationToken.None).ConfigureAwait(false);
+
                 output.WriteLine(
                     $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] {Markup.Escape(schedule.Id)} "
                     + (code == 0 ? "finished" : $"ended with exit code {code}"));
@@ -641,6 +681,38 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         }
 
         return ready;
+    }
+
+    /// <summary>
+    /// Takes the repository as seen, wherever it is now.
+    /// </summary>
+    /// <remarks>
+    /// Called when a watching schedule's run has finished, so that whatever the
+    /// run did to the repository is not read as a reason to run again. A commit
+    /// somebody else made while the run was going is taken as seen too, which
+    /// is the price: one trigger can cover work that arrived during it, and the
+    /// alternative is a loop that cannot stop itself.
+    /// </remarks>
+    private async Task SeenAsync(TeamSchedule schedule, CancellationToken ct)
+    {
+        if (schedule.On.Length == 0)
+        {
+            return;
+        }
+
+        var resolution = await _projects.ResolveAsync(schedule.Project, ct).ConfigureAwait(false);
+
+        if (resolution.Failed || resolution.Value?.LocalPath is not { Length: > 0 } repository)
+        {
+            return;
+        }
+
+        var state = await _git.GetStateAsync(repository, ct).ConfigureAwait(false);
+
+        if (state.Succeeded && state.Value?.HeadCommit is { Length: > 0 } head)
+        {
+            await _schedules.SawAsync(schedule.Id, head, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Whether the project this watches has moved since it last looked.</summary>

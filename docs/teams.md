@@ -708,6 +708,16 @@ the laptop at nine.
 looked. The first look never fires — it only records where the repository is —
 and a dry run records nothing, so previewing a trigger cannot arm it.
 
+**A run's own commits do not fire it again.** A run that merges a worker's
+branch moves the checked-out branch, and the head is taken as seen once the run
+has finished, so what the run did is not read as a reason to run. Without that
+it is a loop: fire, merge, fire, merge, a team run a minute on an unattended
+machine.
+
+The price is that a commit somebody else makes *while* a run is going is taken
+as seen too, so one trigger covers work that arrived during it. That is the
+right way round — the alternative is a loop that cannot stop itself.
+
 ## Runs started from outside
 
 Off until you turn it on, and then off again for anything you have not named.
