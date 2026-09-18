@@ -13,6 +13,25 @@ namespace Loadout.Core.Teams.Daemon;
 /// <param name="Project">Which project it works on, as the registry names it.</param>
 public sealed record TriggerRequest(string Team, string Goal, string? Project = null);
 
+/// <summary>Work the page asked be started.</summary>
+/// <param name="Team">The team to run, as <c>team list</c> names it.</param>
+/// <param name="Goal">What the run is for, in the person's words.</param>
+/// <param name="Project">Which project it works on, as the registry names it.</param>
+/// <param name="Rounds">How many rounds it may take, or null for the default.</param>
+/// <param name="Autonomy">manual, supervised or autonomous, or null for the team's own.</param>
+/// <remarks>
+/// Nothing here is checked against anything. Whether that team exists, whether
+/// that project is registered and whether that autonomy is a word at all are
+/// questions the command line already answers, and answering them twice is how
+/// two answers start to disagree.
+/// </remarks>
+public sealed record StartRequest(
+    string Team,
+    string Goal,
+    string? Project = null,
+    int? Rounds = null,
+    string? Autonomy = null);
+
 /// <summary>Something the page asked be done to a run.</summary>
 /// <param name="Run">Which run, as the journal names it.</param>
 /// <param name="Verb">gates, message, pause, resume or stop.</param>

@@ -57,7 +57,7 @@ public sealed class DashboardServer : IDisposable
     /// is a 400 somebody notices, and a change routed as a read is a change
     /// that skipped the check.
     /// </remarks>
-    private static readonly string[] Reads = ["events", "documents"];
+    private static readonly string[] Reads = ["events", "documents", "diff", "stream"];
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -66,9 +66,24 @@ public sealed class DashboardServer : IDisposable
     };
 
     private readonly IRunJournal _journal;
+
+    /// <summary>
+    /// Whatever runs git, or null where nothing does.
+    /// </summary>
+    /// <remarks>
+    /// Optional because the dashboard is useful without it and a run's journal
+    /// is readable on a machine whose repository has since moved. What a node
+    /// changed is the one thing that needs the repository itself, so it is the
+    /// one thing that says so when it is not there.
+    /// </remarks>
+    private readonly Git.IGitManager? _git;
     private readonly HttpListener _listener = new();
 
-    public DashboardServer(IRunJournal journal) => _journal = journal;
+    public DashboardServer(IRunJournal journal, Git.IGitManager? git = null)
+    {
+        _journal = journal;
+        _git = git;
+    }
 
     /// <summary>The secret every request has to carry, made when the server starts.</summary>
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
@@ -99,6 +114,19 @@ public sealed class DashboardServer : IDisposable
     /// the thing that can.
     /// </remarks>
     public Func<RunAction, CancellationToken, Task<OperationResult>>? Act { get; set; }
+
+    /// <summary>
+    /// What to do when somebody starts a team from the page, or null where
+    /// nothing can.
+    /// </summary>
+    /// <remarks>
+    /// Like <see cref="Act"/>, and for the same reason: this maps an ask onto
+    /// the command line somebody would have typed and the parser does the
+    /// rest. Nothing here knows what a team is, whether the project exists or
+    /// what an autonomy is, which is why the page cannot be wrong about them
+    /// in a way the terminal would not be.
+    /// </remarks>
+    public Func<StartRequest, CancellationToken, Task<OperationResult>>? Begin { get; set; }
 
     /// <summary>
     /// Answers whether a trigger may proceed, or null when none may.
@@ -444,6 +472,24 @@ public sealed class DashboardServer : IDisposable
         var request = context.Request;
         var path = request.Url?.AbsolutePath ?? "/";
 
+        // Starting work, which belongs to no run yet and so is not under
+        // /api/runs. Behind the dashboard's own token like everything else
+        // that changes anything.
+        if (path == "/api/start")
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await StartAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         // Before the dashboard's own token, because a trigger carries a
         // different one and is the only thing here a stranger is meant to be
         // able to reach. The dashboard's token changes every start, which is
@@ -519,6 +565,32 @@ public sealed class DashboardServer : IDisposable
             if (rest.EndsWith("/events", StringComparison.Ordinal))
             {
                 await StreamAsync(context, rest[..^"/events".Length], ct).ConfigureAwait(false);
+
+                return;
+            }
+
+            if (rest.IndexOf("/stream/", StringComparison.Ordinal) is var from && from > 0)
+            {
+                await TrailAsync(
+                    context,
+                    rest[..from],
+                    Uri.UnescapeDataString(rest[(from + "/stream/".Length)..]),
+                    int.TryParse(request.QueryString["after"], out var had) && had > 0 ? had : 0)
+                    .ConfigureAwait(false);
+
+                return;
+            }
+
+            if (rest.IndexOf("/diff/", StringComparison.Ordinal) is var at && at > 0)
+            {
+                // Everything after the word, slashes and all: a node is called
+                // implementer/1, and whether that arrives escaped or not is the
+                // browser's business rather than this one's.
+                await ChangedAsync(
+                    context,
+                    rest[..at],
+                    Uri.UnescapeDataString(rest[(at + "/diff/".Length)..]),
+                    ct).ConfigureAwait(false);
 
                 return;
             }
@@ -630,6 +702,12 @@ public sealed class DashboardServer : IDisposable
             cap = run.BudgetUsd,
         },
 
+        // What it has cost is on the page already and nobody acts on it. What
+        // it is costing, and where that ends up, is the number somebody stops
+        // a run over - so it is worked out here rather than left for a person
+        // to do in their head at three in the morning.
+        numbers = Numbers(run),
+
         nodes = run.Nodes.Select(node => new
         {
             node.Node,
@@ -642,6 +720,7 @@ public sealed class DashboardServer : IDisposable
             node.Doing,
             node.Said,
             node.Model,
+            node.Base,
             tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
         }),
 
@@ -662,6 +741,179 @@ public sealed class DashboardServer : IDisposable
             turn.Outcome,
         }),
     };
+
+    /// <summary>
+    /// Starts a team, through whatever can run a command.
+    /// </summary>
+    /// <remarks>
+    /// It answers as soon as the run has been asked for rather than when it
+    /// finishes. A team run takes twenty minutes on a good day, and a browser
+    /// tab holding a request open for twenty minutes is a tab that has already
+    /// given up - the run appears in the list within a few seconds, which is
+    /// the answer somebody actually wanted.
+    /// </remarks>
+    private async Task StartAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Starting a team is a POST." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Begin is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "This dashboard was started on its own and cannot run commands. "
+                        + "Start teams from the daemon's dashboard, or from the command line.",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        StartRequest? asking;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+
+            asking = JsonSerializer.Deserialize<StartRequest>(
+                await reader.ReadToEndAsync(ct).ConfigureAwait(false), Json);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            asking = null;
+        }
+
+        if (asking is null || string.IsNullOrWhiteSpace(asking.Team) || string.IsNullOrWhiteSpace(asking.Goal))
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "A run needs a team and something to do." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var done = await Begin(asking, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 202 : 400,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                done.Succeeded
+                    ? new { started = true, error = (string?)null }
+                    : new { started = false, error = done.Error },
+                Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>Everything one node did, rather than the few lines the journal kept.</summary>
+    /// <remarks>
+    /// The journal is thin on purpose - one line every few seconds, repeats
+    /// dropped - which is right for watching and wrong for working out what a
+    /// node actually did. This is the other one.
+    /// </remarks>
+    private async Task TrailAsync(
+        HttpListenerContext context,
+        string runId,
+        string node,
+        int after)
+    {
+        var directory = _journal.DirectoryOf(runId);
+        var read = NodeStream.Read(directory, node, after: after);
+
+        if (read.Failed)
+        {
+            await WriteAsync(
+                context,
+                read.ExitCode == ExitCode.InvalidArguments ? 400 : 404,
+                "application/json; charset=utf-8",
+                JsonSerializer.Serialize(new { error = read.Error }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var steps = read.Value!.Select(step => new
+        {
+            at = step.At,
+            step.Kind,
+            step.Tool,
+            step.Target,
+            step.Text,
+            step.Sub,
+        });
+
+        await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(new
+        {
+            node,
+
+            // What the total became, so a page asking "what is new" knows what
+            // to ask for next time and can tell a file that was replaced from
+            // one that simply grew.
+            total = NodeStream.Count(directory, node),
+            steps,
+        }, Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>What one node changed, as a patch.</summary>
+    /// <remarks>
+    /// Every way this can fail is a sentence rather than a status: the
+    /// repository has moved, the run is too old to have written down where its
+    /// branches started, the branch has been tidied away. Each is ordinary,
+    /// and none of them is the page's fault.
+    /// </remarks>
+    private async Task ChangedAsync(
+        HttpListenerContext context,
+        string runId,
+        string node,
+        CancellationToken ct)
+    {
+        if (_git is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "This dashboard was started without anything that can run git." }, Json))
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        var read = _journal.Summarise(runId);
+
+        if (read.Failed)
+        {
+            await WriteAsync(context, 404, "application/json; charset=utf-8",
+                JsonSerializer.Serialize(new { error = read.Error }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var run = read.Value!;
+        var which = run.Nodes.FirstOrDefault(one =>
+            string.Equals(one.Node, node, StringComparison.OrdinalIgnoreCase));
+
+        if (which is null)
+        {
+            await WriteAsync(context, 404, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = $"{runId} had no node called {node}." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var diff = await RunDiff.ForAsync(_git, run.Path, which, run.Merged, ct).ConfigureAwait(false);
+
+        if (diff.Failed)
+        {
+            await WriteAsync(context, 409, "application/json; charset=utf-8",
+                JsonSerializer.Serialize(new { error = diff.Error }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        await WriteAsync(context, 200, "application/json; charset=utf-8",
+            JsonSerializer.Serialize(diff.Value, Json)).ConfigureAwait(false);
+    }
 
     /// <summary>What a run wrote down beside its journal, listed.</summary>
     /// <remarks>
@@ -724,6 +976,48 @@ public sealed class DashboardServer : IDisposable
         }, Json)).ConfigureAwait(false);
     }
 
+    /// <summary>A run's numbers, shaped for the page.</summary>
+    private static object Numbers(RunSummary run)
+    {
+        var read = RunMetrics.For(run, DateTimeOffset.UtcNow);
+
+        return new
+        {
+            money = new
+            {
+                read.Money.Spent,
+                perMinute = read.Money.PerMinute,
+                rate = RunMetrics.Rate(read.Money.PerMinute),
+                read.Money.Projected,
+                read.Money.Budget,
+                read.Money.Overrunning,
+            },
+            rounds = read.Rounds.Select(round => new
+            {
+                round.Round,
+                round.Seconds,
+                round.Requests,
+                round.Running,
+            }),
+            nodes = read.Nodes.Select(node => new
+            {
+                node.Node,
+                node.Role,
+                node.Seconds,
+                cost = node.CostUsd,
+            }),
+            trouble = new
+            {
+                read.Trouble.Denials,
+                read.Trouble.Rejected,
+                read.Trouble.Retried,
+                quietRounds = read.Trouble.QuietRounds,
+                read.Trouble.Conflicts,
+                read.Trouble.Any,
+            },
+        };
+    }
+
     /// <summary>
     /// The journal as it arrives, one event per message.
     /// </summary>
@@ -766,6 +1060,13 @@ public sealed class DashboardServer : IDisposable
                     node = entry.Node,
                     entry.Kind,
                     said = RunJournal.Describe(entry),
+
+                    // The same line without its clock in front of it. Two
+                    // events that say the same thing are worth showing as one
+                    // thing and a count, and the whole line never repeats -
+                    // the time is different every time, which is exactly what
+                    // made the first attempt at this collapse nothing at all.
+                    what = RunJournal.Wording(entry),
                 }, Json)).ConfigureAwait(false);
             }
 

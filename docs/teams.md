@@ -205,9 +205,9 @@ there is one account of what happened rather than three that can disagree.
 - `loadout team status` — where each node got to, what it is doing now, what it
   cost.
 - `loadout team dashboard` — a page on this machine, live, at a loopback address
-  behind a token that changes every start. It watches and it acts: answering a
-  gate, holding a run, stopping one and sending the lead a message are all
-  buttons on it. Nothing there implements any of that — each button runs the
+  behind a token that changes every start. It watches and it acts: starting a
+  team, answering a gate, holding a run, stopping one and sending the lead a
+  message are all buttons on it. Nothing there implements any of that — each button runs the
   command you would have typed, so there is one behaviour rather than two that
   drift.
 - **Tools → Team runs…** in the launcher — the same, in the terminal UI. See
@@ -216,28 +216,50 @@ there is one account of what happened rather than three that can disagree.
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
 
-### Three depths of one run
+### Four depths of one run
 
-Open a run and the pane on the right has three tabs, reached with <kbd>1</kbd>,
-<kbd>2</kbd> and <kbd>3</kbd> from anywhere on the page.
+Open a run and the pane on the right has four tabs, reached with <kbd>1</kbd>
+to <kbd>4</kbd> from anywhere on the page, or with the arrow keys once you are
+on the strip.
 
-- **What it said** — the journal as it arrives. A line that repeats becomes one
-  line and a count, so a node reading forty files does not push what mattered
-  off the top.
-- **What it cost** — every exchange one by one: which round, which node, which
-  model, how many messages, what was refused, what it cost, and what the report
-  came back as. Two nodes that cost the same are the same number and can be
-  quite different problems; the totals cannot tell them apart.
+- **What it said** — at two resolutions. The run's own journal is one line
+  every few seconds with repeats collapsed to a count, which is what watching
+  wants; pick a node instead and you get everything that node did, every tool
+  it called and everything it said, which is what working out where it went
+  wrong wants. Sub-agents inside a node are marked as such.
+- **What it cost** — what it is costing rather than only what it has cost,
+  then every exchange one by one: which round, which node, which model, how
+  many messages, what was refused, what it cost, and what the report came back
+  as. Two nodes that cost the same are the same number and can be quite
+  different problems; the totals cannot tell them apart.
 - **The papers** — what each node was *told* to do and what it said it did, in
   the words the model actually saw. The run's own summing-up first, then each
   node's brief beside its report. This is where to look when a node did
   something reasonable for a brief nobody meant to give it.
+- **What it changed** — the patch each node produced, file summary first. A
+  report says "added the flag and a test for it"; the patch says what was
+  added, and those are not always the same thing.
 
-Two things about the papers. Names are matched against the shape a run writes
-before they are ever joined to a path, so a name from a browser cannot climb
-out of the run's own directory. And everything is redacted on the way out — if
-a document cannot be checked in a reasonable time, it is not shown at all,
+Two things about the papers and the patch. Names are matched against the shape
+a run writes before they are ever joined to a path, so a name from a browser
+cannot climb out of the run's own directory. And everything is redacted on the
+way out — if it cannot be checked in a reasonable time, it is not shown at all,
 rather than shown unchecked.
+
+Each node's own stream is written as the run happens, in the launcher's
+vocabulary rather than the agent's — so nothing reads an agent's JSON, a second
+agent needs no change here, and a node's stream never carries whatever its agent
+felt like printing. Anything one step said is cut to a readable length: a node
+that reads a large file and quotes it back would otherwise put the whole file in
+there several times over, and the file is on disk already.
+
+A patch is measured from the commit the node's branch started at, which the run
+writes down when it makes the worktree. Not from wherever the repository is now:
+once a node's branch has been merged and tidied away, a diff against the current
+state is empty, and empty reads as "it did nothing" rather than as "this cannot
+be shown". Runs recorded before this was written down say so plainly instead of
+guessing — a diff measured from the wrong place is worse than no diff, because
+it looks like one.
 
 ### What needs you
 
@@ -264,6 +286,45 @@ because a reviewer reading one diff and an implementer running a suite have
 nothing in common — with a two-minute floor, so a node whose turns take four
 seconds is not reported after twelve. A node on its first turn is never called
 quiet: nothing is known yet about how long that one takes.
+
+### The numbers that change a decision
+
+Four, above the exchanges, chosen because each one changes what somebody does
+rather than decorating the page.
+
+**What it is costing.** Not what it has cost — that is already on the list and
+nobody acts on it — but the rate, and where that ends up if the run uses the
+rounds it has left. A run projected past the budget its team set says so while
+there is still something to be done about it, in words and with a border rather
+than in colour alone. The rate is said per hour once it drops below a penny a
+minute, because "$0.0041 a minute" is a number nobody has a feel for.
+
+Projected from rounds rather than from the clock. A run does not spend evenly
+through time — it spends while a node is up and nothing while the lead thinks —
+but it does spend roughly per round, because a round is what buys nodes.
+
+**Where the time went**, by round and then by node. The round narrows it down;
+the node says which one to look at. Drawn as bars in the page itself: no
+canvas, no library, and a screen reader reads the row, which says the name and
+the number.
+
+**What went wrong**, counted by shape: tool calls refused, reports the checker
+would not accept, turns that had to be asked again, rounds that asked for
+nothing, branches that would not merge. These are questions about the *team
+file* rather than about the run. One run refusing twenty tool calls is a bad
+afternoon; every run of one role refusing twenty is a role whose permissions
+are written wrong, and the second only shows up once the first is counted.
+
+All of it from what the run wrote down while it happened. Nothing is mined out
+of an agent's own transcript files afterwards: those formats have changed
+before, and a figure that quietly becomes wrong when somebody else ships a
+release is worse than no figure. Runs recorded before a number existed do not
+show it.
+
+**Not built yet.** Splitting a node's time into thinking, tool calls and
+waiting on a person, and comparing cost against outcome across runs by model
+and by role. Both want data that is only now being written down, so they will
+mean something once there are runs that carry it.
 
 ### Being told
 
@@ -311,6 +372,29 @@ post into that channel as you.
 A reason that clears and comes back is news again. A daemon that restarts
 repeats whatever is still outstanding, once — what has been said is held in
 memory rather than in a file nobody would ever read.
+
+### Starting one from the page
+
+**Start a team** on the dashboard takes the same things `team run` does: a
+team, what the run is for, a project, how many rounds, and an autonomy. It
+asks once, naming the team and the goal, before anything starts — the token
+got somebody to the page rather than to this, and this one spends money and
+edits a repository.
+
+Nothing on the page knows what a team is. Whether that team exists, whether
+that project is registered and whether that autonomy is a word at all are
+questions the command line already answers, and the page shows whatever it
+says. The team and project boxes suggest names this machine has run before,
+which is a convenience rather than a list to choose from.
+
+It answers as soon as the run is under way rather than when it finishes — a
+run takes twenty minutes on a good day and a browser holding a request open
+that long has already given up. The run appears in the list within a few
+seconds.
+
+**Only the daemon's dashboard can start one.** `team dashboard` on its own
+serves the page and nothing that runs commands, and says so plainly rather
+than failing quietly.
 
 ### Answering, steering and stopping
 

@@ -292,6 +292,27 @@ public sealed class RunJournalTests
     }
 
     [Fact]
+    public void Two_events_saying_the_same_thing_say_it_the_same_way()
+    {
+        // What a page groups on. The rendered line carries the clock in front
+        // of it and so is different every time, which is what made the first
+        // attempt at collapsing repeats collapse nothing at all: a node that
+        // read one file forty times still wrote forty rows.
+        var first = RunJournal.Parse(
+            """{"at":"2026-09-15T22:54:20+00:00","node":"lead","kind":"node.doing","data":{"doing":"Read docs/teams.md"}}""");
+
+        var again = RunJournal.Parse(
+            """{"at":"2026-09-15T22:54:39+00:00","node":"lead","kind":"node.doing","data":{"doing":"Read docs/teams.md"}}""");
+
+        RunJournal.Wording(first!).Should().Be(RunJournal.Wording(again!));
+        RunJournal.Describe(first!).Should().NotBe(RunJournal.Describe(again!));
+
+        // And the whole line still says when and who, because that is what
+        // somebody reading rather than counting needs.
+        RunJournal.Describe(first!).Should().Contain("lead").And.Contain(RunJournal.Wording(first!));
+    }
+
+    [Fact]
     public void An_event_kind_nothing_knows_about_still_reads_as_itself()
     {
         // The runner will grow kinds this does not know. Naming it is worse

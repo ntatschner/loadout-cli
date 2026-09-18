@@ -144,6 +144,31 @@
   #rail .which { font-weight: 700; }
   #rail .clears { color: var(--quiet); }
 
+  /*
+    Starting work. Folded away by default: the page is for watching what is
+    already going, and a form that is always open is a form somebody fills in
+    by accident.
+  */
+  .start { border: 1px solid var(--line); border-radius: 0.4rem; margin: 0 0 1rem; }
+  .start summary { padding: 0.6rem 0.9rem; cursor: pointer; min-height: 2.5rem; }
+  .start .fields { display: grid; gap: 0.6rem; padding: 0 0.9rem 0.9rem; }
+  .start label { display: block; color: var(--quiet); font-size: 0.9rem; }
+  .start input, .start select { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem; }
+  .start .narrow { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+  .start .narrow > * { flex: 1 1 8rem; }
+
+  .start button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+    justify-self: start;
+  }
+
   .prefs { display: flex; gap: 0.75rem; align-items: center; margin: 0.5rem 0; }
   .prefs label { color: var(--quiet); }
 
@@ -201,6 +226,39 @@
     margin-left: 0.4rem;
   }
 
+  /*
+    The numbers that change a decision. Big enough to read from across a room,
+    because the one that matters is read while deciding whether to walk over
+    and stop something.
+  */
+  .figures { display: flex; flex-wrap: wrap; gap: 1.25rem; margin: 0 0 1rem; }
+  .figure { min-width: 7rem; }
+  .figure dt { color: var(--quiet); font-size: 0.85rem; }
+  .figure dd { margin: 0; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+
+  /* Bordered as well as coloured, so it survives a greyscale screenshot and a
+     forced-colours mode - which is the whole point of saying it at all. */
+  .figure.over dd { color: var(--stopped); font-weight: 700; }
+  .figure.over { border-left: 3px solid var(--stopped); padding-left: 0.6rem; }
+
+  /*
+    A bar per round, drawn in the page rather than as a picture: no canvas, no
+    library, and a screen reader reads the number rather than being told there
+    is a chart.
+  */
+  .bars { list-style: none; margin: 0 0 1rem; padding: 0; font-size: 0.9rem; }
+  .bars li { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; }
+  .bars .name { min-width: 9rem; }
+  .bars .amount { font-variant-numeric: tabular-nums; min-width: 5rem; text-align: right; }
+
+  .bars .bar {
+    height: 0.7rem;
+    background: var(--going);
+    border: 1px solid var(--line);
+    border-radius: 0.15rem;
+    flex: 0 0 auto;
+  }
+
   .turns { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
   .turns th, .turns td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--line); }
   .turns td.money, .turns th.money { text-align: right; font-variant-numeric: tabular-nums; }
@@ -222,6 +280,22 @@
   }
 
   .papers button[aria-pressed="true"] { font-weight: 700; box-shadow: inset 0 -3px 0 var(--going); }
+
+  /*
+    A patch. The + and - at the start of each line is what says which is which;
+    the colour is decoration on top of a signal that is already there, which is
+    why it survives a greyscale screenshot and a forced-colours mode intact.
+  */
+  .add { color: var(--done); }
+  .drop { color: var(--stopped); }
+  .hunk { color: var(--quiet); font-weight: 700; }
+
+  .stat {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    margin: 0 0 0.75rem;
+  }
 
   .paper {
     background: var(--card);
@@ -245,6 +319,8 @@
      still drawn. */
   @media (forced-colors: active) {
     .run, .log, .run button, .depths button, .papers button, .paper { border: 1px solid CanvasText; }
+    .add, .drop, .hunk { color: CanvasText; }
+    .bars .bar { background: CanvasText; }
     .depths button[aria-selected="true"], .papers button[aria-pressed="true"] { border: 3px solid CanvasText; }
     .state { color: CanvasText; }
   }
@@ -277,6 +353,48 @@
 
   <section class="pane" aria-labelledby="runs">
     <h2 id="runs">Runs on this machine</h2>
+
+    <details class="start">
+      <summary>Start a team</summary>
+
+      <div class="fields">
+        <div>
+          <label for="start-team">Team</label>
+          <input type="text" id="start-team" list="known-teams" placeholder="as team list names it">
+          <datalist id="known-teams"></datalist>
+        </div>
+
+        <div>
+          <label for="start-goal">What it is for</label>
+          <input type="text" id="start-goal" placeholder="check the docs against the code">
+        </div>
+
+        <div>
+          <label for="start-project">Project</label>
+          <input type="text" id="start-project" list="known-projects" placeholder="as the registry names it">
+          <datalist id="known-projects"></datalist>
+        </div>
+
+        <div class="narrow">
+          <div>
+            <label for="start-rounds">Rounds</label>
+            <input type="number" id="start-rounds" min="1" max="20" placeholder="the team's own">
+          </div>
+
+          <div>
+            <label for="start-autonomy">Autonomy</label>
+            <select id="start-autonomy">
+              <option value="">the team's own</option>
+              <option value="manual">manual</option>
+              <option value="supervised">supervised</option>
+              <option value="autonomous">autonomous</option>
+            </select>
+          </div>
+        </div>
+
+        <button type="button" id="start">Start it</button>
+      </div>
+    </details>
     <ul class="runs" id="list" aria-describedby="status"></ul>
   </section>
 
@@ -301,15 +419,20 @@
         aria-selected="false" tabindex="-1">What it cost <kbd>2</kbd></button>
       <button type="button" role="tab" id="tab-papers" aria-controls="depth-papers"
         aria-selected="false" tabindex="-1">The papers <kbd>3</kbd></button>
+      <button type="button" role="tab" id="tab-changes" aria-controls="depth-changes"
+        aria-selected="false" tabindex="-1">What it changed <kbd>4</kbd></button>
     </div>
 
     <div id="depth-messages" role="tabpanel" aria-labelledby="tab-messages" tabindex="0">
+      <ul class="papers" id="who"></ul>
       <div class="log" id="log" role="log" aria-labelledby="detail-heading"></div>
     </div>
 
     <div id="depth-turns" role="tabpanel" aria-labelledby="tab-turns" tabindex="0" hidden></div>
 
     <div id="depth-papers" role="tabpanel" aria-labelledby="tab-papers" tabindex="0" hidden></div>
+
+    <div id="depth-changes" role="tabpanel" aria-labelledby="tab-changes" tabindex="0" hidden></div>
   </section>
 
   </div>
@@ -375,11 +498,25 @@
   function api(path) {
     return fetch(path + (path.indexOf("?") < 0 ? "?" : "&") + "token=" + encodeURIComponent(token))
       .then(function (answer) {
-        if (!answer.ok) {
-          throw new Error("The dashboard answered " + answer.status + ".");
+        if (answer.ok) {
+          return answer.json();
         }
 
-        return answer.json();
+        // Every one of these carries a sentence saying what happened and what
+        // to do about it - the run is too old, the branch was tidied away, the
+        // node recorded no stream. Replacing that with "404" throws away the
+        // only part somebody can act on.
+        return answer.text().then(function (body) {
+          var said = null;
+
+          try {
+            said = JSON.parse(body).error;
+          } catch (e) {
+            said = null;
+          }
+
+          throw new Error(said || ("The dashboard answered " + answer.status + "."));
+        });
       });
   }
 
@@ -498,6 +635,104 @@
 
   // Everything wanting somebody, across every run, newest first. Rebuilt on
   // every read: nothing here is remembered, so a reason that has gone is gone.
+  /*
+    What this machine has run before, offered as suggestions rather than as a
+    list to choose from. Whether a team exists is the command line's question,
+    and asking it here as well is how two answers start to disagree - but a
+    name somebody typed last week is still the name they want today.
+  */
+  function suggest(runs) {
+    [["known-teams", "team"], ["known-projects", "project"]].forEach(function (pair) {
+      var list = document.getElementById(pair[0]);
+      var seen = {};
+      var names = [];
+
+      runs.forEach(function (run) {
+        var name = run[pair[1]];
+
+        if (name && !seen[name]) {
+          seen[name] = true;
+          names.push(name);
+        }
+      });
+
+      if (list.getAttribute("data-names") === names.join("|")) { return; }
+
+      list.setAttribute("data-names", names.join("|"));
+      list.textContent = "";
+
+      names.forEach(function (name) {
+        var option = document.createElement("option");
+
+        option.value = name;
+        list.appendChild(option);
+      });
+    });
+  }
+
+  (function () {
+    var go = document.getElementById("start");
+
+    go.addEventListener("click", function () {
+      var team = document.getElementById("start-team").value.trim();
+      var goal = document.getElementById("start-goal").value.trim();
+      var project = document.getElementById("start-project").value.trim();
+      var rounds = parseInt(document.getElementById("start-rounds").value, 10);
+      var autonomy = document.getElementById("start-autonomy").value;
+
+      if (!team || !goal) {
+        announce("A run needs a team and something to do.");
+
+        return;
+      }
+
+      // Named in the question. This one spends money and edits a repository,
+      // and the token got somebody to the page rather than to this.
+      if (!window.confirm("Start " + team + (project ? " on " + project : "")
+        + " to \u201c" + goal + "\u201d?")) {
+        return;
+      }
+
+      go.disabled = true;
+
+      fetch("/api/start?token=" + encodeURIComponent(token), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          team: team,
+          goal: goal,
+          project: project || null,
+          rounds: rounds > 0 ? rounds : null,
+          autonomy: autonomy || null
+        })
+      })
+        .then(function (answer) {
+          return answer.text().then(function (body) {
+            var said = null;
+
+            try {
+              said = JSON.parse(body).error;
+            } catch (e) {
+              said = null;
+            }
+
+            go.disabled = false;
+
+            if (!answer.ok) {
+              throw new Error(said || ("The dashboard answered " + answer.status + "."));
+            }
+
+            announce(team + " is starting. It appears in the list in a moment.");
+            document.getElementById("start-goal").value = "";
+          });
+        })
+        .catch(function (wrong) {
+          go.disabled = false;
+          announce(wrong.message);
+        });
+    });
+  }());
+
   function drawRail(runs) {
     var rail = document.getElementById("rail");
     var list = document.getElementById("rail-list");
@@ -591,6 +826,8 @@
   }
 
   function draw(runs) {
+    suggest(runs);
+
     list.textContent = "";
 
     if (runs.length === 0) {
@@ -648,7 +885,7 @@
       run.nodes.forEach(function (node) {
         var row = document.createElement("li");
         var text = node.node + " (" + node.role + "): " + node.state +
-          ", " + node.turns + " exchanges, $" + node.cost.toFixed(2);
+          ", " + many(node.turns, "exchange", "exchanges") + ", $" + node.cost.toFixed(2);
 
         if (node.tookSeconds) {
           text += ", " + minutes(node.tookSeconds);
@@ -727,10 +964,18 @@
       drawGates(run);
     }
 
-    var turns = (run.turns || []).length;
+    drawWho();
 
-    if (depth === 1 && turns !== turnsShown) {
-      turnsShown = turns;
+    if (depth === 0 && trailOf) {
+      showTrail(false);
+    }
+
+    // Redrawn every tick rather than only when an exchange lands: what it is
+    // costing per minute changes with the clock, and a burn rate that only
+    // moves when a node finishes is a burn rate that says nothing while one
+    // is running - which is exactly when somebody is reading it.
+    if (depth === 1) {
+      turnsShown = (run.turns || []).length;
       drawTurns();
     }
   }
@@ -838,10 +1083,20 @@
   var depths = [
     { tab: "tab-messages", panel: "depth-messages" },
     { tab: "tab-turns", panel: "depth-turns" },
-    { tab: "tab-papers", panel: "depth-papers" }
+    { tab: "tab-papers", panel: "depth-papers" },
+    { tab: "tab-changes", panel: "depth-changes" }
   ];
 
   var depth = 0;
+
+  // Whose account of the run is being shown: null for the run's own journal,
+  // which is deliberately thin, or a node for everything that node did.
+  var trailOf = null;
+
+  // How many of that node's steps are already on the page. Asking again every
+  // few seconds and being sent the same two thousand steps is most of a
+  // megabyte a minute to say nothing.
+  var trailHas = 0;
 
   function showDepth(which, move) {
     depth = which;
@@ -869,6 +1124,7 @@
     }
 
     if (which === 2) { drawPapers(); }
+    if (which === 3) { drawChanges(); }
   }
 
   function money(amount) {
@@ -888,10 +1144,167 @@
     return td;
   }
 
+  function figure(into, name, value, over) {
+    var box = document.createElement("div");
+    var what = document.createElement("dt");
+    var much = document.createElement("dd");
+
+    box.className = "figure" + (over ? " over" : "");
+    what.textContent = name;
+    much.textContent = value;
+
+    box.appendChild(what);
+    box.appendChild(much);
+    into.appendChild(box);
+  }
+
+  /*
+    Bars drawn in the page rather than as a picture. No canvas and no library:
+    a screen reader reads the row, which says the name and the number, and a
+    bar that is only a width adds nothing for it to get wrong.
+  */
+  function bars(into, rows) {
+    var most = rows.reduce(function (top, row) { return Math.max(top, row.amount); }, 0) || 1;
+    var list = document.createElement("ul");
+
+    list.className = "bars";
+
+    rows.forEach(function (row) {
+      var li = document.createElement("li");
+      var name = document.createElement("span");
+      var bar = document.createElement("span");
+      var amount = document.createElement("span");
+
+      name.className = "name";
+      name.textContent = row.name;
+
+      bar.className = "bar";
+      bar.style.width = Math.max(2, Math.round((row.amount / most) * 60)) + "%";
+      bar.setAttribute("aria-hidden", "true");
+
+      amount.className = "amount";
+      amount.textContent = row.said;
+
+      li.appendChild(name);
+      li.appendChild(bar);
+      li.appendChild(amount);
+      list.appendChild(li);
+    });
+
+    into.appendChild(list);
+  }
+
+  // One of a thing is not one things. Every count on this page goes through
+  // here, because "1 tool calls refused" is the sort of thing that makes
+  // somebody trust the rest of the numbers a little less.
+  function many(count, one, more) {
+    return count + " " + (count === 1 ? one : more);
+  }
+
+  function spell(seconds) {
+    if (seconds < 60) { return seconds + "s"; }
+
+    var m = Math.floor(seconds / 60);
+
+    return m < 60 ? m + "m" : Math.floor(m / 60) + "h " + (m % 60) + "m";
+  }
+
+  function drawNumbers(panel) {
+    var numbers = opened && opened.numbers;
+
+    if (!numbers) { return; }
+
+    var figures = document.createElement("dl");
+
+    figures.className = "figures";
+
+    figure(figures, "spent", "$" + numbers.money.spent.toFixed(2));
+    figure(figures, "burning", numbers.money.rate);
+
+    if (numbers.money.projected !== null && numbers.money.projected !== undefined) {
+      figure(figures, "if it uses every round",
+        "$" + numbers.money.projected.toFixed(2), numbers.money.overrunning);
+    }
+
+    if (numbers.money.budget !== null && numbers.money.budget !== undefined) {
+      figure(figures, "budget", "$" + numbers.money.budget.toFixed(2), numbers.money.overrunning);
+    }
+
+    panel.appendChild(figures);
+
+    if (numbers.money.overrunning) {
+      var warned = document.createElement("p");
+
+      warned.className = "said";
+      warned.textContent = "At this rate it goes past what the team said it may spend.";
+      panel.appendChild(warned);
+    }
+
+    // Where the time went, by round and then by node. The round narrows it
+    // down; the node says which one to look at.
+    if (numbers.rounds.length) {
+      var byRound = document.createElement("h3");
+
+      byRound.textContent = "Where the time went";
+      panel.appendChild(byRound);
+
+      bars(panel, numbers.rounds.map(function (round) {
+        return {
+          name: "round " + round.round + (round.running ? " (going)" : ""),
+          amount: round.seconds,
+          said: spell(round.seconds)
+        };
+      }));
+    }
+
+    if (numbers.nodes.length) {
+      bars(panel, numbers.nodes.map(function (node) {
+        return { name: node.node, amount: node.seconds, said: spell(node.seconds) };
+      }));
+    }
+
+    if (numbers.trouble.any) {
+      var went = document.createElement("h3");
+
+      went.textContent = "What went wrong";
+      panel.appendChild(went);
+
+      var said = [];
+
+      if (numbers.trouble.denials) {
+        said.push(many(numbers.trouble.denials, "tool call refused", "tool calls refused"));
+      }
+
+      if (numbers.trouble.rejected) {
+        said.push(many(numbers.trouble.rejected, "report not accepted", "reports not accepted"));
+      }
+
+      if (numbers.trouble.retried) {
+        said.push(many(numbers.trouble.retried, "turn asked again", "turns asked again"));
+      }
+
+      if (numbers.trouble.quietRounds) {
+        said.push(many(numbers.trouble.quietRounds, "round asked for nothing", "rounds asked for nothing"));
+      }
+
+      if (numbers.trouble.conflicts) {
+        said.push(many(numbers.trouble.conflicts, "branch would not merge", "branches would not merge"));
+      }
+
+      var line = document.createElement("p");
+
+      line.className = "facts";
+      line.textContent = said.join(", ") + ".";
+      panel.appendChild(line);
+    }
+  }
+
   function drawTurns() {
     var panel = document.getElementById("depth-turns");
 
     panel.textContent = "";
+
+    drawNumbers(panel);
 
     var turns = (opened && opened.turns) || [];
 
@@ -914,8 +1327,7 @@
     var caption = document.createElement("caption");
     var spent = turns.reduce(function (sum, turn) { return sum + (turn.cost || 0); }, 0);
 
-    caption.textContent = turns.length + " exchange" + (turns.length === 1 ? "" : "s")
-      + ", " + money(spent) + " in all";
+    caption.textContent = many(turns.length, "exchange", "exchanges") + ", " + money(spent) + " in all";
 
     table.appendChild(caption);
 
@@ -1064,6 +1476,254 @@
       });
   }
 
+  /*
+    A report says "added the flag and a test for it". The patch says what was
+    added, and those are not always the same thing. This is the last of three
+    answers about a node - what it was told, what it said, and what it did -
+    and the only one nothing can argue with.
+  */
+  /*
+    Two resolutions of the same question. The run's journal is one line every
+    few seconds with repeats dropped, which is what somebody watching wants;
+    a node's own stream is every tool it called and everything it said, which
+    is what somebody working out where it went wrong wants. Both are "what it
+    said", so both live here rather than in two tabs that sound the same.
+  */
+  function drawWho() {
+    var box = document.getElementById("who");
+
+    if (!opened) { return; }
+
+    var names = ["the run"].concat((opened.nodes || []).map(function (n) { return n.node; }));
+
+    // Rebuilt only when the cast changes, so a click does not land on a
+    // button that was replaced between the press and the release.
+    if (box.getAttribute("data-who") === names.join("|")) { return; }
+
+    box.setAttribute("data-who", names.join("|"));
+    box.textContent = "";
+
+    names.forEach(function (name, i) {
+      var li = document.createElement("li");
+      var pick = document.createElement("button");
+      var node = i === 0 ? null : name;
+
+      pick.type = "button";
+      pick.textContent = name;
+      pick.setAttribute("aria-pressed", trailOf === node ? "true" : "false");
+      pick.setAttribute("aria-controls", "log");
+
+      pick.addEventListener("click", function () {
+        trailOf = node;
+
+        box.querySelectorAll("button").forEach(function (other) {
+          other.setAttribute("aria-pressed", other === pick ? "true" : "false");
+        });
+
+        log.textContent = "";
+        lastLine = null;
+        lastSaid = null;
+        trailHas = 0;
+
+        if (node) {
+          showTrail(true);
+        } else {
+          // Opened again rather than simply switched back to: the events
+          // already delivered are gone, and on a run that has finished
+          // nothing more is coming, so the box would stay empty for ever.
+          follow(opened);
+          say("Following " + opened.id + " again, from the top.");
+        }
+      });
+
+      li.appendChild(pick);
+      box.appendChild(li);
+    });
+  }
+
+  function showTrail(fresh) {
+    if (!opened || !trailOf) { return; }
+
+    var id = opened.id;
+    var node = trailOf;
+
+    if (fresh) {
+      log.textContent = "Reading everything " + node + " did...";
+    }
+
+    api("/api/runs/" + encodeURIComponent(id) + "/stream/" + encodeURIComponent(node)
+      + "?after=" + trailHas)
+      .then(function (got) {
+        // Somebody may have picked a different one while this was in flight.
+        if (opened.id !== id || trailOf !== node) { return; }
+
+        if (fresh) {
+          log.textContent = "";
+        }
+
+        // A total below what is already shown means the file was replaced
+        // rather than added to, so what is on the page is not part of it.
+        if (got.total < trailHas) {
+          log.textContent = "";
+          trailHas = 0;
+        }
+
+        trailHas = got.total;
+
+        if (!got.steps.length) {
+          if (fresh) {
+            log.textContent = node + " recorded no steps.";
+          }
+
+          return;
+        }
+
+        got.steps.forEach(function (step) {
+          var line = document.createElement("p");
+
+          line.textContent = clock(step.at) + "  " + step.kind
+            + (step.sub ? " (subagent)" : "")
+            + "  " + [step.tool, step.target, step.text].filter(Boolean).join(" ");
+
+          log.appendChild(line);
+        });
+
+        log.scrollTop = log.scrollHeight;
+      })
+      .catch(function (wrong) {
+        log.textContent = wrong.message;
+      });
+  }
+
+  function clock(at) {
+    try {
+      return new Date(at).toTimeString().slice(0, 8);
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function drawChanges() {
+    var panel = document.getElementById("depth-changes");
+
+    if (!opened) { return; }
+
+    // Only when the run changes, like the papers: redrawing every four
+    // seconds would take the patch away from whoever is reading it.
+    if (panel.getAttribute("data-run") === opened.id) { return; }
+
+    panel.setAttribute("data-run", opened.id);
+    panel.textContent = "";
+
+    var working = (opened.nodes || []).filter(function (node) { return node.branch; });
+
+    if (!working.length) {
+      var none = document.createElement("p");
+
+      none.textContent = "No node in this run worked on a branch of its own.";
+      panel.appendChild(none);
+
+      return;
+    }
+
+    var choices = document.createElement("ul");
+
+    choices.className = "papers";
+
+    var stat = document.createElement("p");
+
+    stat.className = "stat";
+
+    var shown = document.createElement("pre");
+
+    shown.className = "paper";
+    shown.id = "patch-shown";
+    shown.tabIndex = 0;
+    shown.textContent = "Pick a node to see what it changed.";
+
+    var id = opened.id;
+
+    working.forEach(function (node) {
+      var li = document.createElement("li");
+      var open = document.createElement("button");
+
+      open.type = "button";
+      open.setAttribute("aria-pressed", "false");
+      open.setAttribute("aria-controls", "patch-shown");
+      open.textContent = node.node + " on " + node.branch
+        + (merged(node.branch) ? " (merged)" : "");
+
+      open.addEventListener("click", function () {
+        choices.querySelectorAll("button").forEach(function (other) {
+          other.setAttribute("aria-pressed", other === open ? "true" : "false");
+        });
+
+        stat.textContent = "";
+        shown.textContent = "Reading what " + node.node + " changed...";
+
+        api("/api/runs/" + encodeURIComponent(id) + "/diff/" + encodeURIComponent(node.node))
+          .then(function (got) {
+            stat.textContent = tidy(got.summary).trim() || "It changed nothing.";
+            paint(shown, tidy(got.patch));
+          })
+          .catch(function (wrong) {
+            stat.textContent = "";
+            shown.textContent = wrong.message;
+          });
+      });
+
+      li.appendChild(open);
+      choices.appendChild(li);
+    });
+
+    panel.appendChild(choices);
+    panel.appendChild(stat);
+    panel.appendChild(shown);
+  }
+
+  function merged(branch) {
+    return ((opened && opened.merged) || []).indexOf(branch) >= 0;
+  }
+
+  // Whatever joined these lines did it the way this machine writes them, and
+  // a carriage return at the end of every row is not part of anybody's diff.
+  function tidy(text) {
+    return (text || "").replace(/\r\n/g, "\n");
+  }
+
+  // One span per line, so a patch reads as a patch. The + and - are left on
+  // the line rather than replaced by the colour: they are what says which is
+  // which when there is no colour to see.
+  function paint(into, patch) {
+    into.textContent = "";
+
+    if (!patch || !patch.trim()) {
+      into.textContent = "It changed nothing.";
+
+      return;
+    }
+
+    // Split on the newline and drop whatever carriage return is left: what
+    // reads the patch back joins its lines the way this machine writes
+    // them, and a stray return at the end of every row is not part of
+    // anybody's diff.
+    patch.split("\n").forEach(function (whole) {
+      var line = whole.replace(/\r$/, "");
+      var row = document.createElement("span");
+
+      if (line.indexOf("@@") === 0) {
+        row.className = "hunk";
+      } else if (line.indexOf("+") === 0 && line.indexOf("+++") !== 0) {
+        row.className = "add";
+      } else if (line.indexOf("-") === 0 && line.indexOf("---") !== 0) {
+        row.className = "drop";
+      }
+
+      row.textContent = line + "\n";
+      into.appendChild(row);
+    });
+  }
+
   (function () {
     var strip = document.querySelector(".depths");
 
@@ -1100,7 +1760,7 @@
         return;
       }
 
-      var which = ["1", "2", "3"].indexOf(event.key);
+      var which = ["1", "2", "3", "4"].indexOf(event.key);
 
       if (which < 0 || detail.hidden) { return; }
 
@@ -1110,25 +1770,45 @@
   }());
 
   function watch(run) {
-    if (stream) {
-      stream.close();
-    }
-
     watching = run.id;
     opened = run;
-    log.textContent = "";
-    lastLine = null;
-    lastSaid = null;
-    lastSame = 1;
+
     showDepth(depth, false);
     heading.textContent = "What " + run.id + " is doing";
     detail.hidden = false;
 
     gatesShown = null;
     turnsShown = -1;
+    trailOf = null;
+
+    document.getElementById("who").removeAttribute("data-who");
 
     drawGates(run);
     wire(run);
+
+    follow(run);
+
+    // Moved to, so somebody reading with the keyboard is where the new
+    // content is rather than being told about it and left at the top.
+    heading.setAttribute("tabindex", "-1");
+    heading.focus();
+  }
+
+  /*
+    Opens, or re-opens, the run's own journal. Re-opening matters: the events
+    already delivered are gone once the box is cleared, and on a run that has
+    finished nothing more is coming, so anybody who looked at a node's own
+    stream and came back would find an empty box for ever.
+  */
+  function follow(run) {
+    if (stream) {
+      stream.close();
+    }
+
+    log.textContent = "";
+    lastLine = null;
+    lastSaid = null;
+    lastSame = 1;
 
     stream = new EventSource("/api/runs/" + encodeURIComponent(run.id) +
       "/events?token=" + encodeURIComponent(token));
@@ -1139,7 +1819,19 @@
       // The same line over and over is one line and a count. A node reading
       // forty files writes forty rows that differ only in a path, and they
       // push everything that mattered off the top of the box.
-      if (entry.said === lastSaid && lastLine) {
+      //
+      // Compared on what it says and who said it, never on the rendered
+      // line: that carries the clock in front of it, which is different
+      // every time, so the first attempt at this collapsed nothing at all.
+      // A node's own stream is in the box instead, so the run's journal has
+      // nowhere to go and would be interleaved into somebody else's account.
+      if (trailOf) {
+        return;
+      }
+
+      var same = JSON.stringify([entry.node, entry.kind, entry.what || entry.said]);
+
+      if (same === lastSaid && lastLine) {
         lastSame += 1;
 
         var badge = lastLine.querySelector(".again");
@@ -1162,7 +1854,7 @@
       log.appendChild(line);
 
       lastLine = line;
-      lastSaid = entry.said;
+      lastSaid = same;
       lastSame = 1;
 
       log.scrollTop = log.scrollHeight;

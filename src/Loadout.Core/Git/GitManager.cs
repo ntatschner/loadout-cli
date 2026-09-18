@@ -399,6 +399,72 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<string>> ResolveAsync(
+        string repositoryPath,
+        string reference,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reference);
+
+        // ^{commit} rather than the bare name, so an annotated tag gives the
+        // commit it points at rather than the tag object, and --verify so a
+        // name that matches nothing fails instead of being echoed back.
+        var read = await RunAsync(
+            repositoryPath,
+            ["rev-parse", "--verify", "--quiet", reference + "^{commit}"],
+            LocalOperationTimeout,
+            ct).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            return OperationResult<string>.Fail(read.Error!, ExitCode.RepositoryUnavailable);
+        }
+
+        var commit = read.Value!.Trim();
+
+        return commit.Length > 0
+            ? OperationResult<string>.Ok(commit)
+            : OperationResult<string>.Fail(
+                $"Nothing in this repository is called '{reference}'.", ExitCode.RepositoryUnavailable);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<string>> DiffAsync(
+        string repositoryPath,
+        string from,
+        string to,
+        bool summary = false,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(from);
+        ArgumentException.ThrowIfNullOrWhiteSpace(to);
+
+        var arguments = new List<string> { "diff" };
+
+        if (summary)
+        {
+            arguments.Add("--stat");
+        }
+
+        // No colour and no pager, whatever the person's own git config says:
+        // this output is read by a program, and a configured pager would hang
+        // waiting for a keypress nobody is there to give it.
+        arguments.Add("--no-color");
+        arguments.Add(from);
+        arguments.Add(to);
+        arguments.Add("--");
+
+        var read = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return read.Failed
+            ? OperationResult<string>.Fail(read.Error!, ExitCode.RepositoryUnavailable)
+            : OperationResult<string>.Ok(read.Value!);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default)
     {
         var result = await RunAsync(repositoryPath, ["push"], TimeSpan.FromMinutes(5), ct)

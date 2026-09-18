@@ -57,6 +57,10 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 /// <param name="Model">
 /// The model it was pinned to, or null for whatever the agent picks itself.
 /// </param>
+/// <param name="Base">
+/// The commit its branch started from, which is what makes its diff still
+/// mean the same thing after the branch has been merged and tidied away.
+/// </param>
 /// <remarks>
 /// <paramref name="Doing"/> and <paramref name="Said"/> are two accounts and
 /// neither corrects the other. The first is precise about what happened and
@@ -77,7 +81,8 @@ public sealed record RunNode(
     DateTimeOffset? Started = null,
     string? Doing = null,
     string? Said = null,
-    string? Model = null)
+    string? Model = null,
+    string? Base = null)
 {
     /// <summary>How long it has been going, or how long it took.</summary>
     public TimeSpan? Took =>
@@ -113,6 +118,26 @@ public sealed record RunTurn(
     string? Status = null,
     string? Outcome = null);
 
+/// <summary>One round of a run, and how long it took.</summary>
+/// <param name="Number">Which round.</param>
+/// <param name="Started">When it began.</param>
+/// <param name="Ended">When it came back, or null for the one still going.</param>
+/// <param name="Requests">How many nodes the lead asked for in it.</param>
+/// <remarks>
+/// Where the time goes is a question about rounds before it is a question
+/// about anything else: a run that took an hour spent it somewhere, and the
+/// round it was spent in is the first thing that narrows it down.
+/// </remarks>
+public sealed record RunRound(
+    int Number,
+    DateTimeOffset Started,
+    DateTimeOffset? Ended = null,
+    int Requests = 0)
+{
+    /// <summary>How long it took, or has taken so far against a given clock.</summary>
+    public TimeSpan Took(DateTimeOffset now) => (Ended ?? now) - Started;
+}
+
 /// <summary>A run, read back from what it wrote down.</summary>
 public sealed record RunSummary(
     string RunId,
@@ -134,8 +159,13 @@ public sealed record RunSummary(
     IReadOnlyList<PendingAsk>? Gates = null,
     decimal? BudgetUsd = null,
     int QuietRounds = 0,
-    IReadOnlyList<RunTurn>? Exchanges = null)
+    IReadOnlyList<RunTurn>? Exchanges = null,
+    IReadOnlyList<RunRound>? Timeline = null,
+    int Conflicts = 0)
 {
+    /// <summary>Each round, with when it started and when it came back.</summary>
+    public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
+
     /// <summary>Every exchange the run paid for, oldest first.</summary>
     public IReadOnlyList<RunTurn> Turns => Exchanges ?? [];
 
@@ -371,6 +401,8 @@ public sealed class RunJournal : IRunJournal
         var limit = 0;
         var merged = new List<string>();
         var turns = new List<RunTurn>();
+        var timeline = new List<RunRound>();
+        var conflicts = 0;
 
         // Insertion order, because that is the order the run briefed them
         // and the order somebody reading it will expect.
@@ -406,6 +438,16 @@ public sealed class RunJournal : IRunJournal
                 // the run; one is worth somebody knowing about.
                 case "round.ended":
                     quiet = (int)(entry.Number("quiet") ?? 0);
+
+                    if (timeline.Count > 0)
+                    {
+                        timeline[^1] = timeline[^1] with
+                        {
+                            Ended = entry.At,
+                            Requests = (int)(entry.Number("requests") ?? 0),
+                        };
+                    }
+
                     break;
 
                 case "round.started":
@@ -414,6 +456,8 @@ public sealed class RunJournal : IRunJournal
                     // watching most wants.
                     rounds = (int)(entry.Number("round") ?? rounds + 1);
                     limit = (int)(entry.Number("of") ?? limit);
+
+                    timeline.Add(new RunRound(rounds, entry.At));
                     break;
 
                 case "run.finished":
@@ -445,6 +489,7 @@ public sealed class RunJournal : IRunJournal
                     {
                         Role = entry.Text("role") ?? node.Role,
                         Model = entry.Text("model") ?? node.Model,
+                        Base = entry.Text("base") ?? node.Base,
                         Branch = entry.Text("worktree") ?? node.Branch,
                         State = "working",
                         LastSeen = entry.At,
@@ -519,6 +564,10 @@ public sealed class RunJournal : IRunJournal
                     Set(finishedNode, node => node with { LastSeen = entry.At, Doing = null });
                     break;
 
+                case "merge.conflicted":
+                    conflicts++;
+                    break;
+
                 case "merge.done" when entry.Text("branch") is { Length: > 0 } branch:
                     if (!merged.Contains(branch, StringComparer.Ordinal))
                     {
@@ -556,7 +605,9 @@ public sealed class RunJournal : IRunJournal
             NodePermissions.Pending(directory),
             budget,
             quiet,
-            turns);
+            turns,
+            timeline,
+            conflicts);
     }
 
     /// <summary>One event as a line somebody can read.</summary>
@@ -566,7 +617,25 @@ public sealed class RunJournal : IRunJournal
 
         var who = entry.Node is { Length: > 0 } node ? node : "run";
 
-        var what = entry.Kind switch
+        return $"{entry.At.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)}  "
+            + $"{who,-16} {Wording(entry)}";
+    }
+
+    /// <summary>
+    /// What an event says, without the time or the node in front of it.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Describe"/> because two events that say the
+    /// same thing are worth showing as one thing and a count, and the only
+    /// part of a whole line that is ever the same is this. A node reading the
+    /// same file forty times writes forty lines that differ in nothing but
+    /// their clock.
+    /// </remarks>
+    public static string Wording(RunEvent entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return entry.Kind switch
         {
             "run.started" => $"started {entry.Text("team")}"
                 + (entry.Text("project") is { Length: > 0 } on ? $" on {on}" : string.Empty)
@@ -600,7 +669,5 @@ public sealed class RunJournal : IRunJournal
             "decision" => $"decided: {entry.Text("question")} -> {entry.Text("answer")}",
             _ => entry.Kind,
         };
-
-        return $"{entry.At.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture)}  {who,-16} {what}";
     }
 }

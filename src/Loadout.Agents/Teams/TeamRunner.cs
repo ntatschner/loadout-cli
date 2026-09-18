@@ -455,7 +455,7 @@ public sealed class TeamRunner : ITeamRunner
                 // one breath. Found by the first run that reached the reminder.
                 if (rounds >= request.MaxRounds)
                 {
-                    ended = $"round limit: {request.MaxRounds} rounds";
+                    ended = $"round limit: {request.MaxRounds} round{(request.MaxRounds == 1 ? string.Empty : "s")}";
                     break;
                 }
 
@@ -1400,6 +1400,28 @@ public sealed class TeamRunner : ITeamRunner
         await using var launch = started.Value!;
         warnings.AddRange(launch.Warnings);
 
+        /*
+          Where this node's branch started, as a commit rather than a name.
+          A name moves and can be deleted; the commit is what makes "what did
+          this node produce" still answerable after the branch has been merged
+          and tidied away, which is when somebody most wants to know.
+
+          The branch was made with no commits on it, so its tip is where it
+          started. Read just after the process was handed the tree rather than
+          just before, which leaves a window of a few milliseconds in which a
+          node could commit; nothing has ever done so that fast, and the cost
+          of being wrong is a diff that misses its own first commit rather than
+          anything that breaks.
+        */
+        string? branchedAt = null;
+
+        if (_git is not null && brief.Constraints.Worktree is { Length: > 0 } made)
+        {
+            var at = await _git.ResolveAsync(launch.Plan.WorkingDirectory, made, ct).ConfigureAwait(false);
+
+            branchedAt = at.Succeeded ? at.Value : null;
+        }
+
         await journal.WriteAsync(
             "node.launched",
             brief.Node,
@@ -1409,6 +1431,7 @@ public sealed class TeamRunner : ITeamRunner
                 role = node.Role,
                 directory = launch.Plan.WorkingDirectory,
                 worktree = brief.Constraints.Worktree,
+                @base = branchedAt,
 
                 // Null means whatever the agent would pick by itself, which is
                 // a real answer and not a missing one - so it is written down
@@ -2195,6 +2218,12 @@ public sealed class TeamRunner : ITeamRunner
 
         public async Task SawAsync(HeadlessEvent evt, CancellationToken ct)
         {
+            // Everything, before the throttling below. The journal is
+            // deliberately thin - one line every few seconds, repeats dropped -
+            // which is right for watching a run and wrong for working out what
+            // it did, and those two wants deserve different files.
+            await KeptAsync(evt, ct).ConfigureAwait(false);
+
             if (Describe(evt) is not { Length: > 0 } doing)
             {
                 return;
@@ -2213,6 +2242,47 @@ public sealed class TeamRunner : ITeamRunner
             _said = doing;
 
             await _journal.WriteAsync("node.doing", _node, new { doing }, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Writes one step to the node's own stream.
+        /// </summary>
+        /// <remarks>
+        /// In the launcher's vocabulary rather than the agent's, so nothing
+        /// here reads anybody's JSON and a node's stream never carries whatever
+        /// its agent felt like printing.
+        /// </remarks>
+        private async Task KeptAsync(HeadlessEvent evt, CancellationToken ct)
+        {
+            var step = evt switch
+            {
+                HeadlessToolUse use => new NodeStep(
+                    _journal.Now, "tool", use.Tool, Target(use.InputJson).TrimStart(), null, use.FromSubagent),
+
+                HeadlessText text => new NodeStep(
+                    _journal.Now, "said", null, null, text.Text, text.FromSubagent),
+
+                HeadlessToolResult answered => new NodeStep(
+                    _journal.Now, answered.IsError ? "failed" : "answered", null, null, answered.Content),
+
+                HeadlessPermissionDenied refused => new NodeStep(
+                    _journal.Now, "refused", refused.Tool),
+
+                HeadlessStarted begun => new NodeStep(
+                    _journal.Now, "started", null, begun.Model),
+
+                _ => null,
+            };
+
+            if (step is null)
+            {
+                return;
+            }
+
+            await _journal.AppendAsync(
+                NodeStream.FileFor(_node),
+                NodeStream.Line(step),
+                ct).ConfigureAwait(false);
         }
 
         /// <summary>What an event says the node is doing, or null for one that says nothing.</summary>
@@ -2297,6 +2367,34 @@ public sealed class TeamRunner : ITeamRunner
             _path = path;
             _run = run;
             _time = time;
+        }
+
+        /// <summary>The run's directory, which is where everything else goes.</summary>
+        public string Directory => Path.GetDirectoryName(_path) ?? string.Empty;
+
+        /// <summary>When it is, by whatever clock the run is keeping.</summary>
+        public DateTimeOffset Now => _time.GetUtcNow();
+
+        /// <summary>
+        /// Appends one line to a file beside the journal, and never fails a run
+        /// over it.
+        /// </summary>
+        public async Task AppendAsync(string file, string line, CancellationToken ct)
+        {
+            await _lock.WaitAsync(ct).ConfigureAwait(false);
+
+            try
+            {
+                await File.AppendAllTextAsync(Path.Combine(Directory, file), line + "\n", ct)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+            finally
+            {
+                _lock.Release();
+            }
         }
 
         public async Task WriteAsync(string kind, string? node, object? data, CancellationToken ct)

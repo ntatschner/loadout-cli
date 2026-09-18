@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text.Json;
 using FluentAssertions;
 using Loadout.Core.Teams;
+using Loadout.Tests.Fakes;
 using Loadout.Core.Teams.Daemon;
 using Loadout.Models.Results;
 using Xunit;
@@ -28,6 +29,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
 {
     private readonly CancellationTokenSource _stopping = new();
     private readonly StubJournal _journal = new();
+    private readonly FakeGit _git = new("D:/repo");
 
     private DashboardServer _server = null!;
     private HttpClient _client = null!;
@@ -35,7 +37,13 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        _server = new DashboardServer(_journal);
+        _git.Commits["teams-r-lead"] = "2222222222222222222222222222222222222222";
+        _git.Diffs["1111111111111111111111111111111111111111..2222222222222222222222222222222222222222"] =
+            "diff --git a/docs/commands.md b/docs/commands.md\n+--since\n";
+        _git.Diffs["1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 --stat"] =
+            " docs/commands.md | 1 +\n";
+
+        _server = new DashboardServer(_journal, _git);
 
         var started = _server.Start(0);
 
@@ -213,6 +221,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         (await GetAsync("/api/runs/r")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
         (await GetAsync("/api/runs/r/events")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
         (await GetAsync("/api/runs/r/documents")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
+        (await GetAsync("/api/runs/r/stream/lead")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
 
         // And the one underneath it, which is a name rather than a fixed word.
         (await GetAsync("/api/runs/r/documents/brief-lead.json")).StatusCode
@@ -367,6 +376,103 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Everything_a_node_did_comes_back_as_steps()
+    {
+        var root = Papers();
+        var run = Path.Combine(root, "20260916-1200-aaaa");
+
+        File.WriteAllLines(NodeStream.PathFor(run, "lead"),
+        [
+            NodeStream.Line(new NodeStep(DateTimeOffset.UtcNow, "tool", "Read", "docs/teams.md")),
+            NodeStream.Line(new NodeStep(DateTimeOffset.UtcNow, "said", null, null, "Starting on the docs.")),
+        ]);
+
+        var json = JsonDocument.Parse(
+            await (await GetAsync("/api/runs/20260916-1200-aaaa/stream/lead")).Content.ReadAsStringAsync());
+
+        var steps = json.RootElement.GetProperty("steps");
+
+        steps.GetArrayLength().Should().Be(2);
+        steps[0].GetProperty("tool").GetString().Should().Be("Read");
+        steps[1].GetProperty("text").GetString().Should().Contain("Starting");
+    }
+
+    [Fact]
+    public async Task A_node_with_no_stream_says_so_rather_than_showing_an_empty_one()
+    {
+        Papers();
+
+        var answer = await GetAsync("/api/runs/20260916-1200-aaaa/stream/lead");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("recorded no stream");
+    }
+
+    [Fact]
+    public async Task What_a_node_changed_comes_back_as_a_patch_and_a_summary()
+    {
+        var json = JsonDocument.Parse(
+            await (await GetAsync("/api/runs/20260916-1200-aaaa/diff/lead")).Content.ReadAsStringAsync());
+
+        json.RootElement.GetProperty("branch").GetString().Should().Be("teams-r-lead");
+        json.RootElement.GetProperty("summary").GetString().Should().Contain("docs/commands.md");
+        json.RootElement.GetProperty("patch").GetString().Should().Contain("+--since");
+
+        // Measured from where the branch started, which the run wrote down.
+        json.RootElement.GetProperty("from").GetString()
+            .Should().Be("1111111111111111111111111111111111111111");
+    }
+
+    [Fact]
+    public async Task A_node_nobody_has_is_a_404_rather_than_an_empty_patch()
+    {
+        (await GetAsync("/api/runs/20260916-1200-aaaa/diff/nobody")).StatusCode
+            .Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_dashboard_with_no_git_says_so_rather_than_showing_nothing()
+    {
+        // The journal is readable on a machine whose repository has since
+        // moved, and most of the page still works there. What a node changed
+        // is the one thing that needs the repository itself.
+        using var bare = new DashboardServer(_journal);
+
+        var started = bare.Start(0);
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        using var stopping = new CancellationTokenSource();
+
+        _ = bare.ListenAsync(stopping.Token);
+
+        var root = bare.Address[..bare.Address.IndexOf('?', StringComparison.Ordinal)];
+
+        var answer = await _client.GetAsync(new Uri(
+            root.TrimEnd('/') + "/api/runs/20260916-1200-aaaa/diff/lead?token=" + bare.Token));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("run git");
+
+        await stopping.CancelAsync();
+    }
+
+    [Fact]
+    public async Task Asking_what_a_node_changed_is_reading_and_needs_the_token()
+    {
+        (await GetAsync("/api/runs/20260916-1200-aaaa/diff/lead", withToken: false))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/20260916-1200-aaaa/diff/lead?token=" + _server.Token),
+            new StringContent(string.Empty));
+
+        // Never routed as a verb: a change routed as a read is a change that
+        // skipped the check, and the other way round is only a 405.
+        answer.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
+    }
+
+    [Fact]
     public async Task Asking_for_the_papers_of_a_run_nobody_has_is_a_404()
     {
         (await GetAsync("/api/runs/no-such-run/documents")).StatusCode
@@ -374,7 +480,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_detail_pane_has_three_depths_and_says_which_key_reaches_each()
+    public async Task The_detail_pane_has_four_depths_and_says_which_key_reaches_each()
     {
         // A tab strip, so what a screen reader announces matches what the page
         // looks like: three tabs, one selected, three panels below them.
@@ -382,7 +488,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         text.Should().Contain("""<div class="depths" role="tablist" aria-label="How much detail">""");
 
-        foreach (var tab in new[] { "messages", "turns", "papers" })
+        foreach (var tab in new[] { "messages", "turns", "papers", "changes" })
         {
             // With the role on it, not merely near it: taking role="tab" off one
             // of them left every one of these assertions passing.
@@ -392,13 +498,14 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         // Written on the tabs rather than left for somebody to discover. A
         // shortcut nobody is told about is a shortcut nobody uses.
-        text.Should().Contain("<kbd>1</kbd>").And.Contain("<kbd>2</kbd>").And.Contain("<kbd>3</kbd>");
+        text.Should().Contain("<kbd>1</kbd>").And.Contain("<kbd>2</kbd>")
+            .And.Contain("<kbd>3</kbd>").And.Contain("<kbd>4</kbd>");
 
         // Two of the three are not the selected one. Counted on "false"
         // rather than on "true" because the styles select on "true" as well,
         // and a test that counts those is counting its own stylesheet.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-selected=\"false\"")
-            .Should().HaveCount(2);
+            .Should().HaveCount(3);
     }
 
     [Fact]
@@ -417,6 +524,134 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         text[refresh..].Should().NotContain("addEventListener",
             "nothing refresh does should leave anything behind it");
+    }
+
+    [Fact]
+    public async Task A_run_carries_what_it_is_costing_and_not_only_what_it_has_cost()
+    {
+        var json = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync());
+
+        var numbers = json.RootElement.GetProperty("runs")[0].GetProperty("numbers");
+
+        // The rate in words as well as the figure, because the figure is often
+        // a fraction of a penny and nobody has a feel for those.
+        numbers.GetProperty("money").GetProperty("rate").GetString()
+            .Should().MatchRegex(@"^\$\d+\.\d\d an? (minute|hour)$");
+
+        numbers.GetProperty("rounds").ValueKind.Should().Be(JsonValueKind.Array);
+        numbers.GetProperty("nodes").ValueKind.Should().Be(JsonValueKind.Array);
+        numbers.GetProperty("trouble").GetProperty("any").ValueKind
+            .Should().BeOneOf(JsonValueKind.True, JsonValueKind.False);
+    }
+
+    private Task<HttpResponseMessage> StartAsync(string body, bool withToken = true) =>
+        _client.PostAsync(
+            new Uri(_root + "api/start" + (withToken ? "?token=" + _server.Token : string.Empty)),
+            new StringContent(body, System.Text.Encoding.UTF8, "application/json"));
+
+    [Fact]
+    public async Task Starting_a_team_types_the_command_somebody_would_have_typed()
+    {
+        StartRequest? asked = null;
+
+        _server.Begin = (request, _) =>
+        {
+            asked = request;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await StartAsync(
+            """{"team":"docs-crew","goal":"check the docs","project":"loadout-cli","rounds":3,"autonomy":"supervised"}""");
+
+        // Accepted rather than done: a team run takes twenty minutes, and a
+        // browser holding a request open that long has already given up.
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked!.Team.Should().Be("docs-crew");
+        asked.Goal.Should().Be("check the docs");
+        asked.Project.Should().Be("loadout-cli");
+        asked.Rounds.Should().Be(3);
+        asked.Autonomy.Should().Be("supervised");
+    }
+
+    [Fact]
+    public async Task Starting_a_team_needs_the_token()
+    {
+        _server.Begin = (_, _) => Task.FromResult(OperationResult.Ok());
+
+        (await StartAsync("""{"team":"docs-crew","goal":"go"}""", withToken: false))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Starting_a_team_is_never_a_GET()
+    {
+        // A link somebody could be sent, or a page could prefetch, must not
+        // start something that spends money.
+        _server.Begin = (_, _) => Task.FromResult(OperationResult.Ok());
+
+        (await GetAsync("/api/start")).StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
+    }
+
+    [Fact]
+    public async Task A_run_with_nothing_to_do_is_refused_before_anything_is_typed()
+    {
+        var typed = false;
+
+        _server.Begin = (_, _) =>
+        {
+            typed = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        (await StartAsync("""{"team":"docs-crew","goal":"   "}""")).StatusCode
+            .Should().Be(HttpStatusCode.BadRequest);
+
+        typed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Whatever_the_command_line_says_about_it_reaches_the_page()
+    {
+        // Nothing here knows what a team is. Whether that one exists is the
+        // command line's question, and its answer is the useful one.
+        _server.Begin = (_, _) => Task.FromResult(
+            OperationResult.Fail("There is no team called 'docs-crew'. Run: loadout team list"));
+
+        var answer = await StartAsync("""{"team":"docs-crew","goal":"go"}""");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("loadout team list");
+    }
+
+    [Fact]
+    public async Task A_dashboard_that_cannot_run_commands_says_so_rather_than_failing_quietly()
+    {
+        // The fixture's server has no Begin unless a test sets one, which is
+        // the same state a dashboard started on its own is in.
+        var answer = await StartAsync("""{"team":"docs-crew","goal":"go"}""");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("command line");
+    }
+
+    [Fact]
+    public async Task The_page_offers_a_way_to_start_one()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // Folded away, because the page is for watching what is already going
+        // and a form that is always open is one somebody fills in by accident.
+        text.Should().Contain("<details class=\"start\">");
+        text.Should().Contain("<summary>Start a team</summary>");
+
+        // Every field the command line takes, and nothing it does not.
+        foreach (var field in new[] { "start-team", "start-goal", "start-project", "start-rounds", "start-autonomy" })
+        {
+            text.Should().Contain($"id=\"{field}\"");
+        }
     }
 
     [Fact]
@@ -459,8 +694,8 @@ public sealed class DashboardServerTests : IAsyncLifetime
     {
         private static readonly string[] Lines =
         [
-            """{"at":"2026-09-16T12:00:00+00:00","run":"r","node":null,"kind":"run.started","data":{"team":"iterating-project","goal":"Add --since","autonomy":"autonomous","rounds":5}}""",
-            """{"at":"2026-09-16T12:00:02+00:00","run":"r","node":"lead","kind":"node.launched","data":{"role":"role.project-lead"}}""",
+            """{"at":"2026-09-16T12:00:00+00:00","run":"r","node":null,"kind":"run.started","data":{"team":"iterating-project","goal":"Add --since","autonomy":"autonomous","rounds":5,"path":"D:/repo"}}""",
+            """{"at":"2026-09-16T12:00:02+00:00","run":"r","node":"lead","kind":"node.launched","data":{"role":"role.project-lead","worktree":"teams-r-lead","base":"1111111111111111111111111111111111111111"}}""",
             """{"at":"2026-09-16T12:00:20+00:00","run":"r","node":"lead","kind":"node.doing","data":{"doing":"Read docs/commands.md"}}""",
         ];
 

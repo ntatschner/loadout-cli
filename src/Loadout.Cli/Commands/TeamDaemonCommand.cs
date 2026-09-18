@@ -131,7 +131,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         }
 
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        using var server = settings.NoDashboard ? null : new DashboardServer(_journal);
+        using var server = settings.NoDashboard ? null : new DashboardServer(_journal, _git);
 
         if (server is not null)
         {
@@ -164,6 +164,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // somebody would have typed. The page decides nothing; this maps
             // its ask onto a command line and the parser does the rest.
             server.Act = (action, ct) => ActedOnAsync(action, output, ct);
+
+            // And starting one, which is the same rule with a longer wait: the
+            // page asks, this types "team run", and the parser decides whether
+            // any of it means anything.
+            server.Begin = (asking, ct) => BeganAsync(asking, output, ct);
 
             _address = server.Address;
 
@@ -266,6 +271,83 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             : OperationResult.Fail(
                 $"The run ended with exit code {code}. Read it with: loadout team log",
                 ExitCode.GeneralFailure);
+    }
+
+    /// <summary>
+    /// Starts a team because somebody asked from the page.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Answered as soon as the run is under way rather than when it finishes.
+    /// A team run takes twenty minutes on a good day and a browser holding a
+    /// request open that long has already given up; the run appears in the
+    /// list within a few seconds, which is the answer somebody wanted.
+    /// </para>
+    /// <para>
+    /// Which means a failure has nowhere to be reported to. It is written to
+    /// the daemon's own output, where the schedules report theirs, and the run
+    /// that did not start is simply not in the list - which is the same thing
+    /// somebody sees when a schedule fails, rather than a new kind of silence.
+    /// </para>
+    /// </remarks>
+    private Task<OperationResult> BeganAsync(
+        StartRequest asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        var arguments = new List<string> { asking.Team, asking.Goal };
+
+        if (asking.Project is { Length: > 0 } project)
+        {
+            arguments.Add("--project");
+            arguments.Add(project);
+        }
+
+        if (asking.Rounds is { } rounds and > 0)
+        {
+            arguments.Add("--rounds");
+            arguments.Add(rounds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (asking.Autonomy is { Length: > 0 } autonomy)
+        {
+            arguments.Add("--autonomy");
+            arguments.Add(autonomy);
+        }
+
+        arguments.Add("--non-interactive");
+
+        output.WriteLine(
+            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"team run {Markup.Escape(asking.Team)}"
+            + (asking.Project is { Length: > 0 } on ? $" on {Markup.Escape(on)}" : string.Empty));
+
+        // Not awaited on purpose, and not left to chance either: whatever it
+        // ends up doing is written where the schedules write theirs.
+        _ = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    var code = await _commands.RunAsync("team run", arguments, ct).ConfigureAwait(false);
+
+                    if (code != (int)ExitCode.Success)
+                    {
+                        output.WriteLine(
+                            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                            + $"that run ended with exit code {code}.");
+                    }
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException)
+                {
+                    output.WriteLine(
+                        $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                        + $"that run could not be started: {Markup.Escape(ex.Message)}");
+                }
+            },
+            CancellationToken.None);
+
+        return Task.FromResult(OperationResult.Ok());
     }
 
     /// <summary>

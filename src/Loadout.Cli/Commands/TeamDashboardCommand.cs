@@ -34,17 +34,20 @@ namespace Loadout.Cli.Commands;
 public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Settings>
 {
     private readonly IRunJournal _journal;
+    private readonly Loadout.Core.Git.IGitManager _git;
     private readonly IAnsiConsole _console;
     private readonly IApplicationLauncher _opener;
     private readonly ReadingProfile _reading;
 
     public TeamDashboardCommand(
         IRunJournal journal,
+        Loadout.Core.Git.IGitManager git,
         IAnsiConsole console,
         IApplicationLauncher opener,
         ReadingProfile reading)
     {
         _journal = journal;
+        _git = git;
         _console = console;
         _opener = opener;
         _reading = reading;
@@ -113,7 +116,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
 
         var output = new CommandOutput(_console, settings);
 
-        using var server = new DashboardServer(_journal);
+        using var server = new DashboardServer(_journal, _git);
 
         if (settings.DryRun)
         {

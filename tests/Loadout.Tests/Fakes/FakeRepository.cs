@@ -158,6 +158,24 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default) =>
         throw new NotSupportedException("a team run pushes nothing");
 
+    /// <summary>What a branch resolves to here, when a test has said.</summary>
+    public Dictionary<string, string> Commits { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>What a diff between two commits looks like here, by "from..to".</summary>
+    public Dictionary<string, string> Diffs { get; } = new(StringComparer.Ordinal);
+
+    public Task<OperationResult<string>> ResolveAsync(
+        string repositoryPath, string reference, CancellationToken ct = default) =>
+        Task.FromResult(Commits.TryGetValue(reference, out var commit)
+            ? OperationResult<string>.Ok(commit)
+            : OperationResult<string>.Fail($"Nothing in this repository is called '{reference}'."));
+
+    public Task<OperationResult<string>> DiffAsync(
+        string repositoryPath, string from, string to, bool summary = false, CancellationToken ct = default) =>
+        Task.FromResult(Diffs.TryGetValue($"{from}..{to}" + (summary ? " --stat" : string.Empty), out var diff)
+            ? OperationResult<string>.Ok(diff)
+            : OperationResult<string>.Ok(string.Empty));
+
     public Task<OperationResult<IReadOnlyList<CommitSummary>>> ListCommitsAsync(
         string repositoryPath, DateTimeOffset since, CancellationToken ct = default) =>
         Task.FromResult(OperationResult<IReadOnlyList<CommitSummary>>.Ok([]));

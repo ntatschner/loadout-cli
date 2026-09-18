@@ -141,6 +141,41 @@ public interface IGitManager
         string repositoryPath,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// The commit a name points at, or a failure if nothing does.
+    /// </summary>
+    /// <remarks>
+    /// A branch name is not a commit: it moves, and it can be deleted out from
+    /// under whoever wrote it down. Recording what it pointed at, at the moment
+    /// it mattered, is what makes a diff still mean the same thing a week
+    /// later.
+    /// </remarks>
+    Task<OperationResult<string>> ResolveAsync(
+        string repositoryPath,
+        string reference,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// What changed between two commits.
+    /// </summary>
+    /// <param name="repositoryPath">Any working tree of the repository.</param>
+    /// <param name="from">Where to measure from.</param>
+    /// <param name="to">Where to measure to.</param>
+    /// <param name="summary">The file-by-file summary rather than the patch.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// Two commits rather than two branch names, and two dots rather than
+    /// three. What a node produced is what it did to the commit it started
+    /// from, and that is still true after its branch has been merged, renamed
+    /// or deleted - which a diff against whatever HEAD is now is not.
+    /// </remarks>
+    Task<OperationResult<string>> DiffAsync(
+        string repositoryPath,
+        string from,
+        string to,
+        bool summary = false,
+        CancellationToken ct = default);
+
     /// <summary>Pushes the current branch to its upstream.</summary>
     Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default);
 

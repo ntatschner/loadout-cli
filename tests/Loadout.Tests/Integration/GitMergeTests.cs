@@ -79,6 +79,88 @@ public sealed class GitMergeTests : IAsyncLifetime
         return result.Value!.StandardOutput;
     }
 
+    [Fact]
+    public async Task What_git_says_comes_back_as_git_said_it()
+    {
+        // Nothing to do with merging, and here because this is where real git
+        // runs. An em dash, written and read back: decoded with the console's
+        // own code page - which is what .NET does unless told otherwise, and on
+        // Windows is a legacy one - it comes back as three characters of
+        // nonsense. That was true of every non-ASCII character in anything git
+        // ever said: commit messages, paths, and every line of a patch.
+        await GitAsync("commit", "--allow-empty", "--message", "it reads \u2014 and it acts");
+
+        var said = await GitAsync("log", "-1", "--format=%s");
+
+        said.Should().Contain("it reads \u2014 and it acts");
+        said.Should().NotContain("\u00d4\u00c7\u00f6", "that is the em dash read as a legacy code page");
+    }
+
+    [Fact]
+    public async Task What_changed_between_two_commits_comes_back_as_a_patch()
+    {
+        var was = await GitAsync("rev-parse", "HEAD");
+
+        await File.WriteAllTextAsync(Path.Combine(_repository, "README.md"), "one\ntwo\n");
+        await GitAsync("add", ".");
+        await GitAsync("commit", "--message", "a second line");
+
+        var now = await GitAsync("rev-parse", "HEAD");
+
+        var summary = await _git.DiffAsync(_repository, was.Trim(), now.Trim(), summary: true);
+        var patch = await _git.DiffAsync(_repository, was.Trim(), now.Trim());
+
+        summary.Succeeded.Should().BeTrue(summary.Error);
+        summary.Value.Should().Contain("README.md");
+
+        patch.Succeeded.Should().BeTrue(patch.Error);
+        patch.Value.Should().Contain("+two");
+    }
+
+    [Fact]
+    public async Task A_patch_carrying_a_character_git_did_not_invent_arrives_as_that_character()
+    {
+        // An em dash, written as UTF-8 because that is what everything in this
+        // repository is. Read back through a Windows console's own code page it
+        // becomes three characters of nonsense, which is what a patch full of
+        // prose looked like on the dashboard before anybody checked: every
+        // dash, quote and accent in the docs came out mangled.
+        var was = await GitAsync("rev-parse", "HEAD");
+
+        await File.WriteAllTextAsync(
+            Path.Combine(_repository, "README.md"),
+            "one\nit reads \u2014 and it acts\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+        await GitAsync("add", ".");
+        await GitAsync("commit", "--message", "prose");
+
+        var now = await GitAsync("rev-parse", "HEAD");
+        var patch = await _git.DiffAsync(_repository, was.Trim(), now.Trim());
+
+        patch.Succeeded.Should().BeTrue(patch.Error);
+        patch.Value.Should().Contain("it reads \u2014 and it acts");
+        patch.Value.Should().NotContain("\u00d4\u00c7\u00f6", "that is the em dash read as a legacy code page");
+    }
+
+    [Fact]
+    public async Task A_name_that_matches_nothing_is_a_failure_rather_than_itself()
+    {
+        var read = await _git.ResolveAsync(_repository, "no-such-branch");
+
+        read.Failed.Should().BeTrue("echoing the name back would look like a commit");
+    }
+
+    [Fact]
+    public async Task A_branch_resolves_to_the_commit_it_points_at()
+    {
+        var head = (await GitAsync("rev-parse", "HEAD")).Trim();
+        var read = await _git.ResolveAsync(_repository, "main");
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value.Should().Be(head);
+    }
+
     /// <summary>A branch with one commit on it, made in a worktree so the repository's own tree is untouched.</summary>
     [Fact]
     public async Task A_run_can_make_its_worktree_on_a_repository_whose_branch_is_called_teams()
