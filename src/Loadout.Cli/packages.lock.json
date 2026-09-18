@@ -4,11 +4,11 @@
     "net10.0": {
       "Microsoft.Extensions.DependencyInjection": {
         "type": "Direct",
-        "requested": "[10.0.11, )",
-        "resolved": "10.0.11",
-        "contentHash": "PSmotV19c7E3lKed++uYo1kSiXFI+uTl37CBSrhq+CfLC3FCHjG7R91+xPnNehQfHS1b0Tzo/CCLPWH3qaEheg==",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "lXyK2O5GoYvfxW8eCFcD16JFbcoSTM1sJkAM0UHS1jZyl9NYMW64Tqm6OQFT0IDBjZi+xHt95/Zg+nxZhGFhZg==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12"
         }
       },
       "Microsoft.NET.ILLink.Tasks": {
@@ -254,7 +254,7 @@
       "loadout.agents": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Core": "[0.33.1, )",
+          "Loadout.Core": "[0.33.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
@@ -262,8 +262,8 @@
       "loadout.core": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.33.1, )",
-          "Loadout.Platform": "[0.33.1, )",
+          "Loadout.Models": "[0.33.3, )",
+          "Loadout.Platform": "[0.33.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
           "YamlDotNet": "[16.3.0, )"
@@ -275,7 +275,7 @@
       "loadout.platform": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.33.1, )",
+          "Loadout.Models": "[0.33.3, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
@@ -283,7 +283,7 @@
       "loadout.tui": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Agents": "[0.33.1, )",
+          "Loadout.Agents": "[0.33.3, )",
           "Spectre.Console": "[0.57.2, )",
           "Terminal.Gui": "[2.5.0, )"
         }
