@@ -212,6 +212,11 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         (await GetAsync("/api/runs/r")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
         (await GetAsync("/api/runs/r/events")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
+        (await GetAsync("/api/runs/r/documents")).StatusCode.Should().NotBe(HttpStatusCode.MethodNotAllowed);
+
+        // And the one underneath it, which is a name rather than a fixed word.
+        (await GetAsync("/api/runs/r/documents/brief-lead.json")).StatusCode
+            .Should().NotBe(HttpStatusCode.MethodNotAllowed);
     }
 
     [Fact]
@@ -287,6 +292,133 @@ public sealed class DashboardServerTests : IAsyncLifetime
         run.GetProperty("nodes")[0].GetProperty("doing").GetString().Should().Be("Read docs/commands.md");
     }
 
+    /// <summary>Gives the stub a real directory with the papers named in it.</summary>
+    private string Papers(params string[] names)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "loadout-dash-" + Guid.NewGuid().ToString("N")[..8]);
+        var run = Path.Combine(root, "20260916-1200-aaaa");
+
+        Directory.CreateDirectory(run);
+
+        foreach (var name in names)
+        {
+            File.WriteAllText(Path.Combine(run, name), """{"said":"something"}""");
+        }
+
+        _journal.Root = root;
+
+        return root;
+    }
+
+    [Fact]
+    public async Task What_a_run_wrote_down_is_listed_without_its_contents()
+    {
+        // The listing, not the contents. A run with eight nodes has twenty of
+        // these and most of them are not the one somebody wants.
+        Papers("brief-lead.json", "report-lead.json", "journal.jsonl");
+
+        var json = JsonDocument.Parse(
+            await (await GetAsync("/api/runs/20260916-1200-aaaa/documents")).Content.ReadAsStringAsync());
+
+        var papers = json.RootElement.GetProperty("documents");
+
+        papers.GetArrayLength().Should().Be(2, "the journal itself is not one of these");
+        papers[0].GetProperty("kind").GetString().Should().Be("brief");
+        papers[0].GetProperty("subject").GetString().Should().Be("lead");
+        papers[0].TryGetProperty("text", out _).Should().BeFalse("a listing is not twenty documents");
+    }
+
+    [Fact]
+    public async Task One_of_them_can_be_read()
+    {
+        Papers("brief-lead.json");
+
+        var json = JsonDocument.Parse(
+            await (await GetAsync("/api/runs/20260916-1200-aaaa/documents/brief-lead.json"))
+                .Content.ReadAsStringAsync());
+
+        json.RootElement.GetProperty("kind").GetString().Should().Be("brief");
+        json.RootElement.GetProperty("text").GetString().Should().Contain("something");
+    }
+
+    [Fact]
+    public async Task A_name_that_climbs_out_of_the_run_gets_nothing()
+    {
+        // The name arrives from a browser. Everything below the run's own
+        // directory is somebody's home directory.
+        Papers("brief-lead.json");
+
+        var answer = await GetAsync("/api/runs/20260916-1200-aaaa/documents/..%2F..%2Fsettings.json");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("not one of the documents");
+    }
+
+    [Fact]
+    public async Task The_papers_need_the_token_like_everything_else()
+    {
+        Papers("brief-lead.json");
+
+        (await GetAsync("/api/runs/20260916-1200-aaaa/documents", withToken: false))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        (await GetAsync("/api/runs/20260916-1200-aaaa/documents/brief-lead.json", withToken: false))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Asking_for_the_papers_of_a_run_nobody_has_is_a_404()
+    {
+        (await GetAsync("/api/runs/no-such-run/documents")).StatusCode
+            .Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task The_detail_pane_has_three_depths_and_says_which_key_reaches_each()
+    {
+        // A tab strip, so what a screen reader announces matches what the page
+        // looks like: three tabs, one selected, three panels below them.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("""<div class="depths" role="tablist" aria-label="How much detail">""");
+
+        foreach (var tab in new[] { "messages", "turns", "papers" })
+        {
+            // With the role on it, not merely near it: taking role="tab" off one
+            // of them left every one of these assertions passing.
+            text.Should().Contain($"role=\"tab\" id=\"tab-{tab}\" aria-controls=\"depth-{tab}\"");
+            text.Should().Contain($"id=\"depth-{tab}\" role=\"tabpanel\" aria-labelledby=\"tab-{tab}\"");
+        }
+
+        // Written on the tabs rather than left for somebody to discover. A
+        // shortcut nobody is told about is a shortcut nobody uses.
+        text.Should().Contain("<kbd>1</kbd>").And.Contain("<kbd>2</kbd>").And.Contain("<kbd>3</kbd>");
+
+        // Two of the three are not the selected one. Counted on "false"
+        // rather than on "true" because the styles select on "true" as well,
+        // and a test that counts those is counting its own stylesheet.
+        System.Text.RegularExpressions.Regex.Matches(text, "aria-selected=\"false\"")
+            .Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task The_preferences_are_wired_once_and_not_every_four_seconds()
+    {
+        // This sat inside refresh(), which runs every four seconds, so it
+        // added another change handler and another click handler each time.
+        // After five minutes one tick of the Sound box chimed seventy-odd
+        // times: measured in a browser at thirteen seconds, one click wrote
+        // the setting five times, and one after the fix.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        var refresh = text.IndexOf("function refresh()", StringComparison.Ordinal);
+
+        refresh.Should().BeGreaterThan(0);
+
+        text[refresh..].Should().NotContain("addEventListener",
+            "nothing refresh does should leave anything behind it");
+    }
+
     [Fact]
     public async Task A_run_nobody_has_is_a_404_rather_than_an_empty_one()
     {
@@ -349,6 +481,10 @@ public sealed class DashboardServerTests : IAsyncLifetime
                 : OperationResult<RunSummary>.Ok(RunJournal.Fold(runId, "C:/runs/" + runId, read.Value!));
         }
 
-        public string DirectoryOf(string runId) => "C:/runs/" + runId;
+        /// <summary>Where the run's papers are, when a test has written some.</summary>
+        public string? Root { get; set; }
+
+        public string DirectoryOf(string runId) =>
+            Root is null ? "C:/runs/" + runId : Path.Combine(Root, runId);
     }
 }

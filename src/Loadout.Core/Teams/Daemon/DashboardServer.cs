@@ -50,6 +50,15 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>The segments under a run that only ever read.</summary>
+    /// <remarks>
+    /// Named rather than assumed. The right default for a segment nobody has
+    /// thought about yet is "this changes something": a read routed as a change
+    /// is a 400 somebody notices, and a change routed as a read is a change
+    /// that skipped the check.
+    /// </remarks>
+    private static readonly string[] Reads = ["events", "documents"];
+
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -273,8 +282,9 @@ public sealed class DashboardServer : IDisposable
 
         var verb = rest[(slash + 1)..];
 
-        // Reading, not acting, whatever else is bolted on later.
-        return verb is "events" ? (rest[..slash], null) : (rest[..slash], verb);
+        return Reads.Contains(verb.Split('/')[0], StringComparer.Ordinal)
+            ? (rest[..slash], null)
+            : (rest[..slash], verb);
     }
 
     /// <summary>
@@ -477,11 +487,11 @@ public sealed class DashboardServer : IDisposable
 
         if (!string.Equals(request.HttpMethod, "GET", StringComparison.Ordinal))
         {
-            // Every change goes through the command line, which is the rule
-            // the launcher follows: two implementations of one behaviour drift,
-            // and the one nobody is watching drifts furthest.
+            // Everything this does change was matched further up, by name.
+            // Anything reaching here is a read, and the only thing to do with
+            // a read somebody is trying to POST to is say so.
             await WriteAsync(context, 405, "text/plain; charset=utf-8",
-                "This dashboard only reads. Run team commands from the command line.").ConfigureAwait(false);
+                "There is nothing here to change. This address only reads.").ConfigureAwait(false);
 
             return;
         }
@@ -509,6 +519,23 @@ public sealed class DashboardServer : IDisposable
             if (rest.EndsWith("/events", StringComparison.Ordinal))
             {
                 await StreamAsync(context, rest[..^"/events".Length], ct).ConfigureAwait(false);
+
+                return;
+            }
+
+            if (rest.EndsWith("/documents", StringComparison.Ordinal))
+            {
+                await PapersAsync(context, rest[..^"/documents".Length]).ConfigureAwait(false);
+
+                return;
+            }
+
+            if (rest.IndexOf("/documents/", StringComparison.Ordinal) is var cut && cut > 0)
+            {
+                await PaperAsync(
+                    context,
+                    rest[..cut],
+                    Uri.UnescapeDataString(rest[(cut + "/documents/".Length)..])).ConfigureAwait(false);
 
                 return;
             }
@@ -614,9 +641,88 @@ public sealed class DashboardServer : IDisposable
             node.Denials,
             node.Doing,
             node.Said,
+            node.Model,
             tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
         }),
+
+        // Every exchange, one by one, rather than only each node's total. Two
+        // nodes that cost the same are the same number and can be quite
+        // different problems, and the totals cannot tell them apart.
+        turns = run.Turns.Select(turn => new
+        {
+            at = turn.At,
+            turn.Node,
+            turn.Round,
+            turn.Attempt,
+            exchanges = turn.Exchanges,
+            cost = turn.CostUsd,
+            turn.Denials,
+            turn.Completed,
+            turn.Status,
+            turn.Outcome,
+        }),
     };
+
+    /// <summary>What a run wrote down beside its journal, listed.</summary>
+    /// <remarks>
+    /// The listing, not the contents. A run with eight nodes has twenty of
+    /// these and most of them are not the one somebody wants.
+    /// </remarks>
+    private async Task PapersAsync(HttpListenerContext context, string runId)
+    {
+        var directory = _journal.DirectoryOf(runId);
+
+        if (!Directory.Exists(directory))
+        {
+            await WriteAsync(context, 404, "application/json; charset=utf-8",
+                JsonSerializer.Serialize(new { error = $"No run called {runId}." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var documents = RunDocuments.In(directory).Select(one => new
+        {
+            one.Name,
+            one.Kind,
+            one.Subject,
+            one.Bytes,
+            one.Written,
+        });
+
+        await WriteAsync(context, 200, "application/json; charset=utf-8",
+            JsonSerializer.Serialize(new { documents }, Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>One of them, as text.</summary>
+    /// <remarks>
+    /// The name is checked against the shape a run writes before it is joined
+    /// to anything, so a name carrying a separator never becomes a path at all.
+    /// </remarks>
+    private async Task PaperAsync(HttpListenerContext context, string runId, string name)
+    {
+        var read = RunDocuments.Read(_journal.DirectoryOf(runId), name);
+
+        if (read.Failed)
+        {
+            await WriteAsync(
+                context,
+                read.ExitCode == ExitCode.InvalidArguments ? 400 : 404,
+                "application/json; charset=utf-8",
+                JsonSerializer.Serialize(new { error = read.Error }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var (kind, subject) = RunDocuments.Describe(name);
+
+        await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(new
+        {
+            name,
+            kind,
+            subject,
+            text = read.Value,
+        }, Json)).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// The journal as it arrives, one event per message.

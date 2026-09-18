@@ -205,12 +205,39 @@ there is one account of what happened rather than three that can disagree.
 - `loadout team status` — where each node got to, what it is doing now, what it
   cost.
 - `loadout team dashboard` — a page on this machine, live, at a loopback address
-  behind a token that changes every start. It reads and never writes.
+  behind a token that changes every start. It watches and it acts: answering a
+  gate, holding a run, stopping one and sending the lead a message are all
+  buttons on it. Nothing there implements any of that — each button runs the
+  command you would have typed, so there is one behaviour rather than two that
+  drift.
 - **Tools → Team runs…** in the launcher — the same, in the terminal UI. See
   [The launcher](launcher.md).
 
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
+
+### Three depths of one run
+
+Open a run and the pane on the right has three tabs, reached with <kbd>1</kbd>,
+<kbd>2</kbd> and <kbd>3</kbd> from anywhere on the page.
+
+- **What it said** — the journal as it arrives. A line that repeats becomes one
+  line and a count, so a node reading forty files does not push what mattered
+  off the top.
+- **What it cost** — every exchange one by one: which round, which node, which
+  model, how many messages, what was refused, what it cost, and what the report
+  came back as. Two nodes that cost the same are the same number and can be
+  quite different problems; the totals cannot tell them apart.
+- **The papers** — what each node was *told* to do and what it said it did, in
+  the words the model actually saw. The run's own summing-up first, then each
+  node's brief beside its report. This is where to look when a node did
+  something reasonable for a brief nobody meant to give it.
+
+Two things about the papers. Names are matched against the shape a run writes
+before they are ever joined to a path, so a name from a browser cannot climb
+out of the run's own directory. And everything is redacted on the way out — if
+a document cannot be checked in a reasonable time, it is not shown at all,
+rather than shown unchecked.
 
 ### What needs you
 

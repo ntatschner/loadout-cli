@@ -160,6 +160,82 @@
 
   .log p { margin: 0 0 0.2rem; }
 
+  /* How many times in a row the same line came back, rather than the same
+     line forty times. */
+  .again { color: var(--quiet); font-weight: 700; }
+
+  /*
+    Three depths of the same run: what it cost, what it said, and the papers.
+    A tab strip rather than three sections down the page, because the whole
+    point of them is that you are looking at one at a time.
+  */
+  .depths { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.75rem 0 0; }
+
+  .depths button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    border-radius: 0.3rem 0.3rem 0 0;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+  }
+
+  /* Bold and underlined as well as coloured, because which tab you are on is
+     not something to say in colour alone. */
+  .depths button[aria-selected="true"] {
+    font-weight: 700;
+    background: var(--card);
+    box-shadow: inset 0 -3px 0 var(--going);
+  }
+
+  .depths kbd {
+    font: inherit;
+    font-size: 0.8em;
+    color: var(--quiet);
+    border: 1px solid var(--line);
+    border-radius: 0.2rem;
+    padding: 0 0.25rem;
+    margin-left: 0.4rem;
+  }
+
+  .turns { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  .turns th, .turns td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--line); }
+  .turns td.money, .turns th.money { text-align: right; font-variant-numeric: tabular-nums; }
+  .turns caption { text-align: left; color: var(--quiet); padding: 0 0 0.5rem; }
+
+  .papers { list-style: none; margin: 0 0 0.75rem; padding: 0; }
+  .papers li { padding: 0.2rem 0; }
+
+  .papers button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .papers button[aria-pressed="true"] { font-weight: 700; box-shadow: inset 0 -3px 0 var(--going); }
+
+  .paper {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    padding: 0.75rem 1rem;
+    max-height: 22rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.85rem;
+  }
+
   /* A person who asked their machine for less movement gets none. */
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -168,7 +244,8 @@
   /* And one using a forced-colours mode keeps their own, with the borders
      still drawn. */
   @media (forced-colors: active) {
-    .run, .log, .run button { border: 1px solid CanvasText; }
+    .run, .log, .run button, .depths button, .papers button, .paper { border: 1px solid CanvasText; }
+    .depths button[aria-selected="true"], .papers button[aria-pressed="true"] { border: 3px solid CanvasText; }
     .state { color: CanvasText; }
   }
 </style>
@@ -217,7 +294,22 @@
       <button type="button" id="send">Send</button>
     </div>
 
-    <div class="log" id="log" role="log" aria-labelledby="detail-heading"></div>
+    <div class="depths" role="tablist" aria-label="How much detail">
+      <button type="button" role="tab" id="tab-messages" aria-controls="depth-messages"
+        aria-selected="true">What it said <kbd>1</kbd></button>
+      <button type="button" role="tab" id="tab-turns" aria-controls="depth-turns"
+        aria-selected="false" tabindex="-1">What it cost <kbd>2</kbd></button>
+      <button type="button" role="tab" id="tab-papers" aria-controls="depth-papers"
+        aria-selected="false" tabindex="-1">The papers <kbd>3</kbd></button>
+    </div>
+
+    <div id="depth-messages" role="tabpanel" aria-labelledby="tab-messages" tabindex="0">
+      <div class="log" id="log" role="log" aria-labelledby="detail-heading"></div>
+    </div>
+
+    <div id="depth-turns" role="tabpanel" aria-labelledby="tab-turns" tabindex="0" hidden></div>
+
+    <div id="depth-papers" role="tabpanel" aria-labelledby="tab-papers" tabindex="0" hidden></div>
   </section>
 
   </div>
@@ -235,6 +327,11 @@
   var log = document.getElementById("log");
   var stream = null;
   var watching = null;
+
+  // The run the detail pane is showing, kept as an object rather than an id
+  // so the depths can be drawn from it without asking the server again. It is
+  // replaced on every refresh, so what the depths draw stays live.
+  var opened = null;
 
   function say(text) {
     status.textContent = text;
@@ -503,6 +600,10 @@
     }
 
     runs.forEach(function (run) {
+      if (run.id === watching) {
+        keepUp(run);
+      }
+
       var how = state(run);
       var item = document.createElement("li");
       item.className = "run";
@@ -603,6 +704,37 @@
   // What a run has stopped to ask, with the buttons to answer it. Rebuilt
   // whenever the runs are read again, so an answer given anywhere - here, or
   // at a terminal - takes the question off the page.
+  // What the gates looked like when they were last drawn, by their ids.
+  var gatesShown = null;
+
+  // How many exchanges the cost table was built from.
+  var turnsShown = -1;
+
+  /*
+    The detail pane showing whatever was true when it was opened is a pane that
+    lies within four seconds. It follows instead - but only redraws what has
+    actually changed, because rebuilding a gate's buttons under somebody who
+    has just tabbed to one takes their focus away, every four seconds, for as
+    long as the question is open.
+  */
+  function keepUp(run) {
+    opened = run;
+
+    var gates = (run.gates || []).map(function (gate) { return gate.id; }).join("|");
+
+    if (gates !== gatesShown) {
+      gatesShown = gates;
+      drawGates(run);
+    }
+
+    var turns = (run.turns || []).length;
+
+    if (depth === 1 && turns !== turnsShown) {
+      turnsShown = turns;
+      drawTurns();
+    }
+  }
+
   function drawGates(run) {
     var box = document.getElementById("gates");
     box.textContent = "";
@@ -690,15 +822,310 @@
     };
   }
 
+  // The last line drawn, so a line that repeats becomes a count rather than
+  // another row.
+  var lastLine = null;
+  var lastSaid = null;
+  var lastSame = 1;
+
+  /*
+    Three depths of one run, in the order somebody reaches for them: what it
+    said, then what that cost, then the papers it was working from. LangSmith
+    splits a trace the same way and for the same reason - the trajectory is
+    what you read, the numbers are what you check, and the raw documents are
+    where you go when neither explains it.
+  */
+  var depths = [
+    { tab: "tab-messages", panel: "depth-messages" },
+    { tab: "tab-turns", panel: "depth-turns" },
+    { tab: "tab-papers", panel: "depth-papers" }
+  ];
+
+  var depth = 0;
+
+  function showDepth(which, move) {
+    depth = which;
+
+    depths.forEach(function (one, i) {
+      var tab = document.getElementById(one.tab);
+      var panel = document.getElementById(one.panel);
+
+      tab.setAttribute("aria-selected", i === which ? "true" : "false");
+
+      // One stop in the tab order for the whole strip, and the arrow keys
+      // move within it. Three tabs are three stops otherwise, on the way to
+      // everything below them.
+      tab.tabIndex = i === which ? 0 : -1;
+      panel.hidden = i !== which;
+    });
+
+    if (move) {
+      document.getElementById(depths[which].tab).focus();
+    }
+
+    if (which === 1) {
+      turnsShown = (opened && opened.turns ? opened.turns.length : 0);
+      drawTurns();
+    }
+
+    if (which === 2) { drawPapers(); }
+  }
+
+  function money(amount) {
+    return "$" + (Math.round((amount || 0) * 100) / 100).toFixed(2);
+  }
+
+  // The third argument shades a column of figures, not the money() above it.
+  function cell(row, text, figures) {
+    var td = document.createElement("td");
+
+    td.textContent = text;
+
+    if (figures) { td.className = "money"; }
+
+    row.appendChild(td);
+
+    return td;
+  }
+
+  function drawTurns() {
+    var panel = document.getElementById("depth-turns");
+
+    panel.textContent = "";
+
+    var turns = (opened && opened.turns) || [];
+
+    if (!turns.length) {
+      var none = document.createElement("p");
+
+      none.textContent = opened && opened.running
+        ? "Nothing has come back yet."
+        : "This run recorded no exchanges.";
+
+      panel.appendChild(none);
+
+      return;
+    }
+
+    var table = document.createElement("table");
+
+    table.className = "turns";
+
+    var caption = document.createElement("caption");
+    var spent = turns.reduce(function (sum, turn) { return sum + (turn.cost || 0); }, 0);
+
+    caption.textContent = turns.length + " exchange" + (turns.length === 1 ? "" : "s")
+      + ", " + money(spent) + " in all";
+
+    table.appendChild(caption);
+
+    var head = document.createElement("tr");
+
+    ["Round", "Node", "Model", "Messages", "Refused", "Cost", "Came back as"]
+      .forEach(function (name, i) {
+        var th = document.createElement("th");
+
+        th.scope = "col";
+        th.textContent = name;
+
+        if (i === 5) { th.className = "money"; }
+
+        head.appendChild(th);
+      });
+
+    var headRow = document.createElement("thead");
+
+    headRow.appendChild(head);
+    table.appendChild(headRow);
+
+    var body = document.createElement("tbody");
+
+    turns.forEach(function (turn) {
+      var row = document.createElement("tr");
+      var about = (opened.nodes || []).filter(function (n) { return n.node === turn.node; })[0];
+
+      cell(row, turn.round || "-");
+      cell(row, turn.node + (turn.attempt > 1 ? " (try " + turn.attempt + ")" : ""));
+
+      // Null is a real answer here and not a missing one: it means whatever
+      // the agent picks for itself.
+      cell(row, (about && about.model) || "its own choice");
+      cell(row, turn.exchanges);
+      cell(row, turn.denials || "");
+      cell(row, money(turn.cost), true);
+
+      cell(row, !turn.completed
+        ? "did not finish"
+        : (turn.outcome ? turn.outcome + ", said " + turn.status : "no report read"));
+
+      body.appendChild(row);
+    });
+
+    table.appendChild(body);
+    panel.appendChild(table);
+  }
+
+  function size(bytes) {
+    return bytes < 1024
+      ? bytes + " bytes"
+      : Math.round(bytes / 1024) + "k";
+  }
+
+  // These are all JSON and all written on one line, which is unreadable in a
+  // box. Indented if it parses, and left exactly as it came if it does not -
+  // a document that will not parse is the one most worth seeing verbatim.
+  function laidOut(text) {
+    try {
+      return JSON.stringify(JSON.parse(text), null, 2);
+    } catch (e) {
+      return text;
+    }
+  }
+
+  function drawPapers() {
+    var panel = document.getElementById("depth-papers");
+
+    if (!opened) { return; }
+
+    // Only when the run changes. Redrawing this every four seconds would take
+    // the selection away from whoever is reading one.
+    if (panel.getAttribute("data-run") === opened.id) { return; }
+
+    panel.setAttribute("data-run", opened.id);
+    panel.textContent = "";
+
+    var waiting = document.createElement("p");
+
+    waiting.textContent = "Reading what this run wrote down...";
+    panel.appendChild(waiting);
+
+    var id = opened.id;
+
+    api("/api/runs/" + encodeURIComponent(id) + "/documents")
+      .then(function (answer) {
+        if (panel.getAttribute("data-run") !== id) { return; }
+
+        panel.textContent = "";
+
+        var papers = answer.documents || [];
+
+        if (!papers.length) {
+          var none = document.createElement("p");
+
+          none.textContent = "This run wrote nothing beside its journal.";
+          panel.appendChild(none);
+
+          return;
+        }
+
+        var choices = document.createElement("ul");
+
+        choices.className = "papers";
+
+        var shown = document.createElement("pre");
+
+        shown.className = "paper";
+        shown.tabIndex = 0;
+        shown.textContent = "Pick one to read it.";
+
+        papers.forEach(function (paper) {
+          var li = document.createElement("li");
+          var open = document.createElement("button");
+
+          open.type = "button";
+          open.setAttribute("aria-pressed", "false");
+          open.setAttribute("aria-controls", "paper-shown");
+          open.textContent = paper.kind + ": " + paper.subject + " (" + size(paper.bytes) + ")";
+
+          open.addEventListener("click", function () {
+            choices.querySelectorAll("button").forEach(function (other) {
+              other.setAttribute("aria-pressed", other === open ? "true" : "false");
+            });
+
+            shown.textContent = "Reading " + paper.name + "...";
+
+            api("/api/runs/" + encodeURIComponent(id) + "/documents/"
+              + encodeURIComponent(paper.name))
+              .then(function (got) { shown.textContent = laidOut(got.text); })
+              .catch(function (wrong) { shown.textContent = wrong.message; });
+          });
+
+          li.appendChild(open);
+          choices.appendChild(li);
+        });
+
+        shown.id = "paper-shown";
+
+        panel.appendChild(choices);
+        panel.appendChild(shown);
+      })
+      .catch(function (wrong) {
+        panel.textContent = wrong.message;
+      });
+  }
+
+  (function () {
+    var strip = document.querySelector(".depths");
+
+    depths.forEach(function (one, i) {
+      document.getElementById(one.tab).addEventListener("click", function () {
+        showDepth(i, false);
+      });
+    });
+
+    strip.addEventListener("keydown", function (event) {
+      var step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+
+      if (step) {
+        showDepth((depth + step + depths.length) % depths.length, true);
+        event.preventDefault();
+      } else if (event.key === "Home") {
+        showDepth(0, true);
+        event.preventDefault();
+      } else if (event.key === "End") {
+        showDepth(depths.length - 1, true);
+        event.preventDefault();
+      }
+    });
+
+    // The numbers, from anywhere on the page. Not while somebody is typing in
+    // the box that sends a message to the lead, and not while a modifier is
+    // held, because those are the browser's own shortcuts.
+    document.addEventListener("keydown", function (event) {
+      if (event.altKey || event.ctrlKey || event.metaKey) { return; }
+
+      var on = event.target;
+
+      if (on && (on.tagName === "INPUT" || on.tagName === "TEXTAREA" || on.isContentEditable)) {
+        return;
+      }
+
+      var which = ["1", "2", "3"].indexOf(event.key);
+
+      if (which < 0 || detail.hidden) { return; }
+
+      showDepth(which, true);
+      event.preventDefault();
+    });
+  }());
+
   function watch(run) {
     if (stream) {
       stream.close();
     }
 
     watching = run.id;
+    opened = run;
     log.textContent = "";
+    lastLine = null;
+    lastSaid = null;
+    lastSame = 1;
+    showDepth(depth, false);
     heading.textContent = "What " + run.id + " is doing";
     detail.hidden = false;
+
+    gatesShown = null;
+    turnsShown = -1;
 
     drawGates(run);
     wire(run);
@@ -708,10 +1135,36 @@
 
     stream.addEventListener("line", function (message) {
       var entry = JSON.parse(message.data);
+
+      // The same line over and over is one line and a count. A node reading
+      // forty files writes forty rows that differ only in a path, and they
+      // push everything that mattered off the top of the box.
+      if (entry.said === lastSaid && lastLine) {
+        lastSame += 1;
+
+        var badge = lastLine.querySelector(".again");
+
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "again";
+          lastLine.appendChild(badge);
+        }
+
+        badge.textContent = "  x" + lastSame;
+        log.scrollTop = log.scrollHeight;
+
+        return;
+      }
+
       var line = document.createElement("p");
 
       line.textContent = entry.said;
       log.appendChild(line);
+
+      lastLine = line;
+      lastSaid = entry.said;
+      lastSame = 1;
+
       log.scrollTop = log.scrollHeight;
     });
 
@@ -725,8 +1178,11 @@
     heading.focus();
   }
 
-  function refresh() {
-    (function () {
+  // Wired once, not on every refresh. This sat inside refresh() and so
+  // added another change handler and another click handler every four
+  // seconds: after five minutes, one tick of the Sound box chimed seventy-odd
+  // times and wrote the setting seventy-odd times.
+  (function () {
     var sound = document.getElementById("sound");
     sound.checked = remembered("loadout.sound", false);
     sound.addEventListener("change", function () {
@@ -776,7 +1232,8 @@
     showPermission();
   })();
 
-  api("/api/runs")
+  function refresh() {
+    api("/api/runs")
       .then(function (answer) {
         draw(answer.runs);
       })
