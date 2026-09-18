@@ -386,6 +386,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             "stop" => ("team halt", [action.Run]),
             "pause" => ("team halt", [action.Run, "--pause"]),
             "resume" => ("team halt", [action.Run, "--resume"]),
+
+            // An empty name clears it, which is how the page offers "put it
+            // back": there is one box, and emptying a box is what people do.
+            "name" => ("team name", action.Room is { Length: > 0 } room
+                ? [action.Run, "--room", room]
+                : [action.Run, "--clear"]),
             _ => (string.Empty, []),
         };
 

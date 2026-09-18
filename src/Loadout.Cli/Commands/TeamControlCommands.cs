@@ -231,6 +231,106 @@ public sealed class TeamMessageCommand : AsyncCommand<TeamMessageCommand.Setting
     }
 }
 
+/// <summary>Gives a run's room a name somebody chose.</summary>
+/// <remarks>
+/// <para>
+/// A run is called 20260918-1436-ed59, which is precise, sortable and
+/// impossible to hold in your head. Every run gets a room worked out from that
+/// identifier so there is always something to say out loud; this is for when
+/// the worked-out one is not the one you would use.
+/// </para>
+/// <para>
+/// One file beside the journal rather than an event in it. The journal is a
+/// record of what happened; what somebody decided to call it afterwards is
+/// not that, and putting it there would mean renaming a run by appending to
+/// its history.
+/// </para>
+/// </remarks>
+[Description("Name a run's room, or clear the name to get the worked-out one back.")]
+[CommandMeta(CommandCategory.Start, Intent = "name rename room run call label", Mutates = true)]
+public sealed class TeamNameCommand : AsyncCommand<TeamNameCommand.Settings>
+{
+    private readonly IRunJournal _journal;
+    private readonly IAnsiConsole _console;
+
+    public TeamNameCommand(IRunJournal journal, IAnsiConsole console)
+    {
+        _journal = journal;
+        _console = console;
+    }
+
+    public sealed class Settings : RunSettings
+    {
+        [CommandOption("--room <NAME>")]
+        [Description("What to call it. Leave out with --clear to go back to the worked-out one.")]
+        public string? Room { get; init; }
+
+        [CommandOption("--clear")]
+        [Description("Forget the chosen name.")]
+        public bool Clear { get; init; }
+    }
+
+    /// <inheritdoc />
+    protected override Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        if (!settings.Clear && settings.Room is not { Length: > 0 })
+        {
+            return Task.FromResult(output.Fail(
+                "Say what to call it with --room, or --clear to go back to the worked-out one.",
+                ExitCode.InvalidArguments));
+        }
+
+        var (run, error) = RunControlling.Resolve(_journal, settings.Run);
+
+        if (run is null)
+        {
+            return Task.FromResult(output.Fail(error!, ExitCode.ProjectNotFound));
+        }
+
+        var directory = _journal.DirectoryOf(run);
+
+        if (settings.DryRun)
+        {
+            output.WriteLine(settings.Clear
+                ? $"Would forget what {Markup.Escape(run)} is called. Nothing was written."
+                : $"Would call {Markup.Escape(run)} "
+                    + $"\u201c{Markup.Escape(settings.Room!)}\u201d. Nothing was written.");
+
+            return Task.FromResult(CommandOutput.Success());
+        }
+
+        try
+        {
+            if (settings.Clear)
+            {
+                RoomNames.Forget(directory);
+            }
+            else
+            {
+                RoomNames.Rename(directory, settings.Room!);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Task.FromResult(output.Fail(
+                $"That name could not be written: {ex.Message}", ExitCode.GeneralFailure));
+        }
+
+        output.WriteLine(
+            $"[green]+[/] {Markup.Escape(run)} is "
+            + $"[bold]{Markup.Escape(RoomNames.For(directory, run))}[/].");
+
+        return Task.FromResult(CommandOutput.Success());
+    }
+}
+
 /// <summary>Stops, holds or releases a run.</summary>
 /// <remarks>
 /// <para>

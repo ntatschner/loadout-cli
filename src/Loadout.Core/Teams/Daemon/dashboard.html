@@ -507,6 +507,10 @@
       <label for="say" class="said">Say something to the lead</label>
       <input type="text" id="say" placeholder="read after its current round">
       <button type="button" id="send">Send</button>
+
+      <label for="room" class="said">Call this room something</label>
+      <input type="text" id="room" maxlength="60" placeholder="empty to go back to its own name">
+      <button type="button" id="rename">Rename</button>
     </div>
 
     <div class="depths" role="tablist" aria-label="How much detail">
@@ -1310,6 +1314,9 @@
   // What the gates looked like when they were last drawn, by their ids.
   var gatesShown = null;
 
+  // What the room was called when the heading was last written.
+  var roomShown = null;
+
   // How many exchanges the cost table was built from.
   var turnsShown = -1;
 
@@ -1322,6 +1329,22 @@
   */
   function keepUp(run) {
     opened = run;
+
+    // A rename lands as a file the next read picks up, and it can be done from
+    // a terminal as easily as from here, so the heading follows it rather than
+    // holding whatever it said when the run was opened.
+    if ((run.room || "") !== roomShown) {
+      roomShown = run.room || "";
+      heading.textContent = (run.room ? run.room + ": " : "") + "what " + run.id + " is doing";
+
+      var box = document.getElementById("room");
+
+      // Left alone while somebody is typing in it: taking the cursor out of a
+      // box every four seconds is worse than showing an old name in one.
+      if (document.activeElement !== box) {
+        box.value = run.room || "";
+      }
+    }
 
     var gates = (run.gates || []).map(function (gate) { return gate.id; }).join("|");
 
@@ -1418,6 +1441,25 @@
         .then(function () { announce(run.id + " ends when its current round comes back."); })
         .catch(function (e) { announce(e.message); });
     };
+
+    var room = document.getElementById("room");
+
+    // Filled in from what it is called now, so renaming starts from the name
+    // rather than from nothing, and emptying the box is visibly the way to
+    // put the worked-out one back.
+    room.value = run.room || "";
+
+    document.getElementById("rename").onclick = function () {
+        var wanted = room.value.trim();
+
+        act(run.id, "name", { room: wanted })
+          .then(function () {
+            announce(wanted
+              ? "That run is " + wanted + " now."
+              : "That run goes back to the name it was given.");
+          })
+          .catch(function (e) { announce(e.message); });
+      };
 
     document.getElementById("send").onclick = function () {
       var box = document.getElementById("say");
@@ -2138,9 +2180,10 @@
   function watch(run) {
     watching = run.id;
     opened = run;
+    roomShown = null;
 
     showDepth(depth, false);
-    heading.textContent = "What " + run.id + " is doing";
+    heading.textContent = (run.room ? run.room + ": " : "") + "what " + run.id + " is doing";
     detail.hidden = false;
 
     gatesShown = null;

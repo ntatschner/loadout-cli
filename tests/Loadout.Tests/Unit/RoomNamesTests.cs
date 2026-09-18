@@ -62,6 +62,72 @@ public sealed class RoomNamesTests
     }
 
     [Fact]
+    public void A_room_somebody_named_keeps_that_name()
+    {
+        var directory = Temporary();
+
+        RoomNames.Rename(directory, "The Haunted Meeting Room");
+
+        RoomNames.For(directory, "20260918-1436-ed59").Should().Be("The Haunted Meeting Room");
+
+        // And forgetting it puts the worked-out one back rather than leaving
+        // the run with no name at all.
+        RoomNames.Forget(directory);
+
+        RoomNames.For(directory, "20260918-1436-ed59")
+            .Should().Be(RoomNames.For("20260918-1436-ed59"));
+    }
+
+    [Fact]
+    public void Forgetting_a_name_that_was_never_given_is_not_a_failure()
+    {
+        // The page offers one box, and emptying a box somebody never filled in
+        // is an ordinary thing to do.
+        var act = () => RoomNames.Forget(Temporary());
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void A_name_longer_than_a_heading_is_cut_rather_than_taken_whole()
+    {
+        var directory = Temporary();
+
+        RoomNames.Rename(directory, new string('x', RoomNames.Longest * 3));
+
+        RoomNames.For(directory, "r").Should().HaveLength(RoomNames.Longest);
+    }
+
+    [Fact]
+    public void A_name_with_a_newline_in_it_stays_one_line()
+    {
+        // The file has one line in it. A name carrying its own would make the
+        // second line a name of its own on the next read.
+        var directory = Temporary();
+
+        RoomNames.Rename(directory, "The Broom\nCupboard");
+
+        RoomNames.For(directory, "r").Should().Be("The Broom Cupboard");
+    }
+
+    [Fact]
+    public void A_directory_that_is_not_there_falls_back_rather_than_failing()
+    {
+        RoomNames.For(Path.Combine(Path.GetTempPath(), "loadout-no-such-" + Guid.NewGuid()), "r")
+            .Should().Be(RoomNames.For("r"));
+    }
+
+    private static string Temporary()
+    {
+        var directory = Path.Combine(
+            Path.GetTempPath(), "loadout-room-" + Guid.NewGuid().ToString("N")[..8]);
+
+        Directory.CreateDirectory(directory);
+
+        return directory;
+    }
+
+    [Fact]
     public void A_run_with_no_name_is_still_somewhere()
     {
         // Nothing should ever render an empty heading, and "The Corridor" is

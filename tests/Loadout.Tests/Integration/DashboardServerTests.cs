@@ -751,6 +751,52 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Everything_the_page_puts_in_the_body_reaches_whatever_types_the_command()
+    {
+        // Every field on its own rather than one happy path, because the way
+        // this goes wrong is silent: a field added at one end and not the
+        // other arrives as null, the command runs with a default, and the page
+        // is told it worked. Renaming a room did exactly that - the body
+        // carried a name, the server never read it, and "--clear" on a run
+        // with no name succeeds.
+        RunAction? asked = null;
+
+        _server.Act = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        await _client.PostAsync(
+            new Uri(_root + "api/runs/r/anything?token=" + _server.Token),
+            new StringContent(
+                """{"gate":"toolu_1","answer":"yes","reason":"it needs the suite","message":"leave the tests alone","room":"The Haunted Meeting Room"}""",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        asked!.Run.Should().Be("r");
+        asked.Verb.Should().Be("anything");
+        asked.Gate.Should().Be("toolu_1");
+        asked.Answer.Should().Be("yes");
+        asked.Reason.Should().Be("it needs the suite");
+        asked.Message.Should().Be("leave the tests alone");
+        asked.Room.Should().Be("The Haunted Meeting Room");
+    }
+
+    [Fact]
+    public async Task The_page_offers_a_way_to_rename_a_room()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // In the detail pane with the other controls, because there is one
+        // place anything is done from and three views that only look.
+        text.Should().Contain("id=\"room\"");
+        text.Should().Contain("<label for=\"room\"");
+        text.Should().Contain("id=\"rename\"");
+    }
+
+    [Fact]
     public async Task A_run_nobody_has_is_a_404_rather_than_an_empty_one()
     {
         var answer = await GetAsync("/api/runs/no-such-run");

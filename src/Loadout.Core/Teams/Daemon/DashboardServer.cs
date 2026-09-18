@@ -451,7 +451,8 @@ public sealed class DashboardServer : IDisposable
             Text(asked, "gate"),
             Text(asked, "answer"),
             Text(asked, "reason"),
-            Text(asked, "message"));
+            Text(asked, "message"),
+            Text(asked, "room"));
 
         var done = await Act(action, ct).ConfigureAwait(false);
 
@@ -734,7 +735,7 @@ public sealed class DashboardServer : IDisposable
         // Somewhere for the office to put it, and something a person can say
         // out loud a week later. Worked out from the identifier rather than
         // stored, so every machine reading this journal calls it the same.
-        room = RoomNames.For(run.RunId),
+        room = RoomNames.For(run.Directory, run.RunId),
         run.Team,
         run.Goal,
         run.Autonomy,

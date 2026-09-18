@@ -86,7 +86,79 @@ public static class RoomNames
     /// </remarks>
     public static int Rooms => Places.Length * Qualifiers.Length;
 
-    /// <summary>The room a run is in.</summary>
+    /// <summary>Where a renamed room keeps its name, beside the journal.</summary>
+    public const string File = "room.txt";
+
+    /// <summary>The longest a room's name may be.</summary>
+    /// <remarks>
+    /// A name is for saying out loud and for fitting in a heading. Something
+    /// longer than this is a description, and a description in a heading
+    /// pushes the run's own details off the line.
+    /// </remarks>
+    public const int Longest = 60;
+
+    /// <summary>
+    /// The room a run is in, as somebody renamed it or as it was worked out.
+    /// </summary>
+    /// <param name="directory">The run's own directory.</param>
+    /// <param name="runId">The run's identifier, as the journal names it.</param>
+    public static string For(string directory, string? runId)
+    {
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            try
+            {
+                var path = Path.Combine(directory, File);
+
+                if (System.IO.File.Exists(path)
+                    && System.IO.File.ReadAllText(path).Trim() is { Length: > 0 } given)
+                {
+                    return given.Length > Longest ? given[..Longest] : given;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A name that cannot be read is not worth failing a page over.
+                // The worked-out one below is still true.
+            }
+        }
+
+        return For(runId);
+    }
+
+    /// <summary>Gives a run's room a name of somebody's choosing.</summary>
+    /// <remarks>
+    /// One file with one line in it, beside the journal. It could have been a
+    /// field in the journal, and then renaming a run would mean appending an
+    /// event to a record of what happened - which this is not: it is what
+    /// somebody decided to call it afterwards.
+    /// </remarks>
+    public static void Rename(string directory, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var tidied = name.Trim().ReplaceLineEndings(" ");
+
+        System.IO.File.WriteAllText(
+            Path.Combine(directory, File),
+            (tidied.Length > Longest ? tidied[..Longest] : tidied) + Environment.NewLine);
+    }
+
+    /// <summary>Forgets a chosen name, so the worked-out one comes back.</summary>
+    public static void Forget(string directory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+
+        var path = Path.Combine(directory, File);
+
+        if (System.IO.File.Exists(path))
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    /// <summary>The room a run is in, worked out from its identifier.</summary>
     /// <param name="runId">The run's identifier, as the journal names it.</param>
     public static string For(string? runId)
     {

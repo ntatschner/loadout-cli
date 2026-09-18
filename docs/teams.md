@@ -248,9 +248,21 @@ square waiting for art. When the art arrives it becomes a second encoding on
 top of a first rather than the only one, which is the decision that keeps this
 inside the accessibility bar rather than beside it.
 
-**Not built yet.** The art, the movement that goes with it, renaming a room,
-and a timeline view. Where the time went is answered for now by the bars in
-*What it cost*.
+Rename any of them from the detail pane, or from a terminal:
+
+```sh
+loadout team name 20260918-1436-ed59 --room "The one that ate the budget"
+loadout team name 20260918-1436-ed59 --clear     # back to the worked-out name
+```
+
+The name goes in one file beside the journal rather than into the journal
+itself. The journal is a record of what happened; what somebody decided to call
+it afterwards is not that, and putting it there would mean renaming a run by
+appending to its history. Emptying the box on the page is the same as
+`--clear`.
+
+**Not built yet.** The art and the movement that goes with it, and a timeline
+view. Where the time went is answered for now by the bars in *What it cost*.
 
 ### Four depths of one run
 

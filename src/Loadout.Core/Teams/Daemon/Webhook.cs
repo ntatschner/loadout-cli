@@ -39,6 +39,7 @@ public sealed record StartRequest(
 /// <param name="Answer">What was chosen: an option, or yes or no.</param>
 /// <param name="Reason">Why, where somebody gave one. Reaches the node.</param>
 /// <param name="Message">What to say to the lead, for a message.</param>
+/// <param name="Room">What to call the run's room, for a rename.</param>
 /// <remarks>
 /// One shape for all five because they all end the same way: the daemon runs
 /// the command somebody would have typed. Nothing here decides what any of
@@ -50,7 +51,8 @@ public sealed record RunAction(
     string? Gate = null,
     string? Answer = null,
     string? Reason = null,
-    string? Message = null);
+    string? Message = null,
+    string? Room = null);
 
 /// <summary>
 /// Letting something outside this machine start a run.
