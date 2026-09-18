@@ -103,13 +103,8 @@ public interface ITeamConsole
     /// is given, whether or not it is the one that came in.
     /// </para>
     /// </remarks>
-    Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default) =>
-        ConfirmAsync($"{what}: {task}", ct)
-            .ContinueWith(
-                answered => answered.Result ? task : null,
-                ct,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
+    async Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default) =>
+        await ConfirmAsync($"{what}: {task}", ct).ConfigureAwait(false) ? task : null;
 
     /// <summary>A question the lead could not decide. The option chosen, or null to stop the run.</summary>
     Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default);

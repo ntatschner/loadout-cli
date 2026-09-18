@@ -130,6 +130,21 @@
   .gate .asked { font-weight: 700; margin: 0 0 0.5rem; }
   .gate button { margin: 0 0.5rem 0 0; }
   .gate textarea { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem; margin: 0 0 0.5rem; }
+  /*
+    Hidden means hidden.
+
+    A browser hides [hidden] through its own stylesheet, and any author rule
+    that sets display beats it - so .controls { display: flex } left the box
+    for typing at a live node on screen at all times, 664 by 78 pixels of it,
+    and in the tab order, while its hidden attribute said otherwise. Every
+    test passed: the attribute was in the markup, which is what they looked at.
+
+    One rule rather than one per class, because the next thing given a display
+    would bring it straight back, and there is nothing here that ever wants a
+    hidden element drawn.
+  */
+  [hidden] { display: none !important; }
+
   .controls { margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .controls input { flex: 1 1 14rem; min-width: 8rem; }
 
@@ -1650,6 +1665,11 @@
   function keepUp(run) {
     opened = run;
 
+    // A run that finishes while somebody is watching it becomes one that can
+    // be run again, and the button said otherwise until the pane was opened
+    // a second time - the same staleness the heading and the gates had.
+    document.getElementById("again").hidden = run.running;
+
     // A rename lands as a file the next read picks up, and it can be done from
     // a terminal as easily as from here, so the heading follows it rather than
     // holding whatever it said when the run was opened.
@@ -1690,6 +1710,58 @@
     }
   }
 
+  /*
+    What answering this actually does, said in the question that asks whether
+    to do it.
+
+    Refusing is not one thing. Refusing a permission tells the node no and the
+    run carries on - it reports what it needed and why. Refusing a brief or a
+    confirmation stops the run, and so does choosing to stop one outright. A
+    warning that said "that stops the run" over every refusal was wrong about
+    the commonest one of the three, and a warning that is wrong is worse than
+    none: it teaches somebody to click past it.
+  */
+  /*
+    One question mark.
+
+    A permission is written without one so that whoever asks can add it - the
+    first real run asked somebody "Let it??" and that is why. A lead's own
+    question arrives with one already, because it is a sentence somebody wrote,
+    and appending another brought the same thing back on a different gate:
+    "Should the flag be --since or --from??".
+
+    So the mark is added only where there is not one, rather than the rule
+    being remembered at each of the places that ask.
+  */
+  function asking(question) {
+    var said = (question || "").trim();
+
+    return /[?!.]$/.test(said) ? said : said + "?";
+  }
+
+  function ends(gate, option) {
+    return option === "Stop the run"
+      || ((gate.kind === "confirm" || gate.kind === "brief") && option === "no");
+  }
+
+  function asks(gate, option, instead) {
+    if (instead && option !== "no") {
+      return "Send this brief?\n\n" + (instead.value.trim() || "(nothing)");
+    }
+
+    if (ends(gate, option)) {
+      return "Answer \u201c" + asking(gate.question) + "\u201d with \u201c" + option
+        + "\u201d? That stops the run.";
+    }
+
+    if (gate.kind === "permission" && option === "no") {
+      return "Refuse \u201c" + asking(gate.question) + "\u201d "
+        + gate.node + " is told no and carries on without it.";
+    }
+
+    return "Answer \u201c" + asking(gate.question) + "\u201d with \u201c" + option + "\u201d?";
+  }
+
   function drawGates(run) {
     var box = document.getElementById("gates");
     box.textContent = "";
@@ -1700,7 +1772,7 @@
 
       var asked = document.createElement("p");
       asked.className = "asked";
-      asked.textContent = gate.question + "?";
+      asked.textContent = asking(gate.question);
       card.appendChild(asked);
 
       /*
@@ -1742,18 +1814,7 @@
           // The second confirmation, and the reason it exists: the token got
           // somebody to this page, and answering a gate spends money or
           // changes a repository. It names what is being agreed to.
-          // Named in the question, and for a brief it names what is actually
-          // being sent rather than the word on the button.
-          var asking = instead
-            ? "Send this brief?\n\n" + (instead.value.trim() || "(nothing)")
-            : "Answer \u201c" + gate.question + "?\u201d with \u201c" + option + "\u201d?";
-
-          if (option !== "no" && !window.confirm(asking)) {
-            return;
-          }
-
-          if (option === "no" && !window.confirm(
-            "Refuse \u201c" + gate.question + "\u201d? That stops the run.")) {
+          if (!window.confirm(asks(gate, option, instead))) {
             return;
           }
 
@@ -2149,6 +2210,11 @@
   // happens when somebody opens this and not four times a minute.
   var spentShown = null;
 
+  // When it was last asked, whether one is in flight, and what came back.
+  var spentAt = 0;
+  var spentAsking = false;
+  var lastSpent = [];
+
   /*
     Where each node's time went, from the gaps between the things it did. Each
     gap is put down to whatever ended it: one ending in a tool call is the
@@ -2167,20 +2233,36 @@
     box.id = "spent";
     panel.appendChild(box);
 
-    if (spentShown === opened.id && spentShown !== null) {
-      // Already asked for this run; the answer lands in the box below.
-      box.appendChild(spentFor(lastSpent));
+    box.appendChild(spentFor(lastSpent));
 
+    /*
+      Asked again while the run is going, because the answer changes as the
+      node works - it fetched once and then never again, so the split sat
+      frozen beside a burn rate that kept moving, which is the pane lying in
+      the way this page has already been caught doing once.
+
+      Not every tick: answering it means reading every node's whole stream. And
+      not while one is already in flight, or a slow answer on a big run would
+      pile requests up behind itself.
+    */
+    var now = Date.now();
+
+    if (spentAsking || (spentShown === opened.id && (!opened.running || now - spentAt < 20000))) {
       return;
     }
 
     var id = opened.id;
 
+    spentAsking = true;
+
     api("/api/runs/" + encodeURIComponent(id) + "/spent")
       .then(function (got) {
+        spentAsking = false;
+
         if (!opened || opened.id !== id) { return; }
 
         spentShown = id;
+        spentAt = Date.now();
         lastSpent = got.nodes;
 
         var into = document.getElementById("spent");
@@ -2193,12 +2275,12 @@
       .catch(function () {
         // Runs from before a node kept a stream have none, which is ordinary
         // rather than worth a line of its own.
+        spentAsking = false;
         spentShown = id;
+        spentAt = Date.now();
         lastSpent = [];
       });
   }
-
-  var lastSpent = [];
 
   function spentFor(nodes) {
     var box = document.createElement("div");
@@ -2799,6 +2881,8 @@
     opened = run;
     roomShown = null;
     spentShown = null;
+    spentAt = 0;
+    lastSpent = [];
 
     showDepth(depth, false);
     heading.textContent = (run.room ? run.room + ": " : "") + "what " + run.id + " is doing";

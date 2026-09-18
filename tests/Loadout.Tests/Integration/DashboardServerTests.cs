@@ -832,6 +832,54 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Refusing_a_gate_is_not_one_thing_and_the_page_does_not_say_it_is()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // Refusing a permission tells the node no and the run carries on;
+        // refusing a brief or a confirmation stops it, and so does choosing to
+        // stop one outright. A warning that said "that stops the run" over
+        // every refusal was wrong about the commonest of the three, and a
+        // warning that is wrong teaches somebody to click past it.
+        text.Should().Contain("is told no and carries on without it");
+        text.Should().Contain("That stops the run");
+        text.Should().Contain("gate.kind === \"confirm\" || gate.kind === \"brief\"");
+        text.Should().Contain("option === \"Stop the run\"");
+    }
+
+    [Fact]
+    public async Task A_question_that_already_ends_in_one_does_not_get_a_second()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // A permission is written without a mark so whoever asks can add one -
+        // the first real run asked somebody "Let it??" and that is why. A
+        // lead's own question arrives with one, and appending another brought
+        // the same defect back on a different gate.
+        text.Should().Contain("function asking(question)");
+
+        text.Should().NotContain("gate.question + \"?\"",
+            "the mark goes on only where there is not one already");
+    }
+
+    [Fact]
+    public async Task Hidden_means_hidden()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // A browser hides [hidden] through its own stylesheet, and any author
+        // rule that sets display beats it. `.controls { display: flex }` left
+        // the box for typing at a live node on screen at all times - 664 by 78
+        // pixels of it, and in the tab order - while its hidden attribute said
+        // otherwise, and every test passed because the attribute was in the
+        // markup, which is what they look at.
+        //
+        // This one cannot see it either. What it can do is insist the rule that
+        // settles it is still there.
+        text.Should().Contain("[hidden] { display: none !important; }");
+    }
+
+    [Fact]
     public async Task The_page_offers_a_way_to_rename_a_room()
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
