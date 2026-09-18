@@ -248,18 +248,28 @@ internal sealed class TeamsWindow : Window
                 // A run being written while it is read is the ordinary case,
                 // not a fault. The next pass gets it.
             }
-
-            _application.Invoke(() =>
+            finally
             {
-                _reading = false;
-
-                if (read is null)
+                // In a finally rather than after the catch, because this is the
+                // only place the flag above goes back down. Anything thrown
+                // that the catch does not name - and the read is somebody
+                // else's delegate, so that is not a list this can close -
+                // skipped the line, left the flag up, and every later read
+                // returned at the first line of this method. The screen went
+                // on drawing what it had, for ever, saying nothing: the one
+                // failure a refresh loop must not have.
+                _application.Invoke(() =>
                 {
-                    return;
-                }
+                    _reading = false;
 
-                Show(read);
-            });
+                    if (read is null)
+                    {
+                        return;
+                    }
+
+                    Show(read);
+                });
+            }
         });
     }
 

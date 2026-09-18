@@ -162,6 +162,102 @@ public sealed class TeamsScreenTests
         profile.MayRefreshItself.Should().Be(expected);
     }
 
+    [Fact]
+    public void A_read_that_throws_does_not_stop_the_screen_reading_again()
+    {
+        /*
+          One read at a time, so a slow one cannot stack up - and the flag that
+          enforces it only went back down on the way out through the success
+          path. The read is a delegate somebody else supplies, so what it can
+          throw is not a list this screen can close, and anything unnamed left
+          the flag up: every later read returned at the first line, the screen
+          went on drawing what it had, and nothing anywhere said so.
+
+          A screen frozen with no error is the failure worth a test. The first
+          read here throws something nobody thought of; the second is the one
+          that has to happen.
+        */
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var reads = 0;
+
+        Task<IReadOnlyList<RunSummary>> Read(CancellationToken ct)
+        {
+            if (++reads == 1)
+            {
+                throw new InvalidOperationException("something nobody thought of");
+            }
+
+            return Task.FromResult<IReadOnlyList<RunSummary>>(
+                [Run("20260916-1300-cccc", "docs-crew", finished: null)]);
+        }
+
+        using var window = new TeamsWindow([], Read, live: false, app);
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        window.InvokeCommand(Command.Refresh);
+
+        // Until the first read has been and gone there is nothing to prove.
+        Until(app, () => reads == 1).Should().BeTrue("the first read should have run");
+
+        // Draining what the read handed back to the main loop is what puts the
+        // flag down, so it happens before the second key rather than after.
+        Settle(app);
+
+        window.InvokeCommand(Command.Refresh);
+
+        Until(app, () => Rows(window).Any(row => row.Contains("docs-crew", StringComparison.Ordinal)))
+            .Should().BeTrue("a read that threw should not have stopped the next one");
+    }
+
+    /// <summary>
+    /// Pumps the main loop until something is true, or patience runs out.
+    /// </summary>
+    /// <remarks>
+    /// Timers as well as iterations: a result handed back from another thread
+    /// reaches the screen through the application's invoke queue, and off the
+    /// main thread that is queued as a zero-length timeout.
+    /// </remarks>
+    private static bool Until(IApplication app, Func<bool> done, int milliseconds = 5000)
+    {
+        var deadline = Environment.TickCount64 + milliseconds;
+
+        do
+        {
+            if (done())
+            {
+                return true;
+            }
+
+            app.RaiseIteration();
+            app.TimedEvents?.RunTimers();
+            app.LayoutAndDraw();
+
+            Thread.Sleep(5);
+        }
+        while (Environment.TickCount64 < deadline);
+
+        return done();
+    }
+
+    /// <summary>Pumps a few times over, for work that has nothing to wait on.</summary>
+    private static void Settle(IApplication app)
+    {
+        for (var pass = 0; pass < 20; pass++)
+        {
+            app.RaiseIteration();
+            app.TimedEvents?.RunTimers();
+            app.LayoutAndDraw();
+
+            Thread.Sleep(5);
+        }
+    }
+
     private static IReadOnlyList<RunSummary> Runs() =>
     [
         Run("20260916-1200-aaaa", "bug-hunt", finished: null),
