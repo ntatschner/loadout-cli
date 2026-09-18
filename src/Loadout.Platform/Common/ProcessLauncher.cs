@@ -41,6 +41,16 @@ public sealed class ProcessLauncher : IProcessLauncher
         startInfo.UseShellExecute = false;
         startInfo.CreateNoWindow = true;
 
+        // UTF-8, like the piped path, and for the same reason. Without it,
+        // .NET decodes with the console's own code page, which on Windows is
+        // a legacy one: every non-ASCII character in anything read back - a
+        // commit message, a path, a line of a patch - arrives as two or three
+        // characters of nonsense. It showed up as mangled dashes in a diff on
+        // the dashboard, and it had been true of everything git said since
+        // this method was written.
+        startInfo.StandardOutputEncoding = Encoding.UTF8;
+        startInfo.StandardErrorEncoding = Encoding.UTF8;
+
         using var process = new Process { StartInfo = startInfo };
 
         var stdout = new StringBuilder();
