@@ -88,6 +88,18 @@ public sealed class MachineTeams
 
     /// <summary>The Telegram chat to send to. Meaningless for the others.</summary>
     public string NotifyChat { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which set of office art the dashboard draws desks with, or empty for
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// Machine-local because the art is: Loadout ships none of it, and a set is
+    /// a directory somebody filled on this computer from packs they bought. A
+    /// name here that no directory answers to draws nothing, which is the same
+    /// as drawing nothing.
+    /// </remarks>
+    public string OfficeSet { get; set; } = string.Empty;
 }
 
 /// <summary>This machine's view of one project.</summary>

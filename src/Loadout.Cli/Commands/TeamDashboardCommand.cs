@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Configuration;
 using Loadout.Core.Teams;
 using Loadout.Core.Teams.Daemon;
 using Loadout.Models;
@@ -38,19 +39,25 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly IAnsiConsole _console;
     private readonly IApplicationLauncher _opener;
     private readonly ReadingProfile _reading;
+    private readonly IConfigurationService _configuration;
+    private readonly IPlatformPaths _paths;
 
     public TeamDashboardCommand(
         IRunJournal journal,
         Loadout.Core.Git.IGitManager git,
         IAnsiConsole console,
         IApplicationLauncher opener,
-        ReadingProfile reading)
+        ReadingProfile reading,
+        IConfigurationService configuration,
+        IPlatformPaths paths)
     {
         _journal = journal;
         _git = git;
         _console = console;
         _opener = opener;
         _reading = reading;
+        _configuration = configuration;
+        _paths = paths;
     }
 
     /// <summary>
@@ -146,6 +153,17 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         var output = new CommandOutput(_console, settings);
 
         using var server = new DashboardServer(_journal, _git);
+
+        // The same art the daemon draws with, for the same reason: this is the
+        // page people actually open to look at the office, and a dashboard that
+        // drew squares while the daemon drew people would be two dashboards.
+        var office = OfficeArt.Chosen(
+            _paths,
+            (await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false))
+                .Value?.Teams.OfficeSet);
+
+        server.OfficeRoot = office.Root;
+        server.OfficeSet = office.Set;
 
         if (settings.DryRun)
         {

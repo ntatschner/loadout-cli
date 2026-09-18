@@ -35,6 +35,10 @@ public sealed class DashboardServerTests : IAsyncLifetime
     private HttpClient _client = null!;
     private string _root = string.Empty;
 
+    /// <summary>A directory standing in for one somebody filled with art.</summary>
+    private readonly string _art =
+        Path.Combine(Path.GetTempPath(), "loadout-dash-art-" + Guid.NewGuid().ToString("N"));
+
     public Task InitializeAsync()
     {
         _git.Commits["teams-r-lead"] = "2222222222222222222222222222222222222222";
@@ -44,6 +48,16 @@ public sealed class DashboardServerTests : IAsyncLifetime
             " docs/commands.md | 1 +\n";
 
         _server = new DashboardServer(_journal, _git);
+
+        // One set with one piece in it. Four bytes of PNG signature, because
+        // what is being checked is that the file arrives and is called an
+        // image - not that it decodes.
+        Directory.CreateDirectory(Path.Combine(_art, "open-office"));
+        File.WriteAllBytes(
+            Path.Combine(_art, "open-office", "lead.png"), [0x89, 0x50, 0x4E, 0x47]);
+
+        _server.OfficeRoot = _art;
+        _server.OfficeSet = "open-office";
 
         var started = _server.Start(0);
 
@@ -64,6 +78,17 @@ public sealed class DashboardServerTests : IAsyncLifetime
         _client.Dispose();
         _server.Dispose();
         _stopping.Dispose();
+
+        try
+        {
+            if (Directory.Exists(_art))
+            {
+                Directory.Delete(_art, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+        }
     }
 
     private Task<HttpResponseMessage> GetAsync(string path, bool withToken = true) =>
@@ -71,6 +96,96 @@ public sealed class DashboardServerTests : IAsyncLifetime
             _root.TrimEnd('/') + path + (withToken
                 ? (path.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "token=" + _server.Token
                 : string.Empty)));
+
+    [Fact]
+    public async Task The_page_is_told_what_art_there_is_to_draw_with()
+    {
+        var answer = await GetAsync("/api/office");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var read = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
+
+        read.RootElement.GetProperty("set").GetString().Should().Be("open-office");
+
+        read.RootElement.GetProperty("pieces").EnumerateArray()
+            .Select(one => one.GetString()).Should().Equal("lead");
+    }
+
+    [Fact]
+    public async Task A_piece_of_the_chosen_set_is_served_as_an_image()
+    {
+        var answer = await GetAsync("/office/lead");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+        answer.Content.Headers.ContentType!.MediaType.Should().Be("image/png");
+
+        (await answer.Content.ReadAsByteArrayAsync()).Should().Equal([0x89, 0x50, 0x4E, 0x47]);
+    }
+
+    [Fact]
+    public async Task A_piece_that_is_a_path_reaches_nothing()
+    {
+        // The failure this is here for: a name from a browser becoming a file
+        // outside the directory the daemon was pointed at. It has happened on
+        // this project once already, with a run identifier.
+        File.WriteAllText(Path.Combine(_art, "secrets.txt"), "not for a browser");
+
+        foreach (var asked in new[]
+        {
+            "/office/..%2Fsecrets.txt",
+            "/office/..%5Csecrets.txt",
+            "/office/%2E%2E%2F%2E%2E%2Fsecrets.txt",
+        })
+        {
+            var answer = await GetAsync(asked);
+
+            // Refused, rather than refused with one particular number. Which
+            // gate turns it away depends on the listener: on Windows this is
+            // HTTP.sys, which normalises the path before the code here ever
+            // sees it, so an escaped traversal can arrive as a path that
+            // matches no route and carries no token. What matters is the same
+            // either way - nothing of the file comes back.
+            answer.StatusCode.Should().NotBe(
+                HttpStatusCode.OK, "{0} must not reach a file", asked);
+
+            (await answer.Content.ReadAsStringAsync())
+                .Should().NotContain("not for a browser");
+        }
+    }
+
+    [Fact]
+    public async Task A_piece_nobody_installed_is_a_plain_404()
+    {
+        (await GetAsync("/office/reviewer")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task The_art_needs_the_token_like_everything_else()
+    {
+        // A page in any tab can reach loopback, and an image is a request it
+        // can make without asking anybody.
+        (await GetAsync("/office/lead", withToken: false)).StatusCode
+            .Should().Be(HttpStatusCode.Forbidden);
+
+        (await GetAsync("/api/office", withToken: false)).StatusCode
+            .Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task The_page_may_load_images_from_here_and_nowhere_else()
+    {
+        var page = await GetAsync("/");
+
+        var policy = page.Headers.GetValues("Content-Security-Policy").Single();
+
+        // Without img-src the sprites are blocked by the page's own policy,
+        // which is a failure that looks exactly like having no art.
+        policy.Should().Contain("img-src 'self'");
+
+        // And still nothing from anywhere else.
+        policy.Should().Contain("default-src 'none'");
+    }
 
     [Fact]
     public async Task Nothing_is_answered_without_the_token()

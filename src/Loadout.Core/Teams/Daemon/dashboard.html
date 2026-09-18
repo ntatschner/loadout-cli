@@ -265,6 +265,31 @@
   }
 
   /*
+    With art in it. The border goes, because a square drawn round a character
+    is a box and not a person; pixel art is scaled with no smoothing, because
+    the whole point of a 32px sprite is the pixels.
+  */
+  .desk .sprite.drawn {
+    /* A person is about twice as tall as they are wide, and a square box
+       letterboxes them into something too small to recognise. The border goes
+       with the art: a square drawn round a character is a box, not a person. */
+    width: 2.5rem;
+    height: 4rem;
+    border-color: transparent;
+    background-repeat: no-repeat;
+    background-position: center bottom;
+    background-size: contain;
+
+    /* The whole point of pixel art is the pixels. Without this the browser
+       smooths them on the way down and the sprite arrives as a smudge. */
+    image-rendering: pixelated;
+  }
+
+  /* A desk whose node has finished keeps its sprite, quieter. The list already
+     dims the whole desk; this stops the art fighting that. */
+  .desk.gone .sprite.drawn { opacity: 0.7; }
+
+  /*
     The timeline. One row per run, placed by when it started and stretched by
     how long it took, so a machine's afternoon reads at a glance: what
     overlapped, what sat there, and what the day cost.
@@ -1056,9 +1081,20 @@
     var sprite = document.createElement("span");
 
     // Decorative, and empty until there is art. Announced as nothing, which is
-    // what a picture of a person at a desk is worth saying about.
+    // what a picture of a person at a desk is worth saying about - the name and
+    // the state are already on the element as words, and this is the second
+    // encoding rather than the only one.
     sprite.className = "sprite";
     sprite.setAttribute("aria-hidden", "true");
+
+    var drawn = pieceFor(node);
+
+    if (drawn) {
+      sprite.className = "sprite drawn";
+      sprite.style.backgroundImage =
+        "url(\"/office/" + encodeURIComponent(drawn) + "?token=" + encodeURIComponent(token) + "\")";
+    }
+
     button.appendChild(sprite);
 
     var who = document.createElement("span");
@@ -3036,6 +3072,46 @@
     showPermission();
   })();
 
+  /*
+    The art, if any is installed. Asked for once rather than on every draw:
+    a set is a directory somebody filled before starting the daemon, and it
+    does not change underneath a page.
+
+    Everything below degrades to what the office drew before. No art, an
+    unreachable endpoint, a set naming pieces that are not there - all of them
+    end with an empty square and a name in words, which is what the desk was
+    built to be.
+  */
+  var pieces = {};
+
+  function sprites() {
+    return api("/api/office")
+      .then(function (answer) {
+        (answer.pieces || []).forEach(function (piece) { pieces[piece] = true; });
+      })
+      .catch(function () {
+        // Nothing to say. A dashboard with no art is the ordinary case.
+      });
+  }
+
+  /*
+    Which piece draws this node, or null for none.
+
+    By role, because a role is what somebody recognises across runs - the
+    reviewer looks like the reviewer whichever run it is in - and by the bare
+    role name, so a set is a folder of files called implementer.png and
+    reviewer.png rather than anything that needs a manifest. "worker" is the
+    fallback for a set that did not draw every role, and a set with neither
+    leaves the square empty.
+  */
+  function pieceFor(node) {
+    var role = (node.role || "").replace(/^role\./, "");
+
+    if (pieces[role]) { return role; }
+
+    return pieces.worker ? "worker" : null;
+  }
+
   function refresh() {
     api("/api/runs")
       .then(function (answer) {
@@ -3046,7 +3122,11 @@
       });
   }
 
-  refresh();
+  // The art first, then the runs, so the first office somebody sees is
+  // already drawn rather than redrawing itself a moment later. Either way
+  // round it works; this way it does not flicker.
+  sprites().then(refresh);
+
   setInterval(refresh, 4000);
 }());
 </script>

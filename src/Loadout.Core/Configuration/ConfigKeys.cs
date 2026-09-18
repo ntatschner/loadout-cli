@@ -339,6 +339,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "nothing, which Telegram refuses"),
 
+        new("team-office-set",
+            "Which set of office art the dashboard draws desks with",
+            (_, m) => m.Teams.OfficeSet,
+            (_, m, v) => m.Teams.OfficeSet = v.Trim(),
+            true,
+            Sample: "open-office",
+            Group: Groups.Machine,
+            WhenUnset: "a desk is a square with the node's name in it, which is what it has always been"),
+
         new("team-webhook-teams",
             "Comma-separated teams something outside this machine may start",
             (_, m) => string.Join(", ", m.Teams.WebhookTeams),

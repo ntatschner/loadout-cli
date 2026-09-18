@@ -244,6 +244,48 @@ are two teams running at once on an afternoon, never across a week.
 answering a gate is implemented once rather than three times. Clicking anybody
 anywhere takes you there.
 
+#### Putting art in the office
+
+Out of the box a desk is a square with the node's name and state written in it,
+and that is the whole design: the words come first and a picture is a second
+encoding on top of them, never the only one. Nothing below changes what a
+screen reader is handed.
+
+**Loadout ships no art.** Pixel-art asset packs are generally sold under
+licences that let you use the files inside a finished project and forbid
+redistributing the originals — and a public source repository hands everything
+in it to anybody who clones. So the art lives on your machine and Loadout only
+draws it.
+
+A set is a directory; a piece is a file in it, named after the role it draws:
+
+```
+<state>/teams/office/open-office/lead.png
+<state>/teams/office/open-office/implementer.png
+<state>/teams/office/open-office/reviewer.png
+<state>/teams/office/open-office/worker.png
+```
+
+```sh
+loadout config set team-office-set "open-office"
+```
+
+Each desk looks for its own role — `implementer`, `reviewer`, `verifier`,
+whatever the team calls them, minus the `role.` — and falls back to `worker`.
+A role with neither keeps its empty square, so a half-finished set is a
+partly-drawn office rather than a broken one. `png`, `webp` and `gif` are
+served and nothing else is; a name that is a path reaches nothing.
+
+Several sets can sit side by side and the setting picks one, which is the point
+of a set rather than a folder: an office themed one way on Monday and another
+on Friday is one config change. A name no directory answers to draws squares —
+the same as having no art, rather than something subtly broken.
+
+The images are served by the daemon from that directory, over the same loopback
+address and behind the same token as everything else on the page. Nothing is
+fetched from the internet, which was true when the page had no images and is
+still true now.
+
 Each run is also given a **room**, which is a name somebody might actually
 remember: *The Corner Office (Plant Died)*, *The Mezzanine (Lift Out of
 Order)*, *The Breakout Space (Double Booked)*. A run is called
@@ -793,6 +835,12 @@ Said here rather than discovered:
 - The machine's ceiling covers outward actions only. Everything else a node may
   do comes from its role and the agent's own permissions, checked when it tries
   rather than before the run starts.
+- Office art is drawn and not animated. A set is one still image per role; a
+  node that is working and a node that is waiting are told apart by the words
+  on the desk and by the desk itself, as they were before there was any art.
+- There is no room backdrop. Only the desks are drawn, because a picture behind
+  text is the easiest way to lose the contrast the rest of this was built to
+  keep.
 
 ## See also
 

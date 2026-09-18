@@ -155,6 +155,13 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 return output.Fail(started);
             }
 
+            // The office art, if this machine has any. Read once: a set is a
+            // directory somebody filled before starting the daemon.
+            var office = OfficeArt.Chosen(_paths, teams?.OfficeSet);
+
+            server.OfficeRoot = office.Root;
+            server.OfficeSet = office.Set;
+
             // Asked per request rather than read once here, so turning the
             // webhook off with 'team webhook disable' takes effect on the next
             // request rather than the next restart.

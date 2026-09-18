@@ -98,6 +98,19 @@ public sealed class DashboardServer : IDisposable
         _git = git;
     }
 
+    /// <summary>
+    /// Where the office art lives on this machine, or null for none.
+    /// </summary>
+    /// <remarks>
+    /// Null is the ordinary case and draws what the office always drew: a
+    /// square with the node's name in it. Loadout ships no art, so this points
+    /// at a directory somebody filled themselves.
+    /// </remarks>
+    public string? OfficeRoot { get; set; }
+
+    /// <summary>Which set in that directory to draw with, or empty for none.</summary>
+    public string OfficeSet { get; set; } = string.Empty;
+
     /// <summary>The secret every request has to carry, made when the server starts.</summary>
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
@@ -672,6 +685,33 @@ public sealed class DashboardServer : IDisposable
         if (path is "/" or "/index.html")
         {
             await WriteAsync(context, 200, "text/html; charset=utf-8", Page()).ConfigureAwait(false);
+
+            return;
+        }
+
+        // What art there is, if any, so the page knows which desks it can
+        // draw and which it has to leave as a square. Answered even with
+        // nothing installed, because "none" is an answer the page acts on.
+        if (path == "/api/office")
+        {
+            var root = OfficeRoot;
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    set = root is null ? string.Empty : OfficeSet,
+                    sets = root is null ? [] : OfficeArt.Sets(root),
+                    pieces = root is null || OfficeSet.Length == 0
+                        ? []
+                        : OfficeArt.Pieces(root, OfficeSet),
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (path.StartsWith("/office/", StringComparison.Ordinal))
+        {
+            await PieceAsync(context, path["/office/".Length..]).ConfigureAwait(false);
 
             return;
         }
@@ -1382,7 +1422,64 @@ public sealed class DashboardServer : IDisposable
         // fetch". Nothing in the tests could see that - they check the markup
         // and the endpoints separately, and a browser is what joins them.
         response.Headers["Content-Security-Policy"] =
-            "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'";
+            // img-src is what the office needs to draw a sprite at all, and
+            // 'self' is the whole of it: the art is served by this daemon from
+            // a directory on this machine. Nothing is fetched from anywhere,
+            // which was true when the page had no images and stays true now.
+            "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
+            + "connect-src 'self'; img-src 'self'";
+
+        await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
+
+        response.Close();
+    }
+
+    /// <summary>
+    /// One piece of the chosen set, as an image.
+    /// </summary>
+    /// <remarks>
+    /// Only from the set that is configured, and only a name that is a name.
+    /// A request naming another set is a request to read a directory this was
+    /// not pointed at, and the answer to that is the same as for a piece that
+    /// is not there.
+    /// </remarks>
+    private async Task PieceAsync(HttpListenerContext context, string piece)
+    {
+        if (OfficeRoot is not { Length: > 0 } root
+            || OfficeSet.Length == 0
+            || OfficeArt.FileOf(root, OfficeSet, Uri.UnescapeDataString(piece)) is not { } file
+            || OfficeArt.TypeOf(file) is not { } type)
+        {
+            await WriteAsync(context, 404, "text/plain; charset=utf-8", "No such piece.").ConfigureAwait(false);
+
+            return;
+        }
+
+        byte[] bytes;
+
+        try
+        {
+            bytes = await File.ReadAllBytesAsync(file).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            await WriteAsync(context, 404, "text/plain; charset=utf-8", "That piece could not be read.")
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        var response = context.Response;
+
+        response.StatusCode = 200;
+        response.ContentType = type;
+        response.ContentLength64 = bytes.Length;
+        response.Headers["X-Content-Type-Options"] = "nosniff";
+        response.Headers["Referrer-Policy"] = "no-referrer";
+
+        // A set does not change while the daemon is running, and a desk asks
+        // for the same sprite on every redraw.
+        response.Headers["Cache-Control"] = "private, max-age=3600";
 
         await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
 
