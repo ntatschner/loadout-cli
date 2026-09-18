@@ -105,6 +105,16 @@ public sealed class RunAttentionTests
     }
 
     [Fact]
+    public void A_question_the_lead_wrote_reaches_the_rail_with_one_question_mark()
+    {
+        var asking = RunAttention.For(Run(gates: [Gate() with { Asked = "Merge now?" }]), Noon);
+
+        // This is the sentence that goes out to somebody's phone, so it is
+        // worth being exact about rather than merely containing the words.
+        asking.Should().ContainSingle().Which.Detail.Should().Be("Merge now?");
+    }
+
+    [Fact]
     public void A_round_that_asked_for_nothing_is_worth_saying_before_the_next_one_ends_it()
     {
         var stuck = RunAttention.For(Run(quietRounds: 1), Noon);

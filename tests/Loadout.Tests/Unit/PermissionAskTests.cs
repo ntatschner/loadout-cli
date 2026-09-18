@@ -101,6 +101,25 @@ public sealed class PermissionAskTests : IDisposable
     }
 
     [Fact]
+    public void A_question_the_lead_wrote_keeps_the_punctuation_it_came_with()
+    {
+        // The lead writes its own questions and writes them as questions, so
+        // "Merge now?" is what arrives here. Every surface adds a question
+        // mark, because a permission question is built without one - which
+        // made the lead's read "Merge now??" everywhere but the dashboard.
+        new PendingAsk("g", "lead", "role.lead", "ask", null, _time.GetUtcNow(), "question", "Merge now?")
+            .Asking.Should().Be("Merge now?");
+
+        // Not every question the lead asks ends in a question mark, and one
+        // that has finished its own sentence is left alone too.
+        new PendingAsk("g", "lead", "role.lead", "ask", null, _time.GetUtcNow(), "question", "Pick one.")
+            .Asking.Should().Be("Pick one.");
+
+        // And the one built here, which really does need it, still gets it.
+        Ask().Asking.Should().EndWith("Let it?");
+    }
+
+    [Fact]
     public async Task Questions_are_offered_oldest_first()
     {
         var early = new PendingAsk("a", "one", "role.implementer", "Bash", "first", _time.GetUtcNow());

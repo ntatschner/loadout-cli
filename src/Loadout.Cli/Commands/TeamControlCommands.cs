@@ -126,7 +126,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
 
             foreach (var one in waiting)
             {
-                output.WriteLine($"  [bold]{Markup.Escape(one.Id)}[/]  {Markup.Escape(one.Question)}?");
+                output.WriteLine($"  [bold]{Markup.Escape(one.Id)}[/]  {Markup.Escape(one.Asking)}");
             }
 
             return output.Fail("Say which with --gate.", ExitCode.InvalidArguments);
@@ -135,7 +135,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         if (settings.Answer is not { Length: > 0 } answer)
         {
             return output.Fail(
-                $"{gate.Question}? Answer with --answer "
+                $"{gate.Asking} Answer with --answer "
                 + string.Join(" or ", gate.Choices),
                 ExitCode.InvalidArguments);
         }

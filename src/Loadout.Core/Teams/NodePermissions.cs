@@ -90,6 +90,33 @@ public sealed record PendingAsk(
                 + (Target is { Length: > 0 } ? $" for '{Target}'" : string.Empty)
                 + ". Nothing in its role allows that. Let it";
 
+    /// <summary>The question with one question mark, however it was written.</summary>
+    /// <remarks>
+    /// <para>
+    /// The convention above - whoever asks adds the mark - is right for a
+    /// permission question, which is built here without one. It is wrong for a
+    /// lead's own question, which arrives already written as one: "Merge now?"
+    /// went to the rail, to the notice on somebody's phone and to what the CLI
+    /// prints as "Merge now??".
+    /// </para>
+    /// <para>
+    /// So the adding is the part that knows, and every surface goes through
+    /// here. The dashboard had already learnt this in its own script and was
+    /// the only one getting it right.
+    /// </para>
+    /// </remarks>
+    public string Asking
+    {
+        get
+        {
+            var said = Question.TrimEnd();
+
+            return said.Length > 0 && said[^1] is '?' or '!' or '.'
+                ? said
+                : said + "?";
+        }
+    }
+
     /// <summary>What may be chosen, with yes and no as the default pair.</summary>
     public IReadOnlyList<string> Choices =>
         Options is { Count: > 0 } given ? given : ["yes", "no"];

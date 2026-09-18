@@ -99,7 +99,7 @@ public static class RunAttention
         {
             reasons.Add(new Attention(
                 AttentionKind.Asking,
-                gate.Question + "?",
+                gate.Asking,
                 "you answer it"));
         }
 
