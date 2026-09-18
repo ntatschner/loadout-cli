@@ -818,6 +818,20 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_finished_run_can_be_run_again()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("id=\"again\">Run it again</button>");
+
+        // It fills the form rather than starting anything, because a run that
+        // has been run before is exactly the one somebody wants to change one
+        // thing about before running again.
+        text.Should().Contain("again.onclick");
+        text.Should().Contain("form.open = true");
+    }
+
+    [Fact]
     public async Task The_page_offers_a_way_to_rename_a_room()
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();

@@ -497,6 +497,17 @@ the whole point of a gate is that a person decided. Stopping a run and
 answering its question stay with the dashboard and the command line, and a test
 asserts that no tool here is named for either.
 
+### Running one again
+
+A finished run has **Run it again**, which fills the start form from it — team,
+goal, project, rounds and autonomy — rather than starting anything. A run that
+has been run before is exactly the one somebody wants to change one thing about
+before running again, and the earlier one stays where it is and stays readable.
+
+**Not built:** re-running only the nodes that failed, or one node on its own.
+Both mean re-entering a run that has ended rather than starting a fresh one,
+which is a different and much larger thing.
+
 ### Changing a brief before it goes out
 
 In **manual** mode every worker's brief is a checkpoint, and it is the one

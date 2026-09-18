@@ -550,6 +550,7 @@
       <button type="button" id="pause">Hold it</button>
       <button type="button" id="resume">Let it carry on</button>
       <button type="button" id="stop">Stop it</button>
+      <button type="button" id="again">Run it again</button>
       <label for="say" class="said">Say something to the lead</label>
       <input type="text" id="say" placeholder="read after its current round">
       <button type="button" id="send">Send</button>
@@ -1812,6 +1813,36 @@
           })
           .catch(function (e) { announce(e.message); });
       };
+
+    /*
+      A fresh run of the same thing, with the earlier one still readable - which
+      is what re-running means and is the whole reason a finished run is kept.
+
+      It fills the form rather than starting anything, because a run that has
+      been run before is exactly the one somebody wants to change one thing
+      about before running again.
+    */
+    var again = document.getElementById("again");
+
+    again.hidden = run.running;
+
+    again.onclick = function () {
+      document.getElementById("start-team").value = run.team || "";
+      document.getElementById("start-goal").value = run.goal || "";
+      document.getElementById("start-project").value = run.project || "";
+      document.getElementById("start-rounds").value = run.roundLimit || "";
+      document.getElementById("start-autonomy").value = run.autonomy || "";
+
+      var form = document.querySelector(".start");
+
+      form.open = true;
+
+      // Moved to, so somebody reading with the keyboard is at the thing that
+      // just filled itself in rather than being told about it.
+      document.getElementById("start-goal").focus();
+
+      announce("Filled in from " + (run.room || run.id) + ". Change what you want and start it.");
+    };
 
     document.getElementById("send").onclick = function () {
       var box = document.getElementById("say");
