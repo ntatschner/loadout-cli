@@ -364,7 +364,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Nine tools, each making the same call its command makes:
+Eleven tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -378,6 +378,7 @@ Nine tools, each making the same call its command makes:
 | `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
 | `loadout_progress` | For a node of a team run: say what you are doing, in your own words |
+| `loadout_teams` | What the team runs on this machine are doing, and which have stopped to ask |
 
 `loadout_recall` exists because only the memory index reaches the context — one
 line per topic — and a session deciding from that alone either opens six files

@@ -373,6 +373,21 @@ A reason that clears and comes back is news again. A daemon that restarts
 repeats whatever is still outstanding, once — what has been said is held in
 memory rather than in a file nobody would ever read.
 
+### Asking a Claude session what the teams are doing
+
+The MCP server carries `loadout_teams`, so a session that is not part of a run
+can answer "is anything of mine still going, and does it want me" without you
+leaving the conversation to go and look. It gives what the dashboard and
+`team status` give, from the same journals, so three accounts cannot disagree:
+which runs are going, what each has cost and is costing, and what any of them
+has stopped to ask.
+
+**It reads and nothing else.** A session that could stop a run or answer a gate
+could be talked into doing either by whatever it happened to be reading, and
+the whole point of a gate is that a person decided. Stopping a run and
+answering its question stay with the dashboard and the command line, and a test
+asserts that no tool here is named for either.
+
 ### Reaching it from something other than this machine
 
 The dashboard listens on `127.0.0.1` by default, which is this machine and

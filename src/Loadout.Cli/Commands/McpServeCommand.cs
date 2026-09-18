@@ -150,6 +150,7 @@ public sealed class LoadoutTools
     private readonly Core.Tasks.ITaskService _tasks;
     private readonly IGitManager _git;
     private readonly ISymbolIndexService _symbols;
+    private readonly IRunJournal _runs;
     private readonly TimeProvider _time;
     private readonly LoadoutToolScope _scope;
 
@@ -161,6 +162,7 @@ public sealed class LoadoutTools
         Core.Tasks.ITaskService tasks,
         IGitManager git,
         ISymbolIndexService symbols,
+        IRunJournal runs,
         TimeProvider time,
         LoadoutToolScope scope)
     {
@@ -171,6 +173,7 @@ public sealed class LoadoutTools
         _tasks = tasks;
         _git = git;
         _symbols = symbols;
+        _runs = runs;
         _time = time;
         _scope = scope;
     }
@@ -773,6 +776,82 @@ public sealed class LoadoutTools
             ct).ConfigureAwait(false);
 
         return $"Recorded, as {policy.Node}.";
+    }
+
+    /// <summary>
+    /// What the teams on this machine are doing, for a session that is not one
+    /// of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reading only, and deliberately. A session that could stop a run or
+    /// answer a gate could be talked into doing either by whatever it was
+    /// reading at the time, and the whole point of a gate is that a person
+    /// decided. What this is for is the question somebody actually asks a
+    /// session - "is anything of mine still going, and does it want me" - which
+    /// otherwise means leaving the conversation to go and look.
+    /// </para>
+    /// <para>
+    /// The same numbers as the dashboard and the status command, from the same
+    /// journals, so three accounts cannot disagree.
+    /// </para>
+    /// </remarks>
+    [McpServerTool(Name = "loadout_teams")]
+    [Description(
+        "What team runs on this machine are doing: which are going, what each has cost, and "
+        + "which have stopped to ask somebody something. Reads only; stopping a run or "
+        + "answering its question is a person's to do, from the dashboard or the command line.")]
+    public string Teams(
+        [Description("How many of the most recent runs. 5 by default.")] int most = 5,
+        [Description("Only the ones still going.")] bool onlyRunning = false)
+    {
+        var now = _time.GetUtcNow();
+        var lines = new List<string>();
+
+        foreach (var id in _runs.List(Math.Clamp(most, 1, 40)))
+        {
+            var read = _runs.Summarise(id);
+
+            if (read.Failed || read.Value is not { } run)
+            {
+                continue;
+            }
+
+            if (onlyRunning && !run.Running)
+            {
+                continue;
+            }
+
+            var money = RunMetrics.Money(run, now);
+
+            var state = run.WaitingForYou
+                ? "waiting for a person"
+                : run.Running ? "going" : run.Ended ?? "finished";
+
+            var said = $"{run.RunId}  {run.Team}"
+                + (run.Project is { Length: > 0 } on ? $" on {on}" : string.Empty)
+                + $"  {state}, round {run.Rounds}"
+                + (run.RoundLimit > 0 ? $" of {run.RoundLimit}" : string.Empty)
+                + $", ${run.CostUsd:0.00}"
+                + (run.Running ? $" and {RunMetrics.Rate(money.PerMinute)}" : string.Empty)
+                + $"  {run.Goal}";
+
+            lines.Add(said);
+
+            foreach (var reason in RunAttention.For(run, now))
+            {
+                lines.Add($"    needs you: {reason.Detail} (clears when {reason.Clears})");
+            }
+        }
+
+        if (lines.Count == 0)
+        {
+            return onlyRunning
+                ? "Nothing is running on this machine."
+                : "No team has run on this machine yet.";
+        }
+
+        return string.Join("\n", lines);
     }
 
     [McpServerTool(Name = "loadout_task_declare")]
