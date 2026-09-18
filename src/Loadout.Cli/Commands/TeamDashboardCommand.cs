@@ -58,6 +58,14 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     /// has not asked for their keyboard to be read; a script has closed the
     /// pipe precisely to say it is finished.
     /// </remarks>
+    /// <remarks>
+    /// An input that cannot be read at all is not the same as one that closed.
+    /// Started with no usable handle - detached, or from something that
+    /// redirected input it never opened - reading it throws at once, and
+    /// treating that as "my owner has finished" would stop the server before
+    /// anybody could open the page. There is nothing to watch, so it watches
+    /// nothing and waits to be stopped instead.
+    /// </remarks>
     internal static async Task Ends(CancellationTokenSource stopping)
     {
         if (!Console.IsInputRedirected)
@@ -70,6 +78,11 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             try
             {
                 await Console.In.ReadToEndAsync(stopping.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException)
+            {
+                // No readable input at all. Nothing closed, so nothing ends.
+                return;
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
             {
@@ -129,8 +142,8 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         {
             output.WriteLine($"[bold]{Markup.Escape(server.Address)}[/]");
             output.WriteLine(
-                "[dim]On this machine only, and only with that token. It reads; nothing can be "
-                + "changed from it.[/]");
+                "[dim]On this machine only, and only with that token. Anything it changes "
+                + "runs the command you would have typed.[/]");
             output.WriteLine(Console.IsInputRedirected
                 ? "[dim]It stops when whatever started it closes its input.[/]"
                 : "[dim]Press Ctrl+C to stop.[/]");
