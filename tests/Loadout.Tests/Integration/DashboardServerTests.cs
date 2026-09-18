@@ -170,6 +170,40 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_page_is_one_column_until_there_is_room_for_three()
+    {
+        // The narrow case is a phone answering a gate from the sofa, and a
+        // layout that starts wide and is squeezed reads as an afterthought
+        // there. So the columns are what a wide screen adds, not what a narrow
+        // one takes away.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain(".panes { display: grid;");
+        text.Should().Contain("@media (min-width: 64rem)");
+
+        // The three-column rule must live inside that query and nowhere else.
+        var columns = text.IndexOf("grid-template-columns", StringComparison.Ordinal);
+        var breakpoint = text.IndexOf("@media (min-width: 64rem)", StringComparison.Ordinal);
+
+        columns.Should().BeGreaterThan(breakpoint, "columns are added by width, not removed by it");
+    }
+
+    [Fact]
+    public async Task Every_pane_says_what_it_is()
+    {
+        // Three unnamed regions announce as "region, region, region". The
+        // detail pane was exactly that until somebody looked.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // On the sections themselves, not merely somewhere in the page: the
+        // log inside the detail pane carries the same label, so asking
+        // whether the string exists anywhere passed with the pane unnamed.
+        text.Should().Contain("<section id=\"rail\" class=\"pane\" hidden aria-labelledby=\"rail-heading\">");
+        text.Should().Contain("<section class=\"pane\" aria-labelledby=\"runs\">");
+        text.Should().Contain("<section id=\"detail\" class=\"pane\" hidden aria-labelledby=\"detail-heading\">");
+    }
+
+    [Fact]
     public async Task Reading_a_run_is_still_reading_it()
     {
         // The route split is by verb, and two of them are not verbs at all.
