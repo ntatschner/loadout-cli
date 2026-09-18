@@ -90,6 +90,36 @@ public sealed class HeadlessSession : IAsyncDisposable
     }
 
     /// <summary>
+    /// Says something to the agent without waiting for it to answer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The other half of <see cref="TurnAsync"/>: the message goes in and the
+    /// caller carries on. What it is for is saying something to an agent that
+    /// is already in the middle of a turn - "stop, you are in the wrong file" -
+    /// which otherwise has to wait until the turn comes back, by which time it
+    /// has spent the money it was going to spend.
+    /// </para>
+    /// <para>
+    /// Whether the agent acts on it mid-turn is the agent's business and not
+    /// this one's. Claude Code's stream-json input takes further user messages
+    /// while a turn is running; another agent may queue it until the turn ends.
+    /// What is promised here is that it was written and flushed.
+    /// </para>
+    /// </remarks>
+    /// <param name="message">What to say.</param>
+    /// <param name="ct">Cancellation.</param>
+    public async Task SayAsync(string message, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+        await _process.Input.WriteLineAsync(_protocol.EncodeUserMessage(message).AsMemory(), ct)
+            .ConfigureAwait(false);
+
+        await _process.Input.FlushAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Reads until the agent reports a turn over, or its output ends. For a
     /// turn the agent started on its own, or the tail of one after a
     /// message was sent another way.

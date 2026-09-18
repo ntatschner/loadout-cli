@@ -53,6 +53,61 @@ public sealed class HeadlessSessionTests
     }
 
     [Fact]
+    public async Task Something_said_while_a_turn_is_running_is_written_to_the_agent_there_and_then()
+    {
+        // The point of it. A worker going the wrong way is spending money doing
+        // it, and waiting for the turn to come back means waiting for exactly
+        // the spend somebody is trying to stop.
+        var arrived = new TaskCompletionSource();
+        var carryOn = new TaskCompletionSource();
+
+        var pipe = new StubProcessLauncher.StubPipedProcess(
+            string.Join("\n", [Init, Pong, ResultOne]) + "\n",
+            0,
+            beforeFirstLine: async () =>
+            {
+                arrived.SetResult();
+
+                await carryOn.Task;
+            });
+
+        await using var session = new HeadlessSession(pipe, ClaudeHeadlessProtocol.Instance);
+
+        var turn = session.TurnAsync("go");
+
+        // Held mid-turn: the agent has been asked and has said nothing back.
+        await arrived.Task;
+
+        await session.SayAsync("stop, you are in the wrong file");
+
+        carryOn.SetResult();
+
+        await turn;
+
+        var written = pipe.Written.ToString();
+
+        written.Should().Contain("stop, you are in the wrong file");
+
+        // After the message that started the turn, because it was said after
+        // it - an agent reading its input in order sees them in that order.
+        written.IndexOf("stop, you are in the wrong file", StringComparison.Ordinal)
+            .Should().BeGreaterThan(written.IndexOf("\"go\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Saying_nothing_is_refused_rather_than_written()
+    {
+        var (session, pipe) = Open(Init, Pong, ResultOne);
+        await using var _ = session;
+
+        var act = async () => await session.SayAsync("   ");
+
+        await act.Should().ThrowAsync<ArgumentException>();
+
+        pipe.Written.ToString().Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Two_turns_over_one_pipe_cost_the_step_in_the_running_total()
     {
         var (session, pipe) = Open(Init, Pong, ResultOne, Ping, ResultTwo);

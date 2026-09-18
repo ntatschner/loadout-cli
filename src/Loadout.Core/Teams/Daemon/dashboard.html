@@ -571,6 +571,13 @@
 
     <div id="depth-messages" role="tabpanel" aria-labelledby="tab-messages" tabindex="0">
       <ul class="papers" id="who"></ul>
+
+      <div class="controls" id="steer" hidden>
+        <label for="steer-said" class="said">Say something to this node now</label>
+        <input type="text" id="steer-said" placeholder="it hears this next time it says anything">
+        <button type="button" id="steer-send">Say it</button>
+      </div>
+
       <div class="log" id="log" role="log" aria-labelledby="detail-heading"></div>
     </div>
 
@@ -1661,6 +1668,7 @@
     drawWho();
 
     if (depth === 0 && trailOf) {
+      steering();
       showTrail(false);
     }
 
@@ -1810,6 +1818,53 @@
   // few seconds and being sent the same two thousand steps is most of a
   // megabyte a minute to say nothing.
   var trailHas = 0;
+
+  /*
+    The second credential, held for as long as the daemon says and never
+    written anywhere. The token in the address got somebody to this page, which
+    is for watching and deciding; putting words into a process that is running
+    with somebody's file access, at a moment nobody chose, is a separate grant.
+
+    In a variable rather than in storage on purpose: it is for a person at a
+    page, and when the page goes it should go with it.
+  */
+  var grant = null;
+
+  function attached() {
+    if (grant) { return Promise.resolve(grant); }
+
+    var said = window.prompt(
+      "Typing at a running node needs the attach passphrase. "
+      + "The token that got you here is for watching and deciding.");
+
+    if (!said) { return Promise.reject(new Error("Nothing was typed at anything.")); }
+
+    return fetch("/api/attach?token=" + encodeURIComponent(token), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passphrase: said })
+    }).then(function (answer) {
+      return answer.text().then(function (body) {
+        var read = null;
+
+        try {
+          read = JSON.parse(body);
+        } catch (e) {
+          read = null;
+        }
+
+        if (!answer.ok || !read || !read.grant) {
+          throw new Error((read && read.error) || "That was not accepted.");
+        }
+
+        grant = read.grant;
+
+        announce("Attached. That lasts " + read.minutes + " minutes.");
+
+        return grant;
+      });
+    });
+  }
 
   function showDepth(which, move) {
     depth = which;
@@ -2238,6 +2293,8 @@
         lastSaid = null;
         trailHas = 0;
 
+        steering();
+
         if (node) {
           showTrail(true);
         } else {
@@ -2253,6 +2310,62 @@
       box.appendChild(li);
     });
   }
+
+  /*
+    Typing at the node whose stream is open. Only there: this is the view that
+    shows what a node is doing right now, which is the only moment at which
+    saying something to it rather than to the lead makes any sense.
+  */
+  function steering() {
+    var box = document.getElementById("steer");
+    var alive = opened && opened.running && trailOf
+      && (opened.nodes || []).some(function (node) {
+        return node.node === trailOf && node.state !== "done" && node.state !== "reported";
+      });
+
+    box.hidden = !alive;
+  }
+
+  (function () {
+    var send = document.getElementById("steer-send");
+
+    send.addEventListener("click", function () {
+      var box = document.getElementById("steer-said");
+      var message = box.value.trim();
+
+      if (!message || !trailOf || !opened) { return; }
+
+      var node = trailOf;
+      var id = opened.id;
+
+      send.disabled = true;
+
+      attached()
+        .then(function (held) {
+          return fetch("/api/runs/" + encodeURIComponent(id) + "/say?token="
+            + encodeURIComponent(token), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Loadout-Attach": held },
+            body: JSON.stringify({ node: node, message: message })
+          }).then(function (answer) {
+            return answer.text().then(function (body) {
+              if (!answer.ok) {
+                // A grant that has run out is the ordinary case, and asking
+                // again is what somebody wants rather than being told off.
+                if (answer.status === 403) { grant = null; }
+
+                throw new Error(body || ("The dashboard answered " + answer.status + "."));
+              }
+
+              box.value = "";
+              announce(node + " hears that the next time it says anything.");
+            });
+          });
+        })
+        .catch(function (wrong) { announce(wrong.message); })
+        .then(function () { send.disabled = false; });
+    });
+  }());
 
   function showTrail(fresh) {
     if (!opened || !trailOf) { return; }
@@ -2524,6 +2637,7 @@
     turnsShown = -1;
     trailOf = null;
 
+    document.getElementById("steer").hidden = true;
     document.getElementById("who").removeAttribute("data-who");
 
     drawGates(run);

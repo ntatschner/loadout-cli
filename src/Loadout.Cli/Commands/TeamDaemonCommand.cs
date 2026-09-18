@@ -180,6 +180,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // any of it means anything.
             server.Begin = (asking, ct) => BeganAsync(asking, output, ct);
 
+            // And the second credential, which the dashboard's own token does
+            // not grant: typing at a live node is not something the run
+            // offered to have decided.
+            server.Attach = new Attaching(_secrets, _time);
+
             _address = server.Address;
 
             foreach (var address in server.Reachable())
@@ -396,6 +401,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             "pr" => ("team pr", action.Node is { Length: > 0 } whose
                 ? [action.Run, "--node", whose]
                 : [action.Run]),
+
+            "say" => ("team say", [
+                action.Run,
+                "--node", action.Node ?? string.Empty,
+                "--message", action.Message ?? string.Empty,
+            ]),
             _ => (string.Empty, []),
         };
 

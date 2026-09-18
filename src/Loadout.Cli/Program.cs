@@ -656,6 +656,14 @@ public static class Program
             team.AddCommand<TeamHaltCommand>("halt");
             team.AddCommand<TeamNameCommand>("name");
             team.AddCommand<TeamPrCommand>("pr");
+            team.AddCommand<TeamSayCommand>("say");
+
+            team.AddBranch("attach", attach =>
+            {
+                attach.AddCommand<TeamAttachSetCommand>("set");
+                attach.AddCommand<TeamAttachClearCommand>("clear");
+                attach.AddCommand<TeamAttachShowCommand>("show");
+            });
 
             team.AddBranch("autostart", autostart =>
             {

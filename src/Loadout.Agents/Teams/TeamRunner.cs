@@ -1517,7 +1517,7 @@ public sealed class TeamRunner : ITeamRunner
         var session = launch.Session!;
         var cost = 0m;
         var said = string.Empty;
-        var watching = new Progress(journal, brief.Node, time);
+        var watching = new Progress(journal, brief.Node, time) { Steering = session };
 
         for (var attempt = 1; attempt <= 2; attempt++)
         {
@@ -2216,8 +2216,22 @@ public sealed class TeamRunner : ITeamRunner
             _time = time;
         }
 
+        /// <summary>
+        /// The session to pass anything somebody says along to, or null.
+        /// </summary>
+        /// <remarks>
+        /// Here rather than anywhere else because this is the one thing that
+        /// runs while a node's turn is in flight. Everything else that reaches
+        /// into a run waits for a round to come back, which for a worker going
+        /// the wrong way means waiting for exactly the spend somebody is trying
+        /// to stop.
+        /// </remarks>
+        public HeadlessSession? Steering { get; init; }
+
         public async Task SawAsync(HeadlessEvent evt, CancellationToken ct)
         {
+            await PassOnAsync(ct).ConfigureAwait(false);
+
             // Everything, before the throttling below. The journal is
             // deliberately thin - one line every few seconds, repeats dropped -
             // which is right for watching a run and wrong for working out what
@@ -2242,6 +2256,31 @@ public sealed class TeamRunner : ITeamRunner
             _said = doing;
 
             await _journal.WriteAsync("node.doing", _node, new { doing }, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Tells the node whatever somebody has left for it.
+        /// </summary>
+        /// <remarks>
+        /// Between the events the run is already reading, which is as often as
+        /// a node says anything and no more often than that. A node that has
+        /// gone quiet is a node nobody can steer, which is the same thing the
+        /// needs-you rail already says out loud.
+        /// </remarks>
+        private async Task PassOnAsync(CancellationToken ct)
+        {
+            if (Steering is null || _journal.Directory is not { Length: > 0 } directory)
+            {
+                return;
+            }
+
+            foreach (var message in NodeControl.Take(directory, _node))
+            {
+                await Steering.SayAsync(message, ct).ConfigureAwait(false);
+
+                await _journal.WriteAsync(
+                    "node.told", _node, new { message }, ct).ConfigureAwait(false);
+            }
         }
 
         /// <summary>

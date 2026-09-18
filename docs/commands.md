@@ -76,6 +76,10 @@
 | `loadout team halt` | Stop a run after its current round, hold it, or let it carry on |
 | `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
 | `loadout team pr` | Open a pull request for what one node of a run produced |
+| `loadout team say` | Say something to one node while it is still working |
+| `loadout team attach set` | Set the passphrase that lets the dashboard type at a running node |
+| `loadout team attach show` | Say whether one is set, never what it is |
+| `loadout team attach clear` | Forget it, so nothing can type at a running node |
 | `loadout team notify set\|test\|show\|clear` | Send a run's call for help to Slack, Discord, Teams, Telegram or your own endpoint |
 | `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
 | `loadout pack list\|add\|approve\|update\|remove` | Sets of specialists, roles and teams fetched from a Git remote, approved per machine |

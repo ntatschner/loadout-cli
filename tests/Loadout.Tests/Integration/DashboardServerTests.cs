@@ -787,6 +787,22 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_page_offers_a_way_to_type_at_a_node_and_hides_it_by_default()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // Hidden until somebody opens a live node's own stream, which is the
+        // only moment at which saying something to it rather than to the lead
+        // makes any sense.
+        text.Should().Contain("<div class=\"controls\" id=\"steer\" hidden>");
+        text.Should().Contain("<label for=\"steer-said\"");
+        text.Should().Contain("id=\"steer-send\"");
+
+        // And it carries the second credential rather than the first.
+        text.Should().Contain("X-Loadout-Attach");
+    }
+
+    [Fact]
     public async Task The_page_offers_a_way_to_rename_a_room()
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
@@ -796,6 +812,150 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("id=\"room\"");
         text.Should().Contain("<label for=\"room\"");
         text.Should().Contain("id=\"rename\"");
+    }
+
+    private Task<HttpResponseMessage> SayAsync(string? grant)
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            new Uri(_root + "api/runs/20260916-1200-aaaa/say?token=" + _server.Token))
+        {
+            Content = new StringContent(
+                """{"node":"lead","message":"stop, wrong file"}""",
+                System.Text.Encoding.UTF8,
+                "application/json"),
+        };
+
+        if (grant is not null)
+        {
+            request.Headers.Add("X-Loadout-Attach", grant);
+        }
+
+        return _client.SendAsync(request);
+    }
+
+    [Fact]
+    public async Task The_token_that_gets_you_here_does_not_let_you_type_at_a_node()
+    {
+        // The whole of the split. Reading a run, answering a gate it asked and
+        // stopping it are things the run offered to have decided. Typing at a
+        // live node is not: it puts words into a process running with somebody's
+        // file access, at a moment nobody chose.
+        var typed = false;
+
+        _server.Act = (_, _) =>
+        {
+            typed = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        _server.Attach = new Attaching(new NoSecrets());
+
+        var answer = await SayAsync(grant: null);
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("separate grant");
+
+        typed.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_grant_from_the_passphrase_does()
+    {
+        RunAction? asked = null;
+
+        _server.Act = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var attach = new Attaching(new NoSecrets { Kept = "a passphrase worth having" });
+
+        _server.Attach = attach;
+
+        var got = await _client.PostAsync(
+            new Uri(_root + "api/attach?token=" + _server.Token),
+            new StringContent(
+                """{"passphrase":"a passphrase worth having"}""",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        got.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var grant = JsonDocument.Parse(await got.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("grant").GetString();
+
+        (await SayAsync(grant)).StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked!.Verb.Should().Be("say");
+        asked.Node.Should().Be("lead");
+        asked.Message.Should().Be("stop, wrong file");
+    }
+
+    [Fact]
+    public async Task A_grant_somebody_made_up_is_not_one()
+    {
+        _server.Act = (_, _) => Task.FromResult(OperationResult.Ok());
+        _server.Attach = new Attaching(new NoSecrets { Kept = "a passphrase worth having" });
+
+        (await SayAsync(new string('a', 64))).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Asking_to_attach_needs_the_dashboard_token_as_well()
+    {
+        _server.Attach = new Attaching(new NoSecrets { Kept = "a passphrase worth having" });
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/attach"),
+            new StringContent("""{"passphrase":"a passphrase worth having"}""",
+                System.Text.Encoding.UTF8, "application/json"));
+
+        // No reason for anything without the first credential to be guessing at
+        // the second.
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task A_dashboard_that_cannot_attach_at_all_says_so()
+    {
+        // The fixture's server has no Attaching unless a test sets one, which
+        // is the state a dashboard started on its own is in.
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/attach?token=" + _server.Token),
+            new StringContent("""{"passphrase":"anything"}""",
+                System.Text.Encoding.UTF8, "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("team attach set");
+    }
+
+    /// <summary>A credential store holding one thing, or nothing.</summary>
+    private sealed class NoSecrets : Loadout.Platform.Abstractions.ISecretProvider
+    {
+        public string? Kept { get; init; }
+
+        public string Name => "none";
+
+        public Task<OperationResult> IsAvailableAsync(CancellationToken ct = default) =>
+            Task.FromResult(OperationResult.Ok());
+
+        public Task<OperationResult<string>> GetAsync(string reference, CancellationToken ct = default) =>
+            Task.FromResult(Kept is { Length: > 0 }
+                ? OperationResult<string>.Ok(Kept)
+                : OperationResult<string>.Fail("nothing kept", Loadout.Models.ExitCode.GeneralFailure));
+
+        public Task<OperationResult> SetAsync(string reference, string value, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult.Ok());
+
+        public Task<OperationResult> RemoveAsync(string reference, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult.Ok());
+
+        public Task<OperationResult> TestAsync(string reference, CancellationToken ct = default) =>
+            Task.FromResult(OperationResult.Ok());
     }
 
     [Fact]

@@ -666,6 +666,7 @@ public sealed class RunJournal : IRunJournal
             "merge.conflicted" => $"{entry.Text("branch")} conflicted",
             "merge.failed" => $"{entry.Text("branch")} could not be merged: {entry.Text("error")}",
             "worktree.tidied" => $"cleared away {entry.Text("branch")}",
+            "node.told" => $"was told: {entry.Text("message")}",
             "decision" => $"decided: {entry.Text("question")} -> {entry.Text("answer")}",
             _ => entry.Kind,
         };

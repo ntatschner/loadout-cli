@@ -77,6 +77,19 @@ public sealed class DashboardServer : IDisposable
     /// one thing that says so when it is not there.
     /// </remarks>
     private readonly Git.IGitManager? _git;
+
+    /// <summary>
+    /// The second credential, or null where nothing can be typed at anyway.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the dashboard's own token on purpose. That one is for
+    /// watching and deciding - reading a run, answering a gate it asked,
+    /// stopping it - and every one of those is something the run offered to
+    /// have decided. Typing at a live node is not: it puts words into a process
+    /// running with somebody's file access, at a moment nobody chose, over a
+    /// port that may be on a network.
+    /// </remarks>
+    public Attaching? Attach { get; set; }
     private readonly HttpListener _listener = new();
 
     public DashboardServer(IRunJournal journal, Git.IGitManager? git = null)
@@ -553,6 +566,24 @@ public sealed class DashboardServer : IDisposable
         var request = context.Request;
         var path = request.Url?.AbsolutePath ?? "/";
 
+        // Exchanging the second credential for a grant. Behind the
+        // dashboard's own token as well, because there is no reason for
+        // anything without it to be guessing at this one.
+        if (path == "/api/attach")
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await AttachAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         // Starting work, which belongs to no run yet and so is not under
         // /api/runs. Behind the dashboard's own token like everything else
         // that changes anything.
@@ -592,6 +623,18 @@ public sealed class DashboardServer : IDisposable
             {
                 await WriteAsync(context, 403, "text/plain; charset=utf-8",
                     "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            // The one verb the dashboard's own token does not grant.
+            if (string.Equals(verb, "say", StringComparison.Ordinal)
+                && !(Attach?.Holds(request.Headers["X-Loadout-Attach"]) ?? false))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "Typing at a running node is a separate grant. Give the attach passphrase "
+                    + "first; the token that got you here is for watching and deciding.")
+                    .ConfigureAwait(false);
 
                 return;
             }
@@ -852,6 +895,70 @@ public sealed class DashboardServer : IDisposable
             turn.Outcome,
         }),
     };
+
+    /// <summary>
+    /// Exchanges the attach passphrase for a grant that expires.
+    /// </summary>
+    /// <remarks>
+    /// What comes back is not the passphrase and does not become it: a grant is
+    /// thirty-two random bytes this process made a moment ago, and it stops
+    /// working on its own whether or not anybody remembers to give it back.
+    /// </remarks>
+    private async Task AttachAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Asking to attach is a POST." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Attach is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "This dashboard cannot type at a node at all. Run the daemon's "
+                        + "dashboard, and set a passphrase with: loadout team attach set",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        string? given;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+            var body = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
+
+            given = body.Length == 0
+                ? null
+                : Text(JsonDocument.Parse(body).RootElement, "passphrase");
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            given = null;
+        }
+
+        var grant = await Attach.GrantAsync(given, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            grant.Succeeded ? 200 : 403,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                grant.Succeeded
+                    ? new
+                    {
+                        grant = grant.Value,
+                        minutes = (int)Attaching.Lasts.TotalMinutes,
+                        error = (string?)null,
+                    }
+                    : new { grant = (string?)null, minutes = 0, error = grant.Error },
+                Json)).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Starts a team, through whatever can run a command.

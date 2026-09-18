@@ -486,6 +486,58 @@ the whole point of a gate is that a person decided. Stopping a run and
 answering its question stay with the dashboard and the command line, and a test
 asserts that no tool here is named for either.
 
+### Saying something to a node while it is still working
+
+The lead reads messages between its rounds, which is the right place for
+"change the plan". This is the other one: a worker has gone the wrong way and
+is spending money doing it, and waiting for its turn to come back means waiting
+for exactly the spend you are trying to stop.
+
+Open a live node's own stream under *What it said* and there is a box for it,
+or from a terminal:
+
+```sh
+loadout team say 20260918-1436-ed59 --node implementer/1 --message "stop, wrong file"
+```
+
+It reaches the node **the next time the node says anything** — between the
+events the run is already reading, which is as often as it speaks and no more
+often. A node that has gone quiet is a node nobody can steer, which is the same
+thing the needs-you rail already says out loud. It is delivered once: a message
+that arrived twice would be a node told twice, which reads as insistence rather
+than as a bug.
+
+#### It needs a second credential
+
+**The dashboard's token does not grant this.** That token is for watching and
+deciding — reading a run, answering a gate it *asked*, holding it, stopping it —
+and every one of those is something the run offered to have decided. Typing at
+a live node is not: it puts words into a process running with your file access,
+at a moment nobody chose, over a port that may be on a network.
+
+```sh
+loadout team attach set --passphrase "something worth having"
+loadout team attach show      # whether, never what
+loadout team attach clear
+```
+
+The passphrase lives in your operating system's credential store with the other
+credentials. The page asks for it once, exchanges it for a grant — thirty-two
+random bytes the daemon made, not the passphrase and not derived from it — and
+that grant stops working after thirty minutes whether or not anybody remembers
+to give it back. A page left open on a laptop somebody walked away from stops
+being one that can type at anything.
+
+Nothing on this machine can attach until a passphrase is set, and the refusal
+says so rather than reading as "you typed it wrong".
+
+**What the agent does with it is the agent's business.** Claude Code's
+stream-json input takes further user messages while a turn is running; another
+agent may queue one until the turn ends. What Loadout promises is that it was
+written to the agent and flushed, which is what its tests check — against a
+pipe held open mid-turn, so the message genuinely goes in while the agent is
+working rather than between turns.
+
 ### Reaching it from something other than this machine
 
 The dashboard listens on `127.0.0.1` by default, which is this machine and
