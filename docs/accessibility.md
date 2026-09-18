@@ -122,11 +122,18 @@ survive a forced-colours mode, targets no smaller than 40 pixels, and both
 focus to the heading of what you asked for.
 
 **axe-core finds nothing wrong with it.** Version 4.10.2, against WCAG 2.0,
-2.1 and 2.2 at A and AA plus its best-practice rules. Seven states were audited
-as the page grew — the run list, a run open at each of its four depths, the
-office, the graph, and the form for starting a team — and every one came back
-with **no violations and nothing left incomplete**, with 37 to 48 rules passing
-depending on what was on screen. The rules that pass are the ones the paragraph
+2.1 and 2.2 at A and AA plus its best-practice rules. Eleven states have been
+audited as the page grew — the run list, a run open at each of its four depths,
+the office, the graph, the timeline, the roles table, a brief offered for
+changing, and the form for starting a team — and every one comes back with **no
+violations and nothing left incomplete**, with 37 to 50 rules passing depending
+on what is on screen.
+
+It has caught one thing nobody would have. The controls for steering a live
+node came out twenty-one pixels tall, under the twenty-four the standard asks
+for, because they were relying on their own padding where the buttons in the
+run list have carried a minimum since the first commit. Every control in that
+row now carries one. The rules that pass are the ones the paragraph
 above claims — `color-contrast`, `target-size`, `skip-link`, `bypass`,
 `landmark-one-main`, `heading-order`, `region`, `list`, `listitem`,
 `page-has-heading-one`. Following a run was confirmed to move focus to the

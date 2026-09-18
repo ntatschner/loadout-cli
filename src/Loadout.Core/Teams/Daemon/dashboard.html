@@ -132,6 +132,12 @@
   .gate textarea { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem; margin: 0 0 0.5rem; }
   .controls { margin: 0.75rem 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
   .controls input { flex: 1 1 14rem; min-width: 8rem; }
+
+  /* Twenty-four pixels at least, in both directions. The buttons in the run
+     list have said so since the first commit; the ones down here were relying
+     on their own padding, and the box for steering a node came out at
+     twenty-one, which axe caught and nobody would have. */
+  .controls input, .controls button, .controls textarea { min-height: 2.5rem; }
   .said { flex-basis: 100%; }
   #said { font-weight: 700; margin: 0.25rem 0 0; }
 
