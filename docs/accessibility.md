@@ -122,13 +122,25 @@ survive a forced-colours mode, targets no smaller than 40 pixels, and both
 focus to the heading of what you asked for.
 
 **axe-core finds nothing wrong with it.** Version 4.10.2, against WCAG 2.0,
-2.1 and 2.2 at A and AA plus its best-practice rules: 33 rules pass on the run
-list and 34 once a run is followed, with no violations and nothing left
-incomplete. The rules that pass are the ones the paragraph above claims —
-`color-contrast`, `target-size`, `skip-link`, `bypass`, `landmark-one-main`,
-`heading-order`, `region`, `list`, `listitem`, `page-has-heading-one`. Following
-a run was confirmed to move focus to the heading of what was asked for, and the
-live region is `role="status"` with `aria-live="polite"`.
+2.1 and 2.2 at A and AA plus its best-practice rules. Seven states were audited
+as the page grew — the run list, a run open at each of its four depths, the
+office, the graph, and the form for starting a team — and every one came back
+with **no violations and nothing left incomplete**, with 37 to 48 rules passing
+depending on what was on screen. The rules that pass are the ones the paragraph
+above claims — `color-contrast`, `target-size`, `skip-link`, `bypass`,
+`landmark-one-main`, `heading-order`, `region`, `list`, `listitem`,
+`page-has-heading-one`. Following a run was confirmed to move focus to the
+heading of what was asked for, and the live region is `role="status"` with
+`aria-live="polite"`.
+
+The office and the graph were built elements-first for this reason. Every desk
+is a button whose accessible name reads as a sentence — "implementer/1,
+implementer, working, dotnet test" — and the sprite beside it is marked
+decorative and is empty until there is art to put in it. Tab order through a
+room follows the team: the lead, then its workers. Every box in the graph is a
+focusable link carrying name, role, state and spend, and a node the run is
+waiting on says "waiting for you" in its name as well as being drawn with a
+heavier border.
 
 The audit ran against a copy of the page served without its content security
 policy, because that policy says `connect-src 'self'` and correctly stops a
@@ -137,7 +149,10 @@ server embeds and the data was stubbed so every part of it rendered; axe reads
 the DOM rather than the response headers.
 
 It has still not been heard with a screen reader, and no keyboard-only pass by
-a person has been recorded.
+a person has been recorded. Nor has it been rendered at phone width: the
+automation would not give up control of the viewport, so what is proven is that
+the three-column rule lives inside a `min-width` query and nowhere else, which
+is the behaviour that matters and is not the same as having looked at it.
 
 ### The launcher speaking
 
