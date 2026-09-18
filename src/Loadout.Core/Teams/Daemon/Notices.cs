@@ -93,11 +93,11 @@ public sealed class Notices
 
         // Rebuilt from what is true now rather than added to, so a reason that
         // has cleared is forgotten and is news again if it returns.
-        _said = [.. wanted.Select(one => one.Key)];
+        var saying = new HashSet<string>(wanted.Select(one => one.Key), StringComparer.Ordinal);
 
         var sent = 0;
 
-        foreach (var (run, reason, _) in fresh)
+        foreach (var (run, reason, key) in fresh)
         {
             if (await PostAsync(
                     kind,
@@ -110,7 +110,22 @@ public sealed class Notices
             {
                 sent++;
             }
+            else
+            {
+                // It did not land, so it has not been said, so it is still
+                // news. Recording it regardless meant one refused request -
+                // a chat service restarting, a minute of no network - lost the
+                // notice for good: the reason stays true, so it is never fresh
+                // again, and the run sits waiting for somebody who was never
+                // told. Swallowing the failure is right; forgetting what it
+                // was about is not.
+                saying.Remove(key);
+            }
         }
+
+        // Written at the end rather than before sending, so that a cancelled
+        // pass has said nothing and starts again.
+        _said = saying;
 
         return sent;
     }

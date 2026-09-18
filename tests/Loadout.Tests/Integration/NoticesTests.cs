@@ -33,6 +33,7 @@ public sealed class NoticesTests : IAsyncLifetime
     private readonly List<string> _received = [];
 
     private string _address = string.Empty;
+    private int _refuse;
     private CancellationTokenSource _stopping = new();
     private Task _serving = Task.CompletedTask;
 
@@ -68,7 +69,19 @@ public sealed class NoticesTests : IAsyncLifetime
                     }
                 }
 
-                context.Response.StatusCode = 200;
+                int code;
+
+                lock (_received)
+                {
+                    code = _refuse > 0 ? 503 : 200;
+
+                    if (_refuse > 0)
+                    {
+                        _refuse--;
+                    }
+                }
+
+                context.Response.StatusCode = code;
                 context.Response.Close();
             }
         });
@@ -192,6 +205,31 @@ public sealed class NoticesTests : IAsyncLifetime
             [Waiting("dotnet test")], NoticeKind.Slack, null, _address, _ => "link", Noon);
 
         Received().Should().HaveCount(2, "it stopped being true, then started again");
+    }
+
+    [Fact]
+    public async Task A_notice_that_did_not_land_is_said_again_next_time()
+    {
+        // The reason a failed send cannot simply be forgotten about: the
+        // reason it was about is still true, so it is never new again, and the
+        // run waits for somebody who was never told. One refused request - a
+        // chat service restarting, a minute without network - lost the notice
+        // for the whole run.
+        _refuse = 1;
+
+        var notices = Made();
+        var run = Waiting("dotnet test");
+
+        (await notices.SayAsync([run], NoticeKind.Slack, null, _address, _ => "link", Noon))
+            .Should().Be(0, "the service refused it");
+
+        (await notices.SayAsync([run], NoticeKind.Slack, null, _address, _ => "link", Noon))
+            .Should().Be(1, "nobody has been told yet");
+
+        // And now somebody has, so it stops - the property the whole class is
+        // for still holds either side of a failure.
+        (await notices.SayAsync([run], NoticeKind.Slack, null, _address, _ => "link", Noon))
+            .Should().Be(0);
     }
 
     [Fact]

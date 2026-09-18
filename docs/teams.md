@@ -482,6 +482,12 @@ A reason that clears and comes back is news again. A daemon that restarts
 repeats whatever is still outstanding, once — what has been said is held in
 memory rather than in a file nobody would ever read.
 
+A notice the service refused does not count as said, and the next look tries it
+again. The reason it was about is still true, so it would never have been new
+again: one restarting chat service, or a minute without network, lost the
+notice for the rest of the run and left it waiting for somebody who was never
+told.
+
 ### Asking a Claude session what the teams are doing
 
 The MCP server carries `loadout_teams`, so a session that is not part of a run
