@@ -206,6 +206,92 @@ public sealed class RunJournalTests
     }
 
     [Fact]
+    public void Every_exchange_is_kept_one_by_one_and_not_only_summed()
+    {
+        // Two nodes that cost the same are the same number and can be quite
+        // different problems. The totals cannot tell them apart; these can.
+        var run = Fold();
+
+        run.Turns.Should().HaveCount(2);
+
+        run.Turns[0].Node.Should().Be("lead");
+        run.Turns[0].Exchanges.Should().Be(2);
+        run.Turns[0].CostUsd.Should().Be(0.017m);
+        run.Turns[0].Denials.Should().Be(0);
+        run.Turns[0].Completed.Should().BeTrue();
+
+        run.Turns[1].Node.Should().Be("implementer/1");
+        run.Turns[1].Exchanges.Should().Be(5);
+        run.Turns[1].Denials.Should().Be(3);
+    }
+
+    [Fact]
+    public void An_exchange_carries_the_verdict_on_the_report_it_produced()
+    {
+        // The verdict arrives as its own event a moment later. Left beside the
+        // exchange rather than on it, somebody has to join the two up by eye.
+        var run = Fold();
+
+        run.Turns[0].Status.Should().Be("blocked");
+        run.Turns[0].Outcome.Should().Be("accepted");
+
+        run.Turns[1].Status.Should().Be("done");
+    }
+
+    [Fact]
+    public void A_second_attempt_takes_the_verdict_and_the_first_keeps_none()
+    {
+        // A node whose first report could not be read is asked again. Both
+        // exchanges were paid for and both are kept; only the second one
+        // produced a report, so only the second one carries a verdict.
+        const string Again =
+            """{"at":"2026-09-15T22:56:00+00:00","run":"r","node":"lead","kind":"node.turn","data":{"attempt":2,"completed":true,"turns":1,"cost":0.004,"denials":0}}""";
+
+        const string Verdict =
+            """{"at":"2026-09-15T22:56:01+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[]}}""";
+
+        var lead = Fold(Again, Verdict).Turns.Where(turn => turn.Node == "lead").ToList();
+
+        lead.Should().HaveCount(2);
+        lead[1].Attempt.Should().Be(2);
+        lead[1].Status.Should().Be("done");
+
+        // The first attempt keeps the verdict its own report earned, which is
+        // the earlier one - not the later report's.
+        lead[0].Status.Should().Be("blocked");
+    }
+
+    [Fact]
+    public void An_exchange_remembers_which_round_the_run_was_in()
+    {
+        // Round two starts before the lead's turn, so the lead's exchange is
+        // in round two and the implementer's, later still, is as well.
+        var run = Fold(Round);
+
+        run.Turns.Should().OnlyContain(turn => turn.Round == 2);
+    }
+
+    [Fact]
+    public void A_node_pinned_to_a_model_says_which_one()
+    {
+        const string Pinned =
+            """{"at":"2026-09-15T22:54:23+00:00","run":"r","node":"pinned","kind":"node.launched","data":{"role":"role.implementer","model":"claude-opus-5"}}""";
+
+        var run = RunJournal.Fold(Run, "C:/runs/" + Run,
+            [.. new[] { Pinned }.Select(RunJournal.Parse).Where(e => e is not null)!]);
+
+        run.Nodes.Should().ContainSingle().Which.Model.Should().Be("claude-opus-5");
+    }
+
+    [Fact]
+    public void A_node_that_was_not_pinned_says_nothing_rather_than_guessing()
+    {
+        // Null here means "whatever the agent picks for itself", which is a
+        // real answer. Nothing in the journal knows what that turned out to be.
+        Fold().Nodes.Should().OnlyContain(node => node.Model == null);
+    }
+
+    [Fact]
     public void An_event_kind_nothing_knows_about_still_reads_as_itself()
     {
         // The runner will grow kinds this does not know. Naming it is worse

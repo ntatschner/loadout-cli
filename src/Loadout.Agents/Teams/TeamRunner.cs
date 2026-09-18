@@ -411,7 +411,16 @@ public sealed class TeamRunner : ITeamRunner
         var lead = started.Value!;
         warnings.AddRange(lead.Warnings);
 
-        await journal.WriteAsync("node.launched", team.Lead, new { launch = lead.LaunchId, role = leadNode.Role }, ct).ConfigureAwait(false);
+        await journal.WriteAsync(
+            "node.launched",
+            team.Lead,
+            new
+            {
+                launch = lead.LaunchId,
+                role = leadNode.Role,
+                model = request.Model ?? (leadNode.Model is { Length: > 0 } pinned ? pinned : null),
+            },
+            ct).ConfigureAwait(false);
 
         // Once the lead is actually going, and not before: a run somebody
         // stopped at the first gate did nothing, and a task list that
@@ -1394,7 +1403,19 @@ public sealed class TeamRunner : ITeamRunner
         await journal.WriteAsync(
             "node.launched",
             brief.Node,
-            new { launch = launch.LaunchId, role = node.Role, directory = launch.Plan.WorkingDirectory, worktree = brief.Constraints.Worktree },
+            new
+            {
+                launch = launch.LaunchId,
+                role = node.Role,
+                directory = launch.Plan.WorkingDirectory,
+                worktree = brief.Constraints.Worktree,
+
+                // Null means whatever the agent would pick by itself, which is
+                // a real answer and not a missing one - so it is written down
+                // as null rather than as the name of whatever it turned out to
+                // be, which nothing here knows.
+                model = request.Model ?? (node.Model is { Length: > 0 } pinned ? pinned : null),
+            },
             ct).ConfigureAwait(false);
 
         if (brief.Constraints.Worktree is { Length: > 0 } tree)

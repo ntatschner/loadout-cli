@@ -54,6 +54,9 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 /// <param name="Said">
 /// The last thing it said <em>about itself</em>, in its own words.
 /// </param>
+/// <param name="Model">
+/// The model it was pinned to, or null for whatever the agent picks itself.
+/// </param>
 /// <remarks>
 /// <paramref name="Doing"/> and <paramref name="Said"/> are two accounts and
 /// neither corrects the other. The first is precise about what happened and
@@ -73,12 +76,42 @@ public sealed record RunNode(
     int Denials = 0,
     DateTimeOffset? Started = null,
     string? Doing = null,
-    string? Said = null)
+    string? Said = null,
+    string? Model = null)
 {
     /// <summary>How long it has been going, or how long it took.</summary>
     public TimeSpan? Took =>
         Started is { } began && LastSeen > began ? LastSeen - began : null;
 }
+
+/// <summary>One exchange with a node's model, as the run paid for it.</summary>
+/// <param name="At">When it came back.</param>
+/// <param name="Node">Which node had it.</param>
+/// <param name="Round">The round the run was in.</param>
+/// <param name="Attempt">Which try this was: a second one means the first
+/// report could not be read.</param>
+/// <param name="Exchanges">How many messages went back and forth inside it.</param>
+/// <param name="CostUsd">What it cost.</param>
+/// <param name="Denials">How many things it asked for and was refused.</param>
+/// <param name="Completed">Whether the node got to the end of its turn.</param>
+/// <param name="Status">What the node said it had done, once it reported.</param>
+/// <param name="Outcome">What the run made of that report.</param>
+/// <remarks>
+/// Kept one by one rather than only summed, because a node that cost five
+/// dollars over forty cheap exchanges and a node that cost five dollars over
+/// two enormous ones are the same number and different problems.
+/// </remarks>
+public sealed record RunTurn(
+    DateTimeOffset At,
+    string Node,
+    int Round,
+    int Attempt,
+    int Exchanges,
+    decimal CostUsd,
+    int Denials,
+    bool Completed,
+    string? Status = null,
+    string? Outcome = null);
 
 /// <summary>A run, read back from what it wrote down.</summary>
 public sealed record RunSummary(
@@ -100,8 +133,12 @@ public sealed record RunSummary(
     string? Path = null,
     IReadOnlyList<PendingAsk>? Gates = null,
     decimal? BudgetUsd = null,
-    int QuietRounds = 0)
+    int QuietRounds = 0,
+    IReadOnlyList<RunTurn>? Exchanges = null)
 {
+    /// <summary>Every exchange the run paid for, oldest first.</summary>
+    public IReadOnlyList<RunTurn> Turns => Exchanges ?? [];
+
     /// <summary>
     /// What the run has stopped and asked a person, and not yet been told.
     /// </summary>
@@ -333,6 +370,7 @@ public sealed class RunJournal : IRunJournal
         var rounds = 0;
         var limit = 0;
         var merged = new List<string>();
+        var turns = new List<RunTurn>();
 
         // Insertion order, because that is the order the run briefed them
         // and the order somebody reading it will expect.
@@ -406,6 +444,7 @@ public sealed class RunJournal : IRunJournal
                     Set(launched, node => node with
                     {
                         Role = entry.Text("role") ?? node.Role,
+                        Model = entry.Text("model") ?? node.Model,
                         Branch = entry.Text("worktree") ?? node.Branch,
                         State = "working",
                         LastSeen = entry.At,
@@ -426,6 +465,18 @@ public sealed class RunJournal : IRunJournal
                     break;
 
                 case "node.turn" when entry.Node is { Length: > 0 } turned:
+                    turns.Add(new RunTurn(
+                        entry.At,
+                        turned,
+                        rounds,
+                        (int)(entry.Number("attempt") ?? 1),
+                        (int)(entry.Number("turns") ?? 0),
+                        entry.Number("cost") ?? 0m,
+                        (int)(entry.Number("denials") ?? 0),
+                        entry.Data.ValueKind == JsonValueKind.Object
+                            && entry.Data.TryGetProperty("completed", out var got)
+                            && got.ValueKind == JsonValueKind.True));
+
                     Set(turned, node => node with
                     {
                         Turns = node.Turns + (int)(entry.Number("turns") ?? 0),
@@ -437,6 +488,24 @@ public sealed class RunJournal : IRunJournal
                     break;
 
                 case "report.checked" when entry.Node is { Length: > 0 } reported:
+                    // Onto the exchange that produced it rather than beside it.
+                    // The verdict arrives as its own event a moment later, and
+                    // a turn whose outcome sits in a different row is a turn
+                    // somebody has to join up by eye.
+                    for (var back = turns.Count - 1; back >= 0; back--)
+                    {
+                        if (string.Equals(turns[back].Node, reported, StringComparison.Ordinal))
+                        {
+                            turns[back] = turns[back] with
+                            {
+                                Status = entry.Text("status"),
+                                Outcome = entry.Text("outcome"),
+                            };
+
+                            break;
+                        }
+                    }
+
                     Set(reported, node => node with
                     {
                         State = entry.Text("status") ?? node.State,
@@ -486,7 +555,8 @@ public sealed class RunJournal : IRunJournal
             // by a file appearing, and the journal hears about it after.
             NodePermissions.Pending(directory),
             budget,
-            quiet);
+            quiet,
+            turns);
     }
 
     /// <summary>One event as a line somebody can read.</summary>
