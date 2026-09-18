@@ -663,6 +663,13 @@ for it. Nothing here kills anything.
 A message reaches the lead at the start of its next round, once. It is mid-turn
 when you send it and cannot hear anything until it comes back.
 
+A question is redacted before it is stored, so what reaches your screen, your
+phone and the browser has had anything credential-shaped taken out of it. The
+lead writes its own questions after spending ten minutes reading a repository,
+and quoting what it found is how it asks about it. The options you choose
+between are left exactly as written — they are matched against your answer, and
+a changed one would be a question nobody could answer.
+
 ### Runs that ask a browser
 
 A run started by hand answers at your terminal. A run with nobody at one — from
