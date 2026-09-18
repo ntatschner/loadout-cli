@@ -74,6 +74,7 @@
 | `loadout team gate` | Answer something a run stopped to ask |
 | `loadout team message` | Say something to a run's lead, read at its next round |
 | `loadout team halt` | Stop a run after its current round, hold it, or let it carry on |
+| `loadout team notify set\|test\|show\|clear` | Send a run's call for help to Slack, Discord, Teams, Telegram or your own endpoint |
 | `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
 | `loadout pack list\|add\|approve\|update\|remove` | Sets of specialists, roles and teams fetched from a Git remote, approved per machine |
 | `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |

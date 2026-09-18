@@ -75,6 +75,19 @@ public sealed class MachineTeams
     /// wants nothing bound outside itself.
     /// </remarks>
     public string WebhookListen { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// Where a run's call for help is sent: slack, discord, teams, telegram,
+    /// generic, or empty for nowhere.
+    /// </summary>
+    /// <remarks>
+    /// Machine-local, like everything else here: which chat somebody watches
+    /// is a fact about them and their machine, not about the team.
+    /// </remarks>
+    public string NotifyKind { get; set; } = string.Empty;
+
+    /// <summary>The Telegram chat to send to. Meaningless for the others.</summary>
+    public string NotifyChat { get; set; } = string.Empty;
 }
 
 /// <summary>This machine's view of one project.</summary>

@@ -259,6 +259,32 @@ system notification, and could not stub the browser's own API convincingly
 enough to prove the path. The counting, the title, the favicon and the
 self-clearing all were.
 
+### Told somewhere else
+
+The browser tells you while you're looking at it, and unattended runs are
+precisely the case where you aren't.
+
+```sh
+loadout team notify set slack --url "<your webhook address>"
+loadout team notify test          # see it arrive before you need it
+loadout team notify show          # whether, and where — never what the address is
+loadout team notify clear
+```
+
+Slack, Discord, Teams, Telegram, or `generic` for your own endpoint, which gets
+Loadout's own JSON. Telegram also needs `--chat`. Every message carries a link
+back to the run, because a notice that says something is wrong and leaves you
+to find it is half a notice.
+
+The address lives in your operating system's credential store, never in a file
+— a Slack or Discord webhook address *is* the credential: anyone holding it can
+post into that channel as you.
+
+**It only goes out while the daemon is running**, and it says each thing once.
+A reason that clears and comes back is news again. A daemon that restarts
+repeats whatever is still outstanding, once — what has been said is held in
+memory rather than in a file nobody would ever read.
+
 ### Answering, steering and stopping
 
 A run that has stopped to ask you something is **waiting for you** — its own

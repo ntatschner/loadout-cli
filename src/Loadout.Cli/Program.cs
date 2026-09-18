@@ -662,6 +662,14 @@ public static class Program
                 autostart.AddCommand<TeamAutostartShowCommand>("show");
             });
 
+            team.AddBranch("notify", notify =>
+            {
+                notify.AddCommand<TeamNotifySetCommand>("set");
+                notify.AddCommand<TeamNotifyTestCommand>("test");
+                notify.AddCommand<TeamNotifyShowCommand>("show");
+                notify.AddCommand<TeamNotifyClearCommand>("clear");
+            });
+
             team.AddBranch("webhook", webhook =>
             {
                 webhook.AddCommand<TeamWebhookEnableCommand>("enable");

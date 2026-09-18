@@ -320,6 +320,25 @@ public static class ConfigKeys
             Group: Groups.Display,
             WhenUnset: "the launcher says nothing; a screen reader reads the terminal as it always has"),
 
+        new("team-notify",
+            "Where a run's call for help is sent: slack, discord, teams, telegram, generic",
+            (_, m) => m.Teams.NotifyKind,
+            (_, m, v) => m.Teams.NotifyKind =
+                OneOf(v, "team-notify", "", "slack", "discord", "teams", "telegram", "generic"),
+            true,
+            Sample: "slack",
+            Group: Groups.Machine,
+            WhenUnset: "nothing is sent anywhere; the dashboard and the tab title still say"),
+
+        new("team-notify-chat",
+            "The Telegram chat to send to. Meaningless for the others",
+            (_, m) => m.Teams.NotifyChat,
+            (_, m, v) => m.Teams.NotifyChat = v.Trim(),
+            true,
+            Sample: "-1001234567890",
+            Group: Groups.Machine,
+            WhenUnset: "nothing, which Telegram refuses"),
+
         new("team-webhook-teams",
             "Comma-separated teams something outside this machine may start",
             (_, m) => string.Join(", ", m.Teams.WebhookTeams),

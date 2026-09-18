@@ -57,12 +57,14 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Core.Git.IGitManager _git;
     private readonly IProcessInspector _processes;
     private readonly ISecretProvider _secrets;
+    private readonly HttpClient _client;
     private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
 
     public TeamDaemonCommand(
         ISecretProvider secrets,
+        HttpClient client,
         Loadout.Core.Configuration.IConfigurationService configuration,
         IScheduleService schedules,
         IRunJournal journal,
@@ -75,6 +77,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         TimeProvider time)
     {
         _secrets = secrets;
+        _client = client;
         _configuration = configuration;
         _schedules = schedules;
         _journal = journal;
@@ -162,6 +165,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // its ask onto a command line and the parser does the rest.
             server.Act = (action, ct) => ActedOnAsync(action, output, ct);
 
+            _address = server.Address;
+
             output.WriteLine($"[bold]{Markup.Escape(server.Address)}[/]");
 
             if (await Webhook.TokenAsync(_secrets, cancellationToken).ConfigureAwait(false) is not null)
@@ -169,6 +174,21 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 output.WriteLine(
                     $"[dim]accepting triggered runs of: "
                     + $"{Markup.Escape(teams?.WebhookTeams is { Count: > 0 } named ? string.Join(", ", named) : "nothing")}[/]");
+            }
+        }
+
+        _notices = new Notices(_secrets, _client);
+
+        _sendTo = await _notices.AddressAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_sendTo is { Length: > 0 })
+        {
+            var where = (await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false))
+                .Value?.Teams.NotifyKind;
+
+            if (where is { Length: > 0 })
+            {
+                output.WriteLine($"[dim]telling {Markup.Escape(where)} when a run needs you[/]");
             }
         }
 
@@ -322,6 +342,68 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     }
 
     /// <summary>
+    /// Says out loud, somewhere else, anything newly worth saying.
+    /// </summary>
+    /// <remarks>
+    /// On the same loop as the schedules rather than a second one: a run that
+    /// wants somebody is not more urgent than a minute, and a second timer
+    /// would be a second thing to reason about when one of them stops.
+    /// </remarks>
+    private async Task NoticeAsync(CommandOutput output, string? address, CancellationToken ct)
+    {
+        var machine = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
+        var teams = machine.Value?.Teams;
+
+        if (Notices.KindOf(teams?.NotifyKind) is not { } kind || address is not { Length: > 0 })
+        {
+            return;
+        }
+
+        var runs = new List<RunSummary>();
+
+        foreach (var id in _journal.List(30))
+        {
+            if (_journal.Summarise(id) is { Succeeded: true } read)
+            {
+                runs.Add(read.Value!);
+            }
+        }
+
+        var sent = await _notices!
+            .SayAsync(runs, kind, teams!.NotifyChat, address, Link, _time.GetUtcNow(), ct)
+            .ConfigureAwait(false);
+
+        if (sent > 0)
+        {
+            output.WriteLine(
+                $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] told "
+                + $"{Markup.Escape(teams.NotifyKind)} about {sent} thing(s)");
+        }
+    }
+
+    /// <summary>Where the dashboard is, so a notice can point at it.</summary>
+    /// <remarks>
+    /// A notice that says something is wrong and leaves somebody to find it is
+    /// half a notice. Falls back to the command when no page is being served.
+    /// </remarks>
+    private string Link(RunSummary run) =>
+        _address is { Length: > 0 }
+            ? _address
+            : $"loadout team status {run.RunId}";
+
+    private Notices? _notices;
+    private string? _address;
+
+    /// <summary>Where notices go, read once when the daemon starts.</summary>
+    /// <remarks>
+    /// Read once rather than every minute: it lives in the credential store,
+    /// and asking the operating system for a secret sixty times an hour to
+    /// learn the same answer is work nobody asked for. Changing it takes
+    /// effect when the daemon is next started, which the command says.
+    /// </remarks>
+    private string? _sendTo;
+
+    /// <summary>
     /// Starts what is due, one at a time, until told to stop.
     /// </summary>
     /// <remarks>
@@ -334,6 +416,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     {
         while (!ct.IsCancellationRequested)
         {
+            await NoticeAsync(output, _sendTo, ct).ConfigureAwait(false);
+
             var now = _time.GetUtcNow();
             var ready = await ReadyAsync(now, record: true, ct).ConfigureAwait(false);
 
