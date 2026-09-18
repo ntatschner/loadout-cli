@@ -533,6 +533,11 @@
     <div id="graph" hidden></div>
 
     <div id="when" hidden></div>
+
+    <details class="start" id="roles">
+      <summary>How the roles have been doing</summary>
+      <div class="fields" id="roles-table"></div>
+    </details>
   </section>
 
   <section id="detail" class="pane" hidden aria-labelledby="detail-heading">
@@ -1163,6 +1168,107 @@
     span is a button whose accessible name is the whole sentence, so the row
     reads without the bar being seen at all.
   */
+  /*
+    What the machine has learned about its own team file.
+
+    One run refusing twenty tool calls is a bad afternoon; every run of one
+    role refusing twenty is a role whose permissions are written wrong, and the
+    second only shows up once the first is counted across runs. Same for cost:
+    what a reviewer costs once is noise, and what it costs every time is a line
+    somebody should change.
+
+    Read when the section is opened rather than on every refresh: it walks
+    every journal on the machine, and nobody needs that four times a minute
+    behind a fold they have not opened.
+  */
+  (function () {
+    var fold = document.getElementById("roles");
+
+    fold.addEventListener("toggle", function () {
+      if (fold.open) { drawRoles(); }
+    });
+  }());
+
+  function drawRoles() {
+    var box = document.getElementById("roles-table");
+
+    box.textContent = "Reading every run on this machine...";
+
+    api("/api/roles")
+      .then(function (got) {
+        box.textContent = "";
+
+        if (!got.roles.length) {
+          box.textContent = "No role has run yet.";
+
+          return;
+        }
+
+        var table = document.createElement("table");
+
+        table.className = "turns";
+
+        var head = document.createElement("tr");
+
+        ["Role", "Model", "Runs", "Cost", "Each", "Reports taken", "Refused"]
+          .forEach(function (name, i) {
+            var th = document.createElement("th");
+
+            th.scope = "col";
+            th.textContent = name;
+
+            if (i === 3 || i === 4) { th.className = "money"; }
+
+            head.appendChild(th);
+          });
+
+        var headRow = document.createElement("thead");
+
+        headRow.appendChild(head);
+        table.appendChild(headRow);
+
+        var body = document.createElement("tbody");
+
+        got.roles.forEach(function (role) {
+          var row = document.createElement("tr");
+
+          cell(row, role.role.replace(/^role\./, ""));
+
+          // Null is a real answer: these runs did not write down what they ran
+          // on, and a comparison against a model nobody knows is not one.
+          cell(row, role.model || "not recorded");
+
+          cell(row, role.runs);
+          cell(row, money(role.cost), true);
+          cell(row, money(role.each), true);
+
+          cell(row, role.accepting === null || role.accepting === undefined
+            ? "no reports"
+            : Math.round(role.accepting * 100) + "% of " + (role.accepted + role.rejected));
+
+          cell(row, role.denials
+            ? role.denials + " (" + (Math.round(role.refusals * 10) / 10) + " a run)"
+            : "");
+
+          body.appendChild(row);
+        });
+
+        table.appendChild(body);
+        box.appendChild(table);
+
+        var note = document.createElement("p");
+
+        note.className = "facts";
+        note.textContent = "Dearest first. Which model a node ran on has only been "
+          + "written down since this was added, so older runs say so rather than guessing.";
+
+        box.appendChild(note);
+      })
+      .catch(function (wrong) {
+        box.textContent = wrong.message;
+      });
+  }
+
   function drawWhen(runs) {
     var box = document.getElementById("when");
 

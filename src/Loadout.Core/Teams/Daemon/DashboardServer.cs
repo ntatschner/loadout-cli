@@ -631,6 +631,31 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        if (path == "/api/roles")
+        {
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    roles = TeamMetrics.Across(_journal).Select(one => new
+                    {
+                        one.Role,
+                        one.Model,
+                        one.Runs,
+                        one.Turns,
+                        cost = one.CostUsd,
+                        each = one.Each,
+                        one.Accepted,
+                        one.Rejected,
+                        one.Accepting,
+                        one.Denials,
+                        one.Refusals,
+                        one.Seconds,
+                    }),
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
         if (path == "/api/runs")
         {
             await WriteAsync(context, 200, "application/json; charset=utf-8", Runs()).ConfigureAwait(false);

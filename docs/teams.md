@@ -378,10 +378,32 @@ before, and a figure that quietly becomes wrong when somebody else ships a
 release is worse than no figure. Runs recorded before a number existed do not
 show it.
 
+### How the roles have been doing
+
+Under the runs, folded away, is what this machine has learned about its own
+team file: one row per role and model, dearest first, with how many runs it has
+been in, what it has cost in all and on average, how often its reports were
+taken, and how many tool calls it is refused per run.
+
+These are questions about the *team file* rather than about any run. One run
+refusing twenty tool calls is a bad afternoon; every run of one role refusing
+twenty is a role whose permissions are written wrong, and the second only shows
+up once the first is counted across runs. The same for cost: what a reviewer
+costs once is noise, and what it costs every time is a line somebody should
+change.
+
+Split by model as well as by role, because the question worth answering is not
+"what does the reviewer cost" but "what does it cost on this model rather than
+that one, and does it finish". Which model a node ran on has only been written
+down since this was added, so older runs say so rather than being guessed at.
+
+Read when you open it rather than on every refresh: it walks every journal on
+the machine, and nobody needs that four times a minute behind a fold they have
+not opened.
+
 **Not built yet.** Splitting a node's time into thinking, tool calls and
-waiting on a person, and comparing cost against outcome across runs by model
-and by role. Both want data that is only now being written down, so they will
-mean something once there are runs that carry it.
+waiting on a person. It wants per-step timings that are only now being written
+down, so it will mean something once there are runs that carry them.
 
 ### Being told
 
