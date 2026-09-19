@@ -367,10 +367,21 @@ nobody is standing it puts the room back exactly as it was and shows nothing.
 Covering too much sideways costs nothing at all. Two edges do matter.
 
 The **top** edge is the line where the furniture starts covering somebody, and
-it is the one thing to measure - off the artist's populated scene, as the share
-of a seated figure their chair leaves showing. It runs from about 58% in the
-newsroom, which looks almost straight down, to about 80% in the open-plan
-office, which does not.
+it is the one thing to measure. It is **the top of the chair's own back**, in
+the empty room - not a share of the figure guessed by looking at the result.
+Read it off a grid drawn over `room.png` at half a percent a line, then turn it
+into a share of the figure standing there: it runs from about half in the
+trading floor and the network floor to about three quarters in the open-plan
+office, whose chairs are seen from the side rather than from above.
+
+Guessing it fails in both directions and both look bad. Cut too low and a strip
+of the person runs down the middle of the chair and stops in a straight line
+halfway. Cut too high and their legs are replaced by whatever is behind them:
+if the desk is not directly under them, that is bare floor, and what is left is
+a torso hanging in mid-air. That second one shipped here, because the desks in
+that room were a chair and a half to the right of the chairs and nothing in the
+numbers said so. Look at one desk of every room, scaled up, before believing
+any of it.
 
 The **bottom** edge should stop at the desk's own coordinate. That coordinate
 is already the lowest point of the person standing there, so there is nobody
