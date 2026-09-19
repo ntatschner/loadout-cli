@@ -1532,29 +1532,52 @@
   /*
     Which office a team works in.
 
-    Spread across whatever sets are installed rather than everybody sharing
-    one, because a viewer showing four teams at once wants four different
-    rooms - otherwise it is the same picture four times and tells you nothing
-    about which is which. Worked out from the team's name, so a team is always
-    in the same office and you learn it; changeable on the room itself when
-    the worked-out one is not the one you wanted.
+    A room each, rather than everybody sharing one: a viewer showing four
+    teams at once wants four different rooms, or it is the same picture four
+    times and tells you nothing about which is which.
+
+    Decided once, the first time a team is seen, and written down. It used to
+    be worked out afresh every time by hashing the name across the installed
+    sets - which meant installing or removing a single set moved every team on
+    the machine into a different room. That is how an afternoon of measuring
+    one office came to be applied to a different one, with nothing anywhere
+    saying the room had changed.
+
+    A team keeps its office until somebody changes it on the panel, or until
+    the set it was in is gone.
   */
   var officeOf = kept("loadout.offices", {});
 
   function setFor(team) {
-    if (!team) { return board.set || ""; }
-
-    if (officeOf[team]) { return officeOf[team]; }
+    if (!team) { return ""; }
 
     var all = (installed || []).slice().sort();
 
     if (!all.length) { return ""; }
 
+    // Still valid? A set can be uninstalled, and pointing at one that is not
+    // there draws nothing at all.
+    if (officeOf[team] && all.indexOf(officeOf[team]) >= 0) { return officeOf[team]; }
+
+    // An empty room first, so four teams get four offices rather than two of
+    // them colliding on a hash and looking identical.
+    var taken = {};
+
+    Object.keys(officeOf).forEach(function (other) {
+      if (other !== team && all.indexOf(officeOf[other]) >= 0) { taken[officeOf[other]] = true; }
+    });
+
+    var free = all.filter(function (one) { return !taken[one]; });
+    var from = free.length ? free : all;
+
     var sum = 0;
 
     for (var i = 0; i < team.length; i += 1) { sum += team.charCodeAt(i) * (i + 1); }
 
-    return all[sum % all.length];
+    officeOf[team] = from[sum % from.length];
+    keep("loadout.offices", officeOf);
+
+    return officeOf[team];
   }
 
   // What each screen is called once it is a panel on a board rather than the
@@ -1938,8 +1961,12 @@
     var saved = kept("loadout.board", null);
 
     if (saved && saved.on && (saved.open || []).length) {
+      // Team offices count as well. This kept only the fixed views, so a
+      // board of team offices came back empty - and then saved the empty one
+      // over the top, which is how an arrangement disappears for good rather
+      // than just failing to appear once.
       board.open = (saved.open || []).filter(function (name) {
-        return views.some(function (one) { return one.box === name; });
+        return isTeamOffice(name) || views.some(function (one) { return one.box === name; });
       });
       board.big = board.open.indexOf(saved.big) >= 0 ? saved.big : null;
 
