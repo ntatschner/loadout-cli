@@ -938,6 +938,47 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_panes_do_not_hold_a_column_open_for_a_pane_that_is_not_there()
+    {
+        /*
+          The rail and the detail are hidden until something needs you and
+          until you open a run, and a grid with three declared tracks holds
+          all three open regardless. The ordinary first look at this page put
+          the run list in a 22rem column with two thirds of the window empty
+          beside it - a dashboard that reads as having failed to load.
+
+          A browser is what proved it and what proved the fix: all four
+          combinations now fill the width. This only stops the rules being
+          removed without anybody noticing, which is the failure a test can
+          actually catch.
+        */
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain(".panes:has(#rail[hidden]):has(#detail[hidden])");
+        text.Should().Contain(".panes:has(#rail[hidden]):has(#detail:not([hidden]))");
+        text.Should().Contain(".panes:has(#rail:not([hidden])):has(#detail[hidden])");
+
+        // And the three-pane default is still there, so a browser without
+        // :has() gets what it always got rather than something worse.
+        text.Should().Contain("minmax(16rem, 22rem) minmax(18rem, 24rem) minmax(0, 1fr)");
+    }
+
+    [Fact]
+    public async Task Every_control_in_the_header_is_big_enough_to_hit()
+    {
+        // These two were left as the browser drew them - a 21px button and a
+        // 13px checkbox, both under the 24px minimum, and both in the header,
+        // which is the first thing anybody touches.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain(".prefs button");
+        text.Should().Contain(".prefs input[type=\"checkbox\"]");
+
+        // 2.5rem is what every other button on the page already asked for.
+        text.Should().Contain("min-height: 2.5rem");
+    }
+
+    [Fact]
     public async Task None_of_the_other_views_can_do_anything_to_a_run()
     {
         // Every control lives in the detail pane, so answering a gate is
