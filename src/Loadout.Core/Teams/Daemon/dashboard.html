@@ -323,10 +323,14 @@
     line-height: 1.25;
   }
 
-  /* The size the artist drew their own people in this room - measured off
-     the scene rather than picked - so ours are the size of the furniture
-     whatever size the card is. */
-  .desks.placed .desk .sprite.drawn { width: 6.5cqh; height: 10cqh; margin: 0; }
+  /* The size the artist drew their own people in this room - measured off the
+     scene rather than picked, and per room, because the packs do not draw to
+     one scale. */
+  .desks.placed .desk .sprite.drawn {
+    width: calc(var(--person, 10) * 0.65cqh);
+    height: calc(var(--person, 10) * 1cqh);
+    margin: 0;
+  }
   /*
     Kept narrow so two people standing near each other do not label over one
     another. What is cut here is only ever repeated elsewhere: the whole
@@ -624,10 +628,17 @@
     beside it, because "everything the same size" is how a wall of panels
     stops being readable.
   */
+  /*
+    The viewer. Panels are added to it and it lays them out itself: one fills
+    the window, four make a two by two, nine a three by three, up to six
+    across. Each panel keeps its room's shape and the people inside scale with
+    it, so a wall of six offices is still six readable offices rather than six
+    postage stamps of one.
+  */
   .board {
     display: grid;
     gap: 1rem;
-    grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+    grid-template-columns: repeat(var(--across, 2), minmax(0, 1fr));
     align-items: start;
   }
 
@@ -640,6 +651,12 @@
 
   /* The big one takes the whole row it is on. */
   .board .screen.big { grid-column: 1 / -1; }
+
+  /* A team's office is one room, drawn as large as its panel allows. */
+  .board .screen.office-of .holds { max-height: none; overflow: visible; }
+  .board .screen.office-of .rooms { grid-template-columns: minmax(0, 1fr); }
+  .board .screen.office-of .room { border: 0; margin: 0; padding: 0; }
+  .board .screen.office-of .room .where { display: none; }
 
   .board .screen > header {
     display: flex;
@@ -1512,6 +1529,34 @@
     { button: "view-terminal", box: "terminal", draw: drawTerminal }
   ];
 
+  /*
+    Which office a team works in.
+
+    Spread across whatever sets are installed rather than everybody sharing
+    one, because a viewer showing four teams at once wants four different
+    rooms - otherwise it is the same picture four times and tells you nothing
+    about which is which. Worked out from the team's name, so a team is always
+    in the same office and you learn it; changeable on the room itself when
+    the worked-out one is not the one you wanted.
+  */
+  var officeOf = kept("loadout.offices", {});
+
+  function setFor(team) {
+    if (!team) { return board.set || ""; }
+
+    if (officeOf[team]) { return officeOf[team]; }
+
+    var all = (installed || []).slice().sort();
+
+    if (!all.length) { return ""; }
+
+    var sum = 0;
+
+    for (var i = 0; i < team.length; i += 1) { sum += team.charCodeAt(i) * (i + 1); }
+
+    return all[sum % all.length];
+  }
+
   // What each screen is called once it is a panel on a board rather than the
   // thing the whole pane is showing.
   var titles = {
@@ -1557,10 +1602,57 @@
     });
   }
 
+  /* A screen named for a team rather than for one of the fixed views. */
+  function isTeamOffice(name) { return name.indexOf("office:") === 0; }
+
+  function teamOf(name) { return name.slice("office:".length); }
+
   function boardScreens() {
     return board.open.filter(function (name) {
-      return views.some(function (one) { return one.box === name; });
+      return isTeamOffice(name) || views.some(function (one) { return one.box === name; });
     });
+  }
+
+  /*
+    How many across.
+
+    The viewer works it out rather than being told: one panel fills the
+    window, four make a two by two, nine a three by three, and it stops at six
+    across because a seventh column is a row of postage stamps.
+  */
+  function across(count) {
+    if (count <= 1) { return 1; }
+
+    return Math.min(6, Math.ceil(Math.sqrt(count)));
+  }
+
+  /* One team's office, drawn into a panel of the viewer. */
+  function drawTeamOffice(name, holds) {
+    var team = teamOf(name);
+    var runs = (shown || []).filter(function (run) { return run.team === team; });
+
+    // The one going, or the last one there was. A panel for a team with
+    // nothing to show says so rather than disappearing.
+    var going = runs.filter(function (run) { return run.running; });
+    var run = going[0] || runs[0] || null;
+
+    holds.textContent = "";
+
+    if (!run) {
+      var none = document.createElement("p");
+
+      none.className = "facts";
+      none.textContent = team + " has not run on this machine.";
+      holds.appendChild(none);
+
+      return;
+    }
+
+    var list = document.createElement("ul");
+
+    list.className = "rooms";
+    list.appendChild(roomOf(run, setFor(team)));
+    holds.appendChild(list);
   }
 
   function drawBoard() {
@@ -1577,13 +1669,41 @@
       var panel = document.createElement("section");
       var head = document.createElement("header");
       var title = document.createElement("h3");
+      var team = isTeamOffice(name) ? teamOf(name) : null;
 
-      panel.className = "screen" + (board.big === name ? " big" : "");
+      panel.className = "screen"
+        + (board.big === name ? " big" : "")
+        + (team ? " office-of" : "");
       panel.setAttribute("aria-labelledby", "screen-" + name);
 
       title.id = "screen-" + name;
-      title.textContent = titles[name] || name;
+      title.textContent = team ? team : (titles[name] || name);
       head.appendChild(title);
+
+      // Which office this team works in, changeable here rather than only in
+      // a config file: it is a thing you decide by looking at it.
+      if (team && installed.length > 1) {
+        var pick = document.createElement("select");
+
+        pick.setAttribute("aria-label", "Which office " + team + " works in");
+        installed.forEach(function (one) {
+          var choice = document.createElement("option");
+
+          choice.value = one;
+          choice.textContent = one;
+          choice.selected = one === setFor(team);
+          pick.appendChild(choice);
+        });
+
+        pick.addEventListener("change", function () {
+          officeOf[team] = pick.value;
+          keep("loadout.offices", officeOf);
+          drawBoard();
+          if (shown) { drawOpenScreens(shown); }
+        });
+
+        head.appendChild(pick);
+      }
 
       var big = document.createElement("button");
 
@@ -1620,13 +1740,23 @@
 
       holds.className = "holds";
 
-      var box = document.getElementById(name);
+      if (team) {
+        // Its own markup rather than a borrowed screen: there is one office
+        // box and a viewer may hold six teams at once.
+        holds.id = "holds-" + name;
+        drawTeamOffice(name, holds);
+      } else {
+        var box = document.getElementById(name);
 
-      box.hidden = false;
-      holds.appendChild(box);
+        box.hidden = false;
+        holds.appendChild(box);
+      }
+
       panel.appendChild(holds);
       holder.appendChild(panel);
     });
+
+    holder.style.setProperty("--across", across(boardScreens().length));
 
     if (!boardScreens().length) {
       var none = document.createElement("p");
@@ -1640,6 +1770,14 @@
   /* Every screen the board is showing, drawn from the same state. */
   function drawOpenScreens(runs) {
     boardScreens().forEach(function (name) {
+      if (isTeamOffice(name)) {
+        var holds = document.getElementById("holds-" + name);
+
+        if (holds) { drawTeamOffice(name, holds); }
+
+        return;
+      }
+
       var one = views.filter(function (v) { return v.box === name; })[0];
 
       if (one) { one.draw(runs); }
@@ -1651,18 +1789,18 @@
 
     where.textContent = "";
 
-    views.forEach(function (one) {
+    function offer(name, text) {
       var label = document.createElement("label");
       var tick = document.createElement("input");
 
       tick.type = "checkbox";
-      tick.checked = board.open.indexOf(one.box) >= 0;
+      tick.checked = board.open.indexOf(name) >= 0;
       tick.addEventListener("change", function () {
         if (tick.checked) {
-          if (board.open.indexOf(one.box) < 0) { board.open.push(one.box); }
+          if (board.open.indexOf(name) < 0) { board.open.push(name); }
         } else {
-          board.open = board.open.filter(function (other) { return other !== one.box; });
-          if (board.big === one.box) { board.big = null; }
+          board.open = board.open.filter(function (other) { return other !== name; });
+          if (board.big === name) { board.big = null; }
         }
 
         keep("loadout.board", board);
@@ -1671,9 +1809,35 @@
       });
 
       label.appendChild(tick);
-      label.appendChild(document.createTextNode(" " + (titles[one.box] || one.box)));
+      label.appendChild(document.createTextNode(" " + text));
       where.appendChild(label);
+    }
+
+    views.forEach(function (one) { offer(one.box, titles[one.box] || one.box); });
+
+    /*
+      And one per team that has run here, so a viewer can be four teams'
+      offices side by side rather than four ways of looking at all of them.
+      Taken from the runs themselves: a team nobody has run here is not a team
+      this machine can show anything about.
+    */
+    var teams = [];
+
+    (shown || []).forEach(function (run) {
+      if (run.team && teams.indexOf(run.team) < 0) { teams.push(run.team); }
     });
+
+    teams.sort();
+
+    if (teams.length) {
+      var rule = document.createElement("span");
+
+      rule.className = "kind";
+      rule.textContent = "Offices:";
+      where.appendChild(rule);
+
+      teams.forEach(function (team) { offer("office:" + team, team); });
+    }
   }
 
   function showBoard() {
@@ -1789,7 +1953,7 @@
     than the only one. That ordering is the whole reason this is elements and
     not a canvas.
   */
-  function desk(run, node) {
+  function desk(run, node, set) {
     var li = document.createElement("li");
     var button = document.createElement("button");
     var gone = node.state === "done" || node.state === "reported" || node.state === "failed";
@@ -1808,12 +1972,12 @@
     sprite.className = "sprite";
     sprite.setAttribute("aria-hidden", "true");
 
-    var drawn = pieceFor(node);
+    var drawn = pieceFor(node, set);
 
     if (drawn) {
       sprite.className = "sprite drawn";
-      sprite.style.backgroundImage =
-        "url(\"/office/" + encodeURIComponent(drawn) + "?token=" + encodeURIComponent(token) + "\")";
+      sprite.style.backgroundImage = "url(\"/office/" + encodeURIComponent(set)
+        + "/" + encodeURIComponent(drawn) + "?token=" + encodeURIComponent(token) + "\")";
     }
 
     button.appendChild(sprite);
@@ -2169,104 +2333,122 @@
       });
   }
 
+  /*
+    One run's room, drawn in a named office.
+
+    Its own function because a room is wanted in two places now: the office
+    screen, which draws every run in the machine's office, and a viewer panel,
+    which draws one team in the office that team works in.
+  */
+  function roomOf(run, set) {
+    var li = document.createElement("li");
+    var how = state(run);
+    var office = offices[set] || null;
+    var plan = office && office.room ? office.room : null;
+
+    li.className = "room" + (run.running ? "" : " empty");
+
+    var name = document.createElement("h3");
+
+    name.textContent = run.room || run.id;
+    li.appendChild(name);
+
+    var where = document.createElement("p");
+
+    where.className = "where";
+    where.textContent = run.team + (run.project ? " on " + run.project : "")
+      + " - " + how.word + ". " + (run.goal || "");
+
+    li.appendChild(where);
+
+    var desks = document.createElement("ul");
+    var spare = document.createElement("ul");
+
+    // Where this office says its desks are, if it says. The lead's place is
+    // first in the list, which is why the lead is first in the queue below.
+    var places = (plan && plan.desks) || [];
+
+    desks.className = "desks" + (places.length ? " placed" : "");
+    spare.className = "desks";
+
+    // The lead first and then its workers, so tabbing through a room follows
+    // the shape of the team rather than the order a journal happened to
+    // write things down in - and so the lead gets the lead's desk.
+    var people = (run.nodes || []).slice().sort(function (a, b) {
+      return (a.role === "role.project-lead" ? 0 : 1) - (b.role === "role.project-lead" ? 0 : 1);
+    });
+
+    people.forEach(function (node, i) {
+      var seat = desk(run, node, set);
+
+      if (places.length) {
+        if (i < places.length) {
+          seat.style.left = places[i][0] + "%";
+          seat.style.top = places[i][1] + "%";
+          desks.appendChild(seat);
+
+          return;
+        }
+
+        // More people than the office has furniture. They stand in a row
+        // under the room rather than being left out of it.
+        spare.appendChild(seat);
+
+        return;
+      }
+
+      desks.appendChild(seat);
+    });
+
+    if (!people.length) {
+      var nobody = document.createElement("li");
+
+      nobody.className = "where";
+      nobody.textContent = run.running ? "Nobody has been briefed yet." : "Everybody has gone home.";
+
+      // An empty room still has a floor, so the words go under it.
+      (places.length ? spare : desks).appendChild(nobody);
+    }
+
+    var floor = document.createElement("div");
+    var has = office && (office.pieces || []).indexOf("room") >= 0;
+
+    floor.className = "floor" + (has ? "" : " bare");
+
+    if (has) {
+      // Decorative, and the desks stand on top of it. Which room this is,
+      // what team, and who is at which desk are all words on the elements
+      // already; a picture of an office adds nothing worth reading out.
+      floor.style.backgroundImage = "url(\"/office/" + encodeURIComponent(set)
+        + "/room?token=" + encodeURIComponent(token) + "\")";
+
+      if (plan && plan.width && plan.height) {
+        floor.style.aspectRatio = plan.width + " / " + plan.height;
+      }
+
+      if (plan && plan.person) {
+        floor.style.setProperty("--person", plan.person);
+      }
+    }
+
+    floor.appendChild(desks);
+    li.appendChild(floor);
+
+    // Anybody the room has no desk for stands in a row underneath rather than
+    // being left out: a run with more nodes than the office has furniture is
+    // still a run somebody needs to see all of.
+    if (spare.children.length) { li.appendChild(spare); }
+
+    return li;
+  }
+
   function drawOffice(runs) {
     var box = document.getElementById("office");
 
     box.textContent = "";
 
     runs.forEach(function (run) {
-      var li = document.createElement("li");
-      var how = state(run);
-
-      li.className = "room" + (run.running ? "" : " empty");
-
-      var name = document.createElement("h3");
-
-      name.textContent = run.room || run.id;
-      li.appendChild(name);
-
-      var where = document.createElement("p");
-
-      where.className = "where";
-      where.textContent = run.team + (run.project ? " on " + run.project : "")
-        + " - " + how.word + ". " + (run.goal || "");
-
-      li.appendChild(where);
-
-      var desks = document.createElement("ul");
-      var spare = document.createElement("ul");
-
-      // Where the room says its desks are, if it says. The lead's place is
-      // first in the list, which is why the lead is first in the queue below.
-      var places = (pieces.room && room && room.desks) || [];
-
-      desks.className = "desks" + (places.length ? " placed" : "");
-      spare.className = "desks";
-
-      // The lead first and then its workers, so tabbing through a room follows
-      // the shape of the team rather than the order a journal happened to
-      // write things down in - and so the lead gets the lead's desk.
-      var people = (run.nodes || []).slice().sort(function (a, b) {
-        return (a.role === "role.project-lead" ? 0 : 1) - (b.role === "role.project-lead" ? 0 : 1);
-      });
-
-      people.forEach(function (node, i) {
-        var li = desk(run, node);
-
-        if (places.length) {
-          if (i < places.length) {
-            li.style.left = places[i][0] + "%";
-            li.style.top = places[i][1] + "%";
-            desks.appendChild(li);
-
-            return;
-          }
-
-          // More people than the office has furniture. They stand in a row
-          // under the room rather than being left out of it.
-          spare.appendChild(li);
-
-          return;
-        }
-
-        desks.appendChild(li);
-      });
-
-      if (!people.length) {
-        var nobody = document.createElement("li");
-
-        nobody.className = "where";
-        nobody.textContent = run.running ? "Nobody has been briefed yet." : "Everybody has gone home.";
-
-        // An empty room still has a floor, so the words go under it.
-        (places.length ? spare : desks).appendChild(nobody);
-      }
-
-      var scene = roomScene();
-      var floor = document.createElement("div");
-
-      floor.className = "floor" + (scene ? "" : " bare");
-
-      if (scene) {
-        // Decorative, and the desks stand on top of it. Which room this is,
-        // what team, and who is at which desk are all words on the elements
-        // already; a picture of an office adds nothing worth reading out.
-        floor.style.backgroundImage =
-          "url(\"/office/" + encodeURIComponent(scene) + "?token=" + encodeURIComponent(token) + "\")";
-
-        if (room && room.width && room.height) {
-          floor.style.aspectRatio = room.width + " / " + room.height;
-        }
-      }
-
-      floor.appendChild(desks);
-      li.appendChild(floor);
-
-      // Anybody the room has no desk for stands in a row underneath rather
-      // than being left out: a run with more nodes than the office has
-      // furniture is still a run somebody needs to see all of.
-      if (spare.children.length) { li.appendChild(spare); }
-      box.appendChild(li);
+      box.appendChild(roomOf(run, setFor(run.team)));
     });
 
     if (!runs.length) {
@@ -4188,6 +4370,10 @@
   var pieces = {};
   var waitingPieces = {};
 
+  // Every set this machine has: its room and its pieces, by name.
+  var offices = {};
+  var installed = [];
+
   // What the chosen set says about its own room: how big the scene is and
   // where somebody stands in it. Null for a set that says nothing, and then
   // the office draws the row of people it always drew.
@@ -4199,6 +4385,10 @@
         (answer.pieces || []).forEach(function (piece) { pieces[piece] = true; });
         (answer.waitingPieces || []).forEach(function (piece) { waitingPieces[piece] = true; });
         room = answer.room || null;
+        offices = answer.offices || {};
+        installed = (answer.sets || []).filter(function (one) {
+          return offices[one] && offices[one].room;
+        });
       })
       .catch(function () {
         // Nothing to say. A dashboard with no art is the ordinary case.
@@ -4215,12 +4405,14 @@
     fallback for a set that did not draw every role, and a set with neither
     leaves the square empty.
   */
-  function pieceFor(node) {
+  function pieceFor(node, set) {
+    var office = offices[set];
+    var has = office ? (office.pieces || []) : [];
     var role = (node.role || "").replace(/^role\./, "");
 
-    if (pieces[role]) { return role; }
+    if (has.indexOf(role) >= 0) { return role; }
 
-    return pieces.worker ? "worker" : null;
+    return has.indexOf("worker") >= 0 ? "worker" : null;
   }
 
   function refresh() {
@@ -4242,7 +4434,12 @@
 
         draw(answer.runs);
 
-        if (board.on) { drawOpenScreens(answer.runs); }
+        if (board.on) {
+          // The team choices come from the runs, so they cannot be listed
+          // until the first answer has arrived.
+          showChoices();
+          drawOpenScreens(answer.runs);
+        }
       })
       .catch(function (wrong) {
         say(wrong.message + " The dashboard may have been stopped.");

@@ -255,10 +255,20 @@ anywhere takes you there.
 
 #### Several at once, or one on its own
 
-**Board** shows several screens together. Tick the ones you want, and give one
-of them the whole width with **Big** — everything the same size is how a wall
-of panels stops being readable. Which screens you chose is remembered in that
-browser and nowhere else; it never reaches the daemon.
+**Board** shows several screens together, and **a team's office is one of the
+things you can add**. Tick `docs-crew` and you get that team's room as a panel
+of its own; tick four teams and you get four offices side by side.
+
+The viewer works out its own layout: one panel fills the window, four make a
+two by two, nine a three by three, and it stops at six across because a seventh
+column is a row of postage stamps. **Big** gives one panel the whole width.
+
+Each team works in its **own office**, so four panels are four different rooms
+rather than the same picture four times. Which office is worked out from the
+team's name — so a team is always in the same room and you learn it — and the
+picker on the panel changes it when the worked-out one is not the one you
+wanted. Both that and which screens you chose are remembered in that browser
+and nowhere else; neither reaches the daemon.
 
 A panel does not copy a screen, it borrows it, so there is one office and one
 terminal however you arrange them.
@@ -350,7 +360,17 @@ one to use. The people in the room should be your nodes, not the artist's.
 ```
 
 Each desk is a percentage across and down the scene, so the room draws
-correctly at any width. The **lead takes the first desk** and the workers take
+correctly at any width, and `person` is how tall a person is in that room -
+also a percentage of the scene. Per room, because the packs do not draw to one
+scale: a person is a tenth of the open-plan office and under a twelfth of the
+network floor, and one size applied to all of them is right in one room and
+floating over the furniture in the rest.
+
+**How to get those numbers right.** Do not read them off a screenshot; that was
+wrong four times running here. A pack that ships a populated scene beside its
+empty one has already answered the question - the difference between the two
+images is exactly where the artist put their people, and how big they drew
+them. Diff the two and take the bounding boxes. The **lead takes the first desk** and the workers take
 the rest in order; anybody the office has no furniture for stands in a row
 underneath rather than being left out. A set with no `room.json` draws its
 people in a row, which is what every set did before rooms existed.

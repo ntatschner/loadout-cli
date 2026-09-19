@@ -737,6 +737,22 @@ public sealed class DashboardServer : IDisposable
                     room = root is null || OfficeSet.Length == 0
                         ? null
                         : OfficeArt.Room(root, OfficeSet),
+
+                    // Every set this machine has, each with its own room and
+                    // its own pieces. A viewer showing four teams at once
+                    // draws four different offices, and it cannot ask for
+                    // them one page load at a time.
+                    offices = root is null
+                        ? new Dictionary<string, object>()
+                        : OfficeArt.Sets(root).ToDictionary(
+                            one => one,
+                            one => (object)new
+                            {
+                                room = OfficeArt.Room(root, one),
+                                pieces = OfficeArt.Pieces(root, one),
+                            },
+                            StringComparer.Ordinal),
+
                     waitingSet = root is null ? string.Empty : WaitingSet,
                     waitingPieces = root is null || WaitingSet.Length == 0
                         ? []
@@ -748,7 +764,17 @@ public sealed class DashboardServer : IDisposable
 
         if (path.StartsWith("/office/", StringComparison.Ordinal))
         {
-            await PieceAsync(context, OfficeSet, path["/office/".Length..]).ConfigureAwait(false);
+            var rest = path["/office/".Length..];
+
+            // /office/<set>/<piece> for a page drawing several offices at
+            // once, and /office/<piece> for one drawing the configured one.
+            // Two forms rather than a flag, because the caller knows which
+            // question it is asking.
+            var cut = rest.IndexOf('/', StringComparison.Ordinal);
+
+            await (cut > 0
+                ? PieceAsync(context, rest[..cut], rest[(cut + 1)..])
+                : PieceAsync(context, OfficeSet, rest)).ConfigureAwait(false);
 
             return;
         }

@@ -15,10 +15,20 @@ namespace Loadout.Core.Teams;
 /// place first. Percentages rather than pixels because the page draws the room
 /// at whatever width it has.
 /// </param>
+/// <param name="Person">
+/// How tall a person is in this room, as a percentage of the scene's height.
+/// <para>
+/// Per room rather than one number everywhere, because the packs do not draw
+/// to one scale: a person is a tenth of the open-plan office and under a
+/// twelfth of the network floor. A size picked once and applied to all of them
+/// is right in one room and floating over the furniture in the others.
+/// </para>
+/// </param>
 public sealed record OfficeRoom(
     [property: JsonPropertyName("width")] int Width,
     [property: JsonPropertyName("height")] int Height,
-    [property: JsonPropertyName("desks")] IReadOnlyList<IReadOnlyList<double>> Desks);
+    [property: JsonPropertyName("desks")] IReadOnlyList<IReadOnlyList<double>> Desks,
+    [property: JsonPropertyName("person")] double Person = 10);
 
 /// <summary>
 /// The art the office view draws with, installed on this machine rather than
