@@ -353,42 +353,60 @@ A set can also carry the room itself, and where its desks are:
 environment-only variant beside the populated one, and the empty one is the
 one to use. The people in the room should be your nodes, not the artist's.
 
-`front.png` is the half of that room that goes **in front** of the people: the
-seats of the chairs, their arms, the near edges of the desks. It is optional,
-and a set without one draws as it always did. A set with one looks like the
-artist's own scene instead, because a room drawn as a single picture can only
-ever be behind - so a seated figure sat on top of the chair it was in, legs
-across the seat and shoes over the castors, which is somebody standing in front
-of their own chair rather than sitting in it.
+`front.png` is the **furniture that goes in front of the people**: the chairs
+they are sitting in, and whatever else stands between them and the viewer. It
+is optional, and a set without one draws as it always did. A set with one looks
+like the artist's own scene instead, because a room drawn as a single picture
+can only ever be behind - so a seated figure sat on top of the chair it was in,
+legs across the seat and shoes over the castors, which is somebody standing in
+front of their own chair rather than sitting in it.
 
-Making one is easier than it sounds, because of a property worth stating
-plainly: **every pixel of `front.png` is copied from `room.png`**, so anywhere
-nobody is standing it puts the room back exactly as it was and shows nothing.
-Covering too much sideways costs nothing at all. Two edges do matter.
+The thing to understand about making one is that **it has to be the furniture's
+own shape**. The obvious construction - copy a rectangle of `room.png` around
+each desk and lay it back on top - does not layer anything. A rectangle has a
+straight top edge, so the person stops at a horizontal line with a chair
+somewhere underneath, and at the amount needed to hide the legs it leaves half
+a person. Where the person is wider than the chair it is worse still: plain
+floor from inside the rectangle erases them.
 
-The **top** edge is the line where the furniture starts covering somebody, and
-it is the one thing to measure. It is **the top of the chair's own back**, in
-the empty room - not a share of the figure guessed by looking at the result.
-Read it off a grid drawn over `room.png` at half a percent a line, then turn it
-into a share of the figure standing there: it runs from about half in the
-trading floor and the network floor to about three quarters in the open-plan
-office, whose chairs are seen from the side rather than from above.
+**Look in the pack first.** These packs ship their furniture as individual
+transparent PNGs, and the trading floor ships four facings of its swivel chair.
+That art is a proper alpha silhouette drawn by the artist: scale it to the
+height the chairs are drawn at in that room, stand it on its castors at each
+desk, and the curve of the back, the arms, the gap between them and a shoe
+showing past the base all come out right. Three of the five rooms here are made
+this way.
 
-Guessing it fails in both directions and both look bad. Cut too low and a strip
-of the person runs down the middle of the chair and stops in a straight line
-halfway. Cut too high and their legs are replaced by whatever is behind them:
-if the desk is not directly under them, that is bare floor, and what is left is
-a torso hanging in mid-air. That second one shipped here, because the desks in
-that room were a chair and a half to the right of the chairs and nothing in the
-numbers said so. Look at one desk of every room, scaled up, before believing
-any of it.
+They are not the scene's own pixels, so they cannot be *found* by matching -
+the best placement of one in its own empty scene agrees on 43%, which says
+these are separate renders. Each has to be placed and its height measured.
+Check the facing too: the open-plan office and the headquarters ship one facing
+each and it is not the one their rooms show, so the office's chair swallows a
+person seen from the side and the headquarters' puts a seat cushion on the
+sitter's back like a rucksack.
 
-The **bottom** edge should stop at the desk's own coordinate. That coordinate
-is already the lowest point of the person standing there, so there is nobody
-below it to cover - and a copy that reached further covered the *next* row's
-people, who had already been drawn. In the corporate headquarters, whose desk
-rows are ten percent apart and whose people are eight percent tall, that hid
-the second and third rows almost completely.
+**Where the pack has no chair you can use, cut one out of the room.** Take the
+rectangle again and flood it inwards from its edges, following pixels that
+match their neighbour within a tolerance. What the flood reaches is floor, or a
+desk running out of the rectangle, and both belong behind the person. What it
+cannot reach is the chair standing in the middle, and that is what to keep. It
+is aligned with the room by construction, since every pixel of it is copied
+from `room.png` unchanged - it can only ever put the room back as it was.
+
+One line still has to be measured: where the furniture *starts* being in front,
+because above it the person is in front of the desk and their arms belong on
+top of it. It is **the top of the chair's own back** in the empty room, read
+off a grid at half a percent a line, then turned into a share of the figure
+standing there. It runs from about half in the trading floor and the network
+floor to about three quarters in the open-plan office, whose chairs are seen
+from the side rather than from above.
+
+Guessing that line instead of measuring it fails in both directions. Too low
+and a strip of the person runs down the middle of the chair. Too high and their
+legs go behind furniture that is not there. The second one shipped here,
+because that room's desks were a chair and a half to the right of its chairs
+and nothing in the numbers said so. Look at one desk of every room, scaled up,
+before believing any of it.
 
 `room.json` says how big the scene is and where somebody stands in it:
 
