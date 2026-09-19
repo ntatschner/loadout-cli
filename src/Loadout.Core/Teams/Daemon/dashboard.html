@@ -248,7 +248,20 @@
     ordering is what keeps this inside the accessibility bar rather than beside
     it.
   */
-  .rooms { list-style: none; margin: 0; padding: 0; }
+  /*
+    Rooms across the page rather than down it. Twelve runs stacked in one
+    column is a page of scrolling with two thirds of the window unused; as a
+    grid the afternoon fits on one screen, which is what a view you leave open
+    on a spare monitor is for.
+  */
+  .rooms {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(32rem, 1fr));
+  }
 
   .room {
     border: 1px solid var(--line);
@@ -257,17 +270,111 @@
     padding: 0.6rem 0.9rem;
   }
 
+  /*
+    The floor the desks stand on, rather than a picture above them. A band of
+    office over a row of buttons is two things on a page; this is one room
+    with the team in it, which is the whole point of the view.
+
+    The scene stays behind the desks and never behind the words: every desk
+    carries its own solid card, so the text it holds is read against that and
+    not against whatever happens to be painted underneath.
+  */
+  /*
+    The floor. Drawn at the scene's own shape and filled exactly, because the
+    desks are placed on it by percentage and any cropping would move them off
+    the furniture they belong to.
+  */
+  .room .floor {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 100% 100%;
+    image-rendering: pixelated;
+  }
+
+  /* Without a scene there is nothing to stand on, so they stand in a row. */
+  .room .floor.bare { padding: 0.75rem; }
+
+  /* The desks of a room that knows where its desks are. */
+  .desks.placed { display: block; position: absolute; inset: 0; }
+
+  .desks.placed li { position: absolute; }
+
+  .desks.placed .desk {
+    /* Anchored by the feet: the coordinate is where somebody stands, so the
+       sprite sits above it and the plate hangs under it. */
+    position: relative;
+    transform: translate(-50%, -100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    font-size: 0.7rem;
+    line-height: 1.25;
+  }
+
+  .desks.placed .desk .sprite.drawn { width: 2rem; height: 3.25rem; margin: 0; }
+  /*
+    Kept narrow so two people standing near each other do not label over one
+    another. What is cut here is only ever repeated elsewhere: the whole
+    sentence is the button's accessible name, it is on the element's title for
+    a pointer, and the detail pane says all of it in full.
+  */
+  .desks.placed .desk .plate {
+    text-align: center;
+    max-width: 7rem;
+    overflow: hidden;
+  }
+
+  .desks.placed .desk .who,
+  .desks.placed .desk .state {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .desks.placed .desk .who { font-size: 0.72rem; }
+  .desks.placed .desk .state { font-size: 0.66rem; }
+
+  /* What a node is doing is a sentence, and a sentence on a floor plan covers
+     the floor. It stays on the desk for a screen reader and in the detail
+     pane for everybody. */
+  .desks.placed .desk .doing { display: none; }
+
+  /*
+    The one bit of movement in the room, and it is the room's own people
+    rather than a decoration: a node that is working breathes, and one that is
+    blocked or gone is still. The reduced-motion rule further down turns every
+    animation on the page off, this one included.
+  */
+  @keyframes at-work {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+
+  .desk.busy .sprite.drawn { animation: at-work 1.8s ease-in-out infinite; }
+
   .room h3 { margin: 0; font-size: 1rem; }
   .room .where { color: var(--quiet); font-size: 0.85rem; margin: 0 0 0.5rem; }
   .room.empty { border-style: dashed; }
 
-  .desks { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; }
+  .desks { list-style: none; display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0; padding: 0; }
 
+  /*
+    A desk is a person standing in the room with a name plate, not a card
+    pasted over a photograph. So the button itself carries nothing: the
+    sprite stands on the floor and the words sit on a plate of their own.
+  */
   .desk {
-    border: 1px solid var(--line);
+    border: 1px solid transparent;
     border-radius: 0.3rem;
-    padding: 0.4rem 0.6rem;
-    min-width: 8rem;
+    padding: 0.25rem;
+    min-width: 7rem;
     min-height: 2.5rem;
     font: inherit;
     color: inherit;
@@ -276,10 +383,27 @@
     cursor: pointer;
   }
 
+  .desk:hover { border-color: var(--line); }
+
+  /*
+    The plate. Opaque, and deliberately so: this is what the desk's words are
+    read against once there is a room painted behind them, and a translucent
+    one would make the contrast depend on which pixel of which office happened
+    to land under which letter.
+  */
+  .desk .plate {
+    display: block;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 0.25rem;
+    padding: 0.2rem 0.4rem;
+  }
+
   /* The word first and the colour second, here as everywhere else. */
   .desk .who { display: block; font-weight: 700; }
   .desk .state { display: block; font-size: 0.85rem; }
-  .desk.gone { opacity: 0.65; border-style: dashed; }
+  .desk.gone { opacity: 0.7; }
+  .desk.gone .plate { border-style: dashed; }
 
   /* Where a sprite goes when there is one: a background on the desk, with the
      words still in it. Nothing here needs art to work. */
@@ -301,8 +425,8 @@
     /* A person is about twice as tall as they are wide, and a square box
        letterboxes them into something too small to recognise. The border goes
        with the art: a square drawn round a character is a box, not a person. */
-    width: 2.5rem;
-    height: 4rem;
+    width: 3rem;
+    height: 5rem;
     border-color: transparent;
     background-repeat: no-repeat;
     background-position: center bottom;
@@ -597,6 +721,10 @@
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   }
+
+  /* That rule is what stops the office breathing, so a set's room needs no
+     motion switch of its own: the only movement is a CSS animation on the
+     people who are working. */
 
   /* And one using a forced-colours mode keeps their own, with the borders
      still drawn. */
@@ -1204,7 +1332,9 @@
     var gone = node.state === "done" || node.state === "reported" || node.state === "failed";
 
     button.type = "button";
-    button.className = "desk" + (gone ? " gone" : "");
+    button.className = "desk"
+      + (gone ? " gone" : "")
+      + (node.state === "working" ? " busy" : "");
 
     var sprite = document.createElement("span");
 
@@ -1225,24 +1355,31 @@
 
     button.appendChild(sprite);
 
+    // Everything written goes on one plate, so there is a single opaque
+    // thing behind all of it rather than a chip per line.
+    var plate = document.createElement("span");
+
+    plate.className = "plate";
+    button.appendChild(plate);
+
     var who = document.createElement("span");
 
     who.className = "who";
     who.textContent = node.node;
-    button.appendChild(who);
+    plate.appendChild(who);
 
     var state = document.createElement("span");
 
     state.className = "state";
     state.textContent = node.role.replace(/^role\./, "") + ", " + (gone ? "left" : node.state);
-    button.appendChild(state);
+    plate.appendChild(state);
 
     if (node.doing) {
       var doing = document.createElement("span");
 
       doing.className = "state doing";
       doing.textContent = node.doing;
-      button.appendChild(doing);
+      plate.appendChild(doing);
     }
 
     // Said as a sentence rather than left to whatever a reader makes of three
@@ -1250,6 +1387,11 @@
     // as, and a comma is the difference between a name and a mumble.
     button.setAttribute("aria-label", node.node + ", " + state.textContent
       + (node.doing ? ", " + node.doing : ""));
+
+    // The same sentence for a pointer, because a plate on a floor plan has to
+    // be narrow and a narrow plate cuts words off.
+    button.title = node.node + ", " + state.textContent
+      + (node.doing ? ", " + node.doing : "");
 
     button.addEventListener("click", function () { watch(run); });
 
@@ -1411,6 +1553,19 @@
     });
   }
 
+  /*
+    Whether to draw the room moving.
+
+    The packs carry a head-bob loop of the whole floor as a GIF, which is the
+    thing that makes an office look like somewhere people are rather than a
+    diagram. It is also motion nobody asked for, so anybody who has asked
+    their system for less gets the still instead - and a GIF cannot be stopped
+    from CSS, so the choice is made here rather than in a media query.
+  */
+  function roomScene() {
+    return pieces.room ? "room" : null;
+  }
+
   function drawOffice(runs) {
     var box = document.getElementById("office");
 
@@ -1436,27 +1591,78 @@
       li.appendChild(where);
 
       var desks = document.createElement("ul");
+      var spare = document.createElement("ul");
 
-      desks.className = "desks";
+      // Where the room says its desks are, if it says. The lead's place is
+      // first in the list, which is why the lead is first in the queue below.
+      var places = (pieces.room && room && room.desks) || [];
+
+      desks.className = "desks" + (places.length ? " placed" : "");
+      spare.className = "desks";
 
       // The lead first and then its workers, so tabbing through a room follows
       // the shape of the team rather than the order a journal happened to
-      // write things down in.
-      (run.nodes || []).slice().sort(function (a, b) {
+      // write things down in - and so the lead gets the lead's desk.
+      var people = (run.nodes || []).slice().sort(function (a, b) {
         return (a.role === "role.project-lead" ? 0 : 1) - (b.role === "role.project-lead" ? 0 : 1);
-      }).forEach(function (node) {
-        desks.appendChild(desk(run, node));
       });
 
-      if (!(run.nodes || []).length) {
+      people.forEach(function (node, i) {
+        var li = desk(run, node);
+
+        if (places.length) {
+          if (i < places.length) {
+            li.style.left = places[i][0] + "%";
+            li.style.top = places[i][1] + "%";
+            desks.appendChild(li);
+
+            return;
+          }
+
+          // More people than the office has furniture. They stand in a row
+          // under the room rather than being left out of it.
+          spare.appendChild(li);
+
+          return;
+        }
+
+        desks.appendChild(li);
+      });
+
+      if (!people.length) {
         var nobody = document.createElement("li");
 
         nobody.className = "where";
         nobody.textContent = run.running ? "Nobody has been briefed yet." : "Everybody has gone home.";
-        desks.appendChild(nobody);
+
+        // An empty room still has a floor, so the words go under it.
+        (places.length ? spare : desks).appendChild(nobody);
       }
 
-      li.appendChild(desks);
+      var scene = roomScene();
+      var floor = document.createElement("div");
+
+      floor.className = "floor" + (scene ? "" : " bare");
+
+      if (scene) {
+        // Decorative, and the desks stand on top of it. Which room this is,
+        // what team, and who is at which desk are all words on the elements
+        // already; a picture of an office adds nothing worth reading out.
+        floor.style.backgroundImage =
+          "url(\"/office/" + encodeURIComponent(scene) + "?token=" + encodeURIComponent(token) + "\")";
+
+        if (room && room.width && room.height) {
+          floor.style.aspectRatio = room.width + " / " + room.height;
+        }
+      }
+
+      floor.appendChild(desks);
+      li.appendChild(floor);
+
+      // Anybody the room has no desk for stands in a row underneath rather
+      // than being left out: a run with more nodes than the office has
+      // furniture is still a run somebody needs to see all of.
+      if (spare.children.length) { li.appendChild(spare); }
       box.appendChild(li);
     });
 
@@ -3377,11 +3583,17 @@
   var pieces = {};
   var waitingPieces = {};
 
+  // What the chosen set says about its own room: how big the scene is and
+  // where somebody stands in it. Null for a set that says nothing, and then
+  // the office draws the row of people it always drew.
+  var room = null;
+
   function sprites() {
     return api("/api/office")
       .then(function (answer) {
         (answer.pieces || []).forEach(function (piece) { pieces[piece] = true; });
         (answer.waitingPieces || []).forEach(function (piece) { waitingPieces[piece] = true; });
+        room = answer.room || null;
       })
       .catch(function () {
         // Nothing to say. A dashboard with no art is the ordinary case.

@@ -1,6 +1,24 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Teams;
+
+/// <summary>
+/// What a set says about its own room: how big the scene is, and where
+/// somebody stands in it.
+/// </summary>
+/// <param name="Width">The scene's width in pixels, so the page can keep its shape.</param>
+/// <param name="Height">The scene's height in pixels.</param>
+/// <param name="Desks">
+/// Where a person stands, as percentages across and down the scene, the lead's
+/// place first. Percentages rather than pixels because the page draws the room
+/// at whatever width it has.
+/// </param>
+public sealed record OfficeRoom(
+    [property: JsonPropertyName("width")] int Width,
+    [property: JsonPropertyName("height")] int Height,
+    [property: JsonPropertyName("desks")] IReadOnlyList<IReadOnlyList<double>> Desks);
 
 /// <summary>
 /// The art the office view draws with, installed on this machine rather than
@@ -94,6 +112,46 @@ public static class OfficeArt
             ".gif" => "image/gif",
             _ => null,
         };
+
+    /// <summary>
+    /// What one set says about its room, or null when it says nothing.
+    /// </summary>
+    /// <remarks>
+    /// The room describes itself, in a file beside its picture, so the page
+    /// needs to know nothing about which office it is drawing and a set added
+    /// later needs no change here. A set with no room.json draws its people in
+    /// a row, which is what every set did before this existed.
+    /// </remarks>
+    public static OfficeRoom? Room(string root, string set)
+    {
+        if (!Names(set))
+        {
+            return null;
+        }
+
+        var path = Path.Combine(root, set, "room.json");
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            var read = JsonSerializer.Deserialize<OfficeRoom>(File.ReadAllText(path));
+
+            // A room with no scale cannot be drawn to shape, and one with no
+            // desks is the same as having no file at all.
+            return read is { Width: > 0, Height: > 0 } ? read : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            // Somebody's own directory, edited by hand. A file that will not
+            // parse draws the row of people it drew before rather than taking
+            // the view out.
+            return null;
+        }
+    }
 
     /// <summary>The sets installed, in the order somebody reading them expects.</summary>
     public static IReadOnlyList<string> Sets(string root)

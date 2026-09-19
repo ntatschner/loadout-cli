@@ -299,6 +299,46 @@ A set is a directory; a piece is a file in it, named after the role it draws:
 loadout config set team-office-set "open-office"
 ```
 
+A set can also carry the room itself, and where its desks are:
+
+```
+<state>/teams/office/open-office/room.png
+<state>/teams/office/open-office/room.json
+```
+
+`room.png` is the office **with nobody in it** — most packs ship an empty or
+environment-only variant beside the populated one, and the empty one is the
+one to use. The people in the room should be your nodes, not the artist's.
+
+`room.json` says how big the scene is and where somebody stands in it:
+
+```json
+{
+  "width": 1024,
+  "height": 1024,
+  "desks": [[20, 24], [13, 47], [31, 47], [49, 47], [13, 66]]
+}
+```
+
+Each desk is a percentage across and down the scene, so the room draws
+correctly at any width. The **lead takes the first desk** and the workers take
+the rest in order; anybody the office has no furniture for stands in a row
+underneath rather than being left out. A set with no `room.json` draws its
+people in a row, which is what every set did before rooms existed.
+
+The room describes itself so that adding a set needs no change to Loadout, and
+a `room.json` that will not parse falls back to the row rather than taking the
+view out.
+
+**What moves.** A node that is working breathes, gently; one that is blocked or
+finished is still. That is the only movement, and it is tied to what the node
+is actually doing rather than being decoration — the packs' own animated scenes
+are loops of *their* people, which are not the ones in your run. It stops
+entirely under `prefers-reduced-motion`.
+
+Rooms are laid out across the page rather than down it, so an afternoon's runs
+fit on one screen.
+
 Each desk looks for its own role — `implementer`, `reviewer`, `verifier`,
 whatever the team calls them, minus the `role.` — and falls back to `worker`.
 A role with neither keeps its empty square, so a half-finished set is a
@@ -882,12 +922,10 @@ Said here rather than discovered:
 - The machine's ceiling covers outward actions only. Everything else a node may
   do comes from its role and the agent's own permissions, checked when it tries
   rather than before the run starts.
-- Office art is drawn and not animated. A set is one still image per role; a
-  node that is working and a node that is waiting are told apart by the words
-  on the desk and by the desk itself, as they were before there was any art.
-- There is no room backdrop. Only the desks are drawn, because a picture behind
-  text is the easiest way to lose the contrast the rest of this was built to
-  keep.
+- The *people* at the desks do not animate. A set is one still per role, and a
+  node working and a node waiting are told apart by the words on the desk, as
+  they were before there was any art. The room behind them can move; they
+  cannot.
 
 ## See also
 

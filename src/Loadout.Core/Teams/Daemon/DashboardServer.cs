@@ -723,6 +723,9 @@ public sealed class DashboardServer : IDisposable
                     pieces = root is null || OfficeSet.Length == 0
                         ? []
                         : OfficeArt.Pieces(root, OfficeSet),
+                    room = root is null || OfficeSet.Length == 0
+                        ? null
+                        : OfficeArt.Room(root, OfficeSet),
                     waitingSet = root is null ? string.Empty : WaitingSet,
                     waitingPieces = root is null || WaitingSet.Length == 0
                         ? []
