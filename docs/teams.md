@@ -370,7 +370,23 @@ floating over the furniture in the rest.
 wrong four times running here. A pack that ships a populated scene beside its
 empty one has already answered the question - the difference between the two
 images is exactly where the artist put their people, and how big they drew
-them. Diff the two and take the bounding boxes. The **lead takes the first desk** and the workers take
+them. Diff the two and take the bounding boxes.
+
+Two things that diff will not tell you, and both were wrong until they were
+looked for:
+
+**Which way the chairs face.** A character sheet is usually front, side and
+back, and the right one is whichever matches the desks. A newsroom's banks put
+the monitor away from the viewer, so somebody at one is seen from behind; an
+open-plan desk with the monitor to the right wants the side view. Take the
+front view and everybody sits with their back to their work.
+
+**Where the desks are, as opposed to where the artist stood somebody.** The
+diff finds the artist's people, and they may be in the meeting room and the
+corridor while the room's actual desk banks are empty. Where a room has obvious
+workstations, find its chairs by their own colour and use those, ordered so the
+busiest row fills first - an office with everybody in the meeting room and
+nobody at a desk does not look like an office at work. The **lead takes the first desk** and the workers take
 the rest in order; anybody the office has no furniture for stands in a row
 underneath rather than being left out. A set with no `room.json` draws its
 people in a row, which is what every set did before rooms existed.
