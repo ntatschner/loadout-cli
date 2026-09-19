@@ -999,6 +999,13 @@ public sealed class DashboardServer : IDisposable
             // When it last said anything, which is how the terminal screen
             // decides whose output is worth showing without asking anybody.
             lastSeen = node.LastSeen,
+
+            // Somebody to call it. "implementer/1" is the same string in every
+            // room on the machine; this points at exactly one node of exactly
+            // one run, which is what a person needs to say a week later. The
+            // technical name is still right there beside it.
+            person = DeskNames.For(run.RunId, node.Node),
+            personFull = DeskNames.Full(run.RunId, node.Node),
         }),
 
         // Every exchange, one by one, rather than only each node's total. Two

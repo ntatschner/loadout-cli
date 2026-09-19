@@ -286,6 +286,12 @@
   */
   .room .floor {
     position: relative;
+
+    /* So the people can be sized against the room rather than against the
+       font. A character is 95 pixels tall in a 1024 pixel scene; at a fixed
+       rem size it came out half again too big and read as floating over the
+       furniture rather than sitting at it. */
+    container-type: size;
     border: 1px solid var(--line);
     border-radius: 0.3rem;
     background-repeat: no-repeat;
@@ -317,18 +323,50 @@
     line-height: 1.25;
   }
 
-  .desks.placed .desk .sprite.drawn { width: 2rem; height: 3.25rem; margin: 0; }
+  /* The size the artist drew their own people in this room - measured off
+     the scene rather than picked - so ours are the size of the furniture
+     whatever size the card is. */
+  .desks.placed .desk .sprite.drawn { width: 6.5cqh; height: 10cqh; margin: 0; }
   /*
     Kept narrow so two people standing near each other do not label over one
     another. What is cut here is only ever repeated elsewhere: the whole
     sentence is the button's accessible name, it is on the element's title for
     a pointer, and the detail pane says all of it in full.
   */
+  /*
+    Hung below the sprite rather than stacked under it.
+
+    The desk is anchored by its bottom edge, and the plate was inside it - so
+    the coordinate landed at the bottom of the *plate* and the person floated a
+    plate's height above the chair. Every attempt to fix that by moving the
+    coordinate moved the label with it and never closed the gap. Out of the
+    flow, the desk is exactly as tall as the person, and the coordinate is
+    where they sit.
+  */
   .desks.placed .desk .plate {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
     text-align: center;
-    max-width: 7rem;
+    max-width: 5.5rem;
     overflow: hidden;
   }
+
+  /*
+    On a floor plan a plate says who, and only who.
+
+    Neighbouring desks are twelve per cent of a room apart and a plate saying
+    name-and-state is three times that wide, so they label over one another.
+    Staggering them alternately cleared that and put the lowered ones behind
+    the sprites of the row below instead - the desks are absolutely positioned
+    siblings, so the one drawn later simply covers the one before.
+
+    So the plate is a name plate. How somebody is doing is on the card that
+    opens when you point at them or tab to them, and in the sentence a screen
+    reader is given, and in the List view in full. What is left here is the one
+    thing a floor plan is for: which of them is that.
+  */
 
   .desks.placed .desk .who,
   .desks.placed .desk .state {
@@ -341,23 +379,80 @@
   .desks.placed .desk .who { font-size: 0.72rem; }
   .desks.placed .desk .state { font-size: 0.66rem; }
 
+  .desks.placed .desk .state { display: none; }
+
   /* What a node is doing is a sentence, and a sentence on a floor plan covers
      the floor. It stays on the desk for a screen reader and in the detail
      pane for everybody. */
   .desks.placed .desk .doing { display: none; }
 
   /*
-    The one bit of movement in the room, and it is the room's own people
-    rather than a decoration: a node that is working breathes, and one that is
-    blocked or gone is still. The reduced-motion rule further down turns every
-    animation on the page off, this one included.
+    Movement, and it means something.
+
+    Anybody still in the room breathes - an office where nothing at all moves
+    reads as a screenshot, and these are people. Somebody actually working
+    types as well, which is a faster and larger movement, so across a room you
+    can see who is doing something without reading a word. Anybody who has
+    left is perfectly still.
+
+    Staggered by desk, because six people bobbing in lockstep is not an office,
+    it is a chorus line. The reduced-motion rule further down turns all of it
+    off.
   */
-  @keyframes at-work {
+  @keyframes breathing {
     0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-2px); }
+    50% { transform: translateY(-1px); }
   }
 
-  .desk.busy .sprite.drawn { animation: at-work 1.8s ease-in-out infinite; }
+  @keyframes typing {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-2px) rotate(-0.6deg); }
+    75% { transform: translateY(-1px) rotate(0.6deg); }
+  }
+
+  .desk .sprite.drawn { animation: breathing 4s ease-in-out infinite; }
+  .desk.busy .sprite.drawn { animation: typing 1.1s ease-in-out infinite; }
+  .desk.gone .sprite.drawn { animation: none; }
+
+  /* On the list item, not the button: each desk is the only child of its own
+     li, so counting buttons gives every one of them the same number and every
+     sprite the same delay - which is the chorus line this is here to avoid. */
+  .desks li:nth-child(2n) .sprite.drawn { animation-delay: -0.7s; }
+  .desks li:nth-child(3n) .sprite.drawn { animation-delay: -1.4s; }
+  .desks li:nth-child(5n) .sprite.drawn { animation-delay: -2.1s; }
+
+  /*
+    Who somebody is, on hovering or focusing their desk. The plate has room
+    for a name and nothing else; this is where the rest of it goes, rather
+    than in a browser tooltip that cannot be styled, cannot be read by a
+    keyboard, and takes a second to appear.
+  */
+  .desk { position: relative; }
+
+  .desk .card {
+    display: none;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 0.35rem);
+    transform: translateX(-50%);
+    z-index: 5;
+    width: max-content;
+    max-width: 18rem;
+    text-align: left;
+    white-space: normal;
+    background: var(--page);
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  }
+
+  .desk:hover .card, .desk:focus-visible .card { display: block; }
+
+  .desk .card b { display: block; font-size: 0.85rem; }
+  .desk .card .line { display: block; color: var(--quiet); }
 
   .room h3 { margin: 0; font-size: 1rem; }
   .room .where { color: var(--quiet); font-size: 0.85rem; margin: 0 0 0.5rem; }
@@ -1730,36 +1825,68 @@
     plate.className = "plate";
     button.appendChild(plate);
 
+    var role = node.role.replace(/^role\./, "");
+    var doing = gone ? "left" : node.state;
+
     var who = document.createElement("span");
 
+    // The person, not the slot. Every room on this machine has an
+    // implementer/1 in it and none of them can be told apart in conversation;
+    // this one is Priya and nobody else is.
     who.className = "who";
-    who.textContent = node.node;
+    who.textContent = node.person || node.node;
     plate.appendChild(who);
 
     var state = document.createElement("span");
 
+    // On a floor plan the plate says who and how they are; which role they
+    // are playing is on the card, along with everything else. A plate wide
+    // enough for all three covers the desk next to it.
     state.className = "state";
-    state.textContent = node.role.replace(/^role\./, "") + ", " + (gone ? "left" : node.state);
+    state.textContent = doing;
     plate.appendChild(state);
 
-    if (node.doing) {
-      var doing = document.createElement("span");
+    /*
+      The rest of it, on hovering or focusing the desk. The technical name is
+      in here rather than on the plate because it is what the commands take
+      and what a journal calls it - needed, and needed second.
+    */
+    var card = document.createElement("span");
 
-      doing.className = "state doing";
-      doing.textContent = node.doing;
-      plate.appendChild(doing);
-    }
+    card.className = "card";
+    card.setAttribute("aria-hidden", "true");
+
+    var title = document.createElement("b");
+
+    title.textContent = node.personFull || node.node;
+    card.appendChild(title);
+
+    [
+      node.node + " - " + role,
+      doing + (node.turns ? ", " + node.turns + " exchange" + (node.turns === 1 ? "" : "s") : ""),
+      typeof node.cost === "number" ? "$" + node.cost.toFixed(2) : null,
+      node.model || null,
+      node.doing || null,
+      node.said ? "says: " + node.said : null
+    ].filter(Boolean).forEach(function (text) {
+      var line = document.createElement("span");
+
+      line.className = "line";
+      line.textContent = text;
+      card.appendChild(line);
+    });
+
+    button.appendChild(card);
 
     // Said as a sentence rather than left to whatever a reader makes of three
     // stacked spans: "lead project-lead, blocked" is what those run together
-    // as, and a comma is the difference between a name and a mumble.
-    button.setAttribute("aria-label", node.node + ", " + state.textContent
-      + (node.doing ? ", " + node.doing : ""));
-
-    // The same sentence for a pointer, because a plate on a floor plan has to
-    // be narrow and a narrow plate cuts words off.
-    button.title = node.node + ", " + state.textContent
+    // as, and a comma is the difference between a name and a mumble. The
+    // person first and the node second, in the order somebody would say them.
+    var sentence = (node.personFull ? node.personFull + ", " : "")
+      + node.node + ", " + role + ", " + doing
       + (node.doing ? ", " + node.doing : "");
+
+    button.setAttribute("aria-label", sentence);
 
     button.addEventListener("click", function () { watch(run); });
 
