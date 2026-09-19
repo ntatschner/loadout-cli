@@ -59,6 +59,26 @@ public sealed class DashboardServerTests : IAsyncLifetime
         _server.OfficeRoot = _art;
         _server.OfficeSet = "open-office";
 
+        // A second set, because the waiting area draws with its own: a
+        // reception of people waiting and a floor of people working are
+        // different rooms.
+        Directory.CreateDirectory(Path.Combine(_art, "lobby"));
+        File.WriteAllBytes(
+            Path.Combine(_art, "lobby", "waiting-1.png"), [0x89, 0x50, 0x4E, 0x47]);
+
+        _server.WaitingSet = "lobby";
+
+        _server.WaitingFor = _ => Task.FromResult<IReadOnlyList<Waiting>>(
+        [
+            new Waiting(
+                WaitingKind.Schedule, "nightly", "check the docs", "docs-crew",
+                "loadout-cli", new DateTimeOffset(2026, 9, 19, 23, 0, 0, TimeSpan.Zero),
+                "daily at 23:00", Held: false),
+            new Waiting(
+                WaitingKind.Task, "office-art", "Put art in the office", null,
+                "loadout-cli", null, "blocked: waiting on the licence", Held: true),
+        ]);
+
         var started = _server.Start(0);
 
         started.Succeeded.Should().BeTrue(started.Error);
@@ -98,6 +118,60 @@ public sealed class DashboardServerTests : IAsyncLifetime
                 : string.Empty)));
 
     [Fact]
+    public async Task What_is_queued_is_answered_as_well_as_what_is_going()
+    {
+        var answer = await GetAsync("/api/waiting");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var read = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
+
+        var waiting = read.RootElement.GetProperty("waiting").EnumerateArray().ToList();
+
+        waiting.Should().HaveCount(2);
+
+        // Both kinds, because showing one without the other answers half the
+        // question: a schedule fires whether or not anybody remembers, and a
+        // task never will.
+        waiting[0].GetProperty("kind").GetString().Should().Be("schedule");
+        waiting[0].GetProperty("team").GetString().Should().Be("docs-crew");
+        waiting[0].GetProperty("because").GetString().Should().Be("daily at 23:00");
+
+        waiting[1].GetProperty("kind").GetString().Should().Be("task");
+        waiting[1].GetProperty("held").GetBoolean().Should().BeTrue();
+        waiting[1].GetProperty("due").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task A_dashboard_that_cannot_see_either_store_answers_an_empty_room()
+    {
+        // Rather than a 404 or a 500. An empty waiting area is an answer
+        // somebody acts on: nothing is going to start without me.
+        // A fresh server per test, so putting this back is somebody else's
+        // problem rather than this test's.
+        _server.WaitingFor = null;
+
+        using var read = JsonDocument.Parse(
+            await (await GetAsync("/api/waiting")).Content.ReadAsStringAsync());
+
+        read.RootElement.GetProperty("waiting").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task The_waiting_area_draws_from_its_own_set()
+    {
+        var answer = await GetAsync("/waiting/waiting-1");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+        answer.Content.Headers.ContentType!.MediaType.Should().Be("image/png");
+
+        // And the two rooms do not reach into each other: the office set has
+        // no waiting-1 and the lobby has no lead.
+        (await GetAsync("/office/waiting-1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetAsync("/waiting/lead")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task The_page_is_told_what_art_there_is_to_draw_with()
     {
         var answer = await GetAsync("/api/office");
@@ -110,6 +184,15 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         read.RootElement.GetProperty("pieces").EnumerateArray()
             .Select(one => one.GetString()).Should().Equal("lead");
+
+        // Both sets in one answer, so the page asks once.
+        read.RootElement.GetProperty("waitingSet").GetString().Should().Be("lobby");
+
+        read.RootElement.GetProperty("waitingPieces").EnumerateArray()
+            .Select(one => one.GetString()).Should().Equal("waiting-1");
+
+        read.RootElement.GetProperty("sets").EnumerateArray()
+            .Select(one => one.GetString()).Should().Contain("lobby").And.Contain("open-office");
     }
 
     [Fact]
@@ -836,21 +919,22 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task There_are_four_ways_to_look_at_the_same_state()
+    public async Task There_are_five_ways_to_look_at_the_same_state()
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
         text.Should().Contain("<div class=\"views\" role=\"group\" aria-label=\"How to look at them\">");
 
-        foreach (var view in new[] { "list", "office", "graph", "when" })
+        // Four read the runs; the fifth reads what has not become one yet.
+        foreach (var view in new[] { "list", "office", "graph", "when", "waiting" })
         {
             text.Should().Contain($"id=\"view-{view}\"");
         }
 
-        // One of them is on, the other two are not. A group where every button
-        // claims to be pressed announces as three pressed buttons.
+        // One of them is on and the rest are not. A group where every button
+        // claims to be pressed announces as five pressed buttons.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
-            .Should().HaveCount(3);
+            .Should().HaveCount(4);
     }
 
     [Fact]
@@ -864,6 +948,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("<ul class=\"rooms\" id=\"office\" hidden></ul>");
         text.Should().Contain("<div id=\"graph\" hidden></div>");
         text.Should().Contain("<div id=\"when\" hidden></div>");
+        text.Should().Contain("<ul class=\"queue\" id=\"waiting\" hidden></ul>");
     }
 
     [Fact]

@@ -128,6 +128,7 @@ public sealed class DaemonStartsWorkTests
             commands,
             paths: null!,
             projects: null!,
+            tasks: null!,
             git: null!,
             processes: null!,
             Quiet(),

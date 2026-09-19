@@ -111,6 +111,25 @@ public sealed class DashboardServer : IDisposable
     /// <summary>Which set in that directory to draw with, or empty for none.</summary>
     public string OfficeSet { get; set; } = string.Empty;
 
+    /// <summary>Which set the waiting area draws with, or empty for none.</summary>
+    /// <remarks>
+    /// Its own, because a reception full of people waiting and an office full
+    /// of people working are different rooms and somebody may well want them
+    /// to look different.
+    /// </remarks>
+    public string WaitingSet { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What is queued rather than going, or null where nothing can say.
+    /// </summary>
+    /// <remarks>
+    /// A delegate rather than the two services, for the same reason the other
+    /// three are: this type reads journals off a disk and should not acquire a
+    /// schedule store and a task store to do it. Null answers an empty room,
+    /// which is what a dashboard that cannot see either of them should say.
+    /// </remarks>
+    public Func<CancellationToken, Task<IReadOnlyList<Waiting>>>? WaitingFor { get; set; }
+
     /// <summary>The secret every request has to carry, made when the server starts.</summary>
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
@@ -704,6 +723,10 @@ public sealed class DashboardServer : IDisposable
                     pieces = root is null || OfficeSet.Length == 0
                         ? []
                         : OfficeArt.Pieces(root, OfficeSet),
+                    waitingSet = root is null ? string.Empty : WaitingSet,
+                    waitingPieces = root is null || WaitingSet.Length == 0
+                        ? []
+                        : OfficeArt.Pieces(root, WaitingSet),
                 }, Json)).ConfigureAwait(false);
 
             return;
@@ -711,7 +734,41 @@ public sealed class DashboardServer : IDisposable
 
         if (path.StartsWith("/office/", StringComparison.Ordinal))
         {
-            await PieceAsync(context, path["/office/".Length..]).ConfigureAwait(false);
+            await PieceAsync(context, OfficeSet, path["/office/".Length..]).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (path.StartsWith("/waiting/", StringComparison.Ordinal))
+        {
+            await PieceAsync(context, WaitingSet, path["/waiting/".Length..]).ConfigureAwait(false);
+
+            return;
+        }
+
+        // What is queued rather than going. Answered even when nothing can
+        // say, because an empty waiting area is an answer somebody acts on.
+        if (path == "/api/waiting")
+        {
+            var waiting = WaitingFor is null
+                ? []
+                : await WaitingFor(ct).ConfigureAwait(false);
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    waiting = waiting.Select(one => new
+                    {
+                        kind = one.Kind.ToString().ToLowerInvariant(),
+                        one.Id,
+                        one.Title,
+                        one.Team,
+                        one.Project,
+                        one.Due,
+                        one.Because,
+                        one.Held,
+                    }),
+                }, Json)).ConfigureAwait(false);
 
             return;
         }
@@ -1443,11 +1500,11 @@ public sealed class DashboardServer : IDisposable
     /// not pointed at, and the answer to that is the same as for a piece that
     /// is not there.
     /// </remarks>
-    private async Task PieceAsync(HttpListenerContext context, string piece)
+    private async Task PieceAsync(HttpListenerContext context, string set, string piece)
     {
         if (OfficeRoot is not { Length: > 0 } root
-            || OfficeSet.Length == 0
-            || OfficeArt.FileOf(root, OfficeSet, Uri.UnescapeDataString(piece)) is not { } file
+            || set.Length == 0
+            || OfficeArt.FileOf(root, set, Uri.UnescapeDataString(piece)) is not { } file
             || OfficeArt.TypeOf(file) is not { } type)
         {
             await WriteAsync(context, 404, "text/plain; charset=utf-8", "No such piece.").ConfigureAwait(false);

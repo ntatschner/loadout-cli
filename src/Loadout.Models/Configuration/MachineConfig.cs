@@ -100,6 +100,17 @@ public sealed class MachineTeams
     /// as drawing nothing.
     /// </remarks>
     public string OfficeSet { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which set the waiting area draws with, or empty for none.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="OfficeSet"/> rather than shared: a reception
+    /// of people waiting and a floor of people working are different rooms, and
+    /// the whole reason sets exist is that somebody may want them to look
+    /// different.
+    /// </remarks>
+    public string WaitingSet { get; set; } = string.Empty;
 }
 
 /// <summary>This machine's view of one project.</summary>

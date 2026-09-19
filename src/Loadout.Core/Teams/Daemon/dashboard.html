@@ -198,7 +198,11 @@
     cannot. None of them can do anything: every control is in the detail pane,
     so there is one implementation of answering a gate rather than three.
   */
-  .views { display: flex; gap: 0.25rem; margin: 0 0 0.75rem; }
+  /* Wraps, because the fifth view did not fit. Four buttons sat inside the
+     runs pane and five overflowed it by sixty pixels, which turned the whole
+     pane into a horizontal scroller and pushed every run's name off the left
+     edge. A row of view buttons is not worth a scrollbar. */
+  .views { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0 0 0.75rem; }
 
   .views button {
     font: inherit;
@@ -288,6 +292,64 @@
   /* A desk whose node has finished keeps its sprite, quieter. The list already
      dims the whole desk; this stops the art fighting that. */
   .desk.gone .sprite.drawn { opacity: 0.7; }
+
+  /*
+    The waiting area. One row per thing that has not started: a reception of
+    schedules with their next time, and the tasks sitting behind them. Rows
+    rather than desks, because what somebody reads here is an order - what
+    happens next, then next - and a wrapped grid has no order to read.
+  */
+  .queue { list-style: none; margin: 0; padding: 0; }
+
+  .queue li { margin: 0 0 0.4rem; }
+
+  /* No width: 100% here. This is a block element and already fills the row,
+     and adding it to something with padding and a border - on a page with no
+     global box-sizing - makes it exactly 21px too wide, which turned the whole
+     runs pane into a horizontal scroller and clipped the time off every row. */
+  .queue .item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    padding: 0.4rem 0.6rem;
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    text-align: left;
+  }
+
+  /* Held is not a colour. A paused schedule and a blocked task say so in
+     words on the row; the dashes are the second encoding, not the first. */
+  .queue .item.held { border-style: dashed; opacity: 0.75; }
+
+  .queue .who { display: block; font-weight: 700; }
+  .queue .why { display: block; font-size: 0.85rem; color: var(--quiet); }
+  .queue .when { margin-left: auto; padding-left: 0.6rem; font-size: 0.85rem; white-space: nowrap; }
+  .queue .body { min-width: 0; }
+  .queue .kind { font-size: 0.85rem; color: var(--quiet); }
+
+  .queue .sprite {
+    flex: 0 0 auto;
+    display: block;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.2rem;
+  }
+
+  .queue .sprite.drawn {
+    width: 2rem;
+    height: 3rem;
+    border-color: transparent;
+    background-repeat: no-repeat;
+    background-position: center bottom;
+    background-size: contain;
+    image-rendering: pixelated;
+  }
+
+  .queue .empty { color: var(--quiet); }
 
   /*
     The timeline. One row per run, placed by when it started and stretched by
@@ -571,6 +633,7 @@
       <button type="button" id="view-office" aria-pressed="false">Office</button>
       <button type="button" id="view-graph" aria-pressed="false">Graph</button>
       <button type="button" id="view-when" aria-pressed="false">Timeline</button>
+      <button type="button" id="view-waiting" aria-pressed="false">Waiting</button>
     </div>
 
     <ul class="runs" id="list" aria-describedby="status"></ul>
@@ -580,6 +643,8 @@
     <div id="graph" hidden></div>
 
     <div id="when" hidden></div>
+
+    <ul class="queue" id="waiting" hidden></ul>
 
     <details class="start" id="roles">
       <summary>How the roles have been doing</summary>
@@ -1036,7 +1101,8 @@
     { button: "view-list", box: "list", draw: drawList },
     { button: "view-office", box: "office", draw: drawOffice },
     { button: "view-graph", box: "graph", draw: drawGraph },
-    { button: "view-when", box: "when", draw: drawWhen }
+    { button: "view-when", box: "when", draw: drawWhen },
+    { button: "view-waiting", box: "waiting", draw: drawWaiting }
   ];
 
   var view = 0;
@@ -1128,6 +1194,159 @@
     li.appendChild(button);
 
     return li;
+  }
+
+  /*
+    What is queued rather than going.
+
+    Its own source: the office and the timeline both read the runs, and this
+    reads the schedules and the tasks, which are the two things that have not
+    become runs yet. A schedule is the machine's own intention and will fire
+    whether or not anybody remembers; a task is a person's, and nothing will
+    ever fire it. Showing one without the other answers half the question.
+  */
+  var queue = null;
+
+  function queued() {
+    return api("/api/waiting")
+      .then(function (answer) {
+        queue = answer.waiting || [];
+
+        if (views[view].box === "waiting") { drawWaiting(); }
+      })
+      .catch(function () {
+        // A dashboard that cannot see either store says so by staying empty,
+        // which is what it should say.
+      });
+  }
+
+  /*
+    Which piece draws one of these.
+
+    A lobby of identical people is a lobby nobody looks at twice, so a set may
+    carry waiting-1, waiting-2 and so on and they are dealt out by the item's
+    own id - the same item gets the same person on every redraw, which matters
+    more than the variety does. Failing that, a piece named after the kind,
+    and failing that the worker everything falls back to.
+  */
+  function queuePieceFor(item) {
+    var many = [];
+
+    for (var i = 1; i <= 24; i += 1) {
+      if (waitingPieces["waiting-" + i]) { many.push("waiting-" + i); }
+    }
+
+    if (many.length > 0) {
+      var sum = 0;
+
+      for (var c = 0; c < item.id.length; c += 1) { sum += item.id.charCodeAt(c); }
+
+      return many[sum % many.length];
+    }
+
+    if (waitingPieces[item.kind]) { return item.kind; }
+
+    return waitingPieces.worker ? "worker" : null;
+  }
+
+  /*
+    When it next comes round, said the way somebody would say it rather than
+    as a timestamp. "Tomorrow at 09:00" is a thing a person can act on; an ISO
+    string is a thing they have to decode first.
+  */
+  function nextTime(due) {
+    if (!due) { return ""; }
+
+    var at = new Date(due);
+    var now = new Date();
+    var days = Math.round((at - now) / 86400000);
+
+    var clock = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    if (at.toDateString() === now.toDateString()) { return "today at " + clock; }
+
+    if (days >= 0 && days <= 1) { return "tomorrow at " + clock; }
+
+    return at.toLocaleDateString([], { day: "numeric", month: "short" }) + " at " + clock;
+  }
+
+  function drawWaiting() {
+    var box = document.getElementById("waiting");
+
+    box.textContent = "";
+
+    if (queue === null) { return; }
+
+    if (queue.length === 0) {
+      var none = document.createElement("li");
+
+      none.className = "empty";
+      none.textContent =
+        "Nothing is queued. No schedule is waiting to fire and no task is open.";
+      box.appendChild(none);
+
+      return;
+    }
+
+    queue.forEach(function (item) {
+      var li = document.createElement("li");
+      var row = document.createElement("div");
+
+      row.className = "item" + (item.held ? " held" : "");
+
+      var sprite = document.createElement("span");
+      var drawn = queuePieceFor(item);
+
+      sprite.className = "sprite";
+      sprite.setAttribute("aria-hidden", "true");
+
+      if (drawn) {
+        sprite.className = "sprite drawn";
+        sprite.style.backgroundImage =
+          "url(\"/waiting/" + encodeURIComponent(drawn) + "?token=" + encodeURIComponent(token) + "\")";
+      }
+
+      row.appendChild(sprite);
+
+      var body = document.createElement("div");
+
+      body.className = "body";
+
+      var who = document.createElement("span");
+
+      who.className = "who";
+      who.textContent = item.title || item.id;
+      body.appendChild(who);
+
+      var why = document.createElement("span");
+
+      // The kind first, because "schedule" and "task" are the difference
+      // between something that will happen on its own and something that
+      // will not happen until somebody does it.
+      why.className = "why";
+      why.textContent = (item.kind === "schedule"
+        ? (item.team ? item.team : "a team") + (item.project ? " on " + item.project : "")
+        : "task " + item.id + (item.project ? " in " + item.project : ""))
+        + " - " + item.because;
+      body.appendChild(why);
+
+      row.appendChild(body);
+
+      var when = document.createElement("span");
+
+      when.className = "when";
+      when.textContent = item.due ? nextTime(item.due) : "";
+      row.appendChild(when);
+
+      // Said as one sentence rather than left to whatever a reader makes of
+      // three stacked spans.
+      row.setAttribute("aria-label",
+        (item.title || item.id) + ", " + why.textContent
+        + (when.textContent ? ", " + when.textContent : ""));
+
+      li.appendChild(row);
+      box.appendChild(li);
+    });
   }
 
   function drawOffice(runs) {
@@ -3083,11 +3302,13 @@
     built to be.
   */
   var pieces = {};
+  var waitingPieces = {};
 
   function sprites() {
     return api("/api/office")
       .then(function (answer) {
         (answer.pieces || []).forEach(function (piece) { pieces[piece] = true; });
+        (answer.waitingPieces || []).forEach(function (piece) { waitingPieces[piece] = true; });
       })
       .catch(function () {
         // Nothing to say. A dashboard with no art is the ordinary case.
@@ -3113,6 +3334,10 @@
   }
 
   function refresh() {
+    // Both, every pass. The waiting area is two small files off a disk and a
+    // schedule made while this is open should appear without a reload.
+    queued();
+
     api("/api/runs")
       .then(function (answer) {
         draw(answer.runs);

@@ -348,6 +348,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "a desk is a square with the node's name in it, which is what it has always been"),
 
+        new("team-waiting-set",
+            "Which set of art the dashboard's waiting area draws with",
+            (_, m) => m.Teams.WaitingSet,
+            (_, m, v) => m.Teams.WaitingSet = v.Trim(),
+            true,
+            Sample: "lobby",
+            Group: Groups.Machine,
+            WhenUnset: "the waiting area is a list of words, which is what it has always been"),
+
         new("team-webhook-teams",
             "Comma-separated teams something outside this machine may start",
             (_, m) => string.Join(", ", m.Teams.WebhookTeams),

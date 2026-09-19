@@ -41,6 +41,9 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly ReadingProfile _reading;
     private readonly IConfigurationService _configuration;
     private readonly IPlatformPaths _paths;
+    private readonly IScheduleService _schedules;
+    private readonly Loadout.Core.Tasks.ITaskService _tasks;
+    private readonly Loadout.Core.Projects.IProjectService _projects;
 
     public TeamDashboardCommand(
         IRunJournal journal,
@@ -49,7 +52,10 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         IApplicationLauncher opener,
         ReadingProfile reading,
         IConfigurationService configuration,
-        IPlatformPaths paths)
+        IPlatformPaths paths,
+        IScheduleService schedules,
+        Loadout.Core.Tasks.ITaskService tasks,
+        Loadout.Core.Projects.IProjectService projects)
     {
         _journal = journal;
         _git = git;
@@ -58,6 +64,9 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         _reading = reading;
         _configuration = configuration;
         _paths = paths;
+        _schedules = schedules;
+        _tasks = tasks;
+        _projects = projects;
     }
 
     /// <summary>
@@ -157,13 +166,17 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         // The same art the daemon draws with, for the same reason: this is the
         // page people actually open to look at the office, and a dashboard that
         // drew squares while the daemon drew people would be two dashboards.
-        var office = OfficeArt.Chosen(
-            _paths,
-            (await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false))
-                .Value?.Teams.OfficeSet);
+        var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
+        var office = OfficeArt.Chosen(_paths, machine.Value?.Teams.OfficeSet);
 
         server.OfficeRoot = office.Root;
         server.OfficeSet = office.Set;
+        server.WaitingSet = OfficeArt.Chosen(_paths, machine.Value?.Teams.WaitingSet).Set;
+
+        // Reading only, like everything else this command serves. It can show
+        // what is queued; it cannot fire any of it.
+        server.WaitingFor = token => WaitingRoom.ReadAsync(
+            _schedules, _tasks, _projects, DateTimeOffset.UtcNow, token);
 
         if (settings.DryRun)
         {

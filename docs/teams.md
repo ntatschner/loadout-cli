@@ -216,11 +216,11 @@ there is one account of what happened rather than three that can disagree.
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
 
-### Four ways of looking at the same thing
+### Five ways of looking at the same thing
 
-**List**, **Office**, **Graph** and **Timeline** across the top of the runs
-pane. The state is the same; how you look at it is a choice, and the four
-answer different questions.
+**List**, **Office**, **Graph**, **Timeline** and **Waiting** across the top of
+the runs pane. The first four show the same state and differ only in how you
+look at it; the fifth shows what has not become a run yet.
 
 - **List** — dense and complete. The working view, and the default.
 - **Office** — one room per run, a desk per node. The glanceable one, the thing
@@ -232,6 +232,9 @@ answer different questions.
 - **Timeline** — where the minutes and the money went, across the machine
   rather than inside one run. A strip per day with that day's totals, each
   scaled to the hours the day actually used.
+- **Waiting** — what is queued rather than going: schedules that have not
+  fired, and tasks nobody has finished. The one to look at before you go to
+  bed.
 
 The timeline collapses the empty days on purpose. One scale across everything
 was tried first and is useless: runs span days and each lasts minutes, so every
@@ -243,6 +246,32 @@ are two teams running at once on an afternoon, never across a week.
 **None of them can do anything.** Every control lives in the detail pane, so
 answering a gate is implemented once rather than three times. Clicking anybody
 anywhere takes you there.
+
+#### The waiting area
+
+The other four views read the runs. This one reads the two things that have not
+become runs: your **schedules** and your **tasks**.
+
+Both, because they are not the same kind of thing and showing one without the
+other answers half the question. A schedule is the machine's own intention — it
+fires whether or not you remember it. A task is yours, recorded and dated, and
+*nothing* will ever fire it. "Is anything going to start without me, and is
+anything sitting here I said I would do" is one question with two answers.
+
+Soonest first, because what the view is for is what happens next. Anything a
+clock does not decide — a schedule watching for a commit, any task — comes after
+everything a clock does; saying "due at" about those would be a guess dressed as
+a fact. Anything **held** comes last and says what is holding it: a paused
+schedule, a blocked task. Held is not a colour — the row says it in words and
+the dashed border is the second encoding.
+
+Only `open` and `blocked` tasks are here. A task somebody is `doing` is in the
+office, not the waiting area, and `done` and `dropped` are not waiting at all.
+At most twelve tasks are read from any one project, because a waiting area is a
+glance rather than a backlog tool: one project with four hundred open tasks
+would otherwise bury every schedule on the machine underneath it.
+
+It reads and nothing else. Nothing here can fire a schedule or close a task.
 
 #### Putting art in the office
 
@@ -280,6 +309,24 @@ Several sets can sit side by side and the setting picks one, which is the point
 of a set rather than a folder: an office themed one way on Monday and another
 on Friday is one config change. A name no directory answers to draws squares —
 the same as having no art, rather than something subtly broken.
+
+The waiting area has a set of its own, because a reception of people waiting and
+a floor of people working are different rooms:
+
+```
+<state>/teams/office/lobby/waiting-1.png
+<state>/teams/office/lobby/waiting-2.png
+```
+
+```sh
+loadout config set team-waiting-set "lobby"
+```
+
+Pieces there are named `waiting-1`, `waiting-2` and so on, and are dealt out by
+each item's own identifier — the same schedule gets the same person on every
+redraw, which matters more than the variety does. A set with none of those falls
+back to a piece named after the kind (`schedule` or `task`), then to `worker`,
+then to an empty square.
 
 The images are served by the daemon from that directory, over the same loopback
 address and behind the same token as everything else on the page. Nothing is

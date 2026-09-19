@@ -54,6 +54,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly ICommandCatalogue _commands;
     private readonly IPlatformPaths _paths;
     private readonly Loadout.Core.Projects.IProjectService _projects;
+    private readonly Loadout.Core.Tasks.ITaskService _tasks;
     private readonly Loadout.Core.Git.IGitManager _git;
     private readonly IProcessInspector _processes;
     private readonly ISecretProvider _secrets;
@@ -71,6 +72,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         ICommandCatalogue commands,
         IPlatformPaths paths,
         Loadout.Core.Projects.IProjectService projects,
+        Loadout.Core.Tasks.ITaskService tasks,
         Loadout.Core.Git.IGitManager git,
         IProcessInspector processes,
         IAnsiConsole console,
@@ -84,6 +86,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         _commands = commands;
         _paths = paths;
         _projects = projects;
+        _tasks = tasks;
         _git = git;
         _processes = processes;
         _console = console;
@@ -161,6 +164,13 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             server.OfficeRoot = office.Root;
             server.OfficeSet = office.Set;
+            server.WaitingSet = OfficeArt.Chosen(_paths, teams?.WaitingSet).Set;
+
+            // Read per request rather than once: a schedule made while the
+            // daemon is up should appear in the waiting area without somebody
+            // having to restart the thing that fires it.
+            server.WaitingFor = token => WaitingRoom.ReadAsync(
+                _schedules, _tasks, _projects, _time.GetUtcNow(), token);
 
             // Asked per request rather than read once here, so turning the
             // webhook off with 'team webhook disable' takes effect on the next
