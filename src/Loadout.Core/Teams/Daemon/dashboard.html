@@ -605,6 +605,12 @@
     .add, .drop, .hunk { color: CanvasText; }
     .bars .bar { background: CanvasText; }
     .views button, .room, .desk { border: 1px solid CanvasText; }
+    .queue .item, .prefs button { border: 1px solid CanvasText; }
+
+    /* Held keeps its dashes here too: in a mode that throws every colour
+       away, the shape of the border is the only thing left carrying it, and
+       the row says "paused" or "blocked" in words regardless. */
+    .queue .item.held { border-style: dashed; }
     .views button[aria-pressed="true"] { border: 3px solid CanvasText; }
     .when .span { background: CanvasText; border: 1px solid CanvasText; }
     .graph .box { stroke: CanvasText; fill: Canvas; }
