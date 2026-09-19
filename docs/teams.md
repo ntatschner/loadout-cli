@@ -369,29 +369,41 @@ somewhere underneath, and at the amount needed to hide the legs it leaves half
 a person. Where the person is wider than the chair it is worse still: plain
 floor from inside the rectangle erases them.
 
-**Look in the pack first.** These packs ship their furniture as individual
-transparent PNGs, and the trading floor ships four facings of its swivel chair.
-That art is a proper alpha silhouette drawn by the artist: scale it to the
-height the chairs are drawn at in that room, stand it on its castors at each
-desk, and the curve of the back, the arms, the gap between them and a shoe
-showing past the base all come out right. Three of the five rooms here are made
-this way.
+**Look in the pack first - but for a shape, not for pixels.** These packs ship
+their furniture as individual transparent PNGs, and the trading floor ships
+four facings of its swivel chair. Use that art as a **stencil**: scale it to
+the height the chairs are drawn at in that room, stand it on its castors at
+each desk, and copy `room.png` through its alpha. The outline is the artist's -
+the curve of the back, the arms, the gap between them, a shoe showing past the
+base - and every pixel is the room's own.
 
-They are not the scene's own pixels, so they cannot be *found* by matching -
-the best placement of one in its own empty scene agrees on 43%, which says
-these are separate renders. Each has to be placed and its height measured.
+Pasting the art itself is the mistake to avoid, and it is an easy one to make:
+the room already has chairs in it, so what you get is a second chair on top of
+the first, a shade out and a pixel or two out of register. Spread the stencil
+by a pixel or two as well. Overhang costs nothing, because it can only redraw
+the room over itself; falling short leaves a sliver of somebody's leg across
+the arm of their chair.
+
+There is a test for having got this right, and it is worth running: laying
+`front.png` back over `room.png` must give `room.png` **exactly**. Anything
+that differs came from somewhere other than the room and will show up as a
+ghost behind an empty desk.
+
+The art cannot be *found* by matching - the best placement of one in its own
+empty scene agrees on 43%, which says these are separate renders rather than
+parts cut from the drawing. Each has to be placed and its height measured.
 Check the facing too: the open-plan office and the headquarters ship one facing
 each and it is not the one their rooms show, so the office's chair swallows a
 person seen from the side and the headquarters' puts a seat cushion on the
 sitter's back like a rucksack.
 
-**Where the pack has no chair you can use, cut one out of the room.** Take the
-rectangle again and flood it inwards from its edges, following pixels that
-match their neighbour within a tolerance. What the flood reaches is floor, or a
-desk running out of the rectangle, and both belong behind the person. What it
-cannot reach is the chair standing in the middle, and that is what to keep. It
-is aligned with the room by construction, since every pixel of it is copied
-from `room.png` unchanged - it can only ever put the room back as it was.
+**Where the pack has no chair in the right facing, find the shape in the room
+instead.** Take the rectangle again and flood it inwards from its edges,
+following pixels that match their neighbour within a tolerance. What the flood
+reaches is floor, or a desk running out of the rectangle, and both belong
+behind the person. What it cannot reach is the chair standing in the middle,
+and that is the shape to keep. The pixels still come from `room.png`, so the
+same test applies.
 
 One line still has to be measured: where the furniture *starts* being in front,
 because above it the person is in front of the desk and their arms belong on
