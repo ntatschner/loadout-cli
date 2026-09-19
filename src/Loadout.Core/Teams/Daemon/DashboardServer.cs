@@ -708,6 +708,17 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // One screen, filling the window, for a browser dragged onto a second
+        // monitor. The same page every time: which screen it is, is the
+        // page's business, and a name it does not know shows the whole
+        // dashboard rather than nothing.
+        if (path.StartsWith("/screen/", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 200, "text/html; charset=utf-8", Page()).ConfigureAwait(false);
+
+            return;
+        }
+
         // What art there is, if any, so the page knows which desks it can
         // draw and which it has to leave as a square. Answered even with
         // nothing installed, because "none" is an answer the page acts on.
@@ -984,6 +995,10 @@ public sealed class DashboardServer : IDisposable
             node.Model,
             node.Base,
             tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
+
+            // When it last said anything, which is how the terminal screen
+            // decides whose output is worth showing without asking anybody.
+            lastSeen = node.LastSeen,
         }),
 
         // Every exchange, one by one, rather than only each node's total. Two

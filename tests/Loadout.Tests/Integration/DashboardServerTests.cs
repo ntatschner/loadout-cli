@@ -919,22 +919,53 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task There_are_five_ways_to_look_at_the_same_state()
+    public async Task There_are_six_screens_and_a_board_to_put_them_on()
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
         text.Should().Contain("<div class=\"views\" role=\"group\" aria-label=\"How to look at them\">");
 
-        // Four read the runs; the fifth reads what has not become one yet.
-        foreach (var view in new[] { "list", "office", "graph", "when", "waiting" })
+        // Four read the runs, one reads what has not become one yet, and one
+        // is the output of whatever is running.
+        foreach (var view in new[] { "list", "office", "graph", "when", "waiting", "terminal" })
         {
             text.Should().Contain($"id=\"view-{view}\"");
         }
 
+        // And the board, which shows several of them at once.
+        text.Should().Contain("id=\"view-board\"");
+        text.Should().Contain("<div class=\"board\" id=\"board\" hidden></div>");
+        text.Should().Contain("<div class=\"terminal\" id=\"terminal\" hidden></div>");
+
         // One of them is on and the rest are not. A group where every button
-        // claims to be pressed announces as five pressed buttons.
+        // claims to be pressed announces as seven pressed buttons.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
-            .Should().HaveCount(4);
+            .Should().HaveCount(6);
+    }
+
+    [Fact]
+    public async Task A_screen_can_be_had_on_its_own_for_a_second_monitor()
+    {
+        // The same page every time: which screen it is, is the page's
+        // business. A name the page does not know shows the whole dashboard
+        // rather than an error, which is the right way round for an address
+        // somebody typed.
+        foreach (var screen in new[] { "office", "terminal", "waiting", "nonsense" })
+        {
+            var answer = await GetAsync("/screen/" + screen);
+
+            answer.StatusCode.Should().Be(HttpStatusCode.OK, "/screen/{0} should serve the page", screen);
+            answer.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
+        }
+    }
+
+    [Fact]
+    public async Task A_screen_on_its_own_still_needs_the_token()
+    {
+        // It is the same dashboard. Putting it on a second monitor is not a
+        // reason for any page in any tab to be able to read it.
+        (await GetAsync("/screen/office", withToken: false)).StatusCode
+            .Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
@@ -990,6 +1021,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("<div id=\"graph\" hidden></div>");
         text.Should().Contain("<div id=\"when\" hidden></div>");
         text.Should().Contain("<ul class=\"queue\" id=\"waiting\" hidden></ul>");
+        text.Should().Contain("<div class=\"terminal\" id=\"terminal\" hidden></div>");
     }
 
     [Fact]

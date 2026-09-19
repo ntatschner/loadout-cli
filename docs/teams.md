@@ -216,11 +216,12 @@ there is one account of what happened rather than three that can disagree.
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
 
-### Five ways of looking at the same thing
+### Six screens, and a board to put them on
 
-**List**, **Office**, **Graph**, **Timeline** and **Waiting** across the top of
-the runs pane. The first four show the same state and differ only in how you
-look at it; the fifth shows what has not become a run yet.
+**List**, **Office**, **Graph**, **Timeline**, **Waiting** and **Terminal**
+across the top of the runs pane. The first four show the same state and differ
+only in how you look at it; the fifth shows what has not become a run yet, and
+the sixth shows what one is doing right now.
 
 - **List** — dense and complete. The working view, and the default.
 - **Office** — one room per run, a desk per node. The glanceable one, the thing
@@ -235,6 +236,11 @@ look at it; the fifth shows what has not become a run yet.
 - **Waiting** — what is queued rather than going: schedules that have not
   fired, and tasks nobody has finished. The one to look at before you go to
   bed.
+- **Terminal** — what a node is doing, line by line, as it does it. It picks
+  the newest running run's most recently active node rather than asking you to,
+  because a screen you leave on should not need operating. It follows the tail
+  only while you are already at the tail, so scrolling back to read something
+  is not yanked away a second later.
 
 The timeline collapses the empty days on purpose. One scale across everything
 was tried first and is useless: runs span days and each lasts minutes, so every
@@ -246,6 +252,29 @@ are two teams running at once on an afternoon, never across a week.
 **None of them can do anything.** Every control lives in the detail pane, so
 answering a gate is implemented once rather than three times. Clicking anybody
 anywhere takes you there.
+
+#### Several at once, or one on its own
+
+**Board** shows several screens together. Tick the ones you want, and give one
+of them the whole width with **Big** — everything the same size is how a wall
+of panels stops being readable. Which screens you chose is remembered in that
+browser and nowhere else; it never reaches the daemon.
+
+A panel does not copy a screen, it borrows it, so there is one office and one
+terminal however you arrange them.
+
+For a second monitor, any screen is also an address of its own:
+
+```
+http://127.0.0.1:8321/screen/office?token=<your token>
+http://127.0.0.1:8321/screen/terminal?token=<your token>
+```
+
+The page is then the screen: no heading, no buttons, nothing to press by
+accident while walking past it. It is the same dashboard and needs the same
+token — putting it on another monitor is not a reason for any page in any tab
+to be able to read it. An address naming a screen that does not exist shows the
+whole dashboard rather than an error.
 
 #### The waiting area
 

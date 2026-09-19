@@ -500,6 +500,96 @@
   .queue .empty { color: var(--quiet); }
 
   /*
+    The terminal: what a node is actually doing, as it does it. The same
+    stream the detail pane shows for a node you picked, except this picks the
+    one worth watching on its own - the newest running node on the machine.
+  */
+  .terminal { display: flex; flex-direction: column; gap: 0.5rem; min-height: 0; }
+
+  .terminal .who { font-weight: 700; }
+
+  .terminal .tape {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    overflow: auto;
+    flex: 1 1 auto;
+    min-height: 12rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+
+  .terminal .tape p { margin: 0; white-space: pre-wrap; word-break: break-word; }
+
+  /*
+    The board: several screens at once, which is what a machine with four
+    teams on it actually wants. One of them is the big one and the rest sit
+    beside it, because "everything the same size" is how a wall of panels
+    stops being readable.
+  */
+  .board {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+    align-items: start;
+  }
+
+  .board .screen {
+    border: 1px solid var(--line);
+    border-radius: 0.4rem;
+    padding: 0.6rem 0.75rem;
+    min-width: 0;
+  }
+
+  /* The big one takes the whole row it is on. */
+  .board .screen.big { grid-column: 1 / -1; }
+
+  .board .screen > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+  }
+
+  .board .screen h3 { margin: 0; flex: 1 1 auto; }
+
+  .board .screen header button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    min-height: 2.5rem;
+    padding: 0.25rem 0.7rem;
+    cursor: pointer;
+  }
+
+  .board .screen header button[aria-pressed="true"] { box-shadow: inset 0 -3px 0 var(--going); }
+
+  /* A screen's own contents scroll rather than the panel growing without end. */
+  .board .screen .holds { max-height: 34rem; overflow: auto; }
+
+  .board .screen.big .holds { max-height: 48rem; }
+
+  .adding { margin: 0 0 0.75rem; }
+  .adding summary { cursor: pointer; min-height: 2.5rem; display: flex; align-items: center; }
+  .adding .choices { display: flex; flex-wrap: wrap; gap: 0.75rem; padding: 0.5rem 0 0; }
+  .adding label { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.5rem; cursor: pointer; }
+  .adding input[type="checkbox"] { width: 1.5rem; height: 1.5rem; margin: 0; cursor: pointer; }
+
+  /*
+    One screen on its own, for a window dragged onto a second monitor. The
+    page is the screen: no heading, no view buttons, nothing to click by
+    accident while walking past it.
+  */
+  body.solo { padding: 0.5rem; }
+  body.solo main { max-width: none; }
+  body.solo .board .screen .holds, body.solo .screen .holds { max-height: none; }
+
+  /*
     The timeline. One row per run, placed by when it started and stretched by
     how long it took, so a machine's afternoon reads at a glance: what
     overlapped, what sat there, and what the day cost.
@@ -824,7 +914,16 @@
       <button type="button" id="view-graph" aria-pressed="false">Graph</button>
       <button type="button" id="view-when" aria-pressed="false">Timeline</button>
       <button type="button" id="view-waiting" aria-pressed="false">Waiting</button>
+      <button type="button" id="view-terminal" aria-pressed="false">Terminal</button>
+      <button type="button" id="view-board" aria-pressed="false">Board</button>
     </div>
+
+    <details class="adding" id="adding" hidden>
+      <summary>Which screens are on the board</summary>
+      <div class="choices" id="choices"></div>
+    </details>
+
+    <div class="board" id="board" hidden></div>
 
     <ul class="runs" id="list" aria-describedby="status"></ul>
 
@@ -835,6 +934,8 @@
     <div id="when" hidden></div>
 
     <ul class="queue" id="waiting" hidden></ul>
+
+    <div class="terminal" id="terminal" hidden></div>
 
     <details class="start" id="roles">
       <summary>How the roles have been doing</summary>
@@ -1018,6 +1119,26 @@
 
   function remember(name, on) {
     try { window.localStorage.setItem(name, on ? "1" : "0"); } catch (e) { /* fine */ }
+  }
+
+  /*
+    The same, for something that is not a yes or a no. Which screens somebody
+    put on their board is a per-browser convenience and lives nowhere else:
+    it never reaches the daemon, and a browser that refuses storage gets the
+    default board rather than an error.
+  */
+  function kept(name, fallback) {
+    try {
+      var value = window.localStorage.getItem(name);
+
+      return value === null ? fallback : JSON.parse(value);
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function keep(name, value) {
+    try { window.localStorage.setItem(name, JSON.stringify(value)); } catch (e) { /* fine */ }
   }
 
   // Synthesised rather than fetched, so the page still fetches nothing: a
@@ -1292,12 +1413,208 @@
     { button: "view-office", box: "office", draw: drawOffice },
     { button: "view-graph", box: "graph", draw: drawGraph },
     { button: "view-when", box: "when", draw: drawWhen },
-    { button: "view-waiting", box: "waiting", draw: drawWaiting }
+    { button: "view-waiting", box: "waiting", draw: drawWaiting },
+    { button: "view-terminal", box: "terminal", draw: drawTerminal }
   ];
+
+  // What each screen is called once it is a panel on a board rather than the
+  // thing the whole pane is showing.
+  var titles = {
+    list: "Runs",
+    office: "Office",
+    graph: "Who asked whom",
+    when: "Timeline",
+    waiting: "Waiting",
+    terminal: "Terminal"
+  };
 
   var view = 0;
 
+  /*
+    The board: several screens at once instead of one.
+
+    A panel does not copy a screen, it adopts it - the same element the single
+    view uses is moved into the panel, so every draw function keeps working
+    and nothing is built twice. A screen can therefore be in one place at a
+    time, which is right: two offices on one page would be the same office.
+  */
+  var board = { on: false, open: [], big: null };
+
+  /*
+    Where the boxes live when the board is not borrowing them.
+
+    Read once, now, while every one of them is still where the markup put it.
+    Working it out later from one of the boxes is how they end up being
+    "returned" into a panel that is about to be emptied - and emptying a panel
+    destroys whatever is inside it, which is the screen itself.
+  */
+  var screensHome = document.getElementById("waiting").parentNode;
+
+  /* Every adopted screen back home and hidden, before anything is emptied. */
+  function reclaimScreens() {
+    views.forEach(function (one) {
+      var box = document.getElementById(one.box);
+
+      if (box && box.closest("#board")) {
+        box.hidden = true;
+        screensHome.appendChild(box);
+      }
+    });
+  }
+
+  function boardScreens() {
+    return board.open.filter(function (name) {
+      return views.some(function (one) { return one.box === name; });
+    });
+  }
+
+  function drawBoard() {
+    var holder = document.getElementById("board");
+
+    // Everything home first and the panels emptied second. The other order
+    // deletes the screens: they are inside the panels, and emptying a panel
+    // takes its contents with it.
+    reclaimScreens();
+
+    holder.textContent = "";
+
+    boardScreens().forEach(function (name) {
+      var panel = document.createElement("section");
+      var head = document.createElement("header");
+      var title = document.createElement("h3");
+
+      panel.className = "screen" + (board.big === name ? " big" : "");
+      panel.setAttribute("aria-labelledby", "screen-" + name);
+
+      title.id = "screen-" + name;
+      title.textContent = titles[name] || name;
+      head.appendChild(title);
+
+      var big = document.createElement("button");
+
+      big.type = "button";
+      big.textContent = "Big";
+      big.setAttribute("aria-pressed", board.big === name ? "true" : "false");
+      big.title = "Give " + (titles[name] || name) + " the whole width";
+      big.addEventListener("click", function () {
+        board.big = board.big === name ? null : name;
+        keep("loadout.board", board);
+        drawBoard();
+        if (shown) { drawOpenScreens(shown); }
+      });
+      head.appendChild(big);
+
+      var shut = document.createElement("button");
+
+      shut.type = "button";
+      shut.textContent = "Close";
+      shut.title = "Take " + (titles[name] || name) + " off the board";
+      shut.addEventListener("click", function () {
+        board.open = board.open.filter(function (other) { return other !== name; });
+        if (board.big === name) { board.big = null; }
+        keep("loadout.board", board);
+        showChoices();
+        drawBoard();
+        if (shown) { drawOpenScreens(shown); }
+      });
+      head.appendChild(shut);
+
+      panel.appendChild(head);
+
+      var holds = document.createElement("div");
+
+      holds.className = "holds";
+
+      var box = document.getElementById(name);
+
+      box.hidden = false;
+      holds.appendChild(box);
+      panel.appendChild(holds);
+      holder.appendChild(panel);
+    });
+
+    if (!boardScreens().length) {
+      var none = document.createElement("p");
+
+      none.className = "facts";
+      none.textContent = "No screens on the board. Add one above.";
+      holder.appendChild(none);
+    }
+  }
+
+  /* Every screen the board is showing, drawn from the same state. */
+  function drawOpenScreens(runs) {
+    boardScreens().forEach(function (name) {
+      var one = views.filter(function (v) { return v.box === name; })[0];
+
+      if (one) { one.draw(runs); }
+    });
+  }
+
+  function showChoices() {
+    var where = document.getElementById("choices");
+
+    where.textContent = "";
+
+    views.forEach(function (one) {
+      var label = document.createElement("label");
+      var tick = document.createElement("input");
+
+      tick.type = "checkbox";
+      tick.checked = board.open.indexOf(one.box) >= 0;
+      tick.addEventListener("change", function () {
+        if (tick.checked) {
+          if (board.open.indexOf(one.box) < 0) { board.open.push(one.box); }
+        } else {
+          board.open = board.open.filter(function (other) { return other !== one.box; });
+          if (board.big === one.box) { board.big = null; }
+        }
+
+        keep("loadout.board", board);
+        drawBoard();
+        if (shown) { drawOpenScreens(shown); }
+      });
+
+      label.appendChild(tick);
+      label.appendChild(document.createTextNode(" " + (titles[one.box] || one.box)));
+      where.appendChild(label);
+    });
+  }
+
+  function showBoard() {
+    board.on = true;
+    view = -1;
+
+    views.forEach(function (one) {
+      document.getElementById(one.button).setAttribute("aria-pressed", "false");
+      document.getElementById(one.box).hidden = true;
+    });
+
+    document.getElementById("view-board").setAttribute("aria-pressed", "true");
+    document.getElementById("adding").hidden = false;
+    document.getElementById("board").hidden = false;
+
+    keep("loadout.board", board);
+    showChoices();
+    drawBoard();
+
+    if (shown) { drawOpenScreens(shown); }
+  }
+
   function showView(which) {
+    if (board.on) {
+      // Take the screens back off the board before showing one on its own.
+      board.on = false;
+
+      reclaimScreens();
+
+      document.getElementById("board").textContent = "";
+      document.getElementById("board").hidden = true;
+      document.getElementById("adding").hidden = true;
+      document.getElementById("view-board").setAttribute("aria-pressed", "false");
+      keep("loadout.board", board);
+    }
+
     view = which;
 
     views.forEach(function (one, i) {
@@ -1312,12 +1629,63 @@
   // four seconds for the next refresh to show anything.
   var shown = null;
 
+  /*
+    One screen, filling the window, for a browser dragged onto a second
+    monitor. /screen/office is the office and nothing else - no heading, no
+    view buttons, nothing to press by accident while walking past it.
+  */
+  function soloScreen() {
+    var at = location.pathname.replace(/\/+$/, "");
+    var mark = "/screen/";
+
+    if (at.indexOf(mark) !== 0) { return null; }
+
+    var want = decodeURIComponent(at.slice(mark.length));
+
+    return views.some(function (one) { return one.box === want; }) ? want : null;
+  }
+
+  var solo = soloScreen();
+
   (function () {
     views.forEach(function (one, i) {
       document.getElementById(one.button).addEventListener("click", function () {
         showView(i);
       });
     });
+
+    document.getElementById("view-board").addEventListener("click", showBoard);
+
+    if (solo) {
+      // The page is the screen. Everything else goes, including the panes,
+      // so nothing has to be scrolled past to see it.
+      document.body.className = "solo";
+      document.title = (titles[solo] || solo) + " - Loadout teams";
+
+      var main = document.querySelector("main");
+
+      Array.from(main.children).forEach(function (child) { child.hidden = true; });
+
+      var box = document.getElementById(solo);
+
+      box.hidden = false;
+      main.appendChild(box);
+
+      return;
+    }
+
+    // A board somebody arranged last time. Screens that no longer exist are
+    // dropped rather than leaving a panel that cannot be filled.
+    var saved = kept("loadout.board", null);
+
+    if (saved && saved.on && (saved.open || []).length) {
+      board.open = (saved.open || []).filter(function (name) {
+        return views.some(function (one) { return one.box === name; });
+      });
+      board.big = board.open.indexOf(saved.big) >= 0 ? saved.big : null;
+
+      showBoard();
+    }
   }());
 
   /*
@@ -1564,6 +1932,114 @@
   */
   function roomScene() {
     return pieces.room ? "room" : null;
+  }
+
+  /*
+    The terminal. What one node is doing, line by line, as it does it.
+
+    Which node: the newest running run's most recently active node. That is
+    the thing somebody leaving a screen on wants to see, and picking it here
+    rather than making them choose is the difference between a screen you
+    glance at and one you operate.
+  */
+  var tapeOf = null;
+  var tapeHas = 0;
+
+  function drawTerminal(runs) {
+    var box = document.getElementById("terminal");
+
+    var going = runs.filter(function (run) { return run.running; });
+    var run = going[0] || null;
+
+    var node = null;
+
+    if (run) {
+      // Most recently seen first, and never one that has gone home.
+      (run.nodes || []).forEach(function (one) {
+        if (one.state === "done" || one.state === "reported" || one.state === "failed") { return; }
+        if (!node || (one.lastSeen || "") > (node.lastSeen || "")) { node = one; }
+      });
+    }
+
+    var want = run && node ? run.id + "/" + node.node : null;
+
+    if (want !== tapeOf) {
+      // A different node than last time, so nothing on the page belongs to it.
+      tapeOf = want;
+      tapeHas = 0;
+      box.textContent = "";
+
+      var who = document.createElement("p");
+
+      who.className = "who";
+      who.textContent = node
+        ? node.node + " (" + node.role.replace(/^role\./, "") + ") in " + (run.room || run.id)
+        : "Nothing is running.";
+      box.appendChild(who);
+
+      var tape = document.createElement("div");
+
+      tape.className = "tape";
+      tape.id = "tape";
+
+      // A log that grows on its own, read out as it arrives, is a screen
+      // reader talking over whoever is using the page. It is readable by
+      // going to it, not by being announced.
+      tape.setAttribute("role", "log");
+      tape.setAttribute("aria-live", "off");
+      tape.textContent = node ? "Reading what " + node.node + " has done..." : "";
+      box.appendChild(tape);
+    }
+
+    if (!want) { return; }
+
+    api("/api/runs/" + encodeURIComponent(run.id) + "/stream/"
+      + encodeURIComponent(node.node) + "?after=" + tapeHas)
+      .then(function (got) {
+        // Somebody's run moved on while this was in flight.
+        if (tapeOf !== want) { return; }
+
+        var tape = document.getElementById("tape");
+
+        if (!tape) { return; }
+
+        if (tapeHas === 0) { tape.textContent = ""; }
+
+        // A total below what is shown means the file was replaced rather than
+        // added to, so what is on the page is not part of it.
+        if (got.total < tapeHas) {
+          tape.textContent = "";
+          tapeHas = 0;
+        }
+
+        tapeHas = got.total;
+
+        if (!got.steps.length) {
+          if (!tape.textContent) { tape.textContent = node.node + " has recorded nothing yet."; }
+
+          return;
+        }
+
+        var bottom = tape.scrollTop + tape.clientHeight >= tape.scrollHeight - 8;
+
+        got.steps.forEach(function (step) {
+          var line = document.createElement("p");
+
+          line.textContent = clock(step.at) + "  " + step.kind
+            + (step.sub ? " (subagent)" : "")
+            + "  " + [step.tool, step.target, step.text].filter(Boolean).join(" ");
+
+          tape.appendChild(line);
+        });
+
+        // Follows the tail only while somebody is already at the tail, so
+        // scrolling back to read something is not yanked away a second later.
+        if (bottom) { tape.scrollTop = tape.scrollHeight; }
+      })
+      .catch(function () {
+        // A run that ended between the list and this. The next pass picks
+        // whatever is running now.
+      });
   }
 
   function drawOffice(runs) {
@@ -2079,7 +2555,9 @@
       }
     }
 
-    views[view].draw(runs);
+    // On a board there is no single view to draw; the panels are drawn by
+    // whoever asked for them. view is -1 there, and -1 is not an index.
+    if (view >= 0) { views[view].draw(runs); }
   }
 
   function drawList(runs) {
@@ -3625,7 +4103,19 @@
 
     api("/api/runs")
       .then(function (answer) {
+        shown = answer.runs;
+
+        if (solo) {
+          var one = views.filter(function (v) { return v.box === solo; })[0];
+
+          if (one) { one.draw(answer.runs); }
+
+          return;
+        }
+
         draw(answer.runs);
+
+        if (board.on) { drawOpenScreens(answer.runs); }
       })
       .catch(function (wrong) {
         say(wrong.message + " The dashboard may have been stopped.");
