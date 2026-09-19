@@ -346,11 +346,38 @@ A set can also carry the room itself, and where its desks are:
 ```
 <state>/teams/office/open-office/room.png
 <state>/teams/office/open-office/room.json
+<state>/teams/office/open-office/front.png
 ```
 
 `room.png` is the office **with nobody in it** — most packs ship an empty or
 environment-only variant beside the populated one, and the empty one is the
 one to use. The people in the room should be your nodes, not the artist's.
+
+`front.png` is the half of that room that goes **in front** of the people: the
+seats of the chairs, their arms, the near edges of the desks. It is optional,
+and a set without one draws as it always did. A set with one looks like the
+artist's own scene instead, because a room drawn as a single picture can only
+ever be behind - so a seated figure sat on top of the chair it was in, legs
+across the seat and shoes over the castors, which is somebody standing in front
+of their own chair rather than sitting in it.
+
+Making one is easier than it sounds, because of a property worth stating
+plainly: **every pixel of `front.png` is copied from `room.png`**, so anywhere
+nobody is standing it puts the room back exactly as it was and shows nothing.
+Covering too much sideways costs nothing at all. Two edges do matter.
+
+The **top** edge is the line where the furniture starts covering somebody, and
+it is the one thing to measure - off the artist's populated scene, as the share
+of a seated figure their chair leaves showing. It runs from about 58% in the
+newsroom, which looks almost straight down, to about 80% in the open-plan
+office, which does not.
+
+The **bottom** edge should stop at the desk's own coordinate. That coordinate
+is already the lowest point of the person standing there, so there is nobody
+below it to cover - and a copy that reached further covered the *next* row's
+people, who had already been drawn. In the corporate headquarters, whose desk
+rows are ten percent apart and whose people are eight percent tall, that hid
+the second and third rows almost completely.
 
 `room.json` says how big the scene is and where somebody stands in it:
 

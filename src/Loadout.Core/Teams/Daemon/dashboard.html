@@ -300,6 +300,33 @@
     image-rendering: pixelated;
   }
 
+  /*
+    The half of the room that goes in front of the people in it: the seats of
+    the chairs, their arms, the near edges of the desks.
+
+    A room drawn as one picture can only ever be behind, so a seated figure sat
+    on top of the chair it was in, with its legs across the seat and its shoes
+    over the castors - which is what it looked like, somebody standing in front
+    of their own chair. A set can ship a second copy of the room kept only
+    where furniture should cover somebody, and this lays it back over the
+    desks. Every pixel of it comes from the room itself, so where nobody is
+    standing it puts the room back exactly as it was and shows nothing.
+  */
+  .room .floor .over {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 100% 100%;
+    image-rendering: pixelated;
+  }
+
+  /* Above it, because a name nobody can read is not a name. The furniture
+     covers the person; it has no business covering who they are. */
+  .desks.placed .desk .plate { z-index: 2; }
+
   /* Without a scene there is nothing to stand on, so they stand in a row. */
   .room .floor.bare { padding: 0.75rem; }
 
@@ -2475,6 +2502,18 @@
     }
 
     floor.appendChild(desks);
+
+    if (has && (office.pieces || []).indexOf("front") >= 0) {
+      var over = document.createElement("div");
+
+      over.className = "over";
+      over.setAttribute("aria-hidden", "true");
+      over.style.backgroundImage = "url(\"/office/" + encodeURIComponent(set)
+        + "/front?token=" + encodeURIComponent(token) + "\")";
+
+      floor.appendChild(over);
+    }
+
     li.appendChild(floor);
 
     // Anybody the room has no desk for stands in a row underneath rather than
