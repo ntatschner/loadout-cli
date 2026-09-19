@@ -264,8 +264,11 @@ two by two, nine a three by three, and it stops at six across because a seventh
 column is a row of postage stamps. **Big** gives one panel the whole width.
 
 Each team works in its **own office**, so four panels are four different rooms
-rather than the same picture four times. Which office is worked out from the
-team's name — so a team is always in the same room and you learn it — and the
+rather than the same picture four times. Five rooms are fitted - an open-plan
+office, a network operations floor, a newsroom, a trading floor and a corporate
+headquarters - and a team is only ever put in one that has been. Which office
+is worked out from the team's name — so a team is always in the same room and
+you learn it — and the
 picker on the panel changes it when the worked-out one is not the one you
 wanted. Both that and which screens you chose are remembered in that browser
 and nowhere else; neither reaches the daemon.
@@ -355,24 +358,52 @@ one to use. The people in the room should be your nodes, not the artist's.
 {
   "width": 1024,
   "height": 1024,
-  "desks": [[20, 24], [13, 47], [31, 47], [49, 47], [13, 66]]
+  "person": 8,
+  "desks": [[20, 20], [15, 49], [30, 46], [43, 46], [15, 63]]
 }
 ```
 
 Each desk is a percentage across and down the scene, so the room draws
 correctly at any width, and `person` is how tall a person is in that room -
 also a percentage of the scene. Per room, because the packs do not draw to one
-scale: a person is a tenth of the open-plan office and under a twelfth of the
-network floor, and one size applied to all of them is right in one room and
+scale: a person is a twelfth of the open-plan office and a fifteenth of the
+trading floor, and one size applied to all of them is right in one room and
 floating over the furniture in the rest.
 
-**How to get those numbers right.** Do not read them off a screenshot; that was
-wrong four times running here. A pack that ships a populated scene beside its
-empty one has already answered the question - the difference between the two
-images is exactly where the artist put their people, and how big they drew
-them. Diff the two and take the bounding boxes.
+It is the whole figure, shoes included, and the desk's coordinate is where the
+shoes land. Measure both from the artist's own person rather than from the
+blob they make in a diff, which is them and their chair together: that mistake
+drew everybody half again too tall, standing at the castors.
 
-Two things that diff will not tell you, and both were wrong until they were
+**How to get those numbers right.** Draw the room yourself and compare it with
+the artist's. Composite one of the pack's own sprites onto the empty scene, put
+that beside the populated scene, and slide it until the two agree: where it
+agrees best is where somebody sits, and where no placement beats the empty room
+there is nobody there. That last part is the test for whether a place is a desk
+at all, and it is the only method here that has survived being checked.
+
+Three that did not, each of which shipped its mistake:
+
+**Diffing the populated scene against the empty one.** The obvious method, and
+it was wrong in both directions. What it caught was not only people: a potted
+plant, a filing cabinet and a wall of monitors whose animation differs between
+the two renders all came back as somebody at a desk. And where it did find a
+person it found the chair they had pulled out with them, because the empty
+scene tucks its chairs in - so everybody was measured half again as tall as
+they are and anchored at the castors rather than at their shoes. That is what
+put people in front of their seats instead of on them.
+
+**Finding the chairs by their own colour.** It found the meeting room's and
+missed the trading desks' entirely at full size, then found the trading desks'
+and missed the meeting room's once the image had been resized. A mask that
+changes its answer when the picture is resampled is not measuring the room.
+
+**Matching the pack's character PNGs into the scene.** Reasonable-sounding and
+hopeless: those files are redraws rather than the scene's own pixels. The
+correct placement of one agrees with the scene on 8% of its pixels, which is
+indistinguishable from the wrong ones.
+
+Two more things no method will tell you, and both were wrong until they were
 looked for:
 
 **Which way the chairs face.** A character sheet is usually front, side and
@@ -381,15 +412,25 @@ the monitor away from the viewer, so somebody at one is seen from behind; an
 open-plan desk with the monitor to the right wants the side view. Take the
 front view and everybody sits with their back to their work.
 
-**Where the desks are, as opposed to where the artist stood somebody.** The
-diff finds the artist's people, and they may be in the meeting room and the
-corridor while the room's actual desk banks are empty. Where a room has obvious
-workstations, find its chairs by their own colour and use those, ordered so the
-busiest row fills first - an office with everybody in the meeting room and
-nobody at a desk does not look like an office at work. The **lead takes the first desk** and the workers take
-the rest in order; anybody the office has no furniture for stands in a row
-underneath rather than being left out. A set with no `room.json` draws its
-people in a row, which is what every set did before rooms existed.
+**Whether the artist's person was sitting.** A found placement is where the
+artist drew somebody, not necessarily where somebody sits: a trading floor's
+reception had two people standing at the desk, and a seated sprite put there
+crouches in the middle of the floor. Keep the seats; leave the standing.
+
+**Where the desks are, as opposed to where the artist put somebody.** They may
+have populated the meeting room and left the desk banks empty. Where a room has
+an obvious bank of identical workstations and only some were drawn occupied,
+fill the rest along the row and column that were measured - and check the
+result against the scene rather than trusting the arithmetic. The **lead takes
+the first desk** and the workers take the rest in order; anybody the office has
+no furniture for stands in a row underneath rather than being left out. A set
+with no `room.json` draws its people in a row, which is what every set did
+before rooms existed.
+
+A pack that ships no usable empty scene is measured by eye off a percentage
+grid laid over its populated one, and the corporate headquarters is the one
+that needed it: its two master scenes are separate renders that disagree over
+half their pixels, so nothing there can be diffed or slid.
 
 The room describes itself so that adding a set needs no change to Loadout, and
 a `room.json` that will not parse falls back to the row rather than taking the

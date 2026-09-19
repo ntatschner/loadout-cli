@@ -325,9 +325,16 @@
 
   /* The size the artist drew their own people in this room - measured off the
      scene rather than picked, and per room, because the packs do not draw to
-     one scale. */
+     one scale.
+
+     The box is wider than any sprite in it on purpose. The art is a background
+     sized to `contain`, so whichever side of the box binds first decides how
+     big it comes out - and at the 0.65 this used to be, the network floor's
+     sprites are wider than that, so they were fitted by their width and
+     arrived a twentieth shorter than the room says a person is. Nothing shows
+     outside the art, so a box with room to spare costs nothing. */
   .desks.placed .desk .sprite.drawn {
-    width: calc(var(--person, 10) * 0.65cqh);
+    width: calc(var(--person, 10) * 0.8cqh);
     height: calc(var(--person, 10) * 1cqh);
     margin: 0;
   }
@@ -1703,13 +1710,22 @@
       title.textContent = team ? team : (titles[name] || name);
       head.appendChild(title);
 
-      // Which office this team works in, changeable here rather than only in
-      // a config file: it is a thing you decide by looking at it.
-      if (team && installed.length > 1) {
+      /*
+        Which office this team works in, changeable here rather than only in a
+        config file: it is a thing you decide by looking at it.
+
+        Guarded, because a board restored from a previous visit is drawn
+        before the answer saying what art exists has arrived - and reading
+        .length off a list that is not there yet threw, which took the whole
+        of drawBoard with it and left the board silently empty.
+      */
+      var sets = installed || [];
+
+      if (team && sets.length > 1) {
         var pick = document.createElement("select");
 
         pick.setAttribute("aria-label", "Which office " + team + " works in");
-        installed.forEach(function (one) {
+        sets.forEach(function (one) {
           var choice = document.createElement("option");
 
           choice.value = one;
@@ -4416,6 +4432,15 @@
         installed = (answer.sets || []).filter(function (one) {
           return offices[one] && offices[one].room;
         });
+
+        // A board restored from a previous visit was drawn before any of this
+        // arrived, so it has no office pickers on it and its rooms are bare.
+        // Now that there is art, draw it again.
+        if (board.on) {
+          drawBoard();
+
+          if (shown) { drawOpenScreens(shown); }
+        }
       })
       .catch(function () {
         // Nothing to say. A dashboard with no art is the ordinary case.
