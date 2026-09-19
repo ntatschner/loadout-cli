@@ -344,6 +344,51 @@ public sealed class ScheduleTests : IDisposable
     }
 
     [Fact]
+    public async Task The_time_of_day_survives_being_written_down()
+    {
+        /*
+          The whole promise of "--at 23:00" is that it runs at 23:00. It was
+          accepted, echoed back correctly, and stored as midnight: the file
+          held hour: 0, minute: 0, ticks: 0, so every daily schedule on the
+          machine fired at the wrong hour and nothing anywhere said so.
+
+          Found by reading a real schedules.yaml, not by reasoning about one.
+        */
+        var evening = new TimeOnly(23, 0);
+
+        await _schedules.SaveAsync(new TeamSchedule
+        {
+            Id = "nightly",
+            Project = "demo",
+            Team = "docs-crew",
+            Goal = "check the docs",
+            At = evening,
+        });
+
+        var read = (await _schedules.ListAsync()).Value!.Single();
+
+        read.At.Should().Be(evening, "a schedule that comes back at midnight is not the one that was made");
+    }
+
+    [Fact]
+    public async Task So_does_an_interval()
+    {
+        // The other half of the same question, and the one that was already
+        // fine - here so that a fix for the first cannot quietly break it.
+        await _schedules.SaveAsync(new TeamSchedule
+        {
+            Id = "often",
+            Project = "demo",
+            Team = "docs-crew",
+            Goal = "check the docs",
+            Every = TimeSpan.FromMinutes(90),
+        });
+
+        (await _schedules.ListAsync()).Value!.Single()
+            .Every.Should().Be(TimeSpan.FromMinutes(90));
+    }
+
+    [Fact]
     public void A_repository_nobody_could_read_does_not_fire_anything()
     {
         var watching = Nightly();
