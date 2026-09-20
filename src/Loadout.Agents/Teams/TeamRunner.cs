@@ -147,6 +147,20 @@ public interface ITeamConsole
     /// having done nothing in between.
     /// </remarks>
     bool CanAsk { get; }
+
+    /// <summary>
+    /// Whether this console answers by writing into the run's own directory.
+    /// </summary>
+    /// <remarks>
+    /// A terminal is told a question and says yes or no. The dashboard's
+    /// console answers by leaving an ask in the run directory for a browser to
+    /// pick up - so when the watcher carried a node's question there, the
+    /// question it was carrying and the question it asked were two entries in
+    /// one queue, under two ids. Answering either let the node go; the other
+    /// stayed on the list, and the watcher sat on it for the full five minutes
+    /// without looking at any other node.
+    /// </remarks>
+    bool AnswersInPlace => false;
 }
 
 /// <summary>
@@ -164,6 +178,8 @@ internal sealed class OneAtATime(ITeamConsole inner) : ITeamConsole, IDisposable
     private readonly SemaphoreSlim _turn = new(1, 1);
 
     public bool CanAsk => inner.CanAsk;
+
+    public bool AnswersInPlace => inner.AnswersInPlace;
 
     public void Starting(string runDirectory) => inner.Starting(runDirectory);
 
@@ -352,11 +368,6 @@ public sealed class TeamRunner : ITeamRunner
                 ExitCode.InvalidArguments);
         }
 
-        // Decided once, here, because it is a fact about the run: an
-        // autonomous run has nobody by definition, and a run down a pipe has
-        // nobody whatever its posture says.
-        _asking = autonomy != "autonomous" && console.CanAsk;
-
         // From here on every question goes through one voice, because the
         // watcher below asks from another thread.
         using var one = new OneAtATime(console);
@@ -425,6 +436,20 @@ public sealed class TeamRunner : ITeamRunner
         // Before anything can be asked, so a console that answers from
         // elsewhere knows where to leave the question.
         console.Starting(directory);
+
+        // And decided after that, not before it, which is the whole of a bug
+        // that made the daemon's half of this dead.
+        //
+        // It is a fact about the run - an autonomous run has nobody by
+        // definition, and a run down a pipe has nobody whatever its posture
+        // says - so it was settled early, at the top of the method. But a
+        // console that answers from elsewhere can only ask once it knows where
+        // to leave the question, and that is what Starting tells it. Asked
+        // before, it truthfully said no. Every run watched by the daemon
+        // therefore decided that nobody was watching, and a held remedy was
+        // refused instead of put to the person sitting in front of the
+        // dashboard.
+        _asking = autonomy != "autonomous" && console.CanAsk;
 
         var journal = new Journal(Path.Combine(directory, "journal.jsonl"), runId, _time);
 
@@ -2063,7 +2088,13 @@ public sealed class TeamRunner : ITeamRunner
         Journal journal,
         CancellationToken ct)
     {
-        var answered = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        // Questions noted and not yet answered, for the console that answers
+        // into this directory. Kept rather than awaited: awaiting one held the
+        // loop for the whole five minutes of somebody's patience, and every
+        // other node's question went unnoted until it let go.
+        var outstanding = new Dictionary<string, PendingAsk>(StringComparer.Ordinal);
 
         try
         {
@@ -2071,7 +2102,7 @@ public sealed class TeamRunner : ITeamRunner
             {
                 foreach (var ask in NodePermissions.Pending(directory))
                 {
-                    if (!answered.Add(ask.Id))
+                    if (!seen.Add(ask.Id))
                     {
                         continue;
                     }
@@ -2079,6 +2110,16 @@ public sealed class TeamRunner : ITeamRunner
                     await journal
                         .WriteAsync("node.asked", ask.Node, new { tool = ask.Tool, target = ask.Target }, ct)
                         .ConfigureAwait(false);
+
+                    if (console.AnswersInPlace)
+                    {
+                        // The question is already where this console reads it.
+                        // Asking would put it in the same queue a second time,
+                        // under a second id, and whoever answered one would
+                        // leave the other on the list.
+                        outstanding[ask.Id] = ask;
+                        continue;
+                    }
 
                     var allowed = await console.ConfirmAsync(ask.Question, ct).ConfigureAwait(false);
 
@@ -2095,6 +2136,28 @@ public sealed class TeamRunner : ITeamRunner
 
                     await journal
                         .WriteAsync("node.answered", ask.Node, new { tool = ask.Tool, allowed }, ct)
+                        .ConfigureAwait(false);
+                }
+
+                // Whatever has been answered since the last glance. Pending
+                // stops returning a question once its answer is there, so what
+                // has gone from that list is what somebody decided - and it is
+                // their answer that gets journalled, not one made up here.
+                foreach (var (id, ask) in outstanding.ToList())
+                {
+                    if (NodePermissions.Answered(directory, id) is not { } said)
+                    {
+                        continue;
+                    }
+
+                    outstanding.Remove(id);
+
+                    await journal
+                        .WriteAsync(
+                            "node.answered",
+                            ask.Node,
+                            new { tool = ask.Tool, allowed = said.Allowed, reason = said.Reason },
+                            ct)
                         .ConfigureAwait(false);
                 }
 

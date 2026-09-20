@@ -835,6 +835,33 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_run_watched_from_elsewhere_knows_that_it_can_ask()
+    {
+        // The bug this exists for. Whether anybody is watching was settled at
+        // the top of the run, from the console; the console that answers
+        // through the daemon can only ask once it has been told where to leave
+        // the question, and it is told sixty lines further down. So the answer
+        // was taken before it could be true, and every run watched from a
+        // dashboard decided nobody was there - a held remedy refused instead of
+        // put to the person sitting in front of it.
+        var team = await IteratingProjectAsync();
+
+        _console.AnswersFromElsewhere = true;
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = await RunAsync(team);
+
+        outcome.Succeeded.Should().BeTrue();
+
+        var policy = System.Text.Json.JsonSerializer.Deserialize<NodePolicy>(
+            await File.ReadAllTextAsync(
+                Path.Combine(outcome.Value!.Directory!, "policy-lead.json")));
+
+        policy!.Ask.Should().BeTrue("the daemon was watching, and the run has to know it");
+    }
+
+    [Fact]
     public async Task A_node_can_reach_the_directory_its_brief_tells_it_to_write_in()
     {
         // The gap this closes. Every brief has been telling every node "this is
@@ -1105,6 +1132,99 @@ public sealed class TeamRunnerTests : IDisposable
         _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
 
         (await RunAsync()).Succeeded.Should().BeTrue();
+    }
+
+    /// <summary>Polls until something is true, or fails saying what never was.</summary>
+    /// <remarks>
+    /// Failing beats hanging: a watcher that never looked would otherwise sit
+    /// here until the suite's own timeout, minutes later and nowhere near the
+    /// cause.
+    /// </remarks>
+    private static async Task Until(string what, Func<bool> done)
+    {
+        for (var i = 0; i < 300; i++)
+        {
+            if (done())
+            {
+                return;
+            }
+
+            await Task.Delay(100);
+        }
+
+        throw new Xunit.Sdk.XunitException($"Gave up waiting: {what}.");
+    }
+
+    [Fact]
+    public async Task A_console_that_answers_in_the_run_directory_is_not_asked_a_second_time()
+    {
+        // One question, one entry. The watcher carries a node's question up to
+        // whoever is running the team; the dashboard's console answers by
+        // leaving an ask in the run directory - the same directory it came
+        // from. So the question it was carrying and the question it asked were
+        // two entries in one queue under two ids, whoever answered one left the
+        // other on the list, and the watcher then sat on its own copy for the
+        // whole five minutes of somebody's patience without looking at any
+        // other node.
+        var directory = string.Empty;
+
+        _launcher.BeforeStart = where => directory = where;
+
+        _console.AnswersInPlace = true;
+
+        _launcher.Hold("role.project-lead", async () =>
+        {
+            await NodePermissions.PutAsync(
+                directory,
+                new PendingAsk("lead-1", "lead", "role.project-lead", "Bash", "dotnet test", DateTimeOffset.UtcNow));
+
+            // Until the watcher has actually picked it up, rather than until
+            // the file exists - which is true the instant it was written, and
+            // would let an answer beat the watcher to it. Pending drops a
+            // question once its answer is there, so it would then never see it
+            // at all and this would pass for the wrong reason.
+            var journal = Path.Combine(directory, "journal.jsonl");
+
+            await Until(
+                "the watcher never noted the question",
+                () => File.Exists(journal) && Read(journal).Any(l => l.Contains("node.asked")));
+
+            // Now what the dashboard does: answer the question that is there.
+            await NodePermissions.AnswerAsync(
+                directory, "lead-1", new AskAnswer(true, "because somebody said so"));
+
+            await Until(
+                "the watcher never noted the answer",
+                () => Read(journal).Any(l => l.Contains("node.answered")));
+        });
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        // Nothing asked the console, because it had nothing to be told.
+        _console.Confirmations.Should().NotContain(c => c.Contains("dotnet test"));
+
+        // And no second entry: the question that was answered is the question
+        // that was asked.
+        Directory.GetFiles(outcome.Directory!, "ask-*.json")
+            .Select(Path.GetFileName)
+            .Should().ContainSingle().Which.Should().Be("ask-lead-1.json");
+
+        // The person's own reason is what goes down, not one made up here.
+        Read(Path.Combine(outcome.Directory!, "journal.jsonl")).Should().Contain(l =>
+            l.Contains("\"kind\":\"node.answered\"") && l.Contains("because somebody said so"));
+    }
+
+    /// <summary>A file something else is still writing.</summary>
+    private static string[] Read(string path)
+    {
+        using var stream = new FileStream(
+            path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+        using var reader = new StreamReader(stream);
+
+        return reader.ReadToEnd().Split('\n');
     }
 
     [Fact]
@@ -1705,7 +1825,36 @@ public sealed class TeamRunnerTests : IDisposable
         /// Somebody is there, by default. A test that wants nobody there says
         /// so, because the interesting case is a run that may ask and does.
         /// </summary>
-        public bool CanAsk { get; set; } = true;
+        public bool CanAsk
+        {
+            get => AnswersFromElsewhere ? _told : _canAsk;
+            set => _canAsk = value;
+        }
+
+        private bool _canAsk = true;
+        private bool _told;
+
+        /// <summary>
+        /// Behave like the console that answers through the daemon: able to ask
+        /// only once it has been told where to leave the question.
+        /// </summary>
+        /// <remarks>
+        /// Without this every test agreed a run could ask from the moment it
+        /// began, which is what a terminal does and is not what the dashboard
+        /// does - and the run settled the question before telling it. Every
+        /// daemon-watched run therefore decided nobody was watching, and this
+        /// fake said it was fine.
+        /// </remarks>
+        public bool AnswersFromElsewhere { get; set; }
+
+        /// <summary>
+        /// Like the dashboard's console: every question it asks is a file in
+        /// the run's directory.
+        /// </summary>
+        public bool AnswersInPlace { get; set; }
+
+        /// <summary>Where the run is writing, which is what makes asking possible.</summary>
+        public void Starting(string runDirectory) => _told = runDirectory is { Length: > 0 };
 
         public Func<string, bool> Confirm { get; set; } = _ => true;
 

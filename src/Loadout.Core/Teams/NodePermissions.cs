@@ -377,24 +377,36 @@ public static class NodePermissions
             return null;
         }
 
+        return await WaitAsync(directory, ask.Id, time, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Waits for an answer to a question that is already in the queue.
+    /// </summary>
+    /// <remarks>
+    /// Separate from asking because something has to wait on a question it did
+    /// not write. The watcher carries a node's question up to whoever is
+    /// running the team, and a console that answers into this same directory
+    /// has nothing to be told - the question is already where it reads. Asking
+    /// it again there put one question in the queue twice, under two ids.
+    /// </remarks>
+    public static async Task<AskAnswer?> WaitAsync(
+        string directory,
+        string id,
+        TimeProvider time,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(time);
+
         var until = time.GetUtcNow() + Patience;
-        var answer = AnswerPath(directory, ask.Id);
 
         while (time.GetUtcNow() < until)
         {
             ct.ThrowIfCancellationRequested();
 
-            if (File.Exists(answer))
+            if (Answered(directory, id) is { } said)
             {
-                try
-                {
-                    return JsonSerializer.Deserialize<AskAnswer>(
-                        await File.ReadAllTextAsync(answer, ct).ConfigureAwait(false));
-                }
-                catch (Exception ex) when (ex is JsonException or IOException)
-                {
-                    // Half written: the other side is still putting it there.
-                }
+                return said;
             }
 
             await Task.Delay(Glance, time, ct).ConfigureAwait(false);
@@ -436,6 +448,31 @@ public static class NodePermissions
         }
 
         return [.. waiting.OrderBy(ask => ask.At)];
+    }
+
+    /// <summary>What somebody decided about one question, or null if nobody has.</summary>
+    /// <remarks>
+    /// The glance behind a wait, for a caller that has other things to do
+    /// between looks. <see cref="WaitAsync"/> is this in a loop.
+    /// </remarks>
+    public static AskAnswer? Answered(string directory, string id)
+    {
+        var answer = AnswerPath(directory, id);
+
+        if (!File.Exists(answer))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<AskAnswer>(File.ReadAllText(answer));
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            // Half written. The next glance gets it.
+            return null;
+        }
     }
 
     /// <summary>Answers one question, for the node waiting on it to read.</summary>

@@ -54,6 +54,16 @@ public sealed class DashboardTeamConsole : ITeamConsole
     /// </remarks>
     public bool CanAsk => _directory is { Length: > 0 };
 
+    /// <summary>
+    /// Yes: every question this console asks is a file in the run directory.
+    /// </summary>
+    /// <remarks>
+    /// Which is also where a node's own questions arrive, so the watcher that
+    /// carries one up must not hand it to this console - it would be writing
+    /// the question back into the queue it just read it from.
+    /// </remarks>
+    public bool AnswersInPlace => true;
+
     /// <inheritdoc />
     public async Task<bool> ConfirmAsync(string what, CancellationToken ct = default)
     {
