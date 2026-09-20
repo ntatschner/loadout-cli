@@ -32,6 +32,12 @@ namespace Loadout.Agents.Teams;
 /// is what a caller that has not decided gets: a team file may only ask, and a
 /// run that granted what it was asked for would be no boundary at all.
 /// </param>
+/// <param name="Remediation">
+/// What this machine says a remediator may do with each kind of task, by kind.
+/// Passed in rather than read here, for the same reason the outward list is:
+/// what a machine allows is decided before a run starts and arrives already
+/// decided, so forgetting to decide it grants nothing rather than everything.
+/// </param>
 public sealed record TeamRunRequest(
     string ProjectHandle,
     TeamDefinition Team,
@@ -44,7 +50,8 @@ public sealed record TeamRunRequest(
     bool Offline = false,
     bool NoSync = false,
     string? Model = null,
-    IReadOnlyList<string>? OutwardAllowed = null);
+    IReadOnlyList<string>? OutwardAllowed = null,
+    IReadOnlyDictionary<string, string>? Remediation = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -1731,7 +1738,12 @@ public sealed class TeamRunner : ITeamRunner
                     // nobody, and a question nobody answers is a node sitting
                     // still for five minutes and then being refused anyway -
                     // worse than the refusal it would have had at once.
-                    Ask: _asking),
+                    Ask: _asking,
+
+                    // What this team has registered and what was decided about
+                    // each, worked out here so that whatever answers the node's
+                    // questions reads no files and holds no opinion.
+                    Remedies: Standing(team, request.Remediation)),
                 ct).ConfigureAwait(false);
 
         var options = new HeadlessOptions(
@@ -1804,6 +1816,56 @@ public sealed class TeamRunner : ITeamRunner
     /// surprise.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Every remedy this team has registered, with what this machine has
+    /// decided about each.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both keys applied here, once, before anything starts: whether a person
+    /// trusted that exact script, and what this machine says about that kind of
+    /// task. A node never sees either - it sees the answer.
+    /// </para>
+    /// <para>
+    /// A team with no directory, or one nothing has been registered in, gets an
+    /// empty list, which changes nothing about how its calls are answered.
+    /// </para>
+    /// </remarks>
+    private IReadOnlyList<RemedyStanding> Standing(
+        TeamDefinition team,
+        IReadOnlyDictionary<string, string>? rules)
+    {
+        var book = new RemedyBook(_paths);
+        var read = book.All(team.Name);
+
+        if (read.Failed || read.Value is not { Count: > 0 } remedies)
+        {
+            return [];
+        }
+
+        var standing = new List<RemedyStanding>();
+
+        foreach (var remedy in remedies)
+        {
+            var script = book.ScriptOf(team.Name, remedy);
+
+            var rule = rules is not null
+                && rules.TryGetValue(remedy.Kind is { Length: > 0 } kind ? kind.Trim() : "unclassified", out var said)
+                    ? said
+                    : RemedyRules.Default;
+
+            var decided = RemedyCeiling.Decide(remedy, rule, script.Succeeded ? script.Value : null);
+
+            standing.Add(new RemedyStanding(
+                remedy.Name,
+                remedy.Script,
+                decided.Ruling.ToString().ToLowerInvariant(),
+                decided.Because));
+        }
+
+        return standing;
+    }
+
     private string TeamDirectory(string team) =>
         Path.Combine(_paths.Paths.State, "teams", "work", Slug(team));
 

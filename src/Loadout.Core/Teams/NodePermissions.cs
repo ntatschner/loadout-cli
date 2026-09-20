@@ -26,13 +26,41 @@ namespace Loadout.Core.Teams;
 /// suggestion.
 /// </para>
 /// </remarks>
+/// <param name="Remedies">
+/// What this team has registered and what was decided about each, resolved
+/// before the node started. Empty for a team with none.
+/// </param>
 public sealed record NodePolicy(
     string Run,
     string Node,
     string Role,
     IReadOnlyList<string> Allow,
     IReadOnlyList<string> Deny,
-    bool Ask = false);
+    bool Ask = false,
+    IReadOnlyList<RemedyStanding>? Remedies = null);
+
+/// <summary>
+/// One of a team's remedies, and what was decided about it before the node
+/// started.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Resolved at launch and written into the policy rather than read per call,
+/// so the thing answering a node's questions does no file reading and holds no
+/// opinion: it is handed the answer the same way it is handed the allow list.
+/// </para>
+/// <para>
+/// A remedy registered <em>during</em> this run is not here, and that is the
+/// right answer rather than a gap: nobody has trusted it, so the most it could
+/// ever be is "ask", which is what an unlisted script already gets from the
+/// role's own rules.
+/// </para>
+/// </remarks>
+/// <param name="Name">The remedy, as its record names it.</param>
+/// <param name="Script">The script's file name, which is what a call names.</param>
+/// <param name="Ruling">run, ask or refuse, as decided on this machine.</param>
+/// <param name="Because">Why, in words, for whoever is asked or refused.</param>
+public sealed record RemedyStanding(string Name, string Script, string Ruling, string Because);
 
 /// <summary>
 /// Something a run has stopped on, waiting for a person.
@@ -439,10 +467,42 @@ public static class NodePermissions
 
         foreach (var rule in policy.Allow)
         {
-            if (Matches(rule, tool, target))
+            if (!Matches(rule, tool, target))
             {
-                return new PermissionDecision(true, $"The {policy.Role} role allows '{rule}'.", rule);
+                continue;
             }
+
+            // The role allows it. A remedy can still hold it or refuse it -
+            // never the other way about. Trust is not a way to get Bash: if the
+            // role had not allowed this, nothing above would have reached here,
+            // and a remedy that could widen a role would be a file an agent
+            // writes deciding what an agent may do.
+            if (Standing(policy, target) is { } standing)
+            {
+                return standing.Ruling switch
+                {
+                    "run" => new PermissionDecision(
+                        true,
+                        $"'{standing.Name}' is trusted here, and this machine lets it run. {standing.Because}",
+                        rule),
+
+                    "refuse" => new PermissionDecision(
+                        false,
+                        $"'{standing.Name}' is refused on this machine. {standing.Because} "
+                        + "Report it as a blocker rather than finding another way to do it.",
+
+                        // Named as a rule so this is a decision rather than a
+                        // gap, which is what stops it being put to a person:
+                        // a machine that said never is not asked again.
+                        $"remedy:{standing.Name}"),
+
+                    _ => new PermissionDecision(
+                        false,
+                        $"'{standing.Name}' has to be agreed to before it runs. {standing.Because}"),
+                };
+            }
+
+            return new PermissionDecision(true, $"The {policy.Role} role allows '{rule}'.", rule);
         }
 
         return new PermissionDecision(
@@ -450,6 +510,44 @@ public static class NodePermissions
             $"Nothing in the {policy.Role} role allows {tool}"
             + (target is { Length: > 0 } ? $" for '{target}'" : string.Empty)
             + ". Report what you needed and why, and let whoever briefed you decide.");
+    }
+
+    /// <summary>
+    /// The remedy a call is pointed at, or null where it is pointed at
+    /// something else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// By the script's file name appearing in what the call is aimed at, which
+    /// is how a shell command names one. Not by path: the same script is
+    /// reached by an absolute path, a relative one and a shell variable, and a
+    /// comparison that only caught the first would be a gate somebody walks
+    /// round by typing <c>cd</c>.
+    /// </para>
+    /// <para>
+    /// A name that appears in an unrelated command is a false match, and the
+    /// consequence of one is being asked about something that did not need it.
+    /// That is the right way round: the other error is running something
+    /// unattended that nobody agreed to.
+    /// </para>
+    /// </remarks>
+    internal static RemedyStanding? Standing(NodePolicy policy, string? target)
+    {
+        if (target is not { Length: > 0 } || policy.Remedies is not { Count: > 0 } remedies)
+        {
+            return null;
+        }
+
+        foreach (var remedy in remedies)
+        {
+            if (remedy.Script is { Length: > 0 } script
+                && target.Contains(script, StringComparison.OrdinalIgnoreCase))
+            {
+                return remedy;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

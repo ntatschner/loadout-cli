@@ -352,6 +352,46 @@ Each one says which node asked, in which run, what it says the problem is, and
 needs, and is a sentence rather than a code. Refusing is not a dead end: the
 node reports what it needed and why, rather than finding another way round.
 
+### What a node actually runs into
+
+The ruling is not advice. It is applied where a node's tool calls are already
+answered, so a remediator that reaches for a registered remedy meets it:
+
+- **runs** — allowed, with no question, and the reason recorded.
+- **asks** — held for a person, saying which remedy and why it is being held.
+- **refused** — refused outright, and *not* put to anybody: a machine that said
+  `never` is not asked again.
+
+One rule decides how that composes with everything else, and it is the rule the
+whole of teams follows: **a remedy can only ever make things stricter.**
+
+- A role that **forbids** Bash still forbids it. Deny is checked first, and a
+  trusted remedy that got past a deny list would make every deny list a
+  suggestion.
+- A role that **never allowed** Bash is not given it by trust. If a remedy could
+  widen a role, it would be a file an agent writes deciding what an agent may
+  do.
+- A role that **does** allow the call is where a remedy can still hold it or
+  refuse it.
+
+A remedy is recognised by its script's name appearing in the call, not by path:
+the same script is reached by an absolute path, a relative one and a shell
+variable, and a gate that only caught the first is one you walk round by typing
+`cd`. A name that turns up in an unrelated command is a false match, and the
+cost of one is being asked about something that did not need it — which is the
+right way round.
+
+Every ruling is resolved **before the node starts** and written into its policy,
+so the thing answering its questions reads no files and holds no opinion.
+
+**What this does not do.** It is a decision record for *registered* remedies,
+not a sandbox. A node whose role allows Bash can still run a script it has just
+written, and nothing here stops it — what stops it is the role's own tool
+policy, which is the boundary that has always done that job. A remedy
+registered during the run it was written in is not in the policy, and that is
+the right answer rather than a gap: nobody has trusted it, so the most it could
+ever be is *ask*.
+
 ### What it comes to
 
 | Remedy | Machine | Result |

@@ -1290,7 +1290,13 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             settings.Rounds,
             settings.Offline,
             settings.NoSync,
-            settings.Model);
+            settings.Model,
+
+            // Decided here and handed over already decided, the same as the
+            // outward list: what this machine allows is not something a run
+            // works out for itself, and a caller that forgets to pass it grants
+            // nothing rather than everything.
+            Remediation: machine.Value?.Teams.Remediation);
 
         // Where the run's questions go. A terminal answers its own; a run with
         // nobody at one sends them to the dashboard, if a daemon is serving it.
