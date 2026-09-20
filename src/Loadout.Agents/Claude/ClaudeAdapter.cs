@@ -150,6 +150,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         await AddSettingsAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
+        AddReachable(arguments, context, descriptor);
         AddProjectSkills(context, descriptor, arguments, warnings);
         AddSecurityProfile(context, descriptor, arguments, warnings);
         AddModel(context, descriptor, arguments, warnings);
@@ -967,6 +968,39 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         {
             arguments.Add("--add-dir");
             arguments.Add(projectWorkspace);
+        }
+    }
+
+    /// <summary>
+    /// Anywhere beyond the project this session has been told it may work in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A team's directory is the first of these. Its nodes are briefed with the
+    /// path and told to keep what the team learns there, and without this the
+    /// agent refused every write to it: the directory existed, the path was
+    /// right, the instruction was clear, and nothing could be written.
+    /// </para>
+    /// <para>
+    /// Only ones that exist. Naming a directory that is not there is how a
+    /// session fails to start over a path nobody meant to depend on.
+    /// </para>
+    /// </remarks>
+    private static void AddReachable(List<string> arguments, AgentLaunchContext context, AgentDescriptor descriptor)
+    {
+        if (context.ReachableDirectories is not { Count: > 0 } directories
+            || !descriptor.Supports(AgentCapabilities.AdditionalDirectories))
+        {
+            return;
+        }
+
+        foreach (var directory in directories)
+        {
+            if (directory is { Length: > 0 } && Directory.Exists(directory))
+            {
+                arguments.Add("--add-dir");
+                arguments.Add(directory);
+            }
         }
     }
 

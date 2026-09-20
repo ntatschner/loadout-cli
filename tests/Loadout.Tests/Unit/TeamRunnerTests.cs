@@ -835,6 +835,57 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_node_can_reach_the_directory_its_brief_tells_it_to_write_in()
+    {
+        // The gap this closes. Every brief has been telling every node "this is
+        // the team's directory, put what the team keeps there", and the launch
+        // never gave the directory to the agent - the only --add-dir was the
+        // project's workspace. The directory existed, the path was right, the
+        // declaration was clear, and Write refused it.
+        var team = await IteratingProjectAsync();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        (await RunAsync(team)).Succeeded.Should().BeTrue();
+
+        var asked = _launcher.Requests[0].Request.ReachableDirectories;
+
+        asked.Should().NotBeNullOrEmpty("a brief that names a directory is a promise the launch has to keep");
+        asked!.Should().ContainSingle()
+            .Which.Should().EndWith(Path.Combine("teams", "work", team.Name));
+    }
+
+    [Fact]
+    public async Task A_dry_run_names_the_team_directory_and_makes_nothing()
+    {
+        // --dry-run means change nothing, and that includes not making a
+        // directory somewhere under the state root because somebody asked what
+        // would happen.
+        var team = await IteratingProjectAsync();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await RunAsync(team, dryRun: true);
+
+        Directory.Exists(Path.Combine(_paths.Paths.State, "teams", "work", team.Name))
+            .Should().BeFalse("a dry run creates nothing");
+    }
+
+    [Fact]
+    public async Task The_team_directory_is_made_before_the_first_node_starts()
+    {
+        // A declaration that tells a node to write there is not telling it to
+        // make a directory first.
+        var team = await IteratingProjectAsync();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await RunAsync(team);
+
+        Directory.Exists(Path.Combine(_paths.Paths.State, "teams", "work", team.Name)).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task The_nearest_model_wins_over_the_team_and_the_project()
     {
         // Mode-keyed models in the manifest give five buckets for

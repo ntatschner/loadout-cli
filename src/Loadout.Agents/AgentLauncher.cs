@@ -68,6 +68,11 @@ namespace Loadout.Agents;
 /// the agent's permission questions from. Null for an ordinary session, where
 /// the person at the keyboard answers their own.
 /// </param>
+/// <param name="ReachableDirectories">
+/// Anywhere beyond the project this session may work in. A team's directory is
+/// the first of these: its nodes are briefed with the path and told to keep
+/// what the team learns there, and without it the agent refuses every write.
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -87,7 +92,8 @@ public sealed record LaunchRequest(
     bool DryRun = false,
     string? Model = null,
     bool CreateWorktree = false,
-    string? PermissionPolicyPath = null);
+    string? PermissionPolicyPath = null,
+    IReadOnlyList<string>? ReachableDirectories = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -739,7 +745,13 @@ public sealed class AgentLauncher : IAgentLauncher
             // one question to ask rather than a dozen.
             Core.Instructions.AccessibilityProfile.IsSet(config.Accessibility)
                 ? Core.Instructions.AccessibilityProfile.Resolve(config.Accessibility)
-                : null);
+                : null,
+
+            // Anywhere beyond the project this session has been told it may
+            // work in. A team's directory is the first of these: its nodes are
+            // briefed with the path and told to keep things there, and until
+            // this was passed on the agent refused every write to it.
+            request.ReachableDirectories);
 
         var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
         if (invocationResult.Failed)

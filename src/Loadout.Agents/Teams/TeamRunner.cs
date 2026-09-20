@@ -1789,7 +1789,13 @@ public sealed class TeamRunner : ITeamRunner
             // after it reads a change already on that branch.
             Worktree: brief.Constraints.Worktree,
             CreateWorktree: brief.Constraints.Worktree is { Length: > 0 },
-            PermissionPolicyPath: policy);
+            PermissionPolicyPath: policy,
+
+            // The directory the brief has just told this node to keep things
+            // in. Without it the agent refuses every write there, which is
+            // what it did: the directory existed, the path in the brief was
+            // right, the declaration was clear, and nothing could be written.
+            ReachableDirectories: brief.TeamDirectory is { Length: > 0 } kept ? [kept] : null);
 
         return await _launcher.StartHeadlessAsync(launch, options, ct).ConfigureAwait(false);
     }

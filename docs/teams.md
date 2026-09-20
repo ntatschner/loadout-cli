@@ -261,7 +261,19 @@ It is **not in the repository**. What a team learns about keeping a system up is
 not a change to whatever it happened to be looking at, and committing it into
 somebody's project because a declaration said "register it" would be a surprise.
 
+Being outside the repository is also why the launch has to hand it to the agent
+explicitly: a node may only write where it has been told it can. For a while it
+was not handed over, so every node was briefed with a path it could not write
+to — the directory existed, the path was right, the declaration was clear, and
+`Write` refused. It is passed now, and a test asserts the launch carries it,
+because nothing asserted that before and that is how it went unnoticed.
+
 `--dry-run` says where it would be and creates nothing.
+
+Two things are checked when a team file is read, because both are invisible
+until a run is paying for them: an empty declaration (it would reach every brief
+of every run as a bare dash) and a goal over 600 characters (every node reads it
+every round).
 
 `loadout team show <team>` prints the goal and the declarations above the nodes,
 because a standing goal frames everything under it and reading the nodes first

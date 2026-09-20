@@ -188,6 +188,32 @@ public sealed class TeamCatalogue : ITeamCatalogue
             Error("team-nodes", $"Team '{team.Name}' has no nodes.");
         }
 
+        // A declaration goes into every brief of every run, so an empty one is
+        // a bare dash in front of every node for as long as the file says it.
+        // Cheap to check here and invisible everywhere else.
+        for (var i = 0; i < team.Declarations.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(team.Declarations[i]))
+            {
+                Error(
+                    "team-declaration",
+                    $"Team '{team.Name}' has an empty declaration at position {i + 1}. "
+                    + "Write what it asks for, or take the line out.");
+            }
+        }
+
+        // Every node reads both, every round. A team that put an essay here
+        // would pay for it in every brief of every run, and the first anybody
+        // would know is the bill.
+        if (team.Goal.Length > 600)
+        {
+            Error(
+                "team-goal",
+                $"Team '{team.Name}' has a goal of {team.Goal.Length} characters. "
+                + "It goes into every node's brief, every round: say what the team is for in a "
+                + "sentence or two and leave the rest to the roles.");
+        }
+
         if (string.IsNullOrWhiteSpace(team.Lead))
         {
             Error("team-lead", $"Team '{team.Name}' names no lead.");

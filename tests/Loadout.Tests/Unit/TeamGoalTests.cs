@@ -1,5 +1,7 @@
 using FluentAssertions;
 using Loadout.Agents.Teams;
+using Loadout.Core.Instructions;
+using Loadout.Core.Teams;
 using Loadout.Models.Instructions;
 using Loadout.Models.Teams;
 using Xunit;
@@ -142,6 +144,60 @@ public sealed class TeamGoalTests
             .Which.Should().Be("Register what you write in the team's directory.");
         brief.TeamDirectory.Should().Be(@"C:\state	eams\work\system-watch");
     }
+
+    [Fact]
+    public void An_empty_declaration_is_a_finding_rather_than_a_bare_dash()
+    {
+        // It would go into every brief of every run as "- " with nothing after
+        // it, which nothing else on the page would ever show anybody.
+        var team = new TeamDefinition
+        {
+            Name = "system-watch",
+            Lead = "lead",
+            Declarations = ["Look in the directory first.", "   "],
+            Nodes = { ["lead"] = new TeamNode { Role = "role.project-lead" } },
+        };
+
+        var found = TeamCatalogue.Check(team, Specialists());
+
+        found.Should().Contain(one => one.Kind == "team-declaration")
+            .Which.Detail.Should().Contain("position 2");
+    }
+
+    [Fact]
+    public void A_goal_nobody_could_read_twice_is_a_finding()
+    {
+        // Every node reads it, every round. A team that put an essay here would
+        // pay for it in every brief of every run, and the first anybody would
+        // know is the bill.
+        var team = new TeamDefinition
+        {
+            Name = "system-watch",
+            Lead = "lead",
+            Goal = new string('a', 900),
+            Nodes = { ["lead"] = new TeamNode { Role = "role.project-lead" } },
+        };
+
+        TeamCatalogue.Check(team, Specialists())
+            .Should().Contain(one => one.Kind == "team-goal");
+    }
+
+    [Fact]
+    public void A_team_that_says_nothing_standing_has_nothing_to_complain_about()
+    {
+        var team = new TeamDefinition
+        {
+            Name = "quiet",
+            Lead = "lead",
+            Nodes = { ["lead"] = new TeamNode { Role = "role.project-lead" } },
+        };
+
+        TeamCatalogue.Check(team, Specialists())
+            .Should().NotContain(one => one.Kind == "team-goal" || one.Kind == "team-declaration");
+    }
+
+    private static SpecialistCatalogue Specialists() =>
+        new SpecialistLibrary().LoadAsync(workspaceRoot: null).GetAwaiter().GetResult();
 
     [Fact]
     public void The_team_that_ships_with_this_carries_both()
