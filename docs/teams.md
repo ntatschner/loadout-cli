@@ -295,6 +295,103 @@ Only commits are resolved against git. A decision is not a thing with files in
 it, and asking git for one would report every run that made a decision as having
 lost it - those still show in `team status`, under *delivered*.
 
+### Two dashboards
+
+The dashboard was built plain from its first commit, because the semantics had
+to be right before anything was laid over them: a live region present at the
+first paint, every state a word and not only a colour, real headings and lists,
+40px targets, focus outlines that survive a forced-colours mode.
+
+It then stayed plain for everybody, and that is a different decision — one
+nobody actually made. Somebody who has said nothing about how they read a
+screen was being handed the presentation designed for the hardest case.
+
+So there are two, and which one you get comes from the accessibility profile
+you already keep in `config.yaml`:
+
+- **plain** under the `screen-reader` and `low-vision` presets, and under
+  `accessibility.display.colour: none`. Those are the three settings that say
+  something about reading a screen.
+- **rich** otherwise, including under `colour-blind`, `dyslexia`, `adhd` and
+  `plain-language`. None of those four is helped by taking the chrome away and
+  two of them are about prose rather than pictures. What they *do* carry — a
+  colour-safe palette, less motion — is honoured inside the rich page instead,
+  because those say how a thing is drawn and not whether to draw it.
+
+```
+loadout team dashboard --view rich     # for this run only
+loadout team dashboard --view plain
+```
+
+The flag wins over the profile, because somebody typing one means it now. It
+does **not** override motion: asking to see the rich page is asking about its
+chrome, not asking for your own motion setting to be overruled, and a page that
+moved because a flag was typed would be the one thing that setting exists to
+stop. `prefers-reduced-motion` is asked separately and the page takes the
+quieter of the two answers.
+
+Which page it is, and how much it may move, are written onto the opening tag by
+the server before anything is drawn. A page that asked afterwards would draw
+itself one way and then redecorate — a flash of the wrong thing for everybody,
+and a redraw for the people most likely to have asked for none.
+
+**The rich page is not the plain one with paint on it.** It has its own
+structure: a band of live totals across the top, then runs grouped by what they
+want from you — *Needs you*, then *Running*, then *Finished*, each under its own
+heading with a count on it — as a grid of cards rather than a stack of
+full-width rows. A card carries what a decision needs (what it is, what state,
+how far in, what it cost, and who is in the room as a row of seats) and the rest
+is one press away in the detail. Twelve cards fit on a screen; twelve rows are a
+page of scrolling in which the one that needs you is as likely to be below the
+fold as above it.
+
+That means two renderers over one set of facts, which is a real cost and is the
+one that was asked for. Neither computes anything: both read the same run object
+the server sends.
+
+The floor is the same on both, and it is why the cards say what they say. Every
+card states its run's state **as a word**. Nothing on a card is carried by
+colour alone — which is why the people in a room are drawn as *who is there* and
+never as how they are getting on: a coloured ring would be a claim in colour
+only, and the words for it live in the detail, where there is room to say them.
+Every drawing — the round strip, the spend bar, the cost bars — is
+`aria-hidden`, because every number in them is written out in words on the same
+card, and announcing it twice is reading the card twice.
+
+### Names, and things you can follow
+
+Every name a person needs was already being worked out and sent; the page was
+drawing none of it. A run heads its card with its room — *The Corner Office
+(Plant Died)* — rather than `iterating-project - 20260917-1116-ed59`, a node is
+the person it is rather than `implementer/1`, and `role.project-lead` reads as
+*Project lead*.
+
+The identifier is never taken away. It is what every command takes and what you
+are usually about to type, so it stays on the card, quiet, monospaced and
+selectable — it stops being the label and becomes the reference beside it.
+
+Values you would go and look up are now pressable. A run's name opens it. A
+node's handle, or its seat in the room, opens the run *and* selects that node's
+own stream — which previously meant reading the handle, remembering it, opening
+the run, and finding it again in a list of buttons.
+
+### What was and was not checked
+
+The rich page was checked in a browser against the twelve runs on this machine:
+heading order with no skipped levels, no list holding anything but list items,
+every card stating its state in words, no control under 24px in either
+dimension, no button without an accessible name, every drawing `aria-hidden`,
+and text contrast in both colour schemes — 6.8:1 at worst in light, 9:1 at worst
+in dark, against the 4.5:1 that is required.
+
+One real defect came out of that pass and is fixed: the seats in a room were
+identified by their edge alone at 1.2:1, well under the 3:1 a control's boundary
+needs.
+
+Not checked: **no axe-core run over the rich page, and no screen reader has been
+near it.** The [accessibility statement](accessibility.md) says which parts of
+Loadout have been verified and by what.
+
 ### Six screens, and a board to put them on
 
 **List**, **Office**, **Graph**, **Timeline**, **Waiting** and **Terminal**

@@ -63,6 +63,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
 
+    private readonly AccessibleMode _accessible;
+
     public TeamDaemonCommand(
         ISecretProvider secrets,
         HttpClient client,
@@ -76,8 +78,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Git.IGitManager git,
         IProcessInspector processes,
         IAnsiConsole console,
-        TimeProvider time)
+        TimeProvider time,
+        AccessibleMode accessible)
     {
+        _accessible = accessible;
         _secrets = secrets;
         _client = client;
         _configuration = configuration;
@@ -165,6 +169,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.OfficeRoot = office.Root;
             server.OfficeSet = office.Set;
             server.WaitingSet = OfficeArt.Chosen(_paths, teams?.WaitingSet).Set;
+
+            // The same page the dashboard command would serve. Two dashboards
+            // that looked different depending on which command started them
+            // would be two dashboards.
+            TeamDashboardCommand.Presented(server, view: null, _accessible);
 
             // Read per request rather than once: a schedule made while the
             // daemon is up should appear in the waiting area without somebody

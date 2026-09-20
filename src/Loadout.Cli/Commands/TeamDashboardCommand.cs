@@ -44,6 +44,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly IScheduleService _schedules;
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
     private readonly Loadout.Core.Projects.IProjectService _projects;
+    private readonly AccessibleMode _accessible;
 
     public TeamDashboardCommand(
         IRunJournal journal,
@@ -55,8 +56,10 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         IPlatformPaths paths,
         IScheduleService schedules,
         Loadout.Core.Tasks.ITaskService tasks,
-        Loadout.Core.Projects.IProjectService projects)
+        Loadout.Core.Projects.IProjectService projects,
+        AccessibleMode accessible)
     {
+        _accessible = accessible;
         _journal = journal;
         _git = git;
         _console = console;
@@ -121,6 +124,44 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     /// can answer a gate, stop a run and start a team. Said plainly, every
     /// time, rather than left in the documentation.
     /// </remarks>
+    /// <summary>
+    /// Sets which page the server will serve, and how much it may move.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The page is rich unless this person has said something that means it
+    /// should not be. What they said lives in one place, their own profile,
+    /// and <see cref="Presenting" /> is where the reading of it is written
+    /// down; this only chooses between that and a flag.
+    /// </para>
+    /// <para>
+    /// A typed flag beats the profile because somebody typing one means it for
+    /// this run. It is also the only way to see the other page without editing
+    /// a preference, which is what an audit of either of them needs.
+    /// </para>
+    /// </remarks>
+    internal static void Presented(DashboardServer server, string? view, AccessibleMode accessible)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        ArgumentNullException.ThrowIfNull(accessible);
+
+        var profile = accessible.IsOn ? accessible.Profile : null;
+
+        server.Look = view?.Trim().ToLowerInvariant() switch
+        {
+            "plain" => Presentation.Plain,
+            "rich" => Presentation.Rich,
+            _ => Presenting.For(profile),
+        };
+
+        // Not switched by the flag. Somebody who asked to see the rich page
+        // has asked about its chrome, not for their own motion setting to be
+        // overruled, and a page that moved because a flag was typed would be
+        // the one thing that setting exists to stop.
+        server.Motion = Presenting.Motion(profile);
+        server.Colour = Presenting.Colour(profile);
+    }
+
     internal static void Warn(CommandOutput output, DashboardServer server)
     {
         if (!server.Beyond)
@@ -149,6 +190,12 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         [CommandOption("--open")]
         [Description("Open the page in a browser once it is listening.")]
         public bool Open { get; init; }
+
+        [CommandOption("--view <VIEW>")]
+        [Description(
+            "rich or plain, for this run only. Without it the page follows your accessibility "
+            + "profile: plain under screen-reader and low-vision, rich otherwise.")]
+        public string? View { get; init; }
     }
 
     /// <inheritdoc />
@@ -172,6 +219,11 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         server.OfficeRoot = office.Root;
         server.OfficeSet = office.Set;
         server.WaitingSet = OfficeArt.Chosen(_paths, machine.Value?.Teams.WaitingSet).Set;
+
+        // Which of the two pages this is. The flag wins for one run, then the
+        // profile - the same order as everything else here, and the same order
+        // the accessible mode itself resolves in.
+        Presented(server, settings.View, _accessible);
 
         // Reading only, like everything else this command serves. It can show
         // what is queued; it cannot fire any of it.

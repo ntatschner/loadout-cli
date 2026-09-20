@@ -130,6 +130,29 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public Func<CancellationToken, Task<IReadOnlyList<Waiting>>>? WaitingFor { get; set; }
 
+    /// <summary>
+    /// Which page this is: everything it can draw, or nothing that is not
+    /// information.
+    /// </summary>
+    /// <remarks>
+    /// Rich by default, because the ordinary case is somebody who has said
+    /// nothing about how they read a screen, and the plain page is the one
+    /// built for the hardest case. Whoever starts the server sets this from
+    /// the person's own profile; see <see cref="Presenting" />.
+    /// </remarks>
+    public Presentation Look { get; set; } = Presentation.Rich;
+
+    /// <summary>full, reduced or none: how much the page may move.</summary>
+    /// <remarks>
+    /// The browser is asked as well, through <c>prefers-reduced-motion</c>, and
+    /// the page takes the quieter answer. This never restores motion the
+    /// operating system has asked to be stopped.
+    /// </remarks>
+    public string Motion { get; set; } = "full";
+
+    /// <summary>full or safe: whether the palette has to survive a colour deficiency.</summary>
+    public string Colour { get; set; } = "full";
+
     /// <summary>The secret every request has to carry, made when the server starts.</summary>
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
@@ -727,7 +750,8 @@ public sealed class DashboardServer : IDisposable
 
         if (path is "/" or "/index.html")
         {
-            await WriteAsync(context, 200, "text/html; charset=utf-8", Page()).ConfigureAwait(false);
+            await WriteAsync(context, 200, "text/html; charset=utf-8", Page(Look, Motion, Colour))
+                .ConfigureAwait(false);
 
             return;
         }
@@ -738,7 +762,8 @@ public sealed class DashboardServer : IDisposable
         // dashboard rather than nothing.
         if (path.StartsWith("/screen/", StringComparison.Ordinal))
         {
-            await WriteAsync(context, 200, "text/html; charset=utf-8", Page()).ConfigureAwait(false);
+            await WriteAsync(context, 200, "text/html; charset=utf-8", Page(Look, Motion, Colour))
+                .ConfigureAwait(false);
 
             return;
         }
@@ -1628,6 +1653,38 @@ public sealed class DashboardServer : IDisposable
         await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
 
         response.Close();
+    }
+
+    /// <summary>
+    /// The anchor the page's own settings are written into.
+    /// </summary>
+    /// <remarks>
+    /// Exact, and checked by a test, because a page whose opening tag was
+    /// reworded would go on serving perfectly while quietly ignoring the
+    /// profile - the chrome would simply always be on, which is what it looks
+    /// like when nothing is wrong.
+    /// </remarks>
+    internal const string Opening = "<html lang=\"en\">";
+
+    /// <summary>The page, told what it is.</summary>
+    /// <remarks>
+    /// Written into the markup rather than fetched, so the page is right on
+    /// its first paint. A page that asked afterwards would draw itself plain
+    /// and then redecorate, which is a flash of the wrong thing for everybody
+    /// and a redraw for the people most likely to have asked for none.
+    /// </remarks>
+    internal static string Page(Presentation look, string motion, string colour)
+    {
+        var page = Page();
+
+        var told = Opening[..^1]
+            + $" data-presentation=\"{(look == Presentation.Plain ? "plain" : "rich")}\""
+            + $" data-motion=\"{motion}\""
+            + $" data-colour=\"{colour}\">";
+
+        // Never at the cost of serving the page. A missing anchor is a bug in
+        // this build, and the dashboard still has to come up.
+        return page.Replace(Opening, told, StringComparison.Ordinal);
     }
 
     /// <summary>The page itself, carried inside the binary.</summary>

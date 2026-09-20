@@ -132,7 +132,8 @@ public sealed class DaemonStartsWorkTests
             git: null!,
             processes: null!,
             Quiet(),
-            TimeProvider.System);
+            TimeProvider.System,
+            Loadout.Cli.Infrastructure.AccessibleMode.Off);
 
     private static CommandOutput Output() => new(Quiet(), new GlobalSettings());
 

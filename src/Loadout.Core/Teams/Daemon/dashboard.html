@@ -143,6 +143,46 @@
     cursor: pointer;
   }
 
+  /*
+    A name and its reference on one line. The name is read; the reference is
+    copied, so it is quiet, monospaced and selectable, and never the thing the
+    eye lands on first.
+  */
+  .ident {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    color: var(--quiet);
+    user-select: all;
+  }
+
+  /*
+    A button that reads as a link, because it is one: it goes somewhere on
+    this page rather than to another address. A real anchor would need an href
+    that means something, and the thing it opens is a pane rather than a
+    document.
+
+    Still a button, so it answers Enter and Space and is announced as what it
+    does. Underlined on purpose - a link that is only a colour is a link
+    nobody with a colour deficiency can find.
+  */
+  .as-link {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    text-align: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 1px;
+    cursor: pointer;
+  }
+
+  .as-link:hover { text-decoration-thickness: 2px; }
+
+  .team, .job { color: var(--quiet); font-weight: 400; }
+  .person { font-weight: 700; }
+
   .state { font-weight: 700; }
   .state.going { color: var(--going); }
   .state.done { color: var(--done); }
@@ -997,6 +1037,615 @@
     font-size: 0.85rem;
   }
 
+  /* ==================================================================
+     THE RICH PAGE
+
+     The dashboard was built plain because the semantics had to be right
+     before anything was laid over them. Plain for everybody is a different
+     decision, and not one anybody made: somebody who has said nothing about
+     how they read a screen was being handed the presentation designed for
+     the hardest case.
+
+     So this is the page with its chrome on, and the rule it is built under
+     is that richness is depth, weight and movement - never a word taken
+     away. Every state is still a word. Every heading is still a heading. The
+     live region, the skip link and the focus rings are untouched. If a rule
+     below could remove information rather than decorate it, it is the wrong
+     rule.
+     ================================================================== */
+
+  [data-presentation="rich"] {
+    /* Cards lift off a tinted page rather than sitting in it, which is where
+       the depth comes from - not from shadows on a white background, which
+       is a shadow of nothing. Text still sits on --card, so every contrast
+       ratio measured against the plain page still holds. */
+    --page: #eaedf3;
+    --card: #ffffff;
+    --line: #c4c8d0;
+    --edge: rgba(16, 24, 40, 0.10);
+    --lift: 0 1px 2px rgba(16, 24, 40, 0.06), 0 10px 28px -14px rgba(16, 24, 40, 0.32);
+    --lifted: 0 1px 2px rgba(16, 24, 40, 0.08), 0 18px 40px -18px rgba(16, 24, 40, 0.40);
+    --wash: radial-gradient(1200px 600px at 12% -10%, rgba(11, 79, 158, 0.10), transparent 60%),
+            radial-gradient(900px 500px at 100% 0%, rgba(122, 59, 0, 0.07), transparent 55%);
+    --bar: var(--going);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    [data-presentation="rich"] {
+      --page: #080b0f;
+      --card: #1b212a;
+      --line: #2c323d;
+      --edge: rgba(255, 255, 255, 0.08);
+      --lift: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -14px rgba(0, 0, 0, 0.7);
+      --lifted: 0 1px 2px rgba(0, 0, 0, 0.6), 0 18px 40px -18px rgba(0, 0, 0, 0.85);
+      --wash: radial-gradient(1100px 560px at 10% -12%, rgba(158, 197, 255, 0.10), transparent 60%),
+              radial-gradient(900px 500px at 100% 0%, rgba(255, 191, 128, 0.06), transparent 55%);
+    }
+  }
+
+  /* The wash is painted on a fixed layer behind everything rather than on the
+     body, so it does not scroll away on a long page and repeat when the page
+     is taller than the window. */
+  [data-presentation="rich"] body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: var(--wash);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  /* ---- the masthead ---- */
+
+  [data-presentation="rich"] h1 {
+    font-size: 1.75rem;
+    letter-spacing: -0.02em;
+    margin: 2rem 0 0.25rem;
+  }
+
+  [data-presentation="rich"] h2 { letter-spacing: -0.01em; }
+
+  /* ---- cards ---- */
+
+  [data-presentation="rich"] .run,
+  [data-presentation="rich"] .room,
+  [data-presentation="rich"] .start {
+    border: 1px solid var(--edge);
+    border-radius: 0.75rem;
+    box-shadow: var(--lift);
+  }
+
+  [data-presentation="rich"] .run {
+    position: relative;
+    padding: 0.9rem 1.1rem 0.9rem 1.35rem;
+    overflow: hidden;
+  }
+
+  /*
+    The accent bar. A second carrier for the state, beside the word that is
+    already there - never instead of it, which is why the word is untouched
+    and why this is allowed to be nothing but a colour.
+  */
+  [data-presentation="rich"] .run::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--bar);
+  }
+
+  [data-presentation="rich"] .run:has(.state.going) { --bar: var(--going); }
+  [data-presentation="rich"] .run:has(.state.done) { --bar: var(--done); }
+  [data-presentation="rich"] .run:has(.state.stopped) { --bar: var(--stopped); }
+
+  [data-presentation="rich"] .run h3 {
+    font-size: 1.1rem;
+    letter-spacing: -0.01em;
+  }
+
+  [data-presentation="rich"] .run .team {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.1rem 0.45rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    vertical-align: 0.1em;
+  }
+
+  [data-presentation="rich"] .nodes li {
+    border-top: 1px solid var(--edge);
+    padding: 0.45rem 0;
+  }
+
+  /* ---- the rail: the one thing on the page that wants you ---- */
+
+  [data-presentation="rich"] #rail {
+    border-radius: 0.75rem;
+    border-width: 1px;
+    border-color: var(--stopped);
+    box-shadow: var(--lifted), 0 0 0 4px color-mix(in srgb, var(--stopped) 14%, transparent);
+    background: var(--card);
+  }
+
+  /* ---- controls ---- */
+
+  [data-presentation="rich"] .run button,
+  [data-presentation="rich"] .views button,
+  [data-presentation="rich"] .start button {
+    border-color: var(--line);
+    border-radius: 0.5rem;
+    background: var(--card);
+    box-shadow: 0 1px 1px var(--edge);
+  }
+
+  [data-presentation="rich"] .views button[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--going) 12%, var(--card));
+    border-color: var(--going);
+    box-shadow: inset 0 -3px 0 var(--going);
+  }
+
+  /* ---- atmosphere: the page says which runs are alive ---- */
+
+  /*
+    A dot beside a running state, which breathes. It carries nothing on its
+    own - the word "running" is right beside it and says the same thing - so
+    a page with no animation, or no colour, loses nothing by dropping it.
+  */
+  [data-presentation="rich"] .state.going::before {
+    content: "";
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    margin-right: 0.4em;
+    border-radius: 50%;
+    background: currentColor;
+    vertical-align: 0.02em;
+  }
+
+  [data-presentation="rich"][data-motion="full"] .state.going::before {
+    animation: alive 2.4s ease-in-out infinite;
+  }
+
+  @keyframes alive {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+    50% { opacity: 0.55; box-shadow: 0 0 0 0.25em transparent; }
+  }
+
+  /*
+    A profile asking for no motion, or for less of it, is honoured here as
+    well as by the browser. The two are asked separately and the page takes
+    the quieter answer: this can only ever remove movement the operating
+    system still allows, never restore movement it has asked to stop.
+  */
+  [data-presentation="rich"][data-motion="none"] *,
+  [data-presentation="rich"][data-motion="reduced"] * {
+    animation: none !important;
+  }
+
+  [data-presentation="rich"][data-motion="none"] * {
+    transition: none !important;
+  }
+
+  /* ---- the masthead ---- */
+
+  /*
+    A band rather than a line of text in the corner. The page is left open on
+    a second monitor for hours, and the first thing it should say from across
+    a room is what it is.
+  */
+  [data-presentation="rich"] header {
+    position: relative;
+    padding: 0.25rem 1.25rem 1.1rem;
+    margin: 0 auto 1.25rem;
+    border-bottom: 1px solid var(--edge);
+  }
+
+  [data-presentation="rich"] header::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    background: linear-gradient(90deg, var(--going), transparent 70%);
+  }
+
+  [data-presentation="rich"] h1 {
+    background: linear-gradient(100deg, var(--ink), color-mix(in srgb, var(--going) 70%, var(--ink)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* The gradient is decoration; a mode that throws colours away has to get a
+     colour back rather than a transparent heading. */
+  @media (forced-colors: active) {
+    [data-presentation="rich"] h1 { color: CanvasText; background: none; }
+  }
+
+  /* ---- the card, lifted properly off the page ---- */
+
+  /* ---- the band of totals ---- */
+
+  .totals { display: none; }
+
+  [data-presentation="rich"] .totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    max-width: 90rem;
+    margin: 0 auto 1.5rem;
+  }
+
+  [data-presentation="rich"] .total {
+    flex: 1 1 10rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--line);
+    border-radius: 0.6rem;
+    background: var(--card);
+    box-shadow: var(--lift);
+  }
+
+  [data-presentation="rich"] .total.going { border-left-color: var(--going); }
+  [data-presentation="rich"] .total.stopped { border-left-color: var(--stopped); }
+
+  [data-presentation="rich"] .total strong {
+    display: block;
+    font-size: 1.6rem;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-presentation="rich"] .total.going strong { color: var(--going); }
+  [data-presentation="rich"] .total.stopped strong { color: var(--stopped); }
+
+  [data-presentation="rich"] .total span {
+    color: var(--quiet);
+    font-size: 0.9rem;
+  }
+
+  /* ---- groups ---- */
+
+  /*
+    A heading over each group, and a count on it. The count is what somebody
+    is really asking when they glance at "Needs you", and it is on the heading
+    rather than beside it so that reading the heading answers the question.
+  */
+  [data-presentation="rich"] .group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--quiet);
+    margin: 1.5rem 0 0.6rem;
+  }
+
+  [data-presentation="rich"] .grouped { list-style: none; margin: 0; padding: 0; }
+  [data-presentation="rich"] .group-item:first-child .group { margin-top: 0; }
+
+  [data-presentation="rich"] .group .count {
+    font-size: 0.75rem;
+    letter-spacing: 0;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+
+  [data-presentation="rich"] .nothing {
+    padding: 2rem 1rem;
+    border: 1px dashed var(--line);
+    border-radius: 0.85rem;
+    color: var(--quiet);
+    text-align: center;
+  }
+
+  /* ---- the grid of cards ---- */
+
+  /*
+    A card is the size of the thing it describes. Twelve of them fit on a
+    screen; twelve full-width rows are a page of scrolling, and the row that
+    needs you is as likely to be below the fold as above it.
+
+    Measured against the pane rather than the window, because opening a run
+    takes two thirds of the width and a grid that only knows about the window
+    puts three columns into a column.
+  */
+  [data-presentation="rich"] .cards {
+    container-type: inline-size;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(21rem, 100%), 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  [data-presentation="rich"] .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.9rem 1rem 0.8rem 1.15rem;
+    border: 1px solid var(--edge);
+    border-radius: 0.85rem;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--bar) 7%, var(--card)), var(--card) 4rem);
+    box-shadow: var(--lift);
+    overflow: hidden;
+    transition: box-shadow 160ms ease;
+  }
+
+  [data-presentation="rich"] .card:hover,
+  [data-presentation="rich"] .card:focus-within { box-shadow: var(--lifted); }
+
+  /* The accent, which is a second carrier for a state the card already
+     states in a word. */
+  [data-presentation="rich"] .card::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--bar);
+  }
+
+  [data-presentation="rich"] .card.going { --bar: var(--going); }
+  [data-presentation="rich"] .card.done { --bar: var(--done); }
+  [data-presentation="rich"] .card.stopped { --bar: var(--stopped); }
+
+  [data-presentation="rich"] .card h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+
+  [data-presentation="rich"] .badges .state {
+    /* A state can be a sentence: "the lead ended without a report". It stays
+       whole - it is the one thing on the card that must not be abbreviated -
+       and the badges wrap around it. */
+    flex: 0 1 auto;
+  }
+
+  [data-presentation="rich"] .badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+  }
+
+  [data-presentation="rich"] .badges .team {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.1rem 0.45rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+
+  /* Two lines of it. The goal is what the run is for and it can be a
+     paragraph; the card is not the place to read a paragraph, and the whole
+     of it is in the detail. */
+  [data-presentation="rich"] .card .goal {
+    margin: 0;
+    color: var(--quiet);
+    font-size: 0.92rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  [data-presentation="rich"] .card .figures {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.9rem;
+    margin: 0;
+    color: var(--quiet);
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-presentation="rich"] .card .shapes {
+    gap: 0.9rem;
+    margin: 0.2rem 0 0;
+  }
+
+  /* Shorter on a card than in a row: a card is 21rem wide and a strip that
+     takes a quarter of its height is a chart nobody asked for. */
+  [data-presentation="rich"] .card .viz.strip { height: 1.6rem; }
+  [data-presentation="rich"] .card .viz.strip .round { width: 0.4rem; }
+
+  /* Pushed to the foot, so a row of cards of different heights still has one
+     line to read along. */
+  [data-presentation="rich"] .card .facts { margin: auto 0 0; padding-top: 0.2rem; }
+
+  /* Who is in the room sits above it, and the space between them is the
+     space the card has spare. */
+  [data-presentation="rich"] .roster { margin-top: auto; }
+
+  /* ---- who is in the room ---- */
+
+  [data-presentation="rich"] .roster {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    list-style: none;
+    margin: 0.15rem 0 0;
+    padding: 0;
+  }
+
+  /*
+    A seat, with two letters on it. Forty pixels square, which is the target
+    size this page holds itself to everywhere, and a name that says who it is
+    and what they were doing - because two letters is not a name and the chip
+    is the only thing here that does not write itself out.
+  */
+  [data-presentation="rich"] .roster .chip {
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: inherit;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: grid;
+    place-items: center;
+    /* --quiet rather than --line: a rule between two rows can be faint,
+       because the rows either side of it say where it is. The edge of a seat
+       is the only thing saying the seat is there, and a boundary that
+       identifies a control has to reach 3:1 against what is behind it. This
+       is 7.5:1 on the light card and higher on the dark one. */
+    border: 1px solid var(--quiet);
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--ink) 6%, var(--card));
+    cursor: pointer;
+  }
+
+  [data-presentation="rich"] .roster .chip:hover {
+    border-color: var(--going);
+    background: color-mix(in srgb, var(--going) 14%, var(--card));
+  }
+
+  @media (forced-colors: active) {
+    [data-presentation="rich"] .card,
+    [data-presentation="rich"] .total,
+    [data-presentation="rich"] .roster .chip { border: 1px solid CanvasText; }
+  }
+
+  /* ---- the drawings ---- */
+
+  /*
+    Every one of these is aria-hidden, and every number in them is written out
+    in words on the same card. They are allowed to carry nothing on their own,
+    which is exactly why they are allowed to be pictures.
+  */
+  .viz { display: none; }
+
+  [data-presentation="rich"] .viz { display: block; }
+
+  [data-presentation="rich"] .viz.share {
+    height: 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+    overflow: hidden;
+  }
+
+  [data-presentation="rich"] .viz.share .fill {
+    display: block;
+    height: 100%;
+    background: var(--going);
+    border-radius: inherit;
+  }
+
+  /* The name on the left, the shape of the run on the right, on one line. */
+  [data-presentation="rich"] .run .top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  [data-presentation="rich"] .run .top h3 { margin: 0; }
+
+  [data-presentation="rich"] .shapes {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.25rem;
+    margin: 0;
+  }
+
+  /* One column per round, as tall as that round was long. The thing a list
+     cannot say: that round three took four times round two. */
+  /* A baseline, because four bars floating in space read as a stray mark
+     rather than as a measurement of anything. */
+  [data-presentation="rich"] .viz.strip {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 2.25rem;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+
+  [data-presentation="rich"] .viz.strip .round {
+    display: block;
+    width: 0.55rem;
+    border-radius: 2px 2px 0 0;
+    background: color-mix(in srgb, var(--going) 55%, transparent);
+  }
+
+  [data-presentation="rich"] .viz.strip .round.live {
+    background: var(--going);
+  }
+
+  [data-presentation="rich"][data-motion="full"] .viz.strip .round.live {
+    animation: alive 2.4s ease-in-out infinite;
+  }
+
+  [data-presentation="rich"] .viz.budget {
+    position: relative;
+    flex: 1 1 8rem;
+    max-width: 18rem;
+    height: 0.5rem;
+    align-self: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+    overflow: hidden;
+  }
+
+  [data-presentation="rich"] .viz.budget .fill {
+    display: block;
+    height: 100%;
+    background: var(--done);
+  }
+
+  [data-presentation="rich"] .viz.budget.over .fill { background: var(--stopped); }
+
+  /* Where the spend is heading if it carries on, against where the cap is.
+     A ceiling and not a prediction, which is why it is a line and not a
+     filled bar. */
+  [data-presentation="rich"] .viz.budget .mark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--ink);
+    opacity: 0.55;
+  }
+
+  /*
+    A palette that survives a colour deficiency. The page never uses red
+    against green anywhere, which is the pair that cannot be separated, so
+    this is a narrowing rather than a repair: the two states that could be
+    confused by anybody are pulled further apart, onto blue and orange, which
+    survive every common deficiency.
+  */
+  [data-presentation="rich"][data-colour="safe"] {
+    --done: #1d4ed8;
+    --going: #0b4f9e;
+    --stopped: #9a3412;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    [data-presentation="rich"][data-colour="safe"] {
+      --done: #93c5fd;
+      --going: #bfdbfe;
+      --stopped: #fdba74;
+    }
+  }
+
   /* A person who asked their machine for less movement gets none. */
   @media (prefers-reduced-motion: reduce) {
     * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -1055,6 +1704,12 @@
 </header>
 
 <main>
+<!--
+  The rich page's band of live totals. Empty and unstyled on the plain page,
+  which never fills it: four numbers read from across a room are what a second
+  monitor is for, and they are a summary of things already written out below.
+-->
+<div id="totals" class="totals"></div>
 
   <div class="panes">
 
@@ -1533,7 +2188,7 @@
 
       var which = document.createElement("span");
       which.className = "which";
-      which.textContent = item.run.team + " · " + item.run.id + " — ";
+      which.textContent = nameOf(item.run) + " · " + properly(item.run.team) + " — ";
       li.appendChild(which);
 
       li.appendChild(document.createTextNode(item.reason.detail + " "));
@@ -1597,6 +2252,180 @@
     if (link.getAttribute("href") !== wanted) { link.href = wanted; }
   }
 
+  /*
+    An identifier as a name. "role.project-lead" is a key; "Project lead" is
+    what somebody calls it, and both are true of the same thing.
+
+    Derived rather than looked up, because there is no table of display names
+    anywhere and inventing one would be a second thing to keep in step with
+    the roles that ship. A role's id and a team's name are both written as
+    lower-case words with hyphens between them, which is a sentence with its
+    capital missing.
+
+    NOT called "titled": the page already has a variable of that name holding
+    the document title, and a function declaration would quietly replace it.
+  */
+  function properly(id) {
+    if (!id) { return ""; }
+
+    var words = String(id).replace(/^role\./, "").replace(/[-_]+/g, " ").trim();
+
+    return words ? words.charAt(0).toUpperCase() + words.slice(1) : "";
+  }
+
+  /*
+    The reference, kept beside the name rather than instead of it.
+
+    A run is 20260918-1436-ed59 to every command on the machine, and somebody
+    reading the page is usually about to type it somewhere. Drawn quietly and
+    in a monospace, because it is a string to copy and not a thing to read.
+  */
+  function reference(text, into) {
+    var code = document.createElement("code");
+    code.className = "ident";
+    code.textContent = text;
+
+    if (into) { into.appendChild(code); }
+
+    return code;
+  }
+
+  /*
+    What to call a run: the room it was given, which is the whole reason it
+    was given one. "The Good Kettle" is a thing somebody says a week later;
+    20260918-1436-ed59 is not.
+  */
+  function nameOf(run) {
+    return (run && run.room) || (run && run.id) || "";
+  }
+
+  /*
+    What to call a node: the person, which points at exactly one node of
+    exactly one run. Every office on the machine has an implementer/1 in it.
+  */
+  function who(node) {
+    return (node && (node.personFull || node.person)) || (node && node.node) || "";
+  }
+
+  /*
+    Which page this is. Written onto the opening tag by whatever served it,
+    from the person's own accessibility profile, so it is true before the
+    first paint and nothing has to redecorate itself afterwards.
+  */
+  function rich() {
+    return document.documentElement.getAttribute("data-presentation") !== "plain";
+  }
+
+  /*
+    A word with its punctuation in its own element.
+
+    The plain page reads a node as one sentence and the rich one lines the
+    same fields up in columns. Emitting the separators as elements is what
+    lets one renderer do both: the rich page hides them, and neither page is
+    a second implementation of the other.
+  */
+  function part(row, className, text, after) {
+    var span = document.createElement("span");
+    span.className = className;
+    span.textContent = text;
+    row.appendChild(span);
+
+    if (after) {
+      var sep = document.createElement("span");
+      sep.className = "sep";
+      sep.textContent = after;
+      row.appendChild(sep);
+    }
+
+    return span;
+  }
+
+  /*
+    A bar, as a fraction of something.
+
+    Hidden from a screen reader on purpose: the number it draws is written out
+    in words on the same line. Announcing it again would be reading the row
+    twice, and a bar has no wording of its own that is not already there.
+  */
+  function drawn(className, fraction) {
+    var bar = document.createElement("span");
+    bar.className = "viz " + className;
+    bar.setAttribute("aria-hidden", "true");
+
+    var fill = document.createElement("span");
+    fill.className = "fill";
+    fill.style.width = Math.max(0, Math.min(1, fraction || 0)) * 100 + "%";
+    bar.appendChild(fill);
+
+    return bar;
+  }
+
+  /*
+    The shape of the run: one column per round, as tall as that round was
+    long, with the round still going marked.
+
+    This is the thing a list cannot say and a number cannot either - that
+    round three took four times round two - and every figure in it is already
+    on the page as text.
+  */
+  function rounds(run) {
+    var all = (run.numbers && run.numbers.rounds) || [];
+
+    if (all.length === 0) { return null; }
+
+    var longest = 1;
+
+    all.forEach(function (one) {
+      if (one.seconds > longest) { longest = one.seconds; }
+    });
+
+    var strip = document.createElement("span");
+    strip.className = "viz strip";
+    strip.setAttribute("aria-hidden", "true");
+
+    all.forEach(function (one) {
+      var column = document.createElement("span");
+      column.className = "round" + (one.running ? " live" : "");
+
+      // A floor, so a round that took two seconds is still a mark on the
+      // page rather than a gap somebody reads as a missing round.
+      column.style.height = Math.max(12, Math.round((one.seconds / longest) * 100)) + "%";
+      column.title = "Round " + one.round + ": " + minutes(one.seconds);
+      strip.appendChild(column);
+    });
+
+    return strip;
+  }
+
+  /*
+    Where the money stands. Drawn only when the team set a cap, because a bar
+    with no end is a bar that says nothing: without a budget the figure in the
+    text is the whole of what is known.
+  */
+  function spend(run) {
+    var money = run.numbers && run.numbers.money;
+
+    if (!money || !money.budget) { return null; }
+
+    var box = document.createElement("span");
+    box.className = "viz budget" + (money.overrunning ? " over" : "");
+    box.setAttribute("aria-hidden", "true");
+
+    var spent = document.createElement("span");
+    spent.className = "fill";
+    spent.style.width = Math.min(1, money.spent / money.budget) * 100 + "%";
+    box.appendChild(spent);
+
+    if (money.projected) {
+      var mark = document.createElement("span");
+      mark.className = "mark";
+      mark.style.left = Math.min(1, money.projected / money.budget) * 100 + "%";
+      box.appendChild(mark);
+    }
+
+    return box;
+  }
+
   function state(run) {
     // Its own state, above running, because a run stopped on a question and a
     // run working look identical until one of them is called what it is - and
@@ -1620,8 +2449,16 @@
     once rather than three times, and clicking anybody anywhere takes you
     there.
   */
+  /*
+    The list is drawn by whichever renderer this page is. Chosen here rather
+    than inside one of them, so neither has to know the other exists.
+  */
+  function drawRunsOrList(runs) {
+    return rich() ? drawRuns(runs) : drawList(runs);
+  }
+
   var views = [
-    { button: "view-list", box: "list", draw: drawList },
+    { button: "view-list", box: "list", draw: drawRunsOrList },
     { button: "view-office", box: "office", draw: drawOffice },
     { button: "view-graph", box: "graph", draw: drawGraph },
     { button: "view-when", box: "when", draw: drawWhen },
@@ -3113,6 +3950,274 @@
     if (view >= 0) { views[view].draw(runs); }
   }
 
+  /*
+    The band across the top of the rich page: what is happening on this
+    machine right now, in four numbers.
+
+    Every one of them is a count of something already on the page. It is here
+    because the page is left open on a second monitor and read from across a
+    room, where a list of twelve cards answers "how many need me" only if you
+    count them.
+  */
+  function drawTotals(runs) {
+    var band = document.getElementById("totals");
+
+    if (!band) { return; }
+
+    var going = 0;
+    var wants = 0;
+    var spent = 0;
+    var rate = 0;
+
+    runs.forEach(function (run) {
+      if (run.running) { going++; }
+      if ((run.attention || []).length > 0) { wants++; }
+
+      spent += run.cost || 0;
+
+      if (run.running && run.numbers && run.numbers.money) {
+        rate += run.numbers.money.perMinute || 0;
+      }
+    });
+
+    band.textContent = "";
+
+    total(band, "going", going === 1 ? "run going" : "runs going", going, going > 0 ? "going" : "");
+    total(band, "wants", wants === 1 ? "run needs you" : "runs need you", wants, wants > 0 ? "stopped" : "");
+    total(band, "spent", "spent across them", "$" + spent.toFixed(2), "");
+
+    if (rate > 0) {
+      total(band, "rate", "a minute, right now", "$" + rate.toFixed(2), "going");
+    }
+  }
+
+  function total(band, name, label, value, tone) {
+    var box = document.createElement("div");
+    box.className = "total " + name + (tone ? " " + tone : "");
+
+    var figure = document.createElement("strong");
+    figure.textContent = value;
+    box.appendChild(figure);
+
+    var said = document.createElement("span");
+    said.textContent = label;
+    box.appendChild(said);
+
+    band.appendChild(box);
+  }
+
+  /*
+    One card per run, in a grid.
+
+    Not a row: a row is as wide as the window and puts eight columns of table
+    in front of somebody who wanted to know whether anything needs them. A
+    card is the size of the thing it describes, twelve of them fit on a
+    screen, and what it does not have room for is in the detail - which is one
+    press away and is where the words for everything live.
+  */
+  function drawRuns(runs) {
+    var list = document.getElementById("list");
+
+    drawTotals(runs);
+
+    list.textContent = "";
+    list.className = "grouped";
+
+    if (runs.length === 0) {
+      // An empty page that says only that it is empty leaves somebody to find
+      // out elsewhere what to do about it.
+      var empty = document.createElement("li");
+      var nothing = document.createElement("p");
+      nothing.className = "nothing";
+      nothing.textContent = "No team has run on this machine yet. "
+        + "Open \u201cStart a team\u201d above, or run: loadout team run <team> \u201c<goal>\u201d";
+      empty.appendChild(nothing);
+      list.appendChild(empty);
+
+      say("No team has run on this machine yet.");
+
+      return;
+    }
+
+    // In the order somebody works in, and said rather than implied: a group
+    // that is only an ordering is a pattern a reader has to notice, and one
+    // reading in sequence cannot.
+    grouped(list, "Needs you", runs.filter(function (run) {
+      return (run.attention || []).length > 0;
+    }));
+
+    grouped(list, "Running", runs.filter(function (run) {
+      return run.running && (run.attention || []).length === 0;
+    }));
+
+    grouped(list, "Finished", runs.filter(function (run) { return !run.running; }));
+
+    say(many(runs.length, "run", "runs") + ", updated just now.");
+  }
+
+  /*
+    One group of cards under its own heading, or nothing at all when the group
+    is empty - an empty "Needs you" is a heading that makes somebody look for
+    what is under it.
+  */
+  function grouped(into, title, runs) {
+    if (runs.length === 0) { return; }
+
+    // An item that holds the heading and the group's own list. The element
+    // being drawn into is a list, and a list may contain nothing but items.
+    var group = document.createElement("li");
+    group.className = "group-item";
+
+    var head = document.createElement("h3");
+    head.className = "group";
+    head.textContent = title;
+
+    var count = document.createElement("span");
+    count.className = "count";
+    count.textContent = runs.length;
+    head.appendChild(count);
+
+    group.appendChild(head);
+
+    var cards = document.createElement("ul");
+    cards.className = "runs cards";
+    group.appendChild(cards);
+    into.appendChild(group);
+
+    runs.forEach(function (run) { card(cards, run); });
+  }
+
+  function card(list, run) {
+    (function (run) {
+      var how = state(run);
+      var box = document.createElement("li");
+      box.className = "card " + how.css;
+
+      // The whole card opens the run. A heading inside it, because the page
+      // is a document before it is a dashboard and a card with no heading is
+      // a list of twelve unnamed things to anybody reading it in order.
+      // Under the group's heading, so the document outline reads
+      // "Runs on this machine" then "Needs you" then the run - which is the
+      // order it is laid out in, said the same way to somebody reading it.
+      var name = document.createElement("h4");
+      var open = document.createElement("button");
+      open.type = "button";
+      open.className = "as-link";
+      open.textContent = nameOf(run);
+      open.addEventListener("click", function () { watch(run); });
+      name.appendChild(open);
+      box.appendChild(name);
+
+      var badges = document.createElement("p");
+      badges.className = "badges";
+
+      // The state, as a word. On every card, in every view, whatever the
+      // colours are doing.
+      var word = document.createElement("span");
+      word.className = "state " + how.css;
+      word.textContent = how.word;
+      badges.appendChild(word);
+
+      var team = document.createElement("span");
+      team.className = "team";
+      team.textContent = properly(run.team);
+      badges.appendChild(team);
+
+      if (run.project) {
+        var where = document.createElement("span");
+        where.className = "team";
+        where.textContent = run.project;
+        badges.appendChild(where);
+      }
+
+      box.appendChild(badges);
+
+      var goal = document.createElement("p");
+      goal.className = "goal";
+      goal.textContent = run.goal || "";
+      box.appendChild(goal);
+
+      // The shape of it: one column per round, and where the money is.
+      var shapes = document.createElement("div");
+      shapes.className = "shapes";
+
+      var strip = rounds(run);
+      var budget = spend(run);
+
+      if (strip) { shapes.appendChild(strip); }
+      if (budget) { shapes.appendChild(budget); }
+      if (strip || budget) { box.appendChild(shapes); }
+
+      var facts = document.createElement("p");
+      facts.className = "figures";
+
+      figures(facts, "round " + run.rounds + (run.roundLimit ? " of " + run.roundLimit : ""));
+      figures(facts, minutes(run.elapsedSeconds));
+      figures(facts, "$" + run.cost.toFixed(2));
+      box.appendChild(facts);
+
+      // Who is in the room. Who, and nothing about how they are getting on:
+      // a ring around an initial would be a claim carried by colour alone,
+      // and every word for how a node is doing is in the detail, one press
+      // away, where there is room to say it.
+      var room = document.createElement("ul");
+      room.className = "roster";
+
+      run.nodes.forEach(function (node) {
+        var seat = document.createElement("li");
+        var reach = document.createElement("button");
+
+        reach.type = "button";
+        reach.className = "chip";
+        reach.textContent = initials(who(node));
+
+        // What the chip is, said properly, because two letters is not a name.
+        reach.setAttribute("aria-label",
+          who(node) + ", " + properly(node.role) + ", " + node.node
+          + ": " + node.state + ". Show what they did.");
+        reach.title = who(node) + " - " + properly(node.role) + " - " + node.node;
+
+        reach.addEventListener("click", function () {
+          wanted = node.node;
+          watch(run);
+        });
+
+        seat.appendChild(reach);
+        room.appendChild(seat);
+      });
+
+      box.appendChild(room);
+
+      // The reference, last and quiet. It is what every command takes and
+      // what somebody is about to type, and it is not what the card is about.
+      var ident = document.createElement("p");
+      ident.className = "facts";
+      reference(run.id, ident);
+      box.appendChild(ident);
+
+      list.appendChild(box);
+    }(run));
+  }
+
+  function figures(into, text) {
+    var one = document.createElement("span");
+    one.textContent = text;
+    into.appendChild(one);
+  }
+
+  /*
+    Two letters off a name. Enough to tell five people apart at a glance,
+    which is all a seat in a room has to do; the name itself is the chip's
+    accessible name and its tooltip.
+  */
+  function initials(name) {
+    var words = String(name || "?").trim().split(/\s+/);
+
+    return words.length > 1
+      ? (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase()
+      : words[0].slice(0, 2).toUpperCase();
+  }
+
   function drawList(runs) {
     list.textContent = "";
 
@@ -3128,8 +4233,28 @@
       item.className = "run";
 
       var name = document.createElement("h3");
-      name.textContent = run.team + " - " + run.id;
-      item.appendChild(name);
+
+      // The name opens the run. A heading that names a thing and cannot be
+      // pressed makes somebody find the button that does the same, and on a
+      // page of twelve runs that button is the one below the wrong card as
+      // often as the right one.
+      var open = document.createElement("button");
+      open.type = "button";
+      open.className = "as-link";
+      open.textContent = nameOf(run);
+      open.addEventListener("click", function () { watch(run); });
+      name.appendChild(open);
+
+      var team = document.createElement("span");
+      team.className = "team";
+      team.textContent = properly(run.team);
+      name.appendChild(document.createTextNode(" "));
+      name.appendChild(team);
+
+      var top = document.createElement("div");
+      top.className = "top";
+      top.appendChild(name);
+      item.appendChild(top);
 
       var line = document.createElement("p");
       line.className = "facts";
@@ -3138,6 +4263,12 @@
       word.className = "state " + how.css;
       word.textContent = how.word;
       line.appendChild(word);
+
+      line.appendChild(document.createTextNode(". "));
+
+      // The identifier, beside the name rather than instead of it: this is
+      // what every command takes and what somebody is about to type.
+      reference(run.id, line);
 
       var rest = document.createTextNode(
         ". " +
@@ -3153,6 +4284,22 @@
       line.appendChild(rest);
       item.appendChild(line);
 
+      if (rich()) {
+        var shapes = document.createElement("div");
+        shapes.className = "shapes";
+
+        var strip = rounds(run);
+        var budget = spend(run);
+
+        if (strip) { shapes.appendChild(strip); }
+        if (budget) { shapes.appendChild(budget); }
+
+        // Beside the name rather than under the facts: the shape of a run and
+        // what it is called are the two things somebody reads first, and a
+        // drawing on a line of its own reads as a stray mark.
+        if (strip || budget) { top.appendChild(shapes); }
+      }
+
       if (run.atMostRemainingSeconds) {
         var ceiling = document.createElement("p");
         ceiling.className = "facts";
@@ -3164,16 +4311,63 @@
       var nodes = document.createElement("ul");
       nodes.className = "nodes";
 
+      var dearest = 0;
+
+      run.nodes.forEach(function (node) {
+        if (node.cost > dearest) { dearest = node.cost; }
+      });
+
       run.nodes.forEach(function (node) {
         var row = document.createElement("li");
-        var text = node.node + " (" + node.role + "): " + node.state +
-          ", " + many(node.turns, "exchange", "exchanges") + ", $" + node.cost.toFixed(2);
+
+        var person = document.createElement("span");
+        person.className = "person";
+        person.textContent = who(node);
+        row.appendChild(person);
+
+        var job = document.createElement("span");
+        job.className = "job";
+        job.textContent = " " + properly(node.role);
+        row.appendChild(job);
+
+        row.appendChild(document.createTextNode(" "));
+
+        // Straight to everything that node did. The handle is the value a
+        // person would otherwise copy, open the run, and hunt for in a list
+        // of buttons.
+        var reach = document.createElement("button");
+        reach.type = "button";
+        reach.className = "as-link";
+        reach.appendChild(reference(node.node));
+        reach.addEventListener("click", function () {
+          wanted = node.node;
+          watch(run);
+        });
+
+        row.appendChild(reach);
+
+        var sep = document.createElement("span");
+        sep.className = "sep";
+        sep.textContent = ":";
+        row.appendChild(sep);
+        row.appendChild(document.createTextNode(" "));
+
+        part(row, "node-state " + node.state.replace(/[^a-z-]/g, ""), node.state, ",");
+        part(row, "turns", many(node.turns, "exchange", "exchanges"), ",");
+        part(row, "money", "$" + node.cost.toFixed(2), node.tookSeconds ? "," : "");
 
         if (node.tookSeconds) {
-          text += ", " + minutes(node.tookSeconds);
+          part(row, "took", minutes(node.tookSeconds), "");
         }
 
-        row.textContent = text;
+        // What this node's share of the run cost, drawn. Against the most
+        // expensive node rather than the total, because a run with one node
+        // that spent everything and five that spent nothing is a thing worth
+        // seeing at a glance, and against the total it is one full bar and
+        // five empty ones.
+        if (rich() && dearest > 0) {
+          row.appendChild(drawn("share", node.cost / dearest));
+        }
 
         if (node.said) {
           var says = document.createElement("span");
@@ -3196,7 +4390,7 @@
 
       var follow = document.createElement("button");
       follow.type = "button";
-      follow.textContent = "Follow " + run.id;
+      follow.textContent = "Follow " + nameOf(run);
       follow.addEventListener("click", function () {
         watch(run);
       });
@@ -3240,7 +4434,9 @@
     // holding whatever it said when the run was opened.
     if ((run.room || "") !== roomShown) {
       roomShown = run.room || "";
-      heading.textContent = (run.room ? run.room + ": " : "") + "what " + run.id + " is doing";
+      // What it is called, then what it is. The identifier is on the card that
+      // opened this and in the address bar; a heading is read, not copied.
+      heading.textContent = (run.room || run.id) + ": what it is doing";
 
       var box = document.getElementById("room");
 
@@ -3515,6 +4711,18 @@
   // Whose account of the run is being shown: null for the run's own journal,
   // which is deliberately thin, or a node for everything that node did.
   var trailOf = null;
+
+  /*
+    A node somebody asked for from outside the detail pane, waiting for the
+    buttons to exist.
+
+    The list can open a run, and the buttons that choose whose account to show
+    are built by the next refresh rather than by the click. So the wish is
+    written down here and the builder honours it, which keeps one place
+    deciding what a press does - rather than the list reaching into the detail
+    and doing half of it itself.
+  */
+  var wanted = null;
 
   // How many of that node's steps are already on the page. Asking again every
   // few seconds and being sent the same two thousand steps is most of a
@@ -4094,7 +5302,20 @@
       var node = i === 0 ? null : name;
 
       pick.type = "button";
-      pick.textContent = name;
+
+      // The person, with the handle beside it. "implementer/1" is the same
+      // string in every room on the machine; the name points at one node of
+      // one run, which is what somebody says out loud.
+      var whose = i === 0
+        ? null
+        : (opened.nodes || []).filter(function (n) { return n.node === name; })[0];
+
+      pick.textContent = whose ? who(whose) : name;
+
+      if (whose) {
+        pick.appendChild(document.createTextNode(" "));
+        reference(name, pick);
+      }
       pick.setAttribute("aria-pressed", trailOf === node ? "true" : "false");
       pick.setAttribute("aria-controls", "log");
 
@@ -4125,6 +5346,14 @@
 
       li.appendChild(pick);
       box.appendChild(li);
+
+      // What somebody asked for from the list, now that there is a button to
+      // press. Cleared first, so a rebuild between the click and this does
+      // not press it again under them.
+      if (node && node === wanted) {
+        wanted = null;
+        pick.click();
+      }
     });
   }
 
@@ -4450,7 +5679,9 @@
     lastSpent = [];
 
     showDepth(depth, false);
-    heading.textContent = (run.room ? run.room + ": " : "") + "what " + run.id + " is doing";
+    // What it is called, then what it is. The identifier is on the card that
+      // opened this and in the address bar; a heading is read, not copied.
+      heading.textContent = (run.room || run.id) + ": what it is doing";
     detail.hidden = false;
 
     gatesShown = null;
