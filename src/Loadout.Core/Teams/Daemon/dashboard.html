@@ -2334,6 +2334,14 @@
     <details class="start">
       <summary>Start a team</summary>
 
+      <!--
+        Filled in by the page when it knows which server this is. A run started
+        from a `team dashboard` is hosted by that command and stops with it; one
+        started from the daemon outlives the browser. Which of the two you are
+        looking at is not visible from here, so it is written down.
+      -->
+      <p class="facts" id="start-caveat" hidden></p>
+
       <div class="fields">
         <div>
           <label for="start-team">Team</label>
@@ -3114,6 +3122,35 @@
     everything else hidden, and one line says why - a row that simply vanished
     would read as a page that failed to load.
   */
+  /*
+    What the form for starting a team can promise.
+
+    Two servers draw this page. A `team dashboard` hosts the run inside itself
+    and it stops when that window closes; the daemon is meant to stay up. The
+    page cannot tell them apart, and the difference is a run somebody loses, so
+    the server says and this writes it down.
+  */
+  function starting(answer) {
+    var form = document.querySelector(".start");
+    var note = document.getElementById("start-caveat");
+
+    if (!form || !note) { return; }
+
+    if (answer.begins === false) {
+      form.hidden = true;
+
+      return;
+    }
+
+    form.hidden = false;
+    note.hidden = !answer.owns;
+
+    if (answer.owns) {
+      note.textContent = "A team started here runs inside this dashboard, so it stops "
+        + "when this dashboard does. Run the daemon for one that should outlast the window.";
+    }
+  }
+
   function onlyWatching() {
     var controls = document.getElementById("controls");
     var note = document.getElementById("watching");
@@ -7088,6 +7125,8 @@
           acts = answer.acts;
           onlyWatching();
         }
+
+        starting(answer);
 
         if (solo) {
           var one = views.filter(function (v) { return v.box === solo; })[0];

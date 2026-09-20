@@ -174,6 +174,17 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public Platform.Abstractions.ISpeech? Voice { get; set; }
 
+    /// <summary>
+    /// Whether a run started from this page stops when this server does.
+    /// </summary>
+    /// <remarks>
+    /// True for <c>team dashboard</c>, which hosts the run inside a command
+    /// somebody is sitting in front of and will eventually close. False for
+    /// the daemon, which is meant to stay up. The page says which, because it
+    /// cannot tell and the difference is a run somebody loses.
+    /// </remarks>
+    public bool Owns { get; set; }
+
     /// <summary>Whether this person has asked to be spoken to.</summary>
     /// <remarks>
     /// Their own <c>show-speech</c> setting, off by default and off even under
@@ -1175,7 +1186,19 @@ public sealed class DashboardServer : IDisposable
         // draws a row of controls per run, and drawing "Stop it" on a page
         // whose server refuses it is exactly the fault this field exists to
         // stop: a control that cannot be honoured is worse than no control.
-        return JsonSerializer.Serialize(new { runs, acts = Act is not null }, Json);
+        return JsonSerializer.Serialize(
+            new
+            {
+                runs,
+                acts = Act is not null,
+                begins = Begin is not null,
+
+                // Whether a run started here would stop with this server. The
+                // page cannot tell a daemon from a command somebody is sitting
+                // in front of, and the difference is a run somebody loses.
+                owns = Owns,
+            },
+            Json);
     }
 
     /// <summary>
@@ -1385,8 +1408,8 @@ public sealed class DashboardServer : IDisposable
             await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
                 new
                 {
-                    error = "This dashboard was started on its own and cannot run commands. "
-                        + "Start teams from the daemon's dashboard, or from the command line.",
+                    error = "This dashboard is watching only and cannot run commands. "
+                        + "Start it without --watch-only, run the daemon, or use the command line.",
                 }, Json)).ConfigureAwait(false);
 
             return;

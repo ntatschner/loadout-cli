@@ -93,6 +93,77 @@ internal static class DashboardActions
             : OperationResult.Fail($"'{command}' ended with exit code {code}.", ExitCode.GeneralFailure);
     }
 
+    /// <summary>
+    /// Starts a team, by typing the command somebody would have typed.
+    /// </summary>
+    /// <remarks>
+    /// Not awaited on purpose. A run takes minutes and an HTTP request that
+    /// held open for one would time out long before it finished, so the answer
+    /// is "started" and whatever happens next is written where the schedules
+    /// write theirs.
+    /// </remarks>
+    internal static Task<OperationResult> BeganAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        StartRequest asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        var arguments = new List<string> { asking.Team, asking.Goal };
+
+        if (asking.Project is { Length: > 0 } project)
+        {
+            arguments.Add("--project");
+            arguments.Add(project);
+        }
+
+        if (asking.Rounds is { } rounds and > 0)
+        {
+            arguments.Add("--rounds");
+            arguments.Add(rounds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (asking.Autonomy is { Length: > 0 } autonomy)
+        {
+            arguments.Add("--autonomy");
+            arguments.Add(autonomy);
+        }
+
+        arguments.Add("--non-interactive");
+
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"team run {Markup.Escape(asking.Team)}"
+            + (asking.Project is { Length: > 0 } on ? $" on {Markup.Escape(on)}" : string.Empty));
+
+        // Not awaited on purpose, and not left to chance either: whatever it
+        // ends up doing is written where the schedules write theirs.
+        _ = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    var code = await commands.RunAsync("team run", arguments, ct).ConfigureAwait(false);
+
+                    if (code != (int)ExitCode.Success)
+                    {
+                        output.WriteLine(
+                            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                            + $"that run ended with exit code {code}.");
+                    }
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException)
+                {
+                    output.WriteLine(
+                        $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                        + $"that run could not be started: {Markup.Escape(ex.Message)}");
+                }
+            },
+            CancellationToken.None);
+
+        return Task.FromResult(OperationResult.Ok());
+    }
+
     /// <summary>The command line for answering one gate.</summary>
     private static List<string> Gate(RunAction action)
     {

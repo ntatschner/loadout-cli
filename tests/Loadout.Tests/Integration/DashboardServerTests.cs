@@ -503,6 +503,66 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_server_that_cannot_start_a_run_says_so_rather_than_drawing_the_form()
+    {
+        // The last gap of the same kind: the page draws "Start a team" and a
+        // server without Begin refused it. The page hides the form now, and
+        // the server is what tells it to.
+        (await (await GetAsync("/api/runs")).Content.ReadAsStringAsync())
+            .Should().Contain("\"begins\":false");
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/start?token=" + _server.Token),
+            new StringContent(
+                "{\"team\":\"docs-crew\",\"goal\":\"check the docs\"}",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        // 501 and a sentence, not a bare 404: the route exists and this server
+        // cannot do it, which is a different thing from the route not being
+        // here, and the sentence says what to run instead.
+        answer.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("daemon");
+    }
+
+    [Fact]
+    public async Task A_page_is_told_whether_a_run_started_here_would_outlive_it()
+    {
+        // Two servers draw this page. team dashboard hosts the run inside a
+        // command somebody is sitting in front of and will close; the daemon
+        // is meant to stay up. The page cannot tell, and the difference is a
+        // run somebody loses.
+        StartRequest? asked = null;
+
+        _server.Begin = (asking, _) =>
+        {
+            asked = asking;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        _server.Owns = true;
+
+        var listed = await (await GetAsync("/api/runs")).Content.ReadAsStringAsync();
+
+        listed.Should().Contain("\"begins\":true").And.Contain("\"owns\":true");
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/start?token=" + _server.Token),
+            new StringContent(
+                "{\"team\":\"docs-crew\",\"goal\":\"check the docs\"}",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked.Should().NotBeNull();
+        asked!.Team.Should().Be("docs-crew");
+        asked.Goal.Should().Be("check the docs");
+    }
+
+    [Fact]
     public async Task A_message_for_the_lead_reaches_the_command_that_delivers_it()
     {
         // The page never implements what a button means. It asks; this types

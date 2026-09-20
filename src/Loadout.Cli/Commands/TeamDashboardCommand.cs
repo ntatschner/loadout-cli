@@ -197,6 +197,30 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
                 StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Says that a run started here belongs to this window.
+    /// </summary>
+    /// <remarks>
+    /// The daemon has no such caveat: it is meant to stay up, and a run it
+    /// starts outlives the browser that asked for it. A <c>team dashboard</c>
+    /// is a window somebody closes, and the run is hosted by this process. It
+    /// is said when the server starts rather than discovered when a run stops.
+    /// </remarks>
+    internal static void Owns(CommandOutput output, DashboardServer server)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(server);
+
+        if (server.Begin is null)
+        {
+            return;
+        }
+
+        output.WriteLine(
+            "[dim]A team started from this page runs inside this command, so it stops when "
+            + "this does. Use the daemon for one that should outlast the window.[/]");
+    }
+
     internal static void Warn(CommandOutput output, DashboardServer server)
     {
         if (!server.Beyond)
@@ -294,10 +318,19 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             server.Act = (action, token) => DashboardActions.RanAsync(
                 _commands, _time, action, output, token);
 
+            // And starting one, which is the same rule with a longer wait: the
+            // page asks, this types "team run", and the parser decides whether
+            // any of it means anything.
+            server.Begin = (asking, token) => DashboardActions.BeganAsync(
+                _commands, _time, asking, output, token);
+
             // And the second credential, which the dashboard's own token does
             // not grant: typing at a live node is not something the run offered
             // to have decided.
             server.Attach = new Attaching(_secrets, _time);
+
+            // Hosted by this command, which somebody will close.
+            server.Owns = true;
         }
 
         if (settings.DryRun)
@@ -335,6 +368,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
                 : "[dim]On this machine only, and only with that token. Anything it changes runs "
                     + "the command you would have typed.[/]");
 
+            Owns(output, server);
             Warn(output, server);
             output.WriteLine(Console.IsInputRedirected
                 ? "[dim]It stops when whatever started it closes its input.[/]"

@@ -205,9 +205,10 @@ there is one account of what happened rather than three that can disagree.
 - `loadout team status` — where each node got to, what it is doing now, what it
   cost.
 - `loadout team dashboard` — a page on this machine, live, at a loopback address
-  behind a token that changes every start. It watches and it acts: answering a
-  gate, holding a run, stopping one, renaming its room, opening a pull request,
-  sending the lead a message and typing at a live node are all buttons on it.
+  behind a token that changes every start. It watches and it acts: starting a
+  team, answering a gate, holding a run, stopping one, renaming its room,
+  opening a pull request, sending the lead a message and typing at a live node
+  are all buttons on it.
   Nothing there implements any of that — each button runs the command you would
   have typed, so there is one behaviour rather than two that drift.
 
@@ -216,10 +217,16 @@ there is one account of what happened rather than three that can disagree.
   answered all of them with "this server only reads", which is worse than not
   drawing them.
 
+  A team started from `team dashboard` runs **inside that command**, so it stops
+  when the window does. The daemon is meant to stay up and its runs outlive the
+  browser. The page cannot tell the two apart, so the server says which it is
+  and the form writes it down above itself — and so does the terminal, when it
+  starts.
+
   `loadout team dashboard --watch-only` is the old behaviour, for a screen in a
-  corner: the server refuses anything that would change a run, the page is told
-  so, and it puts the controls away and says why rather than leaving buttons
-  that do nothing.
+  corner: the server refuses anything that would change a run or start one, the
+  page is told so, and it puts the controls away and hides the form rather than
+  leaving buttons that do nothing.
 - **Tools → Team runs…** in the launcher — the same, in the terminal UI. See
   [The launcher](launcher.md).
 
