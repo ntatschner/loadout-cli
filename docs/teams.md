@@ -397,13 +397,39 @@ each and it is not the one their rooms show, so the office's chair swallows a
 person seen from the side and the headquarters' puts a seat cushion on the
 sitter's back like a rucksack.
 
-**Where the pack has no chair in the right facing, find the shape in the room
-instead.** Take the rectangle again and flood it inwards from its edges,
-following pixels that match their neighbour within a tolerance. What the flood
-reaches is floor, or a desk running out of the rectangle, and both belong
-behind the person. What it cannot reach is the chair standing in the middle,
-and that is the shape to keep. The pixels still come from `room.png`, so the
-same test applies.
+**It is not only the chair.** Anything standing between somebody and the
+viewer belongs in front of them - the pedestal their legs go behind, the
+planter at the end of the run, the partition, the bin. The rule for which is
+the one every 2D engine uses and calls **y-sorting**: whatever stands nearer
+the viewer goes on top, and on a top-down room "nearer" means "its base is
+further down the picture". So for a person whose feet are at y, an object whose
+own base is below y is in front of them, and one whose base is above y - the
+monitor, the desk's far edge, the wall - stays behind, which is why a head can
+overlap a screen.
+
+Find those objects the same way. Around each desk, flood a generous box inwards
+from its edges, following pixels that match their neighbour within a tolerance:
+what the flood reaches is floor and the surfaces running out of the box, and
+what it cannot reach is the things standing in it. Label those, and keep the
+ones whose base falls below the person's feet.
+
+**A base nearer than somebody is not sufficient on its own**, and getting this
+wrong buries everybody. A desk is one connected mass that runs from behind the
+person to in front of them - its near edge is nearer, its surface is further -
+so sorting it as a single object puts the whole desk, monitors and all, on top
+of whoever is sitting at it. What is genuinely in front of a seated person is
+furniture no taller than they are. Anything rising past their shoulders is the
+desk they are sitting *at*, or the partition behind it, and belongs behind
+them. This is the limit of y-sorting that every engine shares: it orders whole
+objects, and it cannot put an object's near half in front of somebody and its
+far half behind.
+
+That is also why the chair still needs its own stencil in two of these rooms.
+The chair touches the desk in the picture, so the two flood as one object whose
+crown belongs to the desk, and the rule above drops it. The front layer is the
+union of both passes: the y-sorted objects, and the chair cut out by its own
+outline. Both take their pixels from `room.png`, so the union is still exactly
+the room and the test above still holds.
 
 One line still has to be measured: where the furniture *starts* being in front,
 because above it the person is in front of the desk and their arms belong on
