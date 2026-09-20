@@ -455,6 +455,12 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         var run = read.Value!;
         var quiet = _time.GetUtcNow() - run.LastSeen;
 
+        // What the run produced, which this command has always said it shows.
+        // It is read from the reports the nodes already wrote and the journal
+        // already has; nothing new is recorded to make this work.
+        var events = _journal.Read(run.RunId);
+        var behind = RunLeftBehind.In(run.Directory, events.Failed ? [] : events.Value!);
+
         if (output.IsJson)
         {
             output.WriteJson(new
@@ -493,6 +499,29 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 }),
                 run.Branches,
                 run.Merged,
+                delivered = behind.Delivered.Select(one => new
+                {
+                    one.Node,
+                    one.Kind,
+                    at = one.Ref,
+                    one.Note,
+                }),
+                evidence = behind.Evidence.Select(one => new
+                {
+                    one.Node,
+                    one.Kind,
+                    at = one.Ref,
+                    one.Result,
+                    one.Note,
+                }),
+                decisions = behind.Decisions.Select(one => new
+                {
+                    one.At,
+                    one.What,
+                    one.Outcome,
+                    one.Detail,
+                }),
+                unreadableReports = behind.Unreadable,
             });
 
             return Task.FromResult(CommandOutput.Success());
@@ -579,12 +608,111 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             }
         }
 
+        /*
+            What it left behind.
+
+            The reports have carried this from the first run - what each node
+            produced and what it showed for it - and nothing read any of it
+            back. A run was a list of nodes, a state each and a cost, and
+            answering "what did it actually do" meant opening the journal by
+            hand.
+        */
+        if (behind.Delivered.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("[bold]delivered[/]");
+
+            foreach (var one in behind.Delivered)
+            {
+                output.WriteLine(
+                    $"  {Markup.Escape(one.Kind),-9} {Markup.Escape(one.Ref)}"
+                    + $"  [dim]{Markup.Escape(one.Node)}[/]");
+
+                if (one.Note is { Length: > 0 } note)
+                {
+                    output.WriteLine($"  {string.Empty,-9} [dim]{Markup.Escape(note)}[/]");
+                }
+            }
+        }
+
+        /*
+            Counted per node, and only the failures written out.
+
+            A run of any size has dozens of these - one had fifty-nine - and
+            printing them all buries the single one that did not pass under
+            thirty that did. The count says the work was checked; the failure
+            is the part somebody has to read. Every one of them is still in
+            --json, whole and untruncated.
+        */
+        if (behind.Evidence.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("[bold]shown for it[/]");
+
+            foreach (var node in behind.Evidence.GroupBy(one => one.Node, StringComparer.Ordinal))
+            {
+                var passed = node.Count(one => string.Equals(one.Result, "pass", StringComparison.Ordinal));
+                var failed = node.Where(one => string.Equals(one.Result, "fail", StringComparison.Ordinal)).ToList();
+                var neither = node.Count() - passed - failed.Count;
+
+                var counted = new List<string>();
+
+                if (passed > 0) { counted.Add($"{passed} passed"); }
+                if (failed.Count > 0) { counted.Add($"[red]{failed.Count} failed[/]"); }
+                if (neither > 0) { counted.Add($"{neither} not run"); }
+
+                output.WriteLine(
+                    $"  {Markup.Escape(node.Key),-16} [dim]{string.Join(", ", counted)}[/]");
+
+                foreach (var one in failed)
+                {
+                    output.WriteLine(
+                        $"  {string.Empty,-16} [red]failed[/] {Markup.Escape(one.Kind)}: "
+                        + Markup.Escape(Short(one.Ref)));
+                }
+            }
+        }
+
+        if (behind.Decisions.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("[bold]decided[/]");
+
+            foreach (var one in behind.Decisions)
+            {
+                output.WriteLine(
+                    $"  [dim]{one.At.ToLocalTime():HH:mm:ss}[/]  {Markup.Escape(one.Outcome),-11} "
+                    + Markup.Escape(Short(one.What))
+                    + (one.Detail is { Length: > 0 } why ? $"  [dim]{Markup.Escape(Short(why))}[/]" : string.Empty));
+            }
+        }
+
+        // Named rather than skipped: a node whose report will not parse is a
+        // node whose work nobody can see, and a shorter list looks the same as
+        // a quieter run.
+        foreach (var one in behind.Unreadable)
+        {
+            output.WriteBlankLine();
+            output.WriteLine($"  [yellow]unreadable[/] {Markup.Escape(one)} [dim]could not be read back[/]");
+        }
+
         output.WriteBlankLine();
         output.WriteLine($"[dim]journal: {Markup.Escape(Path.Combine(run.Directory, "journal.jsonl"))}[/]");
         output.WriteLine($"[dim]Read it with:[/] loadout team log {Markup.Escape(run.RunId)}");
 
         return Task.FromResult(CommandOutput.Success());
     }
+
+    /// <summary>
+    /// Enough of a reference to recognise it.
+    /// </summary>
+    /// <remarks>
+    /// A node will happily put a whole command line or a forty-character hash
+    /// in here, and a run with fifty pieces of evidence then scrolls off the
+    /// top. The full text is in the report, and --json gives it back whole.
+    /// </remarks>
+    private static string Short(string text) =>
+        text.Length <= 72 ? text : text[..69] + "...";
 
     private static string State(string state) => state switch
     {

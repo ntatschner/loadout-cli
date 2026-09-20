@@ -26,6 +26,26 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
             ? value.GetString()
             : null;
 
+    /// <summary>A yes or no from the event's data, or null where it says neither.</summary>
+    /// <remarks>
+    /// Gates, permissions and answers all record whether they were allowed, and
+    /// they record it as a JSON boolean. <see cref="Text"/> returns null for
+    /// anything that is not a string, so a reader asking it for "allowed" is
+    /// told nothing and reads every gate in the journal as a refusal - which is
+    /// what the first version of the run summary did, reporting a merge as
+    /// refused on the same line it reported it as done.
+    /// </remarks>
+    public bool? Flag(string name) =>
+        Data.ValueKind == JsonValueKind.Object && Data.TryGetProperty(name, out var value)
+            ? value.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.String when bool.TryParse(value.GetString(), out var said) => said,
+                _ => null,
+            }
+            : null;
+
     /// <summary>A number from the event's data, or null.</summary>
     public decimal? Number(string name) =>
         Data.ValueKind == JsonValueKind.Object && Data.TryGetProperty(name, out var value)
