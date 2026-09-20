@@ -641,6 +641,15 @@ public static class Program
             team.AddCommand<TeamStatusCommand>("status");
             team.AddCommand<TeamLogCommand>("log");
             team.AddCommand<TeamOutboxCommand>("outbox");
+            team.AddCommand<TeamRemediesCommand>("remedies");
+
+            team.AddBranch("remedy", remedy =>
+            {
+                remedy.SetDescription("What a team has worked out how to fix, and whether it may do it again on its own.");
+                remedy.AddCommand<TeamRemedyShowCommand>("show");
+                remedy.AddCommand<TeamRemedyTrustCommand>("trust");
+                remedy.AddCommand<TeamRemedyRequestsCommand>("requests");
+            });
             team.AddCommand<TeamDashboardCommand>("dashboard");
 
             team.AddCommand<TeamDaemonCommand>("daemon");

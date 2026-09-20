@@ -66,6 +66,29 @@ public sealed class MachineTeams
     public List<string> WebhookTeams { get; set; } = [];
 
     /// <summary>
+    /// What a remediator may do with each kind of task, by kind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>never</c>, <c>ask</c> or <c>trusted</c>. A kind nobody has written a
+    /// rule for is asked about, every time.
+    /// </para>
+    /// <para>
+    /// By kind rather than one switch for "automated remediation", because
+    /// "may it restart a service unattended" and "may it delete files off a
+    /// full disk" are different questions with different answers and a single
+    /// switch cannot tell them apart.
+    /// </para>
+    /// <para>
+    /// <c>trusted</c> is not a grant on its own. It says a remedy of that kind
+    /// may run unattended <em>if somebody at this machine has trusted that
+    /// exact script</em>, which is the other key and the one an agent can
+    /// never turn.
+    /// </para>
+    /// </remarks>
+    public Dictionary<string, string> Remediation { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The address the dashboard and its webhook listen on.
     /// </summary>
     /// <remarks>

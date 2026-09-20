@@ -160,6 +160,7 @@ public static class ServiceRegistration
                 provider.GetRequiredService<Packs.IPackService>(), "teams", ct)));
         services.AddSingleton<Teams.IRunJournal, Teams.RunJournal>();
         services.AddSingleton<Teams.IRunOutbox, Teams.RunOutbox>();
+        services.AddSingleton<Teams.IRemedyBook, Teams.RemedyBook>();
         services.AddSingleton<Teams.IScheduleService, Teams.ScheduleService>();
         services.AddSingleton<Diagnostics.IDiagnosticContributor, Teams.Daemon.DaemonDiagnosticContributor>();
 

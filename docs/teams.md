@@ -267,6 +267,103 @@ somebody's project because a declaration said "register it" would be a surprise.
 because a standing goal frames everything under it and reading the nodes first
 is reading them without it.
 
+## Automated remediation
+
+A team whose declarations tell it to write its fixes down accumulates a shelf of
+scripts in its directory. Letting one of them run on your machine with nobody
+watching is a decision somebody has to make deliberately — so it takes **two
+keys, and neither of them is an agent's**.
+
+A node can register a remedy, improve it, and write that it is wonderful. It
+cannot trust it.
+
+### A remedy
+
+A script, and a record beside it saying what it is:
+
+```yaml
+# <team directory>/remedies/clear-build-cache.yaml
+name: clear-build-cache
+kind: disk
+what: Deletes build output older than fourteen days from D:\builds.
+assumes: The build box, PowerShell 7, D:\builds exists, nothing is mid-build.
+proves: Free space before and after, and a build still succeeds afterwards.
+script: clear-build-cache.ps1
+registered_by: 20260920-1200-abcd
+revision: 2
+trust: untrusted
+```
+
+A record beside the script rather than front matter inside it, because the
+scripts are in whatever language suits the problem and a comment convention
+that had to work in PowerShell, bash and Python would be three conventions.
+
+**`kind`** is the classification a machine sets a rule against — free text,
+because the kinds worth telling apart are the ones a particular system has.
+
+### The first key: this machine, by kind
+
+```sh
+loadout config set team-remediation "disk=trusted, service=ask, network=never"
+```
+
+| Rule | What it means |
+| --- | --- |
+| `never` | Refused outright, however trusted the remedy is. |
+| `ask` | Held for you, every time, trusted or not. |
+| `trusted` | May run unattended — **if** somebody has trusted that exact script. |
+
+By kind rather than one switch for "automated remediation", because *may it
+restart a service unattended* and *may it delete files off a full disk* are
+different questions with different answers.
+
+A kind nobody has written a rule for is **asked about**, not refused. A
+remediator that cannot ask is one that stops, and a person who is never asked
+never learns the kind exists to write a rule for it.
+
+### The second key: you, about one script
+
+```sh
+loadout team remedies --team system-watch
+loadout team remedy show clear-build-cache --team system-watch --script
+loadout team remedy trust clear-build-cache --team system-watch
+loadout team remedy trust clear-build-cache --team system-watch --revoke
+```
+
+`trust` records a **fingerprint of the script as it is now**, and a remedy that
+no longer matches asks again. That matters more than it sounds: the declaration
+telling a team to keep improving what it registers is exactly the thing that
+would otherwise carry one script's trust onto another — and the second script is
+the one nobody read.
+
+A remedy trusted without a recorded fingerprint is asked about too. The safe
+reading of *I cannot tell whether this is what you agreed to* is to ask.
+
+### What is waiting on you
+
+```sh
+loadout team remedy requests --team system-watch
+loadout team remedy requests --team system-watch --approve r1 --reason "read it, disk is urgent"
+loadout team remedy requests --team system-watch --refuse r1
+```
+
+Each one says which node asked, in which run, what it says the problem is, and
+**why it is being held rather than run** — which is the part somebody deciding
+needs, and is a sentence rather than a code. Refusing is not a dead end: the
+node reports what it needed and why, rather than finding another way round.
+
+### What it comes to
+
+| Remedy | Machine | Result |
+| --- | --- | --- |
+| untrusted | `trusted` | asks — nobody has read this one |
+| trusted | `ask` | asks — this machine holds that kind |
+| trusted | `trusted` | **runs unattended** |
+| trusted, then changed | `trusted` | asks — the trust was for the old script |
+| trusted | `never` | refused |
+
+Only one row runs anything on its own.
+
 ## Watching a run
 
 Three views of one thing. Each run writes one journal, and all three read it, so

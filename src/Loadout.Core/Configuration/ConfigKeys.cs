@@ -311,6 +311,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "a team may allow nothing; every outward action is held for you"),
 
+        new("team-remediation",
+            "What a remediator may do with each kind of task, as kind=rule pairs: never, ask or trusted",
+            (_, m) => string.Join(", ", m.Teams.Remediation.Select(one => $"{one.Key}={one.Value}")),
+            (_, m, v) => m.Teams.Remediation = Remediation(v),
+            true,
+            Sample: "disk=trusted, service=ask, network=never",
+            Group: Groups.Machine,
+            WhenUnset: "every remediation is held for you, whatever the team trusts"),
+
         new("show-speech",
             "Whether the full-screen launcher speaks what it shows: off, screen-reader",
             (c, _) => c.Accessibility.Display.Speech,
@@ -591,6 +600,40 @@ public static class ConfigKeys
     /// contain one, and splitting there would turn one action somebody agreed
     /// to into two they did not.
     /// </remarks>
+    /// <summary>
+    /// Reads "disk=trusted, service=ask" into what a remediator may do.
+    /// </summary>
+    /// <remarks>
+    /// A pair whose rule is not one of the three is refused by name rather than
+    /// dropped: a typo that silently became "ask" would be the safe reading,
+    /// and a typo that silently became nothing at all would not be.
+    /// </remarks>
+    private static Dictionary<string, string> Remediation(string value)
+    {
+        var rules = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var pair in (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var split = pair.Split('=', 2, StringSplitOptions.TrimEntries);
+
+            if (split.Length != 2 || split[0].Length == 0)
+            {
+                throw new ArgumentException(
+                    $"'{pair}' is not a kind and a rule. Write them as kind=rule, "
+                    + "such as disk=trusted.");
+            }
+
+            rules[split[0]] = OneOf(
+                split[1],
+                $"team-remediation ({split[0]})",
+                Loadout.Models.Teams.RemedyRules.Never,
+                Loadout.Models.Teams.RemedyRules.Ask,
+                Loadout.Models.Teams.RemedyRules.Trusted);
+        }
+
+        return rules;
+    }
+
     private static List<string> SplitActions(string value) =>
         [.. value.Split(
             ',',
