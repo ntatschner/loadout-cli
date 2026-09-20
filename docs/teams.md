@@ -259,7 +259,23 @@ loadout team outbox 20260918-1436-ed59
 
   78b32d6  implementer/1
     changed  README.md
+
+  not committed
+    plan     D:\gitilauncher\PLAN.md  3.7 KB  planner
 ```
+
+Not everything a run makes gets committed, and the second block is why that
+matters. On the run above the planner wrote `PLAN.md` into the repository and
+reported it; an outbox built out of commits alone said that run had changed one
+README and nothing else. A deliverable whose reference looks like a path is
+therefore looked for on disk and reported with its size, or as **gone** if
+nothing is there now.
+
+Whether a reference is a path is settled by its shape, not by the kind the node
+gave it: a plan is `PLAN.md` on one run and `round-3` on the next. A reference
+with no whitespace that either carries a directory separator or ends in an
+extension is treated as a path. Everything else stays a reference, and
+`team status` reads it there.
 
 Two limits, both deliberate.
 
@@ -275,8 +291,8 @@ says where the run was working. That path outlives the worktrees, which are
 cleared away after a merge. A run where every node had a worktree cannot be
 resolved, and says so instead of printing an empty list.
 
-Only commits are resolved. A decision or a plan is not a thing with files in it,
-and asking git for one would report every run that made a decision as having
+Only commits are resolved against git. A decision is not a thing with files in
+it, and asking git for one would report every run that made a decision as having
 lost it - those still show in `team status`, under *delivered*.
 
 ### Six screens, and a board to put them on

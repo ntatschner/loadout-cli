@@ -832,6 +832,14 @@ public sealed class TeamOutboxCommand : AsyncCommand<TeamOutboxCommand.Settings>
                     one.Commit,
                     one.Node,
                 }),
+                loose = outbox.Loose.Select(one => new
+                {
+                    one.Path,
+                    one.Kind,
+                    one.Bytes,
+                    one.Node,
+                    one.Note,
+                }),
                 outbox.Missing,
             });
 
@@ -853,12 +861,15 @@ public sealed class TeamOutboxCommand : AsyncCommand<TeamOutboxCommand.Settings>
                 output.WriteLine($"  [dim]{Markup.Escape(one)}[/]");
             }
 
+            // A file reported by its full path needs no repository to be found.
+            Loose(output, outbox);
+
             return CommandOutput.Success();
         }
 
         output.WriteLine($"[bold]{Markup.Escape(runId)}[/]  [dim]{Markup.Escape(outbox.Repository)}[/]");
 
-        if (outbox.Files.Count == 0 && outbox.Missing.Count == 0)
+        if (outbox.Files.Count == 0 && outbox.Missing.Count == 0 && outbox.Loose.Count == 0)
         {
             output.WriteBlankLine();
             output.WriteLine("  [dim]No node reported a commit.[/]");
@@ -882,6 +893,8 @@ public sealed class TeamOutboxCommand : AsyncCommand<TeamOutboxCommand.Settings>
             }
         }
 
+        Loose(output, outbox);
+
         // Named, because a commit the repository cannot find is the difference
         // between a run that produced nothing and one whose work nobody can
         // reach - and those look identical in a list that simply omits it.
@@ -895,6 +908,44 @@ public sealed class TeamOutboxCommand : AsyncCommand<TeamOutboxCommand.Settings>
 
         return CommandOutput.Success();
     }
+
+    /// <summary>
+    /// The files a node reported that no commit of its carries.
+    /// </summary>
+    /// <remarks>
+    /// Not every useful thing a run makes gets committed. A planner on one real
+    /// run wrote PLAN.md and reported it, and an outbox built only out of
+    /// commits said that run had changed one README and nothing else.
+    /// </remarks>
+    private static void Loose(CommandOutput output, Outbox outbox)
+    {
+        if (outbox.Loose.Count == 0)
+        {
+            return;
+        }
+
+        output.WriteBlankLine();
+        output.WriteLine("  [dim]not committed[/]");
+
+        foreach (var one in outbox.Loose)
+        {
+            var size = one.Bytes is { } bytes
+                ? $"[dim]{Size(bytes)}[/]"
+                : "[yellow]gone[/]";
+
+            output.WriteLine(
+                $"    [dim]{Markup.Escape(one.Kind).PadRight(8)}[/] {Markup.Escape(one.Path)}"
+                + $"  {size}  [dim]{Markup.Escape(one.Node)}[/]");
+        }
+    }
+
+    /// <summary>How big, in whatever unit does not need a calculator.</summary>
+    private static string Size(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
+    };
 
     /// <summary>The word, padded, then coloured - never the other way about.</summary>
     private static string Change(string change)

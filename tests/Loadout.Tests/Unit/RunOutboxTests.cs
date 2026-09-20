@@ -67,6 +67,24 @@ public sealed class RunOutboxTests : IDisposable
         + (worktree is null ? "null" : "\"" + worktree + "\"")
         + "}}";
 
+    /// <summary>A launch in a stated directory, for a test with its own.</summary>
+    private static string LaunchedIn(string node, string directory, string? worktree) =>
+        "{\"at\":\"2026-09-15T22:55:02+00:00\",\"run\":\"r\",\"node\":\"" + node
+        + "\",\"kind\":\"node.launched\",\"data\":{\"launch\":\"L\","
+        + "\"role\":\"role.implementer\",\"directory\":"
+        + System.Text.Json.JsonSerializer.Serialize(directory)
+        + ",\"worktree\":"
+        + (worktree is null ? "null" : "\"" + worktree + "\"")
+        + "}}";
+
+    /// <summary>A report delivering one thing of any kind.</summary>
+    private static string Delivering(string node, string kind, string reference, string? note) =>
+        "{\"contract\":\"report/1\",\"node\":\"" + node
+        + "\",\"status\":\"done\",\"summary\":\"Did it.\",\"deliverables\":[{\"kind\":\""
+        + kind + "\",\"ref\":" + System.Text.Json.JsonSerializer.Serialize(reference)
+        + (note is null ? "" : ",\"note\":" + System.Text.Json.JsonSerializer.Serialize(note))
+        + "}],\"evidence\":[],\"outward_taken\":[]}";
+
     private static string Delivering(string node, string commit) =>
         $$"""
         {"contract":"report/1","node":"{{node}}","status":"done","summary":"Did it.",
@@ -175,6 +193,76 @@ public sealed class RunOutboxTests : IDisposable
         // would report every run that made a decision as having lost it.
         outbox.Files.Should().BeEmpty();
         outbox.Missing.Should().BeEmpty();
+
+        // Nor is either of them a file that has gone missing.
+        outbox.Loose.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_file_a_node_reported_that_no_commit_carries_is_still_delivered()
+    {
+        // The run this was written against: a planner wrote PLAN.md into the
+        // repository, reported it, and never committed it. An outbox built out
+        // of commits alone said that run had changed one README and nothing
+        // else.
+        var repository = Path.Combine(_state, "repo");
+
+        System.IO.Directory.CreateDirectory(repository);
+        File.WriteAllText(Path.Combine(repository, "PLAN.md"), new string('x', 120));
+
+        Journal(LaunchedIn("planner", repository, worktree: null));
+        Report("report-planner-1.json", Delivering("planner", "plan", "PLAN.md", "three pieces of work"));
+
+        var outbox = (await Outbox(new FakeGit(repository)).ForAsync(Run)).Value!;
+
+        outbox.Files.Should().BeEmpty();
+
+        var loose = outbox.Loose.Should().ContainSingle().Which;
+
+        loose.Path.Should().Be(Path.Combine(repository, "PLAN.md"), "resolved against the repository");
+        loose.Kind.Should().Be("plan");
+        loose.Bytes.Should().Be(120);
+        loose.Node.Should().Be("planner");
+        loose.Note.Should().Be("three pieces of work");
+    }
+
+    [Fact]
+    public async Task A_reported_file_that_is_no_longer_there_says_so()
+    {
+        var repository = Path.Combine(_state, "repo");
+
+        System.IO.Directory.CreateDirectory(repository);
+
+        Journal(LaunchedIn("implementer/1", repository, worktree: null));
+        Report("report-implementer-1-1.json", Delivering("implementer/1", "document", "notes/summary.md", null));
+
+        var outbox = (await Outbox(new FakeGit(repository)).ForAsync(Run)).Value!;
+
+        // Named with nothing where its size goes, for the same reason a commit
+        // nobody can find is named: a run whose output has gone is not a run
+        // that produced nothing.
+        outbox.Loose.Should().ContainSingle().Which.Bytes.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("accept")]
+    [InlineData("round-3")]
+    [InlineData("round-1: implementer/1 -> reviewer -> verifier -> merge gate")]
+    [InlineData("not-verified")]
+    public async Task A_verdict_is_not_read_as_a_file_that_has_gone_missing(string reference)
+    {
+        // All four are real references off runs on this machine. A plan is
+        // "PLAN.md" on one run and "round-3" on the next, so the kind cannot
+        // decide this and the shape has to.
+        var repository = Path.Combine(_state, "repo");
+
+        System.IO.Directory.CreateDirectory(repository);
+
+        Journal(LaunchedIn("lead", repository, worktree: null));
+        Report("final-report.json", Delivering("lead", "plan", reference, null));
+
+        (await Outbox(new FakeGit(repository)).ForAsync(Run)).Value!
+            .Loose.Should().BeEmpty();
     }
 
     /// <summary>Paths whose state directory is the one this test wrote into.</summary>
