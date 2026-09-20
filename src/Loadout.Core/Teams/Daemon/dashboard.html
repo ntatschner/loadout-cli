@@ -315,7 +315,10 @@
   .room .floor .over {
     position: absolute;
     inset: 0;
-    z-index: 1;
+
+    /* Above every sprite. A sprite's z-index is its row times ten, so the
+       lowest desk in a room cannot reach a thousand. */
+    z-index: 2000;
     pointer-events: none;
     background-repeat: no-repeat;
     background-position: center;
@@ -325,7 +328,7 @@
 
   /* Above it, because a name nobody can read is not a name. The furniture
      covers the person; it has no business covering who they are. */
-  .desks.placed .desk .plate { z-index: 2; }
+  .desks.placed .desk .plate { z-index: 3000; }
 
   /* Without a scene there is nothing to stand on, so they stand in a row. */
   .room .floor.bare { padding: 0.75rem; }
@@ -580,6 +583,17 @@
   /* A desk whose node has finished keeps its sprite, quieter. The list already
      dims the whole desk; this stops the art fighting that. */
   .desk.gone .sprite.drawn { opacity: 0.7; }
+
+  /*
+    A room scrolled out of sight stops moving.
+
+    Every sprite with a running transform animation is its own compositor
+    layer, and a board of thirty-six offices with a full team in each is about
+    nine hundred of them - all still being composited while the viewer looks at
+    one. Paused rather than removed, so a room scrolled back into view carries
+    on rather than restarting in step with every other room.
+  */
+  .room.unwatched .sprite.drawn { animation-play-state: paused; }
 
   /*
     The waiting area. One row per thing that has not started: a reception of
@@ -1717,6 +1731,8 @@
     list.className = "rooms";
     list.appendChild(roomOf(run, setFor(team)));
     holds.appendChild(list);
+
+    keepStill();
   }
 
   function drawBoard() {
@@ -2475,6 +2491,25 @@
         if (i < places.length) {
           seat.style.left = places[i][0] + "%";
           seat.style.top = places[i][1] + "%";
+
+          /*
+            And the same coordinate again as a stacking order, so that where
+            two desks are close enough for their people to overlap, the one
+            nearer the viewer is drawn in front. This is y-sorting, which is
+            what every 2D engine does, and it costs nothing here because the
+            number is already to hand.
+
+            It goes on the sprite rather than on the desk on purpose. A
+            positioned element with a z-index becomes a stacking context, and
+            everything inside it is then trapped in that context - which would
+            put each desk's name plate back underneath the furniture layer,
+            however high the plate's own z-index was. The sprite has no such
+            children, so it can be ordered freely.
+          */
+          var art = seat.querySelector(".sprite");
+
+          if (art) { art.style.zIndex = Math.round(places[i][1] * 10); }
+
           desks.appendChild(seat);
 
           return;
@@ -2544,6 +2579,59 @@
     return li;
   }
 
+  /*
+    Watches which rooms are actually on screen, so the ones that are not can
+    stop animating. One observer, rebuilt with the rooms it watches, because
+    every draw throws the old rooms away.
+  */
+  var watcher = null;
+
+  /*
+    Named for what it does rather than what it uses, because `watch` is already
+    taken further down for watching one run in the detail pane - and a second
+    function of that name silently replaces the first, so every call here went
+    to the wrong one and threw.
+  */
+  function keepStill() {
+    // Every room on the page, not one view's: the office list draws rooms and
+    // so does a team's panel on the board, and both can be on screen at once.
+    var rooms = [].slice.call(document.querySelectorAll(".room"));
+
+    /*
+      Once now, by measuring, and then by observer from here on.
+
+      The observer alone is not enough, because it answers asynchronously and
+      every poll rebuilds these rooms from scratch - so the answer arrived for
+      elements that had already been thrown away, and the new ones started
+      unmarked every time. Nothing was ever parked.
+
+      Every rectangle is read before any class is written. Interleaving the two
+      makes the browser recompute the layout for each room in turn.
+    */
+    var tall = window.innerHeight || 0;
+    var showing = rooms.map(function (room) {
+      var box = room.getBoundingClientRect();
+
+      return box.bottom > -200 && box.top < tall + 200;
+    });
+
+    rooms.forEach(function (room, i) {
+      room.classList.toggle("unwatched", !showing[i]);
+    });
+
+    if (!window.IntersectionObserver) { return; }
+
+    if (watcher) { watcher.disconnect(); }
+
+    watcher = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        entry.target.classList.toggle("unwatched", !entry.isIntersecting);
+      });
+    }, { rootMargin: "200px" });
+
+    rooms.forEach(function (room) { watcher.observe(room); });
+  }
+
   function drawOffice(runs) {
     var box = document.getElementById("office");
 
@@ -2552,6 +2640,8 @@
     runs.forEach(function (run) {
       box.appendChild(roomOf(run, setFor(run.team)));
     });
+
+    keepStill();
 
     if (!runs.length) {
       var none = document.createElement("li");
