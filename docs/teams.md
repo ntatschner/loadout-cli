@@ -375,6 +375,16 @@ node's handle, or its seat in the room, opens the run *and* selects that node's
 own stream — which previously meant reading the handle, remembering it, opening
 the run, and finding it again in a list of buttons.
 
+The rich page is designed on a scale rather than per rule: three layered
+surfaces (page, well, card), a six-step spacing scale, one accent, and the
+system's variable display cuts where a machine has them. Nothing is fetched -
+no webfont, no stylesheet, no image - because a dashboard that pulled a
+typeface from the internet would be a dashboard that does not work on the
+machine it is most wanted on, which is one with no network.
+
+The same tokens carry every screen, not only the list: changing view used to go
+from a designed page to the one underneath it.
+
 ### What was and was not checked
 
 The rich page was checked in a browser against the twelve runs on this machine:

@@ -1046,46 +1046,78 @@
      how they read a screen was being handed the presentation designed for
      the hardest case.
 
-     So this is the page with its chrome on, and the rule it is built under
-     is that richness is depth, weight and movement - never a word taken
-     away. Every state is still a word. Every heading is still a heading. The
-     live region, the skip link and the focus rings are untouched. If a rule
-     below could remove information rather than decorate it, it is the wrong
-     rule.
+     This is the page with its chrome on, and the rule it is built under is
+     that richness is depth, weight and movement - never a word taken away.
+     Every state is still a word. Every heading is still a heading. The live
+     region, the skip link and the focus rings are untouched. If a rule below
+     could remove information rather than present it, it is the wrong rule.
+
+     Nothing is fetched. No webfont, no stylesheet, no image: a dashboard
+     that pulled a typeface from the internet would be a dashboard that does
+     not work on the machine it is most wanted on, which is one with no
+     network.
      ================================================================== */
 
   [data-presentation="rich"] {
-    /* Cards lift off a tinted page rather than sitting in it, which is where
-       the depth comes from - not from shadows on a white background, which
-       is a shadow of nothing. Text still sits on --card, so every contrast
+    /* ---- surfaces ----
+       Three of them, and they layer: the page is the darkest or lightest,
+       the sunken wells sit in it, and the cards sit on top. Depth comes from
+       the difference between them, not from shadows on a flat background,
+       which is a shadow of nothing. Text always sits on --card, so every
        ratio measured against the plain page still holds. */
-    --page: #eaedf3;
+    --page: #eef0f5;
+    --well: #e4e8ef;
     --card: #ffffff;
     --line: #c4c8d0;
-    --edge: rgba(16, 24, 40, 0.10);
-    --lift: 0 1px 2px rgba(16, 24, 40, 0.06), 0 10px 28px -14px rgba(16, 24, 40, 0.32);
-    --lifted: 0 1px 2px rgba(16, 24, 40, 0.08), 0 18px 40px -18px rgba(16, 24, 40, 0.40);
-    --wash: radial-gradient(1200px 600px at 12% -10%, rgba(11, 79, 158, 0.10), transparent 60%),
-            radial-gradient(900px 500px at 100% 0%, rgba(122, 59, 0, 0.07), transparent 55%);
-    --bar: var(--going);
+    --edge: rgba(15, 23, 42, 0.09);
+    --top: rgba(255, 255, 255, 0.9);
+    --accent: #1d4ed8;
+
+    --lift: 0 1px 1px rgba(15, 23, 42, 0.04), 0 2px 4px rgba(15, 23, 42, 0.04),
+            0 12px 28px -16px rgba(15, 23, 42, 0.28);
+    --lifted: 0 1px 1px rgba(15, 23, 42, 0.05), 0 4px 10px rgba(15, 23, 42, 0.07),
+              0 24px 48px -20px rgba(15, 23, 42, 0.38);
+
+    --wash: radial-gradient(1200px 620px at 8% -14%, rgba(29, 78, 216, 0.10), transparent 62%),
+            radial-gradient(1000px 520px at 102% -6%, rgba(180, 83, 9, 0.06), transparent 58%);
+
+    /* ---- spacing ----
+       A scale rather than a judgement per rule. Four steps is enough for a
+       page of cards and it is what stops one card having 14 pixels of air
+       where its neighbour has 18. */
+    --s1: 0.25rem;
+    --s2: 0.5rem;
+    --s3: 0.75rem;
+    --s4: 1rem;
+    --s5: 1.5rem;
+    --s6: 2rem;
+
+    --round: 0.75rem;
+    --bar: var(--accent);
   }
 
   @media (prefers-color-scheme: dark) {
     [data-presentation="rich"] {
-      --page: #080b0f;
-      --card: #1b212a;
-      --line: #2c323d;
-      --edge: rgba(255, 255, 255, 0.08);
-      --lift: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -14px rgba(0, 0, 0, 0.7);
-      --lifted: 0 1px 2px rgba(0, 0, 0, 0.6), 0 18px 40px -18px rgba(0, 0, 0, 0.85);
-      --wash: radial-gradient(1100px 560px at 10% -12%, rgba(158, 197, 255, 0.10), transparent 60%),
-              radial-gradient(900px 500px at 100% 0%, rgba(255, 191, 128, 0.06), transparent 55%);
+      --page: #0a0d12;
+      --well: #10141b;
+      --card: #171c25;
+      --line: #39404d;
+      --edge: rgba(255, 255, 255, 0.07);
+      --top: rgba(255, 255, 255, 0.05);
+      --accent: #7aa7ff;
+
+      --lift: 0 1px 1px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35),
+              0 14px 32px -18px rgba(0, 0, 0, 0.8);
+      --lifted: 0 1px 1px rgba(0, 0, 0, 0.5), 0 6px 14px rgba(0, 0, 0, 0.45),
+                0 28px 56px -22px rgba(0, 0, 0, 0.95);
+
+      --wash: radial-gradient(1100px 580px at 8% -14%, rgba(122, 167, 255, 0.11), transparent 62%),
+              radial-gradient(1000px 520px at 102% -6%, rgba(255, 191, 128, 0.05), transparent 58%);
     }
   }
 
-  /* The wash is painted on a fixed layer behind everything rather than on the
-     body, so it does not scroll away on a long page and repeat when the page
-     is taller than the window. */
+  /* Painted on a fixed layer behind everything rather than on the body, so it
+     does not scroll away on a long page. */
   [data-presentation="rich"] body::before {
     content: "";
     position: fixed;
@@ -1095,114 +1127,678 @@
     z-index: -1;
   }
 
-  /* ---- the masthead ---- */
+  /* ---- type ----
+     One stack, and the variable cuts first where a system has them: Segoe UI
+     Variable on Windows 11, SF on Apple, Inter where somebody installed it.
+     Nothing is downloaded, so the fallback is what most machines will use and
+     the scale is what does the work rather than the typeface. */
+  [data-presentation="rich"] body {
+    font-family: "Segoe UI Variable Text", "SF Pro Text", Inter, ui-sans-serif,
+                 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 0.95rem;
+    letter-spacing: 0.005em;
+  }
+
+  [data-presentation="rich"] h1,
+  [data-presentation="rich"] h2,
+  [data-presentation="rich"] h3,
+  [data-presentation="rich"] h4 {
+    font-family: "Segoe UI Variable Display", "SF Pro Display", Inter, ui-sans-serif,
+                 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  /* ---- the app bar ---- */
+
+  [data-presentation="rich"] header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    max-width: none;
+    margin: 0 -1rem var(--s5);
+    padding: var(--s3) var(--s5) var(--s3);
+    background: color-mix(in srgb, var(--page) 86%, transparent);
+    backdrop-filter: saturate(160%) blur(12px);
+    border-bottom: 1px solid var(--edge);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s3) var(--s4);
+  }
 
   [data-presentation="rich"] h1 {
-    font-size: 1.75rem;
-    letter-spacing: -0.02em;
-    margin: 2rem 0 0.25rem;
-  }
-
-  [data-presentation="rich"] h2 { letter-spacing: -0.01em; }
-
-  /* ---- cards ---- */
-
-  [data-presentation="rich"] .run,
-  [data-presentation="rich"] .room,
-  [data-presentation="rich"] .start {
-    border: 1px solid var(--edge);
-    border-radius: 0.75rem;
-    box-shadow: var(--lift);
-  }
-
-  [data-presentation="rich"] .run {
+    font-size: 1.15rem;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    margin: 0;
+    padding-left: 1.7rem;
     position: relative;
-    padding: 0.9rem 1.1rem 0.9rem 1.35rem;
+  }
+
+  /* A mark rather than a logotype: three bars, which is what the round strip
+     on every card is, so the page has one idea in it rather than a badge
+     borrowed from nowhere. */
+  [data-presentation="rich"] h1::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.22em;
+    width: 1.1rem;
+    height: 0.85em;
+    background:
+      linear-gradient(var(--accent), var(--accent)) 0 100% / 0.22rem 55% no-repeat,
+      linear-gradient(var(--accent), var(--accent)) 0.44rem 100% / 0.22rem 100% no-repeat,
+      linear-gradient(var(--accent), var(--accent)) 0.88rem 100% / 0.22rem 75% no-repeat;
+  }
+
+  /* The count of runs, which was a paragraph of its own under the title. */
+  [data-presentation="rich"] header > p:first-of-type {
+    margin: 0;
+    color: var(--quiet);
+    font-size: 0.85rem;
+  }
+
+  /* Everything else in the bar goes to the right of it. */
+  [data-presentation="rich"] header > *:nth-child(n+3) { margin-left: auto; }
+  [data-presentation="rich"] header > *:nth-child(n+4) { margin-left: 0; }
+
+  [data-presentation="rich"] header button {
+    font: inherit;
+    color: inherit;
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    background: var(--card);
+    box-shadow: 0 1px 1px var(--edge);
+    min-height: 2.5rem;
+    padding: 0.35rem 0.85rem;
+    cursor: pointer;
+  }
+
+  [data-presentation="rich"] header button:hover { border-color: var(--accent); }
+
+  [data-presentation="rich"] main { padding-top: var(--s2); }
+
+  /* ---- the band of totals ---- */
+
+  .totals { display: none; }
+
+  [data-presentation="rich"] .totals {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: var(--s3);
+    max-width: 90rem;
+    margin: 0 auto var(--s5);
+  }
+
+  [data-presentation="rich"] .total {
+    position: relative;
+    padding: var(--s3) var(--s4);
+    border: 1px solid var(--edge);
+    border-radius: var(--round);
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 1px 0 var(--top);
     overflow: hidden;
   }
 
+  /* The tint says which number this is without a second colour of text. */
+  [data-presentation="rich"] .total::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--tint, transparent) 10%, transparent), transparent 55%);
+    pointer-events: none;
+  }
+
+  [data-presentation="rich"] .total.going { --tint: var(--going); }
+  [data-presentation="rich"] .total.stopped { --tint: var(--stopped); }
+
+  [data-presentation="rich"] .total strong {
+    display: block;
+    font-size: 1.75rem;
+    font-weight: 620;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  [data-presentation="rich"] .total.going strong { color: var(--going); }
+  [data-presentation="rich"] .total.stopped strong { color: var(--stopped); }
+
+  [data-presentation="rich"] .total span {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--quiet);
+    font-size: 0.8rem;
+    letter-spacing: 0.01em;
+  }
+
+  /* ---- the view switcher, as one control ---- */
+
+  [data-presentation="rich"] .views {
+    gap: 0;
+    padding: 0.2rem;
+    border: 1px solid var(--edge);
+    border-radius: 0.65rem;
+    background: var(--well);
+    box-shadow: inset 0 1px 2px var(--edge);
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  [data-presentation="rich"] .views button {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0.45rem;
+    min-height: 2.25rem;
+    padding: 0.3rem 0.8rem;
+    color: var(--quiet);
+  }
+
+  [data-presentation="rich"] .views button:hover { color: var(--ink); }
+
+  [data-presentation="rich"] .views button[aria-pressed="true"] {
+    background: var(--card);
+    color: var(--ink);
+    font-weight: 620;
+    box-shadow: 0 1px 2px var(--edge), inset 0 1px 0 var(--top);
+  }
+
+  /* ---- starting a team ---- */
+
+  [data-presentation="rich"] .start {
+    border: 1px solid var(--edge);
+    border-radius: var(--round);
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 1px 0 var(--top);
+  }
+
+  [data-presentation="rich"] .start summary { font-weight: 560; }
+
+  /* ---- groups ---- */
+
+  [data-presentation="rich"] .grouped { list-style: none; margin: 0; padding: 0; }
+  [data-presentation="rich"] .group-item:first-child .group { margin-top: 0; }
+
   /*
-    The accent bar. A second carrier for the state, beside the word that is
-    already there - never instead of it, which is why the word is untouched
-    and why this is allowed to be nothing but a colour.
+    A heading over each group with the count on it, because the count is what
+    somebody is really asking when they glance at "Needs you" - so reading the
+    heading answers the question rather than starting a count.
   */
-  [data-presentation="rich"] .run::before {
+  [data-presentation="rich"] .group {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    font-size: 0.7rem;
+    font-weight: 620;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--quiet);
+    margin: var(--s6) 0 var(--s3);
+  }
+
+  /* A rule across the rest of the line, so a group reads as a band of the
+     page rather than as a label floating above some cards. */
+  [data-presentation="rich"] .group::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--edge);
+  }
+
+  [data-presentation="rich"] .group .count {
+    font-size: 0.7rem;
+    font-weight: 620;
+    letter-spacing: 0;
+    min-width: 1.35rem;
+    text-align: center;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: var(--well);
+    border: 1px solid var(--edge);
+    color: var(--ink);
+  }
+
+  [data-presentation="rich"] .nothing {
+    padding: var(--s6) var(--s4);
+    border: 1px dashed var(--line);
+    border-radius: var(--round);
+    color: var(--quiet);
+    text-align: center;
+  }
+
+  /* ---- the grid of cards ---- */
+
+  /*
+    A card is the size of the thing it describes. Twelve of them fit on a
+    screen; twelve full-width rows are a page of scrolling in which the one
+    that needs you is as likely to be below the fold as above it.
+
+    Measured against the pane rather than the window, because opening a run
+    takes two thirds of the width and a grid that only knows about the window
+    puts three columns into a column.
+  */
+  [data-presentation="rich"] .cards {
+    container-type: inline-size;
+    display: grid;
+    gap: var(--s4);
+    grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  [data-presentation="rich"] .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+    padding: var(--s4) var(--s4) var(--s3) calc(var(--s4) + 0.35rem);
+    border: 1px solid var(--edge);
+    border-radius: var(--round);
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 1px 0 var(--top);
+    overflow: hidden;
+    transition: box-shadow 180ms ease, border-color 180ms ease;
+  }
+
+  /* The tint at the head of the card, which is the accent bar's colour
+     bleeding into the surface rather than a second decision. */
+  [data-presentation="rich"] .card::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 4.5rem;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bar) 9%, transparent), transparent);
+    pointer-events: none;
+  }
+
+  [data-presentation="rich"] .card > * { position: relative; z-index: 1; }
+
+  [data-presentation="rich"] .card:hover,
+  [data-presentation="rich"] .card:focus-within {
+    box-shadow: var(--lifted), inset 0 1px 0 var(--top);
+    border-color: color-mix(in srgb, var(--bar) 40%, var(--edge));
+  }
+
+  /* The accent, which is a second carrier for a state the card already states
+     in a word. */
+  [data-presentation="rich"] .card::before {
     content: "";
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 4px;
-    background: var(--bar);
+    width: 3px;
+    background: linear-gradient(180deg, var(--bar), color-mix(in srgb, var(--bar) 45%, transparent));
   }
 
-  [data-presentation="rich"] .run:has(.state.going) { --bar: var(--going); }
-  [data-presentation="rich"] .run:has(.state.done) { --bar: var(--done); }
-  [data-presentation="rich"] .run:has(.state.stopped) { --bar: var(--stopped); }
+  [data-presentation="rich"] .card.going { --bar: var(--going); }
+  [data-presentation="rich"] .card.done { --bar: var(--done); }
+  [data-presentation="rich"] .card.stopped { --bar: var(--stopped); }
 
-  [data-presentation="rich"] .run h3 {
-    font-size: 1.1rem;
-    letter-spacing: -0.01em;
+  [data-presentation="rich"] .card h4 {
+    margin: 0;
+    font-size: 1.02rem;
+    font-weight: 620;
+    line-height: 1.3;
+    letter-spacing: -0.012em;
   }
 
-  [data-presentation="rich"] .run .team {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 0.1rem 0.45rem;
-    border: 1px solid var(--line);
+  [data-presentation="rich"] .card h4 .as-link { text-decoration: none; }
+  [data-presentation="rich"] .card h4 .as-link:hover { text-decoration: underline; }
+
+  [data-presentation="rich"] .badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s1) var(--s2);
+    margin: 0;
+  }
+
+  [data-presentation="rich"] .badges .state {
+    flex: 0 1 auto;
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    padding: 0.12rem 0.5rem;
     border-radius: 999px;
-    vertical-align: 0.1em;
+    background: color-mix(in srgb, var(--bar) 13%, transparent);
   }
 
-  [data-presentation="rich"] .nodes li {
+  [data-presentation="rich"] .badges .team {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--quiet);
+    padding: 0.12rem 0.45rem;
+    border: 1px solid var(--edge);
+    border-radius: 999px;
+    background: var(--well);
+  }
+
+  /* Two lines of it. The goal is what the run is for and can be a paragraph;
+     a card is not where a paragraph is read, and the whole of it is in the
+     detail. */
+  [data-presentation="rich"] .card .goal {
+    margin: 0;
+    color: var(--quiet);
+    font-size: 0.87rem;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  [data-presentation="rich"] .card .figures {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 var(--s3);
+    margin: 0;
+    color: var(--ink);
+    font-size: 0.83rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Hairlines between the figures, so three numbers in a row read as three
+     rather than as one long one. */
+  [data-presentation="rich"] .card .figures span + span {
+    padding-left: var(--s3);
+    border-left: 1px solid var(--edge);
+  }
+
+  [data-presentation="rich"] .card .shapes {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--s3);
+    margin: var(--s1) 0 0;
+  }
+
+  /* ---- who is in the room ---- */
+
+  [data-presentation="rich"] .roster {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s1);
+    list-style: none;
+    margin: auto 0 0;
+    padding: var(--s2) 0 0;
     border-top: 1px solid var(--edge);
-    padding: 0.45rem 0;
+  }
+
+  /*
+    A seat, with two letters on it. Forty pixels square, which is the target
+    size this page holds to everywhere, and an accessible name that says who
+    it is and what they were doing - two letters is not a name, and the chip
+    is the only thing here that does not write itself out.
+  */
+  [data-presentation="rich"] .roster .chip {
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 650;
+    letter-spacing: 0.03em;
+    color: var(--ink);
+    width: 2.5rem;
+    height: 2.5rem;
+    display: grid;
+    place-items: center;
+
+    /*
+      --quiet, and not --line. This has now been got wrong twice, so: a rule
+      between two rows may be faint, because the rows either side of it say
+      where it is. The edge of a seat is the only thing saying the seat is
+      there - its fill differs from the card behind it by about 1.1 to 1 -
+      and a boundary that identifies a control has to reach 3 to 1 against
+      what is behind it. --line is 1.7 to 1 on the light card. This is 7.5.
+    */
+    border: 1px solid var(--quiet);
+    border-radius: 50%;
+    background: var(--well);
+    box-shadow: inset 0 1px 0 var(--top);
+    cursor: pointer;
+    transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+  }
+
+  [data-presentation="rich"] .roster .chip:hover {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 16%, var(--card));
+  }
+
+  [data-presentation="rich"][data-motion="full"] .roster .chip:hover {
+    transform: translateY(-2px);
+  }
+
+  [data-presentation="rich"] .card .facts {
+    margin: var(--s2) 0 0;
+    padding: 0;
   }
 
   /* ---- the rail: the one thing on the page that wants you ---- */
 
   [data-presentation="rich"] #rail {
-    border-radius: 0.75rem;
+    border-radius: var(--round);
     border-width: 1px;
-    border-color: var(--stopped);
-    box-shadow: var(--lifted), 0 0 0 4px color-mix(in srgb, var(--stopped) 14%, transparent);
+    border-color: color-mix(in srgb, var(--stopped) 55%, var(--edge));
     background: var(--card);
+    box-shadow: var(--lifted), 0 0 0 4px color-mix(in srgb, var(--stopped) 12%, transparent);
+  }
+
+  [data-presentation="rich"] #rail h2 {
+    font-size: 0.72rem;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--stopped);
   }
 
   /* ---- controls ---- */
 
   [data-presentation="rich"] .run button,
-  [data-presentation="rich"] .views button,
-  [data-presentation="rich"] .start button {
+  [data-presentation="rich"] .start button,
+  [data-presentation="rich"] .depths button,
+  [data-presentation="rich"] .papers button {
     border-color: var(--line);
-    border-radius: 0.5rem;
+    border-radius: 0.55rem;
     background: var(--card);
-    box-shadow: 0 1px 1px var(--edge);
+    box-shadow: 0 1px 1px var(--edge), inset 0 1px 0 var(--top);
   }
 
-  [data-presentation="rich"] .views button[aria-pressed="true"] {
-    background: color-mix(in srgb, var(--going) 12%, var(--card));
-    border-color: var(--going);
-    box-shadow: inset 0 -3px 0 var(--going);
+  /* ---- the surfaces every screen shares ----
+
+     The list was designed and the other six screens were not, so changing
+     view went from a designed page to the one underneath it. Nothing
+     structural changes here: each screen draws what it drew, on the surface
+     the rest of the page uses. */
+
+  [data-presentation="rich"] .room,
+  [data-presentation="rich"] .paper,
+  [data-presentation="rich"] .queue .item,
+  [data-presentation="rich"] .screen,
+  [data-presentation="rich"] details.start,
+  [data-presentation="rich"] main > details {
+    border: 1px solid var(--edge);
+    border-radius: var(--round);
+    background: var(--card);
+    box-shadow: var(--lift), inset 0 1px 0 var(--top);
+  }
+
+  [data-presentation="rich"] main > details > summary,
+  [data-presentation="rich"] .start > summary {
+    font-weight: 560;
+    border-radius: var(--round);
+  }
+
+  /* Output is read, not decorated: a well rather than a card, so a wall of
+     text reads as something the page is showing rather than as another
+     surface competing with the cards. */
+  [data-presentation="rich"] .log,
+  [data-presentation="rich"] .paper {
+    background: var(--well);
+    box-shadow: inset 0 1px 3px var(--edge);
+    border-color: var(--edge);
+    border-radius: 0.6rem;
+  }
+
+  [data-presentation="rich"] #detail {
+    border-radius: var(--round);
+  }
+
+  /* The depths, as one segmented control, like the views above them - two
+     rows of tabs on one page that looked like two different kinds of thing
+     was the clearest sign the redesign had stopped at the list. */
+  [data-presentation="rich"] .depths {
+    gap: 0;
+    padding: 0.2rem;
+    border: 1px solid var(--edge);
+    border-radius: 0.65rem;
+    background: var(--well);
+    box-shadow: inset 0 1px 2px var(--edge);
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  [data-presentation="rich"] .depths button {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0.45rem;
+    color: var(--quiet);
+  }
+
+  [data-presentation="rich"] .depths button[aria-selected="true"] {
+    background: var(--card);
+    color: var(--ink);
+    font-weight: 620;
+    box-shadow: 0 1px 2px var(--edge), inset 0 1px 0 var(--top);
+  }
+
+  [data-presentation="rich"] .depths kbd {
+    border-radius: 0.3rem;
+    border: 1px solid var(--edge);
+    background: var(--well);
+  }
+
+  /* Text boxes and pickers, so a form on this page looks like it belongs to
+     it. */
+  [data-presentation="rich"] input,
+  [data-presentation="rich"] select,
+  [data-presentation="rich"] textarea {
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    background: var(--card);
+    color: inherit;
+    box-shadow: inset 0 1px 2px var(--edge);
+  }
+
+  [data-presentation="rich"] input:focus-visible,
+  [data-presentation="rich"] select:focus-visible,
+  [data-presentation="rich"] textarea:focus-visible {
+    border-color: var(--accent);
+  }
+
+  [data-presentation="rich"] .controls button,
+  [data-presentation="rich"] .prefs button,
+  [data-presentation="rich"] .queue button,
+  [data-presentation="rich"] .screen button {
+    border: 1px solid var(--line);
+    border-radius: 0.55rem;
+    background: var(--card);
+    color: inherit;
+    box-shadow: 0 1px 1px var(--edge), inset 0 1px 0 var(--top);
+  }
+
+  [data-presentation="rich"] .controls button:hover,
+  [data-presentation="rich"] .prefs button:hover,
+  [data-presentation="rich"] .queue button:hover,
+  [data-presentation="rich"] .screen button:hover {
+    border-color: var(--accent);
+  }
+
+  /* A gate is the one thing on the page that stops everything, and it should
+     read that way rather than as a box with a thicker rule. */
+  [data-presentation="rich"] .gate {
+    border-width: 1px;
+    border-color: color-mix(in srgb, var(--stopped) 55%, var(--edge));
+    border-radius: var(--round);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--stopped) 8%, var(--card)), var(--card) 4rem);
+    box-shadow: var(--lift);
+    padding: var(--s4);
+  }
+
+  /*
+    Whose account to show, as a row rather than a column. Six nodes one under
+    another is most of a screen spent on a picker, above the thing it is
+    picking for.
+  */
+  [data-presentation="rich"] #who {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s1);
+    margin: var(--s2) 0;
+  }
+
+  [data-presentation="rich"] #who button {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: 0 1px 1px var(--edge), inset 0 1px 0 var(--top);
+    padding: 0.3rem 0.8rem;
+  }
+
+  [data-presentation="rich"] #who button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--card));
+    font-weight: 620;
+  }
+
+  /*
+    The focus ring in the page's own colour rather than the text's. Still
+    three pixels and still offset - what changes is that it reads as the page
+    saying where you are, rather than as a rule somebody drew by accident.
+    #1d4ed8 on white is 6.3:1, well past the 3:1 an indicator needs.
+  */
+  [data-presentation="rich"] a:focus-visible,
+  [data-presentation="rich"] button:focus-visible,
+  [data-presentation="rich"] input:focus-visible,
+  [data-presentation="rich"] select:focus-visible,
+  [data-presentation="rich"] textarea:focus-visible,
+  [data-presentation="rich"] [tabindex]:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 0.4rem;
+  }
+
+  /* Except in a mode that has thrown the colours away, where the ring has to
+     come back to a colour that mode still has. */
+  @media (forced-colors: active) {
+    [data-presentation="rich"] a:focus-visible,
+    [data-presentation="rich"] button:focus-visible,
+    [data-presentation="rich"] [tabindex]:focus-visible {
+      outline: 3px solid CanvasText;
+    }
   }
 
   /* ---- atmosphere: the page says which runs are alive ---- */
 
   /*
     A dot beside a running state, which breathes. It carries nothing on its
-    own - the word "running" is right beside it and says the same thing - so
-    a page with no animation, or no colour, loses nothing by dropping it.
+    own - the word "running" is beside it and says the same thing - so a page
+    with no animation, or no colour, loses nothing by dropping it.
   */
   [data-presentation="rich"] .state.going::before {
     content: "";
     display: inline-block;
-    width: 0.55em;
-    height: 0.55em;
+    width: 0.5em;
+    height: 0.5em;
     margin-right: 0.4em;
     border-radius: 50%;
     background: currentColor;
-    vertical-align: 0.02em;
+    vertical-align: 0.05em;
   }
 
   [data-presentation="rich"][data-motion="full"] .state.going::before {
@@ -1210,8 +1806,91 @@
   }
 
   @keyframes alive {
-    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
-    50% { opacity: 0.55; box-shadow: 0 0 0 0.25em transparent; }
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+
+  /* ---- the drawings ----
+
+     Every one of these is aria-hidden, and every number in them is written
+     out in words on the same card. They are allowed to carry nothing on
+     their own, which is exactly why they are allowed to be pictures. */
+
+  .viz { display: none; }
+
+  [data-presentation="rich"] .viz { display: block; }
+
+  /* One column per round, as tall as that round was long. The thing a list
+     cannot say: that round three took four times round two. A baseline,
+     because bars floating in space read as a stray mark rather than as a
+     measurement of anything. */
+  [data-presentation="rich"] .viz.strip {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 1.6rem;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+
+  [data-presentation="rich"] .viz.strip .round {
+    display: block;
+    width: 0.375rem;
+    border-radius: 2px 2px 0 0;
+    background: color-mix(in srgb, var(--bar) 50%, transparent);
+  }
+
+  [data-presentation="rich"] .viz.strip .round.live { background: var(--bar); }
+
+  [data-presentation="rich"][data-motion="full"] .viz.strip .round.live {
+    animation: alive 2.4s ease-in-out infinite;
+  }
+
+  /* Where the money stands, against the cap the team set. */
+  [data-presentation="rich"] .viz.budget {
+    position: relative;
+    flex: 1 1 6rem;
+    max-width: 16rem;
+    height: 0.4rem;
+    align-self: center;
+    border-radius: 999px;
+    background: var(--well);
+    box-shadow: inset 0 1px 2px var(--edge);
+    overflow: hidden;
+  }
+
+  [data-presentation="rich"] .viz.budget .fill {
+    display: block;
+    height: 100%;
+    background: var(--done);
+  }
+
+  [data-presentation="rich"] .viz.budget.over .fill { background: var(--stopped); }
+
+  /* Where the spend is heading if it carries on, against where the cap is. A
+     ceiling and not a prediction, which is why it is a line and not a fill. */
+  [data-presentation="rich"] .viz.budget .mark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--ink);
+    opacity: 0.5;
+  }
+
+  [data-presentation="rich"] .viz.share {
+    height: 0.35rem;
+    border-radius: 999px;
+    background: var(--well);
+    overflow: hidden;
+  }
+
+  [data-presentation="rich"] .viz.share .fill {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    border-radius: inherit;
   }
 
   /*
@@ -1227,410 +1906,15 @@
 
   [data-presentation="rich"][data-motion="none"] * {
     transition: none !important;
-  }
-
-  /* ---- the masthead ---- */
-
-  /*
-    A band rather than a line of text in the corner. The page is left open on
-    a second monitor for hours, and the first thing it should say from across
-    a room is what it is.
-  */
-  [data-presentation="rich"] header {
-    position: relative;
-    padding: 0.25rem 1.25rem 1.1rem;
-    margin: 0 auto 1.25rem;
-    border-bottom: 1px solid var(--edge);
-  }
-
-  [data-presentation="rich"] header::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -1px;
-    height: 1px;
-    background: linear-gradient(90deg, var(--going), transparent 70%);
-  }
-
-  [data-presentation="rich"] h1 {
-    background: linear-gradient(100deg, var(--ink), color-mix(in srgb, var(--going) 70%, var(--ink)));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  /* The gradient is decoration; a mode that throws colours away has to get a
-     colour back rather than a transparent heading. */
-  @media (forced-colors: active) {
-    [data-presentation="rich"] h1 { color: CanvasText; background: none; }
-  }
-
-  /* ---- the card, lifted properly off the page ---- */
-
-  /* ---- the band of totals ---- */
-
-  .totals { display: none; }
-
-  [data-presentation="rich"] .totals {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    max-width: 90rem;
-    margin: 0 auto 1.5rem;
-  }
-
-  [data-presentation="rich"] .total {
-    flex: 1 1 10rem;
-    padding: 0.75rem 1rem;
-    border: 1px solid var(--edge);
-    border-left: 3px solid var(--line);
-    border-radius: 0.6rem;
-    background: var(--card);
-    box-shadow: var(--lift);
-  }
-
-  [data-presentation="rich"] .total.going { border-left-color: var(--going); }
-  [data-presentation="rich"] .total.stopped { border-left-color: var(--stopped); }
-
-  [data-presentation="rich"] .total strong {
-    display: block;
-    font-size: 1.6rem;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
-  }
-
-  [data-presentation="rich"] .total.going strong { color: var(--going); }
-  [data-presentation="rich"] .total.stopped strong { color: var(--stopped); }
-
-  [data-presentation="rich"] .total span {
-    color: var(--quiet);
-    font-size: 0.9rem;
-  }
-
-  /* ---- groups ---- */
-
-  /*
-    A heading over each group, and a count on it. The count is what somebody
-    is really asking when they glance at "Needs you", and it is on the heading
-    rather than beside it so that reading the heading answers the question.
-  */
-  [data-presentation="rich"] .group {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--quiet);
-    margin: 1.5rem 0 0.6rem;
-  }
-
-  [data-presentation="rich"] .grouped { list-style: none; margin: 0; padding: 0; }
-  [data-presentation="rich"] .group-item:first-child .group { margin-top: 0; }
-
-  [data-presentation="rich"] .group .count {
-    font-size: 0.75rem;
-    letter-spacing: 0;
-    padding: 0.05rem 0.4rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-  }
-
-  [data-presentation="rich"] .nothing {
-    padding: 2rem 1rem;
-    border: 1px dashed var(--line);
-    border-radius: 0.85rem;
-    color: var(--quiet);
-    text-align: center;
-  }
-
-  /* ---- the grid of cards ---- */
-
-  /*
-    A card is the size of the thing it describes. Twelve of them fit on a
-    screen; twelve full-width rows are a page of scrolling, and the row that
-    needs you is as likely to be below the fold as above it.
-
-    Measured against the pane rather than the window, because opening a run
-    takes two thirds of the width and a grid that only knows about the window
-    puts three columns into a column.
-  */
-  [data-presentation="rich"] .cards {
-    container-type: inline-size;
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(auto-fill, minmax(min(21rem, 100%), 1fr));
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  [data-presentation="rich"] .card {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.9rem 1rem 0.8rem 1.15rem;
-    border: 1px solid var(--edge);
-    border-radius: 0.85rem;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--bar) 7%, var(--card)), var(--card) 4rem);
-    box-shadow: var(--lift);
-    overflow: hidden;
-    transition: box-shadow 160ms ease;
-  }
-
-  [data-presentation="rich"] .card:hover,
-  [data-presentation="rich"] .card:focus-within { box-shadow: var(--lifted); }
-
-  /* The accent, which is a second carrier for a state the card already
-     states in a word. */
-  [data-presentation="rich"] .card::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: var(--bar);
-  }
-
-  [data-presentation="rich"] .card.going { --bar: var(--going); }
-  [data-presentation="rich"] .card.done { --bar: var(--done); }
-  [data-presentation="rich"] .card.stopped { --bar: var(--stopped); }
-
-  [data-presentation="rich"] .card h3 {
-    margin: 0;
-    font-size: 1.05rem;
-    letter-spacing: -0.01em;
-  }
-
-  [data-presentation="rich"] .badges .state {
-    /* A state can be a sentence: "the lead ended without a report". It stays
-       whole - it is the one thing on the card that must not be abbreviated -
-       and the badges wrap around it. */
-    flex: 0 1 auto;
-  }
-
-  [data-presentation="rich"] .badges {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem;
-    margin: 0;
-  }
-
-  [data-presentation="rich"] .badges .team {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 0.1rem 0.45rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-  }
-
-  /* Two lines of it. The goal is what the run is for and it can be a
-     paragraph; the card is not the place to read a paragraph, and the whole
-     of it is in the detail. */
-  [data-presentation="rich"] .card .goal {
-    margin: 0;
-    color: var(--quiet);
-    font-size: 0.92rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  [data-presentation="rich"] .card .figures {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0 0.9rem;
-    margin: 0;
-    color: var(--quiet);
-    font-variant-numeric: tabular-nums;
-  }
-
-  [data-presentation="rich"] .card .shapes {
-    gap: 0.9rem;
-    margin: 0.2rem 0 0;
-  }
-
-  /* Shorter on a card than in a row: a card is 21rem wide and a strip that
-     takes a quarter of its height is a chart nobody asked for. */
-  [data-presentation="rich"] .card .viz.strip { height: 1.6rem; }
-  [data-presentation="rich"] .card .viz.strip .round { width: 0.4rem; }
-
-  /* Pushed to the foot, so a row of cards of different heights still has one
-     line to read along. */
-  [data-presentation="rich"] .card .facts { margin: auto 0 0; padding-top: 0.2rem; }
-
-  /* Who is in the room sits above it, and the space between them is the
-     space the card has spare. */
-  [data-presentation="rich"] .roster { margin-top: auto; }
-
-  /* ---- who is in the room ---- */
-
-  [data-presentation="rich"] .roster {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    list-style: none;
-    margin: 0.15rem 0 0;
-    padding: 0;
-  }
-
-  /*
-    A seat, with two letters on it. Forty pixels square, which is the target
-    size this page holds itself to everywhere, and a name that says who it is
-    and what they were doing - because two letters is not a name and the chip
-    is the only thing here that does not write itself out.
-  */
-  [data-presentation="rich"] .roster .chip {
-    font: inherit;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: inherit;
-    width: 2.5rem;
-    height: 2.5rem;
-    display: grid;
-    place-items: center;
-    /* --quiet rather than --line: a rule between two rows can be faint,
-       because the rows either side of it say where it is. The edge of a seat
-       is the only thing saying the seat is there, and a boundary that
-       identifies a control has to reach 3:1 against what is behind it. This
-       is 7.5:1 on the light card and higher on the dark one. */
-    border: 1px solid var(--quiet);
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--ink) 6%, var(--card));
-    cursor: pointer;
-  }
-
-  [data-presentation="rich"] .roster .chip:hover {
-    border-color: var(--going);
-    background: color-mix(in srgb, var(--going) 14%, var(--card));
-  }
-
-  @media (forced-colors: active) {
-    [data-presentation="rich"] .card,
-    [data-presentation="rich"] .total,
-    [data-presentation="rich"] .roster .chip { border: 1px solid CanvasText; }
-  }
-
-  /* ---- the drawings ---- */
-
-  /*
-    Every one of these is aria-hidden, and every number in them is written out
-    in words on the same card. They are allowed to carry nothing on their own,
-    which is exactly why they are allowed to be pictures.
-  */
-  .viz { display: none; }
-
-  [data-presentation="rich"] .viz { display: block; }
-
-  [data-presentation="rich"] .viz.share {
-    height: 0.4rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--ink) 10%, transparent);
-    overflow: hidden;
-  }
-
-  [data-presentation="rich"] .viz.share .fill {
-    display: block;
-    height: 100%;
-    background: var(--going);
-    border-radius: inherit;
-  }
-
-  /* The name on the left, the shape of the run on the right, on one line. */
-  [data-presentation="rich"] .run .top {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-  }
-
-  [data-presentation="rich"] .run .top h3 { margin: 0; }
-
-  [data-presentation="rich"] .shapes {
-    display: flex;
-    align-items: flex-end;
-    gap: 1.25rem;
-    margin: 0;
-  }
-
-  /* One column per round, as tall as that round was long. The thing a list
-     cannot say: that round three took four times round two. */
-  /* A baseline, because four bars floating in space read as a stray mark
-     rather than as a measurement of anything. */
-  [data-presentation="rich"] .viz.strip {
-    display: flex;
-    align-items: flex-end;
-    gap: 3px;
-    height: 2.25rem;
-    padding-bottom: 2px;
-    border-bottom: 1px solid var(--line);
-    flex: 0 0 auto;
-  }
-
-  [data-presentation="rich"] .viz.strip .round {
-    display: block;
-    width: 0.55rem;
-    border-radius: 2px 2px 0 0;
-    background: color-mix(in srgb, var(--going) 55%, transparent);
-  }
-
-  [data-presentation="rich"] .viz.strip .round.live {
-    background: var(--going);
-  }
-
-  [data-presentation="rich"][data-motion="full"] .viz.strip .round.live {
-    animation: alive 2.4s ease-in-out infinite;
-  }
-
-  [data-presentation="rich"] .viz.budget {
-    position: relative;
-    flex: 1 1 8rem;
-    max-width: 18rem;
-    height: 0.5rem;
-    align-self: center;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--ink) 10%, transparent);
-    overflow: hidden;
-  }
-
-  [data-presentation="rich"] .viz.budget .fill {
-    display: block;
-    height: 100%;
-    background: var(--done);
-  }
-
-  [data-presentation="rich"] .viz.budget.over .fill { background: var(--stopped); }
-
-  /* Where the spend is heading if it carries on, against where the cap is.
-     A ceiling and not a prediction, which is why it is a line and not a
-     filled bar. */
-  [data-presentation="rich"] .viz.budget .mark {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: var(--ink);
-    opacity: 0.55;
+    backdrop-filter: none !important;
   }
 
   /*
     A palette that survives a colour deficiency. The page never uses red
     against green anywhere, which is the pair that cannot be separated, so
-    this is a narrowing rather than a repair: the two states that could be
-    confused by anybody are pulled further apart, onto blue and orange, which
-    survive every common deficiency.
+    this is a narrowing rather than a repair: the two states anybody could
+    confuse are pulled further apart, onto blue and orange, which survive
+    every common deficiency.
   */
   [data-presentation="rich"][data-colour="safe"] {
     --done: #1d4ed8;
@@ -1644,6 +1928,19 @@
       --going: #bfdbfe;
       --stopped: #fdba74;
     }
+  }
+
+  /* A mode that throws colours away keeps its own, with every boundary drawn
+     rather than tinted. */
+  @media (forced-colors: active) {
+    [data-presentation="rich"] header { background: Canvas; backdrop-filter: none; }
+    [data-presentation="rich"] .card,
+    [data-presentation="rich"] .total,
+    [data-presentation="rich"] .views,
+    [data-presentation="rich"] .roster .chip { border: 1px solid CanvasText; }
+    [data-presentation="rich"] .card::after,
+    [data-presentation="rich"] .total::before { display: none; }
+    [data-presentation="rich"] .badges .state { border: 1px solid CanvasText; }
   }
 
   /* A person who asked their machine for less movement gets none. */
