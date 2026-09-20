@@ -30,9 +30,34 @@ public sealed class DaemonContractTests
     /// succeed there. What is under test is the daemon reading the file and
     /// working out what is due, and the file is the contract between them.
     /// </remarks>
+    /// <summary>Where this run keeps its state, according to the run itself.</summary>
+    /// <remarks>
+    /// Asked rather than worked out here. This used to build
+    /// <c>&lt;home&gt;/Local/loadout</c>, which is the Windows layout and only
+    /// the Windows layout: on Linux and macOS state sits under XDG_DATA_HOME,
+    /// so every schedule these tests wrote landed where nothing would read it
+    /// and the daemon saw none at all.
+    ///
+    /// One test failed on that, the first time the branch was ever run on
+    /// Linux. The other asserts that nothing is due and passed - for entirely
+    /// the wrong reason, which is the worse of the two outcomes and the one
+    /// that would have gone on hiding this.
+    /// </remarks>
+    private static async Task<string> StateAsync(LoadoutProcess loadout)
+    {
+        var doctor = await loadout.RunAsync("doctor", "--json");
+
+        return doctor.Json()
+            .GetProperty("checks")
+            .EnumerateArray()
+            .First(check => check.GetProperty("name").GetString() == "State")
+            .GetProperty("detail")
+            .GetString()!;
+    }
+
     private static async Task ScheduleAsync(LoadoutProcess loadout, string body)
     {
-        var state = Path.Combine(loadout.Home, "Local", "loadout", "teams");
+        var state = Path.Combine(await StateAsync(loadout), "teams");
 
         Directory.CreateDirectory(state);
 
