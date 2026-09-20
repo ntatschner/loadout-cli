@@ -560,7 +560,14 @@
        with the art: a square drawn round a character is a box, not a person. */
     width: 3rem;
     height: 5rem;
-    border-color: transparent;
+
+    /* Gone, not just made invisible. It used to be `border-color: transparent`,
+       which leaves the border there: with content-box sizing that is a pixel
+       on every side, so every sprite came out two pixels wider and two taller
+       than the room says a person is, and stood a pixel below the coordinate
+       it was anchored to. Small, and in every room, and enough to put everyone
+       slightly out of register with the furniture drawn in front of them. */
+    border: 0;
     background-repeat: no-repeat;
     background-position: center bottom;
     background-size: contain;
