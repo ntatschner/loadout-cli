@@ -424,6 +424,26 @@ them. This is the limit of y-sorting that every engine shares: it orders whole
 objects, and it cannot put an object's near half in front of somebody and its
 far half behind.
 
+**A thing only goes in front if it is in front of everybody it touches.** One
+static layer cannot be in front of one person and behind another, and some of
+these rooms have desk rows closer together than a person is tall. A chair at
+the near row is genuinely in front of whoever sits in it and genuinely behind
+whoever sits at the row above; kept on the nearer-base test alone, it covered
+that second person completely. Check each candidate against every person it
+overlaps and drop it if it should be behind any of them - but not against the
+person sitting in it, because a chair's castors can fall a little above its own
+desk's coordinate, and comparing a chair with its own occupant throws every
+chair in the room away.
+
+**And a desk where nobody can be seen is not a desk.** After the layer is
+built, measure how much of the person at each desk it covers. Half of somebody
+hidden is a person sitting at a desk; nearly all of them is an agent that has
+simply disappeared from the room, which is worse than the legs-across-the-seat
+this layer exists to fix. Drop those desks and build the layer again, because
+the layer is built from where people are. Three newsroom desks went that way:
+its two front rows are five and a half percent apart and its people are nearly
+eight, so the near row's chairs covered the far row's people entirely.
+
 That is also why the chair still needs its own stencil in two of these rooms.
 The chair touches the desk in the picture, so the two flood as one object whose
 crown belongs to the desk, and the rule above drops it. The front layer is the
