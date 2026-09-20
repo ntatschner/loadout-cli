@@ -1209,6 +1209,62 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         public string? Model { get; init; }
     }
 
+    /// <summary>
+    /// Everything the run is given, with what this machine decided in it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Its own method because three of these are decided here and nowhere
+    /// else - what a team may do outwardly, what a remediator may do with each
+    /// kind of task, and which remedies have been agreed to - and two of them
+    /// were computed and then dropped on the floor. The ceiling was worked out
+    /// and checked and never passed, so an autonomous team got no outward
+    /// action however this machine was configured; and `team remedy trust`
+    /// wrote to a file no run ever read, so a trusted remedy was held for a
+    /// person anyway.
+    /// </para>
+    /// <para>
+    /// Neither showed. A missing optional argument is not a compile error, and
+    /// the safe direction the runner takes when it is told nothing - grant
+    /// nothing - is indistinguishable from a machine that allows nothing.
+    /// </para>
+    /// </remarks>
+    internal static TeamRunRequest Requesting(
+        string projectHandle,
+        TeamDefinition team,
+        SpecialistCatalogue specialists,
+        Settings settings,
+        string autonomy,
+        TeamCeiling.Decision ceiling,
+        Loadout.Models.Configuration.MachineConfig? machine)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(ceiling);
+
+        return new TeamRunRequest(
+            projectHandle,
+            team,
+            specialists,
+            settings.Goal,
+            autonomy,
+            settings.DryRun,
+            settings.Agent,
+            settings.Rounds,
+            settings.Offline,
+            settings.NoSync,
+            settings.Model,
+
+            // What this machine let the team keep of what it asked for. A run
+            // does not work this out for itself.
+            OutwardAllowed: ceiling.Allowed,
+
+            Remediation: machine?.Teams.Remediation,
+
+            // Never read from the team's directory, which its own nodes write
+            // in. Trust lives on this machine or it is not trust.
+            TrustedRemedies: machine?.Teams.TrustedRemedies);
+    }
+
     /// <inheritdoc />
     protected override async Task<int> ExecuteAsync(
         CommandContext context,
@@ -1279,24 +1335,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             return output.Fail(TeamCeiling.Explain(team.Name, ceiling), ExitCode.PolicyViolation);
         }
 
-        var request = new TeamRunRequest(
-            project.Entry.Slug,
-            team,
-            specialists,
-            settings.Goal,
-            autonomy,
-            settings.DryRun,
-            settings.Agent,
-            settings.Rounds,
-            settings.Offline,
-            settings.NoSync,
-            settings.Model,
-
-            // Decided here and handed over already decided, the same as the
-            // outward list: what this machine allows is not something a run
-            // works out for itself, and a caller that forgets to pass it grants
-            // nothing rather than everything.
-            Remediation: machine.Value?.Teams.Remediation);
+        var request = Requesting(
+            project.Entry.Slug, team, specialists, settings, autonomy, ceiling, machine.Value);
 
         // Where the run's questions go. A terminal answers its own; a run with
         // nobody at one sends them to the dashboard, if a daemon is serving it.
