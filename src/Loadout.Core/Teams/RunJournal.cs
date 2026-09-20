@@ -58,6 +58,7 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 /// <param name="Node">The node, as the run named it.</param>
 /// <param name="Role">The role it played.</param>
 /// <param name="State">working, done, blocked, failed, needs-decision, or ended.</param>
+/// <param name="Trouble">What the node's process said on the way out, when it left badly.</param>
 /// <param name="Turns">Exchanges with the model, summed across its turns.</param>
 /// <param name="CostUsd">What it spent.</param>
 /// <param name="LastSeen">When it last said anything.</param>
@@ -102,7 +103,8 @@ public sealed record RunNode(
     string? Doing = null,
     string? Said = null,
     string? Model = null,
-    string? Base = null)
+    string? Base = null,
+    string? Trouble = null)
 {
     /// <summary>How long it has been going, or how long it took.</summary>
     public TimeSpan? Took =>
@@ -626,8 +628,45 @@ public sealed class RunJournal : IRunJournal
                     break;
 
                 case "node.ended" when entry.Node is { Length: > 0 } finishedNode:
-                    Set(finishedNode, node => node with { LastSeen = entry.At, Doing = null });
+                {
+                    /*
+                        A node whose process has gone is not working.
+
+                        This used to record only that it had been heard from,
+                        so a node that never reported kept whatever state it
+                        was given when it launched - and a run that failed at
+                        launch showed its lead as "working" for ever, minutes
+                        after the run had finished and the process had exited
+                        one. The state a node reached is the one thing the
+                        summary exists to say, so saying "working" about a
+                        process that is gone is the worst of the answers
+                        available.
+
+                        A node that did report keeps what it reported: done,
+                        blocked, failed and needs-decision all come from the
+                        node's own account, and ending afterwards is ordinary.
+                    */
+                    var exit = entry.Number("exit");
+                    var trouble = entry.Text("stderr");
+
+                    Set(finishedNode, node => node with
+                    {
+                        State = string.Equals(node.State, "working", StringComparison.Ordinal)
+                            ? exit is null or 0 ? "ended" : "failed"
+                            : node.State,
+                        LastSeen = entry.At,
+                        Doing = null,
+
+                        // Only when it went wrong. A node that exits cleanly
+                        // can still have written to stderr, and that is not
+                        // something to put in front of somebody as a fault.
+                        Trouble = exit is not (null or 0) && trouble is { Length: > 0 } said
+                            ? said.Trim()
+                            : node.Trouble,
+                    });
+
                     break;
+                }
 
                 case "merge.conflicted":
                     conflicts++;

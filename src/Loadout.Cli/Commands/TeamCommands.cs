@@ -493,6 +493,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     node.Denials,
                     node.Doing,
                     node.Said,
+                    node.Trouble,
                     startedAt = node.Started,
                     tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
                     lastSeen = node.LastSeen,
@@ -580,7 +581,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         {
             output.WriteLine(
                 $"  {Markup.Escape(node.Node),-16} {Markup.Escape(node.Role),-22} "
-                + $"{State(node.State),-18} [dim]{node.Turns,3} exchange(s)  ${node.CostUsd,6:0.00}[/]"
+                + $"{State(node.State)} [dim]{node.Turns,3} exchange(s)  ${node.CostUsd,6:0.00}[/]"
                 + (node.Took is { } took ? $"  [dim]{Elapsed(took)}[/]" : string.Empty)
                 + (node.Denials > 0 ? $"  [yellow]{node.Denials} denial(s)[/]" : string.Empty));
 
@@ -596,6 +597,15 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             if (node.Said is { Length: > 0 } said)
             {
                 output.WriteLine($"  {string.Empty,-16} [dim]says: {Markup.Escape(said)}[/]");
+            }
+
+            // What its process said on the way out. Without this a run that
+            // failed at launch showed a node, a state and nothing else, and
+            // the one line explaining the whole run - a rejected schema, a
+            // missing binary - sat in the journal for somebody to find.
+            if (node.Trouble is { Length: > 0 } trouble)
+            {
+                output.WriteLine($"  {string.Empty,-16} [red]{Markup.Escape(Short(trouble))}[/]");
             }
 
             if (node.Branch is { Length: > 0 } branch)
@@ -714,15 +724,35 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     private static string Short(string text) =>
         text.Length <= 72 ? text : text[..69] + "...";
 
-    private static string State(string state) => state switch
+    /// <summary>
+    /// A node's state, coloured, and padded to a column.
+    /// </summary>
+    /// <remarks>
+    /// The padding is applied to the word and the colour wrapped round it
+    /// afterwards, rather than the other way about. Padding the marked-up
+    /// string counts the tags: "[red]failed[/]" is eighteen characters of
+    /// which six are the word, so a column of states lined up only for
+    /// whichever ones happened to carry the same length of markup.
+    /// </remarks>
+    private static string State(string state)
     {
-        "working" => "[yellow]working[/]",
-        "done" => "[green]done[/]",
-        "failed" => "[red]failed[/]",
-        "blocked" => "[yellow]blocked[/]",
-        "needs-decision" => "[yellow]needs a decision[/]",
-        _ => Markup.Escape(state),
-    };
+        var word = state switch
+        {
+            "needs-decision" => "needs a decision",
+            _ => state,
+        };
+
+        var padded = Markup.Escape(word).PadRight(17);
+
+        return state switch
+        {
+            "working" => $"[yellow]{padded}[/]",
+            "done" => $"[green]{padded}[/]",
+            "failed" => $"[red]{padded}[/]",
+            "blocked" or "needs-decision" => $"[yellow]{padded}[/]",
+            _ => padded,
+        };
+    }
 
     private static string Rounds(RunSummary run) => run.RoundLimit > 0
         ? $"round {run.Rounds} of {run.RoundLimit}"

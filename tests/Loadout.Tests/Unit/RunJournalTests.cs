@@ -58,6 +58,70 @@ public sealed class RunJournalTests
             .Where(e => e is not null)
             .OrderBy(e => e!.At)!]);
 
+    /// <remarks>
+    /// The shape of a run that failed at launch: the lead started, was never
+    /// heard from, and its process exited one with the reason on stderr. Two
+    /// real runs did exactly this, on a report schema the agent refused.
+    /// </remarks>
+    private const string DiedAtLaunch =
+        """{"at":"2026-09-15T22:54:25+00:00","run":"r","node":"lead","kind":"node.ended","data":{"exit":1,"killed":false,"stderr":"Error: --json-schema is not a valid JSON Schema"}}""";
+
+    [Fact]
+    public void A_node_whose_process_has_gone_is_not_still_working()
+    {
+        // It launched, said nothing, and its process exited one. Reporting it
+        // as "working" is the summary saying the opposite of the one thing it
+        // exists to say - and a run that failed in a second showed its lead as
+        // working for as long as anybody cared to look.
+        var run = RunJournal.Fold(Run, "C:/runs/" + Run,
+        [
+            .. new[] { Lines[0], Lines[1], DiedAtLaunch }
+                .Select(RunJournal.Parse)
+                .Where(e => e is not null)
+                .OrderBy(e => e!.At)!,
+        ]);
+
+        var lead = run.Nodes.Should().ContainSingle().Subject;
+
+        lead.State.Should().Be("failed");
+        lead.Trouble.Should().Be("Error: --json-schema is not a valid JSON Schema");
+    }
+
+    [Fact]
+    public void A_node_that_reported_keeps_what_it_reported_when_it_ends()
+    {
+        // done, blocked, failed and needs-decision are the node's own account
+        // of itself. Ending afterwards is ordinary and says nothing new.
+        var run = Fold(Merge, Finished);
+
+        run.Nodes.Single(one => one.Node == "implementer/1").State.Should().Be("done");
+    }
+
+    [Fact]
+    public void A_clean_exit_says_ended_rather_than_failed_and_carries_no_fault()
+    {
+        var run = RunJournal.Fold(Run, "C:/runs/" + Run,
+        [
+            .. new[]
+                {
+                    Lines[0],
+                    Lines[1],
+                    """{"at":"2026-09-15T22:54:25+00:00","run":"r","node":"lead","kind":"node.ended","data":{"exit":0,"killed":false,"stderr":"a note to stderr"}}""",
+                }
+                .Select(RunJournal.Parse)
+                .Where(e => e is not null)
+                .OrderBy(e => e!.At)!,
+        ]);
+
+        var lead = run.Nodes.Should().ContainSingle().Subject;
+
+        lead.State.Should().Be("ended");
+
+        // A node can write to stderr and exit cleanly. That is not a fault and
+        // is not worth putting in front of somebody as one.
+        lead.Trouble.Should().BeNull();
+    }
+
     [Fact]
     public void A_finished_run_reads_back_as_what_each_node_did()
     {
