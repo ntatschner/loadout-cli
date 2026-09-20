@@ -255,6 +255,46 @@ public sealed class DashboardServerTests : IAsyncLifetime
             .Should().Be(HttpStatusCode.Forbidden);
     }
 
+    [Theory]
+    [InlineData("/icon")]
+    [InlineData("/icon-needs")]
+    [InlineData("/favicon.ico")]
+    public async Task The_tab_icon_answers_without_the_token(string path)
+    {
+        // A browser asks for a favicon before any script has run, so the
+        // request cannot carry the token and never will. Behind it, the icon
+        // is a 403 on every load and the badge that says a run needs somebody
+        // never appears - which is what used to happen.
+        var answer = await GetAsync(path, withToken: false);
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+        answer.Content.Headers.ContentType!.MediaType.Should().Be("image/svg+xml");
+
+        var drawn = await answer.Content.ReadAsStringAsync();
+
+        drawn.Should().StartWith("<svg");
+
+        // Two icons, not one with a count on it: a browser holds on to a
+        // favicon, and a different address is what makes it fetch again.
+        drawn.Should().Contain(path == "/icon-needs" ? "circle" : "rect x=");
+    }
+
+    [Fact]
+    public async Task The_tab_icon_says_nothing_about_the_runs()
+    {
+        // It is answered without the token, so it must stay two coloured
+        // rectangles. Whichever one is showing is the page's decision; asking
+        // for either tells the asker nothing it did not already choose.
+        foreach (var path in new[] { "/icon", "/icon-needs" })
+        {
+            var drawn = await (await GetAsync(path, withToken: false))
+                .Content.ReadAsStringAsync();
+
+            drawn.Length.Should().BeLessThan(256);
+            drawn.Should().NotContain("run");
+        }
+    }
+
     [Fact]
     public async Task The_page_may_load_images_from_here_and_nowhere_else()
     {

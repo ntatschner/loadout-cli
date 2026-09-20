@@ -677,6 +677,30 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        /*
+            The tab's own icon, ahead of the token.
+
+            A browser asks for a favicon before any script has run, so the
+            request can never carry the token - which is why every load logged
+            a 403 for /favicon.ico, and why the tab badge that says a run needs
+            somebody has never once appeared. The page drew the icon itself as
+            a data: URI, and its own content security policy forbids those.
+
+            There is nothing here to keep behind a token. It is two coloured
+            rectangles, the same bytes for anybody who asks. Which of the two
+            is showing is the page's decision, not this server's, so asking for
+            either one tells the asker nothing it did not already choose.
+        */
+        if (path is "/icon" or "/icon-needs" or "/favicon.ico")
+        {
+            await WriteAsync(context, 200, "image/svg+xml; charset=utf-8",
+                string.Equals(path, "/icon-needs", StringComparison.Ordinal)
+                    ? NeedsSomebodyIcon
+                    : IdleIcon).ConfigureAwait(false);
+
+            return;
+        }
+
         if (!Allowed(request))
         {
             // Said plainly rather than as a puzzle. Whoever sees this is
@@ -1511,6 +1535,18 @@ public sealed class DashboardServer : IDisposable
         await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
         await response.OutputStream.FlushAsync().ConfigureAwait(false);
     }
+
+    /// <summary>The tab icon while nothing is waiting on anybody.</summary>
+    private const string IdleIcon =
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
+        + "<rect width='16' height='16' rx='3' fill='#0b4f9e'/>"
+        + "<rect x='4' y='7' width='8' height='2' rx='1' fill='#fff'/></svg>";
+
+    /// <summary>And while a run is stopped on a question somebody has to answer.</summary>
+    private const string NeedsSomebodyIcon =
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
+        + "<rect width='16' height='16' rx='3' fill='#7a3b00'/>"
+        + "<circle cx='8' cy='8' r='3' fill='#fff'/></svg>";
 
     private static async Task WriteAsync(HttpListenerContext context, int status, string type, string body)
     {

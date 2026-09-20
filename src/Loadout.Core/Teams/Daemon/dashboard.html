@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Loadout teams</title>
+<!-- Named before any script runs, so the browser never falls back to asking
+     for /favicon.ico and being turned away. -->
+<link rel="icon" href="/icon">
 <style>
   /*
     Colour is never the only signal here: every state is a word as well. The
@@ -1540,16 +1543,24 @@
       document.head.appendChild(link);
     }
 
-    // Drawn rather than fetched, so the page still fetches nothing.
-    var svg =
-      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>" +
-      "<rect width='16' height='16' rx='3' fill='" + (count > 0 ? "#7a3b00" : "#0b4f9e") + "'/>" +
-      (count > 0
-        ? "<circle cx='8' cy='8' r='3' fill='#fff'/>"
-        : "<rect x='4' y='7' width='8' height='2' rx='1' fill='#fff'/>") +
-      "</svg>";
+    /*
+      Two addresses rather than one drawing.
 
-    link.href = "data:image/svg+xml," + encodeURIComponent(svg);
+      This used to draw the icon here and hand it over as a data: URI, on the
+      grounds that the page then fetched nothing. The page's own content
+      security policy says `img-src 'self'`, which forbids exactly that, so the
+      icon was blocked on every load and this badge - whose whole point is a
+      tab buried behind thirty others - never appeared once. The browser then
+      asked for /favicon.ico, which answered 403, and that was the second error
+      in the console.
+
+      Two addresses rather than one carrying the count, because a browser holds
+      on to a favicon hard: changing which address is asked for is what makes
+      it fetch again.
+    */
+    var wanted = count > 0 ? "/icon-needs" : "/icon";
+
+    if (link.getAttribute("href") !== wanted) { link.href = wanted; }
   }
 
   function state(run) {
