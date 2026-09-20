@@ -131,6 +131,48 @@ public sealed class PresentationTests
     }
 
     [Fact]
+    public void The_look_this_browser_chose_is_on_the_element_before_a_rule_is_read()
+    {
+        // The server writes which page this is; it cannot know which theme
+        // somebody picked here. That is read from storage by a script at the
+        // top of the document, and it has to be at the top: a page that read
+        // it after the first paint would draw itself in one theme and correct
+        // itself in another.
+        var page = DashboardServer.Page();
+
+        var boot = page.IndexOf("loadout.look", StringComparison.Ordinal);
+        var body = page.IndexOf("<body", StringComparison.Ordinal);
+
+        boot.Should().BeGreaterThan(0, "the page reads the kept look");
+        boot.Should().BeLessThan(body, "and reads it before anything is drawn");
+
+        // Every theme the settings page offers has to exist as a rule, or
+        // choosing it changes an attribute and nothing else.
+        foreach (var theme in new[] { "paper", "slate", "oxblood", "contrast" })
+        {
+            page.Should().Contain($"[data-theme=\"{theme}\"]", $"{theme} is offered");
+        }
+
+        foreach (var accent in new[] { "ink", "oxblood", "forest", "slate", "plum", "rust" })
+        {
+            page.Should().Contain($"[data-accent=\"{accent}\"]", $"{accent} is offered");
+        }
+    }
+
+    [Fact]
+    public void Settings_is_a_destination_with_a_page_of_its_own()
+    {
+        // A dialog would be easier and is the wrong shape: this is a page with
+        // headings and groups, which is a thing somebody can read in order and
+        // leave without losing where they were.
+        var page = DashboardServer.Page();
+
+        page.Should().Contain("id=\"view-settings\"", "it is reachable")
+            .And.Contain("id=\"settings\"", "and it is somewhere")
+            .And.Contain("function drawSettings(", "and something draws it");
+    }
+
+    [Fact]
     public void A_typed_view_beats_the_profile_for_one_run()
     {
         var server = new DashboardServer(new RunJournal(new StubPlatformPaths()));

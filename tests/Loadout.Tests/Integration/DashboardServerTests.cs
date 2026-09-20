@@ -963,7 +963,9 @@ public sealed class DashboardServerTests : IAsyncLifetime
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        text.Should().Contain("<nav class=\"views\" aria-label=\"How to look at them\">");
+        // "Where to go" rather than "How to look at them": six of these are
+        // ways of looking at the runs, and settings is not one of them.
+        text.Should().Contain("<nav class=\"views\" aria-label=\"Where to go\">");
 
         // Four read the runs, one reads what has not become one yet, and one
         // is the output of whatever is running.
@@ -977,10 +979,17 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("<div class=\"board\" id=\"board\" hidden></div>");
         text.Should().Contain("<div class=\"terminal\" id=\"terminal\" hidden></div>");
 
+        // A destination, not a way of looking at runs, and last in the drawer
+        // for the same reason.
+        text.Should().Contain("id=\"view-settings\"");
+
         // One of them is on and the rest are not. A group where every button
-        // claims to be pressed announces as seven pressed buttons.
+        // claims to be pressed announces as eight pressed buttons.
+        //
+        // Eight rather than seven: the button that switches between the two
+        // presentations carries aria-pressed too, and starts off.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
-            .Should().HaveCount(6);
+            .Should().HaveCount(8);
     }
 
     [Fact]

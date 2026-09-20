@@ -375,15 +375,79 @@ node's handle, or its seat in the room, opens the run *and* selects that node's
 own stream — which previously meant reading the handle, remembering it, opening
 the run, and finding it again in a list of buttons.
 
-The rich page is designed on a scale rather than per rule: three layered
-surfaces (page, well, card), a six-step spacing scale, one accent, and the
-system's variable display cuts where a machine has them. Nothing is fetched -
-no webfont, no stylesheet, no image - because a dashboard that pulled a
-typeface from the internet would be a dashboard that does not work on the
-machine it is most wanted on, which is one with no network.
+### The stationery of an office that does not exist
+
+The rich page is deliberately not the house style of every other agent
+dashboard - the dark slab, the blue accent, the soup of rounded pills. Loadout
+already has a language: a run is a room, a node is somebody at a desk, and the
+rooms are called things like The Broom Cupboard (Keycard Only). So the page is
+the stationery that office would use.
+
+Manila and paper. An index card per run, with a ruled line under its name. The
+state as a rubber stamp - uppercase, letterspaced, in a double rule, a degree
+and a half off square. A desk plate per node with the initials on it. The
+totals across the top as one ruled ledger rather than four cards. Dividers down
+the side of the drawer for the destinations, and the one you are in reaches
+across the rule onto the sheet it opens. Serif for anything read, typewriter
+for anything you would type - an identifier, a figure, a label.
+
+Nothing is fetched: no webfont, no stylesheet, no image. The paper grain is two
+gradients at two per cent. A dashboard that pulled a typeface from the internet
+would be a dashboard that does not work on the machine it is most wanted on,
+which is one with no network.
 
 The same tokens carry every screen, not only the list: changing view used to go
 from a designed page to the one underneath it.
+
+### Themes
+
+Four, each with a light and a dark, chosen on the settings page and remembered
+in this browser:
+
+| Theme | What it is |
+| --- | --- |
+| **Paper** | Manila and ink. The default. |
+| **Slate** | Cooler, and quieter about it. |
+| **Oxblood** | Warm, with a red ledger to it. |
+| **High contrast** | Black and white, and every rule drawn; nothing suggested by a shadow. |
+
+Light or dark is its own choice - follow the system, or force one - because a
+theme is not a mode. Forcing light on a dark machine used to give light
+surfaces and the dark state colours together, and the figure saying how many
+runs were going measured at 1.7:1; the state colours follow the chosen scheme
+now rather than the machine's.
+
+The accent is a set of six rather than a colour wheel: ink, oxblood, forest,
+slate, plum, rust. Every one was measured against both of its theme's surfaces,
+and a free picker cannot promise that. Density is comfortable or compact, and
+moves the spacing scale rather than the type size.
+
+All of it lives in this browser and nowhere else. A theme is a thing about this
+screen in this room; the settings that travel are in `config.yaml`, and nothing
+on the settings page writes there.
+
+### Switching page, and being told
+
+A **Plain view** button sits in the letterhead on both pages, in every view,
+early in the tab order and never behind a menu - the page somebody is reading
+is the thing they most need to be able to change about it. Pressing it writes
+the choice down and asks for the page again rather than swapping it in place:
+the presentation is settled before the first paint precisely so that nothing
+draws itself one way and corrects itself, and honouring that means re-entering
+the page rather than mutating it half-way. The settings page has the same
+choice in full, with **As my profile says** as the default.
+
+The change is announced into the live region the page has carried since its
+first commit, so a screen reader that is running reads it.
+
+**Nothing detects a screen reader, because nothing can.** There is no API for
+it; every heuristic that claims to is wrong often; and the ones that work at
+all work by fingerprinting somebody because of a disability. Announcing into a
+live region gets the same result and asks nobody anything.
+
+Movement can be turned down on the settings page and never up. Your machine is
+asked separately through `prefers-reduced-motion`, and the page takes the
+quieter of the two answers.
 
 ### What was and was not checked
 
@@ -402,7 +466,7 @@ Not checked: **no axe-core run over the rich page, and no screen reader has been
 near it.** The [accessibility statement](accessibility.md) says which parts of
 Loadout have been verified and by what.
 
-### Six screens, and a board to put them on
+### Six screens, a board to put them on, and somewhere to set things
 
 **List**, **Office**, **Graph**, **Timeline**, **Waiting** and **Terminal**
 across the top of the runs pane. The first four show the same state and differ
