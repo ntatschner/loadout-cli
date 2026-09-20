@@ -963,7 +963,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        text.Should().Contain("<div class=\"views\" role=\"group\" aria-label=\"How to look at them\">");
+        text.Should().Contain("<nav class=\"views\" aria-label=\"How to look at them\">");
 
         // Four read the runs, one reads what has not become one yet, and one
         // is the output of whatever is running.
@@ -981,6 +981,28 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // claims to be pressed announces as seven pressed buttons.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
             .Should().HaveCount(6);
+    }
+
+    [Fact]
+    public async Task The_page_says_which_part_of_it_is_which()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // Three landmarks, so somebody reading with a screen reader can go
+        // straight to a part of the page instead of tabbing from the top.
+        // This had one - main - with the title, the status, the preferences
+        // and the seven views all inside it and nothing to aim at.
+        text.Should().Contain("<header>");
+        text.Should().Contain("<nav class=\"views\"");
+        text.Should().Contain("<main>");
+
+        // And the switcher is navigation rather than a group of buttons that
+        // happen to be adjacent, which is what it was.
+        text.Should().NotContain("<div class=\"views\"");
+
+        // The skip link still comes first, before any of them.
+        text.IndexOf("class=\"skip\"", StringComparison.Ordinal)
+            .Should().BeLessThan(text.IndexOf("<header>", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -46,7 +46,7 @@
     font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
 
-  main { max-width: 90rem; margin: 0 auto; }
+  header, main { max-width: 90rem; margin: 0 auto; }
 
   /*
     Mission control: what needs you, what is running, and what you are looking
@@ -180,6 +180,11 @@
      on their own padding, and the box for steering a node came out at
      twenty-one, which axe caught and nobody would have. */
   .controls input, .controls button, .controls textarea { min-height: 2.5rem; }
+
+  /* And a select, wherever it is. The board's office picker is built in script
+     rather than written in the page, so it answered to none of the rules above
+     and came out nineteen pixels high. */
+  select { min-height: 2.5rem; }
   .said { flex-basis: 100%; }
   #said { font-weight: 700; margin: 0.25rem 0 0; }
 
@@ -263,7 +268,10 @@
     padding: 0;
     display: grid;
     gap: 1rem;
-    grid-template-columns: repeat(auto-fill, minmax(32rem, 1fr));
+    /* A room wants thirty-two rem to be worth looking at, but never more than
+       there is: on a narrow screen a fixed minimum is wider than the window,
+       and the whole page scrolls sideways to accommodate one column. */
+    grid-template-columns: repeat(auto-fill, minmax(min(32rem, 100%), 1fr));
   }
 
   .room {
@@ -768,13 +776,25 @@
 
   .when li { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0; }
   .when .name { flex: 0 0 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .when .track { flex: 1 1 auto; position: relative; height: 1.6rem; }
+  .when .track { flex: 1 1 auto; position: relative; height: 2.25rem; }
   .when .spent { flex: 0 0 4rem; text-align: right; font-variant-numeric: tabular-nums; }
 
+  /*
+    Tall enough to hit. These were sixteen pixels high and as little as three
+    wide, which is a target nobody with an unsteady hand is going to catch -
+    and there are twelve of them on a day with twelve runs.
+
+    The height is free to change, because it says nothing: only the width
+    means anything here, and it means how long the run took. So the height
+    goes to twenty-four and the width is left alone, because widening a short
+    run to make it easier to click would be the bar telling a lie about the
+    thing it exists to show. A run too brief to have a wide bar is reachable
+    by its own button in the list, which is the same action by another route.
+  */
   .when .span {
     position: absolute;
     top: 0.3rem;
-    height: 1rem;
+    height: 1.5rem;
     min-width: 3px;
     border: 1px solid var(--line);
     border-radius: 0.15rem;
@@ -1012,7 +1032,13 @@
 <body>
 <a class="skip" href="#runs">Skip to the runs</a>
 
-<main>
+<!--
+  What the page is, how it is doing, and how you would like to be told - as
+  opposed to what it is showing you, which is main's job. Everything here used
+  to be inside main, so this page had exactly one landmark and no way to reach
+  any part of it except by tabbing from the top.
+-->
+<header>
   <h1>Loadout teams</h1>
 
   <!--
@@ -1026,6 +1052,9 @@
     <button type="button" id="notify">Tell me when a run needs me</button>
     <label><input type="checkbox" id="sound"> Sound</label>
   </div>
+</header>
+
+<main>
 
   <div class="panes">
 
@@ -1078,7 +1107,12 @@
         <button type="button" id="start">Start it</button>
       </div>
     </details>
-    <div class="views" role="group" aria-label="How to look at them">
+    <!-- A navigation landmark, not a group of buttons that happen to be next
+         to each other. These seven are the whole of this page's navigation,
+         and without this there was nothing for a screen reader to jump to:
+         one banner, one main, and no way to reach the view switcher except by
+         tabbing past everything above it. -->
+    <nav class="views" aria-label="How to look at them">
       <button type="button" id="view-list" aria-pressed="true">List</button>
       <button type="button" id="view-office" aria-pressed="false">Office</button>
       <button type="button" id="view-graph" aria-pressed="false">Graph</button>
@@ -1086,7 +1120,7 @@
       <button type="button" id="view-waiting" aria-pressed="false">Waiting</button>
       <button type="button" id="view-terminal" aria-pressed="false">Terminal</button>
       <button type="button" id="view-board" aria-pressed="false">Board</button>
-    </div>
+    </nav>
 
     <details class="adding" id="adding" hidden>
       <summary>Which screens are on the board</summary>
@@ -2035,8 +2069,15 @@
       document.title = (titles[solo] || solo) + " - Loadout teams";
 
       var main = document.querySelector("main");
+      var banner = document.querySelector("header");
 
       Array.from(main.children).forEach(function (child) { child.hidden = true; });
+
+      // The title and the preferences live in the banner now rather than in
+      // main, so hiding main's children no longer takes them with it - and a
+      // screen meant to fill a wall display does not want a row of buttons
+      // above it.
+      if (banner) { banner.hidden = true; }
 
       var box = document.getElementById(solo);
 
