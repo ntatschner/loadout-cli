@@ -153,14 +153,37 @@ public sealed class OfficeArtTests : IDisposable
 
         OfficeArt.Chosen(paths, "open-office").Set.Should().Be("open-office");
 
-        // A misspelt name comes back as nothing at all. An office drawn as
-        // squares is what an unconfigured Loadout looks like, and it should be
-        // what a misspelt one looks like too - rather than a page that serves
-        // a 404 for every desk on it.
-        OfficeArt.Chosen(paths, "open-offcie").Should().Be((null, string.Empty));
-        OfficeArt.Chosen(paths, "../elsewhere").Should().Be((null, string.Empty));
-        OfficeArt.Chosen(paths, "").Should().Be((null, string.Empty));
-        OfficeArt.Chosen(paths, null).Should().Be((null, string.Empty));
+        // A misspelt name comes back as no set. An office drawn as squares is
+        // what an unconfigured Loadout looks like, and it should be what a
+        // misspelt one looks like too - rather than a page that serves a 404
+        // for every desk on it.
+        OfficeArt.Chosen(paths, "open-offcie").Set.Should().BeEmpty();
+        OfficeArt.Chosen(paths, "../elsewhere").Set.Should().BeEmpty();
+        OfficeArt.Chosen(paths, "").Set.Should().BeEmpty();
+        OfficeArt.Chosen(paths, null).Set.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("open-offcie")]
+    [InlineData("../elsewhere")]
+    public void Not_choosing_a_set_does_not_hide_the_ones_that_are_there(string? asked)
+    {
+        Set("open-office", "lead.png");
+        Set("newsroom", "lead.png");
+
+        var paths = new StubPaths(_root);
+        var chosen = OfficeArt.Chosen(paths, asked);
+
+        // Which set is the default has nothing to do with where the sets live,
+        // and both callers hand this root to the dashboard as "where the art
+        // is". When it came back null for an empty or misspelt name, a machine
+        // with every office installed served none of them - not the configured
+        // one, any of them - and the page could not even list them to offer a
+        // choice.
+        chosen.Root.Should().Be(Office);
+        OfficeArt.Sets(chosen.Root).Should().Equal("newsroom", "open-office");
     }
 
     /// <summary>A set with a room description in it.</summary>

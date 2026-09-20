@@ -66,29 +66,41 @@ public static class OfficeArt
     }
 
     /// <summary>
-    /// The set to draw with and where it lives, or nothing to draw with.
+    /// Where the sets live, and which one of them was asked for - or nothing,
+    /// where what was asked for is not there.
     /// </summary>
     /// <remarks>
-    /// A configured name that no directory answers to comes back as nothing,
-    /// rather than as a set that serves 404s for every piece. The difference
+    /// <para>
+    /// A configured name that no directory answers to comes back as no set,
+    /// rather than as one that serves 404s for every piece. The difference
     /// matters to whoever is reading the page: an office drawn as squares is
     /// what an unconfigured Loadout looks like, and it should also be what a
     /// misspelt one looks like, rather than something subtly broken.
+    /// </para>
+    /// <para>
+    /// The root comes back either way, and that is the point. It used to be
+    /// null whenever the set was empty, and both callers handed it straight to
+    /// the dashboard as "where the art is" - so a machine with seven offices
+    /// installed and no <c>team-office-set</c> configured served no offices at
+    /// all. Not the configured one: any of them. The page could not even list
+    /// the sets to offer a choice, because the list was behind the same null.
+    /// Which set is the default has nothing to do with where the sets live.
+    /// </para>
     /// </remarks>
-    public static (string? Root, string Set) Chosen(IPlatformPaths paths, string? set)
+    public static (string Root, string Set) Chosen(IPlatformPaths paths, string? set)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
+        var root = Root(paths);
+
         if (set is not { Length: > 0 } wanted || !Names(wanted))
         {
-            return (null, string.Empty);
+            return (root, string.Empty);
         }
-
-        var root = Root(paths);
 
         return Directory.Exists(Path.Combine(root, wanted))
             ? (root, wanted)
-            : (null, string.Empty);
+            : (root, string.Empty);
     }
 
     /// <summary>
