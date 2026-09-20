@@ -78,6 +78,7 @@ public sealed class TeamRemediesCommand : AsyncCommand<RemedySettings>
 
         var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
         var rules = machine.Value?.Teams.Remediation ?? [];
+        var trusted = machine.Value?.Teams.TrustedRemedies;
 
         if (output.IsJson)
         {
@@ -90,9 +91,11 @@ public sealed class TeamRemediesCommand : AsyncCommand<RemedySettings>
                     one.Name,
                     one.Kind,
                     one.What,
-                    trusted = one.IsTrusted,
+                    trusted = RemedyCeiling.For(trusted, settings.Team).Any(agreed =>
+                        string.Equals(agreed.Remedy, one.Name, StringComparison.OrdinalIgnoreCase)),
+                    claimsTrust = one.ClaimsTrust,
                     rule = Rule(rules, one.Kind),
-                    ruling = Ruling(_book, settings.Team, one, rules).Ruling.ToString().ToLowerInvariant(),
+                    ruling = Ruling(_book, settings.Team, one, rules, trusted).Ruling.ToString().ToLowerInvariant(),
                     one.Revision,
                 }),
             });
@@ -116,7 +119,7 @@ public sealed class TeamRemediesCommand : AsyncCommand<RemedySettings>
 
         foreach (var remedy in read.Value!)
         {
-            var decided = Ruling(_book, settings.Team, remedy, rules);
+            var decided = Ruling(_book, settings.Team, remedy, rules, trusted);
 
             output.WriteLine(
                 $"  {Markup.Escape(remedy.Name),-28} {Markup.Escape(Kind(remedy)),-14} "
@@ -138,11 +141,16 @@ public sealed class TeamRemediesCommand : AsyncCommand<RemedySettings>
         IRemedyBook book,
         string team,
         Remedy remedy,
-        IReadOnlyDictionary<string, string> rules)
+        IReadOnlyDictionary<string, string> rules,
+        IReadOnlyList<Loadout.Models.Configuration.TrustedRemedy>? trusted)
     {
         var script = book.ScriptOf(team, remedy);
 
-        return RemedyCeiling.Decide(remedy, Rule(rules, remedy.Kind), script.Succeeded ? script.Value : null);
+        return RemedyCeiling.Decide(
+            remedy,
+            Rule(rules, remedy.Kind),
+            script.Succeeded ? script.Value : null,
+            RemedyCeiling.For(trusted, team));
     }
 
     /// <summary>The word for a ruling, padded then coloured - never the other way about.</summary>
@@ -221,7 +229,11 @@ public sealed class TeamRemedyShowCommand : AsyncCommand<TeamRemedyShowCommand.S
         var remedy = found.Value!;
         var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
         var rules = machine.Value?.Teams.Remediation ?? [];
-        var decided = TeamRemediesCommand.Ruling(_book, settings.Team, remedy, rules);
+        var trusted = machine.Value?.Teams.TrustedRemedies;
+        var agreed = RemedyCeiling.For(trusted, settings.Team).FirstOrDefault(one =>
+            string.Equals(one.Remedy, remedy.Name, StringComparison.OrdinalIgnoreCase));
+
+        var decided = TeamRemediesCommand.Ruling(_book, settings.Team, remedy, rules, trusted);
         var script = _book.ScriptOf(settings.Team, remedy);
 
         if (output.IsJson)
@@ -237,9 +249,10 @@ public sealed class TeamRemedyShowCommand : AsyncCommand<TeamRemedyShowCommand.S
                 remedy.RegisteredBy,
                 remedy.RegisteredAt,
                 remedy.Revision,
-                trusted = remedy.IsTrusted,
-                remedy.TrustedBy,
-                remedy.TrustedAt,
+                trusted = agreed is not null,
+                trustedBy = agreed?.By,
+                trustedAt = agreed?.At,
+                claimsTrust = remedy.ClaimsTrust,
                 rule = TeamRemediesCommand.Rule(rules, remedy.Kind),
                 ruling = decided.Ruling.ToString().ToLowerInvariant(),
                 because = decided.Because,
@@ -266,8 +279,17 @@ public sealed class TeamRemedyShowCommand : AsyncCommand<TeamRemedyShowCommand.S
 
         output.WriteBlankLine();
         output.WriteLine(
-            $"  trust      {(remedy.IsTrusted ? "[green]trusted[/]" : "[yellow]untrusted[/]")}"
-            + (remedy.TrustedBy is { Length: > 0 } who ? $" [dim]by {Markup.Escape(who)}[/]" : string.Empty));
+            $"  trust      {(agreed is not null ? "[green]agreed here[/]" : "[yellow]not agreed here[/]")}"
+            + (agreed?.By is { Length: > 0 } who ? $" [dim]by {Markup.Escape(who)}[/]" : string.Empty));
+
+        // A record claiming what this machine never agreed to is worth showing
+        // rather than quietly ignoring. It is either a file somebody copied in
+        // or a node having a go, and both are things to look at.
+        if (remedy.ClaimsTrust && agreed is null)
+        {
+            output.WriteLine(
+                "  [red]its own record claims to be trusted, which decides nothing[/]");
+        }
 
         output.WriteLine($"  this kind  {Markup.Escape(TeamRemediesCommand.Rule(rules, remedy.Kind))}");
         output.WriteLine($"  so         {TeamRemediesCommand.Says(decided.Ruling)}");

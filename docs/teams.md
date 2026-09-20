@@ -291,8 +291,18 @@ proves: Free space before and after, and a build still succeeds afterwards.
 script: clear-build-cache.ps1
 registered_by: 20260920-1200-abcd
 revision: 2
-trust: untrusted
 ```
+
+**Nothing in this file decides anything about trust.** It lives in the team's
+directory, the team's nodes are told where that is and told to put things in
+it, and `role.fixer` has unrestricted `Write`. A record kept here is a record
+an agent can write — so this is what the remedy *is*, and whether it may run is
+decided elsewhere.
+
+That was not the first design. Trust used to be a field in this file, and a
+node could set `trust: trusted`, compute the fingerprint over its own script,
+and Loadout said *runs unasked*. A record that still claims trust is shown for
+what it is rather than quietly ignored.
 
 A record beside the script rather than front matter inside it, because the
 scripts are in whatever language suits the problem and a comment convention
@@ -330,8 +340,22 @@ loadout team remedy trust clear-build-cache --team system-watch
 loadout team remedy trust clear-build-cache --team system-watch --revoke
 ```
 
-`trust` records a **fingerprint of the script as it is now**, and a remedy that
-no longer matches asks again. That matters more than it sounds: the declaration
+This writes to **your machine's own configuration**, not to the remedy's
+record — beside `team-remediation`, behind the same boundary as every other
+decision this machine makes, and nowhere a team's nodes are told to write:
+
+```yaml
+teams:
+  trusted_remedies:
+    - team: system-watch
+      remedy: clear-build-cache
+      fingerprint: 5089960f...
+      by: nigel
+      at: 2026-09-20T19:03:39Z
+```
+
+It records a **fingerprint of the script as it is now**, and a remedy that no
+longer matches asks again. That matters more than it sounds: the declaration
 telling a team to keep improving what it registers is exactly the thing that
 would otherwise carry one script's trust onto another — and the second script is
 the one nobody read.
@@ -387,7 +411,16 @@ so the thing answering its questions reads no files and holds no opinion.
 **What this does not do.** It is a decision record for *registered* remedies,
 not a sandbox. A node whose role allows Bash can still run a script it has just
 written, and nothing here stops it — what stops it is the role's own tool
-policy, which is the boundary that has always done that job. A remedy
+policy, which is the boundary that has always done that job.
+
+Nor is any of this proof against a node with *unrestricted* shell access.
+Trust sits in `machines.yaml`, which is a file on the same machine under the
+same user, and a node that could run arbitrary commands could edit it. Moving
+trust there removes the case that actually existed — a node writing its own
+trust into a directory it was **told to write in** — and leaves trust exactly
+as well protected as every other decision this machine makes. The thing keeping
+a node away from `machines.yaml` is its role's tool policy, and that is the
+same answer as everywhere else here. A remedy
 registered during the run it was written in is not in the policy, and that is
 the right answer rather than a gap: nobody has trusted it, so the most it could
 ever be is *ask*.

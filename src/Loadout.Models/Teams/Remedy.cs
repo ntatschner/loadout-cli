@@ -74,13 +74,23 @@ public sealed class Remedy
     public int Revision { get; set; }
 
     /// <summary>
-    /// Whether a person at this machine has said a remediator may run it:
-    /// <c>untrusted</c> or <c>trusted</c>.
+    /// What the record <em>claims</em> about its own trustworthiness, which
+    /// decides nothing.
     /// </summary>
     /// <remarks>
-    /// Untrusted on arrival and untrusted after every change: a remedy that
-    /// kept its trust through an edit would be a remedy whose trust was granted
-    /// to something else. See <see cref="Fingerprint" />.
+    /// <para>
+    /// This file lives in the team's directory. The nodes are told where that
+    /// is and told to put things in it, so this is a field an agent can write,
+    /// and it used to be where trust was kept. A node with Write could set it
+    /// to trusted, compute a fingerprint over its own script, and the remedy
+    /// ran unasked - which is not a risk, it is a thing that happened in a test
+    /// written to check it.
+    /// </para>
+    /// <para>
+    /// Trust lives in this machine's own configuration now. This is read only
+    /// so that a record claiming something this machine never agreed to can be
+    /// shown for what it is.
+    /// </para>
     /// </remarks>
     public string Trust { get; set; } = Untrusted;
 
@@ -107,8 +117,11 @@ public sealed class Remedy
     /// <summary>Trusted: a remediator may run it where the machine allows the kind.</summary>
     public const string Trusted = "trusted";
 
-    /// <summary>Whether a person has trusted this exact script.</summary>
-    public bool IsTrusted =>
+    /// <summary>
+    /// Whether the record claims to be trusted, which is not the same as being
+    /// trusted and is never treated as if it were.
+    /// </summary>
+    public bool ClaimsTrust =>
         string.Equals(Trust, Trusted, StringComparison.OrdinalIgnoreCase);
 }
 

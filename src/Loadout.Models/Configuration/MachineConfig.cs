@@ -41,6 +41,30 @@ public sealed class MachineConfig
 /// prevents is the same one — a change that reaches your machine because it
 /// reached somebody else's repository.
 /// </remarks>
+/// <summary>One remedy somebody at this machine agreed may run.</summary>
+/// <remarks>
+/// The fingerprint is the point: trust is granted to a script, not to a name,
+/// so a remedy that has been improved since is a remedy nobody has agreed to
+/// yet.
+/// </remarks>
+public sealed class TrustedRemedy
+{
+    /// <summary>The team whose directory it is in.</summary>
+    public string Team { get; set; } = string.Empty;
+
+    /// <summary>The remedy, by name.</summary>
+    public string Remedy { get; set; } = string.Empty;
+
+    /// <summary>The script as it was when it was agreed to.</summary>
+    public string Fingerprint { get; set; } = string.Empty;
+
+    /// <summary>Who said so.</summary>
+    public string By { get; set; } = string.Empty;
+
+    /// <summary>When.</summary>
+    public DateTimeOffset? At { get; set; }
+}
+
 public sealed class MachineTeams
 {
     /// <summary>
@@ -87,6 +111,28 @@ public sealed class MachineTeams
     /// </para>
     /// </remarks>
     public Dictionary<string, string> Remediation { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Remedies somebody at this machine has said may run, each naming the
+    /// exact script they agreed to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here rather than in the team's directory, and that is the whole point.
+    /// The team's directory is written by the team's own nodes - they are told
+    /// where it is and told to put things in it - so a record kept there is a
+    /// record an agent can write. It held the trust, and a node with Write
+    /// could set it: claim trusted, compute the fingerprint over its own
+    /// script, and it ran unasked. That was demonstrated rather than feared.
+    /// </para>
+    /// <para>
+    /// Trust is a decision this machine makes, so it lives where this
+    /// machine's decisions live, behind the same boundary as everything else
+    /// here. What the remedy's own record says about its trustworthiness is
+    /// read as a claim and ignored.
+    /// </para>
+    /// </remarks>
+    public List<TrustedRemedy> TrustedRemedies { get; set; } = [];
 
     /// <summary>
     /// The address the dashboard and its webhook listen on.

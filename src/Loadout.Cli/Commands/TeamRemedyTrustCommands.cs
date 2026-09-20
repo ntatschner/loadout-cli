@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Configuration;
 using Loadout.Core.Teams;
+using Loadout.Models.Configuration;
 using Loadout.Models;
 using Loadout.Models.Teams;
 using Loadout.Tui;
@@ -32,11 +34,16 @@ namespace Loadout.Cli.Commands;
 public sealed class TeamRemedyTrustCommand : AsyncCommand<TeamRemedyTrustCommand.Settings>
 {
     private readonly IRemedyBook _book;
+    private readonly IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
 
-    public TeamRemedyTrustCommand(IRemedyBook book, IAnsiConsole console)
+    public TeamRemedyTrustCommand(
+        IRemedyBook book,
+        IConfigurationService configuration,
+        IAnsiConsole console)
     {
         _book = book;
+        _configuration = configuration;
         _console = console;
     }
 
@@ -47,17 +54,16 @@ public sealed class TeamRemedyTrustCommand : AsyncCommand<TeamRemedyTrustCommand
         public string Remedy { get; init; } = string.Empty;
 
         [CommandOption("--revoke")]
-        [Description("Take the trust back. A remediator asks about it again from now on.")]
+        [Description("Take the agreement back. A remediator asks about it again from now on.")]
         public bool Revoke { get; init; }
 
         [CommandOption("--by <WHO>")]
         [Description("Who is saying so, for the record. Your user name when omitted.")]
         public string By { get; init; } = string.Empty;
-
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -68,82 +74,82 @@ public sealed class TeamRemedyTrustCommand : AsyncCommand<TeamRemedyTrustCommand
 
         if (settings.Team is not { Length: > 0 })
         {
-            return Task.FromResult(output.Fail(
-                "Which team? Name one with --team.", ExitCode.InvalidArguments));
+            return output.Fail("Which team? Name one with --team.", ExitCode.InvalidArguments);
         }
 
         var found = _book.Find(settings.Team, settings.Remedy);
 
         if (found.Failed)
         {
-            return Task.FromResult(output.Fail(found));
+            return output.Fail(found);
         }
 
         var remedy = found.Value!;
 
-        if (settings.Revoke)
+        // This machine's own configuration, which is where a decision this
+        // machine makes belongs. The remedy's record is in the team's
+        // directory, and the team's nodes are told to write there.
+        var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
+
+        if (machine.Failed)
         {
-            return Task.FromResult(Revoke(output, settings, remedy));
+            return output.Fail(machine);
         }
 
-        // Trusting something nobody can read is trusting a name. The script has
-        // to be there and readable before anybody says it may run unattended.
+        var config = machine.Value!;
+        var already = config.Teams.TrustedRemedies.FirstOrDefault(one =>
+            string.Equals(one.Team, settings.Team, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(one.Remedy, remedy.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (settings.Revoke)
+        {
+            if (already is null)
+            {
+                output.WriteLine($"[dim]{Markup.Escape(remedy.Name)} was not agreed to here.[/]");
+
+                return CommandOutput.Success();
+            }
+
+            if (settings.DryRun)
+            {
+                output.WriteLine(
+                    $"[dim]Dry run: nothing was changed.[/] {Markup.Escape(remedy.Name)} would stop being agreed to.");
+
+                return CommandOutput.Success();
+            }
+
+            config.Teams.TrustedRemedies.Remove(already);
+
+            var undone = await _configuration.SaveMachineAsync(config, cancellationToken).ConfigureAwait(false);
+
+            if (undone.Failed)
+            {
+                return output.Fail(undone);
+            }
+
+            output.WriteLine(
+                $"[yellow]{Markup.Escape(remedy.Name)} is no longer agreed to.[/] "
+                + "It is asked about from now on.");
+
+            return CommandOutput.Success();
+        }
+
+        // Agreeing to something nobody can read is agreeing to a name. The
+        // script has to be there and readable before anybody says it may run.
         var script = _book.ScriptOf(settings.Team, remedy);
 
         if (script.Failed)
         {
-            return Task.FromResult(output.Fail(script));
+            return output.Fail(script);
         }
 
         var fingerprint = RemedyCeiling.Fingerprint(script.Value!);
 
-        if (remedy.IsTrusted && string.Equals(remedy.Fingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
-        {
-            output.WriteLine($"[dim]{Markup.Escape(remedy.Name)} is already trusted, and has not changed since.[/]");
-
-            return Task.FromResult(CommandOutput.Success());
-        }
-
-        if (settings.DryRun)
+        if (already is not null
+            && string.Equals(already.Fingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
         {
             output.WriteLine(
-                $"[dim]Dry run: nothing was changed.[/] {Markup.Escape(remedy.Name)} would be trusted"
-                + (remedy.IsTrusted ? " again, at its current script." : "."));
-
-            return Task.FromResult(CommandOutput.Success());
-        }
-
-        remedy.Trust = Remedy.Trusted;
-        remedy.TrustedBy = settings.By is { Length: > 0 } who ? who : Environment.UserName;
-        remedy.TrustedAt = DateTimeOffset.UtcNow;
-        remedy.Fingerprint = fingerprint;
-
-        var saved = _book.Save(settings.Team, remedy);
-
-        if (saved.Failed)
-        {
-            return Task.FromResult(output.Fail(saved));
-        }
-
-        output.WriteLine($"[green]{Markup.Escape(remedy.Name)} is trusted.[/]");
-
-        // What that actually comes to is the other key, and saying "trusted"
-        // without it reads as a grant. It is not one on its own.
-        output.WriteLine(
-            $"[dim]A remediator may run it where this machine allows a trusted "
-            + $"'{Markup.Escape(TeamRemediesCommand.Kind(remedy))}' remedy to run. "
-            + $"Check with: loadout config get team-remediation[/]");
-
-        output.WriteLine("[dim]Changing the script takes this back, and it is asked about again.[/]");
-
-        return Task.FromResult(CommandOutput.Success());
-    }
-
-    private int Revoke(CommandOutput output, Settings settings, Remedy remedy)
-    {
-        if (!remedy.IsTrusted)
-        {
-            output.WriteLine($"[dim]{Markup.Escape(remedy.Name)} was not trusted.[/]");
+                $"[dim]{Markup.Escape(remedy.Name)} is already agreed to, and has not changed since.[/]");
 
             return CommandOutput.Success();
         }
@@ -151,24 +157,53 @@ public sealed class TeamRemedyTrustCommand : AsyncCommand<TeamRemedyTrustCommand
         if (settings.DryRun)
         {
             output.WriteLine(
-                $"[dim]Dry run: nothing was changed.[/] {Markup.Escape(remedy.Name)} would stop being trusted.");
+                $"[dim]Dry run: nothing was changed.[/] {Markup.Escape(remedy.Name)} would be agreed to"
+                + (already is not null ? " again, at its current script." : "."));
 
             return CommandOutput.Success();
         }
 
-        remedy.Trust = Remedy.Untrusted;
-        remedy.TrustedBy = string.Empty;
-        remedy.TrustedAt = null;
-        remedy.Fingerprint = string.Empty;
+        if (already is not null)
+        {
+            config.Teams.TrustedRemedies.Remove(already);
+        }
 
-        var saved = _book.Save(settings.Team, remedy);
+        config.Teams.TrustedRemedies.Add(new TrustedRemedy
+        {
+            Team = settings.Team,
+            Remedy = remedy.Name,
+            Fingerprint = fingerprint,
+            By = settings.By is { Length: > 0 } who ? who : Environment.UserName,
+            At = DateTimeOffset.UtcNow,
+        });
+
+        var saved = await _configuration.SaveMachineAsync(config, cancellationToken).ConfigureAwait(false);
 
         if (saved.Failed)
         {
             return output.Fail(saved);
         }
 
-        output.WriteLine($"[yellow]{Markup.Escape(remedy.Name)} is no longer trusted.[/] It is asked about from now on.");
+        output.WriteLine($"[green]{Markup.Escape(remedy.Name)} is agreed to on this machine.[/]");
+
+        // What that actually comes to is the other key, and saying "agreed"
+        // without it reads as a grant. It is not one on its own.
+        output.WriteLine(
+            "[dim]A remediator may run it where this machine allows a trusted "
+            + $"'{Markup.Escape(TeamRemediesCommand.Kind(remedy))}' remedy to run. "
+            + "Check with: loadout config get team-remediation[/]");
+
+        output.WriteLine("[dim]Changing the script takes this back, and it is asked about again.[/]");
+
+        if (remedy.ClaimsTrust)
+        {
+            // Worth saying. A record that already claimed trust was claiming
+            // something nothing acted on, and somebody agreeing to it now
+            // should know the claim was there.
+            output.WriteLine(
+                "[dim]Its own record already claimed to be trusted. That decides nothing, and "
+                + "is worth knowing about: the record lives where the team's nodes write.[/]");
+        }
 
         return CommandOutput.Success();
     }

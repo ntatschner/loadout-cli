@@ -32,6 +32,10 @@ namespace Loadout.Agents.Teams;
 /// is what a caller that has not decided gets: a team file may only ask, and a
 /// run that granted what it was asked for would be no boundary at all.
 /// </param>
+/// <param name="TrustedRemedies">
+/// The remedies this machine has agreed may run, from its own configuration.
+/// Never read from a team's directory, which its own nodes write in.
+/// </param>
 /// <param name="Remediation">
 /// What this machine says a remediator may do with each kind of task, by kind.
 /// Passed in rather than read here, for the same reason the outward list is:
@@ -51,7 +55,8 @@ public sealed record TeamRunRequest(
     bool NoSync = false,
     string? Model = null,
     IReadOnlyList<string>? OutwardAllowed = null,
-    IReadOnlyDictionary<string, string>? Remediation = null);
+    IReadOnlyDictionary<string, string>? Remediation = null,
+    IReadOnlyList<Loadout.Models.Configuration.TrustedRemedy>? TrustedRemedies = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -1743,7 +1748,7 @@ public sealed class TeamRunner : ITeamRunner
                     // What this team has registered and what was decided about
                     // each, worked out here so that whatever answers the node's
                     // questions reads no files and holds no opinion.
-                    Remedies: Standing(team, request.Remediation)),
+                    Remedies: Standing(team, request.Remediation, request.TrustedRemedies)),
                 ct).ConfigureAwait(false);
 
         var options = new HeadlessOptions(
@@ -1833,7 +1838,8 @@ public sealed class TeamRunner : ITeamRunner
     /// </remarks>
     private IReadOnlyList<RemedyStanding> Standing(
         TeamDefinition team,
-        IReadOnlyDictionary<string, string>? rules)
+        IReadOnlyDictionary<string, string>? rules,
+        IReadOnlyList<Loadout.Models.Configuration.TrustedRemedy>? trusted)
     {
         var book = new RemedyBook(_paths);
         var read = book.All(team.Name);
@@ -1854,7 +1860,14 @@ public sealed class TeamRunner : ITeamRunner
                     ? said
                     : RemedyRules.Default;
 
-            var decided = RemedyCeiling.Decide(remedy, rule, script.Succeeded ? script.Value : null);
+            // Trust comes from this machine's configuration, never from the
+            // record: the record is in the team's directory, which its own
+            // nodes are told to write in.
+            var decided = RemedyCeiling.Decide(
+                remedy,
+                rule,
+                script.Succeeded ? script.Value : null,
+                RemedyCeiling.For(trusted, team.Name));
 
             standing.Add(new RemedyStanding(
                 remedy.Name,

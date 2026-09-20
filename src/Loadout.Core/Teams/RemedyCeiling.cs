@@ -1,3 +1,4 @@
+using Loadout.Models.Configuration;
 using Loadout.Models.Teams;
 
 namespace Loadout.Core.Teams;
@@ -45,10 +46,16 @@ public static class RemedyCeiling
     /// </param>
     /// <param name="script">
     /// The script as it is now, so trust granted to one version is not spent on
-    /// another. Null skips the comparison, which is for a caller that has
-    /// already made it.
+    /// another.
     /// </param>
-    public static Decision Decide(Remedy? remedy, string? rule, string? script = null)
+    /// <param name="trusted">
+    /// What this machine has agreed to, from its own configuration.
+    /// </param>
+    public static Decision Decide(
+        Remedy? remedy,
+        string? rule,
+        string? script,
+        IReadOnlyList<TrustedRemedy>? trusted)
     {
         if (remedy is null)
         {
@@ -67,21 +74,33 @@ public static class RemedyCeiling
                 $"This machine refuses remediation of kind '{Named(remedy.Kind)}' outright.");
         }
 
-        if (!remedy.IsTrusted)
+        // From this machine, never from the record. The record lives in the
+        // team's directory, the nodes are told where that is and told to put
+        // things in it, and a node with Write can therefore write anything it
+        // likes about its own trustworthiness. One did, in a test: claimed
+        // trusted, computed the fingerprint over its own script, and ran
+        // unasked.
+        var agreed = (trusted ?? []).FirstOrDefault(one =>
+            string.Equals(one.Remedy, remedy.Name, StringComparison.OrdinalIgnoreCase));
+
+        if (agreed is null)
         {
             return new Decision(
                 RemedyRuling.Ask,
-                "Nobody has trusted this remedy on this machine.");
+                "Nobody at this machine has agreed to this remedy.");
         }
 
         // Trust was granted to a script, not to a name. The declaration that
         // tells a team to keep improving what it registers is exactly the
         // thing that would otherwise spend one remedy's trust on another.
-        if (script is not null && !Matches(remedy, script))
+        if (script is null || !Agrees(agreed, script))
         {
             return new Decision(
                 RemedyRuling.Ask,
-                "This remedy has changed since it was trusted.");
+                script is null
+                    ? "This remedy's script could not be read, so there is no telling whether it "
+                      + "is the one that was agreed to."
+                    : "This remedy has changed since it was agreed to.");
         }
 
         if (!string.Equals(said, RemedyRules.Trusted, StringComparison.Ordinal))
@@ -96,21 +115,27 @@ public static class RemedyCeiling
             $"Trusted here, and this machine lets a trusted '{Named(remedy.Kind)}' remedy run.");
     }
 
-    /// <summary>Whether a script is the one that was trusted.</summary>
+    /// <summary>Whether a script is the one that was agreed to.</summary>
     /// <remarks>
-    /// A remedy with no fingerprint was trusted before there was one to record,
-    /// or by something that did not record it. Treated as not matching, because
-    /// the safe reading of "I cannot tell whether this is what you agreed to"
-    /// is to ask.
+    /// An entry with no fingerprint agreed to nothing in particular. Treated as
+    /// not matching, because the safe reading of "I cannot tell whether this is
+    /// what you agreed to" is to ask.
     /// </remarks>
-    public static bool Matches(Remedy remedy, string script)
+    public static bool Agrees(TrustedRemedy agreed, string script)
     {
-        ArgumentNullException.ThrowIfNull(remedy);
+        ArgumentNullException.ThrowIfNull(agreed);
         ArgumentNullException.ThrowIfNull(script);
 
-        return remedy.Fingerprint is { Length: > 0 } kept
+        return agreed.Fingerprint is { Length: > 0 } kept
             && string.Equals(kept, Fingerprint(script), StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>What this machine has agreed to for one team.</summary>
+    public static IReadOnlyList<TrustedRemedy> For(
+        IReadOnlyList<TrustedRemedy>? trusted,
+        string team) =>
+        [.. (trusted ?? []).Where(one =>
+            string.Equals(one.Team, team, StringComparison.OrdinalIgnoreCase))];
 
     /// <summary>The fingerprint of a script, as it is recorded.</summary>
     /// <remarks>
