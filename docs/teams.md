@@ -205,11 +205,21 @@ there is one account of what happened rather than three that can disagree.
 - `loadout team status` — where each node got to, what it is doing now, what it
   cost.
 - `loadout team dashboard` — a page on this machine, live, at a loopback address
-  behind a token that changes every start. It watches and it acts: starting a
-  team, answering a gate, holding a run, stopping one and sending the lead a
-  message are all buttons on it. Nothing there implements any of that — each button runs the
-  command you would have typed, so there is one behaviour rather than two that
-  drift.
+  behind a token that changes every start. It watches and it acts: answering a
+  gate, holding a run, stopping one, renaming its room, opening a pull request,
+  sending the lead a message and typing at a live node are all buttons on it.
+  Nothing there implements any of that — each button runs the command you would
+  have typed, so there is one behaviour rather than two that drift.
+
+  That sentence was true of the daemon and not of this command until 20
+  September 2026. The page drew every one of those controls and `team dashboard`
+  answered all of them with "this server only reads", which is worse than not
+  drawing them.
+
+  `loadout team dashboard --watch-only` is the old behaviour, for a screen in a
+  corner: the server refuses anything that would change a run, the page is told
+  so, and it puts the controls away and says why rather than leaving buttons
+  that do nothing.
 - **Tools → Team runs…** in the launcher — the same, in the terminal UI. See
   [The launcher](launcher.md).
 
@@ -237,6 +247,35 @@ until now they were dated at the *fold* rather than at the decision. In one real
 run that put two of them three minutes late, below the line saying the node had
 ended. Runs from here on record the time the decision was made; journals already
 written keep the time they were folded, because that is what they say.
+
+### Saying something to a run
+
+Two different things, with two different answers, because they are two
+different risks.
+
+**To the lead** — the box in the detail pane, or `loadout team message <run>
+--message "..."`. It is read at the start of the lead's next round, which is
+the point: it steers the run without interrupting a node mid-thought. The
+dashboard's own token is enough.
+
+```sh
+loadout team message 20260918-1436-ed59 --message "leave the tests alone"
+```
+
+**To a node, now** — the box under whichever node's output you are reading, or
+`loadout team say <run> --node <node> --message "..."`. It goes into a process
+that is running with your file access, at a moment nobody chose, so it needs a
+**second credential** that the dashboard's token does not grant:
+
+```sh
+loadout team attach set --passphrase "something worth having"
+loadout team say 20260918-1436-ed59 --node implementer/1 --message "stop, wrong file"
+```
+
+The page asks for that passphrase the first time and holds the grant in a
+variable for as long as the daemon says — not in storage, because it is for a
+person at a page and should go when the page does. The box only appears at all
+when the node is still running and its own output is what you are looking at.
 
 ### What a run actually delivered
 

@@ -46,6 +46,9 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly Loadout.Core.Projects.IProjectService _projects;
     private readonly AccessibleMode _accessible;
     private readonly Loadout.Platform.Abstractions.ISpeech _speech;
+    private readonly ICommandCatalogue _commands;
+    private readonly ISecretProvider _secrets;
+    private readonly TimeProvider _time;
 
     public TeamDashboardCommand(
         IRunJournal journal,
@@ -59,10 +62,16 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         Loadout.Core.Tasks.ITaskService tasks,
         Loadout.Core.Projects.IProjectService projects,
         AccessibleMode accessible,
-        Loadout.Platform.Abstractions.ISpeech speech)
+        Loadout.Platform.Abstractions.ISpeech speech,
+        ICommandCatalogue commands,
+        ISecretProvider secrets,
+        TimeProvider time)
     {
         _accessible = accessible;
         _speech = speech;
+        _commands = commands;
+        _secrets = secrets;
+        _time = time;
         _journal = journal;
         _git = git;
         _console = console;
@@ -217,6 +226,12 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         [Description("Open the page in a browser once it is listening.")]
         public bool Open { get; init; }
 
+        [CommandOption("--watch-only")]
+        [Description(
+            "Serve a page that cannot touch anything: no answering a gate, no holding or "
+            + "stopping a run, no messaging the lead. For a screen in a corner.")]
+        public bool WatchOnly { get; init; }
+
         [CommandOption("--view <VIEW>")]
         [Description(
             "rich or plain, for this run only. Without it the page follows your accessibility "
@@ -259,10 +274,31 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         server.Voice = _speech;
         server.MaySpeak = Speaking(_accessible);
 
-        // Reading only, like everything else this command serves. It can show
-        // what is queued; it cannot fire any of it.
+        // Reading only, like the waiting area has always been. It can show what
+        // is queued; it cannot fire any of it.
         server.WaitingFor = token => WaitingRoom.ReadAsync(
             _schedules, _tasks, _projects, DateTimeOffset.UtcNow, token);
+
+        if (!settings.WatchOnly)
+        {
+            // What every button on the page does, which until now only the
+            // daemon could honour. The page drew "Hold it", "Stop it" and a box
+            // for messaging the lead, and this server answered all of them with
+            // "this server only reads" - while the documentation said it acts.
+            // A page that offers a control it cannot honour is worse than one
+            // that does not offer it.
+            //
+            // The token is the whole of the protection here, exactly as it is
+            // for the daemon, and this one was started by somebody who is sitting
+            // in front of it.
+            server.Act = (action, token) => DashboardActions.RanAsync(
+                _commands, _time, action, output, token);
+
+            // And the second credential, which the dashboard's own token does
+            // not grant: typing at a live node is not something the run offered
+            // to have decided.
+            server.Attach = new Attaching(_secrets, _time);
+        }
 
         if (settings.DryRun)
         {

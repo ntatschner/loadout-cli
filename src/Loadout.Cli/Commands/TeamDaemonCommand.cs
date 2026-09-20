@@ -440,91 +440,19 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// run is implemented twice: the page asks, this types it, and whatever the
     /// terminal would have done happens.
     /// </remarks>
-    private async Task<OperationResult> ActedOnAsync(
+    /// <summary>
+    /// Does what a button asked.
+    /// </summary>
+    /// <remarks>
+    /// The mapping itself is in <see cref="DashboardActions" />, because
+    /// <c>team dashboard</c> serves the same page and drew the same buttons
+    /// while answering every one of them with "this server only reads".
+    /// </remarks>
+    private Task<OperationResult> ActedOnAsync(
         RunAction action,
         CommandOutput output,
-        CancellationToken ct)
-    {
-        var (command, arguments) = action.Verb switch
-        {
-            "gates" or "gate" => ("team gate", Gate(action)),
-            "message" => ("team message", new List<string> { action.Run, "--message", action.Message ?? string.Empty }),
-            "stop" => ("team halt", [action.Run]),
-            "pause" => ("team halt", [action.Run, "--pause"]),
-            "resume" => ("team halt", [action.Run, "--resume"]),
-
-            // An empty name clears it, which is how the page offers "put it
-            // back": there is one box, and emptying a box is what people do.
-            "name" => ("team name", action.Room is { Length: > 0 } room
-                ? [action.Run, "--room", room]
-                : [action.Run, "--clear"]),
-
-            "pr" => ("team pr", action.Node is { Length: > 0 } whose
-                ? [action.Run, "--node", whose]
-                : [action.Run]),
-
-            "say" => ("team say", [
-                action.Run,
-                "--node", action.Node ?? string.Empty,
-                "--message", action.Message ?? string.Empty,
-            ]),
-            _ => (string.Empty, []),
-        };
-
-        if (command.Length == 0)
-        {
-            return OperationResult.Fail(
-                $"There is nothing called '{action.Verb}' to do to a run.", ExitCode.InvalidArguments);
-        }
-
-        if (action.Verb == "message" && action.Message is not { Length: > 0 })
-        {
-            return OperationResult.Fail("Say something to say.", ExitCode.InvalidArguments);
-        }
-
-        output.WriteLine(
-            $"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
-            + $"{Markup.Escape(command)} {Markup.Escape(action.Run)}");
-
-        var code = await _commands
-            .RunAsync(command, [.. arguments, "--non-interactive"], ct)
-            .ConfigureAwait(false);
-
-        return code == (int)ExitCode.Success
-            ? OperationResult.Ok()
-            : OperationResult.Fail($"'{command}' ended with exit code {code}.", ExitCode.GeneralFailure);
-    }
-
-    /// <summary>The command line for answering one gate.</summary>
-    private static List<string> Gate(RunAction action)
-    {
-        var arguments = new List<string> { action.Run };
-
-        if (action.Gate is { Length: > 0 } gate)
-        {
-            arguments.Add("--gate");
-            arguments.Add(gate);
-        }
-
-        arguments.Add("--answer");
-        arguments.Add(action.Answer ?? "no");
-        arguments.Add("--by");
-        arguments.Add("dashboard");
-
-        if (action.Instead is { Length: > 0 } instead)
-        {
-            arguments.Add("--instead");
-            arguments.Add(instead);
-        }
-
-        if (action.Reason is { Length: > 0 } reason)
-        {
-            arguments.Add("--reason");
-            arguments.Add(reason);
-        }
-
-        return arguments;
-    }
+        CancellationToken ct) =>
+        DashboardActions.RanAsync(_commands, _time, action, output, ct);
 
     /// <summary>
     /// Says out loud, somewhere else, anything newly worth saying.

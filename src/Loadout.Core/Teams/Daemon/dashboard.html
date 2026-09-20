@@ -3097,6 +3097,48 @@
     return box;
   }
 
+  /*
+    Whether the server this page is talking to can do anything.
+
+    A page that draws "Stop it" against a server that refuses it is offering a
+    control it cannot honour, which is worse than not offering one. True until
+    the first listing comes back, because the ordinary case is a server that
+    acts and a row of controls that flickered away and back would be worse
+    than either.
+  */
+  var acts = true;
+
+  /*
+    Puts away everything that would change a run, when the server has said it
+    will not. The buttons stay in the markup and go out of the tab order with
+    everything else hidden, and one line says why - a row that simply vanished
+    would read as a page that failed to load.
+  */
+  function onlyWatching() {
+    var controls = document.getElementById("controls");
+    var note = document.getElementById("watching");
+
+    if (controls) { controls.hidden = !acts; }
+
+    if (!note) {
+      if (acts) { return; }
+
+      note = document.createElement("p");
+      note.id = "watching";
+      note.className = "facts";
+      note.textContent = "This dashboard is watching only. Start it without --watch-only, "
+        + "or run the daemon, to answer a gate, hold a run or message the lead from here.";
+
+      if (controls && controls.parentNode) {
+        controls.parentNode.insertBefore(note, controls);
+      }
+
+      return;
+    }
+
+    note.hidden = acts;
+  }
+
   function state(run) {
     // Its own state, above running, because a run stopped on a question and a
     // run working look identical until one of them is called what it is - and
@@ -6494,7 +6536,7 @@
   */
   function steering() {
     var box = document.getElementById("steer");
-    var alive = opened && opened.running && trailOf
+    var alive = acts && opened && opened.running && trailOf
       && (opened.nodes || []).some(function (node) {
         return node.node === trailOf && node.state !== "done" && node.state !== "reported";
       });
@@ -7037,6 +7079,15 @@
     api("/api/runs")
       .then(function (answer) {
         shown = answer.runs;
+
+        // Whether this server can do anything about them. A page drawing
+        // "Stop it" against a server that refuses it offers a control it
+        // cannot honour, which is the fault this whole change set out to fix -
+        // and --watch-only puts it straight back if nothing says so.
+        if (typeof answer.acts === "boolean" && answer.acts !== acts) {
+          acts = answer.acts;
+          onlyWatching();
+        }
 
         if (solo) {
           var one = views.filter(function (v) { return v.box === solo; })[0];

@@ -509,7 +509,8 @@ public sealed class DashboardServer : IDisposable
         if (Act is null)
         {
             await WriteAsync(context, 404, "text/plain; charset=utf-8",
-                "This server only reads. Run the daemon to act on a run from here.").ConfigureAwait(false);
+                "This server only reads. Start it without --watch-only, or run the daemon.")
+                .ConfigureAwait(false);
 
             return;
         }
@@ -1170,7 +1171,11 @@ public sealed class DashboardServer : IDisposable
             .Select(read => Describe(read.Value!))
             .ToList();
 
-        return JsonSerializer.Serialize(new { runs }, Json);
+        // Whether this server can do anything about any of them. The page
+        // draws a row of controls per run, and drawing "Stop it" on a page
+        // whose server refuses it is exactly the fault this field exists to
+        // stop: a control that cannot be honoured is worse than no control.
+        return JsonSerializer.Serialize(new { runs, acts = Act is not null }, Json);
     }
 
     /// <summary>

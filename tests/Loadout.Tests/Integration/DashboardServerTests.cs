@@ -467,9 +467,16 @@ public sealed class DashboardServerTests : IAsyncLifetime
     [Fact]
     public async Task A_server_that_only_watches_changes_nothing()
     {
-        // This server has no Act, which is what `team dashboard` gives you: a
-        // page opened to watch a run must not be able to stop one. The daemon
-        // sets Act, and that is the only thing that can.
+        // A server with no Act refuses everything that would change a run, and
+        // says so in a sentence rather than with a bare 404.
+        //
+        // What this used to say about that server is that it was what
+        // `team dashboard` gave you. It is not, any more: the page draws
+        // "Hold it", "Stop it" and a box for messaging the lead, and a server
+        // that refuses all three while the page offers them is worse than one
+        // that does not offer them. `team dashboard --watch-only` is this
+        // server now, and it is a thing somebody asks for rather than the only
+        // thing on offer.
         var answer = await _client.PostAsync(
             new Uri(_root + "api/runs/r/stop?token=" + _server.Token),
             new StringContent(string.Empty));
@@ -477,6 +484,80 @@ public sealed class DashboardServerTests : IAsyncLifetime
         answer.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         (await answer.Content.ReadAsStringAsync()).Should().Contain("only reads");
+    }
+
+    [Fact]
+    public async Task The_page_is_told_whether_this_server_can_do_anything()
+    {
+        // The page draws a row of controls per run, and drawing "Stop it"
+        // against a server that refuses it is the fault this whole change set
+        // out to fix. --watch-only would put it straight back if nothing said
+        // so, which is why the listing says.
+        (await (await GetAsync("/api/runs")).Content.ReadAsStringAsync())
+            .Should().Contain("\"acts\":false", "this server has no Act");
+
+        _server.Act = (_, _) => Task.FromResult(OperationResult.Ok());
+
+        (await (await GetAsync("/api/runs")).Content.ReadAsStringAsync())
+            .Should().Contain("\"acts\":true");
+    }
+
+    [Fact]
+    public async Task A_message_for_the_lead_reaches_the_command_that_delivers_it()
+    {
+        // The page never implements what a button means. It asks; this types
+        // the command a person would have typed; the parser decides whether any
+        // of it means anything. One implementation of messaging a lead, and it
+        // is `team message`.
+        RunAction? asked = null;
+
+        _server.Act = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/20260917-1116-ed59/message?token=" + _server.Token),
+            new StringContent(
+                "{\"message\":\"leave the tests alone\"}",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked.Should().NotBeNull();
+        asked!.Verb.Should().Be("message");
+        asked.Run.Should().Be("20260917-1116-ed59");
+        asked.Message.Should().Be("leave the tests alone");
+    }
+
+    [Fact]
+    public async Task Typing_at_a_live_node_needs_the_second_credential()
+    {
+        // The dashboard's own token got somebody to a page for watching and
+        // deciding. Putting words into a process running with somebody's file
+        // access, at a moment nobody chose, is a separate grant - and it is
+        // refused before the action is ever built.
+        var reached = false;
+
+        _server.Act = (_, _) =>
+        {
+            reached = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/r/say?token=" + _server.Token),
+            new StringContent(
+                "{\"node\":\"implementer/1\",\"message\":\"stop, wrong file\"}",
+                System.Text.Encoding.UTF8,
+                "application/json"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        reached.Should().BeFalse("the passphrase is checked before anything is done");
     }
 
     [Fact]
