@@ -763,6 +763,157 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         : span.TotalHours < 1 ? $"{(int)span.TotalMinutes}m" : $"{(int)span.TotalHours}h {span.Minutes}m";
 }
 
+/// <summary>The files a run delivered, rather than the commits it named.</summary>
+/// <remarks>
+/// A node reports what it produced by reference, because a commit hash is what
+/// it can say truthfully about work it has committed. "What did this run
+/// deliver" is a question about files, and answering it meant knowing which
+/// repository the run used and typing git at it.
+/// </remarks>
+[Description("List the files a team run delivered, resolved from the commits its nodes reported.")]
+[CommandMeta(CommandCategory.Start, Intent = "team outbox delivered files artefacts output run produced")]
+public sealed class TeamOutboxCommand : AsyncCommand<TeamOutboxCommand.Settings>
+{
+    private readonly IRunJournal _journal;
+    private readonly IRunOutbox _outbox;
+    private readonly IAnsiConsole _console;
+
+    public TeamOutboxCommand(IRunJournal journal, IRunOutbox outbox, IAnsiConsole console)
+    {
+        _journal = journal;
+        _outbox = outbox;
+        _console = console;
+    }
+
+    public sealed class Settings : GlobalSettings
+    {
+        [CommandArgument(0, "[RUN]")]
+        [Description("The run, as 'team runs' shows it. The most recent one when omitted.")]
+        public string? Run { get; init; }
+    }
+
+    /// <inheritdoc />
+    protected override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var runId = settings.Run ?? _journal.List(1).FirstOrDefault();
+
+        if (runId is null)
+        {
+            return output.Fail(
+                "No team has run on this machine yet. Start one with: loadout team run <team> \"<goal>\"",
+                ExitCode.ProjectNotFound);
+        }
+
+        var read = await _outbox.ForAsync(runId, cancellationToken).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            return output.Fail(read);
+        }
+
+        var outbox = read.Value!;
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new
+            {
+                run = runId,
+                outbox.Repository,
+                files = outbox.Files.Select(one => new
+                {
+                    one.Path,
+                    one.Change,
+                    one.Commit,
+                    one.Node,
+                }),
+                outbox.Missing,
+            });
+
+            return CommandOutput.Success();
+        }
+
+        if (outbox.Repository is null)
+        {
+            // Every node had a worktree of its own, or none was launched at
+            // all. Without a repository there is nothing to resolve a commit
+            // against, and saying so beats an empty list that reads as "this
+            // run produced nothing".
+            output.WriteLine(
+                "[yellow]This run does not say which repository it worked in,[/] so its commits "
+                + "cannot be resolved to files.");
+
+            foreach (var one in outbox.Missing)
+            {
+                output.WriteLine($"  [dim]{Markup.Escape(one)}[/]");
+            }
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine($"[bold]{Markup.Escape(runId)}[/]  [dim]{Markup.Escape(outbox.Repository)}[/]");
+
+        if (outbox.Files.Count == 0 && outbox.Missing.Count == 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("  [dim]No node reported a commit.[/]");
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteBlankLine();
+
+        foreach (var commit in outbox.Files.GroupBy(one => one.Commit, StringComparer.Ordinal))
+        {
+            var node = commit.First().Node;
+
+            output.WriteLine(
+                $"  [dim]{Markup.Escape(Short(commit.Key))}  {Markup.Escape(node)}[/]");
+
+            foreach (var file in commit)
+            {
+                output.WriteLine(
+                    $"    {Change(file.Change)} {Markup.Escape(file.Path)}");
+            }
+        }
+
+        // Named, because a commit the repository cannot find is the difference
+        // between a run that produced nothing and one whose work nobody can
+        // reach - and those look identical in a list that simply omits it.
+        foreach (var one in outbox.Missing)
+        {
+            output.WriteBlankLine();
+            output.WriteLine(
+                $"  [yellow]not found[/] {Markup.Escape(Short(one))} "
+                + "[dim]reported by a node, and not in this repository[/]");
+        }
+
+        return CommandOutput.Success();
+    }
+
+    /// <summary>The word, padded, then coloured - never the other way about.</summary>
+    private static string Change(string change)
+    {
+        var padded = Markup.Escape(change).PadRight(8);
+
+        return change switch
+        {
+            "added" => $"[green]{padded}[/]",
+            "removed" => $"[red]{padded}[/]",
+            _ => $"[dim]{padded}[/]",
+        };
+    }
+
+    /// <summary>A commit is recognisable long before it is complete.</summary>
+    private static string Short(string commit) =>
+        commit.Length > 12 ? commit[..12] : commit;
+}
+
 /// <summary>Everything a run wrote down, as it wrote it.</summary>
 [Description("Read a team run's journal, one line per thing that happened. --follow watches a run that is still going.")]
 [CommandMeta(CommandCategory.Start, Intent = "team log journal follow tail watch run")]

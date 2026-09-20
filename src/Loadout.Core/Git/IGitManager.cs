@@ -31,6 +31,11 @@ public sealed record GitMerge(bool Merged, bool FastForward, IReadOnlyList<strin
 /// <param name="IsPrimary">True for the main working tree rather than a linked one.</param>
 public sealed record GitWorktree(string Path, string? Branch, bool IsPrimary);
 
+/// <summary>One file a commit changed, and what it did to it.</summary>
+/// <param name="Path">The path, as git records it, relative to the repository.</param>
+/// <param name="Change">added, changed, removed, renamed, copied, or the letter git gave.</param>
+public sealed record GitFileChange(string Path, string Change);
+
 /// <summary>Which paths a listing should return.</summary>
 public enum GitFileSet
 {
@@ -174,6 +179,28 @@ public interface IGitManager
         string from,
         string to,
         bool summary = false,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// The files one commit changed, and what it did to each.
+    /// </summary>
+    /// <param name="repositoryPath">Any working tree of the repository.</param>
+    /// <param name="commit">The commit, by whatever name resolves to it.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// <para>
+    /// One commit against its own parent, which is the question "what did this
+    /// node produce" - not a diff against whatever the branch has become since.
+    /// </para>
+    /// <para>
+    /// A first commit with no parent is included rather than refused: a run
+    /// whose whole output is the first commit in a fresh repository has still
+    /// produced something.
+    /// </para>
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<GitFileChange>>> ListCommitFilesAsync(
+        string repositoryPath,
+        string commit,
         CancellationToken ct = default);
 
     /// <summary>Pushes the current branch to its upstream.</summary>

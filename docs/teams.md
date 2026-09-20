@@ -216,6 +216,47 @@ there is one account of what happened rather than three that can disagree.
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
 
+### What a run actually delivered
+
+A node reports what it produced by reference - a commit hash, a branch - because
+a hash is what it can say truthfully about work it has committed. It is not what
+somebody asking "what did this run deliver" wants to read, and resolving it by
+hand means knowing which repository the run used and typing git at it.
+
+`loadout team outbox` does that for you: it takes the commits the nodes reported
+and prints the files inside them, grouped by commit, with the node that
+delivered each.
+
+```
+loadout team outbox                      # the most recent run
+loadout team outbox 20260918-1436-ed59
+```
+
+```
+20260918-1436-ed59  D:\gitilauncher
+
+  78b32d6  implementer/1
+    changed  README.md
+```
+
+Two limits, both deliberate.
+
+A commit the repository no longer has is **named rather than dropped**. A run
+that produced nothing and a run whose work nobody can reach look identical in a
+list that simply leaves the second one out, and that difference is the whole
+question.
+
+Which repository a run used is not recorded directly, and is recovered: a node
+given its own worktree is launched in that worktree, and a node without one is
+launched in the repository itself, so the first node launched without a worktree
+says where the run was working. That path outlives the worktrees, which are
+cleared away after a merge. A run where every node had a worktree cannot be
+resolved, and says so instead of printing an empty list.
+
+Only commits are resolved. A decision or a plan is not a thing with files in it,
+and asking git for one would report every run that made a decision as having
+lost it - those still show in `team status`, under *delivered*.
+
 ### Six screens, and a board to put them on
 
 **List**, **Office**, **Graph**, **Timeline**, **Waiting** and **Terminal**

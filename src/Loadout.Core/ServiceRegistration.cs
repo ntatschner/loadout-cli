@@ -159,6 +159,7 @@ public static class ServiceRegistration
             new Teams.TeamCatalogue(ct => Packs.PackDirectories.ApprovedAsync(
                 provider.GetRequiredService<Packs.IPackService>(), "teams", ct)));
         services.AddSingleton<Teams.IRunJournal, Teams.RunJournal>();
+        services.AddSingleton<Teams.IRunOutbox, Teams.RunOutbox>();
         services.AddSingleton<Teams.IScheduleService, Teams.ScheduleService>();
         services.AddSingleton<Diagnostics.IDiagnosticContributor, Teams.Daemon.DaemonDiagnosticContributor>();
 

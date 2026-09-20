@@ -155,6 +155,18 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(string repositoryPath, CancellationToken ct = default) =>
         Task.FromResult(OperationResult<IReadOnlyList<string>>.Ok([]));
 
+    /// <summary>What each commit touched here, when a test has said.</summary>
+    public Dictionary<string, IReadOnlyList<GitFileChange>> Touched { get; } = new(StringComparer.Ordinal);
+
+    public Task<OperationResult<IReadOnlyList<GitFileChange>>> ListCommitFilesAsync(
+        string repositoryPath,
+        string commit,
+        CancellationToken ct = default) =>
+        Task.FromResult(Touched.TryGetValue(commit, out var files)
+            ? OperationResult<IReadOnlyList<GitFileChange>>.Ok(files)
+            : OperationResult<IReadOnlyList<GitFileChange>>.Fail(
+                $"fatal: bad object {commit}"));
+
     public Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default) =>
         throw new NotSupportedException("a team run pushes nothing");
 

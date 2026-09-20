@@ -399,6 +399,69 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<GitFileChange>>> ListCommitFilesAsync(
+        string repositoryPath,
+        string commit,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit);
+
+        // diff-tree rather than show: it prints the files and nothing else, so
+        // there is no message to skip past and nothing to mistake for a path.
+        // --root makes a first commit answer with its files instead of
+        // nothing, which matters for a run whose whole output is one.
+        var result = await RunAsync(
+            repositoryPath,
+            ["diff-tree", "--no-commit-id", "--name-status", "-r", "--root", commit],
+            LocalOperationTimeout,
+            ct).ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            return OperationResult<IReadOnlyList<GitFileChange>>.Fail(result.Error!);
+        }
+
+        var files = new List<GitFileChange>();
+
+        foreach (var line in result.Value!.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // A status letter, a tab, then the path. A rename or a copy carries
+            // a similarity score on the letter and two paths after it, and the
+            // one worth reporting is where the file ended up.
+            var parts = line.Split('\t', StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length < 2)
+            {
+                continue;
+            }
+
+            var path = parts[^1].Trim();
+
+            if (path.Length == 0)
+            {
+                continue;
+            }
+
+            files.Add(new GitFileChange(path, Change(parts[0].Trim())));
+        }
+
+        return OperationResult<IReadOnlyList<GitFileChange>>.Ok(files);
+    }
+
+    /// <summary>Git's letter for what happened to a file, as a word.</summary>
+    private static string Change(string letter) => letter.Length == 0 ? "changed" : letter[0] switch
+    {
+        'A' => "added",
+        'M' => "changed",
+        'D' => "removed",
+        'R' => "renamed",
+        'C' => "copied",
+        'T' => "retyped",
+        _ => letter,
+    };
+
+    /// <inheritdoc />
     public async Task<OperationResult<string>> ResolveAsync(
         string repositoryPath,
         string reference,

@@ -640,6 +640,7 @@ public static class Program
             team.AddCommand<TeamRunsCommand>("runs");
             team.AddCommand<TeamStatusCommand>("status");
             team.AddCommand<TeamLogCommand>("log");
+            team.AddCommand<TeamOutboxCommand>("outbox");
             team.AddCommand<TeamDashboardCommand>("dashboard");
 
             team.AddCommand<TeamDaemonCommand>("daemon");
