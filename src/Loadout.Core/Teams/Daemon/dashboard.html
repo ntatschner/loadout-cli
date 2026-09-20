@@ -1390,11 +1390,28 @@
      the difference between a colour and a surface. */
   [data-presentation="rich"] body {
     background-color: var(--page);
+    font-size: 0.95rem;
+    padding: 0;
+  }
+
+  /*
+    The grain, on a layer of its own behind everything.
+
+    It was a background-image on the body, which looked the same and cost the
+    audit two checks: axe cannot compute a contrast ratio against an image, so
+    it declined to judge the two headings that sit straight on the page rather
+    than on a card, and reported them incomplete rather than passing. A flat
+    body colour can be measured; the texture is still there, a pixel behind.
+  */
+  [data-presentation="rich"] body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
     background-image:
       repeating-linear-gradient(0deg, var(--grain) 0 1px, transparent 1px 3px),
       repeating-linear-gradient(90deg, var(--grain) 0 1px, transparent 1px 4px);
-    font-size: 0.95rem;
-    padding: 0;
   }
 
   /* ---- the drawer: a rail of dividers down the left ---- */
@@ -1420,6 +1437,7 @@
 
   [data-presentation="rich"] #shell .mark {
     margin: 0 var(--s3) var(--s5);
+    padding-right: var(--s3);
     font-family: var(--display);
     font-size: 1.15rem;
     font-weight: 600;
@@ -3124,9 +3142,16 @@
 
     var views = document.querySelector(".views");
 
-    shell.appendChild(mark);
-
-    if (views) { shell.appendChild(views); }
+    if (views) {
+      // Inside the nav rather than above it. In a div of its own the wordmark
+      // was page content outside every landmark, which axe reports and which
+      // means somebody moving between regions steps straight over it. One
+      // landmark, and no nesting of two.
+      views.insertBefore(mark, views.firstChild);
+      shell.appendChild(views);
+    } else {
+      shell.appendChild(mark);
+    }
 
     document.body.insertBefore(shell, document.body.querySelector("header"));
   }
@@ -3578,6 +3603,18 @@
     if (heading) { heading.hidden = only; }
     if (start) { start.hidden = only; }
     if (totals) { totals.hidden = only; }
+
+    // The skip link has to name somewhere that is actually there. It points
+    // at the runs heading, and putting that heading away left the first
+    // control on the page aimed at something hidden - which axe reports and
+    // which, for the one person most likely to use a skip link, is a link
+    // that goes nowhere.
+    var skip = document.querySelector("a.skip");
+
+    if (skip) {
+      skip.setAttribute("href", only ? "#settings-heading" : "#runs");
+      skip.textContent = only ? "Skip to the settings" : "Skip to the runs";
+    }
 
     if (!detail) { return; }
 

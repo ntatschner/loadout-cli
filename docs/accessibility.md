@@ -155,6 +155,48 @@ browser pulling axe-core in from anywhere. The markup is the same file the
 server embeds and the data was stubbed so every part of it rendered; axe reads
 the DOM rather than the response headers.
 
+#### Both pages, audited 20 September 2026
+
+There are two presentations now — the plain page, and the full one somebody
+gets when their profile says nothing about reading a screen. Both were audited
+with axe-core 4.10.2 against the same rule set, against the page's own markup
+and against the answers the real server gave, recorded from a live dashboard
+rather than stubbed.
+
+**No violations, in any state, on either page.** Eleven states of the full page
+— the run list, each of the other five destinations, the settings page, and a
+run open at each of its four depths — and four of the plain one, with 38 to 51
+rules passing depending on what is on screen.
+
+It found two things on the full page, both fixed:
+
+- The wordmark at the head of the drawer sat in a plain `div`, outside every
+  landmark. Somebody moving between regions stepped over it. It is inside the
+  navigation it labels now — one landmark rather than two, and no nesting.
+- The skip link points at the runs heading, and the settings page puts that
+  heading away, so the first control on the page aimed at something hidden.
+  For the one person most likely to use a skip link, that is a link that goes
+  nowhere. It follows the page now and says where it is going.
+
+And it declined to judge two things, which is not the same as finding them
+wrong:
+
+- The paper grain used to be a `background-image` on the body, and axe cannot
+  compute a contrast ratio against an image, so it left the two headings that
+  sit straight on the page undecided. The grain moved to a layer behind the
+  content; the body is a flat colour that can be measured, and it looks the
+  same. Those checks pass now.
+- The office and the graph still come back incomplete — 140 contrast checks
+  over rooms with art painted behind them, two overlapping desk targets, and
+  24 pieces of SVG text in the graph. These are the same on the plain page, so
+  they are not something the full one introduced, and they are all "axe cannot
+  work this out" rather than "this is wrong". Every desk measured at or above
+  the target size when checked directly.
+
+The themes were measured separately, by hand, across all 48 combinations of
+four themes, two schemes and six accents: every piece of text passes, the worst
+at 5.2:1 against the 4.5:1 required.
+
 It has still not been heard with a screen reader, and no keyboard-only pass by
 a person has been recorded. Nor has it been rendered at phone width: the
 automation would not give up control of the viewport, so what is proven is that

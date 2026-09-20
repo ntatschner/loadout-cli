@@ -462,9 +462,16 @@ One real defect came out of that pass and is fixed: the seats in a room were
 identified by their edge alone at 1.2:1, well under the 3:1 a control's boundary
 needs.
 
-Not checked: **no axe-core run over the rich page, and no screen reader has been
-near it.** The [accessibility statement](accessibility.md) says which parts of
-Loadout have been verified and by what.
+**axe-core 4.10.2 finds no violations on either page**, in any of the fifteen
+states audited on 20 September 2026 — against the page's own markup and the
+answers a live dashboard actually gave, rather than against a stub. It found
+two things on the full page and both are fixed: the wordmark sat outside every
+landmark, and the skip link pointed at a heading the settings page puts away.
+The [accessibility statement](accessibility.md) has the detail, including the
+two things axe declines to judge and why.
+
+Still not done: **no screen reader has been near any of it**, and no
+keyboard-only pass by a person has been recorded.
 
 ### Six screens, a board to put them on, and somewhere to set things
 

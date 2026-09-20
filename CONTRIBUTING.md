@@ -77,6 +77,30 @@ They are split by what they need, and the split matters:
 Contract tests run the real binary, so rebuilding while they run will fail them
 for reasons that have nothing to do with your change.
 
+### Auditing the dashboard
+
+`loadout team dashboard` says `connect-src 'self'`, which correctly stops a
+browser pulling axe-core in from anywhere, so the audit cannot run against the
+live page. axe reads the DOM rather than the response headers, so serve the
+same file from an origin with no such policy and audit that:
+
+1. Start a real dashboard and record its answers - `/api/runs`, `/api/office`,
+   `/api/roles`, `/api/waiting`, and `/spent` and `/documents` for a run or two.
+   **Record them; do not write a stub.** The one on this branch before used a
+   `state` field where the real JSON has `running` and `ended`, and a running
+   run drew as "stopped" - which read as a page bug and was the harness.
+2. Serve `dashboard.html` unchanged except for one `<script src>` loading axe,
+   with those recordings replayed at their own paths and no security policy.
+3. Write `data-presentation` onto the opening tag yourself, both ways: there
+   are two pages and they are different markup, so auditing one proves nothing
+   about the other.
+4. Run axe over every destination, the settings page, and a run open at each of
+   its four depths.
+
+Record the date and the version in `docs/accessibility.md`, and record what came
+back **incomplete** as well as what came back as a violation - incomplete means
+axe could not work it out, which is worth knowing and is not a pass.
+
 A test that fails only in the full suite is worth two minutes of thought before
 you re-run it. It is usually a disturbed binary. It is sometimes a race, and
 those look identical from the outside.
