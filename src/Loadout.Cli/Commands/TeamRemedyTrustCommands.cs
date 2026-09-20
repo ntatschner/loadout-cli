@@ -299,18 +299,14 @@ public sealed class TeamRemedyRequestsCommand : AsyncCommand<TeamRemedyRequestsC
         {
             output.WriteBlankLine();
             output.WriteLine(
-                $"[bold]{Markup.Escape(one.Id)}[/]  {Markup.Escape(one.Remedy)}  "
-                + $"[dim]{Markup.Escape(one.Node)} in {Markup.Escape(one.Run)}[/]");
+                $"[bold]{Markup.Escape(one.Id)}[/]  "
+                + $"[dim]{Markup.Escape(one.Node)} ({Markup.Escape(one.Role)}) in {Markup.Escape(one.Run)}[/]");
 
-            if (one.Why is { Length: > 0 })
-            {
-                output.WriteLine($"  {Markup.Escape(one.Why)}");
-            }
-
-            output.WriteLine($"  [yellow]{Markup.Escape(one.Because)}[/]");
-            output.WriteLine(
-                $"  [dim]see it with: loadout team remedy show {Markup.Escape(one.Remedy)} "
-                + $"--team {Markup.Escape(settings.Team)} --script[/]");
+            // The question carries what the remedy does, what it assumes and
+            // how somebody would know it worked. "May it use Bash for this
+            // command line" is not a question anybody can answer without going
+            // and reading the script themselves.
+            output.WriteLine($"  {Loadout.Tui.Shown.Safely(one.Asked)}");
         }
 
         output.WriteBlankLine();
@@ -324,7 +320,7 @@ public sealed class TeamRemedyRequestsCommand : AsyncCommand<TeamRemedyRequestsC
     private int Answer(
         CommandOutput output,
         string team,
-        IReadOnlyList<RemedyRequest> waiting,
+        IReadOnlyList<RemedyWaiting> waiting,
         string id,
         bool allowed,
         string reason,
@@ -335,8 +331,7 @@ public sealed class TeamRemedyRequestsCommand : AsyncCommand<TeamRemedyRequestsC
 
         if (found is null)
         {
-            return output.Fail(
-                $"'{team}' is not waiting on anything called '{id}'.", ExitCode.ProjectNotFound);
+            return output.Fail($"Nothing is waiting under '{id}'.", ExitCode.ProjectNotFound);
         }
 
         if (dryRun)
@@ -345,16 +340,16 @@ public sealed class TeamRemedyRequestsCommand : AsyncCommand<TeamRemedyRequestsC
             // answer rather than after it, because a run that reported the same
             // words either way is the failure the rule exists to stop.
             output.WriteLine(
-                $"[dim]Dry run: nothing was answered.[/] {Markup.Escape(found.Remedy)} would be "
+                $"[dim]Dry run: nothing was answered.[/] {Markup.Escape(found.Id)} would be "
                 + (allowed ? "allowed to run." : "refused."));
 
             return CommandOutput.Success();
         }
 
-        // The answer goes where the node that asked is looking, which is the
-        // run's own directory, and off this list. Two writes, and the one that
-        // matters to the node happens first.
-        var answered = _book.Answered(team, found.Id);
+        // Where the node that asked is already looking, which is the same place
+        // a gate is answered and the same place the terminal and the dashboard
+        // write to. One queue, one answering path.
+        var answered = _book.Answer(found.Id, allowed, reason is { Length: > 0 } ? reason : null);
 
         if (answered.Failed)
         {
@@ -363,9 +358,9 @@ public sealed class TeamRemedyRequestsCommand : AsyncCommand<TeamRemedyRequestsC
 
         output.WriteLine(
             allowed
-                ? $"[green]{Markup.Escape(found.Remedy)} may run.[/]"
-                : $"[yellow]{Markup.Escape(found.Remedy)} was refused.[/]"
-                  + " The node reports what it needed rather than finding another way.");
+                ? "[green]It may run.[/]"
+                : "[yellow]It was refused.[/] The node reports what it needed rather than "
+                  + "finding another way.");
 
         if (reason is { Length: > 0 })
         {

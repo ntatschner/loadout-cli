@@ -608,7 +608,8 @@ public sealed class LoadoutTools
         // written twice is written differently the second time.
         if (policy is not null && NodePermissions.Askable(policy, decision))
         {
-            decision = await AskedAsync(policy, tool_name, inputJson, tool_use_id).ConfigureAwait(false);
+            decision = await AskedAsync(policy, tool_name, inputJson, tool_use_id, decision.Remedy)
+                .ConfigureAwait(false);
         }
 
         Record(policy, tool_name, inputJson, decision, tool_use_id);
@@ -646,7 +647,8 @@ public sealed class LoadoutTools
         NodePolicy policy,
         string tool,
         string? inputJson,
-        string? toolUseId)
+        string? toolUseId,
+        RemedyStanding? remedy = null)
     {
         var directory = Path.GetDirectoryName(_scope.PolicyPath!);
 
@@ -667,7 +669,14 @@ public sealed class LoadoutTools
             Target: Loadout.Core.Security.SecretRedactor.Redact(NodePermissions.Target(inputJson) ?? string.Empty) is { Length: > 0 } shown
                 ? shown
                 : null,
-            At: _time.GetUtcNow());
+            At: _time.GetUtcNow(),
+
+            // A remedy is its own sort of question. "May implementer use Bash
+            // for 'pwsh ./remedies/x.ps1'" is not something anybody can answer
+            // without going and reading the script, so the question carries
+            // what it does, what it assumes and how you would know it worked.
+            Kind: remedy is null ? "permission" : "remedy",
+            Asked: remedy?.Asking(policy.Node, policy.Role));
 
         var answer = await NodePermissions
             .AskAsync(directory, ask, _time)

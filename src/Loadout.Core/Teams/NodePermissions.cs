@@ -60,7 +60,58 @@ public sealed record NodePolicy(
 /// <param name="Script">The script's file name, which is what a call names.</param>
 /// <param name="Ruling">run, ask or refuse, as decided on this machine.</param>
 /// <param name="Because">Why, in words, for whoever is asked or refused.</param>
-public sealed record RemedyStanding(string Name, string Script, string Ruling, string Because);
+/// <param name="What">What the remedy does, for the person being asked.</param>
+/// <param name="Assumes">What it assumes about the machine it runs on.</param>
+/// <param name="Proves">How somebody would know it worked.</param>
+public sealed record RemedyStanding(
+    string Name,
+    string Script,
+    string Ruling,
+    string Because,
+    string? What = null,
+    string? Assumes = null,
+    string? Proves = null)
+{
+    /// <summary>
+    /// The question a person is actually being asked, rather than "may it use
+    /// Bash".
+    /// </summary>
+    /// <remarks>
+    /// Everything somebody needs to decide, in the order they need it: what it
+    /// would do, what it takes for granted about this machine, how they would
+    /// know afterwards, and why it stopped to ask at all. A held remediation
+    /// that arrived as a tool and a command line was a question nobody could
+    /// answer without going and reading the script themselves.
+    /// </remarks>
+    public string Asking(string node, string role)
+    {
+        var text = new System.Text.StringBuilder();
+
+        text.Append($"{node} ({role}) wants to run the remedy '{Name}'");
+
+        if (What is { Length: > 0 } does)
+        {
+            text.Append($". It {char.ToLowerInvariant(does[0])}{does[1..].TrimEnd('.')}");
+        }
+
+        if (Assumes is { Length: > 0 } takes)
+        {
+            text.Append($". It assumes {char.ToLowerInvariant(takes[0])}{takes[1..].TrimEnd('.')}");
+        }
+
+        if (Proves is { Length: > 0 } shows)
+        {
+            text.Append($". You would know it worked because {char.ToLowerInvariant(shows[0])}{shows[1..].TrimEnd('.')}");
+        }
+
+        if (Because is { Length: > 0 })
+        {
+            text.Append($". It is being asked about because: {Because.TrimEnd('.')}");
+        }
+
+        return text.ToString();
+    }
+}
 
 /// <summary>
 /// Something a run has stopped on, waiting for a person.
@@ -177,7 +228,15 @@ public sealed record AskAnswer(
 /// <param name="Allowed">Whether it may.</param>
 /// <param name="Reason">Why, in words the node can act on. Never empty.</param>
 /// <param name="Rule">The rule that settled it, or null when nothing matched.</param>
-public sealed record PermissionDecision(bool Allowed, string Reason, string? Rule = null);
+/// <param name="Remedy">
+/// The remedy this was about, where it was about one, so whoever is asked is
+/// asked about the remedy rather than about Bash.
+/// </param>
+public sealed record PermissionDecision(
+    bool Allowed,
+    string Reason,
+    string? Rule = null,
+    RemedyStanding? Remedy = null);
 
 /// <summary>
 /// Decides what a node may do when its agent stops to ask.
@@ -496,9 +555,13 @@ public static class NodePermissions
                         // a machine that said never is not asked again.
                         $"remedy:{standing.Name}"),
 
+                    // No rule named, which is what puts it to a person rather
+                    // than deciding it. The remedy travels with it so whoever
+                    // is asked is asked about the remedy and not about Bash.
                     _ => new PermissionDecision(
                         false,
-                        $"'{standing.Name}' has to be agreed to before it runs. {standing.Because}"),
+                        $"'{standing.Name}' has to be agreed to before it runs. {standing.Because}",
+                        Remedy: standing),
                 };
             }
 

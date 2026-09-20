@@ -381,6 +381,34 @@ the one nobody read.
 A remedy trusted without a recorded fingerprint is asked about too. The safe
 reading of *I cannot tell whether this is what you agreed to* is to ask.
 
+### Who can run one
+
+Exactly one role: **`role.remediator`**. Every other role in the library has
+`Bash(git …)` and nothing else, so it cannot execute a script at all — which
+means that until this role existed the whole harness gated something nothing
+could attempt.
+
+What makes a shell acceptable for that one role is precisely that it does not
+decide which scripts may run. This machine does, per remedy, before the node
+starts. Its rules say so, including that it must not write a remedy and run it
+in the same turn: nothing it writes has been agreed to, and running it would be
+deciding that for itself. The destructive shells are denied outright, so "may
+run a remedy" never quietly becomes "may run anything".
+
+### Unattended runs never wait
+
+A held remedy is a question, and a question needs somebody. On a run with
+nobody watching — autonomous, or down a pipe — a held remedy is **refused**
+rather than queued, and the node reports it as a blocker.
+
+That is deliberate and it is the same rule every permission here follows: a
+question nobody answers leaves a node sitting still and spending until it gives
+up, which is worse than the refusal it would have had at once.
+
+So an overnight run either runs remedies that were already agreed to, or it
+stops and tells you. It never sits waiting. If you want to be asked, something
+has to be watching — a terminal, or the daemon serving its dashboard.
+
 ### What is waiting on you
 
 ```sh

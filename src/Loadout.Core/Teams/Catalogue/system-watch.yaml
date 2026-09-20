@@ -32,11 +32,16 @@ lead: lead
 nodes:
   lead:
     role: role.project-lead
-    delegates: [reproducer, investigator, fixer, verifier]
+    delegates: [reproducer, investigator, remediator, fixer, verifier]
   reproducer:
     role: role.reproducer
   investigator:
     role: role.investigator
+  # The only node here that may run a script. What makes that acceptable is
+  # that it does not decide which ones: this machine does, per remedy, before
+  # the node starts. See `loadout team remedies`.
+  remediator:
+    role: role.remediator
   fixer:
     role: role.fixer
   verifier:

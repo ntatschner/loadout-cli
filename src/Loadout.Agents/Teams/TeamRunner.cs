@@ -1879,7 +1879,14 @@ public sealed class TeamRunner : ITeamRunner
                 remedy.Name,
                 remedy.Script,
                 decided.Ruling.ToString().ToLowerInvariant(),
-                decided.Because));
+                decided.Because,
+
+                // What a person is actually deciding about. Carried now rather
+                // than read when the question is asked, because whatever asks
+                // is another process with nothing to read it from.
+                remedy.What,
+                remedy.Assumes,
+                remedy.Proves));
         }
 
         return standing;

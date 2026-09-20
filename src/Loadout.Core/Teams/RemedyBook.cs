@@ -6,24 +6,26 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace Loadout.Core.Teams;
 
-/// <summary>A remediator asking to run a remedy, held for a person.</summary>
+/// <summary>A remediation waiting on a person.</summary>
+/// <remarks>
+/// Read from the runs rather than kept by this book. A run that has stopped and
+/// wants somebody already has a queue, and the terminal, <c>team gate</c> and
+/// the dashboard all read and answer it; a second one beside it would be a
+/// second thing to answer and a second thing to forget.
+/// </remarks>
 /// <param name="Id">What it is answered by.</param>
-/// <param name="Team">The team whose directory the remedy is in.</param>
-/// <param name="Run">The run that asked.</param>
+/// <param name="Run">The run that stopped.</param>
 /// <param name="Node">The node that asked.</param>
-/// <param name="Remedy">The remedy by name.</param>
-/// <param name="Why">What the node says the problem is.</param>
+/// <param name="Role">What it was playing.</param>
+/// <param name="Asked">The question, with the remedy's own details in it.</param>
 /// <param name="At">When it asked.</param>
-/// <param name="Because">Why it is being held rather than run, from the ruling.</param>
-public sealed record RemedyRequest(
+public sealed record RemedyWaiting(
     string Id,
-    string Team,
     string Run,
     string Node,
-    string Remedy,
-    string Why,
-    DateTimeOffset At,
-    string Because);
+    string Role,
+    string Asked,
+    DateTimeOffset At);
 
 /// <summary>What a team has worked out how to fix, and what is waiting on a person.</summary>
 public interface IRemedyBook
@@ -43,14 +45,11 @@ public interface IRemedyBook
     /// <summary>Writes a remedy's record back, having changed it.</summary>
     OperationResult Save(string team, Remedy remedy);
 
-    /// <summary>Everything waiting on a person, newest last.</summary>
-    OperationResult<IReadOnlyList<RemedyRequest>> Waiting(string team);
+    /// <summary>Every remediation waiting on a person, newest last.</summary>
+    OperationResult<IReadOnlyList<RemedyWaiting>> Waiting(string team);
 
-    /// <summary>Records that a remediator wants to run one.</summary>
-    OperationResult<RemedyRequest> Ask(RemedyRequest request);
-
-    /// <summary>Takes a request off the list, having answered it.</summary>
-    OperationResult Answered(string team, string id);
+    /// <summary>Answers one, the way anything else answers a gate.</summary>
+    OperationResult Answer(string id, bool allowed, string? reason);
 }
 
 /// <summary>
@@ -90,8 +89,6 @@ public sealed class RemedyBook : IRemedyBook
         Path.Combine(_paths.Paths.State, "teams", "work", Slug(team));
 
     private string Shelf(string team) => Path.Combine(DirectoryOf(team), "remedies");
-
-    private string Asks(string team) => Path.Combine(DirectoryOf(team), "asked.jsonl");
 
     /// <inheritdoc />
     public OperationResult<IReadOnlyList<Remedy>> All(string team)
@@ -194,102 +191,84 @@ public sealed class RemedyBook : IRemedyBook
     }
 
     /// <inheritdoc />
-    public OperationResult<IReadOnlyList<RemedyRequest>> Waiting(string team)
+    /// <remarks>
+    /// Across every run on this machine rather than a named one, because
+    /// somebody asking what is waiting does not know which run stopped. Only
+    /// the ones about a remedy: a role's ordinary permission question is
+    /// answered where every other permission question is.
+    /// </remarks>
+    public OperationResult<IReadOnlyList<RemedyWaiting>> Waiting(string team)
     {
-        var at = Asks(team);
+        var runs = Path.Combine(_paths.Paths.State, "teams", "runs");
 
-        if (!File.Exists(at))
+        if (!Directory.Exists(runs))
         {
-            return OperationResult<IReadOnlyList<RemedyRequest>>.Ok([]);
+            return OperationResult<IReadOnlyList<RemedyWaiting>>.Ok([]);
         }
 
-        try
-        {
-            var waiting = new List<RemedyRequest>();
+        var waiting = new List<RemedyWaiting>();
 
-            foreach (var line in File.ReadAllLines(at))
+        foreach (var run in Directory.EnumerateDirectories(runs))
+        {
+            foreach (var ask in NodePermissions.Pending(run))
             {
-                if (string.IsNullOrWhiteSpace(line))
+                if (!string.Equals(ask.Kind, "remedy", StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                try
-                {
-                    if (System.Text.Json.JsonSerializer.Deserialize<RemedyRequest>(line) is { } one)
-                    {
-                        waiting.Add(one);
-                    }
-                }
-                catch (System.Text.Json.JsonException)
-                {
-                    // A half-written last line is the ordinary case while a run
-                    // is going, exactly as it is for the journal.
-                }
+                waiting.Add(new RemedyWaiting(
+                    ask.Id,
+                    Path.GetFileName(run),
+                    ask.Node,
+                    ask.Role,
+                    ask.Question,
+                    ask.At));
+            }
+        }
+
+        return OperationResult<IReadOnlyList<RemedyWaiting>>.Ok(
+            [.. waiting.OrderBy(one => one.At)]);
+    }
+
+    /// <inheritdoc />
+    public OperationResult Answer(string id, bool allowed, string? reason)
+    {
+        var runs = Path.Combine(_paths.Paths.State, "teams", "runs");
+
+        if (!Directory.Exists(runs))
+        {
+            return OperationResult.Fail("Nothing is waiting on this machine.", ExitCode.ProjectNotFound);
+        }
+
+        foreach (var run in Directory.EnumerateDirectories(runs))
+        {
+            if (!NodePermissions.Pending(run).Any(one =>
+                string.Equals(one.Id, id, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
             }
 
-            return OperationResult<IReadOnlyList<RemedyRequest>>.Ok(waiting);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return OperationResult<IReadOnlyList<RemedyRequest>>.Fail(
-                $"What this team is waiting on could not be read: {ex.Message}");
-        }
-    }
-
-    /// <inheritdoc />
-    public OperationResult<RemedyRequest> Ask(RemedyRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        try
-        {
-            Directory.CreateDirectory(DirectoryOf(request.Team));
-
-            File.AppendAllText(
-                Asks(request.Team),
-                System.Text.Json.JsonSerializer.Serialize(request) + "\n");
-
-            return OperationResult<RemedyRequest>.Ok(request);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return OperationResult<RemedyRequest>.Fail($"That request could not be recorded: {ex.Message}");
-        }
-    }
-
-    /// <inheritdoc />
-    public OperationResult Answered(string team, string id)
-    {
-        var read = Waiting(team);
-
-        if (read.Failed)
-        {
-            return OperationResult.Fail(read.Error!);
-        }
-
-        var left = read.Value!
-            .Where(one => !string.Equals(one.Id, id, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (left.Count == read.Value!.Count)
-        {
-            return OperationResult.Fail(
-                $"'{team}' is not waiting on anything called '{id}'.", ExitCode.ProjectNotFound);
-        }
-
-        try
-        {
-            File.WriteAllLines(
-                Asks(team),
-                left.Select(one => System.Text.Json.JsonSerializer.Serialize(one)));
+            // The same answer a gate gets, in the same place the node is
+            // already watching for it.
+            NodePermissions.AnswerAsync(
+                run,
+                id,
+                new AskAnswer(
+                    allowed,
+                    reason is { Length: > 0 } said
+                        ? said
+                        : allowed
+                            ? "Agreed to for this call only."
+                            : "Refused. Report what you needed and why rather than finding another "
+                              + "way to do it."))
+                .GetAwaiter().GetResult();
 
             return OperationResult.Ok();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return OperationResult.Fail($"That request could not be taken off the list: {ex.Message}");
-        }
+
+        return OperationResult.Fail(
+            $"Nothing is waiting under '{id}'.", ExitCode.ProjectNotFound);
     }
 
     private static Remedy? Read(string file)

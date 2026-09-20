@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Loadout.Core.Instructions;
 using Loadout.Core.Teams;
 using Xunit;
 
@@ -93,6 +94,53 @@ public sealed class RemedyGateTests
     }
 
     [Fact]
+    public void A_held_remedy_is_put_to_a_person_as_a_remedy_and_not_as_Bash()
+    {
+        // The gap this closes. Nothing ever created a remedy request, so the
+        // queue had no producer and `team remedy requests` could only ever be
+        // empty - a reader and an approver built, and nothing that writes.
+        //
+        // Now the hold travels with the decision, so whoever is asked is asked
+        // about the remedy. "May implementer use Bash for 'pwsh
+        // ./remedies/x.ps1'" is not a question anybody can answer without going
+        // and reading the script themselves.
+        var standing = new RemedyStanding(
+            "clear-build-cache",
+            "clear-build-cache.ps1",
+            "ask",
+            "Nobody at this machine has agreed to this remedy.",
+            What: "Deletes build output older than fourteen days.",
+            Assumes: "The build box, and nothing mid-build.",
+            Proves: "Free space before and after, and a build still succeeds.");
+
+        var decided = NodePermissions.Decide(
+            Policy(ruling: "ask"), "Bash", Calling("pwsh ./remedies/clear-build-cache.ps1"));
+
+        decided.Remedy.Should().NotBeNull("the hold has to reach whoever asks");
+
+        var question = standing.Asking("implementer/1", "role.fixer");
+
+        question.Should().Contain("implementer/1")
+            .And.Contain("clear-build-cache")
+            .And.Contain("deletes build output")
+            .And.Contain("assumes the build box")
+            .And.Contain("know it worked because free space")
+            .And.Contain("Nobody at this machine has agreed");
+    }
+
+    [Fact]
+    public void A_remedy_that_runs_or_is_refused_is_not_put_to_anybody()
+    {
+        // Only a hold is a question. One that runs needs nobody, and one this
+        // machine refuses outright is not asked about again.
+        NodePermissions.Decide(Policy(), "Bash", Calling("pwsh ./remedies/clear-build-cache.ps1"))
+            .Remedy.Should().BeNull();
+
+        NodePermissions.Decide(Policy(ruling: "refuse"), "Bash", Calling("pwsh ./remedies/clear-build-cache.ps1"))
+            .Remedy.Should().BeNull();
+    }
+
+    [Fact]
     public void A_call_that_is_not_a_remedy_is_answered_the_way_it_always_was()
     {
         var decided = NodePermissions.Decide(Policy(), "Bash", Calling("dotnet test"));
@@ -119,6 +167,49 @@ public sealed class RemedyGateTests
             NodePermissions.Decide(Policy(ruling: "refuse"), "Bash", Calling(command))
                 .Rule.Should().Be("remedy:clear-build-cache", $"'{command}' names it");
         }
+    }
+
+    [Fact]
+    public async Task The_remediator_is_the_one_role_that_can_reach_this_gate_at_all()
+    {
+        // Found by asking whether any shipped role could ever trigger it. None
+        // could: every one of them has Bash(git ...) and nothing else, so a
+        // call to run a script never matched an allow rule and never got as far
+        // as the remedy. The whole harness gated something nothing could
+        // attempt.
+        var specialists = await new SpecialistLibrary().LoadAsync(workspaceRoot: null);
+
+        string[] Allowed(string id) =>
+            [.. specialists.Find(id)?.Role?.AllowedTools ?? []];
+
+        bool CanRunAScript(string id) =>
+            Allowed(id).Any(one =>
+                one.StartsWith("Bash(pwsh", StringComparison.Ordinal)
+                || one.StartsWith("Bash(bash", StringComparison.Ordinal)
+                || string.Equals(one, "Bash", StringComparison.Ordinal));
+
+        CanRunAScript("role.remediator").Should().BeTrue("it is the role that runs remedies");
+
+        // And it stays the only one, because a second role with a shell is a
+        // second way to run something nobody agreed to.
+        foreach (var other in new[] { "role.fixer", "role.investigator", "role.reproducer", "role.verifier", "role.project-lead" })
+        {
+            CanRunAScript(other).Should().BeFalse($"{other} must not be able to run a script");
+        }
+
+        // It cannot reach past a remedy either: the destructive shells are
+        // denied outright, so "run a remedy" does not quietly become "run
+        // anything".
+        var denied = specialists.Find("role.remediator")?.Role?.DeniedTools ?? [];
+
+        denied.Should().Contain("Bash(rm:*)").And.Contain("Bash(git push:*)");
+
+        // And it cannot change the shelf it runs from. Its role file said in
+        // plain words not to rewrite a remedy mid-run, and the first real run
+        // of it read one, found a genuine bug, and rewrote it anyway. A rule an
+        // agent can ignore is a rule the tools should have enforced: an edited
+        // remedy is one nobody has agreed to.
+        Allowed("role.remediator").Should().NotContain("Write").And.NotContain("Edit");
     }
 
     [Fact]
