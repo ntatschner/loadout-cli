@@ -26,6 +26,49 @@ public sealed class TeamDefinition
     /// <summary>One or two sentences on what a run of it does.</summary>
     public string Description { get; set; } = string.Empty;
 
+    /// <summary>
+    /// What this team is for, standing, as opposed to what any one run is
+    /// about.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A run's goal is the thing somebody typed when they started it, true of
+    /// that run and no other. This is true of every run of the team, and it
+    /// reaches every node's brief: a node given a narrow job still needs to
+    /// know what the team is for. "Find why the disk filled" is a different
+    /// job inside a team that exists to keep a system up from inside one that
+    /// exists to write a report about it.
+    /// </para>
+    /// <para>
+    /// Empty is ordinary. A team whose description says enough does not need
+    /// to say it twice.
+    /// </para>
+    /// </remarks>
+    public string Goal { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Rules every node of this team follows, whatever the run is about.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Standing instructions rather than a task: how this team works, not what
+    /// it is doing today. They go into every brief, so a role's own
+    /// instructions and the team's declarations are both in front of a node
+    /// before it starts.
+    /// </para>
+    /// <para>
+    /// Each one is written so somebody could check the node against it
+    /// afterwards, for the same reason a done-when condition is. A declaration
+    /// nobody can check is a hope.
+    /// </para>
+    /// <para>
+    /// A declaration cannot raise what a node may do. It is prose in a brief,
+    /// read by a model; what a node is permitted lives in the machine's own
+    /// configuration and is decided before anything starts.
+    /// </para>
+    /// </remarks>
+    public List<string> Declarations { get; set; } = [];
+
     /// <summary>The node that reports to the person. Must be a key of <see cref="Nodes"/>.</summary>
     public string Lead { get; set; } = string.Empty;
 

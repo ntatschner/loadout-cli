@@ -22,6 +22,22 @@ namespace Loadout.Models.Teams;
 /// <param name="Constraints">How far the node may go.</param>
 /// <param name="DoneWhen">The conditions under which the work is finished, each one something a test or a command can show.</param>
 /// <param name="Parameters">Values a team file passes to a parameterised role, such as a department.</param>
+/// <param name="Goal">
+/// What the team exists for, standing, or null where its file says nothing.
+/// Not the run's goal, which is the task: a node reads both, and they answer
+/// different questions.
+/// </param>
+/// <param name="Declarations">
+/// Rules this team follows whatever the run, or null for none. Prose in a
+/// brief, read by a model - a declaration can never raise what a node may do,
+/// which is decided before anything starts.
+/// </param>
+/// <param name="TeamDirectory">
+/// Where this team keeps what it makes, across every run of it, or null where
+/// it has none. The same path for every node of every run, so a declaration
+/// that says "register it in the team's directory" names one place rather than
+/// one per node.
+/// </param>
 /// <param name="Delegates">
 /// The nodes this node may request, with their roles, or null for a node
 /// that may request none. Only a lead has any. Named here because the first
@@ -40,7 +56,10 @@ public sealed record Brief(
     [property: JsonPropertyName("constraints")] BriefConstraints Constraints,
     [property: JsonPropertyName("done_when")] IReadOnlyList<string> DoneWhen,
     [property: JsonPropertyName("parameters")] IReadOnlyDictionary<string, string>? Parameters = null,
-    [property: JsonPropertyName("delegates")] IReadOnlyList<BriefDelegate>? Delegates = null)
+    [property: JsonPropertyName("delegates")] IReadOnlyList<BriefDelegate>? Delegates = null,
+    [property: JsonPropertyName("goal")] string? Goal = null,
+    [property: JsonPropertyName("declarations")] IReadOnlyList<string>? Declarations = null,
+    [property: JsonPropertyName("team_directory")] string? TeamDirectory = null)
 {
     /// <summary>The version of this shape. Read before anything else, so an older reader can say it does not understand.</summary>
     [JsonPropertyName("contract")]

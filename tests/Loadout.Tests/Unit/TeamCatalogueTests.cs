@@ -51,7 +51,8 @@ public sealed class TeamCatalogueTests : IDisposable
         var catalogue = await LoadAsync();
 
         catalogue.Teams.Keys.Should().BeEquivalentTo(
-            ["iterating-project", "bug-hunt", "release-crew", "docs-crew", "dependency-sweep", "marketing-studio", "product-company"]);
+            ["iterating-project", "bug-hunt", "release-crew", "docs-crew", "dependency-sweep",
+             "marketing-studio", "product-company", "system-watch"]);
 
         catalogue.Findings.Should().BeEmpty(
             "a shipped team naming a role that does not ship is a shipped defect");

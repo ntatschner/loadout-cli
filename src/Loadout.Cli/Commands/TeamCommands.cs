@@ -230,6 +230,8 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
             {
                 team.Name,
                 team.Description,
+                team.Goal,
+                team.Declarations,
                 team.Template,
                 team.Lead,
                 nodes = team.Nodes.Select(n => new
@@ -259,6 +261,28 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
 
         output.WriteLine($"[bold]{Markup.Escape(team.Name)}[/]" + (team.Template ? "  [dim]template: copy it, do not run it[/]" : string.Empty));
         output.WriteLine($"  {Markup.Escape(team.Description)}");
+
+        // What it is for, then how it always works, before the nodes. A
+        // standing goal frames every node under it, and reading the nodes
+        // first is reading them without it.
+        if (team.Goal is { Length: > 0 } purpose)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("  [bold]what it is for[/]");
+            output.WriteLine($"  {Markup.Escape(purpose)}");
+        }
+
+        if (team.Declarations.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("  [bold]how it works, every run[/]");
+
+            foreach (var rule in team.Declarations)
+            {
+                output.WriteLine($"  - {Markup.Escape(rule)}");
+            }
+        }
+
         output.WriteBlankLine();
 
         foreach (var (name, node) in team.Nodes)

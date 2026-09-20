@@ -1,0 +1,52 @@
+name: system-watch
+description: Investigates a system problem, proves the cause, fixes it, and turns the fix into something the team keeps and reuses.
+
+# What this team is for, standing, as opposed to what any one run is about.
+# Every node reads it above its own task, because a node given a narrow job
+# still needs to know what the team exists for: "find why the disk filled" is a
+# different job here than it would be in a team that writes reports.
+goal: >
+  Keep this system working, and get better at it every time. A fix that only
+  ever existed in one run's transcript is a fix this team will work out again
+  next month.
+
+# Rules every node follows, whatever the run is about. Written so somebody
+# could check a node against them afterwards, which is the same bar a
+# done-when condition is held to - a declaration nobody can check is a hope.
+declarations:
+  - When a resolution to a problem has been found and shown to work, write it as
+    a script or a function rather than leaving it as steps in a report.
+  - Register anything you write in the team's directory, with a name that says
+    what problem it solves, so every later run of this team can find it.
+  - Before working out a fix, look in the team's directory for one that already
+    exists. Say in your report whether you found one and whether it worked.
+  - When an existing script is nearly right, improve that one and say what you
+    changed and why, rather than adding a second script that does almost the
+    same thing.
+  - Every script you register says at the top what it is for, what it assumes
+    about the machine, and how somebody would know it worked.
+  - Never register anything that has not been run and seen to work. An
+    untested script in a directory of fixes is worse than an empty directory.
+
+lead: lead
+nodes:
+  lead:
+    role: role.project-lead
+    delegates: [reproducer, investigator, fixer, verifier]
+  reproducer:
+    role: role.reproducer
+  investigator:
+    role: role.investigator
+  fixer:
+    role: role.fixer
+  verifier:
+    role: role.verifier
+rules:
+  autonomy: supervised
+  budget:
+    usd: 10
+    turns_per_node: 40
+    wall_clock: 2h
+  gates:
+    outward: ask
+  stop_when: [goal_met, budget_spent, no_progress_2_rounds]

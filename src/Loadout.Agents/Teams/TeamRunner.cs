@@ -366,10 +366,15 @@ public sealed class TeamRunner : ITeamRunner
         var leadNode = team.Nodes[team.Lead];
         var leadRole = request.Specialists.Find(leadNode.Role)!;
 
+        // Worked out here and made further down, which is the order --dry-run
+        // needs: a dry run says where the team's directory would be and
+        // creates nothing, because that is what --dry-run means.
+        var teamDirectory = TeamDirectory(team.Name);
+
         var leadBrief = MakeBrief(
             runId, team.Lead, parent: null, leadNode, leadRole, request.Goal, inputs: [],
             doneWhen: ["the goal is met, with the evidence cited from your nodes' reports"],
-            team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find);
+            team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory);
 
         if (request.DryRun)
         {
@@ -390,6 +395,20 @@ public sealed class TeamRunner : ITeamRunner
 
         var directory = RunDirectory(runId);
         Directory.CreateDirectory(directory);
+
+        // Made before the first node starts, so a declaration that tells one
+        // to write there is not telling it to make a directory first.
+        try
+        {
+            Directory.CreateDirectory(teamDirectory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A run whose team directory cannot be made still runs. The brief
+            // says where it would have been, and a node that cannot write
+            // there reports that it could not, which is the ordinary way
+            // anything else here fails.
+        }
 
         // Before anything can be asked, so a console that answers from
         // elsewhere knows where to leave the question.
@@ -725,7 +744,7 @@ public sealed class TeamRunner : ITeamRunner
                     var role = request.Specialists.Find(node.Role)!;
                     var brief = MakeBrief(
                         runId, ask.Node, team.Lead, node, role, task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
-                        request.OutwardAllowed ?? [], request.Specialists.Find);
+                        request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory);
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
@@ -1322,7 +1341,8 @@ public sealed class TeamRunner : ITeamRunner
         var brief = MakeBrief(
             runId, nodeName, team.Lead, node, role, task, conflicts,
             doneWhen: [$"'{branch}' merges into '{target}' with no conflict"],
-            team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find);
+            team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find,
+            TeamDirectory(team.Name));
 
         var ask = new ReportRequest(nodeName, task, DeliverableKind.Commit);
 
@@ -1762,6 +1782,47 @@ public sealed class TeamRunner : ITeamRunner
         Path.Combine(_paths.Paths.State, "teams", "runs", runId);
 
     /// <summary>
+    /// Where a team keeps what it makes, across every run of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Beside the runs rather than inside one, because that is the whole
+    /// point: a run's directory goes when the run is over, and a team that
+    /// works out how to fix something should not have to work it out again
+    /// next week.
+    /// </para>
+    /// <para>
+    /// One path for every node of every run, so a declaration that says
+    /// "register it in the team's directory" names one place. Left to each
+    /// node, "the team's directory" is a phrase that resolves differently
+    /// every time and the work is lost between runs.
+    /// </para>
+    /// <para>
+    /// Not in the repository. What a team learns about keeping a system up is
+    /// not a change to whatever it was looking at, and committing it into
+    /// somebody's project because a declaration said "register it" would be a
+    /// surprise.
+    /// </para>
+    /// </remarks>
+    private string TeamDirectory(string team) =>
+        Path.Combine(_paths.Paths.State, "teams", "work", Slug(team));
+
+    /// <summary>A team name as a directory name, with nothing in it that can climb.</summary>
+    /// <remarks>
+    /// A team name comes out of a file that may have come from anywhere, and a
+    /// name with a separator or a pair of dots in it would make a path that is
+    /// not under the one intended. Anything that is not a letter, a digit or a
+    /// hyphen becomes a hyphen.
+    /// </remarks>
+    private static string Slug(string team)
+    {
+        var clean = new string([.. team.Select(one =>
+            char.IsAsciiLetterOrDigit(one) || one == '-' ? char.ToLowerInvariant(one) : '-')]);
+
+        return clean.Trim('-') is { Length: > 0 } named ? named : "team";
+    }
+
+    /// <summary>
     /// Takes what the answerer recorded into the run's own record, once the
     /// node that asked has gone.
     /// </summary>
@@ -2038,7 +2099,16 @@ public sealed class TeamRunner : ITeamRunner
             ? HeadlessPermission.AcceptEdits
             : HeadlessPermission.DenyUnlessAllowed;
 
-    private static Brief MakeBrief(
+    /// <summary>
+    /// The brief for one node.
+    /// </summary>
+    /// <remarks>
+    /// Internal rather than private for the same reason <see cref="Render" />
+    /// is: the mapping from a team file to what a node reads is worth testing
+    /// on its own, and nothing tested that a team's standing goal reached a
+    /// brief at all until a mutation of that line survived.
+    /// </remarks>
+    internal static Brief MakeBrief(
         string runId,
         string nodeName,
         string? parent,
@@ -2050,7 +2120,8 @@ public sealed class TeamRunner : ITeamRunner
         TeamDefinition team,
         string autonomy,
         IReadOnlyList<string> allowed,
-        Func<string, SpecialistDocument?> specialistsOf)
+        Func<string, SpecialistDocument?> specialistsOf,
+        string? teamDirectory)
     {
         var definition = role.Role;
 
@@ -2091,7 +2162,15 @@ public sealed class TeamRunner : ITeamRunner
                 OutwardAllowed: outwardAllowed),
             doneWhen,
             node.Parameters.Count > 0 ? node.Parameters : null,
-            delegates);
+            delegates,
+
+            // What the team is for, and how it always works. A node given a
+            // narrow job still needs both: "find why the disk filled" is a
+            // different job inside a team that exists to keep a system up from
+            // inside one that exists to write a report about it.
+            team.Goal is { Length: > 0 } purpose ? purpose : null,
+            team.Declarations.Count > 0 ? team.Declarations : null,
+            teamDirectory);
     }
 
     /// <summary>"implementer/2" is an instance of "implementer"; anything else is itself.</summary>
@@ -2109,6 +2188,39 @@ public sealed class TeamRunner : ITeamRunner
 
         text.AppendLine($"# Brief for node {brief.Node} ({brief.Role})").AppendLine();
         text.AppendLine($"Run {brief.Run}. " + (brief.Parent is null ? "You report to the person." : $"You report to {brief.Parent}.")).AppendLine();
+
+        // Before the task, because it frames it. The task says what to do
+        // today; this says what the team is for, and the two answer different
+        // questions.
+        if (brief.Goal is { Length: > 0 } purpose)
+        {
+            text.AppendLine("## What this team is for").AppendLine().AppendLine(purpose).AppendLine();
+        }
+
+        if (brief.Declarations is { Count: > 0 } declarations)
+        {
+            text.AppendLine("## How this team works").AppendLine();
+            text.AppendLine("These hold for every run of this team, including this one.").AppendLine();
+
+            foreach (var rule in declarations)
+            {
+                text.AppendLine($"- {rule}");
+            }
+
+            text.AppendLine();
+        }
+
+        if (brief.TeamDirectory is { Length: > 0 } kept)
+        {
+            text.AppendLine("## The team's directory").AppendLine();
+            text.AppendLine(
+                $"`{kept}` is this team's own directory. It is the same directory for every node "
+                + "of every run of this team, and it outlives them: put anything the team is "
+                + "meant to keep and reuse there, and look there before working something out "
+                + "again. It is not in the repository, so nothing written there is a change to "
+                + "whatever you are working on.").AppendLine();
+        }
+
         text.AppendLine("## Task").AppendLine().AppendLine(brief.Task).AppendLine();
         text.AppendLine("## Deliverable").AppendLine().AppendLine(brief.Deliverable.ToString().ToLowerInvariant()).AppendLine();
 

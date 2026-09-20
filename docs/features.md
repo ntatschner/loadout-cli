@@ -179,7 +179,7 @@ loadout team status
 
 A lead splits your goal into requests, workers do the work in their own
 sessions, and the lead reads what came back and decides what to ask for next.
-Seven teams ship; a team is a YAML file, so you can write your own.
+Eight teams ship; a team is a YAML file, so you can write your own.
 
 Each node is an ordinary Loadout launch — same project, same compiled
 instructions, same screening — so what a team adds is who asks whom and what a

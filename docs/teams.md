@@ -197,6 +197,76 @@ Every run records which project and path it used, so `team status`, the
 dashboard and the launcher's screen can all say it afterwards. Runs recorded
 before that was written down simply do not show it.
 
+## What a team is for, and how it always works
+
+A run has a goal: the thing you typed when you started it, true of that run and
+no other. A team has one too, and it is a different thing.
+
+```yaml
+name: system-watch
+description: Investigates a system problem, proves the cause, fixes it, and turns the fix into something the team keeps and reuses.
+
+goal: >
+  Keep this system working, and get better at it every time. A fix that only
+  ever existed in one run's transcript is a fix this team will work out again
+  next month.
+
+declarations:
+  - When a resolution to a problem has been found and shown to work, write it as
+    a script or a function rather than leaving it as steps in a report.
+  - Register anything you write in the team's directory, with a name that says
+    what problem it solves, so every later run of this team can find it.
+  - Before working out a fix, look in the team's directory for one that already
+    exists. Say in your report whether you found one and whether it worked.
+```
+
+**`goal`** is what the team exists for, standing. Every node reads it above its
+own task, because a node given a narrow job still needs to know what the team is
+for: *find why the disk filled* is a different job inside a team that exists to
+keep a system up from inside one that exists to write a report about it.
+
+**`declarations`** are the rules every node follows whatever the run is about —
+how this team works, rather than what it is doing today. Write each one so
+somebody could check a node against it afterwards, which is the bar a done-when
+condition is held to. A declaration nobody can check is a hope.
+
+Both are optional, and most teams need neither: a description that says enough
+does not need saying twice, and an empty heading in a brief reads as something
+missing.
+
+A declaration **cannot raise what a node may do**. It is prose in a brief, read
+by a model. What a node is permitted lives in the machine's own configuration
+and is decided before anything starts — that is the same rule the whole of this
+file works under, and nothing a team writes about itself changes it.
+
+### The team's directory
+
+The first declaration anybody writes needs somewhere to put things, so a team
+has a directory of its own:
+
+```
+<state>/teams/work/<team>/
+```
+
+The same path for every node of every run of that team, made before the first
+node starts, and named on every brief. Left to each node, *the team's directory*
+is a phrase that resolves differently every time and the work is lost between
+runs — which is the whole thing the example above is trying to stop.
+
+It sits beside the runs rather than inside one, because that is the point: a
+run's directory goes when the run is over, and a team that works out how to fix
+something should not have to work it out again next week.
+
+It is **not in the repository**. What a team learns about keeping a system up is
+not a change to whatever it happened to be looking at, and committing it into
+somebody's project because a declaration said "register it" would be a surprise.
+
+`--dry-run` says where it would be and creates nothing.
+
+`loadout team show <team>` prints the goal and the declarations above the nodes,
+because a standing goal frames everything under it and reading the nodes first
+is reading them without it.
+
 ## Watching a run
 
 Three views of one thing. Each run writes one journal, and all three read it, so
