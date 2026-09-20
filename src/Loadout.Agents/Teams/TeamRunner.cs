@@ -2300,6 +2300,33 @@ public sealed class TeamRunner : ITeamRunner
                 + "meant to keep and reuse there, and look there before working something out "
                 + "again. It is not in the repository, so nothing written there is a change to "
                 + "whatever you are working on.").AppendLine();
+
+            // What "register it" means, because it is a fact about how Loadout
+            // works rather than something a team should have to restate. Left
+            // out, a node does the sensible human thing - one wrote the script
+            // and a README index - and everything that reads registered
+            // remedies sees an empty shelf.
+            text.AppendLine(
+                "Something the team should be able to run again goes in as a pair of files under "
+                + "`remedies/`, which is what makes it a remedy this machine can be asked about "
+                + "rather than a file in a folder:").AppendLine();
+
+            text.AppendLine("```");
+            text.AppendLine("remedies/<name>.ps1     the script itself, in whatever suits the job");
+            text.AppendLine("remedies/<name>.yaml    what it is:");
+            text.AppendLine();
+            text.AppendLine("    name: <name>");
+            text.AppendLine("    kind: <one word for the sort of task: disk, service, network>");
+            text.AppendLine("    what: <what it does, in a sentence>");
+            text.AppendLine("    assumes: <what it assumes about the machine it runs on>");
+            text.AppendLine("    proves: <how somebody would know it worked>");
+            text.AppendLine("    script: <name>.ps1");
+            text.AppendLine("```").AppendLine();
+
+            text.AppendLine(
+                "Nothing you write decides whether it may run. A person at this machine agrees to "
+                + "a remedy once, against that exact script, and until they have a remediator asks "
+                + "before running it. A record claiming to be trusted decides nothing.").AppendLine();
         }
 
         text.AppendLine("## Task").AppendLine().AppendLine(brief.Task).AppendLine();

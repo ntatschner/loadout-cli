@@ -73,6 +73,26 @@ public sealed class TeamGoalTests
     }
 
     [Fact]
+    public void A_node_is_told_what_registering_something_actually_means()
+    {
+        // Found by running it. A reproducer told to "register it in the team's
+        // directory" wrote the script and a README index - a fair reading, and
+        // a sensible thing to do - and `team remedies` said "Nothing registered
+        // yet" about a directory with a perfectly good script in it. Nothing
+        // had ever told it the shape.
+        var read = TeamRunner.Render(Briefed(directory: @"C:\state	eams\work\system-watch"));
+
+        read.Should().Contain("remedies/<name>.yaml")
+            .And.Contain("kind:")
+            .And.Contain("assumes:")
+            .And.Contain("proves:");
+
+        // And that writing it does not grant it, so a node does not try to.
+        read.Should().Contain("Nothing you write decides whether it may run")
+            .And.Contain("claiming to be trusted decides nothing");
+    }
+
+    [Fact]
     public void A_team_with_nothing_standing_to_say_says_nothing()
     {
         // Most teams have a description and need no second one. An empty

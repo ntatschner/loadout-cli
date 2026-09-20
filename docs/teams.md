@@ -291,7 +291,13 @@ cannot trust it.
 
 ### A remedy
 
-A script, and a record beside it saying what it is:
+A script, and a record beside it saying what it is. Every node's brief says this
+shape, because how you register one is a fact about how Loadout works rather
+than something each team should have to restate in a declaration — the first
+real run of `system-watch` proved why. Told only to "register it in the team's
+directory", the reproducer wrote the script and a `README.md` index, which is a
+perfectly fair reading, and `team remedies` reported an empty shelf about a
+directory with a good script in it.
 
 ```yaml
 # <team directory>/remedies/clear-build-cache.yaml
