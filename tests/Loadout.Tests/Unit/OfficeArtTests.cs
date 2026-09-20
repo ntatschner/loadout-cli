@@ -163,6 +163,56 @@ public sealed class OfficeArtTests : IDisposable
         OfficeArt.Chosen(paths, null).Should().Be((null, string.Empty));
     }
 
+    /// <summary>A set with a room description in it.</summary>
+    private void Room(string name, string json)
+    {
+        var directory = Path.Combine(Office, name);
+
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "room.json"), json);
+    }
+
+    [Theory]
+    [InlineData(8.0, 8.0)]
+    [InlineData(6.5, 6.5)]
+    [InlineData(33.0, 33.0)]
+    // Somebody's typing mistake, in a file they edited by hand.
+    [InlineData(0.0, 10.0)]
+    [InlineData(-4.0, 10.0)]
+    [InlineData(100.0, 10.0)]
+    public void How_tall_a_person_is_has_to_be_a_size(double said, double drawn)
+    {
+        Room("open-office",
+            $$"""
+            {
+              "width": 1024,
+              "height": 1024,
+              "person": {{said}},
+              "desks": [[20, 20]]
+            }
+            """);
+
+        // A person of nought draws nobody and a person of a hundred draws one
+        // figure over the whole floor. Neither is a room, and both used to go
+        // straight through to the page.
+        OfficeArt.Room(Office, "open-office")!.Person.Should().Be(drawn);
+    }
+
+    [Fact]
+    public void A_room_that_does_not_say_how_tall_a_person_is_still_draws_one()
+    {
+        Room("open-office",
+            """
+            {
+              "width": 1024,
+              "height": 1024,
+              "desks": [[20, 20]]
+            }
+            """);
+
+        OfficeArt.Room(Office, "open-office")!.Person.Should().Be(10);
+    }
+
     /// <summary>Paths whose state directory is the one this test wrote into.</summary>
     private sealed class StubPaths : Loadout.Platform.Abstractions.IPlatformPaths
     {

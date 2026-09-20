@@ -1916,7 +1916,20 @@
     });
 
     document.getElementById("view-board").setAttribute("aria-pressed", "true");
-    document.getElementById("adding").hidden = false;
+    var adding = document.getElementById("adding");
+
+    adding.hidden = false;
+
+    /*
+      Open, when there is nothing on the board yet.
+
+      It is a <details>, so an empty board showed its summary - "Which screens
+      are on the board" - with apparently nothing underneath, and then "No
+      screens on the board. Add one above." pointing at something that is not
+      visible until you click it. Once something is on the board it can fold
+      away again, because then the board itself says what is on it.
+    */
+    if (!board.open.length) { adding.open = true; }
     document.getElementById("board").hidden = false;
 
     keep("loadout.board", board);

@@ -152,7 +152,17 @@ public static class OfficeArt
 
             // A room with no scale cannot be drawn to shape, and one with no
             // desks is the same as having no file at all.
-            return read is { Width: > 0, Height: > 0 } ? read : null;
+            if (read is not { Width: > 0, Height: > 0 })
+            {
+                return null;
+            }
+
+            // How tall a person is has to be a size. Zero or less draws
+            // nobody, and a figure taller than a third of the room is not a
+            // person in it - both are somebody's typing mistake in a file they
+            // edited by hand, and the default is a better answer than a room
+            // full of invisible people.
+            return read.Person is > 0 and <= 33 ? read : read with { Person = 10 };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
