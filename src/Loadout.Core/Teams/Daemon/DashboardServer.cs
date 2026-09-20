@@ -153,6 +153,36 @@ public sealed class DashboardServer : IDisposable
     /// <summary>full or safe: whether the palette has to survive a colour deficiency.</summary>
     public string Colour { get; set; } = "full";
 
+    /// <summary>
+    /// What this machine says things with, or null where nothing is wired to
+    /// one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A web page cannot detect a screen reader. There is no API for it, every
+    /// heuristic that claims to is wrong often, and the ones that work at all
+    /// work by fingerprinting somebody because of a disability. The machine
+    /// serving the page can, because Loadout already has a channel to one and
+    /// already reports whether it was a reader that answered or the system's
+    /// own voice.
+    /// </para>
+    /// <para>
+    /// So the detection the page cannot do happens here and is sent to it.
+    /// Null is the ordinary case for a server nothing wired a voice to, and
+    /// answers "nothing here can speak", which is a true answer.
+    /// </para>
+    /// </remarks>
+    public Platform.Abstractions.ISpeech? Voice { get; set; }
+
+    /// <summary>Whether this person has asked to be spoken to.</summary>
+    /// <remarks>
+    /// Their own <c>show-speech</c> setting, off by default and off even under
+    /// the screen-reader preset. Somebody who has said "speak to me" has said
+    /// it once; they should not have to say it again per surface. Somebody who
+    /// has not said it is not going to be surprised by a machine that talks.
+    /// </remarks>
+    public bool MaySpeak { get; set; }
+
     /// <summary>The secret every request has to carry, made when the server starts.</summary>
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
 
@@ -533,6 +563,147 @@ public sealed class DashboardServer : IDisposable
             done.Succeeded ? "Done." : done.Error ?? "That could not be done.").ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// What this machine can say, and saying it.
+    /// </summary>
+    /// <remarks>
+    /// A GET reports; a POST speaks. The report is answered whatever the
+    /// settings say, because a page that cannot tell "switched off" from
+    /// "nothing here can speak" cannot explain either to anybody.
+    /// </remarks>
+    private async Task SpeechAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        var here = Nearby(context.Request);
+
+        if (Voice is null)
+        {
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    can = false,
+                    reader = false,
+                    allowed = MaySpeak,
+                    here,
+                    said = "This dashboard was not given anything to speak with.",
+                },
+                Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var ready = await Voice.IsAvailableAsync(ct).ConfigureAwait(false);
+
+        // A reader answered, as opposed to a voice being available. Only the
+        // first is somebody already listening to their machine; the second is
+        // a pair of speakers, and talking through those uninvited is a
+        // surprise rather than a feature.
+        var reader = ready.Succeeded
+            && !string.Equals(Voice.Name, "sapi", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(Voice.Name, "say", StringComparison.OrdinalIgnoreCase);
+
+        if (string.Equals(context.Request.HttpMethod, "GET", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    can = reader && MaySpeak && here,
+                    reader,
+                    who = Voice.Name,
+                    allowed = MaySpeak,
+                    here,
+                    said = ready.Succeeded ? ready.Value : ready.Error,
+                },
+                Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "text/plain; charset=utf-8",
+                "Saying something is a POST.").ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!MaySpeak)
+        {
+            await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                "Nobody asked to be spoken to. Turn it on with: "
+                + "loadout config set show-speech screen-reader").ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!reader)
+        {
+            await WriteAsync(context, 409, "text/plain; charset=utf-8",
+                "No screen reader answered on this machine. This speaks to a reader that is "
+                + "already running and never to the speakers.").ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!here)
+        {
+            // Checked per request rather than per listener: a dashboard on
+            // 0.0.0.0 is reachable from the network, and a browser on another
+            // machine making this one talk is not something anybody asked for.
+            await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                "Only a browser on this machine can make it speak.").ConfigureAwait(false);
+
+            return;
+        }
+
+        string body;
+
+        using (var reading = new StreamReader(context.Request.InputStream, Encoding.UTF8))
+        {
+            body = await reading.ReadToEndAsync(ct).ConfigureAwait(false);
+        }
+
+        JsonElement? asked;
+
+        try
+        {
+            asked = body.Length == 0 ? null : JsonDocument.Parse(body).RootElement;
+        }
+        catch (JsonException)
+        {
+            asked = null;
+        }
+
+        var line = Text(asked, "say");
+
+        if (line is not { Length: > 0 })
+        {
+            await WriteAsync(context, 400, "text/plain; charset=utf-8",
+                "Nothing to say.").ConfigureAwait(false);
+
+            return;
+        }
+
+        // A ceiling, not a guess at what is sensible: this speaks the page's
+        // own announcements, which are a sentence, and a reader handed a
+        // megabyte would be reading it for an hour.
+        if (line.Length > 400)
+        {
+            line = line[..400];
+        }
+
+        var done = await Voice.SayAsync(line, interrupt: true, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 202 : 400,
+            "text/plain; charset=utf-8",
+            done.Succeeded ? "Said." : done.Error ?? "That could not be said.").ConfigureAwait(false);
+    }
+
+    /// <summary>Whether the request came from this machine.</summary>
+    private static bool Nearby(HttpListenerRequest request) =>
+        request.RemoteEndPoint?.Address is { } from && IPAddress.IsLoopback(from);
+
     /// <summary>Whether an address is this machine talking to itself.</summary>
     private static bool IsLoopback(string address) =>
         address is "127.0.0.1" or "localhost" or "::1";
@@ -636,6 +807,25 @@ public sealed class DashboardServer : IDisposable
             }
 
             await AttachAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        // Whether this machine can say something, and saying it. Behind the
+        // token like everything else, and behind two more conditions the
+        // handler checks: that the person asked to be spoken to, and that the
+        // request came from this machine rather than across a network.
+        if (path == "/api/speech")
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await SpeechAsync(context, ct).ConfigureAwait(false);
 
             return;
         }

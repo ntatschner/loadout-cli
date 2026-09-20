@@ -64,6 +64,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly TimeProvider _time;
 
     private readonly AccessibleMode _accessible;
+    private readonly Loadout.Platform.Abstractions.ISpeech _speech;
 
     public TeamDaemonCommand(
         ISecretProvider secrets,
@@ -79,9 +80,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IProcessInspector processes,
         IAnsiConsole console,
         TimeProvider time,
-        AccessibleMode accessible)
+        AccessibleMode accessible,
+        Loadout.Platform.Abstractions.ISpeech speech)
     {
         _accessible = accessible;
+        _speech = speech;
         _secrets = secrets;
         _client = client;
         _configuration = configuration;
@@ -174,6 +177,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // that looked different depending on which command started them
             // would be two dashboards.
             TeamDashboardCommand.Presented(server, view: null, _accessible);
+
+            server.Voice = _speech;
+            server.MaySpeak = TeamDashboardCommand.Speaking(_accessible);
 
             // Read per request rather than once: a schedule made while the
             // daemon is up should appear in the waiting area without somebody

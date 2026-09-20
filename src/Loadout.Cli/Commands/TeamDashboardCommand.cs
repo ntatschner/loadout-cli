@@ -45,6 +45,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
     private readonly Loadout.Core.Projects.IProjectService _projects;
     private readonly AccessibleMode _accessible;
+    private readonly Loadout.Platform.Abstractions.ISpeech _speech;
 
     public TeamDashboardCommand(
         IRunJournal journal,
@@ -57,9 +58,11 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         IScheduleService schedules,
         Loadout.Core.Tasks.ITaskService tasks,
         Loadout.Core.Projects.IProjectService projects,
-        AccessibleMode accessible)
+        AccessibleMode accessible,
+        Loadout.Platform.Abstractions.ISpeech speech)
     {
         _accessible = accessible;
+        _speech = speech;
         _journal = journal;
         _git = git;
         _console = console;
@@ -162,6 +165,29 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         server.Colour = Presenting.Colour(profile);
     }
 
+    /// <summary>
+    /// Whether this person has asked to be spoken to.
+    /// </summary>
+    /// <remarks>
+    /// Their own <c>show-speech</c> setting, which the launcher already uses.
+    /// Somebody who has said "speak to me" has said it once and should not
+    /// have to say it again per surface; somebody who has not said it is not
+    /// going to be surprised by a machine that talks. It is off by default and
+    /// off even under the screen-reader preset, and that does not change here.
+    /// </remarks>
+    internal static bool Speaking(AccessibleMode accessible)
+    {
+        ArgumentNullException.ThrowIfNull(accessible);
+
+        // The profile is already resolved by the time it reaches here, preset
+        // applied and anything written by hand on top of it.
+        return accessible.IsOn
+            && string.Equals(
+                accessible.Profile.Display.Speech,
+                "screen-reader",
+                StringComparison.OrdinalIgnoreCase);
+    }
+
     internal static void Warn(CommandOutput output, DashboardServer server)
     {
         if (!server.Beyond)
@@ -224,6 +250,14 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         // profile - the same order as everything else here, and the same order
         // the accessible mode itself resolves in.
         Presented(server, settings.View, _accessible);
+
+        // A web page cannot detect a screen reader; this machine can, and
+        // already has a channel to one. Handed over whatever the settings
+        // say - the server reports what it found either way, because a page
+        // that cannot tell "switched off" from "nothing here can speak"
+        // cannot explain either.
+        server.Voice = _speech;
+        server.MaySpeak = Speaking(_accessible);
 
         // Reading only, like everything else this command serves. It can show
         // what is queued; it cannot fire any of it.

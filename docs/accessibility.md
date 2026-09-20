@@ -203,6 +203,30 @@ automation would not give up control of the viewport, so what is proven is that
 the three-column rule lives inside a `min-width` query and nowhere else, which
 is the behaviour that matters and is not the same as having looked at it.
 
+### The dashboard speaking
+
+The page asks the machine what it can say, because a browser cannot tell and
+should not try: there is no API for detecting a screen reader, every heuristic
+that claims to is wrong often, and the ones that work at all work by
+fingerprinting somebody because of a disability. The machine can tell, and
+already does — it is the same channel the launcher uses.
+
+Four conditions, every one required: a screen reader answered rather than a
+system voice; `show-speech` is `screen-reader`; the browser is on that machine,
+checked per request rather than per listener; and the request carries the
+token. The settings page says which of the four is missing rather than being
+quietly silent about it.
+
+Nothing is said that is not also written on the page, and a line over 400
+characters is cut.
+
+**Verified only against a stub.** There is no screen reader here, so the path
+where one answers has never run for real. What the stub proves is the order of
+the refusals — four mutations, each removing one condition and each failing its
+own test, which is the part that decides whether somebody who never asked ends
+up with a talking computer. Three earlier mutation attempts broke the build
+instead of the behaviour and proved nothing; they are not counted.
+
 ### The launcher speaking
 
 ```sh

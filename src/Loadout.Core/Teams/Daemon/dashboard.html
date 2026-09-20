@@ -2491,7 +2491,53 @@
   // replaced on every refresh, so what the depths draw stays live.
   var opened = null;
 
+  /*
+    What this machine can say out loud, as it answered when asked.
+
+    Asked once, at the start. A page cannot detect a screen reader - there is
+    no API, every heuristic that claims to is wrong often, and the ones that
+    work at all work by fingerprinting somebody because of a disability - but
+    the machine serving this page can, because Loadout already has a channel
+    to one and already reports which of a reader and a system voice answered.
+
+    Null until it has answered, and left null if it never does: a dashboard
+    that cannot reach its own server has larger problems than this.
+  */
+  var voice = null;
+
+  function askTheMachine() {
+    api("/api/speech")
+      .then(function (answer) { voice = answer; })
+      .catch(function () { voice = null; });
+  }
+
+  /*
+    Says something through the reader somebody is already running.
+
+    Only ever a sentence that is on the page in words as well. The live region
+    is what does the work for a reader watching this tab; this reaches one that
+    is not, which is the case a dashboard left on a second screen is.
+  */
+  function speak(text) {
+    if (!voice || !voice.can || !text) { return; }
+
+    fetch("/api/speech?token=" + encodeURIComponent(token), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ say: text })
+    }).catch(function () {
+      // Best effort, always. Somebody who cannot hear this can still read it,
+      // and a dashboard that stopped working because a voice did would be
+      // worse than one that is quiet.
+    });
+  }
+
   function say(text) {
+    // Both, always. The live region is what a reader watching this tab uses;
+    // speaking reaches one that is not watching it, which is the case a
+    // dashboard left open on a second screen actually is.
+    speak(text);
+
     status.textContent = text;
   }
 
@@ -3659,6 +3705,7 @@
     if (!solo) {
       railUp();
       plainly();
+      askTheMachine();
     }
 
     if (solo) {
@@ -5023,6 +5070,42 @@
     choose(density, "density", densities, looking("density", "comfortable"), function (id) {
       lookAt("density", id);
     }, "row");
+
+    // ---- out loud ----
+    var aloud = group(page, "Out loud");
+
+    var what = document.createElement("p");
+    what.className = "said";
+    aloud.appendChild(what);
+
+    if (!voice) {
+      what.textContent = "This page has not heard back from the machine about what it "
+        + "can say.";
+    } else if (voice.can) {
+      what.textContent = "A screen reader answered on this machine (" + voice.who
+        + "), you have asked to be spoken to, and this browser is on the same "
+        + "machine. Announcements are being said out loud as well as written here.";
+    } else if (!voice.reader) {
+      what.textContent = "No screen reader answered on this machine. "
+        + (voice.said || "") + " Loadout speaks to a reader that is already running "
+        + "and never to the speakers, so nothing is said out loud.";
+    } else if (!voice.allowed) {
+      what.textContent = "A screen reader answered on this machine (" + voice.who
+        + "), and nobody has asked to be spoken to. Turn it on with: "
+        + "loadout config set show-speech screen-reader";
+    } else if (!voice.here) {
+      what.textContent = "A screen reader answered on the machine serving this page, "
+        + "but this browser is on a different one. Only a browser on that machine "
+        + "can make it speak.";
+    }
+
+    var never = document.createElement("p");
+    never.className = "said";
+    never.textContent = "Nothing is ever said out loud that is not also written on the "
+      + "page. Whether a reader is running is answered by the machine, never guessed at "
+      + "by this page \u2014 a browser cannot tell, and the ways that claim to work by "
+      + "fingerprinting somebody because of a disability.";
+    aloud.appendChild(never);
 
     // ---- being told ----
     var telling = group(page, "Being told",

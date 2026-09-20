@@ -340,6 +340,131 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_page_is_told_what_the_machine_can_say_whatever_the_settings_are()
+    {
+        // Answered either way on purpose. A page that cannot tell "switched
+        // off" from "nothing here can speak" cannot explain either to
+        // anybody, and the settings page says which it is in a sentence.
+        _server.Voice = new StubVoice("nvda", "NVDA is running and will speak.");
+        _server.MaySpeak = false;
+
+        var said = await (await GetAsync("/api/speech")).Content.ReadAsStringAsync();
+
+        said.Should().Contain("\"reader\":true", "a reader answered")
+            .And.Contain("\"allowed\":false", "and nobody asked to be spoken to")
+            .And.Contain("\"can\":false", "so nothing will be said");
+    }
+
+    [Fact]
+    public async Task Nothing_is_said_out_loud_unless_somebody_asked_for_it()
+    {
+        // The first refusal, and the one that matters most: a person who has
+        // not asked for a talking computer must not be given one because a
+        // page was opened.
+        _server.Voice = new StubVoice("nvda", "NVDA is running and will speak.");
+        _server.MaySpeak = false;
+
+        var answer = await Say("It needs you.");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("show-speech");
+
+        _server.Voice.As<StubVoice>().Said.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_system_voice_is_not_a_screen_reader_and_is_never_spoken_through()
+    {
+        // This speaks to a reader somebody is already listening to. A machine
+        // that started talking through the speakers because it found a voice
+        // installed is a surprise, not a feature - and on the machine this was
+        // written on that is exactly what is there.
+        _server.Voice = new StubVoice("sapi", "No screen reader answered; Windows has 2 voice(s).");
+        _server.MaySpeak = true;
+
+        var answer = await Say("It needs you.");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("never to the speakers");
+
+        _server.Voice.As<StubVoice>().Said.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_reader_that_answered_is_spoken_through_and_a_long_line_is_cut()
+    {
+        _server.Voice = new StubVoice("nvda", "NVDA is running and will speak.");
+        _server.MaySpeak = true;
+
+        var answer = await Say(new string('a', 900));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        // A ceiling rather than a guess at what is sensible: this speaks the
+        // page's own announcements, which are a sentence, and a reader handed
+        // a megabyte would be reading it for an hour.
+        _server.Voice.As<StubVoice>().Said.Should().ContainSingle()
+            .Which.Length.Should().Be(400);
+    }
+
+    [Fact]
+    public async Task Speaking_needs_the_token_like_everything_else()
+    {
+        _server.Voice = new StubVoice("nvda", "NVDA is running and will speak.");
+        _server.MaySpeak = true;
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/speech"),
+            new StringContent("{\"say\":\"It needs you.\"}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        _server.Voice.As<StubVoice>().Said.Should().BeEmpty();
+    }
+
+    private Task<HttpResponseMessage> Say(string line) =>
+        _client.PostAsync(
+            new Uri(_root + "api/speech?token=" + _server.Token),
+            new StringContent(System.Text.Json.JsonSerializer.Serialize(new { say = line })));
+
+    /// <summary>A voice that records rather than speaks.</summary>
+    /// <remarks>
+    /// There is no screen reader on this machine, so the path where one
+    /// answers cannot be exercised for real. What can be, and is what decides
+    /// whether somebody who never asked gets a talking computer, is the order
+    /// the refusals come in.
+    /// </remarks>
+    private sealed class StubVoice : Loadout.Platform.Abstractions.ISpeech
+    {
+        private readonly string _ready;
+
+        public StubVoice(string name, string ready)
+        {
+            Name = name;
+            _ready = ready;
+        }
+
+        public string Name { get; }
+
+        public List<string> Said { get; } = [];
+
+        public Task<OperationResult<string>> IsAvailableAsync(CancellationToken ct = default) =>
+            Task.FromResult(OperationResult<string>.Ok(_ready));
+
+        public Task<OperationResult> SayAsync(string text, bool interrupt = true, CancellationToken ct = default)
+        {
+            Said.Add(text);
+
+            return Task.FromResult(OperationResult.Ok());
+        }
+
+        public Task<OperationResult> SilenceAsync(CancellationToken ct = default) =>
+            Task.FromResult(OperationResult.Ok());
+    }
+
+    [Fact]
     public async Task A_server_that_only_watches_changes_nothing()
     {
         // This server has no Act, which is what `team dashboard` gives you: a

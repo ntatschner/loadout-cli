@@ -133,7 +133,8 @@ public sealed class DaemonStartsWorkTests
             processes: null!,
             Quiet(),
             TimeProvider.System,
-            Loadout.Cli.Infrastructure.AccessibleMode.Off);
+            Loadout.Cli.Infrastructure.AccessibleMode.Off,
+            speech: null!);
 
     private static CommandOutput Output() => new(Quiet(), new GlobalSettings());
 

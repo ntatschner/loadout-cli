@@ -440,10 +440,44 @@ choice in full, with **As my profile says** as the default.
 The change is announced into the live region the page has carried since its
 first commit, so a screen reader that is running reads it.
 
-**Nothing detects a screen reader, because nothing can.** There is no API for
-it; every heuristic that claims to is wrong often; and the ones that work at
-all work by fingerprinting somebody because of a disability. Announcing into a
-live region gets the same result and asks nobody anything.
+**A web page cannot detect a screen reader.** There is no API for it; every
+heuristic that claims to is wrong often; and the ones that work at all work by
+fingerprinting somebody because of a disability. So the page never guesses —
+**it asks the machine serving it**, which can tell, because Loadout already has
+a channel to a running reader and already reports whether it was a reader or
+the system's own voice that answered.
+
+When one did, the page's announcements are said through it as well as written
+into the live region. The live region is what works for a reader watching the
+tab; speaking reaches one that is not, which is what a dashboard left open on a
+second screen actually is.
+
+Four conditions, all of them required, before this machine says a word:
+
+1. **A screen reader answered.** Not a system voice — this speaks to the reader
+   somebody is already listening to, and a page that started talking through
+   the speakers because it found a voice installed would be a surprise, not a
+   feature.
+2. **You asked.** `loadout config set show-speech screen-reader`, the same
+   setting the launcher uses, because somebody who has said "speak to me" has
+   said it once and should not have to say it again per surface. Off by
+   default, and off even under the `screen-reader` preset.
+3. **The browser is on that machine.** Checked per request rather than per
+   listener: a dashboard on `0.0.0.0` is reachable from the network, and a
+   browser elsewhere making this machine talk is not something anybody asked
+   for.
+4. **The token,** like everything else here.
+
+Nothing is ever said out loud that is not also written on the page, and a line
+longer than 400 characters is cut — these are announcements, and a reader handed
+a megabyte would be reading it for an hour. The settings page says which of the
+four conditions is not met, in a sentence, rather than being quietly silent.
+
+**Not verified:** there is no screen reader on the machine this was written on,
+so the path where one answers has only been exercised against a stub. What that
+stub does prove is the order of the refusals, which is the part that decides
+whether somebody who never asked ends up with a talking computer. The real NVDA
+route has still never answered here.
 
 Movement can be turned down on the settings page and never up. Your machine is
 asked separately through `prefers-reduced-motion`, and the page takes the
