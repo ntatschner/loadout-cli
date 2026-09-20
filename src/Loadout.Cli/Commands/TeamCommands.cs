@@ -944,8 +944,11 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
         [CommandOption("--follow")]
         [Description("Keep reading as the run writes, until it finishes.")]
         public bool Follow { get; init; }
-    }
 
+        [CommandOption("--events")]
+        [Description("Only what happened: drop the running commentary and the tool calls.")]
+        public bool Events { get; init; }
+    }
     /// <inheritdoc />
     protected override async Task<int> ExecuteAsync(
         CommandContext context,
@@ -972,6 +975,12 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
             return output.Fail(read);
         }
 
+        // In the order they happened rather than the order they were written
+        // down, which differ for anything folded in out of a side file. The
+        // tail below keeps arrival order instead: a live watch shows things as
+        // they land, and cannot reorder what it has already printed.
+        var events = RunJournal.InOrder(read.Value!);
+
         if (output.IsJson)
         {
             // Read once, whatever --follow says: a document that never ends
@@ -979,7 +988,7 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
             output.WriteJson(new
             {
                 run = runId,
-                events = read.Value!.Select(entry => new
+                events = events.Select(entry => new
                 {
                     at = entry.At,
                     node = entry.Node,
@@ -993,10 +1002,16 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
 
         var seen = 0;
 
-        foreach (var entry in read.Value!)
+        foreach (var entry in events)
         {
-            output.WriteLine(Markup.Escape(RunJournal.Describe(entry)));
             seen++;
+
+            if (settings.Events && !RunJournal.Happened(entry))
+            {
+                continue;
+            }
+
+            output.WriteLine(Markup.Escape(RunJournal.Describe(entry)));
         }
 
         if (!settings.Follow || read.Value!.Any(entry => entry.Kind == "run.finished"))
@@ -1028,8 +1043,12 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
 
             foreach (var entry in again.Value!.Skip(seen))
             {
-                output.WriteLine(Markup.Escape(RunJournal.Describe(entry)));
                 seen++;
+
+                if (!settings.Events || RunJournal.Happened(entry))
+                {
+                    output.WriteLine(Markup.Escape(RunJournal.Describe(entry)));
+                }
 
                 if (entry.Kind == "run.finished")
                 {

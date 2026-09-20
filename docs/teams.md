@@ -216,6 +216,28 @@ there is one account of what happened rather than three that can disagree.
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
 
+`loadout team log --events` prints only what happened. A node writes a line for
+every tool call it makes and every sentence it says about itself, and on one
+four-minute run that was 42 of its 81 events - so the log answered "what did
+each node do, minute by minute" long before it answered "what happened in this
+run", which is the question it gets asked first. `--events` drops that
+commentary and leaves the spine: rounds, launches, asks and answers, reports,
+gates, merges, ends. Nothing is filtered out of the journal or out of `--json`,
+and the full account is still the default.
+
+Two things that used to be missing from it are now on the line. A node stopping
+to ask a person for permission, and the answer it got, printed as the bare words
+`node.asked` and `node.answered` - the most consequential moment in a run, and
+the least legible line in its log. And a run's last line said why it stopped but
+not how many rounds it took or what it spent, both of which it had already
+recorded.
+
+Permission decisions are read out of a side file at the end of a node's turn, so
+until now they were dated at the *fold* rather than at the decision. In one real
+run that put two of them three minutes late, below the line saying the node had
+ended. Runs from here on record the time the decision was made; journals already
+written keep the time they were folded, because that is what they say.
+
 ### What a run actually delivered
 
 A node reports what it produced by reference - a commit hash, a branch - because

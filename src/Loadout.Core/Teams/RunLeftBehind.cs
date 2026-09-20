@@ -162,38 +162,38 @@ public static class RunLeftBehind
             switch (one.Kind)
             {
                 case "gate.decided":
-                    out_.Add(new Decided(one.At, Word(one, "gate") ?? "a gate",
-                        Yes(one, "allowed") ? "allowed" : "refused",
-                        Word(one, "branch")));
+                    out_.Add(new Decided(one.At, one.Word("gate") ?? "a gate",
+                        one.Yes("allowed") ? "allowed" : "refused",
+                        one.Word("branch")));
                     break;
 
                 case "gate.refused":
-                    out_.Add(new Decided(one.At, Word(one, "gate") ?? "a gate", "refused",
-                        Word(one, "decisions")));
+                    out_.Add(new Decided(one.At, one.Word("gate") ?? "a gate", "refused",
+                        one.Word("decisions")));
                     break;
 
                 case "merge.done":
                     out_.Add(new Decided(one.At,
-                        $"merge {Word(one, "branch")} into {Word(one, "target")}", "merged",
-                        Yes(one, "FastForward") ? "fast forward" : null));
+                        $"merge {one.Word("branch")} into {one.Word("target")}", "merged",
+                        one.Yes("FastForward") ? "fast forward" : null));
                     break;
 
                 case "permission.asked":
                     out_.Add(new Decided(one.At,
-                        $"{Word(one, "node")} wanted {Word(one, "tool")} {Word(one, "target")}".Trim(),
-                        Yes(one, "allowed") ? "allowed" : "refused",
-                        Word(one, "reason")));
+                        $"{one.Word("node")} wanted {one.Word("tool")} {one.Word("target")}".Trim(),
+                        one.Yes("allowed") ? "allowed" : "refused",
+                        one.Word("reason")));
                     break;
 
                 case "node.answered":
                     out_.Add(new Decided(one.At, $"a question from {one.Node ?? "a node"}",
-                        Yes(one, "allowed") ? "answered yes" : "answered",
-                        Word(one, "Tool")));
+                        one.Yes("allowed") ? "answered yes" : "answered",
+                        one.Word("Tool")));
                     break;
 
                 case "request.refused":
-                    out_.Add(new Decided(one.At, $"{Word(one, "Node")} was asked for",
-                        "refused", Word(one, "reason")));
+                    out_.Add(new Decided(one.At, $"{one.Word("Node")} was asked for",
+                        "refused", one.Word("reason")));
                     break;
 
                 default:
@@ -204,28 +204,6 @@ public static class RunLeftBehind
         return out_;
     }
 
-    /// <summary>Whether an event said yes, with both spellings tried.</summary>
-    private static bool Yes(RunEvent one, string key) =>
-        one.Flag(key) ?? one.Flag(char.ToUpperInvariant(key[0]) + key[1..]) ?? false;
-
-    /// <summary>One value out of an event's data, as words, or nothing.</summary>
-    /// <remarks>
-    /// Both spellings, because the journal has both. <see cref="RunEvent.Text"/>
-    /// matches a name exactly and says so; what it does not say is that these
-    /// events were written from C# anonymous objects and some of them therefore
-    /// carry <c>Node</c> and <c>Tool</c> where their neighbours carry
-    /// <c>node</c> and <c>tool</c>. Asking for one spelling reads half the
-    /// journal and silently drops the rest, which is the same fault that
-    /// comment describes, one layer up.
-    /// </remarks>
-    private static string? Word(RunEvent one, string key)
-    {
-        var said = one.Text(key)
-            ?? one.Text(char.ToUpperInvariant(key[0]) + key[1..])
-            ?? one.Text(char.ToLowerInvariant(key[0]) + key[1..]);
-
-        return said is { Length: > 0 } && said.Trim().Length > 0 ? said.Trim() : null;
-    }
 
     /// <summary>An enum in the contract's own spelling rather than C#'s.</summary>
     private static string Spelt<T>(T value)

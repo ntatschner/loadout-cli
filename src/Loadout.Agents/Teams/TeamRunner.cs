@@ -1778,6 +1778,17 @@ public sealed class TeamRunner : ITeamRunner
     /// it was given, and nobody finds that out from a count of denials.
     /// </para>
     /// </remarks>
+    /// <summary>When a folded event says it happened, or nothing.</summary>
+    private static DateTimeOffset? When(RunEvent asked) =>
+        asked.Word("at") is { } said
+        && DateTimeOffset.TryParse(
+            said,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind,
+            out var then)
+            ? then
+            : null;
+
     private async Task FoldQuestionsAsync(
         Brief brief,
         Journal journal,
@@ -1816,7 +1827,11 @@ public sealed class TeamRunner : ITeamRunner
                 continue;
             }
 
-            await journal.WriteAsync("permission.asked", brief.Node, asked.Data, ct).ConfigureAwait(false);
+            // The decision carries its own time. Dating it at the fold is what
+            // put it after the node's death in the log.
+            await journal
+                .WriteAsync("permission.asked", brief.Node, asked.Data, ct, When(asked))
+                .ConfigureAwait(false);
 
             if (asked.Data.TryGetProperty("allowed", out var allowed) && allowed.ValueKind == JsonValueKind.False)
             {
@@ -2514,9 +2529,27 @@ public sealed class TeamRunner : ITeamRunner
             }
         }
 
-        public async Task WriteAsync(string kind, string? node, object? data, CancellationToken ct)
+        /// <summary>Records one thing that happened.</summary>
+        /// <param name="kind">What happened.</param>
+        /// <param name="node">Which node, or null for the run itself.</param>
+        /// <param name="data">Whatever that kind carries.</param>
+        /// <param name="ct">Cancellation.</param>
+        /// <param name="at">
+        /// When it happened, where that is not now. An event harvested out of a
+        /// side file happened when the file says, not when it was read: the
+        /// permission decisions are folded in at the end of a node's turn, and
+        /// dating them at the fold put two of them minutes late and after the
+        /// node had already ended.
+        /// </param>
+        public async Task WriteAsync(
+            string kind,
+            string? node,
+            object? data,
+            CancellationToken ct,
+            DateTimeOffset? at = null)
         {
-            var line = JsonSerializer.Serialize(new { at = _time.GetUtcNow(), run = _run, node, kind, data }, JournalLine);
+            var line = JsonSerializer.Serialize(
+                new { at = at ?? _time.GetUtcNow(), run = _run, node, kind, data }, JournalLine);
 
             await _lock.WaitAsync(ct).ConfigureAwait(false);
 

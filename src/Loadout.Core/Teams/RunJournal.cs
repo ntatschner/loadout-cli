@@ -46,6 +46,64 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
             }
             : null;
 
+    /// <summary>One value from the event's data, as words, with both spellings tried.</summary>
+    /// <remarks>
+    /// <see cref="Text"/> matches a name exactly and says so. What it does not
+    /// say is that some of these events were written from C# anonymous-object
+    /// shorthand before that was corrected, so journals already on disk carry
+    /// <c>Tool</c> and <c>Target</c> where their neighbours carry <c>tool</c>
+    /// and <c>target</c>. Asking for one spelling reads half the journal and
+    /// drops the rest without a word, which is the fault that comment
+    /// describes, one layer up. Readers of old journals want this; writers
+    /// still want <see cref="Text"/>, so that the next one is caught.
+    /// </remarks>
+    public string? Word(string name)
+    {
+        var said = Text(name)
+            ?? Text(char.ToUpperInvariant(name[0]) + name[1..])
+            ?? Text(char.ToLowerInvariant(name[0]) + name[1..]);
+
+        return said is { Length: > 0 } && said.Trim().Length > 0 ? said.Trim() : null;
+    }
+
+    /// <summary>Whether the event said yes, with both spellings tried.</summary>
+    public bool Yes(string name) =>
+        Flag(name) ?? Flag(char.ToUpperInvariant(name[0]) + name[1..]) ?? false;
+
+    /// <summary>Every string in a list from the event's data, or nothing.</summary>
+    /// <remarks>
+    /// A rejection carries its reasons and a gate reminder carries what it is
+    /// still waiting on. Both are lists, and a reader with no way to ask for
+    /// one prints the event without the only part that says why.
+    /// </remarks>
+    public IReadOnlyList<string> Words(string name)
+    {
+        if (Data.ValueKind != JsonValueKind.Object)
+        {
+            return [];
+        }
+
+        if (!Data.TryGetProperty(name, out var value)
+            && !Data.TryGetProperty(char.ToUpperInvariant(name[0]) + name[1..], out value))
+        {
+            return [];
+        }
+
+        if (value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. value.EnumerateArray()
+                .Where(one => one.ValueKind == JsonValueKind.String)
+                .Select(one => one.GetString()!)
+                .Where(one => one.Trim().Length > 0)
+                .Select(one => one.Trim()),
+        ];
+    }
+
     /// <summary>A number from the event's data, or null.</summary>
     public decimal? Number(string name) =>
         Data.ValueKind == JsonValueKind.Object && Data.TryGetProperty(name, out var value)
@@ -386,6 +444,53 @@ public sealed class RunJournal : IRunJournal
         }
 
         return OperationResult<IReadOnlyList<RunEvent>>.Ok(events);
+    }
+
+    /// <summary>
+    /// Whether an event belongs to the shape of a run rather than to the
+    /// running account of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A node writes a line for every tool call it makes and every sentence it
+    /// says about itself. On one four-minute run that was 42 of 81 events.
+    /// Both are worth keeping - they are how you tell a node looping on one
+    /// file from one carefully reading forty - and neither answers "what
+    /// happened in this run", which is what a log is read for first.
+    /// </para>
+    /// <para>
+    /// This decides one printed view. Nothing is filtered out of the journal,
+    /// and the full account stays the default.
+    /// </para>
+    /// </remarks>
+    public static bool Happened(RunEvent entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return !string.Equals(entry.Kind, "node.doing", StringComparison.Ordinal)
+            && !string.Equals(entry.Kind, "node.said", StringComparison.Ordinal);
+    }
+
+    /// <summary>The same events, in the order they happened.</summary>
+    /// <remarks>
+    /// <para>
+    /// The journal is appended to as things happen, so its order is the order
+    /// things were <em>written down</em>, and for almost everything those are
+    /// the same. They are not the same for an event harvested out of a side
+    /// file: a node's permission decisions are folded in at the end of its
+    /// turn, and one real run therefore recorded two of them three minutes
+    /// late, after the line saying the node had ended.
+    /// </para>
+    /// <para>
+    /// Stable, so that events sharing an instant keep the order they were
+    /// written in, which is the only thing left that can tell them apart.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<RunEvent> InOrder(IEnumerable<RunEvent> events)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+
+        return [.. events.OrderBy(one => one.At)];
     }
 
     /// <summary>
@@ -744,28 +849,45 @@ public sealed class RunJournal : IRunJournal
             "run.started" => $"started {entry.Text("team")}"
                 + (entry.Text("project") is { Length: > 0 } on ? $" on {on}" : string.Empty)
                 + $", {entry.Text("autonomy")}: {entry.Text("goal")}",
-            "run.finished" => $"finished: {entry.Text("ended")}",
+            "run.finished" => $"finished: {entry.Text("ended")}"
+                + (entry.Number("rounds") is { } rounds ? $" - {rounds:0} round(s)" : string.Empty)
+                + (entry.Number("cost") is { } spent ? $", ${spent:0.00}" : string.Empty),
             "round.started" => $"round {entry.Number("round")} of {entry.Number("of")}",
             "node.doing" => entry.Text("doing") ?? "working",
             "node.said" => entry.Text("line") ?? "working",
-            "permission.asked" => (entry.Data.TryGetProperty("allowed", out var yes)
-                    && yes.ValueKind == JsonValueKind.True ? "allowed " : "refused ")
-                + entry.Text("tool")
-                + (entry.Text("target") is { Length: > 0 } at ? $" {at}" : string.Empty),
+            // The three lines one decision writes. A node stops and says what
+            // it wants; a person answers; the answer is recorded against the
+            // rules that would otherwise have decided it. All three printed as
+            // their bare kind - "node.asked", and nothing about what was asked
+            // - which made the most consequential moment in a run the least
+            // legible line in its log.
+            "node.asked" => $"stopped to ask: {entry.Word("tool")}"
+                + (entry.Word("target") is { Length: > 0 } wanted ? $" {wanted}" : string.Empty),
+            "node.answered" => (entry.Yes("allowed") ? "was allowed " : "was refused ")
+                + entry.Word("tool"),
+            "permission.asked" => (entry.Yes("allowed") ? "allowed " : "refused ")
+                + entry.Word("tool")
+                + (entry.Word("target") is { Length: > 0 } at ? $" {at}" : string.Empty),
             "node.launched" => $"launched as {entry.Text("role")}"
                 + (entry.Text("worktree") is { Length: > 0 } tree ? $" on {tree}" : string.Empty),
             "node.turn" => $"turn {entry.Number("attempt")}: {entry.Number("turns")} exchange(s), "
                 + $"${entry.Number("cost"):0.00}"
                 + (entry.Number("denials") is > 0 ? $", {entry.Number("denials")} denial(s)" : string.Empty),
-            "report.checked" => $"reported {entry.Text("status")}, {entry.Text("outcome")}",
+            "report.checked" => $"reported {entry.Text("status")}, {entry.Text("outcome")}"
+                + (entry.Words("reasons") is { Count: > 0 } why
+                    ? $": {string.Join("; ", why)}"
+                    : string.Empty),
             "report.unreadable" => $"gave no report: {entry.Text("Error")}",
             "node.ended" => $"ended, exit {entry.Number("exit")}",
             "node.failed" => $"could not start: {entry.Text("error")}",
             "request.refused" => $"asked for a node it may not: {entry.Text("reason")}",
-            "gate.reminded" => "told it finished without the merge gate",
+            "gate.reminded" => "told it finished without the merge gate"
+                + (entry.Words("pending") is { Count: > 0 } waiting
+                    ? $": {string.Join(", ", waiting)}"
+                    : string.Empty),
             "gate.refused" => "the merge gate was not satisfied",
             "gate.opened" => $"merge gate open for {entry.Text("branch")}",
-            "gate.decided" => $"merge {(entry.Data.TryGetProperty("allowed", out var a) && a.ValueKind == JsonValueKind.True ? "allowed" : "refused")}",
+            "gate.decided" => $"merge {(entry.Yes("allowed") ? "allowed" : "refused")}",
             "merge.done" => $"merged {entry.Text("branch")} into {entry.Text("target")}",
             "merge.conflicted" => $"{entry.Text("branch")} conflicted",
             "merge.failed" => $"{entry.Text("branch")} could not be merged: {entry.Text("error")}",

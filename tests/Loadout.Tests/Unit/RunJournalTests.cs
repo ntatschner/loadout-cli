@@ -376,6 +376,146 @@ public sealed class RunJournalTests
         RunJournal.Describe(first!).Should().Contain("lead").And.Contain(RunJournal.Wording(first!));
     }
 
+    [Theory]
+    [InlineData("tool", "target")]
+    [InlineData("Tool", "Target")]
+    public void A_decision_a_person_made_says_what_was_asked_and_what_was_said(
+        string tool,
+        string target)
+    {
+        // The most consequential moment in a run - a node stopping, and a
+        // person deciding - printed as the bare words "node.asked", with
+        // nothing about what was wanted. Both spellings, because the journals
+        // already written carry both: these events were written from C#
+        // anonymous-object shorthand before that was corrected.
+        var asked = RunJournal.Parse(
+            "{\"at\":\"2026-09-17T11:18:43+00:00\",\"node\":\"implementer/1\","
+            + "\"kind\":\"node.asked\",\"data\":{\"" + tool + "\":\"Bash\",\""
+            + target + "\":\"dotnet test\"}}");
+
+        var answered = RunJournal.Parse(
+            "{\"at\":\"2026-09-17T11:18:55+00:00\",\"node\":\"implementer/1\","
+            + "\"kind\":\"node.answered\",\"data\":{\"" + tool + "\":\"Bash\",\"allowed\":true}}");
+
+        RunJournal.Wording(asked!).Should().Be("stopped to ask: Bash dotnet test");
+        RunJournal.Wording(answered!).Should().Be("was allowed Bash");
+    }
+
+    [Fact]
+    public void A_decision_that_went_against_a_node_says_so()
+    {
+        var refused = RunJournal.Parse(
+            """{"at":"2026-09-17T11:18:55+00:00","node":"lead","kind":"node.answered","data":{"tool":"WebFetch","allowed":false}}""");
+
+        RunJournal.Wording(refused!).Should().Be("was refused WebFetch");
+    }
+
+    [Fact]
+    public void A_run_that_finished_says_what_it_took()
+    {
+        // "finished: round limit: 3 rounds" and nothing else. The two numbers
+        // anybody wants off the last line of a log - how many rounds it
+        // actually took and what it cost - were on it already, unread.
+        var finished = RunJournal.Parse(
+            """{"at":"2026-09-17T11:23:57+00:00","kind":"run.finished","data":{"ended":"round limit: 3 rounds","cost":0.8521129,"rounds":4,"merged":[]}}""");
+
+        RunJournal.Wording(finished!).Should().Be("finished: round limit: 3 rounds - 4 round(s), $0.85");
+    }
+
+    [Fact]
+    public void A_reminder_names_what_it_is_still_waiting_on()
+    {
+        // The reminder's entire content is which roles have decided nothing,
+        // and that was the part the line dropped.
+        var reminded = RunJournal.Parse(
+            """{"at":"2026-09-17T11:22:28+00:00","node":"lead","kind":"gate.reminded","data":{"pending":["reviewer decided nothing","verifier decided nothing"]}}""");
+
+        RunJournal.Wording(reminded!).Should()
+            .Be("told it finished without the merge gate: reviewer decided nothing, verifier decided nothing");
+    }
+
+    [Fact]
+    public void A_report_that_was_not_accepted_says_why()
+    {
+        var rejected = RunJournal.Parse(
+            """{"at":"2026-09-17T11:22:28+00:00","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"rejected","reasons":["claimed a commit that is not there"]}}""");
+
+        RunJournal.Wording(rejected!).Should()
+            .Be("reported done, rejected: claimed a commit that is not there");
+
+        // An accepted one carries an empty list, and a colon with nothing
+        // after it reads as something missing.
+        var accepted = RunJournal.Parse(
+            """{"at":"2026-09-17T11:22:28+00:00","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","Reasons":[]}}""");
+
+        RunJournal.Wording(accepted!).Should().Be("reported done, accepted");
+    }
+
+    [Fact]
+    public void Events_are_read_in_the_order_they_happened()
+    {
+        // A node's permission decisions are harvested out of a side file at
+        // the end of its turn, so they are written down after events that
+        // happened later. One real run put two of them three minutes late,
+        // below the line saying the node had ended.
+        var late = RunJournal.Parse(
+            """{"at":"2026-09-17T11:18:55+00:00","node":"implementer/1","kind":"permission.asked","data":{"tool":"Bash","allowed":true}}""");
+
+        var ended = RunJournal.Parse(
+            """{"at":"2026-09-17T11:22:16+00:00","node":"implementer/1","kind":"node.ended","data":{"exit":0}}""");
+
+        var order = RunJournal.InOrder([ended!, late!]);
+
+        order.Should().HaveCount(2);
+        order[0].Kind.Should().Be("permission.asked");
+        order[1].Kind.Should().Be("node.ended");
+    }
+
+    [Fact]
+    public void Two_events_in_the_same_instant_keep_the_order_they_were_written()
+    {
+        // Nothing else can tell them apart, and a run finishing before the
+        // line that says what finished it is worse than either order.
+        var first = RunJournal.Parse(
+            """{"at":"2026-09-17T11:23:57+00:00","node":"lead","kind":"node.ended","data":{"exit":0}}""");
+
+        var second = RunJournal.Parse(
+            """{"at":"2026-09-17T11:23:57+00:00","kind":"run.finished","data":{"ended":"done"}}""");
+
+        RunJournal.InOrder([first!, second!])
+            .Select(one => one.Kind).Should().ContainInOrder("node.ended", "run.finished");
+    }
+
+    [Fact]
+    public void The_shape_of_a_run_is_what_is_left_when_the_commentary_goes()
+    {
+        // One four-minute run wrote 81 events, 42 of them a node's own tool
+        // calls and sentences. Those are worth having and they are not an
+        // answer to "what happened", which is what a log is read for first.
+        var commentary = new[]
+        {
+            """{"at":"2026-09-17T11:17:19+00:00","node":"planner","kind":"node.doing","data":{"doing":"Bash git status"}}""",
+            """{"at":"2026-09-17T11:17:29+00:00","node":"planner","kind":"node.said","data":{"line":"Now I'll create a plan."}}""",
+        };
+
+        commentary.Select(RunJournal.Parse)
+            .Should().OnlyContain(entry => !RunJournal.Happened(entry!));
+
+        // Everything else stays, including a kind nothing here knows about:
+        // the runner will grow them, and dropping one silently would leave a
+        // run that did something the log never mentions.
+        var shape = new[]
+        {
+            """{"at":"2026-09-17T11:16:37+00:00","node":"lead","kind":"node.launched","data":{"role":"role.project-lead"}}""",
+            """{"at":"2026-09-17T11:18:43+00:00","node":"lead","kind":"node.asked","data":{"tool":"Bash"}}""",
+            """{"at":"2026-09-17T11:22:11+00:00","node":"lead","kind":"node.turn","data":{"attempt":1,"turns":19,"cost":0.26}}""",
+            """{"at":"2026-09-17T11:23:57+00:00","kind":"something.new","data":{}}""",
+        };
+
+        shape.Select(RunJournal.Parse)
+            .Should().OnlyContain(entry => RunJournal.Happened(entry!));
+    }
+
     [Fact]
     public void An_event_kind_nothing_knows_about_still_reads_as_itself()
     {

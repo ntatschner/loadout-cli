@@ -1,3 +1,4 @@
+using System.Globalization;
 using FluentAssertions;
 using Loadout.Agents;
 using Loadout.Agents.Claude;
@@ -469,6 +470,32 @@ public sealed class TeamRunnerTests : IDisposable
 
         File.Exists(Path.Combine(outcome.Directory!, Loadout.Core.Teams.NodePermissions.AskedFileName("lead")))
             .Should().BeFalse("folded questions are removed, or a second turn counts them twice");
+    }
+
+    [Fact]
+    public async Task A_folded_decision_keeps_the_time_it_was_made()
+    {
+        // The answerer is another process, so its decisions are read out of a
+        // side file at the end of the node's turn. Dating them at the fold put
+        // two of them three minutes late in one real run, below the line
+        // saying the node had already ended - a log whose timeline was wrong
+        // about the only events in it a person caused.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        _launcher.BeforeStart = directory => File.AppendAllText(
+            Path.Combine(directory, Loadout.Core.Teams.NodePermissions.AskedFileName("lead")),
+            """{"at":"2026-09-16T10:00:00+00:00","node":"lead","tool":"Bash","target":"dotnet test","allowed":true,"rule":null,"reason":"allowed for this call only"}"""
+                + "\n");
+
+        var outcome = (await RunAsync()).Value!;
+
+        var folded = (await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl")))
+            .Select(Loadout.Core.Teams.RunJournal.Parse)
+            .Single(entry => entry?.Kind == "permission.asked")!;
+
+        folded.At.Should().Be(
+            DateTimeOffset.Parse("2026-09-16T10:00:00+00:00", CultureInfo.InvariantCulture),
+            "the decision's own time, not the time somebody got round to reading it");
     }
 
     [Fact]
