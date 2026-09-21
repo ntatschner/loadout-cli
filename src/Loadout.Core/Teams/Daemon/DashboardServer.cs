@@ -611,7 +611,7 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     private async Task SpeechAsync(HttpListenerContext context, CancellationToken ct)
     {
-        var here = Nearby(context.Request);
+        var here = From(context.Request);
 
         if (Voice is null)
         {
@@ -742,11 +742,20 @@ public sealed class DashboardServer : IDisposable
     private static bool Nearby(HttpListenerRequest request) =>
         request.RemoteEndPoint?.Address is { } from && IPAddress.IsLoopback(from);
 
+    /// <summary>How a request is judged to have come from this machine.</summary>
+    /// <remarks>
+    /// A seam, and only a seam. Every test here talks to the server over
+    /// loopback, so the refusal that matters - somewhere else asking to set
+    /// the passphrase - cannot happen in one. Without this it would be an
+    /// untested claim in a security surface, which is the kind that turns out
+    /// to be wrong.
+    /// </remarks>
+    internal Func<HttpListenerRequest, bool> From { get; set; } = Nearby;
+
     /// <summary>Whether an address is this machine talking to itself.</summary>
     private static bool IsLoopback(string address) =>
         address is "127.0.0.1" or "localhost" or "::1";
 
-    /// <summary>A port nothing is using, asked of the machine rather than guessed.</summary>
     /// <summary>What to try next when the machine is choosing the port.</summary>
     /// <remarks>
     /// A seam, and only a seam. The race it exists for - a port read from the
@@ -874,6 +883,23 @@ public sealed class DashboardServer : IDisposable
     {
         var request = context.Request;
         var path = request.Url?.AbsolutePath ?? "/";
+
+        // Setting the second credential, which is the one thing here that
+        // this machine has to be sitting in front of.
+        if (path == "/api/attach/passphrase")
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await PassphraseAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
 
         // Exchanging the second credential for a grant. Behind the
         // dashboard's own token as well, because there is no reason for
@@ -1397,6 +1423,122 @@ public sealed class DashboardServer : IDisposable
     /// thirty-two random bytes this process made a moment ago, and it stops
     /// working on its own whether or not anybody remembers to give it back.
     /// </remarks>
+    /// <summary>
+    /// Sets the passphrase that lets somebody type at a node, from the page.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// From this machine only, and that is not the same test as the token.
+    /// Every other route here is something a person somewhere else may
+    /// legitimately do with the token they were given: watch a run, answer a
+    /// gate, hold it, type at a node. This decides what may type at a node
+    /// from now on, and a token should not be able to buy that from across a
+    /// network - a stolen one would otherwise rewrite the credential it was
+    /// stolen alongside.
+    /// </para>
+    /// <para>
+    /// The other half of why it is here: set from the command line it goes in
+    /// as a flag, which lands in shell history and, on Unix, in the process
+    /// list where ps shows other people's command lines. A field on a page
+    /// that only this machine can reach avoids both.
+    /// </para>
+    /// </remarks>
+    private async Task PassphraseAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        // Whether it could be set from here, and whether one is set at all.
+        // Neither is the passphrase and neither is worth withholding: a person
+        // sitting at a page wants to know where they stand before they type
+        // anything into a box.
+        if (string.Equals(context.Request.HttpMethod, "GET", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    here = From(context.Request),
+                    set = Attach is not null && await Attach.IsSetAsync(ct).ConfigureAwait(false),
+                    can = Attach is not null,
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Setting the passphrase is a POST." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!From(context.Request))
+        {
+            await WriteAsync(context, 403, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "The passphrase is set at the machine the dashboard is running on, "
+                        + "not from somewhere else. Set it there with: loadout team attach set",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Attach is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "This dashboard cannot type at a node at all." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        string? given;
+        var make = false;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+            var body = await reader.ReadToEndAsync(ct).ConfigureAwait(false);
+
+            var root = JsonDocument.Parse(body).RootElement;
+
+            given = Text(root, "passphrase");
+            make = root.TryGetProperty("generate", out var asked)
+                && asked.ValueKind == JsonValueKind.True;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            given = null;
+        }
+
+        var chosen = make ? Attaching.Make() : given;
+
+        if (chosen is not { Length: > 0 })
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Give a passphrase, or ask for one to be made." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var kept = await Attach.RememberAsync(chosen, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            kept.Succeeded ? 200 : 400,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                kept.Succeeded
+                    ? new
+                    {
+                        // Only what was made, and only this once. A passphrase
+                        // somebody typed is one they already have, and handing
+                        // it back would put it in a response for no reason.
+                        made = make ? chosen : null,
+                        error = (string?)null,
+                    }
+                    : new { made = (string?)null, error = kept.Error },
+                Json)).ConfigureAwait(false);
+    }
+
     private async Task AttachAsync(HttpListenerContext context, CancellationToken ct)
     {
         if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))

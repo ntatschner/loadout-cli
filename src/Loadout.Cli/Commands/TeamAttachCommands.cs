@@ -43,6 +43,10 @@ public sealed class TeamAttachSetCommand : AsyncCommand<TeamAttachSetCommand.Set
         [CommandOption("--passphrase <TEXT>")]
         [Description("The passphrase. Eight characters at least.")]
         public string? Passphrase { get; init; }
+
+        [CommandOption("--generate")]
+        [Description("Make one instead of choosing it, and print it once.")]
+        public bool Generate { get; init; }
     }
 
     /// <inheritdoc />
@@ -55,16 +59,27 @@ public sealed class TeamAttachSetCommand : AsyncCommand<TeamAttachSetCommand.Set
 
         var output = new CommandOutput(_console, settings);
 
-        if (settings.Passphrase is not { Length: > 0 } passphrase)
+        if (settings.Generate && settings.Passphrase is { Length: > 0 })
         {
             return output.Fail(
-                "Give one with --passphrase. It is not read from a prompt, so it does not end up "
-                + "in a transcript of one.",
+                "Choose one or ask for one, not both.", ExitCode.InvalidArguments);
+        }
+
+        var passphrase = settings.Generate ? Attaching.Make() : settings.Passphrase;
+
+        if (passphrase is not { Length: > 0 })
+        {
+            return output.Fail(
+                "Give one with --passphrase, or ask for one with --generate. It is not read from "
+                + "a prompt, so it does not end up in a transcript of one.",
                 ExitCode.InvalidArguments);
         }
 
         if (settings.DryRun)
         {
+            // The made one is thrown away with everything else. Printing it
+            // would be a passphrase on a screen that nothing is keeping, which
+            // is a thing somebody writes down and then cannot use.
             output.WriteLine("Dry run: nothing was kept. It would go in this machine's credential store.");
 
             return CommandOutput.Success();
@@ -76,6 +91,18 @@ public sealed class TeamAttachSetCommand : AsyncCommand<TeamAttachSetCommand.Set
         if (kept.Failed)
         {
             return output.Fail(kept);
+        }
+
+        if (settings.Generate)
+        {
+            // Once, and only here. It is in the credential store now and
+            // nothing reads it back out to show somebody.
+            output.WriteBlankLine();
+            output.WriteLine($"  [bold]{Markup.Escape(passphrase)}[/]");
+            output.WriteBlankLine();
+            output.WriteLine(
+                "[dim]Written down now or not at all: this is the only time it is shown. "
+                + "It is on this machine's credential store, not in any file.[/]");
         }
 
         output.WriteLine(

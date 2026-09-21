@@ -153,6 +153,83 @@ public sealed class AttachingTests
         await act.Should().ThrowAsync<ArgumentException>();
     }
 
+    [Fact]
+    public async Task Guessing_stops_being_listened_to()
+    {
+        // Fixed-time comparison stops the passphrase leaking a character at a
+        // time. It does nothing about guessing it whole, and this is the one
+        // credential here a person chooses: the tokens are 128 and 256 bits of
+        // CSPRNG, while this has a floor of eight characters and no ceiling on
+        // how ordinary they are.
+        var (attach, _) = Made();
+
+        for (var i = 0; i < Attaching.Patience; i++)
+        {
+            (await attach.GrantAsync("wrong")).Failed.Should().BeTrue();
+        }
+
+        var locked = await attach.GrantAsync(Passphrase);
+
+        locked.Failed.Should().BeTrue("it has stopped listening, even to the right one");
+        locked.Error.Should().Contain("Wait a minute");
+    }
+
+    [Fact]
+    public async Task It_starts_listening_again()
+    {
+        // A minute, not an hour. The point is to make guessing cost something,
+        // not to lock somebody out of their own machine.
+        var (attach, clock) = Made();
+
+        for (var i = 0; i < Attaching.Patience; i++)
+        {
+            await attach.GrantAsync("wrong");
+        }
+
+        clock.Now += Attaching.Cools + TimeSpan.FromSeconds(1);
+
+        (await attach.GrantAsync(Passphrase)).Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Getting_it_right_clears_what_went_before()
+    {
+        // Otherwise four mistyped attempts keep counting against somebody who
+        // has since got it right, and the fifth mistake next week locks them
+        // out for reasons a week old.
+        var (attach, _) = Made();
+
+        for (var i = 0; i < Attaching.Patience - 1; i++)
+        {
+            await attach.GrantAsync("wrong");
+        }
+
+        (await attach.GrantAsync(Passphrase)).Succeeded.Should().BeTrue();
+
+        // Four more would be nine in total, and it is still listening.
+        for (var i = 0; i < Attaching.Patience - 1; i++)
+        {
+            await attach.GrantAsync("wrong");
+        }
+
+        (await attach.GrantAsync(Passphrase)).Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_locked_out_caller_is_not_told_whether_one_is_even_set()
+    {
+        // The check happens before the secret is read, so the refusal says the
+        // same thing on a machine with a passphrase and one without.
+        var (none, _) = Made(kept: null);
+
+        for (var i = 0; i < Attaching.Patience; i++)
+        {
+            await none.GrantAsync("wrong");
+        }
+
+        (await none.GrantAsync("wrong")).Error.Should().Contain("Wait a minute");
+    }
+
     private sealed class Clock(DateTimeOffset now) : TimeProvider
     {
         public DateTimeOffset Now { get; set; } = now;

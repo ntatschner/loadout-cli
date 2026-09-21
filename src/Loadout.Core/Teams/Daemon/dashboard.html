@@ -1883,6 +1883,36 @@
 
   [data-presentation="rich"] #settings .group::after { content: none; }
 
+  /*
+    The passphrase row. Plain gets the browser's own controls, which is right:
+    this is a text field and two buttons and there is nothing to improve.
+  */
+  #settings .secret {
+    font: inherit;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.4rem;
+    margin: 0.3rem 0 0.6rem;
+  }
+
+  #settings .settings-act {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    padding: 0.4rem 0.8rem;
+    margin: 0 0.4rem 0 0;
+    min-height: 2.5rem;
+    cursor: pointer;
+  }
+
+  [data-presentation="rich"] #settings .secret,
+  [data-presentation="rich"] #settings .settings-act {
+    border: 1px solid var(--rule);
+    border-radius: var(--round);
+  }
+
   [data-presentation="rich"] #settings legend {
     padding: 0 var(--s2);
     margin-left: calc(var(--s2) * -1);
@@ -5043,6 +5073,129 @@
   */
   var settingsDrawn = false;
 
+  /*
+    Typing at a node needs its own passphrase, and this is where it is set.
+
+    Only from the machine the dashboard runs on. Everything else here is
+    something a person elsewhere may legitimately do with the token they were
+    given - watch a run, answer a gate, type at a node. This decides what may
+    type at a node from now on, and a stolen token should not be able to
+    rewrite the credential it was stolen alongside. The server refuses it
+    either way; asking first is so the page can say so rather than offering a
+    box that will not work.
+  */
+  function drawPassphrase(page) {
+    var box = group(page, "Typing at a node",
+      "Reading this page and typing at a running agent are different things, "
+      + "so typing needs its own passphrase. It is kept in this machine's "
+      + "credential store, never in a file.");
+
+    var said = document.createElement("p");
+    said.className = "said";
+    said.textContent = "Asking\u2026";
+    box.appendChild(said);
+
+    api("/api/attach/passphrase").then(function (how) {
+      said.textContent = "";
+
+      if (!how || !how.can) {
+        said.textContent = "This dashboard cannot type at a node at all.";
+
+        return;
+      }
+
+      if (!how.here) {
+        // The refusal, said before anything is typed rather than after.
+        said.textContent = "The passphrase is set at the machine the dashboard "
+          + "is running on, not from here. "
+          + (how.set ? "One is set there." : "None is set there yet.");
+
+        return;
+      }
+
+      said.textContent = how.set
+        ? "One is set. Putting a new one here replaces it."
+        : "None is set, so nothing can type at a node yet.";
+
+      var field = document.createElement("input");
+      field.type = "password";
+      field.id = "attach-passphrase";
+      field.autocomplete = "new-password";
+      field.className = "secret";
+
+      var label = document.createElement("label");
+      label.setAttribute("for", field.id);
+      label.textContent = "Passphrase, eight characters at least";
+
+      box.appendChild(label);
+      box.appendChild(field);
+
+      var keep = document.createElement("button");
+      keep.type = "button";
+      keep.className = "settings-act";
+      keep.textContent = "Keep it";
+
+      var make = document.createElement("button");
+      make.type = "button";
+      make.className = "settings-act";
+      make.textContent = "Make one";
+
+      var shown = document.createElement("p");
+      shown.className = "said";
+
+      function sent(body, after) {
+        return fetch("/api/attach/passphrase?token=" + encodeURIComponent(token), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body)
+        }).then(function (answer) {
+          return answer.json().then(function (read) {
+            if (read.error) {
+              shown.textContent = read.error;
+              say(read.error);
+
+              return;
+            }
+
+            after(read);
+          });
+        }).catch(function () {
+          shown.textContent = "That did not reach the dashboard.";
+        });
+      }
+
+      keep.addEventListener("click", function () {
+        if (!field.value) { return; }
+
+        sent({ passphrase: field.value }, function () {
+          field.value = "";
+          shown.textContent = "Kept.";
+          said.textContent = "One is set. Putting a new one here replaces it.";
+          say("Passphrase kept.");
+        });
+      });
+
+      make.addEventListener("click", function () {
+        sent({ generate: true }, function (read) {
+          // Once, and only here. Nothing reads it back out afterwards, so a
+          // person who does not write it down now has to make another.
+          shown.textContent = "Write this down now, it is not shown again: " + read.made;
+          said.textContent = "One is set. Putting a new one here replaces it.";
+          say("Passphrase made. It is on the screen once.");
+        });
+      });
+
+      box.appendChild(keep);
+      box.appendChild(make);
+      box.appendChild(shown);
+    }).catch(function () {
+      // api throws on anything but a 200, and without this the panel sits on
+      // "Asking..." for ever while the console collects an unhandled
+      // rejection. Saying nothing is known is worse than saying nothing.
+      said.textContent = "Whether a passphrase is set could not be read.";
+    });
+  }
+
   function drawSettings() {
     if (settingsDrawn) { return; }
 
@@ -5088,6 +5241,8 @@
       // nothing redecorates itself.
       window.setTimeout(function () { window.location.reload(); }, 900);
     }, "grid");
+
+    drawPassphrase(page);
 
     var moving = group(page, "Movement",
       "Your machine is asked as well, and the page takes the quieter of the "

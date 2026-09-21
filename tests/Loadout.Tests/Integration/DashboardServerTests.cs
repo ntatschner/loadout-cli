@@ -1168,6 +1168,138 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_passphrase_is_set_from_the_machine_it_runs_on()
+    {
+        _server.Attach = new Attaching(new NoSecrets());
+
+        // Why it is here at all: set from the command line it goes in as a
+        // flag, which lands in shell history - PSReadLine writes history to a
+        // file on Windows - and on Unix in the process list, where ps shows
+        // other people's command lines.
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/attach/passphrase?token=" + _server.Token),
+            new StringContent("{\"generate\":true}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var made = JsonDocument.Parse(await answer.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("made").GetString();
+
+        made.Should().NotBeNullOrEmpty("a made one is shown once, here");
+
+        // Four groups of five from an alphabet with no 0, 1, i, l or o,
+        // because somebody reads it off one screen and types it into another.
+        made.Should().MatchRegex("^[2-9a-hjkmnp-z]{5}(-[2-9a-hjkmnp-z]{5}){3}$");
+
+        // And it is the passphrase now, which is the only thing that proves it
+        // was kept rather than merely returned.
+        (await _server.Attach!.GrantAsync(made)).Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Somewhere_else_cannot_set_it_however_good_its_token_is()
+    {
+        // The refusal that matters, and the one no test here could otherwise
+        // reach: every request in this file arrives over loopback. Everything
+        // else the dashboard does is something a person elsewhere may
+        // legitimately do with the token they were given; this decides what
+        // may type at a node from now on, and a stolen token would otherwise
+        // rewrite the credential it was stolen alongside.
+        _server.From = _ => false;
+
+        try
+        {
+            var answer = await _client.PostAsync(
+                new Uri(_root + "api/attach/passphrase?token=" + _server.Token),
+                new StringContent("{\"passphrase\":\"a passphrase worth having\"}"));
+
+            answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+            (await answer.Content.ReadAsStringAsync())
+                .Should().Contain("not from somewhere else");
+        }
+        finally
+        {
+            _server.From = request =>
+                request.RemoteEndPoint?.Address is { } from
+                && System.Net.IPAddress.IsLoopback(from);
+        }
+    }
+
+    [Fact]
+    public async Task Setting_it_needs_the_token_like_everything_else()
+    {
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/attach/passphrase"),
+            new StringContent("{\"generate\":true}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task A_GET_says_where_you_stand_and_never_the_passphrase()
+    {
+        // The page asks before it offers a field, because a refusal a person
+        // only meets after typing their passphrase into a box is a worse way
+        // to learn where they are. Two booleans, and nothing secret in either.
+        _server.Attach = new Attaching(new NoSecrets { Kept = "a passphrase worth having" });
+
+        var answer = await GetAsync("/api/attach/passphrase");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await answer.Content.ReadAsStringAsync();
+
+        var read = JsonDocument.Parse(body).RootElement;
+
+        read.GetProperty("here").GetBoolean().Should().BeTrue("the tests talk to it over loopback");
+        read.GetProperty("set").GetBoolean().Should().BeTrue();
+
+        body.Should().NotContain("a passphrase worth having", "it is never read back out");
+    }
+
+    [Fact]
+    public async Task Setting_it_is_never_a_GET()
+    {
+        // Reporting is a GET; setting is not. A GET that set it would put the
+        // passphrase in a query string, which is the browser history and the
+        // server log both.
+        _server.Attach = new Attaching(new NoSecrets());
+
+        await GetAsync("/api/attach/passphrase?passphrase=a+passphrase+worth+having");
+
+        (await _server.Attach.IsSetAsync()).Should().BeFalse("a GET sets nothing");
+    }
+
+    [Fact]
+    public async Task One_somebody_typed_is_not_handed_back_to_them()
+    {
+        _server.Attach = new Attaching(new NoSecrets());
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/attach/passphrase?token=" + _server.Token),
+            new StringContent("{\"passphrase\":\"a passphrase worth having\"}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        JsonDocument.Parse(await answer.Content.ReadAsStringAsync())
+            .RootElement.GetProperty("made").ValueKind
+            .Should().Be(JsonValueKind.Null, "they already have it");
+    }
+
+    [Fact]
+    public async Task One_too_short_to_be_worth_having_is_refused()
+    {
+        _server.Attach = new Attaching(new NoSecrets());
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/attach/passphrase?token=" + _server.Token),
+            new StringContent("{\"passphrase\":\"short\"}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public void A_port_somebody_named_and_cannot_have_is_refused_rather_than_swapped()
     {
         // The other half of retrying a machine-chosen port. When the machine
@@ -1699,7 +1831,16 @@ public sealed class DashboardServerTests : IAsyncLifetime
     /// <summary>A credential store holding one thing, or nothing.</summary>
     private sealed class NoSecrets : Loadout.Platform.Abstractions.ISecretProvider
     {
-        public string? Kept { get; init; }
+        /// <summary>
+        /// What it holds, which a write actually changes.
+        /// </summary>
+        /// <remarks>
+        /// SetAsync used to say Ok and keep nothing, so anything that wrote a
+        /// credential and read it back got the old one - and a test of that
+        /// round trip passed only because it never checked. A fake easier to
+        /// satisfy than the real thing certifies the bug.
+        /// </remarks>
+        public string? Kept { get; set; }
 
         public string Name => "none";
 
@@ -1711,8 +1852,12 @@ public sealed class DashboardServerTests : IAsyncLifetime
                 ? OperationResult<string>.Ok(Kept)
                 : OperationResult<string>.Fail("nothing kept", Loadout.Models.ExitCode.GeneralFailure));
 
-        public Task<OperationResult> SetAsync(string reference, string value, CancellationToken ct = default) =>
-            Task.FromResult(OperationResult.Ok());
+        public Task<OperationResult> SetAsync(string reference, string value, CancellationToken ct = default)
+        {
+            Kept = value;
+
+            return Task.FromResult(OperationResult.Ok());
+        }
 
         public Task<OperationResult> RemoveAsync(string reference, CancellationToken ct = default) =>
             Task.FromResult(OperationResult.Ok());
