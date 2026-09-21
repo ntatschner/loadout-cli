@@ -56,6 +56,117 @@ public sealed class StubProcessLauncher : IProcessLauncher
         return Task.FromResult(OperationResult<int>.Ok(_exitCode));
     }
 
+    /// <summary>What was last started with its pipes held, for a test to inspect.</summary>
+    public ProcessRequest? Piped { get; private set; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Answers with the prepared output as the child's whole conversation:
+    /// every line of it is readable at once, the exit code is already known,
+    /// and whatever is written to the input is kept for the test to read back.
+    /// </remarks>
+    public Task<OperationResult<IPipedProcess>> StartPipedAsync(
+        ProcessRequest request,
+        CancellationToken ct = default)
+    {
+        Piped = request;
+        Requests.Add(request);
+
+        return Task.FromResult(OperationResult<IPipedProcess>.Ok(
+            new StubPipedProcess(_standardOutput, _exitCode)));
+    }
+
+    /// <summary>The scripted conversation a stubbed pipe holds.</summary>
+    public sealed class StubPipedProcess : IPipedProcess
+    {
+        /// <param name="output">Every line the child will write, readable at once.</param>
+        /// <param name="exitCode">What it exits with.</param>
+        /// <param name="error">What it writes to its error stream.</param>
+        /// <param name="beforeFirstLine">
+        /// Awaited before this child says anything, and only the first time.
+        /// A scripted pipe answers instantly, which is right for reading its
+        /// output and useless for asking whether two of them were running at
+        /// the same moment. This is where a test can hold one open.
+        /// </param>
+        public StubPipedProcess(string output, int exitCode, string error = "", Func<Task>? beforeFirstLine = null)
+        {
+            Output = beforeFirstLine is null
+                ? new StringReader(output)
+                : new HeldReader(output, beforeFirstLine);
+
+            Error = new StringReader(error);
+            Exited = Task.FromResult(exitCode);
+        }
+
+        /// <summary>Everything written to the child's input.</summary>
+        public StringWriter Written { get; } = new();
+
+        public int ProcessId => 4242;
+
+        public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
+
+        public TextWriter Input => Written;
+
+        public TextReader Output { get; }
+
+        public TextReader Error { get; }
+
+        public Task<int> Exited { get; }
+
+        public bool InputClosed { get; private set; }
+
+        public bool Killed { get; private set; }
+
+        public Task CloseInputAsync()
+        {
+            InputClosed = true;
+
+            return Task.CompletedTask;
+        }
+
+        public void Kill() => Killed = true;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        /// <summary>Scripted output that waits once before it starts.</summary>
+        private sealed class HeldReader : TextReader
+        {
+            private readonly StringReader _lines;
+            private readonly Func<Task> _hold;
+            private bool _held;
+
+            public HeldReader(string output, Func<Task> hold)
+            {
+                _lines = new StringReader(output);
+                _hold = hold;
+            }
+
+            public override async ValueTask<string?> ReadLineAsync(CancellationToken ct)
+            {
+                if (!_held)
+                {
+                    _held = true;
+
+                    await _hold().ConfigureAwait(false);
+                }
+
+                return await _lines.ReadLineAsync(ct).ConfigureAwait(false);
+            }
+
+            public override string? ReadLine() => _lines.ReadLine();
+
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    _lines.Dispose();
+                }
+
+                base.Dispose(disposing);
+            }
+        }
+    }
+
     /// <summary>What was last started detached, for a test to inspect.</summary>
     public ProcessRequest? Detached { get; private set; }
 

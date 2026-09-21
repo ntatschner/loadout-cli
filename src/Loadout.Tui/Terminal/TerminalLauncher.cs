@@ -8,6 +8,7 @@ using Loadout.Core.Instructions;
 using Loadout.Core.Manager;
 using Loadout.Core.Projects;
 using Loadout.Core.Sessions;
+using Loadout.Core.Teams;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Models.Configuration;
@@ -64,6 +65,8 @@ public sealed class TerminalLauncher : ILauncherTui
     private readonly IEditorService _editors;
     private readonly ISessionHistoryService _sessions;
     private readonly IManagerInventory _manager;
+    private readonly IRunJournal _runs;
+    private readonly ISpeech _speech;
     private readonly IInstructionService _instructions;
     private readonly IGitManager _git;
     private readonly IUpdateNotice _updates;
@@ -78,6 +81,8 @@ public sealed class TerminalLauncher : ILauncherTui
 
     /// <summary>Agents detected on this machine, once the first screen has asked.</summary>
     private IReadOnlyList<string> _installed = [];
+
+    private readonly ReadingProfile _reading;
 
     public TerminalLauncher(
         IAnsiConsole console,
@@ -99,12 +104,18 @@ public sealed class TerminalLauncher : ILauncherTui
         IEditorService editors,
         ISessionHistoryService sessions,
         IManagerInventory manager,
+        IRunJournal runs,
+        ISpeech speech,
         IInstructionService instructions,
         IGitManager git,
         Loadout.Core.Tasks.ITaskService tasks,
-        IUpdateNotice updates)
+        IUpdateNotice updates,
+        ReadingProfile reading)
     {
+        _reading = reading;
         _instructions = instructions;
+        _runs = runs;
+        _speech = speech;
         _git = git;
         _updates = updates;
         _tasks = tasks;
@@ -249,7 +260,7 @@ public sealed class TerminalLauncher : ILauncherTui
     {
         using IApplication application = Application.Create();
 
-        application.InitLegibly();
+        application.InitLegibly(_reading.Profile);
 
         // Started first, deliberately. Detecting agents and resolving the
         // current repository both shell out, and running them behind the
@@ -257,7 +268,13 @@ public sealed class TerminalLauncher : ILauncherTui
         // than beginning to think once it has.
         var loading = load();
 
-        SplashScreen.Play(application, "reading your projects", opening && Watching);
+        // Not for somebody who asked their machine for less movement. The
+        // animation says "it is thinking" to a person who can see it and
+        // nothing at all to anybody else.
+        SplashScreen.Play(
+            application,
+            "reading your projects",
+            opening && Watching && _reading.Profile?.Display.Motion is null or "full");
 
         var (projects, here, agents, recent) = await loading.ConfigureAwait(false);
 
@@ -275,7 +292,8 @@ public sealed class TerminalLauncher : ILauncherTui
             (project, token) => OverviewAsync(project, token),
             w => ShowPalette(w, application),
             recent,
-            application);
+            application,
+            Speaking());
 
         Announce(_updateNotice, window, application);
 
@@ -473,6 +491,10 @@ public sealed class TerminalLauncher : ILauncherTui
                 await ShowManagerAsync(managed, ct).ConfigureAwait(false);
                 return null;
 
+            case LauncherAction.Teams:
+                await ShowTeamsAsync(ct).ConfigureAwait(false);
+                return null;
+
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
                 // Run against the project on screen. The launcher knew which
                 // one was selected and threw it away here, so a command that
@@ -620,7 +642,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using (IApplication application = Application.Create())
         {
-            application.InitLegibly();
+            application.InitLegibly(_reading.Profile);
 
             using var window = new ProblemsWindow(heading, findings, offered, application);
 
@@ -714,7 +736,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using (IApplication application = Application.Create())
         {
-            application.InitLegibly();
+            application.InitLegibly(_reading.Profile);
 
             using var window = new ManagerWindow(project.Entry.Slug, read.Value!, application);
 
@@ -733,6 +755,97 @@ public sealed class TerminalLauncher : ILauncherTui
             project.LocalPath is { Length: > 0 } local ? ["--repo", local] : [],
             ct).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Shows what the team runs are doing, and runs whatever was chosen there.
+    /// </summary>
+    /// <remarks>
+    /// The runs are machine-wide rather than a project's: a run names the team
+    /// it is, not the project it was started from, and filtering by a guess
+    /// would hide runs from somebody looking for them. Reading them is a read
+    /// of files this launcher wrote, so it happens here; everything the screen
+    /// offers to do about one is handed back as the command somebody would have
+    /// typed.
+    /// </remarks>
+    /// <summary>
+    /// How the launcher says what it is showing, or null where it should not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Null unless somebody asked for it in as many words. A profile that says
+    /// "screen reader" gets the text launcher, which is the answer that has
+    /// been tried by people; this one has been heard by nobody, so it is opted
+    /// into rather than inferred.
+    /// </para>
+    /// <para>
+    /// Fire and forget, and deliberately. Speaking goes through a screen reader
+    /// or a COM object, either of which can take a moment, and a launcher that
+    /// waited for a sentence to finish would stop answering the arrow key that
+    /// started it. A line nobody hears is worth less than a launcher that keeps
+    /// moving.
+    /// </para>
+    /// </remarks>
+    private Action<string>? Speaking() =>
+        _reading.Speaks
+            ? line => _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _speech.SayAsync(line).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
+                {
+                    // Somebody who cannot hear the launcher can still read it.
+                    // A screen that stopped because speech failed would be a
+                    // worse answer than a quiet one.
+                }
+            })
+            : null;
+
+    private async Task ShowTeamsAsync(CancellationToken ct)
+    {
+        string? chosen;
+
+        using (IApplication application = Application.Create())
+        {
+            application.InitLegibly(_reading.Profile);
+
+            using var window = new TeamsWindow(
+                await ReadRunsAsync(ct).ConfigureAwait(false),
+                ReadRunsAsync,
+                _reading.MayRefreshItself,
+                application);
+
+            await application.RunAsync(window, ct).ConfigureAwait(false);
+
+            chosen = window.Chosen;
+        }
+
+        if (chosen is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        await _catalogue.RunAsync(path, [], ct).ConfigureAwait(false);
+
+        Pause();
+    }
+
+    /// <summary>
+    /// The runs on this machine, newest first, each folded into where it got
+    /// to. A run whose journal cannot be read is left out rather than throwing:
+    /// one being written while it is read is the ordinary case.
+    /// </summary>
+    private Task<IReadOnlyList<RunSummary>> ReadRunsAsync(CancellationToken ct) =>
+        Task.Run<IReadOnlyList<RunSummary>>(
+            () =>
+            [
+                .. _runs.List()
+                    .Select(id => _runs.Summarise(id))
+                    .Where(read => read.Succeeded)
+                    .Select(read => read.Value!),
+            ],
+            ct);
 
     private async Task ShowSettingsAsync(CancellationToken ct)
     {
@@ -778,7 +891,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using (IApplication application = Application.Create())
         {
-            application.InitLegibly();
+            application.InitLegibly(_reading.Profile);
 
             var editor = _editors.Describe(config);
 
@@ -1048,7 +1161,7 @@ public sealed class TerminalLauncher : ILauncherTui
 
         using IApplication application = Application.Create();
 
-        application.InitLegibly();
+        application.InitLegibly(_reading.Profile);
 
         using var sheet = new LaunchOptionsDialog(
             project,

@@ -168,6 +168,7 @@ public sealed class AgentToolsTests : IAsyncLifetime
             tasks: null!,
             _git,
             symbols: null!,
+            runs: null!,
             TimeProvider.System,
             new LoadoutToolScope(slug));
 

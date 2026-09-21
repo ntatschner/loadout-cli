@@ -55,6 +55,23 @@ namespace Loadout.Agents;
 /// the project's settings file travels, and a command that runs after every
 /// edit is this machine's to permit.
 /// </param>
+/// <param name="Headless">
+/// How to drive the session without a terminal, or null for an ordinary
+/// interactive launch. When set, the adapter puts the agent into its
+/// message-in, event-out mode and applies the permission, budget and output
+/// settings a node needs, all explicitly; nothing about a headless session
+/// is left to the machine's interactive defaults.
+/// </param>
+/// <param name="Accessibility">
+/// How the person has asked to be written to and shown things, with their
+/// preset already applied, or null when they have set nothing. An adapter
+/// switches on whatever its own agent offers for it.
+/// </param>
+/// <param name="ReachableDirectories">
+/// Anywhere beyond the project this session may work in. A team's directory is
+/// the first of these: its nodes are briefed with the path and told to keep
+/// what the team learns there, and without it the agent refuses every write.
+/// </param>
 public sealed record AgentLaunchContext(
     ProjectResolution Project,
     string WorkingDirectory,
@@ -69,7 +86,10 @@ public sealed record AgentLaunchContext(
     IReadOnlyList<string>? McpConfigFiles = null,
     IReadOnlyList<string>? PreApprovedCommands = null,
     string? Model = null,
-    IReadOnlyList<string>? AllowedHooks = null);
+    IReadOnlyList<string>? AllowedHooks = null,
+    HeadlessOptions? Headless = null,
+    Models.Configuration.AccessibilitySettings? Accessibility = null,
+    IReadOnlyList<string>? ReachableDirectories = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>
@@ -80,11 +100,18 @@ public sealed record AgentLaunchContext(
 /// that could not be attached. Shown to the user rather than swallowed: an
 /// agent silently starting without its context looks like it worked.
 /// </param>
+/// <param name="RemoveEnvironmentPrefixes">
+/// Variables the child must not inherit, by prefix, or null for none. An
+/// adapter names them because it knows which of its agent's variables mark a
+/// session that is already running: a node started from inside one would
+/// otherwise take those markers as its own and lose its transcript.
+/// </param>
 public sealed record AgentInvocation(
     string Executable,
     IReadOnlyList<string> Arguments,
     IReadOnlyDictionary<string, string> Environment,
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null,
+    IReadOnlyList<string>? RemoveEnvironmentPrefixes = null);
 
 /// <summary>
 /// Adapts one coding agent to the launcher (spec section 30).
@@ -123,4 +150,10 @@ public interface IAgentAdapter
 
     /// <summary>Adapter-specific diagnostic checks for the doctor report.</summary>
     Task<IReadOnlyList<DiagnosticCheck>> RunDiagnosticsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// How this agent is spoken to over its pipes, or null when it cannot be
+    /// driven without a terminal.
+    /// </summary>
+    IHeadlessProtocol? HeadlessProtocol { get; }
 }

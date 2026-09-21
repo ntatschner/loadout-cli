@@ -37,12 +37,18 @@ public static class SelfServerConfig
     /// The launcher's own path. Defaults to this process, and is a parameter so
     /// a test can say what it is rather than depend on what is running it.
     /// </param>
+    /// <param name="policyPath">
+    /// A team node's permission policy, which this session's server answers
+    /// the agent's permission questions from. Null for an ordinary session,
+    /// where a person at the keyboard answers their own.
+    /// </param>
     public static IReadOnlyList<string> Write(
         bool enabled,
         string slug,
         string runtimeDirectory,
         List<string> warnings,
-        string? executablePath = null)
+        string? executablePath = null,
+        string? policyPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slug);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
@@ -66,6 +72,10 @@ public static class SelfServerConfig
 
         var path = Path.Combine(runtimeDirectory, FileName);
 
+        string[] args = policyPath is { Length: > 0 }
+            ? ["mcp", "serve", "--project", slug, "--policy", policyPath]
+            : ["mcp", "serve", "--project", slug];
+
         var document = new
         {
             mcpServers = new Dictionary<string, object>
@@ -73,7 +83,7 @@ public static class SelfServerConfig
                 ["loadout"] = new
                 {
                     command = executable,
-                    args = new[] { "mcp", "serve", "--project", slug },
+                    args,
                 },
             },
         };

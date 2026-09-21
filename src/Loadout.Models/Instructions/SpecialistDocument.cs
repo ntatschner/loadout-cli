@@ -47,6 +47,18 @@ public enum SpecialistKind
 
     /// <summary>A repeatable procedure rather than a body of expertise.</summary>
     Skill,
+
+    /// <summary>
+    /// One agent's job in a team run: what it may do, what it hands back, and
+    /// how it is judged.
+    /// </summary>
+    /// <remarks>
+    /// Last, so a role composes after everything that says what the code is
+    /// and what the task is. Never raised by evidence: a role has no globs, no
+    /// dependencies and no task phrases, so the only way into a session is by
+    /// name, which is how a coordinator gives it to a node.
+    /// </remarks>
+    Role,
 }
 
 /// <summary>Where a specialist was loaded from, which decides who can override whom.</summary>
@@ -155,6 +167,22 @@ public sealed record SpecialistActivation(
 }
 
 /// <summary>
+/// What a role's frontmatter says about the node that plays it: the parts a
+/// coordinator reads, as opposed to the body, which the node reads.
+/// </summary>
+/// <param name="Mode">The posture the node is launched in: advise, investigate, implement, review or coordinate.</param>
+/// <param name="Deliverable">What kind of thing the node's report must carry, in the report contract's spelling.</param>
+/// <param name="Contract">The report contract the node writes to, such as <c>report/1</c>.</param>
+/// <param name="AllowedTools">Tools and command patterns the node may use without asking, in the agent's spelling.</param>
+/// <param name="DeniedTools">Tools and command patterns the node may never use. Deny wins over allow.</param>
+public sealed record RoleDefinition(
+    string? Mode,
+    string? Deliverable,
+    string? Contract,
+    IReadOnlyList<string> AllowedTools,
+    IReadOnlyList<string> DeniedTools);
+
+/// <summary>
 /// Something a session doing as this specialist asks would visibly do.
 /// </summary>
 /// <remarks>
@@ -239,6 +267,10 @@ public sealed record SpecialistProbe(
 /// Something a session following this would visibly do, or null where no
 /// honest signature can be written. Most are null.
 /// </param>
+/// <param name="Role">
+/// What a coordinator reads off a role: its posture, its deliverable, its
+/// contract and its tool policy. Null on every other kind.
+/// </param>
 public sealed record SpecialistDocument(
     string Id,
     SpecialistKind Kind,
@@ -249,7 +281,8 @@ public sealed record SpecialistDocument(
     long Bytes,
     SpecialistOrigin Origin = SpecialistOrigin.BuiltIn,
     string Path = "",
-    SpecialistProbe? Probe = null)
+    SpecialistProbe? Probe = null,
+    RoleDefinition? Role = null)
 {
     /// <summary>
     /// A rough token count for the body.

@@ -56,7 +56,7 @@ internal sealed class ManagerWindow : Window
         _slug = slug;
 
         Title = "Manager";
-        BorderStyle = LineStyle.Rounded;
+        BorderStyle = LauncherTheme.Lines;
 
         var listFrame = new FrameView
         {
@@ -65,7 +65,7 @@ internal sealed class ManagerWindow : Window
             Width = Dim.Fill(),
             Height = Dim.Fill(6),
             Title = "Loaded",
-            BorderStyle = LineStyle.Single,
+            BorderStyle = LauncherTheme.Inner,
         };
 
         // Named so a test can find it by what it is rather than where it sits.
@@ -92,7 +92,7 @@ internal sealed class ManagerWindow : Window
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             Title = "About",
-            BorderStyle = LineStyle.Single,
+            BorderStyle = LauncherTheme.Inner,
         };
 
         _detail = new Label

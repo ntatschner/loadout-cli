@@ -52,6 +52,8 @@ public sealed class SetupWizard : ISetupWizard
     private readonly IExecutableResolver _resolver;
     private readonly IProcessLauncher _processes;
 
+    private readonly ReadingProfile _reading;
+
     public SetupWizard(
         IAnsiConsole console,
         IConfigurationService configuration,
@@ -65,8 +67,10 @@ public sealed class SetupWizard : ISetupWizard
         IPlatformPaths paths,
         IExecutableResolver resolver,
         IProcessLauncher processes,
-        IProjectOnboarding onboarding)
+        IProjectOnboarding onboarding,
+        ReadingProfile reading)
     {
+        _reading = reading;
         _console = console;
         _configuration = configuration;
         _workspace = workspace;
@@ -122,10 +126,11 @@ public sealed class SetupWizard : ISetupWizard
             const string Existing = "Configure an existing central workspace";
             const string Create = "Create a new central workspace";
 
-            var choice = _console.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("No central workspace is configured. What would you like to do?")
-                    .AddChoices(Existing, Create, "Run without central storage"));
+            var choice = _reading.Ask(
+                _console,
+                "No central workspace is configured. What would you like to do?",
+                [Existing, Create, "Run without central storage"],
+                option => option);
 
             mode = choice switch
             {
@@ -331,10 +336,8 @@ public sealed class SetupWizard : ISetupWizard
             choices.Add(ViaUrl);
             choices.Add(Later);
 
-            var choice = _console.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("Where should this workspace live?")
-                    .AddChoices(choices));
+            var choice = _reading.Ask(
+                _console, "Where should this workspace live?", choices, option => option);
 
             host = choice switch
             {
@@ -582,10 +585,11 @@ public sealed class SetupWizard : ISetupWizard
             return;
         }
 
-        config.Secrets.Provider = _console.Prompt(
-            new SelectionPrompt<string>()
-                .Title("Which secret provider should be used?")
-                .AddChoices("environment", "1password", "bitwarden", "vault", "native"));
+        config.Secrets.Provider = _reading.Ask(
+            _console,
+            "Which secret provider should be used?",
+            ["environment", "1password", "bitwarden", "vault", "native"],
+            option => option);
     }
 
     private async Task ConfigureDiscoveryRootsAsync(SetupRequest request, CancellationToken ct)

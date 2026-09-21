@@ -50,12 +50,15 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
 
     private async Task<AgentInvocation> BuildAsync(
         IReadOnlyList<string>? allowedHooks = null,
-        IReadOnlyList<string>? preApproved = null)
+        IReadOnlyList<string>? preApproved = null,
+        Loadout.Models.Agents.HeadlessOptions? headless = null)
     {
         const string Help = """
             Usage: claude [options]
               --settings <file>
               --append-system-prompt-file <file>
+              --input-format <format>
+              --output-format <format>
             """;
 
         var adapter = new ClaudeAdapter(
@@ -73,13 +76,43 @@ public sealed class ClaudeSettingsScreeningTests : IDisposable
             [],
             new ProjectManifest { Slug = "demo", Name = "Demo" },
             PreApprovedCommands: preApproved,
-            AllowedHooks: allowedHooks);
+            AllowedHooks: allowedHooks,
+            Headless: headless);
 
         var result = await adapter.BuildInvocationAsync(context);
 
         result.Succeeded.Should().BeTrue(result.Error ?? "the invocation has to build");
 
         return result.Value!;
+    }
+
+    [Fact]
+    public async Task A_headless_node_gets_its_hooks_switched_off_in_the_copy_and_never_in_the_file()
+    {
+        // Nothing here loosens, so an interactive launch would hand the file
+        // over untouched. A node still needs the key, and the key has to go
+        // somewhere that is not the project's file, which travels.
+        const string Original = """{ "theme": "dark" }""";
+        await File.WriteAllTextAsync(_settings, Original);
+
+        var invocation = await BuildAsync(headless: new Loadout.Models.Agents.HeadlessOptions());
+
+        var handed = SettingsArgument(invocation);
+
+        handed.Should().NotBeNull();
+        handed.Should().NotBe(_settings, "the copy is what gets the key");
+        handed.Should().StartWith(_runtime);
+
+        var document = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(handed!))!.AsObject();
+
+        document["disableAllHooks"]!.GetValue<bool>().Should().BeTrue();
+        document["theme"]!.GetValue<string>().Should().Be("dark", "the rest of the file passes as it was");
+
+        (await File.ReadAllTextAsync(_settings)).Should().Be(Original);
+
+        // Folded into the file, so not also passed inline: two --settings
+        // would leave Claude to pick one.
+        invocation.Arguments.Count(a => a == "--settings").Should().Be(1);
     }
 
     private static string? SettingsArgument(AgentInvocation invocation)

@@ -32,7 +32,7 @@ a thing that ships, not a plan.
 
 ### Choosing what the agent is told
 
-- **77 specialists compiled in** — foundations, modes, languages, frameworks,
+- **101 specialists compiled in** — foundations, modes, languages, frameworks,
   databases, platforms, clouds, functional areas and 16 skills. Which ones apply
   is worked out from the repository and from the sentence you typed, so a
   project with three hundred `.rs` files gets the Rust guidance without anybody
@@ -235,7 +235,7 @@ Grab your platform's archive from the
 ### Linux and macOS
 
 ```sh
-tar -xzf loadout-0.33.3-linux-x64.tar.gz
+tar -xzf loadout-0.34.0-linux-x64.tar.gz
 ./install.sh          # goes to ~/.local/bin, no root
 loadout setup
 ```
@@ -246,7 +246,7 @@ There are `.deb` and `.rpm` packages if you'd rather.
 ### Windows
 
 ```powershell
-msiexec /i loadout-0.33.3-win-x64.msi    # per-user, no elevation
+msiexec /i loadout-0.34.0-win-x64.msi    # per-user, no elevation
 loadout setup
 ```
 

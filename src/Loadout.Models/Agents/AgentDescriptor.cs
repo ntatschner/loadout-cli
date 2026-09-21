@@ -67,4 +67,15 @@ public static class AgentCapabilities
     /// can reach, and nothing tells the session it is there.
     /// </remarks>
     public const string ProjectSkills = "project_skills";
+
+    /// <summary>
+    /// The agent can be driven without a terminal: messages in on one stream,
+    /// events out on another, the conversation ended by closing the input.
+    /// </summary>
+    /// <remarks>
+    /// What a team run needs of every node. An agent without it can still be
+    /// launched for a person; it cannot be a node, and a team that names it is
+    /// refused before anything starts rather than found out mid-run.
+    /// </remarks>
+    public const string Headless = "headless";
 }

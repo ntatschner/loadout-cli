@@ -1,5 +1,6 @@
 using Loadout.Agents;
 using Loadout.Core.Workspace;
+using Loadout.Tui;
 using Spectre.Console;
 
 namespace Loadout.Cli.Infrastructure;
@@ -18,10 +19,13 @@ public sealed class WorkspaceSavePrompt
     private readonly IAnsiConsole _console;
     private readonly IWorkspaceManager _workspace;
 
-    public WorkspaceSavePrompt(IAnsiConsole console, IWorkspaceManager workspace)
+    private readonly ReadingProfile _reading;
+
+    public WorkspaceSavePrompt(IAnsiConsole console, IWorkspaceManager workspace, ReadingProfile reading)
     {
         _console = console;
         _workspace = workspace;
+        _reading = reading;
     }
 
     /// <summary>
@@ -73,10 +77,11 @@ public sealed class WorkspaceSavePrompt
         const string Review = "Review the changes";
         const string Leave = "Leave them uncommitted";
 
-        var choice = _console.Prompt(
-            new SelectionPrompt<string>()
-                .Title("What would you like to do with them?")
-                .AddChoices(SaveAndSync, SaveLocally, Review, Leave));
+        var choice = _reading.Ask(
+            _console,
+            "What would you like to do with them?",
+            [SaveAndSync, SaveLocally, Review, Leave],
+            option => option);
 
         if (choice == Review)
         {

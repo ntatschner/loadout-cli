@@ -46,6 +46,30 @@ dependency bump would otherwise swap an open-source test library for one this
 project cannot ship under, without anything in the build noticing. The licence
 check exists to catch precisely that, and it fails on version 8.
 
+## Art the office can draw with, and does not ship
+
+`loadout` ships no artwork. The dashboard's office view draws a square with the
+node's name in it, and that is the whole of what is in this repository or in a
+release.
+
+It will also draw sprites, if you install some yourself. A set is a directory
+under `<state>/teams/office/` and `team-office-set` names the one to use; see
+[docs/teams.md](docs/teams.md). The files stay on your machine and Loadout only
+reads them.
+
+That split is deliberate rather than tidy-minded. Pixel-art asset packs are
+typically sold under a licence that permits using the files inside a finished
+project and forbids making the original files available for extraction or
+download — and a public source repository does exactly that to everybody who
+clones it. Committing a bought pack here would breach the licence for the pack
+*and* hand this project's users files they have no right to.
+
+If you use a pack from [Lennox Studio](https://lennoxstudio.itch.io/), whose
+layout the documented set names follow, its licence asks for no credit and
+suggests "Pixel Art Assets by Lennox Studio". Whatever you install, the terms
+are between you and whoever sold it: read the licence in the download rather
+than assuming this note covers you.
+
 ## Tooling
 
 Not dependencies of the project, but needed to build a release.

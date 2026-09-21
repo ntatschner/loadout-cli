@@ -150,7 +150,7 @@ public sealed class PackAddCommand : AsyncCommand<PackAddCommand.Settings>
             + $"{pack.Commit[..Math.Min(12, pack.Commit.Length)]}.");
 
         // The important line. Somebody who read only the success message would
-        // otherwise assume the specialists are now in play.
+        // otherwise assume its contents are now in play.
         output.WriteLine(
             "[yellow]note[/] nothing from it is loaded yet. Its content becomes instructions "
             + "an agent follows, so read it and then run "

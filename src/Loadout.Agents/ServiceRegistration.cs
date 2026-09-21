@@ -35,6 +35,14 @@ public static class ServiceRegistration
         });
 
         services.AddSingleton<IAgentLauncher, AgentLauncher>();
+        services.AddSingleton<Teams.ITeamRunner>(provider => new Teams.TeamRunner(
+            provider.GetRequiredService<IAgentLauncher>(),
+            provider.GetRequiredService<IPlatformPaths>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<Core.Projects.IProjectService>(),
+            provider.GetRequiredService<Core.Git.IGitManager>(),
+            provider.GetRequiredService<IChildLifetime>(),
+            provider.GetRequiredService<Core.Tasks.ITaskService>()));
         services.AddSingleton<IDiagnosticContributor, AgentDiagnosticContributor>();
 
         return services;

@@ -1,0 +1,25 @@
+name: dependency-sweep
+description: Updates dependencies one branch per bump, in parallel, and verifies each with the suite green before it is offered for merge.
+lead: lead
+nodes:
+  lead:
+    role: role.project-lead
+    delegates: [planner, implementer, verifier]
+  planner:
+    role: role.planner
+  implementer:
+    role: role.implementer
+    worktree: true
+    parallel: 4
+  verifier:
+    role: role.verifier
+rules:
+  autonomy: supervised
+  budget:
+    usd: 20
+    turns_per_node: 30
+    wall_clock: 3h
+  gates:
+    outward: ask
+    merge: [verifier]
+  stop_when: [goal_met, budget_spent, no_progress_2_rounds]

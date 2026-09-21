@@ -50,14 +50,18 @@ public sealed class ProjectOnboarding : IProjectOnboarding
     private readonly IProjectService _projects;
     private readonly IMigrationService _migrations;
 
+    private readonly ReadingProfile _reading;
+
     public ProjectOnboarding(
         IAnsiConsole console,
         IProjectService projects,
-        IMigrationService migrations)
+        IMigrationService migrations,
+        ReadingProfile reading)
     {
         _console = console;
         _projects = projects;
         _migrations = migrations;
+        _reading = reading;
     }
 
     /// <inheritdoc />
@@ -112,15 +116,8 @@ public sealed class ProjectOnboarding : IProjectOnboarding
         }
         else
         {
-            chosen = _console.Prompt(
-                new MultiSelectionPrompt<DiscoveredRepository>()
-                    .Title("Register any of these now? [dim](space to select, enter to confirm)[/]")
-                    .NotRequired()
-                    .PageSize(15)
-                    .MoreChoicesText("[dim](move up and down for more)[/]")
-                    .InstructionsText("[dim]Nothing is registered unless you pick it.[/]")
-                    .UseConverter(Label)
-                    .AddChoices(unregistered))
+            chosen = _reading
+                .AskMany(_console, "Register any of these now?", unregistered, Label, pageSize: 15)
                 .Select(found => found.Path)
                 .ToList();
         }

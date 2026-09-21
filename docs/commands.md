@@ -64,8 +64,25 @@
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
+| `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
+| `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |
+| `loadout team dashboard` | A page on this machine showing every run at once, live. Reads only |
+| `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
+| `loadout team daemon` | Stay running: fire the scheduled runs and serve the dashboard |
+| `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
+| `loadout team autostart enable\|disable\|show` | Start the daemon when you log in, per user |
+| `loadout team gate` | Answer something a run stopped to ask |
+| `loadout team message` | Say something to a run's lead, read at its next round |
+| `loadout team halt` | Stop a run after its current round, hold it, or let it carry on |
+| `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
+| `loadout team pr` | Open a pull request for what one node of a run produced |
+| `loadout team say` | Say something to one node while it is still working |
+| `loadout team attach set` | Set the passphrase that lets the dashboard type at a running node |
+| `loadout team attach show` | Say whether one is set, never what it is |
+| `loadout team attach clear` | Forget it, so nothing can type at a running node |
+| `loadout team notify set\|test\|show\|clear` | Send a run's call for help to Slack, Discord, Teams, Telegram or your own endpoint |
 | `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
-| `loadout pack list\|add\|approve\|update\|remove` | Specialist packs fetched from a Git remote, approved per machine |
+| `loadout pack list\|add\|approve\|update\|remove` | Sets of specialists, roles and teams fetched from a Git remote, approved per machine |
 | `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |
 | `loadout spend refresh` | See and refresh where spending stands against your thresholds |
 
@@ -369,7 +386,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Nine tools, each making the same call its command makes:
+Eleven tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -382,6 +399,8 @@ Nine tools, each making the same call its command makes:
 | `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
 | `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
+| `loadout_progress` | For a node of a team run: say what you are doing, in your own words |
+| `loadout_teams` | What the team runs on this machine are doing, and which have stopped to ask |
 
 `loadout_recall` exists because only the memory index reaches the context — one
 line per topic — and a session deciding from that alone either opens six files

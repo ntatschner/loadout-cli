@@ -54,7 +54,9 @@ internal static class ConsoleGlyphs
     /// separate call somebody has to remember at four call sites, one of which
     /// would eventually be added without it.
     /// </remarks>
-    internal static void InitLegibly(this IApplication application)
+    internal static void InitLegibly(
+        this IApplication application,
+        Models.Configuration.AccessibilitySettings? profile = null)
     {
         ArgumentNullException.ThrowIfNull(application);
 
@@ -71,10 +73,16 @@ internal static class ConsoleGlyphs
         // the borders were misread as unthemed for three attempts running.
         if (application.Driver is { SupportsTrueColor: true } driver)
         {
-            driver.Force16Colors = false;
+            // The sixteen are the only colours a person's own terminal theme
+            // can remap, so somebody who needs particular contrast can only
+            // fix it for themselves if the launcher stays inside them. Asking
+            // for that is what the profile's "sixteen" means, and "none" is
+            // the same request with the theme turned off as well.
+            driver.Force16Colors = profile is not null
+                && profile.Display.Colour is "sixteen" or "none";
         }
 
-        LauncherTheme.Apply();
+        LauncherTheme.Apply(profile);
     }
 
     /// <summary>

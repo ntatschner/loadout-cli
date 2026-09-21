@@ -180,6 +180,11 @@ public sealed class EditorServiceTests
             CancellationToken ct = default) =>
             throw new NotSupportedException("These tests never start anything.");
 
+        public Task<Loadout.Models.Results.OperationResult<Loadout.Platform.Abstractions.IPipedProcess>> StartPipedAsync(
+            Loadout.Platform.Abstractions.ProcessRequest request,
+            CancellationToken ct = default) =>
+            throw new NotSupportedException("These tests never start anything.");
+
         public Loadout.Models.Results.OperationResult StartDetached(
             Loadout.Platform.Abstractions.ProcessRequest request) =>
             throw new NotSupportedException("These tests never start anything.");

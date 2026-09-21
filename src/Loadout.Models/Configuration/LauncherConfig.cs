@@ -68,6 +68,9 @@ public sealed class LauncherConfig
 
     /// <summary>What a newly registered project is given, unless it says otherwise.</summary>
     public OnboardingSettings Onboarding { get; set; } = new();
+
+    /// <summary>How this person wants to be written to and asked.</summary>
+    public AccessibilitySettings Accessibility { get; set; } = new();
 }
 
 /// <summary>

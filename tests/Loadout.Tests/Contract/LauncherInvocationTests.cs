@@ -120,7 +120,9 @@ public sealed class LauncherInvocationTests
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, ".git")))
+        // A directory in an ordinary checkout, a file in a git worktree. The
+        // launcher launches into worktrees, so its suite has to run in one.
+        while (directory is not null && !Path.Exists(Path.Combine(directory.FullName, ".git")))
         {
             directory = directory.Parent;
         }

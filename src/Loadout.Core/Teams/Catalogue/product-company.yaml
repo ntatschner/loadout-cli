@@ -1,0 +1,63 @@
+name: product-company
+description: A shape to copy, not a team to run. An executive lead splits a goal across department leads, each with its own workers. Deliberately shallow, because every level between you and the work costs a session and loses part of the brief.
+template: true
+lead: exec
+nodes:
+  exec:
+    role: role.exec-lead
+    delegates: [engineering, product, marketing, support]
+  engineering:
+    role: role.department-lead
+    parameters: { department: engineering }
+    delegates: [planner, implementer, reviewer, verifier]
+  product:
+    role: role.department-lead
+    parameters: { department: product }
+    delegates: [planner, docs-auditor, docs-writer]
+  marketing:
+    role: role.department-lead
+    parameters: { department: marketing }
+    delegates: [strategist, copywriter, editor, scheduler]
+  support:
+    role: role.department-lead
+    parameters: { department: support }
+    delegates: [reproducer, investigator, docs-writer]
+  planner:
+    role: role.planner
+  implementer:
+    role: role.implementer
+    worktree: true
+    parallel: 2
+  reviewer:
+    role: role.reviewer
+  verifier:
+    role: role.verifier
+  docs-auditor:
+    role: role.docs-auditor
+  docs-writer:
+    role: role.docs-writer
+    worktree: true
+  strategist:
+    role: role.strategist
+  copywriter:
+    role: role.copywriter
+  editor:
+    role: role.editor
+  scheduler:
+    role: role.scheduler
+  reproducer:
+    role: role.reproducer
+    worktree: true
+  investigator:
+    role: role.investigator
+    worktree: true
+rules:
+  autonomy: supervised
+  budget:
+    usd: 60
+    turns_per_node: 40
+    wall_clock: 8h
+  gates:
+    outward: ask
+    merge: [reviewer, verifier]
+  stop_when: [goal_met, budget_spent, no_progress_2_rounds]

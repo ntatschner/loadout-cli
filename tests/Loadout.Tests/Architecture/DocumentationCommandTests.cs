@@ -147,6 +147,67 @@ public sealed class DocumentationCommandTests
             "docs/commands.md is the command reference, so every command belongs in it");
     }
 
+    /// <summary>
+    /// Every setting the documentation names is one a reader can set.
+    /// </summary>
+    /// <remarks>
+    /// The same argument as the commands, and a sharper one: a settings page
+    /// lists dozens of names at once, and a key that was renamed after the page
+    /// was written fails silently when somebody types it. The accessibility
+    /// keys were renamed twice before they fitted the settings screen, which is
+    /// exactly how a page goes stale.
+    /// </remarks>
+    [Fact]
+    public void Every_setting_the_documentation_names_is_one_that_exists()
+    {
+        var keys = Loadout.Core.Configuration.ConfigKeys.All
+            .Select(entry => entry.Key)
+            .ToHashSet(StringComparer.Ordinal);
+
+        // Backticked words that look like a setting: lowercase, hyphenated,
+        // and at least two words, so 'claude' and 'ascii' are not candidates.
+        var named = new System.Text.RegularExpressions.Regex(
+            @"`([a-z][a-z0-9]*(?:-[a-z0-9]+)+)`",
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        var wrong = new List<string>();
+        var found = 0;
+
+        foreach (var file in Documentation())
+        {
+            var text = File.ReadAllText(file);
+
+            foreach (System.Text.RegularExpressions.Match match in named.Matches(text))
+            {
+                var word = match.Groups[1].Value;
+
+                // Only judged where the page is talking about settings at all.
+                // Hyphenated words are ordinary prose everywhere else, and
+                // 'screen-reader' is a profile rather than a key.
+                if (!word.StartsWith("ask-", StringComparison.Ordinal)
+                    && !word.StartsWith("write-", StringComparison.Ordinal)
+                    && !word.StartsWith("show-", StringComparison.Ordinal)
+                    && !word.StartsWith("accessibility-", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                found++;
+
+                if (!keys.Contains(word))
+                {
+                    wrong.Add($"{Path.GetFileName(file)}: {word}");
+                }
+            }
+        }
+
+        found.Should().BeGreaterThan(20, "the scan has to be finding settings at all");
+
+        wrong.Should().BeEmpty(
+            "somebody reading the documentation types what it says, and a setting that "
+            + "does not exist is refused with a list they then have to read instead");
+    }
+
     private static IEnumerable<string> Documentation()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);

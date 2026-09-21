@@ -203,6 +203,48 @@ public sealed class McpServerContractTests
         tools.Should().Contain("loadout_mode");
         tools.Should().Contain("loadout_locate");
         tools.Should().Contain("loadout_code_map");
+        tools.Should().Contain("loadout_teams");
+    }
+
+    [BuiltCliFact]
+    public async Task What_the_teams_are_doing_can_be_asked_without_going_to_look()
+    {
+        using var session = await StartAsync();
+
+        var answer = await session.RequestAsync("tools/call", new
+        {
+            name = "loadout_teams",
+            arguments = new { onlyRunning = true },
+        });
+
+        var text = answer.GetProperty("result").GetProperty("content")[0]
+            .GetProperty("text").GetString() ?? string.Empty;
+
+        // Whatever this machine has, it answers in a sentence rather than with
+        // an empty list: "nothing is running" is the answer somebody wanted
+        // and an empty string is not.
+        text.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [BuiltCliFact]
+    public async Task Nothing_offered_here_can_stop_a_run_or_answer_its_question()
+    {
+        using var session = await StartAsync();
+
+        var tools = (await session.RequestAsync("tools/list"))
+            .GetProperty("result").GetProperty("tools")
+            .EnumerateArray()
+            .Select(t => t.GetProperty("name").GetString() ?? string.Empty)
+            .ToList();
+
+        // A session that could stop a run or answer a gate could be talked
+        // into doing either by whatever it was reading at the time, and the
+        // whole point of a gate is that a person decided.
+        tools.Should().NotContain(name =>
+            name.Contains("halt", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("stop", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("gate", StringComparison.OrdinalIgnoreCase)
+            || name.Contains("run", StringComparison.OrdinalIgnoreCase));
     }
 
     [BuiltCliFact]

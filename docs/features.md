@@ -5,8 +5,9 @@ the commands.
 
 ### Instructions picked for the job
 
-There are 77 specialists built into the binary: foundations, modes, languages,
-frameworks, databases, platforms, clouds, functional areas and skills. Instead
+There are 101 specialists built into the binary: foundations, modes, languages,
+frameworks, databases, platforms, clouds, functional areas, skills and the roles
+a team run gives its nodes. Instead
 of one enormous prompt that's mostly irrelevant, Loadout works out which ones
 your task needs from the repo you're in and the words you used, then tells you
 why it picked each one.
@@ -214,6 +215,26 @@ loadout backup list
 loadout backup restore 20260901-204044-fd3512
 ```
 
+### Several agents on one goal
+
+```sh
+loadout team run bug-hunt "the config loader throws on a missing file"
+loadout team status
+```
+
+A lead splits your goal into requests, workers do the work in their own
+sessions, and the lead reads what came back and decides what to ask for next.
+Eight teams ship; a team is a YAML file, so you can write your own.
+
+Each node is an ordinary Loadout launch — same project, same compiled
+instructions, same screening — so what a team adds is who asks whom and what a
+run may spend before it stops. Workers that may run together do, each in its own
+git worktree, and a branch that conflicts goes back to whoever wrote it.
+
+A run can be started by hand, on a schedule, or when the repository moves. Watch
+one with `team status`, in the launcher, or on a page `team dashboard` serves on
+this machine.
+
 ### Also in the box
 
 A session that ran for a while and left no handoff is told so on the way out,
@@ -232,3 +253,4 @@ branch and context usage. `loadout doctor` checks the lot.
 - [Recipes](recipes.md) — worked answers to the common jobs
 - [The launcher](launcher.md) — the terminal UI in detail
 - [Specialists and skills](specialists.md) — how an instruction set is composed
+- [Teams](teams.md) — several agents on one goal, and writing your own team

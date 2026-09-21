@@ -20,6 +20,17 @@
          Somebody who disagrees with a built-in specialist puts one of the same
          id in their workspace, which is the supported way to override. -->
     <EmbeddedResource Include="Specialists\**\*.md" />
+
+    <!-- The built-in teams travel the same way, for the same reasons. -->
+    <EmbeddedResource Include="Teams\Catalogue\*.yaml" />
+    <EmbeddedResource Include="Teams\Capabilities\*.yaml" />
+
+    <!-- And the dashboard page, so it cannot go missing from an install and
+         cannot be edited into something that fetches from the internet. It is
+         one file with no assets for the same reason: a dashboard that pulled a
+         stylesheet from somewhere would not work on the machine it is most
+         wanted on, which is one with no network. -->
+    <EmbeddedResource Include="Teams\Daemon\dashboard.html" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Loadout.Tests" />

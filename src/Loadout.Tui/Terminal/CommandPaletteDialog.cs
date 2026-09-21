@@ -50,7 +50,7 @@ internal sealed class CommandPaletteDialog : Dialog
         Title = "Commands";
         Width = Dim.Percent(80);
         Height = Dim.Percent(80);
-        BorderStyle = LineStyle.Rounded;
+        BorderStyle = LauncherTheme.Lines;
 
         var filter = new TextField { X = 1, Y = 0, Width = Dim.Fill(1) };
 

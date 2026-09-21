@@ -1,8 +1,10 @@
 using System.Text;
+using System.Text.Json;
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
+using Loadout.Core.Teams;
 using Loadout.Core.Workspace;
 using Loadout.Core.Git;
 using Loadout.Models.Instructions;
@@ -24,6 +26,10 @@ public sealed class McpServeSettings : GlobalSettings
     [CommandOption("--project <PROJECT>")]
     [Description("Project the tools answer about. Defaults to the repository the agent is in.")]
     public string? Project { get; init; }
+
+    [CommandOption("--policy <PATH>")]
+    [Description("A team node's permission policy, which this session answers its agent's permission questions from.")]
+    public string? Policy { get; init; }
 }
 
 /// <summary>
@@ -71,7 +77,7 @@ public sealed class McpServeCommand : AsyncCommand<McpServeSettings>
         var services = new ServiceCollection();
 
         services.AddPlatformServices().AddCoreServices();
-        services.AddSingleton(new LoadoutToolScope(settings.Project));
+        services.AddSingleton(new LoadoutToolScope(settings.Project, settings.Policy));
         services.AddSingleton<LoadoutTools>();
 
         using var provider = services.BuildServiceProvider();
@@ -116,9 +122,14 @@ public sealed class McpServeCommand : AsyncCommand<McpServeSettings>
         typeof(McpServeCommand).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 }
 
-/// <summary>Which project the served tools answer about.</summary>
+/// <summary>Which project the served tools answer about, and for whom.</summary>
 /// <param name="Project">Project handle, or null to work it out from the repository.</param>
-public sealed record LoadoutToolScope(string? Project);
+/// <param name="PolicyPath">
+/// The node policy this session answers permission questions from, or null
+/// when it is nobody's node - an ordinary session with a person at the
+/// keyboard, who answers their own.
+/// </param>
+public sealed record LoadoutToolScope(string? Project, string? PolicyPath = null);
 
 /// <summary>
 /// The launcher operations an agent may call for itself.
@@ -139,6 +150,7 @@ public sealed class LoadoutTools
     private readonly Core.Tasks.ITaskService _tasks;
     private readonly IGitManager _git;
     private readonly ISymbolIndexService _symbols;
+    private readonly IRunJournal _runs;
     private readonly TimeProvider _time;
     private readonly LoadoutToolScope _scope;
 
@@ -150,6 +162,7 @@ public sealed class LoadoutTools
         Core.Tasks.ITaskService tasks,
         IGitManager git,
         ISymbolIndexService symbols,
+        IRunJournal runs,
         TimeProvider time,
         LoadoutToolScope scope)
     {
@@ -160,6 +173,7 @@ public sealed class LoadoutTools
         _tasks = tasks;
         _git = git;
         _symbols = symbols;
+        _runs = runs;
         _time = time;
         _scope = scope;
     }
@@ -542,6 +556,311 @@ public sealed class LoadoutTools
         }
 
         return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>
+    /// Answers the agent's own permission question for a node of a team run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not a tool for a session to call. The agent calls it by itself when it
+    /// stops to ask, because the launcher named it with
+    /// <c>--permission-prompt-tool</c>, and the shape of the answer is the
+    /// agent's contract rather than this launcher's: a JSON object saying
+    /// allow or deny.
+    /// </para>
+    /// <para>
+    /// A session with no policy denies everything it is asked about. That is
+    /// the safe direction, and a launcher that guessed "yes" on behalf of an
+    /// absent person would be the worst thing here.
+    /// </para>
+    /// <para>
+    /// Where the run says somebody is watching, a call no rule covers is put to
+    /// them instead of refused, through two files in the run's directory: this
+    /// is a different process from the coordinator - the agent started it - so
+    /// the directory the run already writes to is the only channel there is.
+    /// A deny rule is never asked about, because a role that forbids something
+    /// has already decided.
+    /// </para>
+    /// <para>
+    /// Every question is recorded beside the policy, so the run can say what
+    /// its nodes asked for and what they were told - which is the difference
+    /// between a role that was too narrow and a node that tried something it
+    /// should not have.
+    /// </para>
+    /// </remarks>
+    [McpServerTool(Name = "loadout_permission")]
+    [Description(
+        "Answers whether the session may make a tool call it stopped to ask about, from the "
+        + "policy of the team node it is running as. The agent calls this itself; there is no "
+        + "reason for you to call it.")]
+    public async Task<string> Permission(
+        [Description("The tool being asked about.")] string tool_name,
+        [Description("The call's input, as the agent would make it.")] JsonElement? input = null,
+        [Description("The agent's own identifier for the call.")] string? tool_use_id = null)
+    {
+        var policy = _scope.PolicyPath is { Length: > 0 } path ? NodePermissions.Read(path) : null;
+        var inputJson = input?.ValueKind is JsonValueKind.Object ? input.Value.GetRawText() : null;
+        var decision = NodePermissions.Decide(policy, tool_name, inputJson);
+
+        // Only what nothing covered, and only where somebody is there. The
+        // condition is Askable's, not spelled out again here: a boundary
+        // written twice is written differently the second time.
+        if (policy is not null && NodePermissions.Askable(policy, decision))
+        {
+            decision = await AskedAsync(policy, tool_name, inputJson, tool_use_id, decision.Remedy)
+                .ConfigureAwait(false);
+        }
+
+        Record(policy, tool_name, inputJson, decision, tool_use_id);
+
+        return JsonSerializer.Serialize(decision.Allowed
+            ? new Dictionary<string, object?>
+            {
+                ["behavior"] = "allow",
+
+                // Unchanged. Rewriting a call the agent asked about would
+                // make the answer a different question from the one put.
+                ["updatedInput"] = input?.ValueKind is JsonValueKind.Object
+                    ? JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(input.Value.GetRawText())
+                    : new Dictionary<string, JsonElement>(),
+            }
+            : new Dictionary<string, object?>
+            {
+                ["behavior"] = "deny",
+                ["message"] = decision.Reason,
+            });
+    }
+
+    /// <summary>
+    /// Puts one call to whoever is running the team, and turns what they said
+    /// into the answer the agent gets.
+    /// </summary>
+    /// <remarks>
+    /// Nobody answering is its own outcome and says so. "Nobody answered" and
+    /// "your role forbids this" are different things to the node reading them
+    /// and to whoever reads the run afterwards, and a refusal that blamed the
+    /// role for an unattended terminal would send somebody looking in the wrong
+    /// place.
+    /// </remarks>
+    private async Task<PermissionDecision> AskedAsync(
+        NodePolicy policy,
+        string tool,
+        string? inputJson,
+        string? toolUseId,
+        RemedyStanding? remedy = null)
+    {
+        var directory = Path.GetDirectoryName(_scope.PolicyPath!);
+
+        if (directory is not { Length: > 0 })
+        {
+            return new PermissionDecision(
+                false, "There is nowhere to put this question, so it cannot be asked.");
+        }
+
+        var ask = new PendingAsk(
+            Id: $"{policy.Node}-{toolUseId ?? Guid.NewGuid().ToString("N")[..8]}",
+            Node: policy.Node,
+            Role: policy.Role,
+            Tool: tool,
+
+            // Redacted before it is written, because this file is read by a
+            // screen and a secret in a command line is a secret on it.
+            Target: Loadout.Core.Security.SecretRedactor.Redact(NodePermissions.Target(inputJson) ?? string.Empty) is { Length: > 0 } shown
+                ? shown
+                : null,
+            At: _time.GetUtcNow(),
+
+            // A remedy is its own sort of question. "May implementer use Bash
+            // for 'pwsh ./remedies/x.ps1'" is not something anybody can answer
+            // without going and reading the script, so the question carries
+            // what it does, what it assumes and how you would know it worked.
+            Kind: remedy is null ? "permission" : "remedy",
+            Asked: remedy?.Asking(policy.Node, policy.Role));
+
+        var answer = await NodePermissions
+            .AskAsync(directory, ask, _time)
+            .ConfigureAwait(false);
+
+        return answer is null
+            ? new PermissionDecision(
+                false,
+                $"Nobody answered whether you may use {tool} within "
+                + $"{NodePermissions.Patience.TotalMinutes:F0} minutes, so it is refused. "
+                + "Report what you needed and why rather than finding another way to do it.")
+            : new PermissionDecision(answer.Allowed, answer.Reason);
+    }
+
+    /// <summary>Keeps what was asked, beside the policy it was answered from.</summary>
+    /// <remarks>
+    /// Its own file rather than the run's journal: the journal is appended to
+    /// by the coordinator, this is a different process, and two processes
+    /// appending to one file is how a record acquires half lines. The
+    /// coordinator folds these in when the node's turn is over.
+    /// </remarks>
+    private void Record(
+        NodePolicy? policy,
+        string tool,
+        string? inputJson,
+        PermissionDecision decision,
+        string? toolUseId)
+    {
+        if (_scope.PolicyPath is not { Length: > 0 } path || policy is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var line = JsonSerializer.Serialize(new
+            {
+                at = _time.GetUtcNow(),
+                node = policy.Node,
+                tool,
+                target = NodePermissions.Target(inputJson),
+                allowed = decision.Allowed,
+                rule = decision.Rule,
+                reason = decision.Reason,
+                toolUseId,
+            });
+
+            File.AppendAllText(
+                Path.Combine(
+                    Path.GetDirectoryName(path) ?? ".",
+                    NodePermissions.AskedFileName(policy.Node)),
+                line + "\n");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The answer matters more than the record of it, and there is
+            // nowhere to complain to from inside a protocol on stdout.
+        }
+    }
+
+    /// <summary>
+    /// Lets a node of a team run say what it is doing, in its own words.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Beside what the run already observes, never instead of it. The run's own
+    /// line says which tool was called and what it was pointed at, which is
+    /// precise and says nothing about why; this says why and may be wrong.
+    /// Somebody watching a run that has gone quiet needs both, because a node
+    /// looping on one file and a node carefully reading forty look identical
+    /// from outside.
+    /// </para>
+    /// <para>
+    /// The identity is stamped from the policy this session was started with,
+    /// not taken from the caller. A node cannot report as another node, and one
+    /// that is not part of a run cannot report at all.
+    /// </para>
+    /// </remarks>
+    [McpServerTool(Name = "loadout_progress")]
+    [Description(
+        "Say what you are doing now, as one present-tense sentence, with which step of how many. "
+        + "For a node of a team run; your identity is stamped from your own brief.")]
+    public async Task<string> ProgressAsync(
+        [Description("Which piece of work you are on.")] int step,
+        [Description("How many you expect. 0 if you do not know yet.")] int of,
+        [Description("One present-tense sentence about what you are doing.")] string doing,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(doing);
+
+        if (_scope.PolicyPath is not { Length: > 0 } path
+            || NodePermissions.Read(path) is not { } policy
+            || Path.GetDirectoryName(path) is not { Length: > 0 } directory)
+        {
+            return "This session is not a node of a team run, so there is nowhere to report progress to.";
+        }
+
+        if (step < 1)
+        {
+            return "A step is counted from 1.";
+        }
+
+        await NodeProgress.AppendAsync(
+            directory,
+            new NodeSaid(_time.GetUtcNow(), policy.Node, policy.Role, step, Math.Max(0, of), doing),
+            ct).ConfigureAwait(false);
+
+        return $"Recorded, as {policy.Node}.";
+    }
+
+    /// <summary>
+    /// What the teams on this machine are doing, for a session that is not one
+    /// of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reading only, and deliberately. A session that could stop a run or
+    /// answer a gate could be talked into doing either by whatever it was
+    /// reading at the time, and the whole point of a gate is that a person
+    /// decided. What this is for is the question somebody actually asks a
+    /// session - "is anything of mine still going, and does it want me" - which
+    /// otherwise means leaving the conversation to go and look.
+    /// </para>
+    /// <para>
+    /// The same numbers as the dashboard and the status command, from the same
+    /// journals, so three accounts cannot disagree.
+    /// </para>
+    /// </remarks>
+    [McpServerTool(Name = "loadout_teams")]
+    [Description(
+        "What team runs on this machine are doing: which are going, what each has cost, and "
+        + "which have stopped to ask somebody something. Reads only; stopping a run or "
+        + "answering its question is a person's to do, from the dashboard or the command line.")]
+    public string Teams(
+        [Description("How many of the most recent runs. 5 by default.")] int most = 5,
+        [Description("Only the ones still going.")] bool onlyRunning = false)
+    {
+        var now = _time.GetUtcNow();
+        var lines = new List<string>();
+
+        foreach (var id in _runs.List(Math.Clamp(most, 1, 40)))
+        {
+            var read = _runs.Summarise(id);
+
+            if (read.Failed || read.Value is not { } run)
+            {
+                continue;
+            }
+
+            if (onlyRunning && !run.Running)
+            {
+                continue;
+            }
+
+            var money = RunMetrics.Money(run, now);
+
+            var state = run.WaitingForYou
+                ? "waiting for a person"
+                : run.Running ? "going" : run.Ended ?? "finished";
+
+            var said = $"{run.RunId}  {run.Team}"
+                + (run.Project is { Length: > 0 } on ? $" on {on}" : string.Empty)
+                + $"  {state}, round {run.Rounds}"
+                + (run.RoundLimit > 0 ? $" of {run.RoundLimit}" : string.Empty)
+                + $", ${run.CostUsd:0.00}"
+                + (run.Running ? $" and {RunMetrics.Rate(money.PerMinute)}" : string.Empty)
+                + $"  {run.Goal}";
+
+            lines.Add(said);
+
+            foreach (var reason in RunAttention.For(run, now))
+            {
+                lines.Add($"    needs you: {reason.Detail} (clears when {reason.Clears})");
+            }
+        }
+
+        if (lines.Count == 0)
+        {
+            return onlyRunning
+                ? "Nothing is running on this machine."
+                : "No team has run on this machine yet.";
+        }
+
+        return string.Join("\n", lines);
     }
 
     [McpServerTool(Name = "loadout_task_declare")]

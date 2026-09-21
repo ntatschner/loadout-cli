@@ -28,6 +28,7 @@ internal sealed class ContextCompiler : IContextCompiler
     private readonly IMemoryService _memory;
     private readonly Instructions.ISymbolIndexService? _symbols;
     private readonly Tasks.ITaskService? _tasks;
+    private readonly Configuration.IConfigurationService? _configuration;
 
     /// <param name="permissions">Restricts the compiled file to its owner.</param>
     /// <param name="rules">Where scoped rules come from.</param>
@@ -41,18 +42,25 @@ internal sealed class ContextCompiler : IContextCompiler
     /// Where the open tasks come from, on the projects that ask for them.
     /// Optional for the same reason as the symbol index.
     /// </param>
+    /// <param name="configuration">
+    /// Where the person's own accessibility profile comes from. Optional for
+    /// the same reason again: without it the section is never written, and a
+    /// person who has set nothing would see none of it either way.
+    /// </param>
     public ContextCompiler(
         IFilePermissions permissions,
         IRuleService rules,
         IMemoryService memory,
         Instructions.ISymbolIndexService? symbols = null,
-        Tasks.ITaskService? tasks = null)
+        Tasks.ITaskService? tasks = null,
+        Configuration.IConfigurationService? configuration = null)
     {
         _permissions = permissions;
         _rules = rules;
         _memory = memory;
         _symbols = symbols;
         _tasks = tasks;
+        _configuration = configuration;
     }
 
     /// <inheritdoc />
@@ -167,6 +175,12 @@ internal sealed class ContextCompiler : IContextCompiler
         {
             await AppendTasksAsync(builder, sources, manifest.Slug, ct).ConfigureAwait(false);
         }
+
+        // Last of everything, after the specialists, the project's own
+        // material, the rules and the memory index. Who is reading is the most
+        // specific fact there is, and the last thing read is what an agent
+        // carries into its first sentence.
+        await AppendAccessibilityAsync(builder, sources, ct).ConfigureAwait(false);
 
         var outputPath = Path.Combine(runtimeDirectory, CompiledFileName);
 
@@ -479,6 +493,54 @@ internal sealed class ContextCompiler : IContextCompiler
             $"projects/{slug}/tasks.yaml",
             "Open tasks",
             Encoding.UTF8.GetByteCount(section.ToString())));
+    }
+
+    /// <summary>
+    /// Appends how this person has asked to be written to and asked.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Composed after every other layer on purpose. Everything above says what
+    /// the code is and what the task is; this says who is reading, which is
+    /// the narrower fact and therefore the one that has to land last.
+    /// </para>
+    /// <para>
+    /// A person who has set nothing pays nothing: no heading, no line, no
+    /// tokens. Whoever wants none of this never learns it exists.
+    /// </para>
+    /// </remarks>
+    private async Task AppendAccessibilityAsync(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        CancellationToken ct)
+    {
+        if (_configuration is null)
+        {
+            return;
+        }
+
+        var loaded = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
+
+        // A broken configuration file is somebody else's error to report. It
+        // must not cost a session its context, and doctor is where a person
+        // finds out.
+        if (loaded.Failed || Instructions.AccessibilityProfile.Compose(loaded.Value?.Accessibility) is not { } section)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine($"## {Instructions.AccessibilityProfile.Heading}");
+        builder.AppendLine();
+        builder.AppendLine("<!-- source: config.yaml, accessibility -->");
+        builder.AppendLine();
+        builder.AppendLine(section);
+        builder.AppendLine();
+
+        sources.Add(new ContextSource(
+            "config.yaml (accessibility)",
+            Instructions.AccessibilityProfile.Heading,
+            Encoding.UTF8.GetByteCount(section)));
     }
 
     /// <summary>

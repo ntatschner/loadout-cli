@@ -15,11 +15,26 @@ public sealed record GitRepositoryState(
     bool IsClean,
     string? HeadCommit);
 
+/// <summary>What happened when one branch was merged into another.</summary>
+/// <param name="Merged">Whether the merge landed. False means the working tree is exactly as it was.</param>
+/// <param name="FastForward">
+/// Whether it moved the branch pointer rather than making a merge commit.
+/// Worth knowing because a fast-forward leaves the history the reviewer read
+/// and a merge commit does not.
+/// </param>
+/// <param name="Conflicts">Paths git could not merge, when it could not. Empty otherwise.</param>
+public sealed record GitMerge(bool Merged, bool FastForward, IReadOnlyList<string> Conflicts);
+
 /// <summary>A linked working tree (spec section 71).</summary>
 /// <param name="Path">Absolute path to the worktree.</param>
 /// <param name="Branch">Branch checked out there, or null when detached.</param>
 /// <param name="IsPrimary">True for the main working tree rather than a linked one.</param>
 public sealed record GitWorktree(string Path, string? Branch, bool IsPrimary);
+
+/// <summary>One file a commit changed, and what it did to it.</summary>
+/// <param name="Path">The path, as git records it, relative to the repository.</param>
+/// <param name="Change">added, changed, removed, renamed, copied, or the letter git gave.</param>
+public sealed record GitFileChange(string Path, string Change);
 
 /// <summary>Which paths a listing should return.</summary>
 public enum GitFileSet
@@ -131,6 +146,63 @@ public interface IGitManager
         string repositoryPath,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// The commit a name points at, or a failure if nothing does.
+    /// </summary>
+    /// <remarks>
+    /// A branch name is not a commit: it moves, and it can be deleted out from
+    /// under whoever wrote it down. Recording what it pointed at, at the moment
+    /// it mattered, is what makes a diff still mean the same thing a week
+    /// later.
+    /// </remarks>
+    Task<OperationResult<string>> ResolveAsync(
+        string repositoryPath,
+        string reference,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// What changed between two commits.
+    /// </summary>
+    /// <param name="repositoryPath">Any working tree of the repository.</param>
+    /// <param name="from">Where to measure from.</param>
+    /// <param name="to">Where to measure to.</param>
+    /// <param name="summary">The file-by-file summary rather than the patch.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// Two commits rather than two branch names, and two dots rather than
+    /// three. What a node produced is what it did to the commit it started
+    /// from, and that is still true after its branch has been merged, renamed
+    /// or deleted - which a diff against whatever HEAD is now is not.
+    /// </remarks>
+    Task<OperationResult<string>> DiffAsync(
+        string repositoryPath,
+        string from,
+        string to,
+        bool summary = false,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// The files one commit changed, and what it did to each.
+    /// </summary>
+    /// <param name="repositoryPath">Any working tree of the repository.</param>
+    /// <param name="commit">The commit, by whatever name resolves to it.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// <para>
+    /// One commit against its own parent, which is the question "what did this
+    /// node produce" - not a diff against whatever the branch has become since.
+    /// </para>
+    /// <para>
+    /// A first commit with no parent is included rather than refused: a run
+    /// whose whole output is the first commit in a fresh repository has still
+    /// produced something.
+    /// </para>
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<GitFileChange>>> ListCommitFilesAsync(
+        string repositoryPath,
+        string commit,
+        CancellationToken ct = default);
+
     /// <summary>Pushes the current branch to its upstream.</summary>
     Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default);
 
@@ -150,6 +222,61 @@ public interface IGitManager
 
     Task<OperationResult<IReadOnlyList<GitWorktree>>> ListWorktreesAsync(
         string repositoryPath,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Adds a linked working tree on a new branch, so work can happen
+    /// somewhere other than the repository's own checkout.
+    /// </summary>
+    /// <remarks>
+    /// The point of it, for a team run, is that a node with its own tree
+    /// commits to its own branch. Without one it commits to whatever the
+    /// repository has checked out, and the reviewer that follows is reading
+    /// a change already on that branch.
+    /// </remarks>
+    /// <param name="repositoryPath">The repository to add it to.</param>
+    /// <param name="path">Where the new tree goes. Its parent is created if missing.</param>
+    /// <param name="branch">The branch to create and check out there.</param>
+    /// <param name="baseRef">What to branch from, or null for the repository's current HEAD.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<GitWorktree>> AddWorktreeAsync(
+        string repositoryPath,
+        string path,
+        string branch,
+        string? baseRef = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Merges a branch into whatever the repository has checked out,
+    /// preferring to move the pointer rather than make a commit.
+    /// </summary>
+    /// <remarks>
+    /// A merge it cannot do is undone rather than left half-applied: the
+    /// caller gets the conflicting paths and a working tree in the state it
+    /// was in, because a repository stopped mid-merge is a repository
+    /// somebody has to rescue by hand.
+    /// </remarks>
+    Task<OperationResult<GitMerge>> MergeAsync(
+        string repositoryPath,
+        string branch,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes a linked working tree. Refuses one holding changes nobody has
+    /// committed, which is the guard rather than an inconvenience.
+    /// </summary>
+    Task<OperationResult> RemoveWorktreeAsync(
+        string repositoryPath,
+        string path,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes a branch that has been merged. Refuses one that has not,
+    /// because the commits on it would then exist nowhere.
+    /// </summary>
+    Task<OperationResult> DeleteMergedBranchAsync(
+        string repositoryPath,
+        string branch,
         CancellationToken ct = default);
 
     /// <summary>Which set of paths to ask git about.</summary>
