@@ -90,7 +90,9 @@ public sealed class DashboardServer : IDisposable
     /// port that may be on a network.
     /// </remarks>
     public Attaching? Attach { get; set; }
-    private readonly HttpListener _listener = new();
+    // Not readonly: a failed Start disposes it, so asking for another port
+    // means asking with another listener.
+    private HttpListener _listener = new();
 
     public DashboardServer(IRunJournal journal, Git.IGitManager? git = null)
     {
@@ -262,37 +264,66 @@ public sealed class DashboardServer : IDisposable
         }
 
         var where = string.IsNullOrWhiteSpace(listen) ? "127.0.0.1" : listen.Trim();
-        var chosen = port == 0 ? Free() : port;
-        var prefix = $"http://{where}:{chosen.ToString(CultureInfo.InvariantCulture)}/";
 
-        _listener.Prefixes.Add(prefix);
-
-        try
+        // Asking the machine for a free port does not reserve it. Free() binds
+        // port zero, reads what it was given and lets go, so anything else can
+        // take it before the listener opens. The gap cannot be closed - there
+        // is no handing an already-bound socket to HttpListener - so a
+        // machine-chosen port is simply asked for again.
+        //
+        // Only a machine-chosen one. A port somebody named and cannot have is
+        // a real failure and has to say so: quietly serving the dashboard on a
+        // different port would put it somewhere they are not looking.
+        for (var attempt = 1; ; attempt++)
         {
-            _listener.Start();
+            var chosen = port == 0 ? Offer() : port;
+            var prefix = $"http://{where}:{chosen.ToString(CultureInfo.InvariantCulture)}/";
+
+            _listener.Prefixes.Clear();
+            _listener.Prefixes.Add(prefix);
+
+            try
+            {
+                _listener.Start();
+            }
+            catch (HttpListenerException ex)
+            {
+                if (port == 0 && attempt < 20)
+                {
+                    // HttpListener closes itself when Start fails, so this one
+                    // is spent. Trying again with it throws
+                    // ObjectDisposedException from Prefixes, which is how this
+                    // was found: the first version of the retry could not have
+                    // worked and would have swapped one failure for a stranger
+                    // one.
+                    ((IDisposable)_listener).Dispose();
+                    _listener = new HttpListener();
+
+                    continue;
+                }
+
+                // Windows refuses a non-loopback prefix to anything unelevated,
+                // and the message it gives ("Access is denied") says nothing
+                // about why. Naming the reservation is the difference between a
+                // person fixing this in a minute and concluding the feature
+                // does not work.
+                var elevated = !IsLoopback(where)
+                    ? $" Binding {where} needs a reservation on Windows: "
+                        + $"netsh http add urlacl url={prefix} user=%USERNAME%"
+                    : string.Empty;
+
+                return OperationResult.Fail(
+                    $"Could not listen on {prefix}: {ex.Message}. Another dashboard may already be "
+                    + "running, or the port may be in use."
+                    + elevated,
+                    ExitCode.GeneralFailure);
+            }
+
+            Address = $"{prefix}?token={Token}";
+            Beyond = !IsLoopback(where);
+
+            return OperationResult.Ok();
         }
-        catch (HttpListenerException ex)
-        {
-            // Windows refuses a non-loopback prefix to anything unelevated, and
-            // the message it gives ("Access is denied") says nothing about why.
-            // Naming the reservation is the difference between a person fixing
-            // this in a minute and concluding the feature does not work.
-            var elevated = !IsLoopback(where)
-                ? $" Binding {where} needs a reservation on Windows: "
-                    + $"netsh http add urlacl url={prefix} user=%USERNAME%"
-                : string.Empty;
-
-            return OperationResult.Fail(
-                $"Could not listen on {prefix}: {ex.Message}. Another dashboard may already be "
-                + "running, or the port may be in use."
-                + elevated,
-                ExitCode.GeneralFailure);
-        }
-
-        Address = $"{prefix}?token={Token}";
-        Beyond = !IsLoopback(where);
-
-        return OperationResult.Ok();
     }
 
     /// <summary>Whether it is listening on more than this machine.</summary>
@@ -721,6 +752,16 @@ public sealed class DashboardServer : IDisposable
         address is "127.0.0.1" or "localhost" or "::1";
 
     /// <summary>A port nothing is using, asked of the machine rather than guessed.</summary>
+    /// <summary>What to try next when the machine is choosing the port.</summary>
+    /// <remarks>
+    /// A seam, and only a seam. The race it exists for - a port read from the
+    /// operating system and taken by something else before the listener opens
+    /// - happens rarely and never on demand, so a test that waited for it
+    /// would pass whether or not the retry worked. This lets a test hand out a
+    /// port that is already taken and watch what happens next.
+    /// </remarks>
+    internal Func<int> Offer { get; set; } = Free;
+
     private static int Free()
     {
         using var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);

@@ -1168,6 +1168,82 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public void A_port_somebody_named_and_cannot_have_is_refused_rather_than_swapped()
+    {
+        // The other half of retrying a machine-chosen port. When the machine
+        // chose, another port is as good; when a person named one, it is not -
+        // they have something pointed at it. Coming up quietly on a different
+        // port would be worse than not coming up at all.
+        using var held = new System.Net.Sockets.TcpListener(
+            System.Net.IPAddress.Loopback, 0);
+
+        held.Start();
+
+        var taken = ((System.Net.IPEndPoint)held.LocalEndpoint).Port;
+
+        using var server = new DashboardServer(_journal);
+
+        var started = server.Start(taken);
+
+        started.Failed.Should().BeTrue("something else is on that port");
+        started.Error.Should().Contain(taken.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void A_machine_chosen_port_that_goes_before_it_is_opened_is_asked_for_again()
+    {
+        // The race that took this whole fixture out on macOS - seventeen tests
+        // at once, because a fixture that throws fails every test in its class
+        // - and that showed on Linux as a pure function failing an assertion
+        // about a string, which is a bewildering thing to be handed.
+        //
+        // Arranged rather than waited for. The first port offered is one that
+        // is already taken, which is exactly what the operating system hands
+        // back when something grabs it in the gap between being asked and being
+        // listened on.
+        using var squatter = new System.Net.Sockets.TcpListener(
+            System.Net.IPAddress.Loopback, 0);
+
+        squatter.Start();
+
+        var taken = ((System.Net.IPEndPoint)squatter.LocalEndpoint).Port;
+
+        using var server = new DashboardServer(_journal);
+
+        var offers = 0;
+
+        server.Offer = () =>
+        {
+            offers++;
+
+            // Taken the first time, free after that.
+            if (offers == 1)
+            {
+                return taken;
+            }
+
+            using var free = new System.Net.Sockets.TcpListener(
+                System.Net.IPAddress.Loopback, 0);
+
+            free.Start();
+
+            var port = ((System.Net.IPEndPoint)free.LocalEndpoint).Port;
+
+            free.Stop();
+
+            return port;
+        };
+
+        server.Start(0).Succeeded.Should().BeTrue("it should have asked for another port");
+
+        offers.Should().BeGreaterThan(1, "the first one was taken");
+
+        server.Address.Should().NotContain(
+            $":{taken.ToString(System.Globalization.CultureInfo.InvariantCulture)}/",
+            "it did not end up on the port somebody else holds");
+    }
+
+    [Fact]
     public void A_wildcard_becomes_an_address_somebody_could_type()
     {
         // A server bound to 0.0.0.0 prints an address nothing can open. What
