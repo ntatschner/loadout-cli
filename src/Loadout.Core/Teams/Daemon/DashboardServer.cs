@@ -1431,6 +1431,18 @@ public sealed class DashboardServer : IDisposable
             reason.Clears,
         }),
         run.Project,
+
+        // What the goal was broken into and where each part got to. Empty for
+        // a run given no criteria, which is every run written before they
+        // existed - so a page drawing this has to treat empty as "this run
+        // does not work that way" rather than as "nothing is met".
+        coverage = run.Coverage.Select(one => new
+        {
+            one.Criterion,
+            one.Verdict,
+            one.Because,
+            one.Met,
+        }),
         cost = run.CostUsd,
         run.Rounds,
         run.RoundLimit,

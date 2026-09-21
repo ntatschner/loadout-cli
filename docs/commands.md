@@ -71,6 +71,7 @@
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
 | `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
 | `loadout team new\|edit\|remove` | Write a team of your own, open its file, or delete it |
+| `loadout team run <team> "<goal>" --done-when` | Say what the run is judged on, one per use. The lead must report a verdict and evidence for every one |
 | `loadout team capabilities` | The machinery a team's declarations can ask for, and what each one needs |
 | `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |
 | `loadout team runs remove\|prune` | Forget runs you are done with, one by one or by age |

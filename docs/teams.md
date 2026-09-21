@@ -201,6 +201,73 @@ A pack carrying teams goes through the same gate as one carrying specialists: it
 is pinned to a commit, and somebody on this machine approves that commit having
 read it. See [Specialists and skills](specialists.md).
 
+## Saying when it is done
+
+A run takes a goal. Without anything more, it ends when the lead reports `done`
+— and nothing argues. That is fine while you are watching. It is also the whole
+of the check on an **autonomous** run, which is the case where nobody is: a lead
+can miss a whole area of the goal, report done, and the run ends reporting
+success.
+
+So a run can carry criteria:
+
+```sh
+loadout team run docs-crew "make the docs true" \
+  --done-when "every command in docs/commands.md exists" \
+  --done-when "the suite passes on a clean checkout" \
+  --done-when "the changelog names the change"
+```
+
+Repeated rather than one comma-separated string, because a criterion is a
+sentence and sentences contain commas.
+
+What that changes:
+
+- **Every node is told them**, for the same reason every node is told the team's
+  standing goal. A worker given a narrow job still needs to know what the run is
+  being judged on.
+- **The lead's brief says it owes a verdict on each**, and its final report
+  carries one entry per criterion: `met`, `unmet` or `not-attempted`, and every
+  `met` saying in `because` which node, which report and which evidence shows it.
+- **A `done` that leaves one unmet or unanswered is sent back to the lead**, with
+  a reason naming the criterion. This is not new machinery: it is the rule that
+  already governs a worker's report — `done` needs evidence that passed —
+  applied at the level of the goal.
+
+`unmet` and `not-attempted` are separate on purpose. An unmet criterion was
+tried and needs a different approach; one never attempted means a whole area of
+the goal was missed, and that is the thing a run of several rounds loses
+quietly.
+
+`team status` then shows where each one got to:
+
+```
+  Done when 2 of 3 met
+  + met           every command in docs/commands.md exists
+      docs-auditor/1 checked all 159
+  + met           the suite passes
+      verifier/1 reported 2843 passing
+  ! not attempted the changelog mentions it
+```
+
+The dashboard's run form takes them one per line, and a run open in the detail
+pane shows the same account.
+
+**A run given no criteria behaves exactly as it did before**, which is what
+keeps every team file and every script already written working. The trade is
+plain: no criteria means "done" is the lead's word for it.
+
+### What is not checked
+
+- **Whether the criteria cover the goal.** They are your list. Nothing reads the
+  goal and tells you a criterion is missing.
+- **Whether the evidence is true.** `because` is a sentence the lead wrote. What
+  is enforced is that a claim of `met` cites something, not that the something
+  says what the lead says it says.
+- **`stop_when` in a team file.** It is parsed, printed by `team show`, and read
+  by nothing that runs. `goal_met`, `budget_spent` and `no_progress_2_rounds`
+  are hard-coded in the loop whatever a team file lists.
+
 ## Which tree it works on
 
 A run works on the **project's registered path**, not on wherever you typed the

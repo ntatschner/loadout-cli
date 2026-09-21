@@ -45,6 +45,17 @@ namespace Loadout.Models.Teams;
 /// the team called the node "implementer", and the run refused it twice
 /// without the lead ever being told what the names were.
 /// </param>
+/// <param name="Criteria">
+/// The run's criteria: what it is being judged on, whole, however narrow this
+/// node's own job is.
+/// </param>
+/// <remarks>
+/// <paramref name="Criteria"/> is the run's, not this node's. Every node is
+/// told them for the same reason every node is told the team's standing goal: a
+/// worker given a narrow job still needs to know what the run is being judged
+/// on. Answering for them is the lead's alone, and the check that enforces that
+/// is in ReportCheck.
+/// </remarks>
 public sealed record Brief(
     [property: JsonPropertyName("run")] string Run,
     [property: JsonPropertyName("node")] string Node,
@@ -59,7 +70,8 @@ public sealed record Brief(
     [property: JsonPropertyName("delegates")] IReadOnlyList<BriefDelegate>? Delegates = null,
     [property: JsonPropertyName("goal")] string? Goal = null,
     [property: JsonPropertyName("declarations")] IReadOnlyList<string>? Declarations = null,
-    [property: JsonPropertyName("team_directory")] string? TeamDirectory = null)
+    [property: JsonPropertyName("team_directory")] string? TeamDirectory = null,
+    [property: JsonPropertyName("criteria")] IReadOnlyList<string>? Criteria = null)
 {
     /// <summary>The version of this shape. Read before anything else, so an older reader can say it does not understand.</summary>
     [JsonPropertyName("contract")]

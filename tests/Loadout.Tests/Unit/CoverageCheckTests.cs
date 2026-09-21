@@ -1,0 +1,207 @@
+using FluentAssertions;
+using Loadout.Core.Teams;
+using Loadout.Models.Teams;
+using Xunit;
+
+namespace Loadout.Tests.Unit;
+
+/// <summary>
+/// Whether a lead may call a run done.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A run's goal was one sentence and one claim: the lead reported
+/// <c>done</c> and nothing argued. That is fine while somebody is watching. It
+/// was also the whole of the check on an autonomous run, which is the case
+/// where nobody is — so a lead could miss an entire area of the goal and the
+/// run would end reporting success.
+/// </para>
+/// <para>
+/// This is the same rule that already governs a worker's report, one level up.
+/// A worker's <c>done</c> needs evidence that passed; a lead's <c>done</c>
+/// needs every criterion answered, every answer met, and every met saying what
+/// shows it.
+/// </para>
+/// </remarks>
+public sealed class CoverageCheckTests
+{
+    private const string One = "the suite passes on a clean checkout";
+    private const string Two = "the README names every command that ships";
+
+    /// <param name="parent">Null for the lead. A worker has one, and answers only for its own brief.</param>
+    private static Brief Briefed(string? parent, params string[] criteria) => new(
+        "20260921-1200-aaaa",
+        parent is null ? "lead" : "implementer/1",
+        parent,
+        "role.project-lead",
+        "make the docs true",
+        DeliverableKind.Answer,
+        [],
+        new BriefConstraints("coordinate"),
+        ["the goal is met"],
+        Criteria: criteria.Length > 0 ? criteria : null);
+
+    private static Report Reported(string node, params ReportCoverage[] coverage) => new(
+        node,
+        ReportStatus.Done,
+        "did the thing",
+        [],
+        [new ReportEvidence(EvidenceKind.Test, "dotnet test", EvidenceResult.Pass)],
+        [],
+        Coverage: coverage.Length > 0 ? coverage : null);
+
+    [Fact]
+    public void A_lead_that_answers_every_criterion_is_accepted()
+    {
+        var verdict = ReportCheck.Check(
+            Reported(
+                "lead",
+                new ReportCoverage(One, CoverageVerdict.Met, "verifier/1 reported 2843 passing"),
+                new ReportCoverage(Two, CoverageVerdict.Met, "docs-auditor/1 checked all 159")),
+            Briefed(null, One, Two));
+
+        verdict.Outcome.Should().Be(ReportOutcome.Accepted);
+    }
+
+    [Fact]
+    public void A_criterion_nobody_mentioned_sends_the_report_back()
+    {
+        // The case this whole thing exists for: a lead that did half the goal
+        // and reported done, with nothing in the run saying which half.
+        var verdict = ReportCheck.Check(
+            Reported("lead", new ReportCoverage(One, CoverageVerdict.Met, "the suite ran")),
+            Briefed(null, One, Two));
+
+        verdict.Outcome.Should().Be(ReportOutcome.Returned);
+        verdict.Reasons.Should().ContainSingle()
+            .Which.Should().Contain(Two).And.Contain("nothing was said about");
+    }
+
+    [Fact]
+    public void A_criterion_reported_met_with_nothing_behind_it_sends_the_report_back()
+    {
+        var verdict = ReportCheck.Check(
+            Reported(
+                "lead",
+                new ReportCoverage(One, CoverageVerdict.Met, "the suite ran"),
+                new ReportCoverage(Two, CoverageVerdict.Met, "   ")),
+            Briefed(null, One, Two));
+
+        verdict.Outcome.Should().Be(ReportOutcome.Returned);
+        verdict.Reasons.Should().ContainSingle()
+            .Which.Should().Contain("nothing behind it");
+    }
+
+    [Theory]
+    [InlineData(CoverageVerdict.Unmet, "is not met")]
+    [InlineData(CoverageVerdict.NotAttempted, "Nothing was attempted")]
+    public void An_honest_answer_that_is_not_met_still_blocks_a_done(
+        CoverageVerdict verdict, string said)
+    {
+        // Honesty is not the same as being finished. A lead saying a criterion
+        // was not met has done the right thing and still has not finished, and
+        // the reason says what to do instead of just refusing.
+        var judged = ReportCheck.Check(
+            Reported(
+                "lead",
+                new ReportCoverage(One, CoverageVerdict.Met, "the suite ran"),
+                new ReportCoverage(Two, verdict)),
+            Briefed(null, One, Two));
+
+        judged.Outcome.Should().Be(ReportOutcome.Returned);
+        judged.Reasons.Should().ContainSingle().Which.Should().Contain(said);
+    }
+
+    [Fact]
+    public void A_criterion_answered_twice_keeps_the_first_answer()
+    {
+        // So a lead cannot overwrite an honest unmet with a later met by
+        // repeating the criterion further down its own list.
+        var verdict = ReportCheck.Check(
+            Reported(
+                "lead",
+                new ReportCoverage(One, CoverageVerdict.Unmet),
+                new ReportCoverage(One, CoverageVerdict.Met, "actually it was fine")),
+            Briefed(null, One));
+
+        verdict.Outcome.Should().Be(ReportOutcome.Returned);
+        verdict.Reasons.Should().ContainSingle().Which.Should().Contain("is not met");
+    }
+
+    [Fact]
+    public void Criteria_are_matched_past_case_and_spacing()
+    {
+        // The lead is repeating back a string it was given, and the one thing a
+        // model reliably does to a string it repeats is change its case or its
+        // spacing. Matching exactly would fail a lead that did the work.
+        var verdict = ReportCheck.Check(
+            Reported("lead", new ReportCoverage("  The Suite Passes On A Clean Checkout  ",
+                CoverageVerdict.Met, "verifier/1")),
+            Briefed(null, One));
+
+        verdict.Outcome.Should().Be(ReportOutcome.Accepted);
+    }
+
+    [Fact]
+    public void A_worker_is_not_asked_to_answer_for_the_goal()
+    {
+        // Every node is told the criteria, for the same reason every node is
+        // told the team's standing goal. Only the lead answers for them: a
+        // worker held to the whole goal would be returned for ever on work it
+        // was never asked to do.
+        var verdict = ReportCheck.Check(
+            new Report(
+                "implementer/1",
+                ReportStatus.Done,
+                "wrote the thing",
+                [new ReportDeliverable(DeliverableKind.Commit, "abc1234")],
+                [new ReportEvidence(EvidenceKind.Test, "dotnet test", EvidenceResult.Pass)],
+                []),
+            Briefed("lead", One, Two) with { Deliverable = DeliverableKind.Commit });
+
+        verdict.Outcome.Should().Be(ReportOutcome.Accepted);
+    }
+
+    [Fact]
+    public void A_run_with_no_criteria_behaves_exactly_as_it_did_before()
+    {
+        // Every team file already written, and every run that does not want
+        // criteria. The absence of them must not become a way to fail.
+        ReportCheck.Check(Reported("lead"), Briefed(null))
+            .Outcome.Should().Be(ReportOutcome.Accepted);
+    }
+
+    [Fact]
+    public void Coverage_is_only_asked_of_a_done()
+    {
+        // A lead reporting blocked is telling you it is not finished, which is
+        // the answer the criteria would have extracted anyway. Returning it for
+        // incomplete coverage would be refusing an honest report.
+        var verdict = ReportCheck.Check(
+            new Report(
+                "lead",
+                ReportStatus.Blocked,
+                "could not get there",
+                [],
+                [],
+                [],
+                Blocker: new ReportBlocker("the suite does not build", "a fix to the build")),
+            Briefed(null, One, Two));
+
+        verdict.Outcome.Should().Be(ReportOutcome.Accepted);
+    }
+
+    [Fact]
+    public void Every_unanswered_criterion_is_named_rather_than_counted()
+    {
+        // Three reasons, not "3 criteria were not covered". The lead has to act
+        // on this, and a count tells it nothing about which.
+        var verdict = ReportCheck.Check(
+            Reported("lead"),
+            Briefed(null, One, Two, "the changelog mentions it"));
+
+        verdict.Reasons.Should().HaveCount(3);
+        verdict.Reasons.Should().Contain(one => one.Contains(One, StringComparison.Ordinal));
+        verdict.Reasons.Should().Contain(one => one.Contains(Two, StringComparison.Ordinal));
+    }
+}

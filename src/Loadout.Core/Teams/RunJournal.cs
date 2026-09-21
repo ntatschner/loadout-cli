@@ -104,12 +104,71 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
         ];
     }
 
+    /// <summary>
+    /// The coverage a lead reported, criterion by criterion.
+    /// </summary>
+    /// <remarks>
+    /// Its own reader because this is the one event carrying a list of objects
+    /// rather than a list of strings, and <see cref="Words"/> would return
+    /// nothing for it without saying so - which is how a whole account of
+    /// whether the goal was met would be dropped in silence.
+    /// </remarks>
+    public IReadOnlyList<RunCovered> Covered()
+    {
+        if (Data.ValueKind != JsonValueKind.Object
+            || !Data.TryGetProperty("coverage", out var value)
+            || value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var covered = new List<RunCovered>();
+
+        foreach (var one in value.EnumerateArray())
+        {
+            if (one.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var criterion = one.TryGetProperty("criterion", out var c) && c.ValueKind == JsonValueKind.String
+                ? c.GetString()
+                : null;
+
+            if (criterion is not { Length: > 0 })
+            {
+                continue;
+            }
+
+            covered.Add(new RunCovered(
+                criterion,
+                one.TryGetProperty("verdict", out var v) && v.ValueKind == JsonValueKind.String
+                    ? v.GetString() ?? "unmet"
+                    : "unmet",
+                one.TryGetProperty("because", out var b) && b.ValueKind == JsonValueKind.String
+                    ? b.GetString()
+                    : null));
+        }
+
+        return covered;
+    }
+
     /// <summary>A number from the event's data, or null.</summary>
     public decimal? Number(string name) =>
         Data.ValueKind == JsonValueKind.Object && Data.TryGetProperty(name, out var value)
         && value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)
             ? number
             : null;
+}
+
+/// <summary>What became of one of a run's criteria, as the lead last reported it.</summary>
+/// <param name="Criterion">The criterion, in the words the run gave it.</param>
+/// <param name="Verdict">met, unmet or not-attempted.</param>
+/// <param name="Because">What the lead says shows it, where it said anything.</param>
+public sealed record RunCovered(string Criterion, string Verdict, string? Because)
+{
+    /// <summary>Whether this one is settled.</summary>
+    public bool Met => string.Equals(Verdict, "met", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>Where a node got to.</summary>
@@ -241,10 +300,25 @@ public sealed record RunSummary(
     int QuietRounds = 0,
     IReadOnlyList<RunTurn>? Exchanges = null,
     IReadOnlyList<RunRound>? Timeline = null,
-    int Conflicts = 0)
+    int Conflicts = 0,
+    IReadOnlyList<RunCovered>? Covered = null)
 {
     /// <summary>Each round, with when it started and when it came back.</summary>
     public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
+
+    /// <summary>
+    /// What the lead last said about each of the run's criteria.
+    /// </summary>
+    /// <remarks>
+    /// Empty for a run given no criteria, which is every run written before
+    /// they existed and every run that does not want them. A run that has them
+    /// is the one where "done" means something a reader can check rather than
+    /// something the lead asserted.
+    /// </remarks>
+    public IReadOnlyList<RunCovered> Coverage => Covered ?? [];
+
+    /// <summary>Criteria the lead has not reported as met.</summary>
+    public IReadOnlyList<RunCovered> Outstanding => [.. Coverage.Where(one => !one.Met)];
 
     /// <summary>Every exchange the run paid for, oldest first.</summary>
     public IReadOnlyList<RunTurn> Turns => Exchanges ?? [];
@@ -683,6 +757,7 @@ public sealed class RunJournal : IRunJournal
         var turns = new List<RunTurn>();
         var timeline = new List<RunRound>();
         var conflicts = 0;
+        IReadOnlyList<RunCovered> covered = [];
 
         // Insertion order, because that is the order the run briefed them
         // and the order somebody reading it will expect.
@@ -838,6 +913,16 @@ public sealed class RunJournal : IRunJournal
                         Doing = null,
                     });
 
+                    // The latest account wins, because a lead sent back for an
+                    // unanswered criterion reports again and the second answer
+                    // is the one that is true. A worker never carries coverage,
+                    // so whichever node this is, an entry here came from the
+                    // node that answers for the goal.
+                    if (entry.Covered() is { Count: > 0 } said)
+                    {
+                        covered = said;
+                    }
+
                     break;
 
                 case "node.ended" when entry.Node is { Length: > 0 } finishedNode:
@@ -924,7 +1009,8 @@ public sealed class RunJournal : IRunJournal
             quiet,
             turns,
             timeline,
-            conflicts);
+            conflicts,
+            covered);
     }
 
     /// <summary>One event as a line somebody can read.</summary>

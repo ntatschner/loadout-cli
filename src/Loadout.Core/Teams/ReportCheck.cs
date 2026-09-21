@@ -87,6 +87,8 @@ public static class ReportCheck
                         $"Status done needs at least one deliverable, and the brief asked for a {Spell(brief.Deliverable)}.");
                 }
 
+                reasons.AddRange(Uncovered(report, brief));
+
                 break;
 
             case ReportStatus.Blocked:
@@ -117,6 +119,91 @@ public static class ReportCheck
         return reasons.Count == 0
             ? ReportVerdict.Accepted
             : new ReportVerdict(ReportOutcome.Returned, reasons);
+    }
+
+    /// <summary>
+    /// What is wrong with the account a lead gives of the run's criteria.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the lead, and only where the run gave criteria at all. A worker is
+    /// accountable for its own brief; the lead is the node that answers for the
+    /// goal, and it is the one whose <c>done</c> ends the run. A run with no
+    /// criteria behaves exactly as it did before this existed, which is what
+    /// keeps every team file already written working.
+    /// </para>
+    /// <para>
+    /// The rule is the one that already governs a worker's report, one level
+    /// up: <c>done</c> needs evidence that passed. Here that means every
+    /// criterion answered, every answer <c>met</c>, and every <c>met</c> saying
+    /// what shows it. A lead that has genuinely finished can write all three in
+    /// a sentence each; a lead that has not is being asked to say so, which is
+    /// the whole point.
+    /// </para>
+    /// <para>
+    /// Criteria are matched on their text, trimmed and case-insensitively,
+    /// because the lead is repeating back a string it was given and the one
+    /// thing a model reliably does to a string it repeats is change its case or
+    /// its spacing. Matching exactly would fail a lead that did the work and
+    /// capitalised a sentence.
+    /// </para>
+    /// </remarks>
+    private static IEnumerable<string> Uncovered(Report report, Brief brief)
+    {
+        // The lead has no parent. A worker told the criteria for context is not
+        // being asked to answer for them.
+        if (brief.Parent is not null || brief.Criteria is not { Count: > 0 } criteria)
+        {
+            yield break;
+        }
+
+        var said = new Dictionary<string, ReportCoverage>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var one in report.Coverage ?? [])
+        {
+            // First answer wins, so a lead that repeats a criterion cannot
+            // overwrite an honest unmet with a later met.
+            said.TryAdd(one.Criterion?.Trim() ?? string.Empty, one);
+        }
+
+        foreach (var criterion in criteria)
+        {
+            if (!said.TryGetValue(criterion.Trim(), out var answer))
+            {
+                yield return
+                    $"Status done needs coverage for every criterion, and nothing was said about "
+                    + $"'{criterion}'. Answer it with verdict met, unmet or not-attempted.";
+
+                continue;
+            }
+
+            switch (answer.Verdict)
+            {
+                case CoverageVerdict.Met when string.IsNullOrWhiteSpace(answer.Because):
+                    yield return
+                        $"'{criterion}' is reported met with nothing behind it. Say in 'because' "
+                        + "which node, which report and which evidence shows it.";
+
+                    break;
+
+                case CoverageVerdict.Unmet:
+                    yield return
+                        $"'{criterion}' is not met, so the run is not done. Report blocked, with a "
+                        + "blocker saying what would meet it, or keep going.";
+
+                    break;
+
+                case CoverageVerdict.NotAttempted:
+                    yield return
+                        $"Nothing was attempted for '{criterion}', so the run is not done. That is "
+                        + "an area of the goal nobody covered.";
+
+                    break;
+
+                default:
+                    break;
+            }
+        }
     }
 
     private static string Spell(DeliverableKind kind) => kind.ToString().ToLowerInvariant();

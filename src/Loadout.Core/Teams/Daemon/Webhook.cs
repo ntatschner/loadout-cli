@@ -19,6 +19,11 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// <param name="Project">Which project it works on, as the registry names it.</param>
 /// <param name="Rounds">How many rounds it may take, or null for the default.</param>
 /// <param name="Autonomy">manual, supervised or autonomous, or null for the team's own.</param>
+/// <param name="Criteria">
+/// What the run is judged on, each one checkable, or null for a run with
+/// nothing but its goal. The lead owes a verdict and evidence on every one, and
+/// a done that leaves one unmet or unanswered is sent back to it.
+/// </param>
 /// <remarks>
 /// <para>
 /// Nothing here is checked against anything. Whether that team exists, whether
@@ -39,7 +44,8 @@ public sealed record StartRequest(
     string Goal,
     string? Project = null,
     int? Rounds = null,
-    string? Autonomy = null);
+    string? Autonomy = null,
+    IReadOnlyList<string>? Criteria = null);
 
 /// <summary>A team the page asked be written.</summary>
 /// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>

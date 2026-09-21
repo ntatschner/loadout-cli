@@ -62,7 +62,13 @@ public static class ReportSchema
                 "inputs": { "type": "array", "items": { "type": "string" } } } } },
             "outward_taken": { "type": "array", "items": { "type": "string" } },
             "outward_requested": { "type": "array", "items": { "type": "string" } },
-            "next": { "type": "string" }
+            "next": { "type": "string" },
+            "coverage": { "type": "array", "items": {
+              "type": "object", "additionalProperties": false, "required": ["criterion", "verdict"],
+              "properties": {
+                "criterion": { "type": "string" },
+                "verdict": { "enum": ["met", "unmet", "not-attempted"] },
+                "because": { "type": "string" } } } }
           }
         }
         """;

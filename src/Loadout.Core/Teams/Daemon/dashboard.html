@@ -302,7 +302,13 @@
   .start summary { padding: 0.6rem 0.9rem; cursor: pointer; min-height: 2.5rem; }
   .start .fields { display: grid; gap: 0.6rem; padding: 0 0.9rem 0.9rem; }
   .start label { display: block; color: var(--quiet); font-size: 0.9rem; }
-  .start input, .start select { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem; }
+  .start input, .start select, .start textarea {
+    font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem;
+  }
+
+  /* Vertically only: sideways drags it out of the column and the page then
+     scrolls horizontally, which is the one thing this layout forbids. */
+  .start textarea { resize: vertical; min-height: 4rem; }
   .start .narrow { display: flex; gap: 0.6rem; flex-wrap: wrap; }
   .start .narrow > * { flex: 1 1 8rem; }
 
@@ -803,6 +809,19 @@
   .queue .who { display: block; font-weight: 700; }
   .queue .why { display: block; font-size: 0.85rem; color: var(--quiet); }
   .queue .when { margin-left: auto; padding-left: 0.6rem; font-size: 0.85rem; white-space: nowrap; }
+
+  /* Each criterion on its own row, its verdict written as a word beside a
+     colour rather than only as one - the page's standing rule, and the
+     reason a terminal, a screen reader and a forced-colours mode all say
+     the same thing about a run. */
+  #coverage { margin: 0 0 1rem; }
+  #coverage h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+  #coverage ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+  #coverage li { border: 1px solid var(--line); border-radius: 0.3rem; padding: 0.5rem 0.7rem; }
+  #coverage .verdict { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  #coverage .met .verdict { color: var(--done); }
+  #coverage .unmet .verdict, #coverage .not-attempted .verdict { color: var(--stopped); }
+  #coverage .because { display: block; color: var(--quiet); font-size: 0.9rem; margin-top: 0.2rem; }
 
   /* The minimum carried explicitly, like every other control on this page:
      the one thing axe has ever found here by itself was a button relying on
@@ -2504,6 +2523,30 @@
         </div>
 
         <div>
+          <label for="start-criteria">Done when</label>
+          <!--
+            One per line, and optional.
+
+            Without these a run ends when the lead says done and nothing argues.
+            That is fine while somebody is watching, and it is the whole of the
+            check on an autonomous run - which is the case where nobody is. With
+            them the lead owes a verdict and evidence on each, and a done that
+            leaves one unmet or unanswered is sent back to it.
+
+            A textarea rather than a row of boxes with add and remove. A
+            criterion is a sentence, lines are how people write lists of
+            sentences, and a widget that has to be operated before it can be
+            typed into is one people skip.
+          -->
+          <textarea id="start-criteria" rows="3" aria-describedby="start-criteria-about"
+            placeholder="one per line, each one checkable"></textarea>
+          <p class="facts" id="start-criteria-about">
+            Optional, and the difference between a run that reports done and one
+            that can show it. The lead must answer for every line.
+          </p>
+        </div>
+
+        <div>
           <label for="start-project">Project</label>
           <select id="start-project">
             <option value="">choose one</option>
@@ -2724,6 +2767,12 @@
 
   <section id="detail" class="pane" hidden aria-labelledby="detail-heading">
     <h2 id="detail-heading">Run</h2>
+
+    <!-- What the goal was broken into and where each part got to. Hidden
+         entirely for a run given no criteria, which is every run written
+         before they existed: an empty list here would read as "nothing is
+         met" rather than "this run does not work that way". -->
+    <div id="coverage" hidden></div>
 
     <div id="gates"></div>
 
@@ -3238,6 +3287,13 @@
       var rounds = parseInt(document.getElementById("start-rounds").value, 10);
       var autonomy = document.getElementById("start-autonomy").value;
 
+      // One per line, blanks dropped: a criterion nothing can report a verdict
+      // on would refuse every done for ever.
+      var criteria = document.getElementById("start-criteria").value
+        .split("\n")
+        .map(function (one) { return one.trim(); })
+        .filter(function (one) { return one.length > 0; });
+
       if (!team || !goal) {
         announce("A run needs a team and something to do.");
 
@@ -3259,7 +3315,10 @@
       // Named in the question. This one spends money and edits a repository,
       // and the token got somebody to the page rather than to this.
       if (!window.confirm("Start " + team + (project ? " on " + project : "")
-        + " to \u201c" + goal + "\u201d?")) {
+        + " to \u201c" + goal + "\u201d?"
+        + (criteria.length
+          ? "\n\nDone when all " + criteria.length + ":\n- " + criteria.join("\n- ")
+          : "\n\nNo criteria, so it is done when the lead says so."))) {
         return;
       }
 
@@ -3273,7 +3332,8 @@
           goal: goal,
           project: project || null,
           rounds: rounds > 0 ? rounds : null,
-          autonomy: autonomy || null
+          autonomy: autonomy || null,
+          criteria: criteria.length ? criteria : null
         })
       })
         .then(function (answer) {
@@ -6509,6 +6569,8 @@
       }
     }
 
+    drawCoverage(run);
+
     var gates = (run.gates || []).map(function (gate) { return gate.id; }).join("|");
 
     if (gates !== gatesShown) {
@@ -6583,6 +6645,87 @@
     }
 
     return "Answer \u201c" + asking(gate.question) + "\u201d with \u201c" + option + "\u201d?";
+  }
+
+  /*
+    What the goal was broken into, and where each part got to.
+
+    A run used to end when the lead said done and nothing argued, which is fine
+    while somebody is watching and is the whole of the check on an autonomous
+    run - the case where nobody is. A run given criteria carries the lead's
+    verdict on each, and a done that leaves one unmet or unanswered never got
+    this far: the report was sent back.
+
+    So what is drawn here is either a finished account of a met goal, or a live
+    one showing which parts are still out.
+  */
+  function drawCoverage(run) {
+    var box = document.getElementById("coverage");
+
+    if (!box) { return; }
+
+    var covered = run.coverage || [];
+
+    if (!covered.length) {
+      box.hidden = true;
+      box.textContent = "";
+      box.removeAttribute("data-shape");
+
+      return;
+    }
+
+    var shape = covered.map(function (one) {
+      return one.criterion + ":" + one.verdict;
+    }).join("|");
+
+    if (box.getAttribute("data-shape") === shape) { return; }
+
+    box.setAttribute("data-shape", shape);
+    box.textContent = "";
+    box.hidden = false;
+
+    var met = covered.filter(function (one) { return one.met; }).length;
+
+    var head = document.createElement("h3");
+
+    head.textContent = "Done when - " + met + " of " + covered.length + " met";
+    box.appendChild(head);
+
+    var list = document.createElement("ul");
+
+    covered.forEach(function (one) {
+      var li = document.createElement("li");
+
+      li.className = one.verdict;
+
+      var verdict = document.createElement("span");
+
+      verdict.className = "verdict";
+      verdict.textContent = one.verdict === "not-attempted"
+        ? "not attempted"
+        : one.verdict;
+      li.appendChild(verdict);
+
+      var said = document.createElement("span");
+
+      said.textContent = " " + one.criterion;
+      li.appendChild(said);
+
+      // What the lead says shows it. A met with nothing behind it never
+      // reaches the page - the report is returned - so anything here has
+      // something to show.
+      if (one.because) {
+        var why = document.createElement("span");
+
+        why.className = "because";
+        why.textContent = one.because;
+        li.appendChild(why);
+      }
+
+      list.appendChild(li);
+    });
+
+    box.appendChild(list);
   }
 
   function drawGates(run) {

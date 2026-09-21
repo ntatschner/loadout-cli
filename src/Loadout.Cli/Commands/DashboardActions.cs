@@ -215,6 +215,19 @@ internal static class DashboardActions
             arguments.Add(autonomy);
         }
 
+        // One option per criterion, because a criterion is a sentence and
+        // sentences contain commas. Blank ones are dropped rather than passed:
+        // a criterion the lead can never report a verdict on would refuse
+        // every done for ever.
+        foreach (var criterion in asking.Criteria ?? [])
+        {
+            if (criterion.Trim() is { Length: > 0 } said)
+            {
+                arguments.Add("--done-when");
+                arguments.Add(said);
+            }
+        }
+
         arguments.Add("--non-interactive");
 
         output.WriteLine(
