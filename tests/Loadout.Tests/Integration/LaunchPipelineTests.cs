@@ -577,7 +577,14 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         await using var launch = started.Value!;
 
         launch.Warnings.Should().Contain(w => w.Contains("would be made at"));
-        launch.Plan.WorkingDirectory.Should().Be(_repository, "the launch is described against what it would branch from");
+        // Compared as directories rather than as strings. macOS gives out
+        // /var/folders/... for temporary files and /var is a symlink to
+        // /private/var, so git - which is asked where the repository is -
+        // answers with the resolved form and this held the unresolved one.
+        // The assertion was never about the spelling.
+        new PathSemantics().PathsEqual(launch.Plan.WorkingDirectory, _repository)
+            .Should().BeTrue("the launch is described against what it would branch from, "
+                + $"but the plan says '{launch.Plan.WorkingDirectory}' and the repository is '{_repository}'");
 
         var after = await _processes.RunAsync(
             new ProcessRequest("git", ["worktree", "list"], _repository), TimeSpan.FromSeconds(30));
