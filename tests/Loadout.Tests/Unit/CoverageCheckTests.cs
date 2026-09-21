@@ -192,6 +192,104 @@ public sealed class CoverageCheckTests
     }
 
     /// <summary>
+    /// Coverage survives the journey a real one actually makes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every other test in this file builds a <see cref="ReportCoverage"/> in
+    /// C# and hands it straight to the check. A real one is JSON, written by an
+    /// agent against the schema, and read back by
+    /// <see cref="ReportReader"/>. If anything on that path drops it - a
+    /// property name that does not match, an enum member spelt differently in
+    /// the schema and the converter - then <c>report.Coverage</c> is null for
+    /// every real run, every criterion reads as unanswered, and every
+    /// autonomous run ends unmet.
+    /// </para>
+    /// <para>
+    /// And every test here would still pass, because none of them use the
+    /// reader. This repository has been caught twice by a double that accepted
+    /// what the real collaborator would refuse; this is the same shape of
+    /// mistake with the arrow pointing the other way.
+    /// </para>
+    /// <para>
+    /// So the JSON below is written as the schema describes it, not as C#
+    /// would serialise it: <c>not-attempted</c> with its hyphen, and
+    /// <c>because</c> absent rather than null on the entry that has none.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void Coverage_written_as_the_schema_describes_it_reads_back()
+    {
+        const string json = """
+            {
+              "contract": "report/1",
+              "node": "lead",
+              "status": "done",
+              "summary": "made the docs true",
+              "deliverables": [],
+              "evidence": [{ "kind": "test", "ref": "dotnet test", "result": "pass" }],
+              "outward_taken": [],
+              "coverage": [
+                { "criterion": "the suite passes on a clean checkout",
+                  "verdict": "met",
+                  "because": "verifier/1 reported 2843 passing" },
+                { "criterion": "the README names every command that ships",
+                  "verdict": "not-attempted" }
+              ]
+            }
+            """;
+
+        var read = ReportReader.Read(json);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+
+        var report = read.Value!;
+
+        report.Coverage.Should().NotBeNull("a real report's coverage arrives as JSON, not as C#");
+        report.Coverage!.Should().HaveCount(2);
+
+        report.Coverage[0].Criterion.Should().Be(One);
+        report.Coverage[0].Verdict.Should().Be(CoverageVerdict.Met);
+        report.Coverage[0].Because.Should().Be("verifier/1 reported 2843 passing");
+
+        // The hyphenated member name, which is the one a mismatch would hide.
+        report.Coverage[1].Verdict.Should().Be(CoverageVerdict.NotAttempted);
+        report.Coverage[1].Because.Should().BeNull();
+
+        // And the whole point: the check reaches the same verdict on a report
+        // that came through the reader as on one built in a test.
+        var verdict = ReportCheck.Check(report, Briefed(null, One, Two));
+
+        verdict.Outcome.Should().Be(ReportOutcome.Returned);
+        verdict.Reasons.Should().ContainSingle().Which.Should().Contain("Nothing was attempted");
+
+        Loadout.Agents.Teams.TeamRunner.Outstanding([One, Two], report).Should().Equal(Two);
+    }
+
+    [Fact]
+    public void A_report_with_no_coverage_at_all_still_reads()
+    {
+        // Which is every report written before this existed, and every worker's
+        // report now. The reader must not require the key.
+        const string json = """
+            {
+              "contract": "report/1",
+              "node": "implementer/1",
+              "status": "done",
+              "summary": "wrote it",
+              "deliverables": [{ "kind": "commit", "ref": "abc1234" }],
+              "evidence": [{ "kind": "test", "ref": "dotnet test", "result": "pass" }],
+              "outward_taken": []
+            }
+            """;
+
+        var read = ReportReader.Read(json);
+
+        read.Succeeded.Should().BeTrue(read.Error);
+        read.Value!.Coverage.Should().BeNull();
+    }
+
+    /// <summary>
     /// What is still out when the run decides whether to call itself done.
     /// </summary>
     /// <remarks>
