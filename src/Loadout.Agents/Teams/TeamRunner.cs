@@ -727,6 +727,44 @@ public sealed class TeamRunner : ITeamRunner
                 if (report.Status is ReportStatus.Done or ReportStatus.Failed
                     || (report.Status == ReportStatus.Blocked && !hasRequests))
                 {
+                    /*
+                        A done the lead could not account for is not a done.
+
+                        ReportCheck already refused this twice - a returned
+                        report goes back once and the second answer is the
+                        node's, whatever it says. That contract is right for a
+                        worker and leaves a hole at the top of a run: a lead
+                        that never fills in coverage is asked twice, and the
+                        run then ends recording "done" while the journal it
+                        wrote says two of three criteria were met.
+
+                        So the run does not argue further and does not spend
+                        another round. It records what happened. An autonomous
+                        run nobody watched must not be readable afterwards as
+                        having met a goal it did not, and "ended: done" beside
+                        "2 of 3 met" is exactly that.
+                    */
+                    if (report.Status == ReportStatus.Done
+                        && Outstanding(criteria, report) is { Count: > 0 } missed)
+                    {
+                        await journal.WriteAsync(
+                            "goal.unmet",
+                            team.Lead,
+                            new { criteria = missed },
+                            ct).ConfigureAwait(false);
+
+                        console.Note(
+                            $"The lead reported done without accounting for {missed.Count} of "
+                            + $"{criteria!.Count} criteria: {string.Join("; ", missed)}");
+
+                        ended = missed.Count == criteria.Count
+                            ? "the lead reported done without accounting for the goal"
+                            : $"the lead reported done with {missed.Count} of {criteria.Count} "
+                              + "criteria unmet";
+
+                        break;
+                    }
+
                     ended = Spell(report.Status);
                     break;
                 }
@@ -2388,6 +2426,44 @@ public sealed class TeamRunner : ITeamRunner
             // judged on, for the same reason it is told the team's standing
             // goal. Answering for them is the lead's alone.
             criteria is { Count: > 0 } ? criteria : null);
+    }
+
+    /// <summary>
+    /// The run's criteria the lead has not reported as met, in the run's own
+    /// words.
+    /// </summary>
+    /// <remarks>
+    /// Matched the way <see cref="ReportCheck"/> matches them, trimmed and
+    /// past case, because the two have to agree about what counts as answered.
+    /// A run given no criteria has nothing outstanding, which is what keeps
+    /// every run written before they existed ending exactly as it did.
+    /// </remarks>
+    internal static IReadOnlyList<string> Outstanding(
+        IReadOnlyList<string>? criteria,
+        Report report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        if (criteria is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        var said = new Dictionary<string, CoverageVerdict>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var one in report.Coverage ?? [])
+        {
+            // First answer wins, exactly as the check does, so the two cannot
+            // disagree about a criterion a lead answered twice.
+            said.TryAdd(one.Criterion?.Trim() ?? string.Empty, one.Verdict);
+        }
+
+        return
+        [
+            .. criteria.Where(criterion =>
+                !said.TryGetValue(criterion.Trim(), out var verdict)
+                || verdict != CoverageVerdict.Met),
+        ];
     }
 
     /// <summary>"implementer/2" is an instance of "implementer"; anything else is itself.</summary>

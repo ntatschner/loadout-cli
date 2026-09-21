@@ -191,6 +191,92 @@ public sealed class CoverageCheckTests
         verdict.Outcome.Should().Be(ReportOutcome.Accepted);
     }
 
+    /// <summary>
+    /// What is still out when the run decides whether to call itself done.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A second reader of the same answer, and it has to agree with the check
+    /// or the run contradicts itself. ReportCheck refuses a report; this
+    /// decides what the run records after the refusals have run out.
+    /// </para>
+    /// <para>
+    /// They run out. A returned report goes back to the node once and the
+    /// second answer is the node's, whatever it says - which is right for a
+    /// worker and leaves a hole at the top of a run: a lead that never fills in
+    /// coverage is asked twice and the run then records "done" while the
+    /// journal beside it says two of three criteria were met.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void A_lead_that_never_accounted_for_the_goal_leaves_every_criterion_outstanding()
+    {
+        Loadout.Agents.Teams.TeamRunner.Outstanding([One, Two], Reported("lead"))
+            .Should().Equal(One, Two);
+    }
+
+    [Fact]
+    public void Only_a_criterion_reported_met_is_settled()
+    {
+        var outstanding = Loadout.Agents.Teams.TeamRunner.Outstanding(
+            [One, Two, "the changelog names it"],
+            Reported(
+                "lead",
+                new ReportCoverage(One, CoverageVerdict.Met, "verifier/1"),
+                new ReportCoverage(Two, CoverageVerdict.Unmet),
+                new ReportCoverage("the changelog names it", CoverageVerdict.NotAttempted)));
+
+        // Honest and unmet is still unmet. The point of recording it is that a
+        // run nobody watched cannot be read afterwards as having met a goal it
+        // did not.
+        outstanding.Should().Equal(Two, "the changelog names it");
+    }
+
+    [Fact]
+    public void A_lead_that_answered_everything_leaves_nothing_outstanding() =>
+        Loadout.Agents.Teams.TeamRunner.Outstanding(
+            [One, Two],
+            Reported(
+                "lead",
+                new ReportCoverage(One, CoverageVerdict.Met, "verifier/1"),
+                new ReportCoverage(Two, CoverageVerdict.Met, "docs-auditor/1")))
+            .Should().BeEmpty();
+
+    [Fact]
+    public void A_run_with_no_criteria_has_nothing_outstanding()
+    {
+        // Every run written before criteria existed. Its ending must not change.
+        Loadout.Agents.Teams.TeamRunner.Outstanding(null, Reported("lead")).Should().BeEmpty();
+        Loadout.Agents.Teams.TeamRunner.Outstanding([], Reported("lead")).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_two_readers_agree_about_a_criterion_answered_twice()
+    {
+        // ReportCheck keeps the first answer, so this must too. If they
+        // disagreed, a report the check refused could still be recorded as a
+        // run that met its goal, which is the contradiction both exist to stop.
+        var report = Reported(
+            "lead",
+            new ReportCoverage(One, CoverageVerdict.Unmet),
+            new ReportCoverage(One, CoverageVerdict.Met, "actually it was fine"));
+
+        ReportCheck.Check(report, Briefed(null, One)).Outcome.Should().Be(ReportOutcome.Returned);
+        Loadout.Agents.Teams.TeamRunner.Outstanding([One], report).Should().Equal(One);
+    }
+
+    [Fact]
+    public void The_two_readers_agree_about_case_and_spacing()
+    {
+        var report = Reported(
+            "lead",
+            new ReportCoverage("  The Suite Passes On A Clean Checkout  ",
+                CoverageVerdict.Met, "verifier/1"));
+
+        ReportCheck.Check(report, Briefed(null, One)).Outcome.Should().Be(ReportOutcome.Accepted);
+        Loadout.Agents.Teams.TeamRunner.Outstanding([One], report).Should().BeEmpty();
+    }
+
     [Fact]
     public void Every_unanswered_criterion_is_named_rather_than_counted()
     {

@@ -268,6 +268,13 @@ plain: no criteria means "done" is the lead's word for it.
   by nothing that runs. `goal_met`, `budget_spent` and `no_progress_2_rounds`
   are hard-coded in the loop whatever a team file lists.
 
+A lead that will not account for the goal is asked twice — a returned report
+goes back once, and the second answer is the node's whatever it says — and then
+the run stops arguing. It does not record a done it cannot support: the run ends
+saying how many criteria were left unmet, and the journal carries a `goal.unmet`
+line naming them. An autonomous run nobody watched must not read afterwards as
+having met a goal it did not.
+
 ## Which tree it works on
 
 A run works on the **project's registered path**, not on wherever you typed the
