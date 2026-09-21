@@ -39,11 +39,7 @@ public sealed class NoticesTests : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        var port = Free();
-
-        _address = $"http://127.0.0.1:{port}/hook";
-        _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-        _listener.Start();
+        _address = $"http://127.0.0.1:{Listen()}/hook";
 
         _serving = Task.Run(async () =>
         {
@@ -106,6 +102,39 @@ public sealed class NoticesTests : IAsyncLifetime
         _listener.Close();
         _client.Dispose();
         _stopping.Dispose();
+    }
+
+    /// <summary>Starts the listener on a port nothing else is using.</summary>
+    /// <remarks>
+    /// Asking the operating system for a free port does not reserve it. Free()
+    /// binds port zero, reads what it was given and lets go again, so between
+    /// that and Start() anything else on the machine can take it. CI's macOS
+    /// leg lost exactly that race - "Address already in use" - where the
+    /// ephemeral range recycles fastest and the suite runs classes in parallel.
+    ///
+    /// The gap cannot be closed, because there is no way to hand an
+    /// already-bound socket to HttpListener. It can only be tried again.
+    /// </remarks>
+    private int Listen()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var port = Free();
+
+            _listener.Prefixes.Clear();
+            _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+
+            try
+            {
+                _listener.Start();
+
+                return port;
+            }
+            catch (HttpListenerException) when (attempt < 20)
+            {
+                // Taken in between. Ask for another one.
+            }
+        }
     }
 
     private static int Free()
