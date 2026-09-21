@@ -12,10 +12,15 @@ namespace Loadout.Core.Teams;
 /// <param name="Teams">By name, later origins having replaced earlier.</param>
 /// <param name="Findings">What did not load, or loaded with a problem, each naming the team.</param>
 /// <param name="Origins">Which layer each team's surviving definition came from.</param>
+/// <param name="Sources">
+/// Where each team's surviving definition was read from: a file path for one
+/// on disk, and the resource name for one that ships inside the launcher.
+/// </param>
 public sealed record TeamCatalogueResult(
     IReadOnlyDictionary<string, TeamDefinition> Teams,
     IReadOnlyList<RuleFinding> Findings,
-    IReadOnlyDictionary<string, SpecialistOrigin> Origins)
+    IReadOnlyDictionary<string, SpecialistOrigin> Origins,
+    IReadOnlyDictionary<string, string>? Sources = null)
 {
     /// <summary>A team by name, or null.</summary>
     public TeamDefinition? Find(string name) =>
@@ -33,6 +38,22 @@ public sealed record TeamCatalogueResult(
     /// </remarks>
     public SpecialistOrigin Origin(string name) =>
         Origins.TryGetValue(name, out var origin) ? origin : SpecialistOrigin.BuiltIn;
+
+    /// <summary>
+    /// The file, or the embedded resource, the surviving definition was read
+    /// from.
+    /// </summary>
+    /// <remarks>
+    /// Recorded here rather than worked out again by whoever wants it. The
+    /// layering — built-in, then packs, then the workspace, then the project,
+    /// later replacing earlier — is decided in exactly one place, and a second
+    /// implementation of it for the sake of editing a file would be a second
+    /// answer to "which file is this team", which is the kind of pair that
+    /// disagrees the first time somebody names a file after something other
+    /// than the team inside it.
+    /// </remarks>
+    public string? Source(string name) =>
+        Sources is not null && Sources.TryGetValue(name, out var path) ? path : null;
 }
 
 /// <summary>Loads and checks the teams available to a project.</summary>
@@ -97,15 +118,17 @@ public sealed class TeamCatalogue : ITeamCatalogue
         var teams = new Dictionary<string, TeamDefinition>(StringComparer.OrdinalIgnoreCase);
         var findings = new List<RuleFinding>();
         var origins = new Dictionary<string, SpecialistOrigin>(StringComparer.OrdinalIgnoreCase);
+        var sources = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        LoadBuiltIn(teams, origins, findings);
+        LoadBuiltIn(teams, origins, sources, findings);
 
         // Packs layer over the built-ins and under the workspace, so a team a
         // pack ships can be replaced by one of your own of the same name, and
         // never the other way round.
         foreach (var directory in await _packs(ct).ConfigureAwait(false))
         {
-            await LoadDirectoryAsync(directory, SpecialistOrigin.Pack, teams, origins, findings, ct)
+            await LoadDirectoryAsync(
+                directory, SpecialistOrigin.Pack, teams, origins, sources, findings, ct)
                 .ConfigureAwait(false);
         }
 
@@ -113,13 +136,13 @@ public sealed class TeamCatalogue : ITeamCatalogue
         {
             await LoadDirectoryAsync(
                 Path.Combine(workspaceRoot, "global", "teams"),
-                SpecialistOrigin.Workspace, teams, origins, findings, ct).ConfigureAwait(false);
+                SpecialistOrigin.Workspace, teams, origins, sources, findings, ct).ConfigureAwait(false);
 
             if (slug is { Length: > 0 })
             {
                 await LoadDirectoryAsync(
                     Path.Combine(workspaceRoot, "projects", slug, "teams"),
-                    SpecialistOrigin.Project, teams, origins, findings, ct).ConfigureAwait(false);
+                    SpecialistOrigin.Project, teams, origins, sources, findings, ct).ConfigureAwait(false);
             }
         }
 
@@ -152,7 +175,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
             findings.AddRange(Check(team, specialists, capabilities.Capabilities));
         }
 
-        return new TeamCatalogueResult(teams, findings, origins);
+        return new TeamCatalogueResult(teams, findings, origins, sources);
     }
 
     /// <summary>Whether a declaration talks about remedies at all.</summary>
@@ -398,6 +421,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
     private static void LoadBuiltIn(
         Dictionary<string, TeamDefinition> teams,
         Dictionary<string, SpecialistOrigin> origins,
+        Dictionary<string, string> sources,
         List<RuleFinding> findings)
     {
         var assembly = typeof(TeamCatalogue).Assembly;
@@ -423,6 +447,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
             {
                 teams[team.Name] = team;
                 origins[team.Name] = SpecialistOrigin.BuiltIn;
+                sources[team.Name] = resource;
             }
         }
     }
@@ -432,6 +457,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
         SpecialistOrigin origin,
         Dictionary<string, TeamDefinition> teams,
         Dictionary<string, SpecialistOrigin> origins,
+        Dictionary<string, string> sources,
         List<RuleFinding> findings,
         CancellationToken ct)
     {
@@ -467,6 +493,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
                 // is the one a person is being told about.
                 teams[team.Name] = team;
                 origins[team.Name] = origin;
+                sources[team.Name] = file;
             }
         }
     }

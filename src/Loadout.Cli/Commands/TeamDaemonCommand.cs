@@ -65,6 +65,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
     private readonly AccessibleMode _accessible;
     private readonly Loadout.Platform.Abstractions.ISpeech _speech;
+    private readonly Loadout.Core.Teams.ITeamCatalogue _teams;
+    private readonly Loadout.Core.Instructions.ISpecialistLibrary _library;
+    private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
 
     public TeamDaemonCommand(
         ISecretProvider secrets,
@@ -81,8 +84,14 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IAnsiConsole console,
         TimeProvider time,
         AccessibleMode accessible,
-        Loadout.Platform.Abstractions.ISpeech speech)
+        Loadout.Platform.Abstractions.ISpeech speech,
+        Loadout.Core.Teams.ITeamCatalogue teams,
+        Loadout.Core.Instructions.ISpecialistLibrary library,
+        Loadout.Core.Workspace.IWorkspaceManager workspace)
     {
+        _teams = teams;
+        _library = library;
+        _workspace = workspace;
         _accessible = accessible;
         _speech = speech;
         _secrets = secrets;
@@ -211,6 +220,17 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // page asks, this types "team run", and the parser decides whether
             // any of it means anything.
             server.Begin = (asking, ct) => BeganAsync(asking, output, ct);
+
+            // And writing one, because the start form was read as the way to
+            // make a team and there was no other way from the page at all.
+            server.Make = (asking, ct) => DashboardActions.MadeAsync(
+                _commands, _time, asking, output, ct);
+
+            // What there is to start, read per request like the waiting area:
+            // a team written a moment ago, from the page or from a terminal,
+            // belongs in the next answer rather than the next restart.
+            server.Choices = ct => DashboardActions.OfferedAsync(
+                _teams, _library, _workspace, _projects, ct);
 
             // And the second credential, which the dashboard's own token does
             // not grant: typing at a live node is not something the run

@@ -130,6 +130,17 @@ public sealed class TeamsToolTests
             OperationResult<RunSummary>.Ok(run);
 
         public string DirectoryOf(string runId) => "C:/runs/" + runId;
+
+        /// <summary>
+        /// Nothing here deletes anything: these tests read runs.
+        /// </summary>
+        /// <remarks>
+        /// A double that quietly reported success would be asserting its own
+        /// opinion about a thing with no undo. Forgetting a run is asserted
+        /// against a real disk, in RunForgettingTests.
+        /// </remarks>
+        public OperationResult<RunForgotten> Forget(string runId, bool force = false) =>
+            throw new NotSupportedException("these tests read runs, they do not delete them");
     }
 
     private sealed class NoRuns : IRunJournal
@@ -143,5 +154,16 @@ public sealed class TeamsToolTests
             OperationResult<RunSummary>.Fail("no such run", ExitCode.ProjectNotFound);
 
         public string DirectoryOf(string runId) => "C:/runs/" + runId;
+
+        /// <summary>
+        /// Nothing here deletes anything: these tests read runs.
+        /// </summary>
+        /// <remarks>
+        /// A double that quietly reported success would be asserting its own
+        /// opinion about a thing with no undo. Forgetting a run is asserted
+        /// against a real disk, in RunForgettingTests.
+        /// </remarks>
+        public OperationResult<RunForgotten> Forget(string runId, bool force = false) =>
+            throw new NotSupportedException("these tests read runs, they do not delete them");
     }
 }

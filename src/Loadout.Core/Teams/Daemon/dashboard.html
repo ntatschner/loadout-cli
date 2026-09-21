@@ -2361,8 +2361,23 @@
   <section class="pane" aria-labelledby="runs">
     <h2 id="runs">Runs on this machine</h2>
 
+    <!--
+      Two forms, not one.
+
+      There was one, headed "Start a team", and it asked for a team, what it was
+      for, a project and an autonomy. Somebody read that as the way to make a
+      team - which is a fair reading of a form that asks you to name one - typed
+      a name nothing had ever heard of, and got "Team Test is starting. It
+      appears in the list in a moment." The refusal went to the terminal behind
+      the browser.
+
+      Three things were wrong and all three are fixed here. The team is chosen
+      from the ones that exist rather than typed from memory. Making one is its
+      own form, which says so in its heading. And a failure comes back to the
+      page.
+    -->
     <details class="start">
-      <summary>Start a team</summary>
+      <summary>Run a team</summary>
 
       <!--
         Filled in by the page when it knows which server this is. A run started
@@ -2375,8 +2390,13 @@
       <div class="fields">
         <div>
           <label for="start-team">Team</label>
-          <input type="text" id="start-team" list="known-teams" placeholder="as team list names it">
-          <datalist id="known-teams"></datalist>
+          <select id="start-team">
+            <option value="">choose one</option>
+          </select>
+          <!-- What the chosen team is, under the box that chose it: where it
+               came from, how many nodes it has, and anything wrong with it.
+               Eight names in a list tell you nothing about which to pick. -->
+          <p class="facts" id="start-team-about" hidden></p>
         </div>
 
         <div>
@@ -2386,8 +2406,13 @@
 
         <div>
           <label for="start-project">Project</label>
-          <input type="text" id="start-project" list="known-projects" placeholder="as the registry names it">
-          <datalist id="known-projects"></datalist>
+          <select id="start-project">
+            <option value="">choose one</option>
+          </select>
+          <!-- Required, unlike before. Without one a run works in whatever
+               directory this server was started in, which for the daemon is
+               wherever somebody happened to be - and which reported that
+               'd:\git' is not a Git repository. -->
         </div>
 
         <div class="narrow">
@@ -2409,6 +2434,42 @@
 
         <button type="button" id="start">Start it</button>
       </div>
+    </details>
+
+    <details class="start" id="making" hidden>
+      <summary>Make a team</summary>
+
+      <p class="facts">
+        A team is a YAML file: which roles run, how they are wired, and the rules
+        a run of it follows. This writes one and tells you where it is. Copying
+        one that already works is nearly always the way to start.
+      </p>
+
+      <div class="fields">
+        <div>
+          <label for="new-name">Call it</label>
+          <input type="text" id="new-name" placeholder="docs-crew-mine"
+            pattern="[a-z0-9-]+" maxlength="64">
+        </div>
+
+        <div>
+          <label for="new-from">Copy from</label>
+          <select id="new-from">
+            <option value="">nothing - start from an empty one</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="new-project">Whose</label>
+          <select id="new-project">
+            <option value="">every project on this machine</option>
+          </select>
+        </div>
+
+        <button type="button" id="make">Write it</button>
+      </div>
+
+      <p class="facts" id="made" hidden></p>
     </details>
     <!-- A navigation landmark, not a group of buttons that happen to be next
          to each other. These seven are the whole of this page's navigation,
@@ -2469,6 +2530,10 @@
       <button type="button" id="resume">Let it carry on</button>
       <button type="button" id="stop">Stop it</button>
       <button type="button" id="again">Run it again</button>
+      <!-- Only ever against a run that has ended: a live run reads its own
+           directory for the answers it is waiting on, and `team runs remove`
+           refuses one anyway. -->
+      <button type="button" id="forget">Forget it</button>
       <label for="say" class="said">Say something to the lead</label>
       <input type="text" id="say" placeholder="read after its current round">
       <button type="button" id="send">Send</button>
@@ -2775,41 +2840,162 @@
   // Everything wanting somebody, across every run, newest first. Rebuilt on
   // every read: nothing here is remembered, so a reason that has gone is gone.
   /*
-    What this machine has run before, offered as suggestions rather than as a
-    list to choose from. Whether a team exists is the command line's question,
-    and asking it here as well is how two answers start to disagree - but a
-    name somebody typed last week is still the name they want today.
+    What there is to run, and what to copy when making one.
+
+    This used to be built from the runs already on the machine, on the reasoning
+    that whether a team exists is the command line's question and asking it here
+    as well is how two answers start to disagree. The reasoning holds and the
+    conclusion did not follow: it meant a machine that had run two teams offered
+    two of the eight that ship, and everything else had to be typed from memory
+    into a box that accepted anything.
+
+    Offering the real list is not a second answer. It is the same answer, from
+    the same loader `team list` reads, sent here so the page can show it. What
+    happens after somebody picks one is unchanged.
   */
-  function suggest(runs) {
-    [["known-teams", "team"], ["known-projects", "project"]].forEach(function (pair) {
-      var list = document.getElementById(pair[0]);
-      var seen = {};
-      var names = [];
+  var teamsKnown = [];
 
-      runs.forEach(function (run) {
-        var name = run[pair[1]];
+  function fillChoices() {
+    return api("/api/choices").then(function (answer) {
+      if (!answer) { return; }
 
-        if (name && !seen[name]) {
-          seen[name] = true;
-          names.push(name);
-        }
-      });
+      teamsKnown = answer.teams || [];
 
-      if (list.getAttribute("data-names") === names.join("|")) { return; }
+      // Only when this server can actually write one. A form that is drawn and
+      // always refused is the fault this whole change set out to fix.
+      var making = document.getElementById("making");
 
-      list.setAttribute("data-names", names.join("|"));
-      list.textContent = "";
+      if (making) { making.hidden = !answer.makes; }
 
-      names.forEach(function (name) {
-        var option = document.createElement("option");
-
-        option.value = name;
-        list.appendChild(option);
-      });
+      fillTeams(answer.teams || []);
+      fillProjects(answer.projects || [], answer.here);
     });
   }
 
+  function fillTeams(teams) {
+    var shape = teams.map(function (t) {
+      return t.name + ":" + (t.template ? "t" : "") + (t.trouble ? "!" : "");
+    }).join("|");
+
+    var run = document.getElementById("start-team");
+    var from = document.getElementById("new-from");
+
+    if (run.getAttribute("data-shape") === shape) { return; }
+
+    run.setAttribute("data-shape", shape);
+
+    // Kept across the redraw, so a list that refreshes every few seconds does
+    // not clear a box somebody is part way through using.
+    var chosenRun = run.value;
+    var chosenFrom = from ? from.value : "";
+
+    run.textContent = "";
+    if (from) { from.textContent = ""; }
+
+    function head(box, text, value) {
+      var option = document.createElement("option");
+
+      option.value = value || "";
+      option.textContent = text;
+      box.appendChild(option);
+    }
+
+    head(run, teams.length ? "choose one" : "no teams on this machine", "");
+    if (from) { head(from, "nothing - start from an empty one", ""); }
+
+    teams.forEach(function (team) {
+      var label = team.name + " - " + team.whose;
+
+      // A template is a shape to copy and `team run` refuses one, so it is not
+      // offered as something to run. It is offered as something to copy, which
+      // is the only thing it is for.
+      if (!team.template) {
+        var one = document.createElement("option");
+
+        one.value = team.name;
+        one.textContent = label + (team.trouble ? " (has a problem)" : "");
+        run.appendChild(one);
+      }
+
+      if (from) {
+        var other = document.createElement("option");
+
+        other.value = team.name;
+        other.textContent = label + (team.template ? " - a template" : "");
+        from.appendChild(other);
+      }
+    });
+
+    run.value = chosenRun;
+    if (from) { from.value = chosenFrom; }
+
+    aboutTeam();
+  }
+
+  // What the chosen team is, said under the box that chose it.
+  function aboutTeam() {
+    var box = document.getElementById("start-team-about");
+
+    if (!box) { return; }
+
+    var name = document.getElementById("start-team").value;
+    var team = teamsKnown.filter(function (t) { return t.name === name; })[0];
+
+    if (!team) {
+      box.hidden = true;
+      box.textContent = "";
+
+      return;
+    }
+
+    box.hidden = false;
+    box.textContent = team.description
+      + " " + team.nodes + " node" + (team.nodes === 1 ? "" : "s") + ", " + team.autonomy + "."
+      + (team.trouble ? " Something is wrong with it: " + team.trouble : "");
+  }
+
+  function fillProjects(projects, here) {
+    var shape = projects.join("|");
+
+    [["start-project", "choose one"], ["new-project", "every project on this machine"]]
+      .forEach(function (pair) {
+        var box = document.getElementById(pair[0]);
+
+        if (!box || box.getAttribute("data-shape") === shape) { return; }
+
+        box.setAttribute("data-shape", shape);
+
+        var chosen = box.value;
+
+        box.textContent = "";
+
+        var first = document.createElement("option");
+
+        first.value = "";
+        first.textContent = projects.length ? pair[1] : "no projects registered";
+        box.appendChild(first);
+
+        projects.forEach(function (slug) {
+          var option = document.createElement("option");
+
+          option.value = slug;
+          option.textContent = slug;
+          box.appendChild(option);
+        });
+
+        // Offered, not assumed. A dashboard is not standing in a repository -
+        // the daemon's directory is wherever it was started - so the project
+        // this server happens to be in is a sensible first guess and nothing
+        // more. It only fills an empty box, never replaces a choice.
+        box.value = chosen || (pair[0] === "start-project" && here ? here : "");
+      });
+  }
+
   (function () {
+    var picked = document.getElementById("start-team");
+
+    if (picked) { picked.addEventListener("change", aboutTeam); }
+
     var go = document.getElementById("start");
 
     go.addEventListener("click", function () {
@@ -2821,6 +3007,18 @@
 
       if (!team || !goal) {
         announce("A run needs a team and something to do.");
+
+        return;
+      }
+
+      // Required here, though the command line lets it default. A terminal
+      // defaults to the directory somebody is standing in, which is usually the
+      // repository they mean. A dashboard has no such directory: the daemon's
+      // is wherever it was started, and leaving this empty is how a run came
+      // back with "'d:\git' is not inside a Git repository".
+      if (!project) {
+        announce("Choose a project. A run started from this page has no directory "
+          + "of its own to fall back on.");
 
         return;
       }
@@ -2861,8 +3059,83 @@
               throw new Error(said || ("The dashboard answered " + answer.status + "."));
             }
 
+            // Said only now, and only because the server waited to see whether
+            // it survived its first seconds. This line used to be printed the
+            // instant the request was accepted, so it appeared under a run that
+            // had already been refused.
             announce(team + " is starting. It appears in the list in a moment.");
             document.getElementById("start-goal").value = "";
+          });
+        })
+        .catch(function (wrong) {
+          go.disabled = false;
+          announce(wrong.message);
+        });
+    });
+  }());
+
+  /*
+    Writing a team.
+
+    The other half of what was missing. A page that can start a run should be
+    able to make the thing it runs, because the alternative is what happened:
+    the start form was read as the way to make one.
+
+    Awaited, unlike starting a run. Writing a file takes milliseconds and the
+    whole point is that somebody finds out here whether it worked.
+  */
+  (function () {
+    var go = document.getElementById("make");
+
+    if (!go) { return; }
+
+    go.addEventListener("click", function () {
+      var name = document.getElementById("new-name").value.trim().toLowerCase();
+      var from = document.getElementById("new-from").value;
+      var project = document.getElementById("new-project").value;
+      var said = document.getElementById("made");
+
+      said.hidden = true;
+
+      if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)) {
+        announce("A team's name is lowercase letters, digits and hyphens: docs-crew-mine.");
+
+        return;
+      }
+
+      go.disabled = true;
+
+      fetch("/api/teams?token=" + encodeURIComponent(token), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name, from: from || null, project: project || null })
+      })
+        .then(function (answer) {
+          return answer.text().then(function (body) {
+            var why = null;
+
+            try { why = JSON.parse(body).error; } catch (e) { why = null; }
+
+            go.disabled = false;
+
+            if (!answer.ok) {
+              throw new Error(why || ("The dashboard answered " + answer.status + "."));
+            }
+
+            document.getElementById("new-name").value = "";
+
+            // Both said and shown. The announcement is cleared after a while so
+            // it does not read as the current state for ever, and this one is
+            // worth still being on screen when somebody goes to find the file.
+            said.hidden = false;
+            said.textContent = name + " is written. Open it with: loadout team edit " + name
+              + " - then it is in the list above.";
+
+            announce(name + " is written. It is in the list above.");
+
+            // Straight away rather than on the next half-minute pass: the team
+            // somebody just made is the one they want to run.
+            fillChoices();
           });
         })
         .catch(function (wrong) {
@@ -4849,7 +5122,6 @@
   function draw(runs) {
     shown = runs;
 
-    suggest(runs);
     drawRail(runs);
 
     // Whatever is being followed keeps up whichever view is showing. This
@@ -5792,6 +6064,7 @@
     // be run again, and the button said otherwise until the pane was opened
     // a second time - the same staleness the heading and the gates had.
     document.getElementById("again").hidden = run.running;
+    document.getElementById("forget").hidden = run.running;
 
     // A rename lands as a file the next read picks up, and it can be done from
     // a terminal as easily as from here, so the heading follows it rather than
@@ -6033,7 +6306,49 @@
       // just filled itself in rather than being told about it.
       document.getElementById("start-goal").focus();
 
-      announce("Filled in from " + (run.room || run.id) + ". Change what you want and start it.");
+      // The team box is a list now, so a name that is not in it does not take.
+      // Said rather than left looking chosen: a team that has since been
+      // deleted is exactly the case where somebody would otherwise press Start
+      // on an empty box.
+      if (run.team && document.getElementById("start-team").value !== run.team) {
+        announce("Filled in from " + (run.room || run.id) + ", but there is no team called "
+          + run.team + " any more. Pick another.");
+      } else {
+        announce("Filled in from " + (run.room || run.id) + ". Change what you want and start it.");
+      }
+    };
+
+    /*
+      Getting rid of a run you are done with.
+
+      The listing is the reason, not the disk: `team runs` and this page are the
+      first places anybody looks, and nothing had ever deleted a run, so both
+      showed every experiment anybody had ever started.
+
+      It refuses a live run - here by not being drawn, and in the command that
+      does the work, which is the one that matters.
+    */
+    var forget = document.getElementById("forget");
+
+    forget.hidden = run.running;
+
+    forget.onclick = function () {
+      // Named in the question. A run's journal is the only copy of what it did.
+      if (!window.confirm("Forget " + (run.room || run.id)
+        + "? Everything it wrote down goes, and there is no other copy.")) {
+        return;
+      }
+
+      act(run.id, "forget", {})
+        .then(function () {
+          announce((run.room || run.id) + " is forgotten.");
+
+          // Back to the list, because the thing being looked at has gone.
+          watching = null;
+          document.getElementById("detail").hidden = true;
+          refresh();
+        })
+        .catch(function (e) { announce(e.message); });
     };
 
     document.getElementById("send").onclick = function () {
@@ -7304,6 +7619,13 @@
         say(wrong.message + " The dashboard may have been stopped.");
       });
   }
+
+  // What there is to run, on its own cadence rather than with the runs. The
+  // catalogue changes when somebody writes a file - which is rare, and which
+  // the page itself does - so it is read at start, after writing one, and
+  // every half minute in case a terminal wrote one.
+  fillChoices();
+  setInterval(fillChoices, 30000);
 
   // The art first, then the runs, so the first office somebody sees is
   // already drawn rather than redrawing itself a moment later. Either way

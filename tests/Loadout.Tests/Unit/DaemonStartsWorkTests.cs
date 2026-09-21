@@ -134,7 +134,10 @@ public sealed class DaemonStartsWorkTests
             Quiet(),
             TimeProvider.System,
             Loadout.Cli.Infrastructure.AccessibleMode.Off,
-            speech: null!);
+            speech: null!,
+            teams: null!,
+            library: null!,
+            workspace: null!);
 
     private static CommandOutput Output() => new(Quiet(), new GlobalSettings());
 

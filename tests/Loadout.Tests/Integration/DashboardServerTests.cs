@@ -424,6 +424,179 @@ public sealed class DashboardServerTests : IAsyncLifetime
         _server.Voice.As<StubVoice>().Said.Should().BeEmpty();
     }
 
+    /*
+        What there is to run, and writing one.
+
+        The page used to fill its team box from the runs already on the machine,
+        so a machine that had run two teams offered two of the eight that ship
+        and every other one had to be typed from memory into a box that accepted
+        anything. Somebody typed a name that was not a team, the page said it was
+        starting, and the refusal went to the terminal behind the browser.
+
+        Two things fix that and both are asserted here: the page is told what
+        exists, and the form that looked like it made teams is joined by one that
+        does.
+    */
+    [Fact]
+    public async Task The_page_is_told_what_there_is_to_run()
+    {
+        _server.Choices = _ => Task.FromResult(new Choosable(
+            [
+                new ChoosableTeam(
+                    "docs-crew", "Reads the docs.", "ships with Loadout", false, null, 4, "supervised"),
+                new ChoosableTeam(
+                    "product-company", "A shape to copy.", "ships with Loadout", true, null, 17, "supervised"),
+                new ChoosableTeam(
+                    "broken", "Names a role that is not there.", "yours", false,
+                    "role.nobody is not a specialist", 2, "manual"),
+            ],
+            ["loadout-cli", "starstats"],
+            "loadout-cli"));
+
+        var json = await Read("api/choices");
+
+        var teams = json.GetProperty("teams").EnumerateArray().ToList();
+
+        teams.Should().HaveCount(3, "a template is offered as something to copy, not hidden");
+
+        // The parts the page cannot work out for itself, and which decide what
+        // it draws: a template cannot be run, and a team with a finding against
+        // it can be but should say so first.
+        teams[1].GetProperty("template").GetBoolean().Should().BeTrue();
+        teams[2].GetProperty("trouble").GetString().Should().Contain("role.nobody");
+
+        json.GetProperty("projects").EnumerateArray().Select(one => one.GetString())
+            .Should().Equal("loadout-cli", "starstats");
+
+        // Offered as a default, never assumed: a dashboard is not standing in a
+        // repository, and leaving the project empty is what ran a team against
+        // the directory the daemon happened to be started in.
+        json.GetProperty("here").GetString().Should().Be("loadout-cli");
+    }
+
+    [Fact]
+    public async Task A_page_that_cannot_write_a_team_is_told_so_rather_than_drawing_the_form()
+    {
+        _server.Choices = _ => Task.FromResult(new Choosable([], []));
+
+        // Make is null: this is the watch-only server. A form that is drawn and
+        // always refused is the fault this whole change set out to fix.
+        (await Read("api/choices")).GetProperty("makes").GetBoolean().Should().BeFalse();
+
+        _server.Make = (_, _) => Task.FromResult(OperationResult.Ok());
+
+        (await Read("api/choices")).GetProperty("makes").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Writing_a_team_goes_to_whatever_can_run_a_command()
+    {
+        MakeRequest? asked = null;
+
+        _server.Make = (request, _) =>
+        {
+            asked = request;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/teams?token=" + _server.Token),
+            new StringContent("""{"name":"mine","from":"docs-crew","project":"loadout-cli"}"""));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        asked.Should().NotBeNull();
+        asked!.Name.Should().Be("mine");
+        asked.From.Should().Be("docs-crew");
+        asked.Project.Should().Be("loadout-cli");
+    }
+
+    [Fact]
+    public async Task Writing_a_team_needs_the_token()
+    {
+        var wrote = false;
+
+        _server.Make = (_, _) =>
+        {
+            wrote = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/teams"), new StringContent("""{"name":"mine"}"""));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        wrote.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_server_that_only_watches_refuses_to_write_a_team()
+    {
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/teams?token=" + _server.Token),
+            new StringContent("""{"name":"mine"}"""));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("watching only");
+    }
+
+    [Fact]
+    public async Task Forgetting_a_run_is_handed_to_the_command_line_like_everything_else()
+    {
+        RunAction? asked = null;
+
+        _server.Act = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/20260916-1200-aaaa/forget?token=" + _server.Token),
+            new StringContent("{}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked.Should().NotBeNull();
+        asked!.Verb.Should().Be("forget");
+        asked.Run.Should().Be("20260916-1200-aaaa");
+
+        // Nothing here deletes anything. The server hands the ask to the
+        // command line, which is the one implementation of forgetting a run.
+        _journal.Forgotten.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Forgetting_a_run_needs_the_token()
+    {
+        var acted = false;
+
+        _server.Act = (_, _) =>
+        {
+            acted = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/runs/20260916-1200-aaaa/forget"), new StringContent("{}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        acted.Should().BeFalse();
+    }
+
+    /// <summary>One JSON answer, with the token, parsed.</summary>
+    private async Task<JsonElement> Read(string path)
+    {
+        var answer = await _client.GetStringAsync(new Uri(_root + path + "?token=" + _server.Token));
+
+        return JsonDocument.Parse(answer).RootElement.Clone();
+    }
+
     private Task<HttpResponseMessage> Say(string line) =>
         _client.PostAsync(
             new Uri(_root + "api/speech?token=" + _server.Token),
@@ -1149,13 +1322,30 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // Folded away, because the page is for watching what is already going
         // and a form that is always open is one somebody fills in by accident.
         text.Should().Contain("<details class=\"start\">");
-        text.Should().Contain("<summary>Start a team</summary>");
+
+        // "Run a team", not "Start a team". The old heading sat above a form
+        // asking for a team name, what it was for and a project, and somebody
+        // read that as the way to make one — typed a name nothing had heard of,
+        // and was told it was starting. Which of the two verbs this is has to be
+        // legible from the heading alone, because that is all anybody reads
+        // before filling the boxes in.
+        text.Should().Contain("<summary>Run a team</summary>");
+        text.Should().Contain("<summary>Make a team</summary>");
 
         // Every field the command line takes, and nothing it does not.
         foreach (var field in new[] { "start-team", "start-goal", "start-project", "start-rounds", "start-autonomy" })
         {
             text.Should().Contain($"id=\"{field}\"");
         }
+
+        // The two that used to be free text with a datalist of whatever had run
+        // here before. A box that accepts anything is what let a name that was
+        // not a team through, so both are lists now and the old datalists are
+        // gone rather than merely unused.
+        text.Should().Contain("<select id=\"start-team\">");
+        text.Should().Contain("<select id=\"start-project\">");
+        text.Should().NotContain("known-teams");
+        text.Should().NotContain("known-projects");
     }
 
     [Fact]
@@ -1933,5 +2123,21 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         public string DirectoryOf(string runId) =>
             Root is null ? "C:/runs/" + runId : Path.Combine(Root, runId);
+
+        /// <summary>What was asked to be forgotten, rather than anything deleted.</summary>
+        /// <remarks>
+        /// The server hands a forget to whatever set Act, which is the command
+        /// line. Nothing here deletes anything: what these tests assert about
+        /// forgetting is the routing, and the deleting is asserted against a
+        /// real disk in RunForgettingTests.
+        /// </remarks>
+        public List<string> Forgotten { get; } = [];
+
+        public OperationResult<RunForgotten> Forget(string runId, bool force = false)
+        {
+            Forgotten.Add(runId);
+
+            return OperationResult<RunForgotten>.Ok(new RunForgotten(runId, "bug-hunt", 0, 0, []));
+        }
     }
 }

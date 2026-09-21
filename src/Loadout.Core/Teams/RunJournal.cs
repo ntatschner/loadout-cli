@@ -332,7 +332,45 @@ public interface IRunJournal
 
     /// <summary>The directory a run wrote into.</summary>
     string DirectoryOf(string runId);
+
+    /// <summary>
+    /// Forget one run: everything it wrote down, gone from this machine.
+    /// </summary>
+    /// <param name="runId">The run.</param>
+    /// <param name="force">
+    /// Take one that has not finished. Off by default, because a run's
+    /// directory is how its nodes are told things while they work: answers to
+    /// gates arrive as files appearing in it, so deleting it under a live run
+    /// leaves processes waiting on answers that can no longer be given.
+    /// </param>
+    /// <returns>What was forgotten, so a caller can say what went.</returns>
+    OperationResult<RunForgotten> Forget(string runId, bool force = false);
 }
+
+/// <summary>What forgetting a run took with it.</summary>
+/// <param name="RunId">The run.</param>
+/// <param name="Team">The team that ran, or empty where the journal never said.</param>
+/// <param name="Bytes">How much disk it was holding.</param>
+/// <param name="Files">How many files it had written.</param>
+/// <param name="Unmerged">
+/// Branches the run made and never got merged.
+/// </param>
+/// <remarks>
+/// <para>
+/// <paramref name="Unmerged"/> is the part worth printing. Nothing here
+/// touches Git — a branch outlives the run that made it, and the working trees
+/// under <c>worktrees/</c> outlive it too. What the journal was, for those, is
+/// the only record that says which run produced them; forget it quietly and a
+/// branch called <c>teams/20260917-1116-ed59/implementer-1</c> is a name with
+/// nothing on this machine left to explain it.
+/// </para>
+/// </remarks>
+public sealed record RunForgotten(
+    string RunId,
+    string Team,
+    long Bytes,
+    int Files,
+    IReadOnlyList<string> Unmerged);
 
 /// <inheritdoc />
 public sealed class RunJournal : IRunJournal
@@ -551,6 +589,76 @@ public sealed class RunJournal : IRunJournal
         }
 
         return OperationResult<RunSummary>.Ok(Fold(runId, DirectoryOf(runId), read.Value!));
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// The summary is read before anything is deleted, for two reasons. It is
+    /// what refuses a run that has not finished, and it is what the caller
+    /// prints afterwards — a directory that has gone cannot be asked what was
+    /// in it.
+    /// </para>
+    /// <para>
+    /// Deliberately only this directory. A run's branches, its working trees
+    /// and anything it committed are Git's, and outlive it; a command called
+    /// "forget the notes about it" that also deleted the work would be the
+    /// worst kind of surprise. What it does instead is say what it is leaving.
+    /// </para>
+    /// </remarks>
+    public OperationResult<RunForgotten> Forget(string runId, bool force = false)
+    {
+        var summary = Summarise(runId);
+
+        if (summary.Failed)
+        {
+            return OperationResult<RunForgotten>.Fail(summary.Error!, summary.ExitCode);
+        }
+
+        var run = summary.Value!;
+
+        if (run.Running && !force)
+        {
+            return OperationResult<RunForgotten>.Fail(
+                $"'{runId}' has not finished. Stop it first with: loadout team halt {runId}",
+                Models.ExitCode.PolicyViolation);
+        }
+
+        var directory = DirectoryOf(runId);
+
+        long bytes = 0;
+        var files = 0;
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+            {
+                files++;
+                bytes += new FileInfo(file).Length;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Measuring is a courtesy. Failing to measure is not a reason to
+            // refuse the thing that was asked for.
+        }
+
+        var unmerged = run.Branches
+            .Where(branch => !run.Merged.Contains(branch, StringComparer.Ordinal))
+            .ToList();
+
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<RunForgotten>.Fail(
+                $"'{runId}' could not be forgotten: {ex.Message}");
+        }
+
+        return OperationResult<RunForgotten>.Ok(
+            new RunForgotten(runId, run.Team, bytes, files, unmerged));
     }
 
     /// <summary>Folds a run's events into where everything got to.</summary>

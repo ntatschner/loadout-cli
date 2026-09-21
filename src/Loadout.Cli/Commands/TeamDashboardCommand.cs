@@ -49,6 +49,9 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly ICommandCatalogue _commands;
     private readonly ISecretProvider _secrets;
     private readonly TimeProvider _time;
+    private readonly Loadout.Core.Teams.ITeamCatalogue _teams;
+    private readonly Loadout.Core.Instructions.ISpecialistLibrary _library;
+    private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
 
     public TeamDashboardCommand(
         IRunJournal journal,
@@ -65,8 +68,14 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         Loadout.Platform.Abstractions.ISpeech speech,
         ICommandCatalogue commands,
         ISecretProvider secrets,
-        TimeProvider time)
+        TimeProvider time,
+        Loadout.Core.Teams.ITeamCatalogue teams,
+        Loadout.Core.Instructions.ISpecialistLibrary library,
+        Loadout.Core.Workspace.IWorkspaceManager workspace)
     {
+        _teams = teams;
+        _library = library;
+        _workspace = workspace;
         _accessible = accessible;
         _speech = speech;
         _commands = commands;
@@ -303,6 +312,13 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         server.WaitingFor = token => WaitingRoom.ReadAsync(
             _schedules, _tasks, _projects, DateTimeOffset.UtcNow, token);
 
+        // What there is to start, from the same loader 'team list' reads.
+        // Offered even to a watch-only page: knowing which teams exist is a
+        // read, and a page that cannot start one is still a page somebody is
+        // reading to find out what this machine has.
+        server.Choices = token => DashboardActions.OfferedAsync(
+            _teams, _library, _workspace, _projects, token);
+
         if (!settings.WatchOnly)
         {
             // What every button on the page does, which until now only the
@@ -322,6 +338,14 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             // page asks, this types "team run", and the parser decides whether
             // any of it means anything.
             server.Begin = (asking, token) => DashboardActions.BeganAsync(
+                _commands, _time, asking, output, token);
+
+            // And writing one. The start form was read as the way to make a
+            // team - it asks for a name, what it is for and a project, which
+            // is what making one looks like - so a name nobody had written was
+            // typed into it and the refusal went to this terminal rather than
+            // to the page. This is the thing that form looked like.
+            server.Make = (asking, token) => DashboardActions.MadeAsync(
                 _commands, _time, asking, output, token);
 
             // And the second credential, which the dashboard's own token does

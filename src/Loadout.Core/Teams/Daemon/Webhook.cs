@@ -20,10 +20,19 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// <param name="Rounds">How many rounds it may take, or null for the default.</param>
 /// <param name="Autonomy">manual, supervised or autonomous, or null for the team's own.</param>
 /// <remarks>
+/// <para>
 /// Nothing here is checked against anything. Whether that team exists, whether
 /// that project is registered and whether that autonomy is a word at all are
 /// questions the command line already answers, and answering them twice is how
 /// two answers start to disagree.
+/// </para>
+/// <para>
+/// That holds, and it was read too widely: it was taken to mean the page
+/// should not be told what the teams are either, so the form offered a
+/// free-text box and the only refusal went to a terminal nobody was watching.
+/// Offering the real list is not deciding — see <see cref="Choosable"/> — and
+/// what arrives here is still whatever the person sent.
+/// </para>
 /// </remarks>
 public sealed record StartRequest(
     string Team,
@@ -31,6 +40,80 @@ public sealed record StartRequest(
     string? Project = null,
     int? Rounds = null,
     string? Autonomy = null);
+
+/// <summary>A team the page asked be written.</summary>
+/// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>
+/// <param name="From">A team to copy as the starting point, or null for an empty one.</param>
+/// <param name="Project">
+/// The project to write it under, so only that project sees it, or null to
+/// write it for all of them.
+/// </param>
+/// <remarks>
+/// <para>
+/// The page had a form headed "Start it" that asked for a team name, what it
+/// was for, a project and an autonomy, and somebody reasonably read that as
+/// making a team. It was not: it started a run of a team that already existed,
+/// and typing a name that did not exist got a success message on the page and
+/// a refusal in a terminal behind it.
+/// </para>
+/// <para>
+/// So this is the thing that form looked like. Like every other change the
+/// page can make, it maps onto the command somebody would have typed —
+/// <c>team new</c> — and decides nothing itself.
+/// </para>
+/// </remarks>
+public sealed record MakeRequest(string Name, string? From = null, string? Project = null);
+
+/// <summary>One team, as a page offering it needs to know it.</summary>
+/// <param name="Name">What to run it by.</param>
+/// <param name="Description">The sentence the team file gives itself.</param>
+/// <param name="Whose">Where it came from: built in, a pack, your workspace, this project.</param>
+/// <param name="Template">A shape to copy rather than a team to run.</param>
+/// <param name="Trouble">What is wrong with it, or null where nothing is.</param>
+/// <param name="Nodes">How many nodes it has, so a page can say how big a thing this is.</param>
+/// <param name="Autonomy">manual, supervised or autonomous, as its own rules set it.</param>
+public sealed record ChoosableTeam(
+    string Name,
+    string Description,
+    string Whose,
+    bool Template,
+    string? Trouble,
+    int Nodes,
+    string Autonomy);
+
+/// <summary>
+/// What can be started from this page.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This exists because the alternative was worse, not because the page should
+/// hold opinions. The start form offered a free-text box whose suggestions came
+/// from the runs already on the machine — so a machine that had run two teams
+/// offered two of the eight that ship, and every other team could only be
+/// reached by typing its name from memory. A name typed wrong was accepted, the
+/// page said the run was starting, and the refusal appeared in the terminal
+/// behind the browser where nobody was looking.
+/// </para>
+/// <para>
+/// Serving the catalogue is not a second answer to "does this team exist". It
+/// is the same answer, read from the same loader <c>team list</c> reads, sent to
+/// the page so it can offer the real list rather than a guess. What happens
+/// after somebody picks one is unchanged: the command line decides, as it
+/// always did.
+/// </para>
+/// </remarks>
+/// <param name="Teams">Every team this machine could run.</param>
+/// <param name="Projects">Every registered project, as the registry names them.</param>
+/// <param name="Here">
+/// The project the server's own directory is in, or null. A dashboard is not
+/// "where you are" — the daemon's directory is wherever it was started, which
+/// is how a run launched from the page reported that <c>d:\git</c> is not a
+/// repository — so this is offered as a default and never assumed.
+/// </param>
+public sealed record Choosable(
+    IReadOnlyList<ChoosableTeam> Teams,
+    IReadOnlyList<string> Projects,
+    string? Here = null);
 
 /// <summary>Something the page asked be done to a run.</summary>
 /// <param name="Run">Which run, as the journal names it.</param>

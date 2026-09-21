@@ -419,7 +419,13 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
         }
 
         output.WriteBlankLine();
-        output.WriteLine("[dim]One in full with:[/] loadout team status [<run>]");
+
+        // The brackets are doubled because Spectre reads a single pair as a
+        // style, and "[<run>]" is not one: every listing with a run in it ended
+        // by printing "Could not find color or style '<run>'" instead of the
+        // line telling you what to type next.
+        output.WriteLine("[dim]One in full with:[/] loadout team status [[<run>]]");
+        output.WriteLine("[dim]Clear out the old ones with:[/] loadout team runs prune --keep 20");
 
         return Task.FromResult(CommandOutput.Success());
     }

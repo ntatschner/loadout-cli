@@ -224,7 +224,6 @@ loadout team status
 
 A lead splits your goal into requests, workers do the work in their own
 sessions, and the lead reads what came back and decides what to ask for next.
-Eight teams ship; a team is a YAML file, so you can write your own.
 
 Each node is an ordinary Loadout launch — same project, same compiled
 instructions, same screening — so what a team adds is who asks whom and what a
@@ -233,7 +232,37 @@ git worktree, and a branch that conflicts goes back to whoever wrote it.
 
 A run can be started by hand, on a schedule, or when the repository moves. Watch
 one with `team status`, in the launcher, or on a page `team dashboard` serves on
-this machine.
+this machine. The page runs and writes teams as well as watching them, and every
+control on it types the command you would have typed.
+
+Eight teams ship. A team is a YAML file, so you can write your own, and copying
+one that already works is the way to start:
+
+```sh
+loadout team list
+loadout team new docs-crew-mine --from docs-crew
+loadout team edit docs-crew-mine
+```
+
+The copy keeps the original's comments and ordering rather than being
+regenerated from it, and `team show` checks the result — a team naming a role
+that does not exist is a finding there rather than a failure half way through a
+run. `team remove` deletes one you wrote; the ones that ship and the ones from a
+pack are refused, because the next `pack update` would overwrite anything you
+changed in them.
+
+Every run keeps what it wrote down, and you can clear out the ones you are done
+with:
+
+```sh
+loadout team runs prune --keep 20 --older-than 30d
+```
+
+It will not take a run that is still going — a gate is answered by a file
+appearing in the run's directory, so deleting one under a live run leaves
+processes waiting on answers that can no longer arrive — and it will not
+silently take a run that left a branch nothing merged. `--dry-run` lists what it
+would take and why it is keeping the rest.
 
 ### Also in the box
 

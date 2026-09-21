@@ -167,5 +167,17 @@ public sealed class TeamMetricsTests
                 : OperationResult<RunSummary>.Fail("that one will not read", ExitCode.GeneralFailure);
 
         public string DirectoryOf(string runId) => "C:/runs/" + runId;
+
+        /// <summary>
+        /// Nothing here deletes anything: these tests read runs.
+        /// </summary>
+        /// <remarks>
+        /// A double that quietly reported success would be asserting its own
+        /// opinion about a thing with no undo. Forgetting a run is asserted
+        /// against a real disk, in RunForgettingTests.
+        /// </remarks>
+        public OperationResult<RunForgotten> Forget(string runId, bool force = false) =>
+            throw new NotSupportedException("these tests read runs, they do not delete them");
+
     }
 }

@@ -240,6 +240,29 @@ public sealed class DashboardServer : IDisposable
     public Func<StartRequest, CancellationToken, Task<OperationResult>>? Begin { get; set; }
 
     /// <summary>
+    /// What there is to start, or null where nothing can say.
+    /// </summary>
+    /// <remarks>
+    /// A delegate like the rest, so this type still knows nothing about
+    /// catalogues, workspaces or project registries. Null answers an empty
+    /// list, and the page falls back to what it did before: the names of teams
+    /// that have already run here.
+    /// </remarks>
+    public Func<CancellationToken, Task<Choosable>>? Choices { get; set; }
+
+    /// <summary>
+    /// What to do when somebody writes a team from the page, or null where
+    /// nothing can.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <see cref="Begin"/>, and set by the same things. A
+    /// page that can start a run should be able to write the team it wants to
+    /// run, because the alternative is what happened: somebody read the start
+    /// form as the way to make one.
+    /// </remarks>
+    public Func<MakeRequest, CancellationToken, Task<OperationResult>>? Make { get; set; }
+
+    /// <summary>
     /// Answers whether a trigger may proceed, or null when none may.
     /// </summary>
     /// <remarks>
@@ -956,6 +979,23 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // Writing a team, which belongs to no run either. Behind the token
+        // like everything else that changes anything.
+        if (path == "/api/teams")
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await MakeAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         // Before the dashboard's own token, because a trigger carries a
         // different one and is the only thing here a stranger is meant to be
         // able to reach. The dashboard's token changes every start, which is
@@ -1180,6 +1220,31 @@ public sealed class DashboardServer : IDisposable
                         one.Refusals,
                         one.Seconds,
                     }),
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        // What there is to start, and what to write a new one beside. Read
+        // afresh rather than cached at start, so a team written a moment ago
+        // — from the page or from a terminal — is in the next answer.
+        if (path == "/api/choices")
+        {
+            var choosable = Choices is null
+                ? new Choosable([], [])
+                : await Choices(ct).ConfigureAwait(false);
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    // Whether the page may offer to write one at all. A
+                    // watch-only server refuses the POST, and a form that is
+                    // drawn and always refused is the fault this whole change
+                    // set out to fix.
+                    makes = Make is not null,
+                    teams = choosable.Teams,
+                    projects = choosable.Projects,
+                    here = choosable.Here,
                 }, Json)).ConfigureAwait(false);
 
             return;
@@ -1659,6 +1724,72 @@ public sealed class DashboardServer : IDisposable
                 done.Succeeded
                     ? new { started = true, error = (string?)null }
                     : new { started = false, error = done.Error },
+                Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writing a team from the page.
+    /// </summary>
+    /// <remarks>
+    /// A POST for the same reason starting a run is one, and the same refusal
+    /// when nothing here can run a command. What it writes, where it writes it
+    /// and whether the name is allowed are all <c>team new</c>'s: this carries
+    /// three strings to it and reports what it said.
+    /// </remarks>
+    private async Task MakeAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Writing a team is a POST." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Make is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "This dashboard is watching only and cannot run commands. "
+                        + "Start it without --watch-only, run the daemon, or use the command line.",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        MakeRequest? asking;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+
+            asking = JsonSerializer.Deserialize<MakeRequest>(
+                await reader.ReadToEndAsync(ct).ConfigureAwait(false), Json);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            asking = null;
+        }
+
+        if (asking is null || string.IsNullOrWhiteSpace(asking.Name))
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "A team needs a name." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var done = await Make(asking, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 201 : 400,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                done.Succeeded
+                    ? new { made = true, error = (string?)null }
+                    : new { made = false, error = done.Error },
                 Json)).ConfigureAwait(false);
     }
 

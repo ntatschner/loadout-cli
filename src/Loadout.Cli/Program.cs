@@ -636,8 +636,22 @@ public static class Program
                 "team teams agents orchestration swarm crew multi-agent autonomous");
             team.AddCommand<TeamListCommand>("list");
             team.AddCommand<TeamShowCommand>("show");
+            team.AddCommand<TeamNewCommand>("new");
+            team.AddCommand<TeamEditCommand>("edit");
+            team.AddCommand<TeamRemoveCommand>("remove");
             team.AddCommand<TeamRunCommand>("run");
-            team.AddCommand<TeamRunsCommand>("runs");
+
+            // A branch whose default is the listing, so 'team runs' means what
+            // it always did and 'team runs remove' is a runs command rather
+            // than a team command called runs-remove.
+            team.AddBranch("runs", runs =>
+            {
+                runs.SetDescription("What has run on this machine, and clearing out what you are done with.");
+                runs.SetDefaultCommand<TeamRunsCommand>();
+                runs.AddCommand<TeamRunsRemoveCommand>("remove");
+                runs.AddCommand<TeamRunsPruneCommand>("prune");
+            });
+
             team.AddCommand<TeamStatusCommand>("status");
             team.AddCommand<TeamLogCommand>("log");
             team.AddCommand<TeamOutboxCommand>("outbox");
