@@ -1792,12 +1792,22 @@ public sealed class TeamRunner : ITeamRunner
                 // then the only record of which criterion it could not answer,
                 // and without it a returned report reads as "something was
                 // wrong" with no way to see what.
+                // Every name spelt out, none by anonymous-object shorthand.
+                // `new { one.Criterion }` writes "Criterion", the reader asks
+                // for "criterion", and it finds nothing - silently, because a
+                // missing property is indistinguishable from an absent one.
+                //
+                // This is the fault RunEvent.Text's own remarks warn about, and
+                // it was made here anyway: the first real run with criteria
+                // produced a perfectly good coverage block, wrote it to the
+                // journal as Criterion/Because, and `team status` showed no
+                // criteria at all.
                 coverage = report.Coverage is { Count: > 0 }
                     ? report.Coverage.Select(one => new
                     {
-                        one.Criterion,
+                        criterion = one.Criterion,
                         verdict = one.Verdict.ToString().ToLowerInvariant(),
-                        one.Because,
+                        because = one.Because,
                     })
                     : null,
             }, ct).ConfigureAwait(false);

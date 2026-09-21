@@ -525,4 +525,83 @@ public sealed class RunJournalTests
 
         RunJournal.Describe(entry!).Should().Contain("something.new");
     }
+
+    /// <summary>
+    /// A lead's account of the run's criteria, read off a real journal line.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The first line below is verbatim from the first real run with criteria,
+    /// and it spells them <c>Criterion</c> and <c>Because</c> — because the
+    /// writer used anonymous-object shorthand, which is the fault
+    /// <see cref="RunEvent.Text"/>'s own remarks warn about, made again in the
+    /// same file that warns about it.
+    /// </para>
+    /// <para>
+    /// The run produced a perfectly good coverage block and <c>team status</c>
+    /// showed no criteria at all. Nothing failed: a property spelt differently
+    /// is indistinguishable from one that is absent, so the account of whether
+    /// the goal had been met was dropped in silence.
+    /// </para>
+    /// <para>
+    /// The writer is corrected, so the second line is what a journal says now.
+    /// Both are read, because the journals already written are the ones least
+    /// worth being wrong about.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void Coverage_is_read_however_the_journal_spelt_it()
+    {
+        const string shorthand =
+            """{"at":"2026-09-21T20:12:00+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","coverage":[{"Criterion":"every .txt file is named","verdict":"met","Because":"docs-auditor/1 listed all three"}]}}""";
+
+        const string corrected =
+            """{"at":"2026-09-21T20:13:00+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","coverage":[{"criterion":"every .txt file is named","verdict":"met","because":"docs-auditor/1 listed all three"}]}}""";
+
+        foreach (var line in new[] { shorthand, corrected })
+        {
+            var entry = RunJournal.Parse(line);
+
+            entry.Should().NotBeNull();
+
+            var covered = entry!.Covered();
+
+            covered.Should().ContainSingle(
+                "a coverage entry the journal carries must reach a reader whichever "
+                + "spelling it was written with");
+
+            covered[0].Criterion.Should().Be("every .txt file is named");
+            covered[0].Verdict.Should().Be("met");
+            covered[0].Met.Should().BeTrue();
+            covered[0].Because.Should().Be("docs-auditor/1 listed all three");
+        }
+    }
+
+    /// <remarks>
+    /// The fold is what <c>team status</c> and the dashboard actually read, so
+    /// the round trip is asserted through it rather than through
+    /// <see cref="RunEvent.Covered"/> alone.
+    /// </remarks>
+    [Fact]
+    public void The_latest_account_reaches_the_summary()
+    {
+        var summary = Fold(
+            """{"at":"2026-09-15T22:56:00+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"returned","coverage":[{"criterion":"the docs are true","verdict":"not-attempted"}]}}""",
+            """{"at":"2026-09-15T22:57:00+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"done","outcome":"accepted","coverage":[{"criterion":"the docs are true","verdict":"met","because":"docs-auditor/1 checked every page"}]}}""");
+
+        // The later answer wins: a lead sent back for an unanswered criterion
+        // reports again, and the second answer is the one that is true.
+        summary.Coverage.Should().ContainSingle();
+        summary.Coverage[0].Verdict.Should().Be("met");
+        summary.Outstanding.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_run_without_criteria_has_no_coverage_and_nothing_outstanding()
+    {
+        var summary = Fold();
+
+        summary.Coverage.Should().BeEmpty();
+        summary.Outstanding.Should().BeEmpty();
+    }
 }
