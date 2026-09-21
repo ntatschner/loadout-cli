@@ -13,6 +13,11 @@ goal: >
 # Rules every node follows, whatever the run is about. Written so somebody
 # could check a node against them afterwards, which is the same bar a
 # done-when condition is held to - a declaration nobody can check is a hope.
+# The machinery these declarations lean on. Without it the rules below are
+# prose that goes into every brief and nothing can act on.
+capabilities:
+  - remedies
+
 declarations:
   - When a resolution to a problem has been found and shown to work, write it as
     a script or a function rather than leaving it as steps in a report.

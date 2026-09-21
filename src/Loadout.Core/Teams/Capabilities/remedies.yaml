@@ -1,0 +1,50 @@
+# Machinery a declaration can lean on, named so a team can ask for it.
+#
+# The first one, and the shape the rest follow. A declaration saying "keep what
+# you work out and reuse it" is prose and enforces nothing; this is what made
+# it real.
+#
+# It cannot define its own gate. It names one that already exists, and what an
+# agent may actually run is decided by this machine's configuration. A file
+# that could describe its own gate would be a shared file deciding what agents
+# may execute, which is the thing trust was moved out of the team's directory
+# to prevent.
+
+id: remedies
+summary: Fixes the team has worked out, kept as scripts it can run again.
+
+# A subdirectory of the team's own directory. Everything kept under this
+# capability lives here, for every node of every run.
+shelf: remedies
+
+# At least one of these has to be on the team, or the declaration goes into
+# every brief and nothing can act on it.
+roles:
+  - role.remediator
+
+# Named, never defined. The gate decides, in C#, from this machine's own
+# configuration: a rule per kind of task, and a fingerprint per exact script.
+gate: remedy
+
+# Verbatim into every brief of a team that asks for this. Nothing summarises
+# it, because a paraphrase of a record format is a different record format.
+brief: |
+  Something the team should be able to run again goes in as a pair of files
+  under `remedies/`, which is what makes it a remedy this machine can be asked
+  about rather than a file in a folder:
+
+  ```
+  remedies/<name>.ps1     the script itself, in whatever suits the job
+  remedies/<name>.yaml    what it is:
+
+      name: <name>
+      kind: <one word for the sort of task: disk, service, network>
+      what: <what it does, in a sentence>
+      assumes: <what it assumes about the machine it runs on>
+      proves: <how somebody would know it worked>
+      script: <name>.ps1
+  ```
+
+  Nothing you write decides whether it may run. A person at this machine agrees
+  to a remedy once, against that exact script, and until they have a remediator
+  asks before running it. A record claiming to be trusted decides nothing.

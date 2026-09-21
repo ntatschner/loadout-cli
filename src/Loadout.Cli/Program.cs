@@ -642,6 +642,7 @@ public static class Program
             team.AddCommand<TeamLogCommand>("log");
             team.AddCommand<TeamOutboxCommand>("outbox");
             team.AddCommand<TeamRemediesCommand>("remedies");
+            team.AddCommand<TeamCapabilitiesCommand>("capabilities");
 
             team.AddBranch("remedy", remedy =>
             {

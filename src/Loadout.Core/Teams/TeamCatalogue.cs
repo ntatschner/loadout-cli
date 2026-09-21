@@ -123,9 +123,33 @@ public sealed class TeamCatalogue : ITeamCatalogue
             }
         }
 
+        // Read here rather than by every caller, so a team asking for
+        // machinery that does not exist is a finding wherever teams are
+        // listed, shown or run.
+        var capabilities = await new CapabilityCatalogue(async inner =>
+            {
+                // A pack's capabilities sit beside its teams. This is the one
+                // place that knows a pack's shape, because this is the one
+                // place handed a pack's teams directory.
+                var directories = await _packs(inner).ConfigureAwait(false);
+
+                return
+                [
+                    .. directories
+                        .Select(one => Path.GetDirectoryName(one.TrimEnd(
+                            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)))
+                        .OfType<string>()
+                        .Select(one => Path.Combine(one, "capabilities")),
+                ];
+            })
+            .LoadAsync(workspaceRoot, slug, ct)
+            .ConfigureAwait(false);
+
+        findings.AddRange(capabilities.Findings);
+
         foreach (var team in teams.Values)
         {
-            findings.AddRange(Check(team, specialists));
+            findings.AddRange(Check(team, specialists, capabilities.Capabilities));
         }
 
         return new TeamCatalogueResult(teams, findings, origins);
@@ -207,7 +231,10 @@ public sealed class TeamCatalogue : ITeamCatalogue
     /// Each is a sentence naming the team and what to change, because a team
     /// file is something a person writes and the finding is what they read.
     /// </remarks>
-    public static IReadOnlyList<RuleFinding> Check(TeamDefinition team, SpecialistCatalogue specialists)
+    public static IReadOnlyList<RuleFinding> Check(
+        TeamDefinition team,
+        SpecialistCatalogue specialists,
+        IReadOnlyDictionary<string, DeclarationCapability>? capabilities = null)
     {
         ArgumentNullException.ThrowIfNull(team);
         ArgumentNullException.ThrowIfNull(specialists);
@@ -239,16 +266,59 @@ public sealed class TeamCatalogue : ITeamCatalogue
             }
         }
 
-        // A declaration is prose in a brief and enforces nothing by itself.
-        // Where it asks for something this team has no way of doing, saying so
-        // is the only warning anybody gets: the run goes ahead, the brief
-        // carries the rule, the model tries, and nothing can.
+        // What the team says it relies on, checked against what exists and
+        // against what this team could actually do with it. A capability is
+        // the machinery a declaration leans on; a declaration is prose and
+        // enforces nothing on its own.
+        foreach (var asked in team.Capabilities)
+        {
+            if (string.IsNullOrWhiteSpace(asked))
+            {
+                Error("team-capability", $"Team '{team.Name}' asks for a capability with no name.");
+
+                continue;
+            }
+
+            // Only where a catalogue was handed over. A caller checking a team
+            // in isolation is not told its capabilities are missing, because
+            // from there it cannot know.
+            if (capabilities is null)
+            {
+                continue;
+            }
+
+            if (!capabilities.TryGetValue(asked.Trim(), out var capability))
+            {
+                Error(
+                    "team-capability-unknown",
+                    $"Team '{team.Name}' asks for the capability '{asked.Trim()}', which nothing "
+                    + "provides. See what there is with: loadout team capabilities");
+
+                continue;
+            }
+
+            if (capability.Roles is { Count: > 0 } wanted
+                && !team.Nodes.Values.Any(node => wanted.Contains(node.Role, StringComparer.OrdinalIgnoreCase)))
+            {
+                Warn(
+                    "team-capability-inert",
+                    $"Team '{team.Name}' asks for '{capability.Id}', but no node of it has a role "
+                    + $"that can act on what it keeps ({string.Join(" or ", wanted)}). The brief "
+                    + "would carry it and nothing could do it.");
+            }
+        }
+
+        // The fallback, for a team that named no capability at all. A
+        // declaration about remedies on a team that cannot run one goes into
+        // every brief of every run and nothing acts on it.
         //
-        // Only remedies, and only by name. That is a keyword and not an
-        // understanding of the sentence, so it is a warning rather than an
-        // error and it says what it looked for - a declaration may mention a
-        // remedy while meaning something this cannot check either way.
-        if (team.Declarations.Any(Mentions) && !team.Nodes.Values.Any(node => CanRunAScript(node, specialists)))
+        // A keyword rather than an understanding of the sentence, so it is a
+        // warning and it says what it looked for. It stands down as soon as
+        // the team says what it relies on, because then there is something
+        // better to check than the prose.
+        if (team.Capabilities.Count == 0
+            && team.Declarations.Any(Mentions)
+            && !team.Nodes.Values.Any(node => CanRunAScript(node, specialists)))
         {
             Warn(
                 "team-declaration-inert",

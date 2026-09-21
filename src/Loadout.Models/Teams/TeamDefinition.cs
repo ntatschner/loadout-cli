@@ -69,6 +69,30 @@ public sealed class TeamDefinition
     /// </remarks>
     public List<string> Declarations { get; set; } = [];
 
+    /// <summary>
+    /// Machinery the declarations lean on, by capability id.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A declaration is prose and enforces nothing by itself. "Register what
+    /// you work out so later runs find it" only means anything where something
+    /// gives the team a shelf to put it on, a format to write it in, a role
+    /// that can act on it and a gate that decides whether it may. This names
+    /// that bundle.
+    /// </para>
+    /// <para>
+    /// Separate from the declarations rather than attached to each one,
+    /// because a declaration reads better as a sentence and a team relies on a
+    /// capability once however many rules it writes about it.
+    /// </para>
+    /// <para>
+    /// Empty is ordinary, and most teams want nothing here: a team whose
+    /// declarations are about how to work rather than what to keep needs no
+    /// machinery at all.
+    /// </para>
+    /// </remarks>
+    public List<string> Capabilities { get; set; } = [];
+
     /// <summary>The node that reports to the person. Must be a key of <see cref="Nodes"/>.</summary>
     public string Lead { get; set; } = string.Empty;
 
