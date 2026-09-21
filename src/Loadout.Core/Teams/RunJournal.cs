@@ -104,12 +104,71 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
         ];
     }
 
+    /// <summary>
+    /// The coverage a lead reported, criterion by criterion.
+    /// </summary>
+    /// <remarks>
+    /// Its own reader because this is the one event carrying a list of objects
+    /// rather than a list of strings, and <see cref="Words"/> would return
+    /// nothing for it without saying so - which is how a whole account of
+    /// whether the goal was met would be dropped in silence.
+    /// </remarks>
+    public IReadOnlyList<RunCovered> Covered()
+    {
+        if (Data.ValueKind != JsonValueKind.Object
+            || !Data.TryGetProperty("coverage", out var value)
+            || value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var covered = new List<RunCovered>();
+
+        foreach (var one in value.EnumerateArray())
+        {
+            if (one.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var criterion = one.TryGetProperty("criterion", out var c) && c.ValueKind == JsonValueKind.String
+                ? c.GetString()
+                : null;
+
+            if (criterion is not { Length: > 0 })
+            {
+                continue;
+            }
+
+            covered.Add(new RunCovered(
+                criterion,
+                one.TryGetProperty("verdict", out var v) && v.ValueKind == JsonValueKind.String
+                    ? v.GetString() ?? "unmet"
+                    : "unmet",
+                one.TryGetProperty("because", out var b) && b.ValueKind == JsonValueKind.String
+                    ? b.GetString()
+                    : null));
+        }
+
+        return covered;
+    }
+
     /// <summary>A number from the event's data, or null.</summary>
     public decimal? Number(string name) =>
         Data.ValueKind == JsonValueKind.Object && Data.TryGetProperty(name, out var value)
         && value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)
             ? number
             : null;
+}
+
+/// <summary>What became of one of a run's criteria, as the lead last reported it.</summary>
+/// <param name="Criterion">The criterion, in the words the run gave it.</param>
+/// <param name="Verdict">met, unmet or not-attempted.</param>
+/// <param name="Because">What the lead says shows it, where it said anything.</param>
+public sealed record RunCovered(string Criterion, string Verdict, string? Because)
+{
+    /// <summary>Whether this one is settled.</summary>
+    public bool Met => string.Equals(Verdict, "met", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>Where a node got to.</summary>
@@ -241,10 +300,25 @@ public sealed record RunSummary(
     int QuietRounds = 0,
     IReadOnlyList<RunTurn>? Exchanges = null,
     IReadOnlyList<RunRound>? Timeline = null,
-    int Conflicts = 0)
+    int Conflicts = 0,
+    IReadOnlyList<RunCovered>? Covered = null)
 {
     /// <summary>Each round, with when it started and when it came back.</summary>
     public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
+
+    /// <summary>
+    /// What the lead last said about each of the run's criteria.
+    /// </summary>
+    /// <remarks>
+    /// Empty for a run given no criteria, which is every run written before
+    /// they existed and every run that does not want them. A run that has them
+    /// is the one where "done" means something a reader can check rather than
+    /// something the lead asserted.
+    /// </remarks>
+    public IReadOnlyList<RunCovered> Coverage => Covered ?? [];
+
+    /// <summary>Criteria the lead has not reported as met.</summary>
+    public IReadOnlyList<RunCovered> Outstanding => [.. Coverage.Where(one => !one.Met)];
 
     /// <summary>Every exchange the run paid for, oldest first.</summary>
     public IReadOnlyList<RunTurn> Turns => Exchanges ?? [];
@@ -332,7 +406,45 @@ public interface IRunJournal
 
     /// <summary>The directory a run wrote into.</summary>
     string DirectoryOf(string runId);
+
+    /// <summary>
+    /// Forget one run: everything it wrote down, gone from this machine.
+    /// </summary>
+    /// <param name="runId">The run.</param>
+    /// <param name="force">
+    /// Take one that has not finished. Off by default, because a run's
+    /// directory is how its nodes are told things while they work: answers to
+    /// gates arrive as files appearing in it, so deleting it under a live run
+    /// leaves processes waiting on answers that can no longer be given.
+    /// </param>
+    /// <returns>What was forgotten, so a caller can say what went.</returns>
+    OperationResult<RunForgotten> Forget(string runId, bool force = false);
 }
+
+/// <summary>What forgetting a run took with it.</summary>
+/// <param name="RunId">The run.</param>
+/// <param name="Team">The team that ran, or empty where the journal never said.</param>
+/// <param name="Bytes">How much disk it was holding.</param>
+/// <param name="Files">How many files it had written.</param>
+/// <param name="Unmerged">
+/// Branches the run made and never got merged.
+/// </param>
+/// <remarks>
+/// <para>
+/// <paramref name="Unmerged"/> is the part worth printing. Nothing here
+/// touches Git — a branch outlives the run that made it, and the working trees
+/// under <c>worktrees/</c> outlive it too. What the journal was, for those, is
+/// the only record that says which run produced them; forget it quietly and a
+/// branch called <c>teams/20260917-1116-ed59/implementer-1</c> is a name with
+/// nothing on this machine left to explain it.
+/// </para>
+/// </remarks>
+public sealed record RunForgotten(
+    string RunId,
+    string Team,
+    long Bytes,
+    int Files,
+    IReadOnlyList<string> Unmerged);
 
 /// <inheritdoc />
 public sealed class RunJournal : IRunJournal
@@ -553,6 +665,76 @@ public sealed class RunJournal : IRunJournal
         return OperationResult<RunSummary>.Ok(Fold(runId, DirectoryOf(runId), read.Value!));
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// <para>
+    /// The summary is read before anything is deleted, for two reasons. It is
+    /// what refuses a run that has not finished, and it is what the caller
+    /// prints afterwards — a directory that has gone cannot be asked what was
+    /// in it.
+    /// </para>
+    /// <para>
+    /// Deliberately only this directory. A run's branches, its working trees
+    /// and anything it committed are Git's, and outlive it; a command called
+    /// "forget the notes about it" that also deleted the work would be the
+    /// worst kind of surprise. What it does instead is say what it is leaving.
+    /// </para>
+    /// </remarks>
+    public OperationResult<RunForgotten> Forget(string runId, bool force = false)
+    {
+        var summary = Summarise(runId);
+
+        if (summary.Failed)
+        {
+            return OperationResult<RunForgotten>.Fail(summary.Error!, summary.ExitCode);
+        }
+
+        var run = summary.Value!;
+
+        if (run.Running && !force)
+        {
+            return OperationResult<RunForgotten>.Fail(
+                $"'{runId}' has not finished. Stop it first with: loadout team halt {runId}",
+                Models.ExitCode.PolicyViolation);
+        }
+
+        var directory = DirectoryOf(runId);
+
+        long bytes = 0;
+        var files = 0;
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
+            {
+                files++;
+                bytes += new FileInfo(file).Length;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Measuring is a courtesy. Failing to measure is not a reason to
+            // refuse the thing that was asked for.
+        }
+
+        var unmerged = run.Branches
+            .Where(branch => !run.Merged.Contains(branch, StringComparer.Ordinal))
+            .ToList();
+
+        try
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<RunForgotten>.Fail(
+                $"'{runId}' could not be forgotten: {ex.Message}");
+        }
+
+        return OperationResult<RunForgotten>.Ok(
+            new RunForgotten(runId, run.Team, bytes, files, unmerged));
+    }
+
     /// <summary>Folds a run's events into where everything got to.</summary>
     public static RunSummary Fold(string runId, string directory, IReadOnlyList<RunEvent> events)
     {
@@ -575,6 +757,7 @@ public sealed class RunJournal : IRunJournal
         var turns = new List<RunTurn>();
         var timeline = new List<RunRound>();
         var conflicts = 0;
+        IReadOnlyList<RunCovered> covered = [];
 
         // Insertion order, because that is the order the run briefed them
         // and the order somebody reading it will expect.
@@ -730,6 +913,16 @@ public sealed class RunJournal : IRunJournal
                         Doing = null,
                     });
 
+                    // The latest account wins, because a lead sent back for an
+                    // unanswered criterion reports again and the second answer
+                    // is the one that is true. A worker never carries coverage,
+                    // so whichever node this is, an entry here came from the
+                    // node that answers for the goal.
+                    if (entry.Covered() is { Count: > 0 } said)
+                    {
+                        covered = said;
+                    }
+
                     break;
 
                 case "node.ended" when entry.Node is { Length: > 0 } finishedNode:
@@ -816,7 +1009,8 @@ public sealed class RunJournal : IRunJournal
             quiet,
             turns,
             timeline,
-            conflicts);
+            conflicts,
+            covered);
     }
 
     /// <summary>One event as a line somebody can read.</summary>

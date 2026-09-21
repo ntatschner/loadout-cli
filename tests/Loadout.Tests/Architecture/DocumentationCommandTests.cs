@@ -122,29 +122,99 @@ public sealed class DocumentationCommandTests
             + "does not exist reads as a broken tool rather than an old page");
     }
 
+    /// <summary>
+    /// Every command, by its whole path, has to be named in the reference.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The check above runs one way only: it catches a documented command that
+    /// does not exist and is blind to a command nobody documented. So 'task',
+    /// 'checkpoint', 'pack', 'running', 'share' and 'spend' were all shipped
+    /// and absent from the page that calls itself the whole command surface —
+    /// and 'commands', which exists to list everything the launcher can do, was
+    /// itself unlisted.
+    /// </para>
+    /// <para>
+    /// This then checked the first word only, which closed the hole one level
+    /// deep and left the level underneath wide open: a sub-command added to a
+    /// family that was already documented was covered by its parent's name and
+    /// checked by nothing. Three shipped that way — 'instructions export',
+    /// 'project show' and 'team capabilities' — and they were found by hand
+    /// rather than by this, which is the thing this test exists to stop.
+    /// </para>
+    /// <para>
+    /// The reference writes a family as one row, <c>loadout team schedule
+    /// add|list|remove</c>, so the alternations are expanded before matching.
+    /// A check that looked for the whole path literally would report two thirds
+    /// of every family as missing, which is a failing test nobody can act on
+    /// and therefore one somebody eventually deletes.
+    /// </para>
+    /// </remarks>
     [Fact]
     public void Every_command_that_exists_is_named_in_the_command_reference()
     {
-        var roots = Program.CommandNames();
-
         var reference = Documentation()
             .Single(f => Path.GetFileName(f).Equals("commands.md", StringComparison.Ordinal));
 
-        var text = File.ReadAllText(reference);
+        var named = Named(File.ReadAllText(reference));
 
-        // The check above runs one way only: it catches a documented command
-        // that does not exist and is blind to a command nobody documented. So
-        // 'task', 'checkpoint', 'pack', 'running', 'share' and 'spend' were all
-        // shipped and absent from the page that calls itself the whole command
-        // surface — and 'commands', which exists to list everything the
-        // launcher can do, was itself unlisted.
-        var missing = roots
-            .Where(name => !text.Contains("loadout " + name, StringComparison.Ordinal))
+        // Calibration, before the assertion it guards. A matcher that silently
+        // matched everything would pass this test for ever while asserting
+        // nothing, and the expansion above is exactly the kind of code that
+        // fails open.
+        named.Should().Contain("team schedule list", "the reference names that family in one row");
+        named.Should().NotContain("team reticulate", "nothing names a command that does not exist");
+
+        var missing = Program.RegisteredCommands()
+            .Select(entry => entry.Path)
+            .Distinct(StringComparer.Ordinal)
+            .Where(path => !named.Contains(path))
             .Order(StringComparer.Ordinal)
             .ToList();
 
         missing.Should().BeEmpty(
-            "docs/commands.md is the command reference, so every command belongs in it");
+            "docs/commands.md is the command reference, so every command belongs in it — "
+            + "including a sub-command of a family that is already there");
+    }
+
+    /// <summary>
+    /// Every command the reference names, with <c>a|b|c</c> families expanded
+    /// into one path each, and every prefix of each path recorded too.
+    /// </summary>
+    /// <remarks>
+    /// The prefixes matter because a row reading <c>loadout team run &lt;team&gt;
+    /// "&lt;goal&gt;"</c> names <c>team run</c> and <c>team</c> as well as
+    /// itself, and a branch is a command somebody types.
+    /// </remarks>
+    private static HashSet<string> Named(string text)
+    {
+        var named = new HashSet<string>(StringComparer.Ordinal);
+
+        // A word, or an alternation of words. The pipes are backslash-escaped
+        // in the table, because an unescaped one would end the cell.
+        foreach (Match match in new Regex(
+            @"loadout ((?:[a-z][a-z-]*)(?:(?:\\\||\|| )[a-z][a-z-]*)*)",
+            RegexOptions.Compiled).Matches(text))
+        {
+            var words = match.Groups[1].Value.Replace("\\|", "|", StringComparison.Ordinal).Split(' ');
+
+            for (var index = 0; index < words.Length; index++)
+            {
+                if (words[index].Contains('|', StringComparison.Ordinal))
+                {
+                    foreach (var one in words[index].Split('|'))
+                    {
+                        named.Add(string.Join(' ', words.Take(index).Append(one)));
+                    }
+
+                    break;
+                }
+
+                named.Add(string.Join(' ', words.Take(index + 1)));
+            }
+        }
+
+        return named;
     }
 
     /// <summary>

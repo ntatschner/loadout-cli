@@ -30,6 +30,11 @@ namespace Loadout.Models.Teams;
 /// <param name="Requests">Nodes a lead asks the coordinator to brief. Never spawns anything itself.</param>
 /// <param name="OutwardRequested">Outward actions the node wanted and was not allowed, each named with its command.</param>
 /// <param name="Next">What should happen next, in a sentence.</param>
+/// <param name="Coverage">
+/// Where each of the run's criteria got to, one entry per criterion. Asked of
+/// the lead and of nothing else: a worker is accountable for its own brief, and
+/// the lead is the node that answers for the goal.
+/// </param>
 public sealed record Report(
     [property: JsonPropertyName("node")] string Node,
     [property: JsonPropertyName("status")] ReportStatus Status,
@@ -41,7 +46,8 @@ public sealed record Report(
     [property: JsonPropertyName("questions")] IReadOnlyList<ReportQuestion>? Questions = null,
     [property: JsonPropertyName("requests")] IReadOnlyList<ReportRequest>? Requests = null,
     [property: JsonPropertyName("outward_requested")] IReadOnlyList<string>? OutwardRequested = null,
-    [property: JsonPropertyName("next")] string? Next = null)
+    [property: JsonPropertyName("next")] string? Next = null,
+    [property: JsonPropertyName("coverage")] IReadOnlyList<ReportCoverage>? Coverage = null)
 {
     /// <summary>The version of this shape.</summary>
     [JsonPropertyName("contract")]
@@ -59,6 +65,57 @@ public enum ReportStatus
     [JsonStringEnumMemberName("blocked")] Blocked,
     [JsonStringEnumMemberName("failed")] Failed,
     [JsonStringEnumMemberName("needs-decision")] NeedsDecision,
+}
+
+/// <summary>
+/// Where one of the run's criteria got to, as the lead reports it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A run's goal used to be one sentence and one claim: the lead said
+/// <c>done</c> and nothing argued. That is fine while somebody is watching and
+/// is the whole of the check on an autonomous run, which is the case where
+/// nobody is.
+/// </para>
+/// <para>
+/// So a run may carry criteria, and a lead reporting done has to say what
+/// became of each. <c>met</c> needs a reason that cites something: the rule
+/// that <c>done</c> needs evidence which passed already exists one level down,
+/// on a worker's report, and this is the same rule at the level of the goal.
+/// </para>
+/// </remarks>
+/// <param name="Criterion">The criterion, repeated back exactly as the run gave it.</param>
+/// <param name="Verdict">met, unmet, or not-attempted.</param>
+/// <param name="Because">
+/// What shows it: which node, which report, which evidence. Required for met,
+/// because a claim with nothing behind it is what this exists to stop.
+/// </param>
+public sealed record ReportCoverage(
+    [property: JsonPropertyName("criterion")] string Criterion,
+    [property: JsonPropertyName("verdict")] CoverageVerdict Verdict,
+    [property: JsonPropertyName("because")] string? Because = null);
+
+/// <summary>What became of one criterion.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CoverageVerdict>))]
+public enum CoverageVerdict
+{
+    /// <summary>Done, and something shows it.</summary>
+    [JsonStringEnumMemberName("met")] Met,
+
+    /// <summary>Attempted and not achieved. An honest answer, and it blocks a done.</summary>
+    [JsonStringEnumMemberName("unmet")] Unmet,
+
+    /// <summary>
+    /// Nothing was done about it.
+    /// </summary>
+    /// <remarks>
+    /// Its own verdict rather than folded into unmet, because the two want
+    /// different things next: an unmet criterion was tried and needs a
+    /// different approach, and one never attempted needs somebody to notice
+    /// that a whole area of the goal was missed. That second case is the one a
+    /// run of several rounds loses quietly.
+    /// </remarks>
+    [JsonStringEnumMemberName("not-attempted")] NotAttempted,
 }
 
 /// <summary>Something a node produced, by reference.</summary>

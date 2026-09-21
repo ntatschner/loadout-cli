@@ -230,6 +230,86 @@ public sealed class TeamGoalTests
         brief.TeamDirectory.Should().Be(@"C:\state	eams\work\system-watch");
     }
 
+    /// <summary>
+    /// The run's criteria reach every node, not only the lead.
+    /// </summary>
+    /// <remarks>
+    /// The same reasoning as the team's standing goal, and the same failure if
+    /// it goes wrong: a worker given a narrow job still needs to know what the
+    /// run is being judged on, and a mutation of the line that carries it would
+    /// otherwise survive every test in the suite. Answering for them is the
+    /// lead's alone, which ReportCheck enforces and CoverageCheckTests covers.
+    /// </remarks>
+    [Fact]
+    public void The_runs_criteria_reach_a_workers_brief()
+    {
+        var team = new TeamDefinition
+        {
+            Name = "docs-crew",
+            Lead = "lead",
+            Nodes = { ["docs-auditor"] = new TeamNode { Role = "role.docs-auditor" } },
+        };
+
+        var role = new SpecialistDocument(
+            "role.docs-auditor",
+            SpecialistKind.Role,
+            "Docs auditor",
+            "Checks the docs against the code.",
+            new SpecialistActivation(),
+            string.Empty,
+            0,
+            Role: new RoleDefinition("investigate", "answer", "report/1", [], []));
+
+        var brief = TeamRunner.MakeBrief(
+            "20260921-1800-cvrg",
+            "docs-auditor",
+            "lead",
+            team.Nodes["docs-auditor"],
+            role,
+            "check docs/commands.md",
+            inputs: [],
+            doneWhen: [],
+            team,
+            "autonomous",
+            allowed: [],
+            specialistsOf: _ => null,
+            teamDirectory: null,
+            criteria: ["every command in docs/commands.md exists", "the suite passes"]);
+
+        brief.Criteria.Should().Equal(
+            "every command in docs/commands.md exists", "the suite passes");
+    }
+
+    [Fact]
+    public void A_run_with_no_criteria_puts_none_in_a_brief()
+    {
+        // Null rather than an empty list, so a brief written by a run that does
+        // not work that way carries no criteria key at all rather than an empty
+        // one a node would read as "nothing is required".
+        var team = new TeamDefinition
+        {
+            Name = "docs-crew",
+            Lead = "lead",
+            Nodes = { ["lead"] = new TeamNode { Role = "role.project-lead" } },
+        };
+
+        var role = new SpecialistDocument(
+            "role.project-lead",
+            SpecialistKind.Role,
+            "Lead",
+            "Splits a goal.",
+            new SpecialistActivation(),
+            string.Empty,
+            0,
+            Role: new RoleDefinition("coordinate", "answer", "report/1", [], []));
+
+        TeamRunner.MakeBrief(
+            "20260921-1800-cvrg", "lead", null, team.Nodes["lead"], role, "do it",
+            inputs: [], doneWhen: [], team, "supervised", allowed: [],
+            specialistsOf: _ => null, teamDirectory: null, criteria: [])
+            .Criteria.Should().BeNull();
+    }
+
     [Fact]
     public void An_empty_declaration_is_a_finding_rather_than_a_bare_dash()
     {

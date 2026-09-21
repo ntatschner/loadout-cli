@@ -302,7 +302,13 @@
   .start summary { padding: 0.6rem 0.9rem; cursor: pointer; min-height: 2.5rem; }
   .start .fields { display: grid; gap: 0.6rem; padding: 0 0.9rem 0.9rem; }
   .start label { display: block; color: var(--quiet); font-size: 0.9rem; }
-  .start input, .start select { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem; }
+  .start input, .start select, .start textarea {
+    font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem;
+  }
+
+  /* Vertically only: sideways drags it out of the column and the page then
+     scrolls horizontally, which is the one thing this layout forbids. */
+  .start textarea { resize: vertical; min-height: 4rem; }
   .start .narrow { display: flex; gap: 0.6rem; flex-wrap: wrap; }
   .start .narrow > * { flex: 1 1 8rem; }
 
@@ -316,6 +322,74 @@
     padding: 0.35rem 0.9rem;
     cursor: pointer;
     justify-self: start;
+  }
+
+  /*
+    The two things that open a sheet of their own, and the sheets.
+
+    min-height matches the buttons everywhere else. The one thing axe has ever
+    found on this page by itself was a control twenty-one pixels tall, because
+    it relied on its own padding where the rest carry a minimum - so anything
+    new that can be clicked carries it explicitly.
+  */
+  .doing { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0 0 1rem; }
+
+  .doing button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
+  }
+
+  dialog {
+    color: var(--ink);
+    /*
+      --card, which is what every other raised surface on this page uses. The
+      first attempt said var(--panel, var(--bg)) and neither of those variables
+      exists, so it fell all the way through to transparent: the sheet drew
+      over the dimmed page with the run list showing through it.
+
+      axe caught it, in the roundabout way axe catches things - it reported the
+      heading and the labels as contrast checks it could not complete, because
+      it could not determine what was behind them. Reading that as "axe cannot
+      work this out about a dialog" was wrong; measuring the computed
+      background was what said so.
+    */
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    padding: 0;
+    max-width: min(38rem, calc(100vw - 2rem));
+    width: 100%;
+  }
+
+  /* Dimmed rather than blacked out, so the run underneath is still legible as
+     context for what is being arranged about it. */
+  dialog::backdrop { background: rgb(0 0 0 / 55%); }
+
+  .sheet { display: grid; gap: 0.6rem; padding: 0.9rem; margin: 0; }
+  .sheet h2 { margin: 0; font-size: 1.1rem; }
+  .sheet .fields { display: grid; gap: 0.6rem; padding: 0; }
+  .sheet label { display: block; color: var(--quiet); font-size: 0.9rem; }
+  .sheet input, .sheet select {
+    font: inherit; width: 100%; box-sizing: border-box; padding: 0.4rem;
+  }
+
+  .sheet-buttons { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
+  .sheet-buttons button {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.9rem;
+    cursor: pointer;
   }
 
   /*
@@ -735,6 +809,34 @@
   .queue .who { display: block; font-weight: 700; }
   .queue .why { display: block; font-size: 0.85rem; color: var(--quiet); }
   .queue .when { margin-left: auto; padding-left: 0.6rem; font-size: 0.85rem; white-space: nowrap; }
+
+  /* Each criterion on its own row, its verdict written as a word beside a
+     colour rather than only as one - the page's standing rule, and the
+     reason a terminal, a screen reader and a forced-colours mode all say
+     the same thing about a run. */
+  #coverage { margin: 0 0 1rem; }
+  #coverage h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+  #coverage ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+  #coverage li { border: 1px solid var(--line); border-radius: 0.3rem; padding: 0.5rem 0.7rem; }
+  #coverage .verdict { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  #coverage .met .verdict { color: var(--done); }
+  #coverage .unmet .verdict, #coverage .not-attempted .verdict { color: var(--stopped); }
+  #coverage .because { display: block; color: var(--quiet); font-size: 0.9rem; margin-top: 0.2rem; }
+
+  /* The minimum carried explicitly, like every other control on this page:
+     the one thing axe has ever found here by itself was a button relying on
+     its own padding and coming out three pixels short. */
+  .queue-stop {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.9rem;
+    margin-left: 0.6rem;
+    cursor: pointer;
+  }
   .queue .body { min-width: 0; }
   .queue .kind { font-size: 0.85rem; color: var(--quiet); }
 
@@ -2361,8 +2463,23 @@
   <section class="pane" aria-labelledby="runs">
     <h2 id="runs">Runs on this machine</h2>
 
+    <!--
+      Two forms, not one.
+
+      There was one, headed "Start a team", and it asked for a team, what it was
+      for, a project and an autonomy. Somebody read that as the way to make a
+      team - which is a fair reading of a form that asks you to name one - typed
+      a name nothing had ever heard of, and got "Team Test is starting. It
+      appears in the list in a moment." The refusal went to the terminal behind
+      the browser.
+
+      Three things were wrong and all three are fixed here. The team is chosen
+      from the ones that exist rather than typed from memory. Making one is its
+      own form, which says so in its heading. And a failure comes back to the
+      page.
+    -->
     <details class="start">
-      <summary>Start a team</summary>
+      <summary>Run a team</summary>
 
       <!--
         Filled in by the page when it knows which server this is. A run started
@@ -2375,8 +2492,29 @@
       <div class="fields">
         <div>
           <label for="start-team">Team</label>
-          <input type="text" id="start-team" list="known-teams" placeholder="as team list names it">
-          <datalist id="known-teams"></datalist>
+          <!--
+            Described by the line underneath, so what the chosen team is reaches
+            somebody who cannot see it appear. axe passes either way - a
+            paragraph next to a control is not a violation - which is exactly
+            why this needed deciding rather than measuring: the page's rule is
+            that every state is written as a word, and a description only a
+            sighted person receives breaks it.
+
+            aria-describedby rather than a live region on purpose. Arrowing
+            through a closed select fires change on every key, so a live region
+            would read a whole paragraph between each option name. The
+            description is read when the control takes focus, which is when
+            somebody is deciding.
+          -->
+          <select id="start-team" aria-describedby="start-team-about">
+            <option value="">choose one</option>
+          </select>
+          <!-- What the chosen team is, under the box that chose it: where it
+               came from, how many nodes it has, and anything wrong with it.
+               Eight names in a list tell you nothing about which to pick.
+               Hidden while nothing is chosen, which is also how the
+               description is withheld rather than read as empty. -->
+          <p class="facts" id="start-team-about" hidden></p>
         </div>
 
         <div>
@@ -2385,9 +2523,38 @@
         </div>
 
         <div>
+          <label for="start-criteria">Done when</label>
+          <!--
+            One per line, and optional.
+
+            Without these a run ends when the lead says done and nothing argues.
+            That is fine while somebody is watching, and it is the whole of the
+            check on an autonomous run - which is the case where nobody is. With
+            them the lead owes a verdict and evidence on each, and a done that
+            leaves one unmet or unanswered is sent back to it.
+
+            A textarea rather than a row of boxes with add and remove. A
+            criterion is a sentence, lines are how people write lists of
+            sentences, and a widget that has to be operated before it can be
+            typed into is one people skip.
+          -->
+          <textarea id="start-criteria" rows="3" aria-describedby="start-criteria-about"
+            placeholder="one per line, each one checkable"></textarea>
+          <p class="facts" id="start-criteria-about">
+            Optional, and the difference between a run that reports done and one
+            that can show it. The lead must answer for every line.
+          </p>
+        </div>
+
+        <div>
           <label for="start-project">Project</label>
-          <input type="text" id="start-project" list="known-projects" placeholder="as the registry names it">
-          <datalist id="known-projects"></datalist>
+          <select id="start-project">
+            <option value="">choose one</option>
+          </select>
+          <!-- Required, unlike before. Without one a run works in whatever
+               directory this server was started in, which for the daemon is
+               wherever somebody happened to be - and which reported that
+               'd:\git' is not a Git repository. -->
         </div>
 
         <div class="narrow">
@@ -2410,6 +2577,145 @@
         <button type="button" id="start">Start it</button>
       </div>
     </details>
+
+    <!--
+      Making a team and scheduling one are their own things rather than a third
+      and fourth fold under the runs list. Both open a dialog.
+
+      A native <dialog> rather than a div pretending to be one: the browser
+      traps focus inside it, returns focus to whatever opened it, closes on
+      Escape and marks it modal to a screen reader, all of which a hand-rolled
+      overlay has to reimplement and usually reimplements incompletely.
+    -->
+    <div class="doing" id="doing" hidden>
+      <button type="button" id="open-making">Make a team…</button>
+      <button type="button" id="open-planning">Run one on a schedule…</button>
+    </div>
+
+    <dialog id="making" aria-labelledby="making-heading">
+      <form method="dialog" class="sheet">
+        <h2 id="making-heading">Make a team</h2>
+
+        <p class="facts">
+          A team is a YAML file: which roles run, how they are wired, and the
+          rules a run of it follows. This writes one and tells you where it is.
+          Copying one that already works is nearly always the way to start.
+        </p>
+
+        <div class="fields">
+          <div>
+            <label for="new-name">Call it</label>
+            <input type="text" id="new-name" placeholder="docs-crew-mine"
+              pattern="[a-z0-9-]+" maxlength="64">
+          </div>
+
+          <div>
+            <label for="new-from">Copy from</label>
+            <select id="new-from">
+              <option value="">nothing - start from an empty one</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="new-project">Whose</label>
+            <select id="new-project">
+              <option value="">every project on this machine</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="facts" id="made" hidden></p>
+
+        <div class="sheet-buttons">
+          <button type="button" id="make">Write it</button>
+          <button type="submit" value="close" id="making-close">Close</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="planning" aria-labelledby="planning-heading">
+      <form method="dialog" class="sheet">
+        <h2 id="planning-heading">Run a team on a schedule</h2>
+
+        <p class="facts" id="planning-caveat">
+          A schedule fires only while the daemon is running. Nothing happens at
+          the appointed time on a machine where it is not.
+        </p>
+
+        <div class="fields">
+          <div>
+            <label for="plan-name">Call this schedule</label>
+            <input type="text" id="plan-name" placeholder="nightly-docs" maxlength="64">
+          </div>
+
+          <div>
+            <label for="plan-team">Team</label>
+            <select id="plan-team">
+              <option value="">choose one</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="plan-goal">What to ask it for</label>
+            <input type="text" id="plan-goal" placeholder="check the docs against the code">
+          </div>
+
+          <div>
+            <label for="plan-project">Project</label>
+            <select id="plan-project">
+              <option value="">choose one</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="plan-when">When</label>
+            <select id="plan-when">
+              <option value="at">at a time of day</option>
+              <option value="every">every so often</option>
+              <option value="on">when something happens</option>
+            </select>
+          </div>
+
+          <div id="plan-at-box">
+            <label for="plan-at">Time of day</label>
+            <input type="time" id="plan-at" value="23:00">
+          </div>
+
+          <div id="plan-every-box" hidden>
+            <label for="plan-every">How often</label>
+            <input type="text" id="plan-every" placeholder="30m, 2h, 1d - at least five minutes">
+          </div>
+
+          <div id="plan-on-box" hidden>
+            <label for="plan-on">Watch for</label>
+            <select id="plan-on">
+              <option value="commit">a commit - the repository moved</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="plan-autonomy">Autonomy</label>
+            <!--
+              No "manual" here, and not because the page decided: the command
+              refuses it, for the reason a schedule exists. Manual means a
+              person at every step, and nobody is watching at 23:00. Offering a
+              choice that is always refused is a control that does not work.
+            -->
+            <select id="plan-autonomy">
+              <option value="supervised">supervised - it stops to ask you</option>
+              <option value="autonomous">autonomous - it decides for itself</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="facts" id="planned" hidden></p>
+
+        <div class="sheet-buttons">
+          <button type="button" id="plan">Schedule it</button>
+          <button type="submit" value="close" id="planning-close">Close</button>
+        </div>
+      </form>
+    </dialog>
     <!-- A navigation landmark, not a group of buttons that happen to be next
          to each other. These seven are the whole of this page's navigation,
          and without this there was nothing for a screen reader to jump to:
@@ -2462,6 +2768,12 @@
   <section id="detail" class="pane" hidden aria-labelledby="detail-heading">
     <h2 id="detail-heading">Run</h2>
 
+    <!-- What the goal was broken into and where each part got to. Hidden
+         entirely for a run given no criteria, which is every run written
+         before they existed: an empty list here would read as "nothing is
+         met" rather than "this run does not work that way". -->
+    <div id="coverage" hidden></div>
+
     <div id="gates"></div>
 
     <div id="controls" class="controls">
@@ -2469,6 +2781,10 @@
       <button type="button" id="resume">Let it carry on</button>
       <button type="button" id="stop">Stop it</button>
       <button type="button" id="again">Run it again</button>
+      <!-- Only ever against a run that has ended: a live run reads its own
+           directory for the answers it is waiting on, and `team runs remove`
+           refuses one anyway. -->
+      <button type="button" id="forget">Forget it</button>
       <label for="say" class="said">Say something to the lead</label>
       <input type="text" id="say" placeholder="read after its current round">
       <button type="button" id="send">Send</button>
@@ -2775,41 +3091,193 @@
   // Everything wanting somebody, across every run, newest first. Rebuilt on
   // every read: nothing here is remembered, so a reason that has gone is gone.
   /*
-    What this machine has run before, offered as suggestions rather than as a
-    list to choose from. Whether a team exists is the command line's question,
-    and asking it here as well is how two answers start to disagree - but a
-    name somebody typed last week is still the name they want today.
+    What there is to run, and what to copy when making one.
+
+    This used to be built from the runs already on the machine, on the reasoning
+    that whether a team exists is the command line's question and asking it here
+    as well is how two answers start to disagree. The reasoning holds and the
+    conclusion did not follow: it meant a machine that had run two teams offered
+    two of the eight that ship, and everything else had to be typed from memory
+    into a box that accepted anything.
+
+    Offering the real list is not a second answer. It is the same answer, from
+    the same loader `team list` reads, sent here so the page can show it. What
+    happens after somebody picks one is unchanged.
   */
-  function suggest(runs) {
-    [["known-teams", "team"], ["known-projects", "project"]].forEach(function (pair) {
-      var list = document.getElementById(pair[0]);
-      var seen = {};
-      var names = [];
+  var teamsKnown = [];
 
-      runs.forEach(function (run) {
-        var name = run[pair[1]];
+  // Whether this server can change the schedules. Read from /api/choices like
+  // 'acts' is from /api/runs, and false until it has answered, so a page that
+  // has not heard yet draws nothing it might not be able to honour.
+  var plans = false;
 
-        if (name && !seen[name]) {
-          seen[name] = true;
-          names.push(name);
-        }
-      });
+  function fillChoices() {
+    return api("/api/choices").then(function (answer) {
+      if (!answer) { return; }
 
-      if (list.getAttribute("data-names") === names.join("|")) { return; }
+      teamsKnown = answer.teams || [];
 
-      list.setAttribute("data-names", names.join("|"));
-      list.textContent = "";
+      // Only where this server can actually do them. A control that is drawn
+      // and always refused is the fault this whole change set out to fix, so
+      // the buttons that open the sheets follow what the server said it can do
+      // rather than being drawn and apologising afterwards.
+      var open = document.getElementById("doing");
+      var makes = document.getElementById("open-making");
+      var planning = document.getElementById("open-planning");
 
-      names.forEach(function (name) {
-        var option = document.createElement("option");
+      plans = !!answer.plans;
 
-        option.value = name;
-        list.appendChild(option);
-      });
+      if (makes) { makes.hidden = !answer.makes; }
+      if (planning) { planning.hidden = !plans; }
+      if (open) { open.hidden = !answer.makes && !plans; }
+
+      fillTeams(answer.teams || []);
+      fillProjects(answer.projects || [], answer.here);
     });
   }
 
+  function fillTeams(teams) {
+    var shape = teams.map(function (t) {
+      return t.name + ":" + (t.template ? "t" : "") + (t.trouble ? "!" : "");
+    }).join("|");
+
+    var run = document.getElementById("start-team");
+    var from = document.getElementById("new-from");
+    var plan = document.getElementById("plan-team");
+
+    if (run.getAttribute("data-shape") === shape) { return; }
+
+    run.setAttribute("data-shape", shape);
+
+    // Kept across the redraw, so a list that refreshes every few seconds does
+    // not clear a box somebody is part way through using.
+    var chosenRun = run.value;
+    var chosenFrom = from ? from.value : "";
+    var chosenPlan = plan ? plan.value : "";
+
+    run.textContent = "";
+    if (from) { from.textContent = ""; }
+    if (plan) { plan.textContent = ""; }
+
+    function head(box, text, value) {
+      var option = document.createElement("option");
+
+      option.value = value || "";
+      option.textContent = text;
+      box.appendChild(option);
+    }
+
+    head(run, teams.length ? "choose one" : "no teams on this machine", "");
+    if (from) { head(from, "nothing - start from an empty one", ""); }
+    if (plan) { head(plan, teams.length ? "choose one" : "no teams on this machine", ""); }
+
+    teams.forEach(function (team) {
+      var label = team.name + " - " + team.whose;
+
+      // A template is a shape to copy and `team run` refuses one, so it is not
+      // offered as something to run. It is offered as something to copy, which
+      // is the only thing it is for.
+      if (!team.template) {
+        var one = document.createElement("option");
+
+        one.value = team.name;
+        one.textContent = label + (team.trouble ? " (has a problem)" : "");
+        run.appendChild(one);
+
+        // The same list for a schedule: a template cannot be run on a clock
+        // any more than it can be run by hand.
+        if (plan) {
+          var timed = document.createElement("option");
+
+          timed.value = team.name;
+          timed.textContent = one.textContent;
+          plan.appendChild(timed);
+        }
+      }
+
+      if (from) {
+        var other = document.createElement("option");
+
+        other.value = team.name;
+        other.textContent = label + (team.template ? " - a template" : "");
+        from.appendChild(other);
+      }
+    });
+
+    run.value = chosenRun;
+    if (from) { from.value = chosenFrom; }
+    if (plan) { plan.value = chosenPlan; }
+
+    aboutTeam();
+  }
+
+  // What the chosen team is, said under the box that chose it.
+  function aboutTeam() {
+    var box = document.getElementById("start-team-about");
+
+    if (!box) { return; }
+
+    var name = document.getElementById("start-team").value;
+    var team = teamsKnown.filter(function (t) { return t.name === name; })[0];
+
+    if (!team) {
+      box.hidden = true;
+      box.textContent = "";
+
+      return;
+    }
+
+    box.hidden = false;
+    box.textContent = team.description
+      + " " + team.nodes + " node" + (team.nodes === 1 ? "" : "s") + ", " + team.autonomy + "."
+      + (team.trouble ? " Something is wrong with it: " + team.trouble : "");
+  }
+
+  function fillProjects(projects, here) {
+    var shape = projects.join("|");
+
+    [["start-project", "choose one"],
+     ["new-project", "every project on this machine"],
+     ["plan-project", "choose one"]]
+      .forEach(function (pair) {
+        var box = document.getElementById(pair[0]);
+
+        if (!box || box.getAttribute("data-shape") === shape) { return; }
+
+        box.setAttribute("data-shape", shape);
+
+        var chosen = box.value;
+
+        box.textContent = "";
+
+        var first = document.createElement("option");
+
+        first.value = "";
+        first.textContent = projects.length ? pair[1] : "no projects registered";
+        box.appendChild(first);
+
+        projects.forEach(function (slug) {
+          var option = document.createElement("option");
+
+          option.value = slug;
+          option.textContent = slug;
+          box.appendChild(option);
+        });
+
+        // Offered, not assumed. A dashboard is not standing in a repository -
+        // the daemon's directory is wherever it was started - so the project
+        // this server happens to be in is a sensible first guess and nothing
+        // more. It only fills an empty box, never replaces a choice.
+        box.value = chosen
+          || ((pair[0] === "start-project" || pair[0] === "plan-project") && here ? here : "");
+      });
+  }
+
   (function () {
+    var picked = document.getElementById("start-team");
+
+    if (picked) { picked.addEventListener("change", aboutTeam); }
+
     var go = document.getElementById("start");
 
     go.addEventListener("click", function () {
@@ -2819,8 +3287,27 @@
       var rounds = parseInt(document.getElementById("start-rounds").value, 10);
       var autonomy = document.getElementById("start-autonomy").value;
 
+      // One per line, blanks dropped: a criterion nothing can report a verdict
+      // on would refuse every done for ever.
+      var criteria = document.getElementById("start-criteria").value
+        .split("\n")
+        .map(function (one) { return one.trim(); })
+        .filter(function (one) { return one.length > 0; });
+
       if (!team || !goal) {
         announce("A run needs a team and something to do.");
+
+        return;
+      }
+
+      // Required here, though the command line lets it default. A terminal
+      // defaults to the directory somebody is standing in, which is usually the
+      // repository they mean. A dashboard has no such directory: the daemon's
+      // is wherever it was started, and leaving this empty is how a run came
+      // back with "'d:\git' is not inside a Git repository".
+      if (!project) {
+        announce("Choose a project. A run started from this page has no directory "
+          + "of its own to fall back on.");
 
         return;
       }
@@ -2828,7 +3315,10 @@
       // Named in the question. This one spends money and edits a repository,
       // and the token got somebody to the page rather than to this.
       if (!window.confirm("Start " + team + (project ? " on " + project : "")
-        + " to \u201c" + goal + "\u201d?")) {
+        + " to \u201c" + goal + "\u201d?"
+        + (criteria.length
+          ? "\n\nDone when all " + criteria.length + ":\n- " + criteria.join("\n- ")
+          : "\n\nNo criteria, so it is done when the lead says so."))) {
         return;
       }
 
@@ -2842,7 +3332,8 @@
           goal: goal,
           project: project || null,
           rounds: rounds > 0 ? rounds : null,
-          autonomy: autonomy || null
+          autonomy: autonomy || null,
+          criteria: criteria.length ? criteria : null
         })
       })
         .then(function (answer) {
@@ -2861,6 +3352,10 @@
               throw new Error(said || ("The dashboard answered " + answer.status + "."));
             }
 
+            // Said only now, and only because the server waited to see whether
+            // it survived its first seconds. This line used to be printed the
+            // instant the request was accepted, so it appeared under a run that
+            // had already been refused.
             announce(team + " is starting. It appears in the list in a moment.");
             document.getElementById("start-goal").value = "";
           });
@@ -2871,6 +3366,228 @@
         });
     });
   }());
+
+  /*
+    Opening and closing the two sheets.
+
+    A native <dialog>, so the browser traps focus inside it, returns focus to
+    the button that opened it, closes on Escape and marks it modal to a screen
+    reader. showModal() rather than show() for all of that; show() is a
+    non-modal popover and gives none of it.
+  */
+  [["open-making", "making"], ["open-planning", "planning"]].forEach(function (pair) {
+    var button = document.getElementById(pair[0]);
+    var sheet = document.getElementById(pair[1]);
+
+    if (!button || !sheet) { return; }
+
+    button.addEventListener("click", function () {
+      // Cleared on open rather than on close: the result of the last go is
+      // worth still being there while the sheet is open, and stale the moment
+      // it is opened again.
+      var said = sheet.querySelector(".facts[id]");
+
+      if (said && (said.id === "made" || said.id === "planned")) {
+        said.hidden = true;
+        said.textContent = "";
+      }
+
+      sheet.showModal();
+    });
+  });
+
+  /*
+    Writing a team.
+
+    The other half of what was missing. A page that can start a run should be
+    able to make the thing it runs, because the alternative is what happened:
+    the start form was read as the way to make one.
+
+    Awaited, unlike starting a run. Writing a file takes milliseconds and the
+    whole point is that somebody finds out here whether it worked.
+  */
+  (function () {
+    var go = document.getElementById("make");
+
+    if (!go) { return; }
+
+    go.addEventListener("click", function () {
+      var name = document.getElementById("new-name").value.trim().toLowerCase();
+      var from = document.getElementById("new-from").value;
+      var project = document.getElementById("new-project").value;
+      var said = document.getElementById("made");
+
+      said.hidden = true;
+
+      if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)) {
+        announce("A team's name is lowercase letters, digits and hyphens: docs-crew-mine.");
+
+        return;
+      }
+
+      go.disabled = true;
+
+      fetch("/api/teams?token=" + encodeURIComponent(token), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name, from: from || null, project: project || null })
+      })
+        .then(function (answer) {
+          return answer.text().then(function (body) {
+            var why = null;
+
+            try { why = JSON.parse(body).error; } catch (e) { why = null; }
+
+            go.disabled = false;
+
+            if (!answer.ok) {
+              throw new Error(why || ("The dashboard answered " + answer.status + "."));
+            }
+
+            document.getElementById("new-name").value = "";
+
+            // Both said and shown. The announcement is cleared after a while so
+            // it does not read as the current state for ever, and this one is
+            // worth still being on screen when somebody goes to find the file.
+            said.hidden = false;
+            said.textContent = name + " is written. Open it with: loadout team edit " + name
+              + " - then it is in the list above.";
+
+            announce(name + " is written. It is in the list above.");
+
+            // Straight away rather than on the next half-minute pass: the team
+            // somebody just made is the one they want to run.
+            fillChoices();
+          });
+        })
+        .catch(function (wrong) {
+          go.disabled = false;
+          announce(wrong.message);
+        });
+    });
+  }());
+
+  /*
+    Arranging for a run to happen again.
+
+    The page could start a run once and never arrange for it to happen nightly,
+    which is most of what a machine that stays up is for. Schedules existed and
+    the waiting area listed them; the only way to make one was a terminal.
+
+    Awaited, like writing a team: it writes a small file and comes back.
+  */
+  (function () {
+    var when = document.getElementById("plan-when");
+
+    // One of three ways to say when, and only the chosen one is shown - a form
+    // offering a time of day, an interval and an event at once reads as though
+    // it wants all three, and the command takes exactly one.
+    function showWhen() {
+      [["at", "plan-at-box"], ["every", "plan-every-box"], ["on", "plan-on-box"]]
+        .forEach(function (pair) {
+          var box = document.getElementById(pair[1]);
+
+          if (box) { box.hidden = when.value !== pair[0]; }
+        });
+    }
+
+    if (when) { when.addEventListener("change", showWhen); showWhen(); }
+
+    var go = document.getElementById("plan");
+
+    if (!go) { return; }
+
+    go.addEventListener("click", function () {
+      var name = document.getElementById("plan-name").value.trim();
+      var team = document.getElementById("plan-team").value;
+      var goal = document.getElementById("plan-goal").value.trim();
+      var project = document.getElementById("plan-project").value;
+      var said = document.getElementById("planned");
+
+      said.hidden = true;
+
+      if (!name || !team || !goal) {
+        announce("A schedule needs a name, a team and something to ask for.");
+
+        return;
+      }
+
+      // Required for the same reason the start form requires it: a run started
+      // by a clock has no directory of its own to fall back on, and the machine
+      // the daemon is on may be somewhere else entirely by then.
+      if (!project) {
+        announce("Choose a project. A scheduled run has no directory to fall back on.");
+
+        return;
+      }
+
+      var body = {
+        verb: "add",
+        name: name,
+        team: team,
+        goal: goal,
+        project: project,
+        autonomy: document.getElementById("plan-autonomy").value
+      };
+
+      var choice = when ? when.value : "at";
+
+      if (choice === "at") { body.at = document.getElementById("plan-at").value; }
+      if (choice === "every") { body.every = document.getElementById("plan-every").value.trim(); }
+      if (choice === "on") { body.on = document.getElementById("plan-on").value; }
+
+      // Named in the question. An autonomous run that fires on a clock spends
+      // money and edits a repository with nobody watching, which is a larger
+      // thing to agree to than starting one while sitting here.
+      if (!window.confirm("Run " + team + " on " + project + ", "
+        + (choice === "at" ? "daily at " + body.at
+          : choice === "every" ? "every " + body.every
+          : "on a " + body.on)
+        + ", " + body.autonomy + "?")) {
+        return;
+      }
+
+      go.disabled = true;
+
+      plan(body)
+        .then(function () {
+          go.disabled = false;
+          document.getElementById("plan-name").value = "";
+
+          said.hidden = false;
+          said.textContent = name + " is scheduled. It fires only while the daemon is running: "
+            + "loadout team daemon. See what is queued under Waiting.";
+
+          announce(name + " is scheduled. It appears under Waiting.");
+          queued();
+        })
+        .catch(function (wrong) {
+          go.disabled = false;
+          announce(wrong.message);
+        });
+    });
+  }());
+
+  // Both schedule verbs go the same way, so neither can drift from the other.
+  function plan(body) {
+    return fetch("/api/schedules?token=" + encodeURIComponent(token), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (answer) {
+      return answer.text().then(function (text) {
+        var why = null;
+
+        try { why = JSON.parse(text).error; } catch (e) { why = null; }
+
+        if (!answer.ok) {
+          throw new Error(why || ("The dashboard answered " + answer.status + "."));
+        }
+
+        return true;
+      });
+    });
+  }
 
   function drawRail(runs) {
     var rail = document.getElementById("rail");
@@ -4120,6 +4837,47 @@
         (item.title || item.id) + ", " + why.textContent
         + (when.textContent ? ", " + when.textContent : ""));
 
+      /*
+        Stopping one, where this server can.
+
+        Only a schedule: a task is somebody's record of work and is not this
+        page's to delete. The waiting area is where schedules are already
+        listed, so it is where somebody looks to be rid of one - the
+        alternative was a terminal, which is what made the page able to create
+        something it could not undo.
+      */
+      if (item.kind === "schedule" && plans) {
+        var stop = document.createElement("button");
+
+        stop.type = "button";
+        stop.className = "queue-stop";
+        stop.textContent = "Stop it";
+        // The row's own label says which; this says what, for somebody who
+        // reaches the button without having read the row.
+        stop.setAttribute("aria-label", "Stop scheduling " + (item.title || item.id));
+
+        stop.addEventListener("click", function () {
+          if (!window.confirm("Stop scheduling " + (item.title || item.id)
+            + "? It will not fire again.")) {
+            return;
+          }
+
+          stop.disabled = true;
+
+          plan({ verb: "remove", name: item.id })
+            .then(function () {
+              announce((item.title || item.id) + " will not fire again.");
+              queued();
+            })
+            .catch(function (wrong) {
+              stop.disabled = false;
+              announce(wrong.message);
+            });
+        });
+
+        row.appendChild(stop);
+      }
+
       li.appendChild(row);
       box.appendChild(li);
     });
@@ -4849,7 +5607,6 @@
   function draw(runs) {
     shown = runs;
 
-    suggest(runs);
     drawRail(runs);
 
     // Whatever is being followed keeps up whichever view is showing. This
@@ -5792,6 +6549,7 @@
     // be run again, and the button said otherwise until the pane was opened
     // a second time - the same staleness the heading and the gates had.
     document.getElementById("again").hidden = run.running;
+    document.getElementById("forget").hidden = run.running;
 
     // A rename lands as a file the next read picks up, and it can be done from
     // a terminal as easily as from here, so the heading follows it rather than
@@ -5810,6 +6568,8 @@
         box.value = run.room || "";
       }
     }
+
+    drawCoverage(run);
 
     var gates = (run.gates || []).map(function (gate) { return gate.id; }).join("|");
 
@@ -5885,6 +6645,87 @@
     }
 
     return "Answer \u201c" + asking(gate.question) + "\u201d with \u201c" + option + "\u201d?";
+  }
+
+  /*
+    What the goal was broken into, and where each part got to.
+
+    A run used to end when the lead said done and nothing argued, which is fine
+    while somebody is watching and is the whole of the check on an autonomous
+    run - the case where nobody is. A run given criteria carries the lead's
+    verdict on each, and a done that leaves one unmet or unanswered never got
+    this far: the report was sent back.
+
+    So what is drawn here is either a finished account of a met goal, or a live
+    one showing which parts are still out.
+  */
+  function drawCoverage(run) {
+    var box = document.getElementById("coverage");
+
+    if (!box) { return; }
+
+    var covered = run.coverage || [];
+
+    if (!covered.length) {
+      box.hidden = true;
+      box.textContent = "";
+      box.removeAttribute("data-shape");
+
+      return;
+    }
+
+    var shape = covered.map(function (one) {
+      return one.criterion + ":" + one.verdict;
+    }).join("|");
+
+    if (box.getAttribute("data-shape") === shape) { return; }
+
+    box.setAttribute("data-shape", shape);
+    box.textContent = "";
+    box.hidden = false;
+
+    var met = covered.filter(function (one) { return one.met; }).length;
+
+    var head = document.createElement("h3");
+
+    head.textContent = "Done when - " + met + " of " + covered.length + " met";
+    box.appendChild(head);
+
+    var list = document.createElement("ul");
+
+    covered.forEach(function (one) {
+      var li = document.createElement("li");
+
+      li.className = one.verdict;
+
+      var verdict = document.createElement("span");
+
+      verdict.className = "verdict";
+      verdict.textContent = one.verdict === "not-attempted"
+        ? "not attempted"
+        : one.verdict;
+      li.appendChild(verdict);
+
+      var said = document.createElement("span");
+
+      said.textContent = " " + one.criterion;
+      li.appendChild(said);
+
+      // What the lead says shows it. A met with nothing behind it never
+      // reaches the page - the report is returned - so anything here has
+      // something to show.
+      if (one.because) {
+        var why = document.createElement("span");
+
+        why.className = "because";
+        why.textContent = one.because;
+        li.appendChild(why);
+      }
+
+      list.appendChild(li);
+    });
+
+    box.appendChild(list);
   }
 
   function drawGates(run) {
@@ -6033,7 +6874,49 @@
       // just filled itself in rather than being told about it.
       document.getElementById("start-goal").focus();
 
-      announce("Filled in from " + (run.room || run.id) + ". Change what you want and start it.");
+      // The team box is a list now, so a name that is not in it does not take.
+      // Said rather than left looking chosen: a team that has since been
+      // deleted is exactly the case where somebody would otherwise press Start
+      // on an empty box.
+      if (run.team && document.getElementById("start-team").value !== run.team) {
+        announce("Filled in from " + (run.room || run.id) + ", but there is no team called "
+          + run.team + " any more. Pick another.");
+      } else {
+        announce("Filled in from " + (run.room || run.id) + ". Change what you want and start it.");
+      }
+    };
+
+    /*
+      Getting rid of a run you are done with.
+
+      The listing is the reason, not the disk: `team runs` and this page are the
+      first places anybody looks, and nothing had ever deleted a run, so both
+      showed every experiment anybody had ever started.
+
+      It refuses a live run - here by not being drawn, and in the command that
+      does the work, which is the one that matters.
+    */
+    var forget = document.getElementById("forget");
+
+    forget.hidden = run.running;
+
+    forget.onclick = function () {
+      // Named in the question. A run's journal is the only copy of what it did.
+      if (!window.confirm("Forget " + (run.room || run.id)
+        + "? Everything it wrote down goes, and there is no other copy.")) {
+        return;
+      }
+
+      act(run.id, "forget", {})
+        .then(function () {
+          announce((run.room || run.id) + " is forgotten.");
+
+          // Back to the list, because the thing being looked at has gone.
+          watching = null;
+          document.getElementById("detail").hidden = true;
+          refresh();
+        })
+        .catch(function (e) { announce(e.message); });
     };
 
     document.getElementById("send").onclick = function () {
@@ -7304,6 +8187,13 @@
         say(wrong.message + " The dashboard may have been stopped.");
       });
   }
+
+  // What there is to run, on its own cadence rather than with the runs. The
+  // catalogue changes when somebody writes a file - which is rare, and which
+  // the page itself does - so it is read at start, after writing one, and
+  // every half minute in case a terminal wrote one.
+  fillChoices();
+  setInterval(fillChoices, 30000);
 
   // The art first, then the runs, so the first office somebody sees is
   // already drawn rather than redrawing itself a moment later. Either way

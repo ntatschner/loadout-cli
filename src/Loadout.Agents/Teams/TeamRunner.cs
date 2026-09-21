@@ -36,6 +36,24 @@ namespace Loadout.Agents.Teams;
 /// The remedies this machine has agreed may run, from its own configuration.
 /// Never read from a team's directory, which its own nodes write in.
 /// </param>
+/// <param name="Criteria">
+/// What this run is judged on, each one checkable, or null for a run with
+/// nothing but its goal.
+/// </param>
+/// <remarks>
+/// <para>
+/// <paramref name="Goal"/> is the directive and <paramref name="Criteria"/> is
+/// how anybody tells whether it was met. Without them a run ends when the lead
+/// says done and nothing argues, which is fine while somebody is watching and
+/// is the whole of the check on an autonomous run - the case where nobody is.
+/// </para>
+/// <para>
+/// With them, the lead's brief says it owes a verdict on each, every node is
+/// told what the run is being judged on, and a done that leaves one unmet or
+/// unanswered is sent back. None of that is new machinery: it is the rule that
+/// already governs a worker's report, applied at the level of the goal.
+/// </para>
+/// </remarks>
 /// <param name="Remediation">
 /// What this machine says a remediator may do with each kind of task, by kind.
 /// Passed in rather than read here, for the same reason the outward list is:
@@ -56,7 +74,8 @@ public sealed record TeamRunRequest(
     string? Model = null,
     IReadOnlyList<string>? OutwardAllowed = null,
     IReadOnlyDictionary<string, string>? Remediation = null,
-    IReadOnlyList<Loadout.Models.Configuration.TrustedRemedy>? TrustedRemedies = null);
+    IReadOnlyList<Loadout.Models.Configuration.TrustedRemedy>? TrustedRemedies = null,
+    IReadOnlyList<string>? Criteria = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -405,10 +424,25 @@ public sealed class TeamRunner : ITeamRunner
         // creates nothing, because that is what --dry-run means.
         var teamDirectory = TeamDirectory(team.Name);
 
+        // What the lead is held to. With criteria it is the criteria, said
+        // plainly enough that a lead reading its own brief knows the report it
+        // owes - and ReportCheck then refuses a done that does not give it,
+        // which is what makes this more than a sentence.
+        var criteria = request.Criteria is { Count: > 0 } asked ? asked : null;
+
         var leadBrief = MakeBrief(
             runId, team.Lead, parent: null, leadNode, leadRole, request.Goal, inputs: [],
-            doneWhen: ["the goal is met, with the evidence cited from your nodes' reports"],
-            team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory);
+            doneWhen: criteria is null
+                ? ["the goal is met, with the evidence cited from your nodes' reports"]
+                :
+                [
+                    "every criterion below is met, with the evidence cited from your nodes' reports",
+                    "your final report carries one coverage entry per criterion, each with a verdict "
+                        + "of met, unmet or not-attempted, and every met saying in 'because' which "
+                        + "node, report and evidence shows it",
+                ],
+            team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory,
+            criteria);
 
         if (request.DryRun)
         {
@@ -693,6 +727,44 @@ public sealed class TeamRunner : ITeamRunner
                 if (report.Status is ReportStatus.Done or ReportStatus.Failed
                     || (report.Status == ReportStatus.Blocked && !hasRequests))
                 {
+                    /*
+                        A done the lead could not account for is not a done.
+
+                        ReportCheck already refused this twice - a returned
+                        report goes back once and the second answer is the
+                        node's, whatever it says. That contract is right for a
+                        worker and leaves a hole at the top of a run: a lead
+                        that never fills in coverage is asked twice, and the
+                        run then ends recording "done" while the journal it
+                        wrote says two of three criteria were met.
+
+                        So the run does not argue further and does not spend
+                        another round. It records what happened. An autonomous
+                        run nobody watched must not be readable afterwards as
+                        having met a goal it did not, and "ended: done" beside
+                        "2 of 3 met" is exactly that.
+                    */
+                    if (report.Status == ReportStatus.Done
+                        && Outstanding(criteria, report) is { Count: > 0 } missed)
+                    {
+                        await journal.WriteAsync(
+                            "goal.unmet",
+                            team.Lead,
+                            new { criteria = missed },
+                            ct).ConfigureAwait(false);
+
+                        console.Note(
+                            $"The lead reported done without accounting for {missed.Count} of "
+                            + $"{criteria!.Count} criteria: {string.Join("; ", missed)}");
+
+                        ended = missed.Count == criteria.Count
+                            ? "the lead reported done without accounting for the goal"
+                            : $"the lead reported done with {missed.Count} of {criteria.Count} "
+                              + "criteria unmet";
+
+                        break;
+                    }
+
                     ended = Spell(report.Status);
                     break;
                 }
@@ -792,7 +864,7 @@ public sealed class TeamRunner : ITeamRunner
                     var role = request.Specialists.Find(node.Role)!;
                     var brief = MakeBrief(
                         runId, ask.Node, team.Lead, node, role, task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
-                        request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory);
+                        request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory, criteria);
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
@@ -1714,6 +1786,20 @@ public sealed class TeamRunner : ITeamRunner
                 status = Spell(report.Status),
                 outcome = verdict.Outcome.ToString().ToLowerInvariant(),
                 verdict.Reasons,
+
+                // Written on every check, not only the accepted one. A lead
+                // that was sent back is the interesting case: the journal is
+                // then the only record of which criterion it could not answer,
+                // and without it a returned report reads as "something was
+                // wrong" with no way to see what.
+                coverage = report.Coverage is { Count: > 0 }
+                    ? report.Coverage.Select(one => new
+                    {
+                        one.Criterion,
+                        verdict = one.Verdict.ToString().ToLowerInvariant(),
+                        one.Because,
+                    })
+                    : null,
             }, ct).ConfigureAwait(false);
 
             switch (verdict.Outcome)
@@ -2283,7 +2369,8 @@ public sealed class TeamRunner : ITeamRunner
         string autonomy,
         IReadOnlyList<string> allowed,
         Func<string, SpecialistDocument?> specialistsOf,
-        string? teamDirectory)
+        string? teamDirectory,
+        IReadOnlyList<string>? criteria = null)
     {
         var definition = role.Role;
 
@@ -2332,7 +2419,51 @@ public sealed class TeamRunner : ITeamRunner
             // inside one that exists to write a report about it.
             team.Goal is { Length: > 0 } purpose ? purpose : null,
             team.Declarations.Count > 0 ? team.Declarations : null,
-            teamDirectory);
+            teamDirectory,
+
+            // The run's criteria reach every node, not only the lead. A worker
+            // given a narrow job still needs to know what the run is being
+            // judged on, for the same reason it is told the team's standing
+            // goal. Answering for them is the lead's alone.
+            criteria is { Count: > 0 } ? criteria : null);
+    }
+
+    /// <summary>
+    /// The run's criteria the lead has not reported as met, in the run's own
+    /// words.
+    /// </summary>
+    /// <remarks>
+    /// Matched the way <see cref="ReportCheck"/> matches them, trimmed and
+    /// past case, because the two have to agree about what counts as answered.
+    /// A run given no criteria has nothing outstanding, which is what keeps
+    /// every run written before they existed ending exactly as it did.
+    /// </remarks>
+    internal static IReadOnlyList<string> Outstanding(
+        IReadOnlyList<string>? criteria,
+        Report report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+
+        if (criteria is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        var said = new Dictionary<string, CoverageVerdict>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var one in report.Coverage ?? [])
+        {
+            // First answer wins, exactly as the check does, so the two cannot
+            // disagree about a criterion a lead answered twice.
+            said.TryAdd(one.Criterion?.Trim() ?? string.Empty, one.Verdict);
+        }
+
+        return
+        [
+            .. criteria.Where(criterion =>
+                !said.TryGetValue(criterion.Trim(), out var verdict)
+                || verdict != CoverageVerdict.Met),
+        ];
     }
 
     /// <summary>"implementer/2" is an instance of "implementer"; anything else is itself.</summary>

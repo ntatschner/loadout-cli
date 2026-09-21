@@ -155,6 +155,31 @@ Per node: `role` (a specialist of `kind: role`), `agent`, `model`, `delegates`,
 `worktree`, `parallel`, and `parameters` for a role that takes them. The lead is
 the node that reports to you and must be one of the nodes.
 
+`loadout team new quick-review` writes that file for you and says where it is;
+`loadout team edit quick-review` opens it. Neither does anything you could not
+do with a text editor, which is the point — the file is the thing, and a command
+that asked you twenty questions and assembled one would be a second way of
+describing a team that has to be kept in step with the parser that reads it.
+
+Copying is nearly always the better start:
+
+```
+loadout team new docs-crew-mine --from docs-crew
+```
+
+That copies the file rather than regenerating it, so the comments, the key order
+and the inline maps survive. A template — `product-company` is the one that
+ships — exists only to be copied, and the copy is not a template, so you can run
+it.
+
+A team you write is available to every project. `--for-this-project` puts it
+under one instead.
+
+`loadout team remove <team>` deletes one you wrote. The ones that ship and the
+ones from a pack are refused, and the refusal names the copy that gets you past
+it: editing a file inside a pack checkout is what the next `pack update`
+overwrites.
+
 `loadout team show quick-review` checks it. A team naming a role that does not
 exist, a lead that is not a node, or a gate nobody can decide is a finding
 there, in a sentence saying what to change — rather than a failure half way
@@ -175,6 +200,80 @@ yourself. `team list` says where each one came from.
 A pack carrying teams goes through the same gate as one carrying specialists: it
 is pinned to a commit, and somebody on this machine approves that commit having
 read it. See [Specialists and skills](specialists.md).
+
+## Saying when it is done
+
+A run takes a goal. Without anything more, it ends when the lead reports `done`
+— and nothing argues. That is fine while you are watching. It is also the whole
+of the check on an **autonomous** run, which is the case where nobody is: a lead
+can miss a whole area of the goal, report done, and the run ends reporting
+success.
+
+So a run can carry criteria:
+
+```sh
+loadout team run docs-crew "make the docs true" \
+  --done-when "every command in docs/commands.md exists" \
+  --done-when "the suite passes on a clean checkout" \
+  --done-when "the changelog names the change"
+```
+
+Repeated rather than one comma-separated string, because a criterion is a
+sentence and sentences contain commas.
+
+What that changes:
+
+- **Every node is told them**, for the same reason every node is told the team's
+  standing goal. A worker given a narrow job still needs to know what the run is
+  being judged on.
+- **The lead's brief says it owes a verdict on each**, and its final report
+  carries one entry per criterion: `met`, `unmet` or `not-attempted`, and every
+  `met` saying in `because` which node, which report and which evidence shows it.
+- **A `done` that leaves one unmet or unanswered is sent back to the lead**, with
+  a reason naming the criterion. This is not new machinery: it is the rule that
+  already governs a worker's report — `done` needs evidence that passed —
+  applied at the level of the goal.
+
+`unmet` and `not-attempted` are separate on purpose. An unmet criterion was
+tried and needs a different approach; one never attempted means a whole area of
+the goal was missed, and that is the thing a run of several rounds loses
+quietly.
+
+`team status` then shows where each one got to:
+
+```
+  Done when 2 of 3 met
+  + met           every command in docs/commands.md exists
+      docs-auditor/1 checked all 159
+  + met           the suite passes
+      verifier/1 reported 2843 passing
+  ! not attempted the changelog mentions it
+```
+
+The dashboard's run form takes them one per line, and a run open in the detail
+pane shows the same account.
+
+**A run given no criteria behaves exactly as it did before**, which is what
+keeps every team file and every script already written working. The trade is
+plain: no criteria means "done" is the lead's word for it.
+
+### What is not checked
+
+- **Whether the criteria cover the goal.** They are your list. Nothing reads the
+  goal and tells you a criterion is missing.
+- **Whether the evidence is true.** `because` is a sentence the lead wrote. What
+  is enforced is that a claim of `met` cites something, not that the something
+  says what the lead says it says.
+- **`stop_when` in a team file.** It is parsed, printed by `team show`, and read
+  by nothing that runs. `goal_met`, `budget_spent` and `no_progress_2_rounds`
+  are hard-coded in the loop whatever a team file lists.
+
+A lead that will not account for the goal is asked twice — a returned report
+goes back once, and the second answer is the node's whatever it says — and then
+the run stops arguing. It does not record a done it cannot support: the run ends
+saying how many criteria were left unmet, and the journal carries a `goal.unmet`
+line naming them. An autonomous run nobody watched must not read afterwards as
+having met a goal it did not.
 
 ## Which tree it works on
 
@@ -518,6 +617,40 @@ there is one account of what happened rather than three that can disagree.
 
 `loadout team runs` lists what has run; `loadout team log` prints everything one
 wrote down, and `--follow` keeps reading as it writes.
+
+### Clearing out old runs
+
+Every run keeps a directory of what it did — its journal, the briefs, the
+reports and one stream per node, under a megabyte for a four-minute run. Disk is
+not the reason to clear them; the listing is. `team runs` is the first place
+anybody looks, and until now it showed every experiment anyone had ever started.
+
+```
+loadout team runs remove 20260917-1116-ed59
+loadout team runs prune --keep 20 --older-than 30d
+```
+
+`remove` takes the runs you name. `prune` takes the old ones, and will not run
+without being told what to keep: `--keep <count>`, `--older-than <age>`, or
+both. Both together means *older than that, but never below the newest count* —
+the intersection, which is what somebody typing both means and the more cautious
+of the two readings.
+
+Three things it will not take:
+
+- **A run that has not finished.** Its directory is not only a record: a gate is
+  answered by a file appearing in it, so deleting one under a live run leaves
+  processes waiting on answers that can no longer arrive. `remove` refuses one
+  unless you pass `--force`; `prune` never takes one at all.
+- **A run that left a branch nothing merged.** The branch is still in Git and
+  outlives the run, but the journal is the only thing on the machine that says
+  which run produced it. `--include-unmerged` takes them anyway.
+- **Anything at all, under `--dry-run`**, which lists what it would take and
+  says why it is keeping the rest.
+
+Nothing here touches Git. A run's branches and its working trees outlive it, and
+a command called "forget the notes about it" that also deleted the work would be
+the worst kind of surprise — so it names what it is leaving behind instead.
 
 `loadout team log --events` prints only what happened. A node writes a line for
 every tool call it makes and every sentence it says about itself, and on one
@@ -1585,28 +1718,57 @@ urlacl` line to run rather than leaving somebody to conclude the feature does
 not work. Loadout never runs it: adding a URL reservation changes the machine,
 and that is yours to do.
 
-### Starting one from the page
+### Running and making a team from the page
 
-**Start a team** on the dashboard takes the same things `team run` does: a
-team, what the run is for, a project, how many rounds, and an autonomy. It
-asks once, naming the team and the goal, before anything starts — the token
+Two forms, and the difference between them is the whole point of there being
+two.
+
+**Run a team** takes the same things `team run` does: a team, what the run is
+for, a project, how many rounds, and an autonomy. The team and the project are
+lists of what actually exists on this machine, read from the same catalogue
+`team list` reads. Picking one shows what it is, how many nodes it has and
+anything wrong with it, because eight names in a list tell you nothing about
+which to pick. A template is offered as something to copy and not as something
+to run, which is what it is.
+
+The project is required here, though the command line lets it default. A
+terminal defaults to the directory you are standing in, which is usually the
+repository you meant. A dashboard has no such directory: the daemon's is
+wherever it happened to be started.
+
+It asks once, naming the team and the goal, before anything starts — the token
 got somebody to the page rather than to this, and this one spends money and
 edits a repository.
 
-Nothing on the page knows what a team is. Whether that team exists, whether
-that project is registered and whether that autonomy is a word at all are
-questions the command line already answers, and the page shows whatever it
-says. The team and project boxes suggest names this machine has run before,
-which is a convenience rather than a list to choose from.
+**Make a team…** and **Run one on a schedule…** each open a sheet of their own
+rather than another fold under the runs list. They are native `<dialog>`s, so
+the browser traps focus inside them, returns it to the button that opened them,
+closes on Escape and marks them modal to a screen reader.
 
-It answers as soon as the run is under way rather than when it finishes — a
-run takes twenty minutes on a good day and a browser holding a request open
-that long has already given up. The run appears in the list within a few
-seconds.
+Making a team writes one and tells you where it is, and is the other half of the
+same story as running one. Scheduling asks for a name, a team, a goal, a project
+and one of three ways to say when — a time of day, an interval, or something to
+watch for. Manual is not offered, because the command refuses it: manual means a
+person at every step and nobody is watching at 23:00.
 
-**Only the daemon's dashboard can start one.** `team dashboard` on its own
-serves the page and nothing that runs commands, and says so plainly rather
-than failing quietly.
+A schedule made here appears under **Waiting**, which is where schedules were
+already listed and is now where you stop one. **Nothing fires unless the daemon
+is running**, which the sheet says rather than leaving you to find out at the
+appointed time.
+
+Everything that decides whether a run can begin — the team existing, the project
+resolving, the tree being a repository — is settled in the first seconds, so the
+page waits that long before saying a run has started, and shows the refusal when
+there is one. It does not wait for the run itself: that takes twenty minutes on
+a good day, and a browser holding a request open that long has already given
+up.
+
+**Forget it**, on a run that has ended, runs `team runs remove` against it. A
+run still going does not offer it, and the command refuses one anyway.
+
+A watch-only dashboard draws none of this. `team dashboard --watch-only` serves
+a page that cannot change anything, is told so, and puts the controls and both
+forms away rather than leaving buttons that do nothing.
 
 ### Answering, steering and stopping
 

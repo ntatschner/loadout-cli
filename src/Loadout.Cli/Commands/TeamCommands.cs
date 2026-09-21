@@ -419,7 +419,13 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
         }
 
         output.WriteBlankLine();
-        output.WriteLine("[dim]One in full with:[/] loadout team status [<run>]");
+
+        // The brackets are doubled because Spectre reads a single pair as a
+        // style, and "[<run>]" is not one: every listing with a run in it ended
+        // by printing "Could not find color or style '<run>'" instead of the
+        // line telling you what to type next.
+        output.WriteLine("[dim]One in full with:[/] loadout team status [[<run>]]");
+        output.WriteLine("[dim]Clear out the old ones with:[/] loadout team runs prune --keep 20");
 
         return Task.FromResult(CommandOutput.Success());
     }
@@ -524,6 +530,12 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 }),
                 run.Branches,
                 run.Merged,
+                coverage = run.Coverage.Select(one => new
+                {
+                    one.Criterion,
+                    one.Verdict,
+                    one.Because,
+                }),
                 delivered = behind.Delivered.Select(one => new
                 {
                     one.Node,
@@ -587,6 +599,31 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         if (run.Goal is { Length: > 0 })
         {
             output.WriteLine($"  {Markup.Escape(run.Goal)}");
+        }
+
+        // What the goal was broken into, and where each part got to. Above the
+        // nodes rather than below, because "is this run done" is answered here
+        // and "what is each node up to" is the question after it.
+        if (run.Coverage.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine(
+                $"  [bold]Done when[/] [dim]{run.Coverage.Count(one => one.Met)} of "
+                + $"{run.Coverage.Count} met[/]");
+
+            foreach (var one in run.Coverage)
+            {
+                output.WriteLine(
+                    $"  {Verdict(one.Verdict)} {Markup.Escape(one.Criterion)}");
+
+                // The evidence, under the criterion it is for. A met with
+                // nothing behind it never reaches here - the report is sent
+                // back - so anything shown has something to show.
+                if (one.Because is { Length: > 0 } because)
+                {
+                    output.WriteLine($"      [dim]{Markup.Escape(because)}[/]");
+                }
+            }
         }
 
         if (run.AtMostRemaining is { } left)
@@ -758,6 +795,23 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     /// which six are the word, so a column of states lined up only for
     /// whichever ones happened to carry the same length of markup.
     /// </remarks>
+    /// <summary>
+    /// One criterion's verdict, as a word and a mark.
+    /// </summary>
+    /// <remarks>
+    /// The word as well as the colour, because a run somebody reads down a
+    /// pipe, in a screen reader, or on a terminal with no colour has to be able
+    /// to tell a met criterion from one nobody touched - which is the same rule
+    /// the whole of this output follows.
+    /// </remarks>
+    private static string Verdict(string verdict) => verdict switch
+    {
+        "met" => "[green]+ met          [/]",
+        "unmet" => "[yellow]- unmet        [/]",
+        "not-attempted" => "[yellow]! not attempted[/]",
+        _ => $"[dim]? {Markup.Escape(verdict).PadRight(13)}[/]",
+    };
+
     private static string State(string state)
     {
         var word = state switch
@@ -1207,6 +1261,26 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         [CommandOption("--model <MODEL>")]
         [Description("A model for every node, overriding the team's and the project's. Written as the agent spells it.")]
         public string? Model { get; init; }
+
+        /// <summary>
+        /// What the run is judged on, one per use of the option.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Without these a run ends when the lead says done and nothing argues.
+        /// That is fine while somebody is watching, and it is the whole of the
+        /// check on an autonomous run, which is the case where nobody is.
+        /// </para>
+        /// <para>
+        /// Repeated rather than one comma-separated string, because a
+        /// criterion is a sentence and sentences contain commas.
+        /// </para>
+        /// </remarks>
+        [CommandOption("--done-when <CRITERION>")]
+        [Description(
+            "Something that must be true for the run to be done. Repeat it for each. "
+            + "The lead must report a verdict and evidence for every one.")]
+        public string[] DoneWhen { get; init; } = [];
     }
 
     /// <summary>
@@ -1262,7 +1336,14 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
 
             // Never read from the team's directory, which its own nodes write
             // in. Trust lives on this machine or it is not trust.
-            TrustedRemedies: machine?.Teams.TrustedRemedies);
+            TrustedRemedies: machine?.Teams.TrustedRemedies,
+
+            // Blank ones dropped rather than passed through: an empty criterion
+            // is one the lead can never report a verdict on, so it would refuse
+            // every done for ever.
+            Criteria: [.. settings.DoneWhen
+                .Select(one => one.Trim())
+                .Where(one => one.Length > 0)]);
     }
 
     /// <inheritdoc />
