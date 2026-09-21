@@ -139,15 +139,31 @@ public sealed class SelfServerConfigTests : IDisposable
     /// has no command for.
     /// </para>
     /// </remarks>
+    /// <remarks>
+    /// The host is named and the path around it is built with this platform's
+    /// own separator. The first version hard-coded a Windows path, passed here
+    /// and failed on Ubuntu and macOS: a backslash is an ordinary character in
+    /// a Unix path, so GetFileNameWithoutExtension finds no separator, returns
+    /// the whole string, and it is not "dotnet".
+    ///
+    /// The production code was right either way - it only ever sees a path its
+    /// own operating system gave it - so the test was the thing that depended on
+    /// which machine ran it. Built this way the host case runs everywhere rather
+    /// than being skipped on two platforms, which is worth more than marking it
+    /// Windows-only.
+    /// </remarks>
     [Theory]
-    [InlineData(@"C:\Program Files\dotnet\dotnet.exe")]
-    [InlineData("/usr/bin/dotnet")]
-    [InlineData(@"C:\Program Files\dotnet\DOTNET.EXE")]
+    [InlineData("dotnet")]
+    [InlineData("dotnet.exe")]
+    [InlineData("DOTNET.EXE")]
     public void Under_the_dotnet_host_the_assembly_comes_before_the_launchers_own_arguments(
-        string host)
+        string hostName)
     {
+        var host = Path.Combine(Path.GetTempPath(), "dotnet-home", hostName);
+        var appDirectory = Path.Combine(Path.GetTempPath(), "loadout-app");
+
         var parts = Loadout.Core.Agents.LauncherInvocation.From(
-            host, "loadout", @"C:\app", _ => true);
+            host, "loadout", appDirectory, _ => true);
 
         parts.Should().NotBeNull("the host case is recoverable, not a reason to give up");
 
@@ -156,17 +172,19 @@ public sealed class SelfServerConfigTests : IDisposable
         command.Should().Be(host);
 
         prefix.Should().ContainSingle()
-            .Which.Should().Be(Path.Combine(@"C:\app", "loadout.dll"),
+            .Which.Should().Be(Path.Combine(appDirectory, "loadout.dll"),
                 "dotnet has no 'mcp' command, so it has to be given something to run");
     }
 
     [Fact]
     public void A_shipped_launcher_is_its_own_command_with_nothing_in_front()
     {
-        var parts = Loadout.Core.Agents.LauncherInvocation.From(
-            @"C:\Program Files\loadout\loadout.exe", "loadout", @"C:\app", _ => true);
+        var launcher = Path.Combine(Path.GetTempPath(), "loadout-app", "loadout.exe");
 
-        parts!.Value.Command.Should().Be(@"C:\Program Files\loadout\loadout.exe");
+        var parts = Loadout.Core.Agents.LauncherInvocation.From(
+            launcher, "loadout", Path.GetTempPath(), _ => true);
+
+        parts!.Value.Command.Should().Be(launcher);
         parts.Value.Prefix.Should().BeEmpty();
     }
 
@@ -176,18 +194,18 @@ public sealed class SelfServerConfigTests : IDisposable
         // Declining is right here. A server entry naming a path that is not
         // there fails the agent's own startup rather than the launcher's, which
         // is a confusing place to find out.
-        Loadout.Core.Agents.LauncherInvocation.From(
-            "/usr/bin/dotnet", "loadout", "/app", _ => false)
+        var host = Path.Combine(Path.GetTempPath(), "dotnet-home", "dotnet");
+
+        Loadout.Core.Agents.LauncherInvocation.From(host, "loadout", Path.GetTempPath(), _ => false)
             .Should().BeNull();
 
-        Loadout.Core.Agents.LauncherInvocation.From(
-            "/usr/bin/dotnet", null, "/app", _ => true)
+        Loadout.Core.Agents.LauncherInvocation.From(host, null, Path.GetTempPath(), _ => true)
             .Should().BeNull();
     }
 
     [Fact]
     public void Nothing_running_is_nothing_declared() =>
-        Loadout.Core.Agents.LauncherInvocation.From(null, "loadout", "/app", _ => true)
+        Loadout.Core.Agents.LauncherInvocation.From(null, "loadout", Path.GetTempPath(), _ => true)
             .Should().BeNull();
 
     /// <summary>
