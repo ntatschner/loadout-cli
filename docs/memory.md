@@ -16,6 +16,70 @@ Only the index reaches the compiled context. Topics stay on disk with their
 paths listed, because a project accumulates memory for years, and inlining all
 of it would make every session pay for every fact anyone ever wrote down.
 
+## Telling a session when to look
+
+An index nobody opens is a cost with no return, and for months that is what it
+was: across one project's whole transcript history, twenty-four titles sitting
+in every context produced a single lookup in twelve thousand turns. The line
+above them said "read the ones that bear on the task", which leaves a session
+to notice mid-work that one of twenty-four titles might have applied.
+
+The index now names the occasions instead:
+
+> **Check this before you investigate.** Call `loadout_recall`, or read the
+> file, before diagnosing a failure, before an unfamiliar error, before
+> anything about how this project builds, tests, releases or is configured, and
+> before recording a fact of your own so an existing topic is extended rather
+> than contradicted. The store is small and a miss costs one call.
+
+The `loadout_recall` tool description is written the same way — around when to
+call it rather than around what it does — because a tool nothing calls is a tool
+that isn't there.
+
+The obvious alternative was tried and removed. A hook that searched memory on
+every prompt and put the matches in front of the session unasked spoke on 56%
+of 322 real prompts while only 18% of them had anything relevant to say, and
+about a third of what it offered was a topically adjacent claim — which is the
+kind of irrelevant context that costs most. Recall was already near its ceiling
+at 91%, so the ranking was never the thing to tune. The index stays and the
+guessing goes.
+
+The repository stays authoritative. Where memory and the code disagree, the
+code is right and the memory needs correcting.
+
+## Finding the one that answers a question
+
+```bash
+loadout memory find "why did the release not publish to winget"
+```
+
+Same ranking the agent's `loadout_recall` uses, so what you see at the prompt is
+what a session gets. It matches words rather than meanings and says so when it
+finds nothing, which is the difference between "nobody wrote this down" and
+"somebody wrote it down in other words".
+
+Two rules do most of the work, and both exist because a plain count of matching
+terms gets this wrong in the same way twice:
+
+- **A long topic can't accumulate its way to the top.** Repetition saturates,
+  scaled by how much the topic says relative to the average, so a topic of
+  ordinary length scores exactly as it did and one twice that length has to say
+  a term more often to be worth the same. Asked why a release didn't publish to
+  winget, the store used to answer with its longest topic — an account of a
+  stalling install check that happens to say "release", "publish" and "winget"
+  somewhere inside a long account of something else.
+- **Mentioning a subject is not being about it.** A name and a description are
+  curated and say what a topic *is*; prose repeats a word for reasons that have
+  nothing to do with its subject. Prose is saturated before it is weighed rather
+  than after, so said once a term is worth most of a mention and said eight
+  times barely more.
+
+None of that settles retrieval, and the docs shouldn't pretend otherwise. What
+guards it is a fixture of questions somebody actually asked, each paired with
+the topic that answers it, run as a test against frozen copies of real topics —
+a capability net for the cases past investigations turned on, not a measurement
+of how often the ranking is right.
+
 ## Who a fact is true for
 
 A store with one scope fills up with facts that aren't about the project.
@@ -156,6 +220,31 @@ workspace is a Git repository, so importing a token would publish it on the next
 push. The original is copied rather than moved, so nothing is lost if the import
 is wrong; removing the old copy is left to you.
 
+### When the two copies disagree
+
+A name in both stores used to end the question: the topic was called "already in
+the workspace" and the run finished with "Nothing left to bring across", which
+reads as an all clear. Two stores keeping the same topic names could therefore
+disagree indefinitely. That wasn't hypothetical — one copy recorded the settled
+cause of a suite failure while its twin still credited a fix that had been tried
+and abandoned, and a session handed the stale one had no way to tell which it
+was holding.
+
+Topics are now compared on what they say — description and facts — rather than
+on their bytes, because the frontmatter carries a modified stamp that changes on
+every write and would otherwise report every topic as drifted.
+
+```text
+  skip    windows-install-check-stalls  differs from the workspace copy
+
+2 topic(s) say something different here than in the workspace.
+Nothing was overwritten. Compare each and settle which copy is right.
+```
+
+Named and left alone. Which copy is right is a judgement, not a merge, so the
+import reports it, `--json` carries the same list under `drifted`, and nothing
+is written either way.
+
 Repositories organised this way also arrive with their instructions already
 split into `.claude/rules/`. `loadout migrate` moves those to
 `projects/<slug>/rules/` rather than into the agent's own directory: which
@@ -176,6 +265,17 @@ Two checks keep memory worth loading:
   tense forever; a fact dated to the day it was written ("the highest migration
   is 0052") misleads within weeks. `loadout memory audit` reports those along
   with duplicates, oversize topics, stale entries and index rot.
+
+  Two of those classes are warnings rather than asides, and only two: a fact
+  pinned to the moment it was written, and a fact already past its own date.
+  They're the ones that turn from true into misleading with nothing in the store
+  to catch them, so they hold up the verdict instead of sitting under a word
+  that says the store is fine — which is how a memory claiming a submission was
+  blocked on a signature it had already received stayed wrong for two days
+  behind a `HEALTHY`. Everything else — weak phrasing, a vague description, a
+  dead cross-reference — stays information, because an audit that demands
+  attention for every imperfect sentence is one people stop reading, and that
+  costs more than the sentences do.
 - **A second topic on the same ground is stopped, and the first one named.** This
   is how memory comes to contradict itself: nothing is overwritten, both are
   indexed, and a later session gets two answers with nothing to choose between

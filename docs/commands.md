@@ -176,6 +176,22 @@ Neither storage format is a published contract, so both readers are best-effort
 by design: a transcript nobody can make sense of costs you that one session,
 never the listing.
 
+What a session *isn't* is anything the agent spawned inside one. Claude Code
+grew a folder of subagent transcripts beside each session's own, and reading
+every `.jsonl` under a project folder turned all of them into resumable rows:
+39 subagent files against 13 real sessions here, a picker full of research
+prompts, and the real sessions pushed off the end by the limit. The listing now
+reads each project folder's own files and goes no deeper, with a name guard
+beside that, because the layout has already moved once and nothing inside such a
+file marks it out. The limit is also applied after the read rather than before,
+so it's spent on sessions rather than on whatever happened to be newest.
+
+Rows are escaped before they're drawn, too. A session is named after the first
+thing said in it, and whoever said it was writing prose — a title opening with
+`[SYSTEM NOTIFICATION]` was read as a style tag and took the whole picker down
+with it, which looks like Resume crashing rather than like one row being
+unprintable.
+
 ## Launches, which are not sessions
 
 `loadout sessions` reads the transcripts the agents write and says what a
@@ -391,6 +407,14 @@ line per topic — and a session deciding from that alone either opens six files
 or opens none. It searches inside them. It matches words rather than meanings,
 which it says when it finds nothing, so an agent doesn't conclude a fact is
 unrecorded when it is recorded in other words.
+
+Its description is written around *when* to call it rather than around what it
+does — before diagnosing a failure, before an unfamiliar error, before anything
+about how the project builds, tests, releases or is configured, and before
+recording a fact of its own. The accurate mechanical description it used to
+carry was acted on once in twelve thousand turns, and a tool nothing calls is a
+tool that isn't there. The memory index in the compiled context now says the
+same thing in the same words; see [Memory](memory.md#telling-a-session-when-to-look).
 
 `loadout_locate` answers the question an agent asks most often and most
 expensively — where is this thing declared — with one line each, from a symbol

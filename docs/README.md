@@ -5,6 +5,8 @@ is the detail behind it.
 
 ## Getting going
 
+- [Getting started](getting-started.md) — the first hour with Loadout, in order, and the week after
+- [Working with a coding agent](agentic-coding.md) — the basics and the habits, by how long you have been at it
 - [What you get](features.md) — every part of Loadout, with the commands
 - [Recipes](recipes.md) — worked answers to the common jobs, with the commands to run
 - [Installing](installing.md) — packages, verification, building your own, updating
