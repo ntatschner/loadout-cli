@@ -118,4 +118,183 @@ public sealed class SelfServerConfigTests : IDisposable
         files.Should().BeEmpty();
         warnings.Should().ContainSingle().Which.Should().Contain("its own path");
     }
+
+    /// <summary>
+    /// The development host, driven rather than waited for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the branch that was wrong, and a test cannot reach it by asking
+    /// what is running: under <c>dotnet test</c> the process is
+    /// <c>testhost.exe</c>, so anything calling the real resolver takes the
+    /// shipped-launcher branch and passes without touching the host case at
+    /// all. The first test written for this fix did exactly that, and a probe
+    /// printing what it had resolved was what caught it.
+    /// </para>
+    /// <para>
+    /// So the decision is told what is running. What it must produce is a
+    /// command that can be executed with those arguments: the host, then the
+    /// assembly the host is to run, then the launcher's own words. The shape
+    /// that shipped was the host followed straight by <c>mcp</c>, which dotnet
+    /// has no command for.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData(@"C:\Program Files\dotnet\dotnet.exe")]
+    [InlineData("/usr/bin/dotnet")]
+    [InlineData(@"C:\Program Files\dotnet\DOTNET.EXE")]
+    public void Under_the_dotnet_host_the_assembly_comes_before_the_launchers_own_arguments(
+        string host)
+    {
+        var parts = Loadout.Core.Agents.LauncherInvocation.From(
+            host, "loadout", @"C:\app", _ => true);
+
+        parts.Should().NotBeNull("the host case is recoverable, not a reason to give up");
+
+        var (command, prefix) = parts!.Value;
+
+        command.Should().Be(host);
+
+        prefix.Should().ContainSingle()
+            .Which.Should().Be(Path.Combine(@"C:\app", "loadout.dll"),
+                "dotnet has no 'mcp' command, so it has to be given something to run");
+    }
+
+    [Fact]
+    public void A_shipped_launcher_is_its_own_command_with_nothing_in_front()
+    {
+        var parts = Loadout.Core.Agents.LauncherInvocation.From(
+            @"C:\Program Files\loadout\loadout.exe", "loadout", @"C:\app", _ => true);
+
+        parts!.Value.Command.Should().Be(@"C:\Program Files\loadout\loadout.exe");
+        parts.Value.Prefix.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_host_case_declines_when_there_is_no_assembly_to_run()
+    {
+        // Declining is right here. A server entry naming a path that is not
+        // there fails the agent's own startup rather than the launcher's, which
+        // is a confusing place to find out.
+        Loadout.Core.Agents.LauncherInvocation.From(
+            "/usr/bin/dotnet", "loadout", "/app", _ => false)
+            .Should().BeNull();
+
+        Loadout.Core.Agents.LauncherInvocation.From(
+            "/usr/bin/dotnet", null, "/app", _ => true)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void Nothing_running_is_nothing_declared() =>
+        Loadout.Core.Agents.LauncherInvocation.From(null, "loadout", "/app", _ => true)
+            .Should().BeNull();
+
+    /// <summary>
+    /// A development build declares something that can actually be run.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The shipped launcher is one executable and its process path is the whole
+    /// answer. A development build is <c>dotnet loadout.dll</c>, whose process
+    /// path is <c>dotnet.exe</c> — and <c>dotnet.exe</c> exists, so the guard
+    /// that declines when the launcher cannot find itself passed happily and
+    /// wrote a server whose command was the host and whose first argument was
+    /// <c>mcp</c>. There is no such dotnet command.
+    /// </para>
+    /// <para>
+    /// The agent started; the server did not. Every team run from a development
+    /// build lost the tool its lead answers permission questions with, and the
+    /// lead died within seconds reporting
+    /// <c>mcp__loadout__loadout_permission not found</c> — which reads as a
+    /// broken permission harness rather than as a path, and was diagnosed as
+    /// three other things first.
+    /// </para>
+    /// <para>
+    /// Asserted through <see cref="Loadout.Core.Agents.LauncherInvocation"/>
+    /// rather than by running under the host, because a test cannot choose what
+    /// is running it. What is checked is that both halves of that type agree:
+    /// whatever the shell form puts in its quoted string, the split form puts
+    /// in command and arguments, so a caller declaring a process and a caller
+    /// writing a shell line cannot describe different launchers.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void The_shell_form_and_the_split_form_describe_the_same_launcher()
+    {
+        var parts = Loadout.Core.Agents.LauncherInvocation.Parts();
+        var line = Loadout.Core.Agents.LauncherInvocation.Current();
+
+        if (parts is null)
+        {
+            line.Should().BeNull("neither form may claim to know what the other could not work out");
+
+            return;
+        }
+
+        var (command, prefix) = parts.Value;
+
+        File.Exists(command).Should().BeTrue(
+            "a server entry pointing at a path that is not there fails the agent's own startup");
+
+        // Every part of the split form, quoted, is the shell form. Built the
+        // same way round as the type builds it, so the assertion is that the
+        // parts are the same parts rather than that the string was formatted.
+        var rebuilt = string.Join(' ', new[] { command }.Concat(prefix).Select(one => "\"" + one + "\""));
+
+        line.Should().Be(rebuilt);
+
+        // And the part that was wrong: under the host there is a prefix, and it
+        // is the assembly the host has to be given.
+        if (Path.GetFileNameWithoutExtension(command).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            prefix.Should().ContainSingle()
+                .Which.Should().EndWith(".dll", "the host needs something to run");
+        }
+        else
+        {
+            prefix.Should().BeEmpty("a shipped launcher is its own command");
+        }
+    }
+
+    [Fact]
+    public void The_declared_arguments_start_with_whatever_has_to_come_first()
+    {
+        var warnings = new List<string>();
+
+        // No executablePath, so it works out how it is being started - which is
+        // the path that was broken, and the one no test took.
+        var files = SelfServerConfig.Write(true, "loadout-cli", _runtime, warnings);
+
+        if (files.Count == 0)
+        {
+            warnings.Should().ContainSingle()
+                .Which.Should().Contain("could not work out its own path");
+
+            return;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(files[0]));
+
+        var server = document.RootElement.GetProperty("mcpServers").GetProperty("loadout");
+        var command = server.GetProperty("command").GetString()!;
+        var args = server.GetProperty("args").EnumerateArray().Select(a => a.GetString()).ToList();
+
+        // Whatever is running this, the declaration has to be runnable: the
+        // first argument is 'mcp' for a shipped launcher, and the assembly
+        // before it under the host.
+        if (Path.GetFileNameWithoutExtension(command).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            args[0].Should().EndWith(".dll", "dotnet has no 'mcp' command to run");
+            args[1].Should().Be("mcp");
+            args[2].Should().Be("serve");
+        }
+        else
+        {
+            args[0].Should().Be("mcp");
+            args[1].Should().Be("serve");
+        }
+
+        args.Should().Contain("--project").And.Contain("loadout-cli");
+    }
 }
