@@ -371,6 +371,117 @@ internal static class DashboardActions
     }
 
     /// <summary>
+    /// Arranges for a run to happen again, by typing the command somebody would
+    /// have typed.
+    /// </summary>
+    /// <remarks>
+    /// Awaited, like writing a team. Both verbs write a small file and come
+    /// back, and the whole point of doing this from the page is finding out on
+    /// the page whether it took.
+    /// </remarks>
+    internal static async Task<OperationResult> PlannedAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        ScheduleAction asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(asking);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var (command, arguments) = Plans(asking);
+
+        if (command.Length == 0)
+        {
+            return OperationResult.Fail(
+                $"There is nothing called '{asking.Verb}' to do to a schedule.",
+                ExitCode.InvalidArguments);
+        }
+
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"{Markup.Escape(command)} {Markup.Escape(asking.Name)}");
+
+        var code = await commands.RunAsync(command, arguments, ct).ConfigureAwait(false);
+
+        if (code == (int)ExitCode.Success)
+        {
+            return OperationResult.Ok();
+        }
+
+        return OperationResult.Fail(
+            (ExitCode)code switch
+            {
+                ExitCode.InvalidArguments =>
+                    "A schedule needs how often it runs, a time of day, or something to watch "
+                    + "for - and at least five minutes between runs. It also cannot be manual: "
+                    + "nobody is watching when it fires.",
+                ExitCode.ProjectNotFound =>
+                    "That team, project or schedule is not one this machine knows about.",
+                _ => $"'{command}' ended with exit code {code}. The terminal serving this page "
+                     + "has the reason.",
+            },
+            (ExitCode)code);
+    }
+
+    /// <summary>
+    /// The command line a schedule verb stands for.
+    /// </summary>
+    /// <remarks>
+    /// Its own function for the same reason <see cref="Maps"/> is: a test runs
+    /// every one of these against the real parser, because it is not enough
+    /// that the command exists - every option in the line has to be one it
+    /// declares.
+    /// </remarks>
+    internal static (string Command, IReadOnlyList<string> Arguments) Plans(ScheduleAction asking)
+    {
+        ArgumentNullException.ThrowIfNull(asking);
+
+        if (string.Equals(asking.Verb, "remove", StringComparison.Ordinal))
+        {
+            return ("team schedule remove", [asking.Name, "--non-interactive"]);
+        }
+
+        if (!string.Equals(asking.Verb, "add", StringComparison.Ordinal))
+        {
+            return (string.Empty, []);
+        }
+
+        // The three arguments are positional and required, so they go first and
+        // in order. An empty one is still passed: the command says which is
+        // missing far better than a line that silently shifts the next
+        // argument into its place.
+        var arguments = new List<string>
+        {
+            asking.Name,
+            asking.Team ?? string.Empty,
+            asking.Goal ?? string.Empty,
+        };
+
+        foreach (var (option, value) in new[]
+        {
+            ("--project", asking.Project),
+            ("--every", asking.Every),
+            ("--at", asking.At),
+            ("--on", asking.On),
+            ("--autonomy", asking.Autonomy),
+        })
+        {
+            if (value is { Length: > 0 })
+            {
+                arguments.Add(option);
+                arguments.Add(value);
+            }
+        }
+
+        arguments.Add("--non-interactive");
+
+        return ("team schedule add", arguments);
+    }
+
+    /// <summary>
     /// What there is to start, and to copy.
     /// </summary>
     /// <remarks>

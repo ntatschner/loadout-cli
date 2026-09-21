@@ -94,6 +94,51 @@ public sealed class DashboardVerbContractTests
     }
 
     /// <summary>
+    /// The two schedule verbs, filled in as the sheet fills them.
+    /// </summary>
+    /// <remarks>
+    /// Every optional field is given a value, because each one becomes an
+    /// option on the line and an option the command does not declare is the
+    /// exact failure this file exists for. The command refuses the combination
+    /// - --every, --at and --on are one-of, and the sheet only ever sends one -
+    /// but refusing it is the command doing its job, and the line still has to
+    /// parse before it can refuse anything.
+    /// </remarks>
+    public static TheoryData<string> ScheduleVerbs => ["add", "remove"];
+
+    [BuiltCliTheory]
+    [MemberData(nameof(ScheduleVerbs))]
+    public async Task Every_schedule_verb_is_a_command_line_the_parser_accepts(string verb)
+    {
+        var (command, arguments) = DashboardActions.Plans(new ScheduleAction(
+            verb,
+            "nightly",
+            Team: "docs-crew",
+            Goal: "check the docs against the code",
+            Project: "loadout-cli",
+            Every: "2h",
+            At: "23:00",
+            On: "commit",
+            Autonomy: "supervised"));
+
+        command.Should().NotBeEmpty($"the sheet can send '{verb}', so something has to answer it");
+
+        using var loadout = new LoadoutProcess();
+
+        var run = await loadout.RunAsync([.. command.Split(' '), .. arguments, "--dry-run"]);
+
+        var everything = run.StandardOutput + run.StandardError;
+
+        everything.Should().NotContain(
+            "Unknown option",
+            $"'{verb}' types '{command} {string.Join(' ', arguments)}', and every option in it "
+            + "has to be one that command declares");
+
+        everything.Should().NotContain("Unexpected option", $"'{verb}' types a line the parser refused");
+        everything.Should().NotContain("Unknown command", $"'{verb}' names a command that does not exist");
+    }
+
+    /// <summary>
     /// The calibration: a verb nothing answers has to be reported as one.
     /// </summary>
     /// <remarks>
@@ -105,5 +150,8 @@ public sealed class DashboardVerbContractTests
     public void A_verb_nothing_answers_maps_to_nothing()
     {
         DashboardActions.Maps(Asking("reticulate")).Command.Should().BeEmpty();
+
+        DashboardActions.Plans(new ScheduleAction("reticulate", "nightly")).Command
+            .Should().BeEmpty();
     }
 }

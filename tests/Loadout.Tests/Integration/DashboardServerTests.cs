@@ -544,6 +544,91 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Scheduling_a_run_goes_to_whatever_can_run_a_command()
+    {
+        ScheduleAction? asked = null;
+
+        _server.Plan = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/schedules?token=" + _server.Token),
+            new StringContent(
+                @"{""verb"":""add"",""name"":""nightly"",""team"":""docs-crew"","
+                + @"""goal"":""check the docs"",""project"":""loadout-cli"","
+                + @"""at"":""23:00"",""autonomy"":""supervised""}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked.Should().NotBeNull();
+        asked!.Verb.Should().Be("add");
+        asked.Name.Should().Be("nightly");
+        asked.Team.Should().Be("docs-crew");
+        asked.At.Should().Be("23:00");
+        asked.Autonomy.Should().Be("supervised");
+    }
+
+    [Fact]
+    public async Task Unscheduling_one_goes_the_same_way()
+    {
+        ScheduleAction? asked = null;
+
+        _server.Plan = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/schedules?token=" + _server.Token),
+            new StringContent(@"{""verb"":""remove"",""name"":""nightly""}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+        asked!.Verb.Should().Be("remove");
+        asked.Name.Should().Be("nightly");
+    }
+
+    [Fact]
+    public async Task Scheduling_needs_the_token()
+    {
+        var planned = false;
+
+        _server.Plan = (_, _) =>
+        {
+            planned = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/schedules"),
+            new StringContent(@"{""verb"":""remove"",""name"":""nightly""}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        planned.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_server_that_only_watches_refuses_to_schedule_anything()
+    {
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/schedules?token=" + _server.Token),
+            new StringContent(@"{""verb"":""add"",""name"":""nightly""}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+
+        // And the page is told, so it does not draw a control it cannot honour.
+        _server.Choices = _ => Task.FromResult(new Choosable([], []));
+
+        (await Read("api/choices")).GetProperty("plans").GetBoolean().Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Forgetting_a_run_is_handed_to_the_command_line_like_everything_else()
     {
         RunAction? asked = null;
@@ -1330,7 +1415,20 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // legible from the heading alone, because that is all anybody reads
         // before filling the boxes in.
         text.Should().Contain("<summary>Run a team</summary>");
-        text.Should().Contain("<summary>Make a team</summary>");
+
+        // Making a team and scheduling one are their own sheets rather than
+        // more folds under the runs list, and they are native <dialog>s: the
+        // browser traps focus, returns it to the opener, closes on Escape and
+        // marks them modal to a screen reader, none of which a div pretending
+        // to be a dialog gets for free.
+        text.Should().Contain("<dialog id=\"making\"");
+        text.Should().Contain("<dialog id=\"planning\"");
+        text.Should().Contain("id=\"open-making\"");
+        text.Should().Contain("id=\"open-planning\"");
+
+        // Each sheet names itself to a screen reader through its own heading.
+        text.Should().Contain("aria-labelledby=\"making-heading\"");
+        text.Should().Contain("aria-labelledby=\"planning-heading\"");
 
         // Every field the command line takes, and nothing it does not.
         foreach (var field in new[] { "start-team", "start-goal", "start-project", "start-rounds", "start-autonomy" })
@@ -1342,7 +1440,11 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // here before. A box that accepts anything is what let a name that was
         // not a team through, so both are lists now and the old datalists are
         // gone rather than merely unused.
-        text.Should().Contain("<select id=\"start-team\">");
+        // Described by the line under it, so what the chosen team is reaches
+        // somebody who cannot see it appear. axe passes either way - a
+        // paragraph beside a control is not a violation - so this is asserted
+        // rather than measured.
+        text.Should().Contain("<select id=\"start-team\" aria-describedby=\"start-team-about\">");
         text.Should().Contain("<select id=\"start-project\">");
         text.Should().NotContain("known-teams");
         text.Should().NotContain("known-projects");

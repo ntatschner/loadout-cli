@@ -226,6 +226,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.Make = (asking, ct) => DashboardActions.MadeAsync(
                 _commands, _time, asking, output, ct);
 
+            // And arranging for one to happen again, which is what this process
+            // exists to honour: the daemon is the thing that fires them.
+            server.Plan = (asking, ct) => DashboardActions.PlannedAsync(
+                _commands, _time, asking, output, ct);
+
             // What there is to start, read per request like the waiting area:
             // a team written a moment ago, from the page or from a terminal,
             // belongs in the next answer rather than the next restart.

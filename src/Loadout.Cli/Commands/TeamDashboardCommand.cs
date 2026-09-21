@@ -348,6 +348,13 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             server.Make = (asking, token) => DashboardActions.MadeAsync(
                 _commands, _time, asking, output, token);
 
+            // And arranging for one to happen again. A dashboard hosted by this
+            // command does not outlive the window, so a schedule made here only
+            // fires while the daemon is up - which the page says, rather than
+            // leaving somebody to find out at 23:00.
+            server.Plan = (asking, token) => DashboardActions.PlannedAsync(
+                _commands, _time, asking, output, token);
+
             // And the second credential, which the dashboard's own token does
             // not grant: typing at a live node is not something the run offered
             // to have decided.

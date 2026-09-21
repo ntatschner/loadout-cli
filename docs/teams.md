@@ -1666,12 +1666,28 @@ It asks once, naming the team and the goal, before anything starts — the token
 got somebody to the page rather than to this, and this one spends money and
 edits a repository.
 
-**Make a team** writes one, and is the other half of the same story. Everything
-that decides whether a run can begin — the team existing, the project resolving,
-the tree being a repository — is settled in the first seconds, so the page waits
-that long before saying a run has started, and shows the refusal when there is
-one. It does not wait for the run itself: that takes twenty minutes on a good
-day, and a browser holding a request open that long has already given up.
+**Make a team…** and **Run one on a schedule…** each open a sheet of their own
+rather than another fold under the runs list. They are native `<dialog>`s, so
+the browser traps focus inside them, returns it to the button that opened them,
+closes on Escape and marks them modal to a screen reader.
+
+Making a team writes one and tells you where it is, and is the other half of the
+same story as running one. Scheduling asks for a name, a team, a goal, a project
+and one of three ways to say when — a time of day, an interval, or something to
+watch for. Manual is not offered, because the command refuses it: manual means a
+person at every step and nobody is watching at 23:00.
+
+A schedule made here appears under **Waiting**, which is where schedules were
+already listed and is now where you stop one. **Nothing fires unless the daemon
+is running**, which the sheet says rather than leaving you to find out at the
+appointed time.
+
+Everything that decides whether a run can begin — the team existing, the project
+resolving, the tree being a repository — is settled in the first seconds, so the
+page waits that long before saying a run has started, and shows the refusal when
+there is one. It does not wait for the run itself: that takes twenty minutes on
+a good day, and a browser holding a request open that long has already given
+up.
 
 **Forget it**, on a run that has ended, runs `team runs remove` against it. A
 run still going does not offer it, and the command refuses one anyway.

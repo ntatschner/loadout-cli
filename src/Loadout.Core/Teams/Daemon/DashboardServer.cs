@@ -263,6 +263,18 @@ public sealed class DashboardServer : IDisposable
     public Func<MakeRequest, CancellationToken, Task<OperationResult>>? Make { get; set; }
 
     /// <summary>
+    /// What to do about a schedule, or null where nothing can.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as the rest, and the same reason. A dashboard is the
+    /// surface somebody leaves open on a machine that stays up, which is
+    /// exactly the machine that should be running things on a clock — and
+    /// arranging that was the one thing it could only be told to do from a
+    /// terminal.
+    /// </remarks>
+    public Func<ScheduleAction, CancellationToken, Task<OperationResult>>? Plan { get; set; }
+
+    /// <summary>
     /// Answers whether a trigger may proceed, or null when none may.
     /// </summary>
     /// <remarks>
@@ -979,6 +991,23 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // Arranging for a run to happen again, which belongs to no run and to
+        // no team file either. Behind the token like everything else.
+        if (path == "/api/schedules")
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await PlanAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         // Writing a team, which belongs to no run either. Behind the token
         // like everything else that changes anything.
         if (path == "/api/teams")
@@ -1242,6 +1271,7 @@ public sealed class DashboardServer : IDisposable
                     // drawn and always refused is the fault this whole change
                     // set out to fix.
                     makes = Make is not null,
+                    plans = Plan is not null,
                     teams = choosable.Teams,
                     projects = choosable.Projects,
                     here = choosable.Here,
@@ -1790,6 +1820,73 @@ public sealed class DashboardServer : IDisposable
                 done.Succeeded
                     ? new { made = true, error = (string?)null }
                     : new { made = false, error = done.Error },
+                Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adding a schedule, or taking one away.
+    /// </summary>
+    /// <remarks>
+    /// Awaited like writing a team and unlike starting a run: both verbs write
+    /// a small file and come back, so there is no reason to answer before
+    /// knowing, and every reason not to.
+    /// </remarks>
+    private async Task PlanAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Changing the schedules is a POST." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Plan is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "This dashboard is watching only and cannot run commands. "
+                        + "Start it without --watch-only, run the daemon, or use the command line.",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        ScheduleAction? asking;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+
+            asking = JsonSerializer.Deserialize<ScheduleAction>(
+                await reader.ReadToEndAsync(ct).ConfigureAwait(false), Json);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            asking = null;
+        }
+
+        if (asking is null || string.IsNullOrWhiteSpace(asking.Name)
+            || string.IsNullOrWhiteSpace(asking.Verb))
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "A schedule needs a name and something to do to it." }, Json))
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        var done = await Plan(asking, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 202 : 400,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                done.Succeeded
+                    ? new { planned = true, error = (string?)null }
+                    : new { planned = false, error = done.Error },
                 Json)).ConfigureAwait(false);
     }
 

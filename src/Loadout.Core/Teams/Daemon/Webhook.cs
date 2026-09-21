@@ -64,6 +64,41 @@ public sealed record StartRequest(
 /// </remarks>
 public sealed record MakeRequest(string Name, string? From = null, string? Project = null);
 
+/// <summary>Something the page asked be done to the schedules.</summary>
+/// <param name="Verb">add, or remove.</param>
+/// <param name="Name">What the schedule is called, which is how the other commands name it.</param>
+/// <param name="Team">The team to run, for an add.</param>
+/// <param name="Goal">What to ask it for, for an add.</param>
+/// <param name="Project">Which project it works on, for an add.</param>
+/// <param name="Every">How often: 30m, 2h, 1d.</param>
+/// <param name="At">The time of day, as 09:00.</param>
+/// <param name="On">Something to watch for instead of a clock, such as a commit.</param>
+/// <param name="Autonomy">supervised or autonomous. Never manual: nobody is watching when it fires.</param>
+/// <remarks>
+/// <para>
+/// One shape for both verbs, like <see cref="RunAction"/> and for the same
+/// reason: they end the same way, with the daemon running the command somebody
+/// would have typed. Nothing here decides what either of them means.
+/// </para>
+/// <para>
+/// The page had no way to make a run happen again. Schedules existed, the
+/// waiting area showed them, and the only way to make one was a terminal — so a
+/// dashboard somebody leaves open on a second monitor could start a run once
+/// and never arrange for it to happen nightly, which is most of what a machine
+/// that stays up is for.
+/// </para>
+/// </remarks>
+public sealed record ScheduleAction(
+    string Verb,
+    string Name,
+    string? Team = null,
+    string? Goal = null,
+    string? Project = null,
+    string? Every = null,
+    string? At = null,
+    string? On = null,
+    string? Autonomy = null);
+
 /// <summary>One team, as a page offering it needs to know it.</summary>
 /// <param name="Name">What to run it by.</param>
 /// <param name="Description">The sentence the team file gives itself.</param>
