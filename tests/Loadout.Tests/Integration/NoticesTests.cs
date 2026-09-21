@@ -28,7 +28,9 @@ namespace Loadout.Tests.Integration;
 /// </remarks>
 public sealed class NoticesTests : IAsyncLifetime
 {
-    private readonly HttpListener _listener = new();
+    // Not readonly: a listener whose Start failed is spent and is replaced
+    // rather than cleared and reused.
+    private HttpListener _listener = new();
     private readonly HttpClient _client = new();
     private readonly List<string> _received = [];
 
@@ -99,9 +101,28 @@ public sealed class NoticesTests : IAsyncLifetime
 
         await _serving;
 
-        _listener.Close();
+        Discard();
         _client.Dispose();
         _stopping.Dispose();
+    }
+
+    /// <summary>Lets go of a listener, whether or not it ever started.</summary>
+    /// <remarks>
+    /// Closing one whose Start failed can throw on its own account; see
+    /// <see cref="Listen"/>. It is being thrown away, so there is nothing to
+    /// do about it and nothing worth reporting.
+    /// </remarks>
+    private void Discard()
+    {
+        try
+        {
+            _listener.Close();
+        }
+        catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException)
+        {
+        }
+
+        _listener = new HttpListener();
     }
 
     /// <summary>Starts the listener on a port nothing else is using.</summary>
@@ -121,7 +142,6 @@ public sealed class NoticesTests : IAsyncLifetime
         {
             var port = Free();
 
-            _listener.Prefixes.Clear();
             _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
 
             try
@@ -132,7 +152,15 @@ public sealed class NoticesTests : IAsyncLifetime
             }
             catch (HttpListenerException) when (attempt < 20)
             {
-                // Taken in between. Ask for another one.
+                // Taken in between. This one is spent - and clearing its
+                // prefixes and reusing it is worse than useless: on the
+                // managed HttpListener that macOS and Linux use, the prefix
+                // that failed to bind stays in the endpoint manager's
+                // bookkeeping and Close trips over it at teardown, throwing
+                // the same "Address already in use" from DisposeAsync,
+                // nowhere near what caused it. That is what CI's macOS leg
+                // reported when this retry was first written.
+                Discard();
             }
         }
     }

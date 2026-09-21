@@ -279,7 +279,6 @@ public sealed class DashboardServer : IDisposable
             var chosen = port == 0 ? Offer() : port;
             var prefix = $"http://{where}:{chosen.ToString(CultureInfo.InvariantCulture)}/";
 
-            _listener.Prefixes.Clear();
             _listener.Prefixes.Add(prefix);
 
             try
@@ -288,17 +287,13 @@ public sealed class DashboardServer : IDisposable
             }
             catch (HttpListenerException ex)
             {
+                // Spent either way, so it is replaced either way - a listener
+                // whose Start failed cannot be asked again, and reusing it
+                // throws ObjectDisposedException from Prefixes.
+                Discard();
+
                 if (port == 0 && attempt < 20)
                 {
-                    // HttpListener closes itself when Start fails, so this one
-                    // is spent. Trying again with it throws
-                    // ObjectDisposedException from Prefixes, which is how this
-                    // was found: the first version of the retry could not have
-                    // worked and would have swapped one failure for a stranger
-                    // one.
-                    ((IDisposable)_listener).Dispose();
-                    _listener = new HttpListener();
-
                     continue;
                 }
 
@@ -761,6 +756,40 @@ public sealed class DashboardServer : IDisposable
     /// port that is already taken and watch what happens next.
     /// </remarks>
     internal Func<int> Offer { get; set; } = Free;
+
+    /// <summary>Lets go of a listener that could not start.</summary>
+    /// <remarks>
+    /// Closing one whose Start failed can itself throw, and does on the
+    /// managed HttpListener that macOS and Linux use: the prefix that failed
+    /// to bind is left in the endpoint manager's bookkeeping, so Close walks
+    /// it, looks the endpoint up again and throws the same "Address already in
+    /// use" - at teardown, from Dispose, nowhere near what caused it. Windows
+    /// does not show it, because HTTP.SYS keeps no such bookkeeping.
+    ///
+    /// There is nothing to do about it and nothing worth reporting: the
+    /// listener is being thrown away.
+    /// </remarks>
+    private void Discard()
+    {
+        try
+        {
+            ((IDisposable)_listener).Dispose();
+        }
+        catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException)
+        {
+            // Being thrown away regardless.
+            //
+            // Defensive, and say so: removing this catch does not fail
+            // anything on Linux, which uses the same managed listener macOS
+            // does. It is here because a macOS run really did throw from
+            // Close - though on the clear-and-reuse path that has since gone,
+            // so what is left may never throw at all. An unexercised catch
+            // over a Dispose of something already being discarded is a cheaper
+            // thing to carry than the run it would otherwise take down.
+        }
+
+        _listener = new HttpListener();
+    }
 
     private static int Free()
     {
@@ -1967,5 +1996,5 @@ public sealed class DashboardServer : IDisposable
         return reader.ReadToEnd();
     }
 
-    public void Dispose() => ((IDisposable)_listener).Dispose();
+    public void Dispose() => Discard();
 }
