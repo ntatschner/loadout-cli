@@ -80,12 +80,17 @@ public sealed class TeamRemediesCommand : AsyncCommand<RemedySettings>
         var rules = machine.Value?.Teams.Remediation ?? [];
         var trusted = machine.Value?.Teams.TrustedRemedies;
 
+        // Named rather than skipped. A record nothing can read is a thing a
+        // node wrote, believing it had registered what it worked out.
+        var unreadable = _book.Unreadable(settings.Team);
+
         if (output.IsJson)
         {
             output.WriteJson(new
             {
                 team = settings.Team,
                 directory = _book.DirectoryOf(settings.Team),
+                unreadable,
                 remedies = read.Value!.Select(one => new
                 {
                     one.Name,
@@ -104,6 +109,19 @@ public sealed class TeamRemediesCommand : AsyncCommand<RemedySettings>
         }
 
         output.WriteLine($"[bold]{Markup.Escape(settings.Team)}[/]  [dim]{Markup.Escape(_book.DirectoryOf(settings.Team))}[/]");
+
+        if (unreadable.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine(
+                $"  [yellow]{unreadable.Count} file(s) here are not readable as a remedy:[/] "
+                + Markup.Escape(string.Join(", ", unreadable)));
+
+            output.WriteLine(
+                "  [dim]Nothing can run one of these and nothing will offer it. Something wrote "
+                + "them meaning to register a fix, so they are worth reading rather than "
+                + "deleting.[/]");
+        }
 
         if (read.Value!.Count == 0)
         {

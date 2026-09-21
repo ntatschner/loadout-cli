@@ -36,6 +36,18 @@ public interface IRemedyBook
     /// <summary>Every remedy a team has registered, by name.</summary>
     OperationResult<IReadOnlyList<Remedy>> All(string team);
 
+    /// <summary>
+    /// Files on the team's shelf that are not readable as a remedy.
+    /// </summary>
+    /// <remarks>
+    /// These used to be skipped in silence, which is the worst of the three
+    /// things that could happen to them: a node told by a declaration to
+    /// register what it worked out did so, wrote something malformed, and
+    /// nothing anywhere said so. The record was absent from every listing and
+    /// from the gate, and the declaration read as satisfied.
+    /// </remarks>
+    IReadOnlyList<string> Unreadable(string team);
+
     /// <summary>One remedy, or a sentence saying there is no such thing.</summary>
     OperationResult<Remedy> Find(string team, string name);
 
@@ -89,6 +101,26 @@ public sealed class RemedyBook : IRemedyBook
         Path.Combine(_paths.Paths.State, "teams", "work", Slug(team));
 
     private string Shelf(string team) => Path.Combine(DirectoryOf(team), "remedies");
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> Unreadable(string team)
+    {
+        var shelf = Shelf(team);
+
+        if (!Directory.Exists(shelf))
+        {
+            return [];
+        }
+
+        return
+        [
+            .. Directory.EnumerateFiles(shelf, "*.yaml")
+                .Where(file => Read(file) is null)
+                .Select(Path.GetFileName)
+                .OfType<string>()
+                .OrderBy(one => one, StringComparer.Ordinal),
+        ];
+    }
 
     /// <inheritdoc />
     public OperationResult<IReadOnlyList<Remedy>> All(string team)

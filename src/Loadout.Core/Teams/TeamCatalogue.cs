@@ -131,6 +131,40 @@ public sealed class TeamCatalogue : ITeamCatalogue
         return new TeamCatalogueResult(teams, findings, origins);
     }
 
+    /// <summary>Whether a declaration talks about remedies at all.</summary>
+    /// <remarks>
+    /// Whole words, so "remedial" and "remediation plan" do not count as
+    /// asking for the machinery. Deliberately narrow: a check that fired on
+    /// anything vaguely related would be a warning people learn to scroll
+    /// past, which is worse than not having it.
+    /// </remarks>
+    private static bool Mentions(string declaration) =>
+        System.Text.RegularExpressions.Regex.IsMatch(
+            declaration ?? string.Empty,
+            @"\bremed(y|ies)\b",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+            TimeSpan.FromSeconds(1));
+
+    /// <summary>Whether a node's role could run a registered remedy.</summary>
+    /// <remarks>
+    /// The same question the gate asks. A role with only Bash(git ...) never
+    /// matches a call to run a script, so it never reaches the remedy branch
+    /// at all - which is how the whole harness once came to gate something
+    /// nothing could attempt.
+    /// </remarks>
+    private static bool CanRunAScript(TeamNode node, SpecialistCatalogue specialists)
+    {
+        var allowed = specialists.Find(node.Role)?.Role?.AllowedTools ?? [];
+
+        return allowed.Any(one =>
+            string.Equals(one, "Bash", StringComparison.Ordinal)
+            || one.StartsWith("Bash(pwsh", StringComparison.Ordinal)
+            || one.StartsWith("Bash(powershell", StringComparison.Ordinal)
+            || one.StartsWith("Bash(bash", StringComparison.Ordinal)
+            || one.StartsWith("Bash(sh", StringComparison.Ordinal)
+            || one.StartsWith("Bash(python", StringComparison.Ordinal));
+    }
+
     /// <summary>Reads one team from its text, or says why the text is not one.</summary>
     public static TeamDefinition? Parse(string text, string path, List<RuleFinding> findings)
     {
@@ -183,6 +217,9 @@ public sealed class TeamCatalogue : ITeamCatalogue
         void Error(string rule, string detail) =>
             findings.Add(new RuleFinding(team.Name, RuleFindingSeverity.Error, rule, detail));
 
+        void Warn(string rule, string detail) =>
+            findings.Add(new RuleFinding(team.Name, RuleFindingSeverity.Warning, rule, detail));
+
         if (team.Nodes.Count == 0)
         {
             Error("team-nodes", $"Team '{team.Name}' has no nodes.");
@@ -200,6 +237,25 @@ public sealed class TeamCatalogue : ITeamCatalogue
                     $"Team '{team.Name}' has an empty declaration at position {i + 1}. "
                     + "Write what it asks for, or take the line out.");
             }
+        }
+
+        // A declaration is prose in a brief and enforces nothing by itself.
+        // Where it asks for something this team has no way of doing, saying so
+        // is the only warning anybody gets: the run goes ahead, the brief
+        // carries the rule, the model tries, and nothing can.
+        //
+        // Only remedies, and only by name. That is a keyword and not an
+        // understanding of the sentence, so it is a warning rather than an
+        // error and it says what it looked for - a declaration may mention a
+        // remedy while meaning something this cannot check either way.
+        if (team.Declarations.Any(Mentions) && !team.Nodes.Values.Any(node => CanRunAScript(node, specialists)))
+        {
+            Warn(
+                "team-declaration-inert",
+                $"Team '{team.Name}' has a declaration about remedies, but no node of it has a "
+                + "role that may run one - every role here can read, write and use git, and "
+                + "nothing else. Give it a node with role.remediator, or say in the declaration "
+                + "what should happen to what it registers instead.");
         }
 
         // Every node reads both, every round. A team that put an essay here

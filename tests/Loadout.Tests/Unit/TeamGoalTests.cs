@@ -37,6 +37,71 @@ public sealed class TeamGoalTests
             Declarations: declarations,
             TeamDirectory: directory);
 
+    private static async Task<SpecialistCatalogue> RolesAsync() =>
+        await new SpecialistLibrary().LoadAsync(workspaceRoot: null);
+
+    private static TeamDefinition Team(string role, params string[] declarations)
+    {
+        var team = new TeamDefinition { Name = "made-up", Lead = "lead" };
+
+        team.Nodes["lead"] = new TeamNode { Role = role };
+        team.Declarations.AddRange(declarations);
+
+        return team;
+    }
+
+    [Fact]
+    public async Task A_declaration_about_remedies_on_a_team_that_cannot_run_one_is_called_out()
+    {
+        // A declaration is prose in a brief and enforces nothing by itself.
+        // Nothing checked one against the machinery it assumes, so this
+        // validated clean, went into every brief of every run, and did
+        // nothing: no role here can run a script, so nothing could ever act on
+        // what it asks for.
+        var findings = TeamCatalogue.Check(
+            Team("role.fixer", "Register any remedy you write in the team's directory."),
+            await RolesAsync());
+
+        var said = findings.Should().ContainSingle(f => f.Kind == "team-declaration-inert").Subject;
+
+        said.Severity.Should().Be(RuleFindingSeverity.Warning,
+            "it is a keyword rather than an understanding of the sentence");
+
+        said.Detail.Should().Contain("role.remediator");
+    }
+
+    [Fact]
+    public async Task A_team_that_can_run_one_is_not_called_out()
+    {
+        TeamCatalogue.Check(
+            Team("role.remediator", "Register any remedy you write in the team's directory."),
+            await RolesAsync())
+            .Should().NotContain(f => f.Kind == "team-declaration-inert");
+    }
+
+    [Fact]
+    public async Task A_declaration_that_never_mentioned_one_is_left_alone()
+    {
+        // Deliberately narrow. A warning that fired on anything vaguely
+        // related is one people learn to scroll past, which is worse than not
+        // having it - so "remedial" is not "remedy".
+        TeamCatalogue.Check(
+            Team("role.fixer", "Take remedial action only where the tests cover it."),
+            await RolesAsync())
+            .Should().NotContain(f => f.Kind == "team-declaration-inert");
+    }
+
+    [Fact]
+    public async Task The_team_that_ships_with_this_declaration_does_not_warn()
+    {
+        // The one real example, and the thing that would make this check a
+        // nuisance if it were wrong.
+        var catalogue = await new TeamCatalogue().LoadAsync(null, null, await RolesAsync());
+
+        catalogue.Findings.Should().NotContain(f =>
+            f.Kind == "team-declaration-inert" && f.Rule == "system-watch");
+    }
+
     [Fact]
     public void A_node_is_told_what_the_team_is_for_before_it_is_told_its_task()
     {

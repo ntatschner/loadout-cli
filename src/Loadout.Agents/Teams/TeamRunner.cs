@@ -386,6 +386,17 @@ public sealed class TeamRunner : ITeamRunner
                 + $"because {_lifetime.Detail}.");
         }
 
+        // Before anything is briefed, because a node told by a declaration to
+        // look on the shelf before working something out will not find what is
+        // sitting there unreadable - and used to be told nothing about it.
+        if (new RemedyBook(_paths).Unreadable(team.Name) is { Count: > 0 } broken)
+        {
+            warnings.Add(
+                $"{broken.Count} file(s) in this team's directory are not readable as a remedy "
+                + $"({string.Join(", ", broken)}). Nothing will offer them and nothing can run "
+                + "them, and something wrote them meaning to register a fix.");
+        }
+
         var leadNode = team.Nodes[team.Lead];
         var leadRole = request.Specialists.Find(leadNode.Role)!;
 
