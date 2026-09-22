@@ -2849,6 +2849,121 @@
       <summary>How the roles have been doing</summary>
       <div class="fields" id="roles-table"></div>
     </details>
+
+    <!--
+      What this machine is set to.
+
+      A fold rather than a dialog, because unlike making a team or scheduling
+      one this is read as often as it is changed: somebody opens it to see where
+      notices go, not only to move them.
+
+      Every control here types the command somebody would have typed. Nothing on
+      this page writes machines.yaml - 'config set' and the team commands own
+      these settings and already know what a valid value is, and a second writer
+      would be a second set of rules to keep in step.
+
+      Hidden entirely where the server cannot change anything. A watch-only
+      dashboard refuses the POST, and a pane of controls that are always refused
+      is the fault this whole design keeps coming back to.
+    -->
+    <details class="start" id="settings" hidden>
+      <summary>What this machine is set to</summary>
+
+      <div class="fields">
+        <div>
+          <label for="set-notify">Tell me where</label>
+          <select id="set-notify" aria-describedby="set-notify-about">
+            <option value="">nowhere</option>
+            <option value="slack">slack</option>
+            <option value="discord">discord</option>
+            <option value="teams">teams</option>
+            <option value="telegram">telegram</option>
+            <option value="generic">generic</option>
+          </select>
+          <!-- Whether an address is held, never what it is. A webhook address
+               IS the credential: anybody holding it can post into that channel
+               as you, and this page may be open on another machine. -->
+          <p class="facts" id="set-notify-about"></p>
+        </div>
+
+        <div>
+          <label for="set-notify-url">Its address</label>
+          <input type="password" id="set-notify-url" autocomplete="off"
+                 placeholder="only travels inwards">
+        </div>
+
+        <div>
+          <label for="set-notify-chat">Telegram chat</label>
+          <input type="text" id="set-notify-chat" placeholder="for telegram only">
+        </div>
+
+        <div>
+          <button type="button" id="set-notify-go">Set where notices go</button>
+          <button type="button" id="set-notify-off">Send nowhere</button>
+        </div>
+      </div>
+
+      <div class="fields">
+        <div>
+          <label for="set-office">Office art</label>
+          <select id="set-office"><option value="">squares with names in</option></select>
+        </div>
+
+        <div>
+          <label for="set-waiting">Waiting area art</label>
+          <select id="set-waiting"><option value="">a list of words</option></select>
+        </div>
+      </div>
+
+      <div class="fields">
+        <div>
+          <label for="set-webhook-teams">Startable from outside</label>
+          <input type="text" id="set-webhook-teams"
+                 placeholder="nothing" aria-describedby="set-webhook-about">
+          <p class="facts" id="set-webhook-about"></p>
+        </div>
+
+        <div>
+          <button type="button" id="set-webhook-on">Let things outside start runs</button>
+          <button type="button" id="set-webhook-off">Stop letting them</button>
+        </div>
+      </div>
+
+      <div class="fields">
+        <div>
+          <label for="set-listen">Listen on</label>
+          <input type="text" id="set-listen" aria-describedby="set-listen-about">
+          <!-- The one setting on this page that changes who can reach your
+               runs. 0.0.0.0 puts this dashboard on the network you are on, and
+               the token in the address becomes the only thing between anyone
+               there and answering your gates. Said here, and said again in the
+               confirmation, because a dropdown that quietly rebinds a listener
+               is how somebody finds out afterwards. -->
+          <p class="facts" id="set-listen-about">127.0.0.1 is this machine only.
+            Anything else puts this page on the network you are on, where the
+            token in its address is all that stands between whoever has it and
+            answering your gates, stopping your runs and starting teams.</p>
+        </div>
+
+        <div>
+          <button type="button" id="set-listen-go">Change what it listens on</button>
+        </div>
+      </div>
+
+      <div class="fields">
+        <div>
+          <h3>Remedies this machine trusts</h3>
+          <!-- Standing permission for a script to run unattended, so this one
+               needs the passphrase rather than the token that got somebody to
+               the page. Same credential typing at a live node needs, same
+               reasoning: reading a run and changing what this machine does on
+               its own are not the same act. -->
+          <p class="facts">Each is a script a team may run on its own, with
+            nobody watching. Revoking one asks for your passphrase.</p>
+          <ul class="papers" id="set-trusted"></ul>
+        </div>
+      </div>
+    </details>
   </section>
 
   <section id="detail" class="pane" hidden aria-labelledby="detail-heading">
@@ -7378,11 +7493,12 @@
   */
   var grant = null;
 
-  function attached() {
+  function attached(why) {
     if (grant) { return Promise.resolve(grant); }
 
     var said = window.prompt(
-      "Typing at a running node needs the attach passphrase. "
+      (why || "Typing at a running node")
+      + " needs the attach passphrase. "
       + "The token that got you here is for watching and deciding.");
 
     if (!said) { return Promise.reject(new Error("Nothing was typed at anything.")); }
@@ -7411,6 +7527,302 @@
 
         return grant;
       });
+    });
+  }
+
+  /*
+    What this machine is set to.
+
+    Read on opening and after every change, rather than on a timer: these change
+    when somebody changes them, and a pane that redrew itself every few seconds
+    would take a half-typed address out of somebody's hands.
+
+    Every control types a command. Nothing here writes a configuration file,
+    which is the rule every other control on this page follows and for the same
+    reason: 'config set' and the team commands already know what a valid value
+    is, and a second writer is a second set of rules to keep in step.
+  */
+  function fillSettings() {
+    return api("/api/settings").then(function (answer) {
+      var fold = document.getElementById("settings");
+
+      if (!fold) { return; }
+
+      var set = answer && answer.settings;
+
+      // Nothing to show on a server that cannot change anything. A pane of
+      // controls that are always refused is worse than no pane.
+      fold.hidden = !set;
+
+      if (!set) { return; }
+
+      document.getElementById("set-notify").value = set.notifyKind || "";
+      document.getElementById("set-notify-chat").value = set.notifyChat || "";
+
+      // Held or not held, never the address itself.
+      document.getElementById("set-notify-about").textContent = set.notifyAddressSet
+        ? "An address is held on this machine. It is never shown here."
+        : "No address is held, so nothing is sent anywhere.";
+
+      artSets("set-office", set.officeSets || [], set.officeSet || "",
+        "squares with names in");
+      artSets("set-waiting", set.officeSets || [], set.waitingSet || "",
+        "a list of words");
+
+      document.getElementById("set-listen").value = set.webhookListen || "";
+      document.getElementById("set-webhook-teams").value =
+        (set.webhookTeams || []).join(", ");
+
+      document.getElementById("set-webhook-about").textContent = set.webhookTokenSet
+        ? "A trigger token is held. Only the teams named here may be started with it."
+        : "No trigger token is held, so nothing outside this machine may start a run.";
+
+      trusted(set.trusted || []);
+    });
+  }
+
+  /* The art this machine actually has, so the page offers real sets. */
+  function artSets(id, sets, chosen, none) {
+    var box = document.getElementById(id);
+    var shape = sets.join("|") + "/" + chosen;
+
+    if (!box || box.getAttribute("data-shape") === shape) { return; }
+
+    box.setAttribute("data-shape", shape);
+    box.textContent = "";
+
+    var first = document.createElement("option");
+
+    first.value = "";
+    first.textContent = none;
+    box.appendChild(first);
+
+    sets.forEach(function (name) {
+      var option = document.createElement("option");
+
+      option.value = name;
+      option.textContent = name;
+      box.appendChild(option);
+    });
+
+    box.value = chosen;
+  }
+
+  function trusted(agreed) {
+    var list = document.getElementById("set-trusted");
+
+    list.textContent = "";
+
+    if (!agreed.length) {
+      var none = document.createElement("li");
+
+      none.textContent = "None. Every remedy is asked about each time.";
+      list.appendChild(none);
+
+      return;
+    }
+
+    agreed.forEach(function (one) {
+      var li = document.createElement("li");
+      var said = document.createElement("span");
+
+      said.textContent = one.remedy + " (" + one.team + ")"
+        + (one.by ? ", agreed by " + one.by : "")
+        + (one.at ? " on " + one.at : "");
+
+      li.appendChild(said);
+
+      var revoke = document.createElement("button");
+
+      revoke.type = "button";
+      revoke.textContent = "Stop trusting it";
+
+      revoke.addEventListener("click", function () {
+        if (!window.confirm("Stop trusting " + one.remedy + "? A remediator asks "
+          + "about it again from now on.")) {
+          return;
+        }
+
+        revoke.disabled = true;
+
+        // The second credential. Standing permission for a script to run when
+        // nobody is here was never something the page's own token granted.
+        attached("Changing which remedies run unattended")
+          .then(function (held) {
+            return settle({
+              what: "remedy",
+              value: one.remedy,
+              team: one.team,
+              off: true,
+              grant: held
+            });
+          })
+          .then(function () {
+            announce("No longer trusting " + one.remedy + ".");
+
+            return fillSettings();
+          })
+          .catch(function (e) {
+            revoke.disabled = false;
+            announce(e.message);
+          });
+      });
+
+      li.appendChild(revoke);
+      list.appendChild(li);
+    });
+  }
+
+  /* One change, as the command somebody would have typed. */
+  function settle(change) {
+    return fetch("/api/settings?token=" + encodeURIComponent(token), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(change)
+    }).then(function (answer) {
+      return answer.text().then(function (body) {
+        var said = null;
+
+        try {
+          said = JSON.parse(body);
+        } catch (e) {
+          said = null;
+        }
+
+        if (!answer.ok || !said || said.changed !== true) {
+          throw new Error((said && said.error) || "That did not go through.");
+        }
+
+        return said;
+      });
+    });
+  }
+
+  function wireSettings() {
+    var go = document.getElementById("set-notify-go");
+
+    if (!go) { return; }
+
+    go.addEventListener("click", function () {
+      var where = document.getElementById("set-notify").value;
+      var url = document.getElementById("set-notify-url").value.trim();
+      var chat = document.getElementById("set-notify-chat").value.trim();
+
+      if (!where) {
+        announce("Choose where notices go, or press Send nowhere.");
+
+        return;
+      }
+
+      settle({ what: "notify", value: where, url: url || null, chat: chat || null })
+        .then(function () {
+          // Emptied rather than left on screen: it is a credential, and a page
+          // somebody walks away from should not still be holding it in a box.
+          document.getElementById("set-notify-url").value = "";
+          announce("Notices go to " + where + " now.");
+
+          return fillSettings();
+        })
+        .catch(function (e) { announce(e.message); });
+    });
+
+    document.getElementById("set-notify-off").addEventListener("click", function () {
+      settle({ what: "notify", off: true })
+        .then(function () {
+          announce("Notices go nowhere now.");
+
+          return fillSettings();
+        })
+        .catch(function (e) { announce(e.message); });
+    });
+
+    ["set-office", "set-waiting"].forEach(function (id) {
+      document.getElementById(id).addEventListener("change", function () {
+        settle({
+          what: id === "set-office" ? "office" : "waiting",
+          value: document.getElementById(id).value
+        })
+          .then(function () {
+            announce("The art changed. Reload to see it.");
+
+            return fillSettings();
+          })
+          .catch(function (e) { announce(e.message); });
+      });
+    });
+
+    document.getElementById("set-webhook-teams").addEventListener("change", function () {
+      settle({
+        what: "webhook-teams",
+        value: document.getElementById("set-webhook-teams").value.trim()
+      })
+        .then(function () {
+          announce("That is what may be started from outside now.");
+
+          return fillSettings();
+        })
+        .catch(function (e) { announce(e.message); });
+    });
+
+    document.getElementById("set-webhook-on").addEventListener("click", function () {
+      if (!window.confirm("Mint a trigger token? Anything holding it can start the "
+        + "teams named above, from anywhere this dashboard can be reached.")) {
+        return;
+      }
+
+      settle({ what: "webhook" })
+        .then(function () {
+          announce("A trigger token was minted. The terminal serving this page has it.");
+
+          return fillSettings();
+        })
+        .catch(function (e) { announce(e.message); });
+    });
+
+    document.getElementById("set-webhook-off").addEventListener("click", function () {
+      settle({ what: "webhook", off: true })
+        .then(function () {
+          announce("Nothing outside this machine may start a run now.");
+
+          return fillSettings();
+        })
+        .catch(function (e) { announce(e.message); });
+    });
+
+    document.getElementById("set-listen-go").addEventListener("click", function () {
+      var address = document.getElementById("set-listen").value.trim();
+
+      if (!address) {
+        announce("Say an address. 127.0.0.1 is this machine only.");
+
+        return;
+      }
+
+      /*
+        The one change on this page that alters who can reach your runs, so it
+        is named in the question rather than in a note beside it. The command
+        line says this out loud every time it serves a page off loopback, and a
+        dropdown that quietly rebound a listener would be the one place it was
+        not said.
+      */
+      var beyond = address !== "127.0.0.1" && address !== "localhost" && address !== "::1";
+
+      if (!window.confirm(beyond
+        ? "Listen on " + address + "?\n\nThis puts the dashboard on the network "
+          + "you are on. Anyone there who has its address can answer your gates, "
+          + "stop your runs and start teams - the token in that address is the "
+          + "only thing in the way.\n\nIt takes effect when the daemon next starts."
+        : "Listen on " + address + "? It takes effect when the daemon next starts.")) {
+        return;
+      }
+
+      settle({ what: "listen", value: address })
+        .then(function () {
+          announce("It listens on " + address + " when the daemon next starts.");
+
+          return fillSettings();
+        })
+        .catch(function (e) { announce(e.message); });
     });
   }
 
@@ -8585,6 +8997,11 @@
   // every half minute in case a terminal wrote one.
   fillChoices();
   setInterval(fillChoices, 30000);
+
+  // Once, and again after each change. Not on a timer: a pane that redrew
+  // itself would take a half-typed address out of somebody's hands.
+  wireSettings();
+  fillSettings();
 
   // The art first, then the runs, so the first office somebody sees is
   // already drawn rather than redrawing itself a moment later. Either way

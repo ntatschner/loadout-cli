@@ -34,6 +34,88 @@ namespace Loadout.Cli.Commands;
 /// </remarks>
 internal static class DashboardActions
 {
+    /// <summary>Every setting the page can change.</summary>
+    /// <remarks>
+    /// Named here for the reason the run verbs are: a test walks this set
+    /// against the real parser, so a control the page draws and the mapping
+    /// does not know about fails here rather than on somebody's screen.
+    /// </remarks>
+    internal static readonly string[] Settings =
+    [
+        "notify", "office", "waiting", "listen", "webhook-teams", "webhook", "remedy",
+    ];
+
+    /// <summary>
+    /// The changes that need the second credential rather than the dashboard's
+    /// own token.
+    /// </summary>
+    /// <remarks>
+    /// Trusting a remedy is standing permission for a script to run unattended,
+    /// on a machine nobody is watching, for as long as the agreement lasts. The
+    /// token got somebody to this page; it did not get them that. This is the
+    /// same passphrase typing at a live node needs, and the same reasoning:
+    /// reading a run and changing what this machine will do on its own are not
+    /// the same act.
+    /// </remarks>
+    internal static readonly string[] NeedAGrant = ["remedy"];
+
+    /// <summary>
+    /// The command line one setting change stands for.
+    /// </summary>
+    /// <remarks>
+    /// An empty command for anything this does not know, which the caller
+    /// reports rather than guessing at. Nothing here writes a configuration
+    /// file: <c>config set</c> and the team commands own every one of these
+    /// settings already, and a second writer is a second set of rules about
+    /// what a valid value is.
+    /// </remarks>
+    internal static (string Command, IReadOnlyList<string> Arguments) Setting(SettingsChange change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+
+        return change.What switch
+        {
+            // The one that carries a credential. It goes as an argument to the
+            // command that keeps it, exactly as somebody typing it would, and
+            // no further: it is never echoed, never logged and never read back
+            // out of this process.
+            "notify" when change.Off => ("team notify clear", []),
+            "notify" => ("team notify set", Notify(change)),
+
+            "office" => ("config set", ["team-office-set", change.Value ?? string.Empty]),
+            "waiting" => ("config set", ["team-waiting-set", change.Value ?? string.Empty]),
+            "listen" => ("config set", ["team-webhook-listen", change.Value ?? string.Empty]),
+            "webhook-teams" => ("config set", ["team-webhook-teams", change.Value ?? string.Empty]),
+
+            "webhook" => (change.Off ? "team webhook disable" : "team webhook enable", []),
+
+            "remedy" => ("team remedy trust", change.Off
+                ? [change.Value ?? string.Empty, "--revoke"]
+                : [change.Value ?? string.Empty]),
+
+            _ => (string.Empty, []),
+        };
+    }
+
+    private static List<string> Notify(SettingsChange change)
+    {
+        var arguments = new List<string> { change.Value ?? string.Empty };
+
+        if (change.Url is { Length: > 0 } url)
+        {
+            arguments.Add("--url");
+            arguments.Add(url);
+        }
+
+        if (change.Chat is { Length: > 0 } chat)
+        {
+            arguments.Add("--chat");
+            arguments.Add(chat);
+        }
+
+        return arguments;
+    }
+
     /// <summary>
     /// Every verb the page can send.
     /// </summary>
@@ -102,6 +184,132 @@ internal static class DashboardActions
         };
 
         return (command, arguments);
+    }
+
+    /// <summary>
+    /// What this machine is set to, for the page to draw.
+    /// </summary>
+    /// <remarks>
+    /// Read afresh on every request rather than cached, like the teams and the
+    /// projects: a setting changed from a terminal while somebody has the page
+    /// open belongs in the next answer rather than the next restart.
+    /// <para>
+    /// Where notices go is reported as held or not held, never as itself. That
+    /// address is the credential - anybody with it can post into the channel as
+    /// you - and this file is read by a browser that may be on the other side
+    /// of the house.
+    /// </para>
+    /// </remarks>
+    internal static async Task<MachineSettings> SetAsync(
+        Loadout.Core.Configuration.IConfigurationService configuration,
+        Loadout.Platform.Abstractions.IPlatformPaths paths,
+        Loadout.Platform.Abstractions.ISecretProvider secrets,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(secrets);
+
+        var machine = await configuration.LoadMachineAsync(ct).ConfigureAwait(false);
+        var teams = machine.Value?.Teams;
+
+        // Asked of the store directly rather than through Notices, which wants
+        // an HttpClient it would never use for this: whether an address is held
+        // is a question for the credential store and nothing else.
+        var held = await secrets.GetAsync(Notices.Reference, ct).ConfigureAwait(false);
+
+        return new MachineSettings(
+            NotifyKind: teams?.NotifyKind ?? string.Empty,
+            NotifyChat: teams?.NotifyChat ?? string.Empty,
+            NotifyAddressSet: held.Value is { Length: > 0 },
+            OfficeSet: teams?.OfficeSet ?? string.Empty,
+            WaitingSet: teams?.WaitingSet ?? string.Empty,
+            OfficeSets: OfficeArt.Sets(OfficeArt.Chosen(paths, null).Root),
+            WebhookListen: Webhook.Listen(teams),
+            WebhookTeams: teams?.WebhookTeams ?? [],
+            WebhookTokenSet: await Webhook.TokenAsync(secrets, ct).ConfigureAwait(false) is not null,
+            Trusted:
+            [
+                .. (machine.Value?.Teams.TrustedRemedies ?? [])
+                    .Select(one => new TrustedOnThisMachine(
+                        one.Team,
+                        one.Remedy,
+                        one.By,
+
+                        // Nullable on the record, because an agreement written
+                        // before it was dated has none, and an empty string is
+                        // the honest way to draw that.
+                        one.At is { } when
+                            ? when.ToLocalTime().ToString(
+                                "yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+                            : string.Empty)),
+            ]);
+    }
+
+    /// <summary>Changes one of this machine's settings, by typing the command.</summary>
+    /// <remarks>
+    /// <para>
+    /// What is said out loud is the setting and never the value. Every other
+    /// thing the page does prints its whole command line where whoever started
+    /// the server can see it, and that is right for them: a page that can stop
+    /// a run should not stop one silently. It is wrong for exactly one of these.
+    /// Where notices go is a webhook address, and a webhook address is the
+    /// credential - printing the line would write it to a terminal, and from
+    /// there to whatever is capturing that terminal's output.
+    /// </para>
+    /// <para>
+    /// So the line is described rather than quoted, for all of them. Naming the
+    /// setting and not the value is a rule worth having whole rather than one
+    /// with an exception that somebody later has to remember.
+    /// </para>
+    /// </remarks>
+    internal static async Task<OperationResult> SettledAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        SettingsChange change,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(change);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var (command, arguments) = Setting(change);
+
+        if (command.Length == 0)
+        {
+            return OperationResult.Fail(
+                $"There is no setting called '{change.What}' on this machine.",
+                ExitCode.InvalidArguments);
+        }
+
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"{Markup.Escape(change.What)} "
+            + (change.Off ? "turned off" : "changed"));
+
+        var code = await commands
+            .RunAsync(command, [.. arguments, "--non-interactive"], ct)
+            .ConfigureAwait(false);
+
+        if (code == (int)ExitCode.Success)
+        {
+            return OperationResult.Ok();
+        }
+
+        return OperationResult.Fail(
+            (ExitCode)code switch
+            {
+                ExitCode.InvalidArguments =>
+                    $"That is not a value '{change.What}' takes. The terminal serving this page "
+                    + "has what it said.",
+                ExitCode.PolicyViolation =>
+                    "That was refused by a rule. The terminal serving this page has which one.",
+                _ => $"Setting '{change.What}' ended with exit code {code}. The terminal serving "
+                    + "this page has the reason.",
+            },
+            (ExitCode)code);
     }
 
     /// <summary>Does what a button asked, by running the command it stands for.</summary>

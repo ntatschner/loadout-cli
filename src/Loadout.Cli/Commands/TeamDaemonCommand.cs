@@ -246,6 +246,15 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.Choices = ct => DashboardActions.OfferedAsync(
                 _teams, _library, _workspace, _projects, _agents, ct);
 
+            // What this machine is set to, and changing it. Read per request
+            // like the teams and the projects: a setting changed from a
+            // terminal belongs in the next answer rather than the next restart.
+            server.Settings = token => DashboardActions.SetAsync(
+                _configuration, _paths, _secrets, token);
+
+            server.Settle = (change, token) => DashboardActions.SettledAsync(
+                _commands, _time, change, output, token);
+
             // And the second credential, which the dashboard's own token does
             // not grant: typing at a live node is not something the run
             // offered to have decided.

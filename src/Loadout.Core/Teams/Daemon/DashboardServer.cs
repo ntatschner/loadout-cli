@@ -89,6 +89,17 @@ public sealed class DashboardServer : IDisposable
     /// running with somebody's file access, at a moment nobody chose, over a
     /// port that may be on a network.
     /// </remarks>
+    /// <summary>What this machine is set to, read per request.</summary>
+    /// <remarks>
+    /// Null where the server cannot change anything, and the page draws no
+    /// settings at all rather than a pane of controls that would be refused -
+    /// the same rule the start form follows.
+    /// </remarks>
+    public Func<CancellationToken, Task<MachineSettings>>? Settings { get; set; }
+
+    /// <summary>Changing one, by running the command somebody would have typed.</summary>
+    public Func<SettingsChange, CancellationToken, Task<OperationResult>>? Settle { get; set; }
+
     public Attaching? Attach { get; set; }
     // Not readonly: a failed Start disposes it, so asking for another port
     // means asking with another listener.
@@ -987,6 +998,24 @@ public sealed class DashboardServer : IDisposable
         // Starting work, which belongs to no run yet and so is not under
         // /api/runs. Behind the dashboard's own token like everything else
         // that changes anything.
+        // What this machine is set to, and changing it. Up here with the
+        // others that change something: everything below the GET guard is a
+        // read, and a POST reaching there is answered 405 by design.
+        if (path == "/api/settings")
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await SettingsAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         if (path == "/api/start")
         {
             if (!Allowed(request))
@@ -1686,6 +1715,124 @@ public sealed class DashboardServer : IDisposable
                     : new { made = (string?)null, error = kept.Error },
                 Json)).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Reading what this machine is set to, and changing it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A GET reads and a POST changes, and a watch-only server refuses the POST
+    /// the way it refuses every other one. Where notices go comes back as held
+    /// or not held and never as itself: that address is the credential, and this
+    /// answer travels to a browser that may not be on this machine.
+    /// </para>
+    /// <para>
+    /// Two changes are not like the others. Trusting a remedy needs the grant
+    /// from <c>/api/attach</c>, because it is standing permission for a script
+    /// to run unattended and the dashboard token only ever meant "you may read
+    /// this page". Moving the listen address off loopback is the change that
+    /// makes every run here reachable by anyone holding the address; the page
+    /// says so at the moment of the change, and the answer says so again, so
+    /// that a script driving this API is told as plainly as a person is.
+    /// </para>
+    /// </remarks>
+    private async Task SettingsAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        if (string.Equals(context.Request.HttpMethod, "GET", StringComparison.Ordinal))
+        {
+            if (Settings is null)
+            {
+                await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                    new { settings = (MachineSettings?)null }, Json)).ConfigureAwait(false);
+
+                return;
+            }
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { settings = await Settings(ct).ConfigureAwait(false) }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Reading a setting is a GET and changing one is a POST." }, Json))
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Settle is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "This dashboard is watching only and cannot change this machine. "
+                        + "Start it without --watch-only, run the daemon, or use the command line.",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        SettingsChange? change;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+
+            change = JsonSerializer.Deserialize<SettingsChange>(
+                await reader.ReadToEndAsync(ct).ConfigureAwait(false), Json);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            change = null;
+        }
+
+        if (change is null || string.IsNullOrWhiteSpace(change.What))
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Say which setting, as 'what'." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        // The second credential, for the change that grants a script standing
+        // permission to run when nobody is here.
+        if (NeedsAGrant(change.What) && !(Attach?.Holds(change.Grant ?? string.Empty) ?? false))
+        {
+            await WriteAsync(context, 403, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "Trusting a remedy needs the passphrase, not just this page. It is "
+                        + "standing permission for a script to run when nobody is watching.",
+                    needs = "passphrase",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var done = await Settle(change, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 200 : 400,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                done.Succeeded
+                    ? new { changed = true, error = (string?)null }
+                    : new { changed = false, error = done.Error },
+                Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>Whether this setting needs more than the dashboard's own token.</summary>
+    /// <remarks>
+    /// Named here rather than taken from the caller, because the server is what
+    /// enforces it: a page that forgot to ask for the passphrase must still be
+    /// refused by the thing holding the port.
+    /// </remarks>
+    private static bool NeedsAGrant(string what) =>
+        string.Equals(what, "remedy", StringComparison.Ordinal);
 
     private async Task AttachAsync(HttpListenerContext context, CancellationToken ct)
     {
