@@ -1,3 +1,5 @@
+using Loadout.Models.Teams;
+
 namespace Loadout.Core.Teams;
 
 /// <summary>One run a prune is not taking, and the reason it is not.</summary>
@@ -24,11 +26,11 @@ public sealed record Pruning(
 /// nobody wants to be wrong about.
 /// </para>
 /// <para>
-/// The two conditions are an intersection, not a union. <c>--keep 10
-/// --older-than 30d</c> means "take what is older than thirty days, but never
-/// go below the ten newest", which is what somebody typing both means and is
-/// also the more cautious of the two readings. Reading it as a union would
-/// make each option quietly widen the other.
+/// The conditions are an intersection, not a union. <c>--keep 10 --older-than
+/// 30d --failed</c> means "take the failed ones older than thirty days, but
+/// never go below the ten newest", which is what somebody typing them means
+/// and is also the most cautious reading available. Reading them as a union
+/// would make each option quietly widen the others.
 /// </para>
 /// </remarks>
 public static class RunRetention
@@ -43,12 +45,19 @@ public static class RunRetention
     /// journal is what says which run produced a branch, so forgetting it
     /// leaves the branch with nothing to explain it.
     /// </param>
+    /// <param name="outcomes">
+    /// Take only runs that ended one of these ways, or null for any ending.
+    /// A run whose ending nothing recognises is never taken by this: asking
+    /// for the failed ones is asking for the ones known to have failed, not
+    /// for everything that could not be ruled out.
+    /// </param>
     public static Pruning Choose(
         IReadOnlyList<RunSummary> runs,
         int? keep,
         TimeSpan? olderThan,
         DateTimeOffset now,
-        bool includeUnmerged = false)
+        bool includeUnmerged = false,
+        IReadOnlyCollection<RunOutcome>? outcomes = null)
     {
         ArgumentNullException.ThrowIfNull(runs);
 
@@ -72,6 +81,28 @@ public static class RunRetention
                 keeping.Add(new RunKept(run, "still going"));
 
                 continue;
+            }
+
+            // Asked for first, because it is the thing somebody typing
+            // --failed is selecting on: a run left alone for any other reason
+            // reads better said as "ended done" than as one of the newest ten.
+            if (outcomes is { Count: > 0 })
+            {
+                var outcome = RunOutcomes.Of(run);
+
+                if (outcome is null)
+                {
+                    keeping.Add(new RunKept(run, "its ending is not one this knows how to file"));
+
+                    continue;
+                }
+
+                if (!outcomes.Contains(outcome.Value))
+                {
+                    keeping.Add(new RunKept(run, $"ended {RunOutcomes.Spell(outcome.Value)}"));
+
+                    continue;
+                }
             }
 
             if (keep is { } newest && index < newest)

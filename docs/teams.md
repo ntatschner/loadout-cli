@@ -628,13 +628,27 @@ anybody looks, and until now it showed every experiment anyone had ever started.
 ```
 loadout team runs remove 20260917-1116-ed59
 loadout team runs prune --keep 20 --older-than 30d
+loadout team runs prune --failed
+loadout team runs prune --outcome stopped --outcome limited --older-than 7d
 ```
 
-`remove` takes the runs you name. `prune` takes the old ones, and will not run
-without being told what to keep: `--keep <count>`, `--older-than <age>`, or
-both. Both together means *older than that, but never below the newest count* —
-the intersection, which is what somebody typing both means and the more cautious
-of the two readings.
+`remove` takes the runs you name. `prune` takes them by the handful, and will
+not run without being told which: `--keep <count>`, `--older-than <age>`,
+`--failed`, `--outcome <ending>`, or several. Together they narrow each other —
+*the failed ones older than that, but never below the newest count* — which is
+what somebody typing them means and the most cautious reading available.
+
+The endings you can ask for are `done`, `failed`, `stopped`, `limited` (out of
+rounds or budget), `blocked`, `needs-decision`, and `unrecorded` for a run that
+recorded a finish without saying how it went. A run files itself as it ends, so
+rewording an ending later cannot re-file runs that have already finished, and
+anything already on this machine is read from the sentence it wrote.
+
+One thing that follows from being careful rather than clever: an ending nothing
+recognises — one a later version writes, say — is never taken by an `--outcome`
+or a `--failed`. Asking for the failed ones is asking for the ones known to
+have failed, not for everything that could not be ruled out. `--dry-run` says
+how each run it picked was filed.
 
 Three things it will not take:
 
@@ -1765,6 +1779,17 @@ up.
 
 **Forget it**, on a run that has ended, runs `team runs remove` against it. A
 run still going does not offer it, and the command refuses one anyway.
+
+**Forget**, beside the identifier on every finished run in the list, is the
+same thing from where you are looking rather than from inside the run: it asks
+by name and runs `team runs remove`. It is on the cards and on the plain rows,
+through one control, and a run still going does not draw it.
+
+**Clear out runs**, folded away above the runs list, is the same thing by the
+handful: pick an ending, an age, how many of the newest to keep, and it runs
+`team runs prune`. It says what it is about to do in a sentence and asks before
+it goes. Nothing about which runs those are is decided in the browser — the
+page types the command, and the command is what refuses a live run.
 
 A watch-only dashboard draws none of this. `team dashboard --watch-only` serves
 a page that cannot change anything, is told so, and puts the controls and both

@@ -629,6 +629,180 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Clearing_out_runs_goes_to_whatever_can_run_a_command()
+    {
+        PruneAction? asked = null;
+
+        _server.Clear = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/prune?token=" + _server.Token),
+            new StringContent(
+                @"{""outcome"":""failed"",""olderThan"":""30d"",""keep"":20}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked.Should().NotBeNull();
+        asked!.Outcome.Should().Be("failed");
+        asked.OlderThan.Should().Be("30d");
+        asked.Keep.Should().Be(20);
+    }
+
+    [Fact]
+    public void The_page_asks_for_a_clear_out_in_the_words_the_server_reads()
+    {
+        // The failure this exists for has happened three times in this
+        // dashboard: the page sends a field, the server never reads it, the
+        // command runs with its default and the page reports success. A
+        // clear-out whose "keep the newest 20" went missing that way would
+        // delete twenty runs nobody agreed to lose.
+        var page = DashboardServer.Page();
+
+        page.Should().Contain("/api/prune", "the pane has to ask where the server listens");
+
+        var asking = page[page.IndexOf("/api/prune", StringComparison.Ordinal)..];
+        var from = asking.IndexOf("JSON.stringify({", StringComparison.Ordinal);
+
+        from.Should().BeGreaterThan(-1, "the pane sends a body");
+
+        var body = asking[from..asking.IndexOf("})", from, StringComparison.Ordinal)];
+
+        var sent = System.Text.RegularExpressions.Regex
+            .Matches(body, @"(\w+)\s*:")
+            .Select(match => match.Groups[1].Value)
+            .Where(word => word != "stringify")
+            .ToList();
+
+        sent.Should().NotBeEmpty("otherwise this asserts nothing about any field");
+
+        var read = typeof(PruneAction).GetProperties().Select(one => one.Name).ToList();
+
+        foreach (var field in sent)
+        {
+            read.Should().Contain(
+                one => string.Equals(one, field, StringComparison.OrdinalIgnoreCase),
+                $"the pane sends '{field}', so something has to read it");
+        }
+    }
+
+    [Fact]
+    public void The_clear_out_control_is_not_hidden_waiting_for_a_call_that_never_comes()
+    {
+        // It was, and the page shipped with a control nobody could ever see.
+        // onlyWatching() is what unhides the things a watch-only server may
+        // not offer, and it runs only when 'acts' CHANGES - it starts true,
+        // so on a server that can act it never runs at all. The run controls
+        // have always relied on that by not being hidden in the first place;
+        // this has to do the same.
+        var page = DashboardServer.Page();
+
+        var at = page.IndexOf("id=\"clearing\"", StringComparison.Ordinal);
+
+        at.Should().BeGreaterThan(-1, "the pane is in the page");
+
+        var tag = page[at..page.IndexOf('>', at)];
+
+        tag.Should().NotContain(
+            "hidden",
+            "a watch-only server hides this through onlyWatching, and anything hidden "
+            + "here is hidden for ever on a server that can act");
+    }
+
+    [Fact]
+    public void Both_run_listings_offer_to_forget_one_through_the_same_control()
+    {
+        // Being rid of a run you are looking at was only possible from inside
+        // it, so being rid of six meant opening six. Both listings offer it
+        // now - the cards and the plain rows - and both have to go through one
+        // implementation, because the one nobody looks at is the one that
+        // drifts. The plain page is the accessible one, which is exactly the
+        // page a missing control would be missing from unnoticed.
+        //
+        // What this cannot do is press the button: it reads the page rather
+        // than running it. That the verb behind it is a command line the
+        // parser accepts is asserted in the contract tests.
+        var page = DashboardServer.Page();
+
+        Count(page, "function forgetOne(").Should().Be(1, "one implementation, not two");
+        Count(page, "forgetOne(ident, run)").Should().Be(1, "the cards offer it");
+        Count(page, "forgetOne(line, run)").Should().Be(1, "the plain rows offer it");
+    }
+
+    private static int Count(string text, string what)
+    {
+        var found = 0;
+
+        for (var at = text.IndexOf(what, StringComparison.Ordinal);
+            at >= 0;
+            at = text.IndexOf(what, at + what.Length, StringComparison.Ordinal))
+        {
+            found += 1;
+        }
+
+        return found;
+    }
+
+    [Fact]
+    public async Task Clearing_out_runs_needs_the_token()
+    {
+        var cleared = false;
+
+        _server.Clear = (_, _) =>
+        {
+            cleared = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/prune"),
+            new StringContent(@"{""outcome"":""failed""}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        cleared.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_ask_that_names_no_condition_is_refused_before_it_reaches_the_command()
+    {
+        // "Forget everything" is the one reading of an empty form nobody
+        // means. The command refuses it too; refusing here as well is what
+        // stops a mis-wired page ever putting the question.
+        var cleared = false;
+
+        _server.Clear = (_, _) =>
+        {
+            cleared = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/prune?token=" + _server.Token),
+            new StringContent("{}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        cleared.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_server_that_only_watches_refuses_to_clear_anything_out()
+    {
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/prune?token=" + _server.Token),
+            new StringContent(@"{""outcome"":""failed""}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("watching only");
+    }
+
+    [Fact]
     public async Task Forgetting_a_run_is_handed_to_the_command_line_like_everything_else()
     {
         RunAction? asked = null;

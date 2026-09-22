@@ -355,6 +355,11 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             server.Plan = (asking, token) => DashboardActions.PlannedAsync(
                 _commands, _time, asking, output, token);
 
+            // And clearing out the runs nobody wants any more, which is the
+            // pane this page spends its life showing.
+            server.Clear = (asking, token) => DashboardActions.ClearedAsync(
+                _commands, _time, asking, output, token);
+
             // And the second credential, which the dashboard's own token does
             // not grant: typing at a live node is not something the run offered
             // to have decided.

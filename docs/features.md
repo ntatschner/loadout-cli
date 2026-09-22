@@ -256,7 +256,14 @@ with:
 
 ```sh
 loadout team runs prune --keep 20 --older-than 30d
+loadout team runs prune --failed
 ```
+
+You can pick by how a run ended as well as by age: `--failed`, or `--outcome`
+with any of `done`, `failed`, `stopped`, `limited`, `blocked`, `needs-decision`
+and `unrecorded`. An ending nothing recognises is never taken by one of those —
+asking for the failed ones means the ones known to have failed, not everything
+that could not be ruled out.
 
 It will not take a run that is still going — a gate is answered by a file
 appearing in the run's directory, so deleting one under a live run leaves

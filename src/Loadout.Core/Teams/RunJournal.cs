@@ -321,7 +321,8 @@ public sealed record RunSummary(
     IReadOnlyList<RunTurn>? Exchanges = null,
     IReadOnlyList<RunRound>? Timeline = null,
     int Conflicts = 0,
-    IReadOnlyList<RunCovered>? Covered = null)
+    IReadOnlyList<RunCovered>? Covered = null,
+    string? Outcome = null)
 {
     /// <summary>Each round, with when it started and when it came back.</summary>
     public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
@@ -770,6 +771,7 @@ public sealed class RunJournal : IRunJournal
         var started = events.Count > 0 ? events[0].At : DateTimeOffset.MinValue;
         DateTimeOffset? finished = null;
         string? ended = null;
+        string? outcome = null;
         var cost = 0m;
         var rounds = 0;
         var limit = 0;
@@ -838,6 +840,7 @@ public sealed class RunJournal : IRunJournal
                 case "run.finished":
                     finished = entry.At;
                     ended = entry.Text("ended");
+                    outcome = entry.Text("outcome");
                     cost = entry.Number("cost") ?? cost;
                     rounds = (int)(entry.Number("rounds") ?? rounds);
 
@@ -1030,7 +1033,8 @@ public sealed class RunJournal : IRunJournal
             turns,
             timeline,
             conflicts,
-            covered);
+            covered,
+            outcome);
     }
 
     /// <summary>One event as a line somebody can read.</summary>

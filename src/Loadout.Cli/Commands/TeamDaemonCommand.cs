@@ -231,6 +231,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.Plan = (asking, ct) => DashboardActions.PlannedAsync(
                 _commands, _time, asking, output, ct);
 
+            // And clearing out the runs nobody wants any more. The page could
+            // forget one from inside it, which is fine for one and is twenty
+            // journeys for twenty.
+            server.Clear = (asking, ct) => DashboardActions.ClearedAsync(
+                _commands, _time, asking, output, ct);
+
             // What there is to start, read per request like the waiting area:
             // a team written a moment ago, from the page or from a terminal,
             // belongs in the next answer rather than the next restart.
