@@ -298,19 +298,82 @@ public sealed class TeamsScreenTests
     /// was asserting what the first read drew, and the failure would arrive
     /// somewhere else entirely.
     /// </remarks>
-    private static TeamsWindow Built(IReadOnlyList<RunSummary> runs)
+    private static TeamsWindow Built(
+        IReadOnlyList<RunSummary> runs,
+        Func<RunSummary, bool>? agreed = null)
     {
         using IApplication app = Application.Create();
 
         app.Init(DriverRegistry.Names.ANSI);
         app.Screen = new Rectangle(0, 0, Width, Height);
 
-        var window = new TeamsWindow(runs, Read(runs), live: false, app);
+        var window = new TeamsWindow(runs, Read(runs), live: false, app, agreed);
 
         app.Begin(window);
         app.LayoutAndDraw();
 
         return window;
+    }
+
+    [Fact]
+    public void Forgetting_a_run_asks_first_and_then_hands_back_the_command()
+    {
+        // The screen deletes nothing itself: it asks, and hands back the
+        // command somebody would have typed, like every other key here.
+        var asked = new List<string>();
+
+        using var window = Built(Runs(), run =>
+        {
+            asked.Add(run.RunId);
+
+            return true;
+        });
+
+        List(window).SelectedItem = 1;
+
+        Press(window, "r");
+
+        asked.Should().ContainSingle("the question is put once")
+            .Which.Should().Be(
+                "20260916-1100-bbbb", "it names the run the cursor is on");
+        window.Chosen.Should().Be("team runs remove 20260916-1100-bbbb");
+    }
+
+    [Fact]
+    public void Saying_no_forgets_nothing()
+    {
+        using var window = Built(Runs(), _ => false);
+
+        List(window).SelectedItem = 1;
+
+        Press(window, "r");
+
+        window.Chosen.Should().BeNull("a no is an answer, not a slower yes");
+    }
+
+    [Fact]
+    public void A_run_still_going_is_not_even_asked_about()
+    {
+        // Asking about something that cannot happen teaches somebody that the
+        // question is noise. The command refuses a live run too, which is the
+        // half that actually holds.
+        var asked = 0;
+
+        using var window = Built(
+            [Run("20260916-1200-live", "docs-crew", finished: null)],
+            _ =>
+            {
+                asked += 1;
+
+                return true;
+            });
+
+        List(window).SelectedItem = 0;
+
+        Press(window, "r");
+
+        asked.Should().Be(0);
+        window.Chosen.Should().BeNull();
     }
 
     /// <summary>Presses a key the way the screen would receive it.</summary>
@@ -321,6 +384,7 @@ public sealed class TeamsScreenTests
             "Enter" => Key.Enter,
             "s" => Key.S,
             "d" => Key.D,
+            "r" => Key.R,
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "Not a key this screen binds."),
         };
 

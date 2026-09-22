@@ -47,6 +47,7 @@ internal sealed class TeamsWindow : Window
     private readonly IApplication _application;
     private readonly Func<CancellationToken, Task<IReadOnlyList<RunSummary>>> _read;
     private readonly bool _live;
+    private readonly Func<RunSummary, bool> _agreed;
 
     private IReadOnlyList<RunSummary> _runs;
     private object? _timer;
@@ -67,11 +68,19 @@ internal sealed class TeamsWindow : Window
     /// redraws, which then refreshes on the key instead.
     /// </param>
     /// <param name="application">The running toolkit.</param>
+    /// <param name="agreed">
+    /// How somebody agrees to forgetting a run. The dialog by default; a test
+    /// passes its own answer, because a dialog waiting for a keypress cannot
+    /// be driven headlessly and the path would otherwise ship unexercised.
+    /// What the real dialog does with the answer it gets is not covered by
+    /// that - only what this screen does with the answer.
+    /// </param>
     internal TeamsWindow(
         IReadOnlyList<RunSummary> runs,
         Func<CancellationToken, Task<IReadOnlyList<RunSummary>>> read,
         bool live,
-        IApplication application)
+        IApplication application,
+        Func<RunSummary, bool>? agreed = null)
     {
         ArgumentNullException.ThrowIfNull(runs);
         ArgumentNullException.ThrowIfNull(read);
@@ -81,6 +90,7 @@ internal sealed class TeamsWindow : Window
         _read = read;
         _live = live;
         _application = application;
+        _agreed = agreed ?? Asks;
 
         Title = "Team runs";
         BorderStyle = LauncherTheme.Lines;
@@ -138,6 +148,7 @@ internal sealed class TeamsWindow : Window
             ("Enter", "log"),
             ("s", "status"),
             ("d", "dashboard"),
+            ("r", "forget"),
             ("F5", live ? "read now" : "refresh"),
             ("Esc", "close"),
         ])
@@ -166,6 +177,12 @@ internal sealed class TeamsWindow : Window
         Hand(Key.S, Command.Save, () => Selected() is { } run ? $"team status {run.RunId}" : null);
         Hand(Key.D, Command.Open, () => "team dashboard");
 
+        // The one key here that changes anything. Everything else hands back
+        // a command that prints; this one deletes the only copy of what a run
+        // did, so it asks first and takes the same slot the manager screen
+        // uses for removing something.
+        Hand(Key.R, Command.Cut, Forget);
+
         // Reading again is a read, so it happens here rather than being handed
         // back as a command: closing the screen to refresh it would be a
         // strange thing to make somebody do.
@@ -192,6 +209,44 @@ internal sealed class TeamsWindow : Window
     /// <summary>The run the cursor is on, or null when there are none.</summary>
     private RunSummary? Selected() =>
         _rows.SelectedItem is int at && at >= 0 && at < _runs.Count ? _runs[at] : null;
+
+    /// <summary>
+    /// The command for forgetting the run the cursor is on, or null where
+    /// there is nothing to forget or the answer was no.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A keypress is not agreement. <c>team runs remove</c> does not ask,
+    /// because naming a run on a command line is itself the agreement - and
+    /// here the run was named by a cursor somebody may not have looked at, so
+    /// the asking has to happen before the command is handed back.
+    /// </para>
+    /// <para>
+    /// A run still going does nothing at all, the way the dashboard does not
+    /// draw the button on one. The command refuses it as well, which is the
+    /// half that holds.
+    /// </para>
+    /// </remarks>
+    private string? Forget() =>
+        Selected() is { Running: false } run && _agreed(run)
+            ? $"team runs remove {run.RunId}"
+            : null;
+
+    /// <summary>Puts the question on the screen.</summary>
+    private bool Asks(RunSummary run)
+    {
+        using var confirm = new ChoiceDialog(
+            $"Forget {run.RunId}? Everything it wrote down goes, and there is no other copy.",
+            ["No, leave it", $"Yes, forget {run.RunId}"],
+            _application);
+
+        _application.Run(confirm);
+
+        // Index 1 is the only yes. Dismissing the question, or the default
+        // landing on the first row, both mean no - a confirmation that can be
+        // passed by pressing Enter without reading is not a confirmation.
+        return confirm.ChosenIndex == 1;
+    }
 
     /// <summary>
     /// Binds a key to whatever command the selected run makes of it.
