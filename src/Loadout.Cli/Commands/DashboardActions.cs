@@ -127,7 +127,7 @@ internal static class DashboardActions
     /// </remarks>
     internal static readonly string[] Verbs =
     [
-        "gate", "gates", "message", "stop", "forget", "pause", "resume", "name", "pr", "say", "budget",
+        "gate", "gates", "message", "stop", "forget", "pause", "resume", "name", "pr", "say", "budget", "pickup",
     ];
 
     /// <summary>
@@ -152,6 +152,11 @@ internal static class DashboardActions
             "message" => ("team message", new List<string> { action.Run, "--message", action.Message ?? string.Empty }),
             "stop" => ("team halt", [action.Run]),
             "budget" => ("team budget", [action.Run, "--usd", action.Budget ?? string.Empty]),
+
+            // Not "resume", which the page already sends for letting a held
+            // run carry on: that one lifts a hold on a live run, and this one
+            // carries on a run that has ended.
+            "pickup" => ("team resume", PickUp(action)),
 
             // No --yes: naming a run is agreeing to it, so the command does not
             // ask and does not take the option. The page asks, by name, before
@@ -350,9 +355,15 @@ internal static class DashboardActions
             $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
             + $"{Markup.Escape(command)} {Markup.Escape(action.Run)}");
 
-        var code = await commands
-            .RunAsync(command, [.. arguments, "--non-interactive"], ct)
-            .ConfigureAwait(false);
+        // Picking a run up runs it, for as long as it takes. Watched only long
+        // enough to catch a refusal, like starting one, rather than holding the
+        // page's request open for an hour.
+        var code = action.Verb == "pickup"
+            ? await InBackgroundAsync(commands, time, command, [.. arguments, "--non-interactive"], output, ct)
+                .ConfigureAwait(false)
+            : await commands
+                .RunAsync(command, [.. arguments, "--non-interactive"], ct)
+                .ConfigureAwait(false);
 
         if (code == (int)ExitCode.Success)
         {
@@ -374,6 +385,10 @@ internal static class DashboardActions
                     + "its directory for the answers they are waiting on.",
                 ExitCode.PolicyViolation =>
                     "That was refused by a rule. The terminal serving this page has which one.",
+                ExitCode.InvalidArguments when action.Verb == "pickup" =>
+                    "That run cannot be picked up as it is: it has not ended, or it would stop again "
+                    + "at once. Give it more money in the budget box. The terminal serving this page "
+                    + "says which.",
                 ExitCode.InvalidArguments =>
                     "That is not something this can be asked of that run.",
                 _ => $"'{command}' ended with exit code {code}. The terminal serving this page "
@@ -490,41 +505,8 @@ internal static class DashboardActions
 
         // Started here and finished wherever it finishes: whatever it ends up
         // doing is written where the schedules write theirs.
-        var running = Task.Run(
-            async () =>
-            {
-                try
-                {
-                    var code = await commands.RunAsync("team run", arguments, ct).ConfigureAwait(false);
-
-                    if (code != (int)ExitCode.Success)
-                    {
-                        output.WriteLine(
-                            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] "
-                            + $"that run ended with exit code {code}.");
-                    }
-
-                    return code;
-                }
-                catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException)
-                {
-                    output.WriteLine(
-                        $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] "
-                        + $"that run could not be started: {Markup.Escape(ex.Message)}");
-
-                    return (int)ExitCode.GeneralFailure;
-                }
-            },
-            CancellationToken.None);
-
-        var settled = await Task.WhenAny(running, Task.Delay(Settles, ct)).ConfigureAwait(false);
-
-        if (settled != (Task)running)
-        {
-            return OperationResult.Ok();
-        }
-
-        var exit = await running.ConfigureAwait(false);
+        var exit = await InBackgroundAsync(commands, time, "team run", arguments, output, ct)
+            .ConfigureAwait(false);
 
         if (exit == (int)ExitCode.Success)
         {
@@ -555,6 +537,53 @@ internal static class DashboardActions
                      + "page has the reason.",
             },
             (ExitCode)exit);
+    }
+
+    /// <summary>
+    /// Runs a command that goes on for as long as a run does, and answers once
+    /// it has either refused or had long enough to have.
+    /// </summary>
+    /// <returns>The command's exit code if it ended that quickly, else success.</returns>
+    private static async Task<int> InBackgroundAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        string command,
+        IReadOnlyList<string> arguments,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        var running = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    var code = await commands.RunAsync(command, arguments, ct).ConfigureAwait(false);
+
+                    if (code != (int)ExitCode.Success)
+                    {
+                        output.WriteLine(
+                            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                            + $"{Markup.Escape(command)} ended with exit code {code}.");
+                    }
+
+                    return code;
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException)
+                {
+                    output.WriteLine(
+                        $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                        + $"{Markup.Escape(command)} could not be started: {Markup.Escape(ex.Message)}");
+
+                    return (int)ExitCode.GeneralFailure;
+                }
+            },
+            CancellationToken.None);
+
+        var settled = await Task.WhenAny(running, Task.Delay(Settles, ct)).ConfigureAwait(false);
+
+        return settled == (Task)running
+            ? await running.ConfigureAwait(false)
+            : (int)ExitCode.Success;
     }
 
     /// <summary>
@@ -930,6 +959,26 @@ internal static class DashboardActions
         SpecialistOrigin.Project => "this project's",
         _ => "ships with Loadout",
     };
+
+    /// <summary>The command line for carrying an ended run on.</summary>
+    private static List<string> PickUp(RunAction action)
+    {
+        var arguments = new List<string> { action.Run };
+
+        if (action.Budget is { Length: > 0 } budget)
+        {
+            arguments.Add("--usd");
+            arguments.Add(budget);
+        }
+
+        if (action.Message is { Length: > 0 } message)
+        {
+            arguments.Add("--message");
+            arguments.Add(message);
+        }
+
+        return arguments;
+    }
 
     /// <summary>The command line for answering one gate.</summary>
     private static List<string> Gate(RunAction action)

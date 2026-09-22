@@ -2982,6 +2982,10 @@
       <button type="button" id="resume">Let it carry on</button>
       <button type="button" id="stop">Stop it</button>
       <button type="button" id="again">Run it again</button>
+      <!-- Only on a run that has ended: carries it on where it stopped, with
+           the budget box as its new budget and the message box as what the
+           lead is told. -->
+      <button type="button" id="pickup">Pick it up</button>
       <!-- Only ever against a run that has ended: a live run reads its own
            directory for the answers it is waiting on, and `team runs remove`
            refuses one anyway. -->
@@ -6956,6 +6960,7 @@
     // be run again, and the button said otherwise until the pane was opened
     // a second time - the same staleness the heading and the gates had.
     document.getElementById("again").hidden = run.running;
+    document.getElementById("pickup").hidden = run.running;
     document.getElementById("forget").hidden = run.running;
 
     // A rename lands as a file the next read picks up, and it can be done from
@@ -7479,6 +7484,45 @@
       It refuses a live run - here by not being drawn, and in the command that
       does the work, which is the one that matters.
     */
+    /*
+      Carrying an ended run on, where it stopped. The budget box is its new
+      budget and the message box is what the lead is told, so somebody picking
+      up a run that ran out of money types the figure and presses one button.
+      The command refuses one that would stop again at once, and says why.
+    */
+    var pickup = document.getElementById("pickup");
+
+    pickup.hidden = run.running;
+
+    pickup.onclick = function () {
+      var spent = run.budget ? run.budget.spent || 0 : 0;
+      var wanted = Number(document.getElementById("budget-usd").value);
+      var said = document.getElementById("say").value.trim();
+
+      var body = {};
+
+      if (wanted > spent && (!run.budget || wanted !== run.budget.cap)) {
+        body.budget = String(wanted);
+      }
+
+      if (said) { body.message = said; }
+
+      if (!window.confirm("Pick up " + (run.room || run.id) + " where it stopped"
+        + (run.ended ? " (" + run.ended + ")" : "") + "?"
+        + (body.budget ? " It may spend $" + wanted.toFixed(2) + " in all." : "")
+        + (said ? "\n\nThe lead is told: " + said : ""))) {
+        return;
+      }
+
+      act(run.id, "pickup", body)
+        .then(function () {
+          if (said) { document.getElementById("say").value = ""; }
+
+          announce(run.id + " is being picked up.");
+        })
+        .catch(function (e) { announce(e.message); });
+    };
+
     var forget = document.getElementById("forget");
 
     forget.hidden = run.running;

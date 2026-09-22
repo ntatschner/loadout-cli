@@ -219,6 +219,10 @@ public sealed record RunCovered(string Criterion, string Verdict, string? Becaus
 /// The commit its branch started from, which is what makes its diff still
 /// mean the same thing after the branch has been merged and tidied away.
 /// </param>
+/// <param name="Session">
+/// The agent's own session for this node, as its latest turn reported it,
+/// which is what picking the node up again after the run ended resumes.
+/// </param>
 /// <remarks>
 /// <paramref name="Doing"/> and <paramref name="Said"/> are two accounts and
 /// neither corrects the other. The first is precise about what happened and
@@ -241,7 +245,8 @@ public sealed record RunNode(
     string? Said = null,
     string? Model = null,
     string? Base = null,
-    string? Trouble = null)
+    string? Trouble = null,
+    string? Session = null)
 {
     /// <summary>How long it has been going, or how long it took.</summary>
     public TimeSpan? Took =>
@@ -871,6 +876,18 @@ public sealed class RunJournal : IRunJournal
                     started = entry.At;
                     break;
 
+                // Picked up again after it had ended. Running from here, so
+                // the ending it had is not its ending any more; and its cost is
+                // the nodes' own figures again until it writes a new total,
+                // because the total the first ending wrote stops at that point.
+                case "run.reopened":
+                    finished = null;
+                    ended = null;
+                    outcome = null;
+                    cost = 0m;
+                    limit = (int)(entry.Number("rounds") ?? limit);
+                    break;
+
                 // Raised (or lowered) while it ran. The latest one is what it
                 // is held to now, and what the page measures the spend against.
                 case "run.budget":
@@ -968,6 +985,7 @@ public sealed class RunJournal : IRunJournal
 
                     Set(turned, node => node with
                     {
+                        Session = entry.Text("session") ?? node.Session,
                         Turns = node.Turns + (int)(entry.Number("turns") ?? 0),
                         CostUsd = node.CostUsd + (entry.Number("cost") ?? 0m),
                         Denials = node.Denials + (int)(entry.Number("denials") ?? 0),
@@ -1137,6 +1155,9 @@ public sealed class RunJournal : IRunJournal
                 + (entry.Number("rounds") is { } rounds ? $" - {rounds:0} round(s)" : string.Empty)
                 + (entry.Number("cost") is { } spent ? $", ${spent:0.00}" : string.Empty),
             "round.started" => $"round {entry.Number("round")} of {entry.Number("of")}",
+            "run.reopened" => "picked up again"
+                + (entry.Text("was") is { Length: > 0 } was ? $" (it had ended: {was})" : string.Empty)
+                + (entry.Text("session") is { Length: > 0 } ? ", the lead resuming its own session" : ", with a fresh lead told where it got to"),
             "run.budget" => $"budget set to ${entry.Number("budget"):0.00}"
                 + (entry.Text("by") is { Length: > 0 } by ? $" by {by}" : string.Empty),
             "node.doing" => entry.Text("doing") ?? "working",

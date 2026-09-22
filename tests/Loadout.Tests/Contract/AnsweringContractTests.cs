@@ -336,6 +336,33 @@ public sealed class AnsweringContractTests
     }
 
     [BuiltCliFact]
+    public async Task A_run_still_going_is_not_picked_up()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await RunAsync(loadout, finished: false);
+
+        var run = await loadout.RunAsync("team", "resume", Run, "--non-interactive");
+
+        run.ExitCode.Should().NotBe(0);
+        (run.StandardOutput + run.StandardError).Should().Contain(
+            "has not ended", "a second coordinator would be two answering one lead");
+    }
+
+    [BuiltCliFact]
+    public async Task A_run_that_ended_before_its_lead_started_is_not_picked_up()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await RunAsync(loadout, finished: true);
+
+        var run = await loadout.RunAsync("team", "resume", Run, "--non-interactive");
+
+        run.ExitCode.Should().NotBe(0);
+        (run.StandardOutput + run.StandardError).Should().Contain("Run it again instead");
+    }
+
+    [BuiltCliFact]
     public async Task A_message_to_a_run_that_is_getting_on_with_it_says_nothing_extra()
     {
         using var loadout = new LoadoutProcess();

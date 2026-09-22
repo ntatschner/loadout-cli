@@ -1434,19 +1434,46 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         var request = Requesting(
             project.Entry.Slug, team, specialists, settings, autonomy, ceiling, machine.Value);
 
+        return await DriveAsync(
+            _runner, _console, _reading, _git, _paths, _processes,
+            output, settings, request, project, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs a request that has been worked out, from choosing where its
+    /// questions go to saying how it ended.
+    /// </summary>
+    /// <remarks>
+    /// Shared by starting a run and picking one up, which differ only in how
+    /// the request is made. Two copies of this would be two places deciding
+    /// where a question goes, and the rule here is that there is one.
+    /// </remarks>
+    internal static async Task<int> DriveAsync(
+        ITeamRunner runner,
+        IAnsiConsole terminal,
+        ReadingProfile reading,
+        Loadout.Core.Git.IGitManager git,
+        IPlatformPaths paths,
+        IProcessInspector processes,
+        CommandOutput output,
+        GlobalSettings settings,
+        TeamRunRequest request,
+        Loadout.Models.Projects.ProjectResolution project,
+        CancellationToken ct)
+    {
         // Where the run's questions go. A terminal answers its own; a run with
         // nobody at one sends them to the dashboard, if a daemon is serving it.
         // Decided once rather than per question, because two places able to
         // answer one question is a race whose loser leaves a dead prompt.
         ITeamConsole console = settings.AllowsPrompting
-            ? new TerminalTeamConsole(_console, settings, _reading)
-            : Serving()
+            ? new TerminalTeamConsole(terminal, settings, reading)
+            : Serving(paths, processes)
                 ? new DashboardTeamConsole(TimeProvider.System, line => output.WriteLine(TeamStyle.Note(line)))
-                : new TerminalTeamConsole(_console, settings, _reading);
+                : new TerminalTeamConsole(terminal, settings, reading);
 
-        await SayWhereAsync(output, project, cancellationToken).ConfigureAwait(false);
+        await SayWhereAsync(git, output, project, ct).ConfigureAwait(false);
 
-        var result = await _runner.RunAsync(request, console, cancellationToken).ConfigureAwait(false);
+        var result = await runner.RunAsync(request, console, ct).ConfigureAwait(false);
 
         if (result.Failed)
         {
@@ -1553,8 +1580,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
     /// whether that process is still the one that wrote it is the difference
     /// between sending a question somewhere and sending it nowhere.
     /// </remarks>
-    private bool Serving() =>
-        Loadout.Core.Teams.Daemon.DaemonNote.Live(_paths, _processes) is not null;
+    private static bool Serving(IPlatformPaths paths, IProcessInspector processes) =>
+        Loadout.Core.Teams.Daemon.DaemonNote.Live(paths, processes) is not null;
 
     /// <summary>
     /// Says which tree the run will work on, before it spends anything.
@@ -1578,7 +1605,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
     /// courtesy before an expensive thing, not a gate.
     /// </para>
     /// </remarks>
-    private async Task SayWhereAsync(
+    private static async Task SayWhereAsync(
+        Loadout.Core.Git.IGitManager git,
         CommandOutput output,
         Loadout.Models.Projects.ProjectResolution project,
         CancellationToken ct)
@@ -1588,7 +1616,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             return;
         }
 
-        var state = await _git.GetStateAsync(path, ct).ConfigureAwait(false);
+        var state = await git.GetStateAsync(path, ct).ConfigureAwait(false);
 
         var branch = state.Succeeded && state.Value?.Branch is { Length: > 0 } named
             ? $" on [bold]{Markup.Escape(named)}[/]"

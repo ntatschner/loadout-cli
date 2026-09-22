@@ -2010,6 +2010,148 @@ public sealed class TeamRunnerTests : IDisposable
             .Should().Be("2", "the raise is kept where the next check reads it");
     }
 
+    /// <summary>Picks up an ended run, as 'team resume' would once it has settled the budget.</summary>
+    private async Task<OperationResult<TeamRunOutcome>> ResumeAsync(
+        string runId,
+        TeamDefinition team,
+        string? message = null,
+        int rounds = 10)
+    {
+        return await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+            new TeamRunRequest("demo", team, await SpecialistsAsync(),
+                "Add --since to loadout usage.", "supervised", MaxRounds: rounds, Offline: true,
+                Resuming: runId, ResumeMessage: message),
+            _console);
+    }
+
+    /// <summary>A run that ends on its budget with its implementer's work on a branch.</summary>
+    private async Task<(TeamDefinition Team, TeamRunOutcome Outcome)> SpentAsync(string leadSession)
+    {
+        var team = await IteratingProjectAsync();
+
+        team.Rules.Budget.Usd = 0.10m;
+        _console.CanAsk = false;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init(leadSession),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.20m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync(team)).Value!;
+
+        outcome.Ended.Should().StartWith("budget spent", "the case being picked up");
+
+        return (team, outcome);
+    }
+
+    [Fact]
+    public async Task An_ended_run_is_picked_up_where_it_stopped_with_its_lead_s_own_session()
+    {
+        var (team, first) = await SpentAsync("lead-1");
+
+        // What 'team resume --usd' leaves before it starts the run, and a stop
+        // left over from before, which must not end it again at once.
+        await RunControl.SetBudgetAsync(first.Directory!, 5m);
+        await RunControl.StopAsync(first.Directory!);
+
+        // Reports done, is told about the gate once, and reports done again.
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        var picked = (await ResumeAsync(first.RunId, team, "Finish it off.")).Value!;
+
+        picked.RunId.Should().Be(first.RunId, "one run that stopped and carried on, not two");
+        picked.Directory.Should().Be(first.Directory);
+        picked.Ended.Should().Be("done");
+        picked.CostUsd.Should().Be(first.CostUsd + 0.03m, "it carries on counting from what it had spent");
+
+        _launcher.Requests.Last().Request.ResumeSessionId.Should().Be("lead-1");
+
+        // The lead remembers the run, so it is told what changed and not
+        // handed its whole brief again.
+        var told = _launcher.Written("role.project-lead")[2];
+
+        told.Should().Contain("This run is being picked up again");
+        told.Should().Contain("budget spent");
+        told.Should().Contain("Finish it off.");
+        told.Should().NotContain("Add --since to loadout usage.");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(first.Directory!, "journal.jsonl"));
+
+        journal.Count(l => l.Contains("\"kind\":\"run.reopened\"")).Should().Be(1);
+        journal.Count(l => l.Contains("\"kind\":\"run.finished\"")).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task A_run_with_no_recorded_session_is_picked_up_by_a_fresh_lead_told_where_it_got_to()
+    {
+        // An empty session is what a run written before sessions were
+        // recorded looks like.
+        var (team, first) = await SpentAsync(string.Empty);
+
+        await RunControl.SetBudgetAsync(first.Directory!, 5m);
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-2"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        var picked = (await ResumeAsync(first.RunId, team)).Value!;
+
+        picked.Ended.Should().Be("done");
+        _launcher.Requests.Last().Request.ResumeSessionId.Should().BeNull();
+
+        var told = _launcher.Written("role.project-lead")[2];
+
+        told.Should().Contain("Add --since to loadout usage.", "a new session has only what it is told");
+        told.Should().Contain("You are a new session");
+        told.Should().Contain("waiting on the merge gate", "so it does not ask for the same work again");
+    }
+
+    [Fact]
+    public async Task A_run_still_going_is_not_picked_up_by_a_second_coordinator()
+    {
+        var (team, first) = await SpentAsync("lead-1");
+
+        // Reopened and never finished, which is how a live run reads.
+        await File.AppendAllTextAsync(
+            Path.Combine(first.Directory!, "journal.jsonl"),
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                at = DateTimeOffset.UtcNow,
+                run = first.RunId,
+                node = (string?)null,
+                kind = "run.reopened",
+                data = new { was = "budget spent" },
+            }) + "\n");
+
+        var refused = await ResumeAsync(first.RunId, team);
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain("has not ended");
+    }
+
+    [Fact]
+    public async Task What_an_ended_run_left_is_read_back_for_picking_it_up()
+    {
+        var (_, first) = await SpentAsync("lead-1");
+
+        var (read, why) = RunResumption.Read(new RunJournal(_paths), first.RunId);
+
+        why.Should().BeNull();
+        read!.LeadSession.Should().Be("lead-1");
+        read.Lead.Should().Be("lead");
+        read.Summary.CostUsd.Should().Be(first.CostUsd);
+        read.Branches.Should().ContainKey("implementer", "its work was never merged");
+    }
+
     [Fact]
     public async Task A_run_that_did_not_finish_merges_nothing_and_says_where_the_work_is()
     {
@@ -2118,7 +2260,16 @@ public sealed class TeamRunnerTests : IDisposable
             {
                 BeforeStart(Path.GetDirectoryName(policy)!);
             }
-            var plan = new LaunchPlan("claude", ["-p", "--verbose"], "C:/work", [], [], null, 0, 0, null, null, request.Task, request.Mode);
+            // With the session on the command line where one was asked for,
+            // as the real adapter puts it: the runner reads this to tell a lead
+            // that resumed from one that could not, and a fake that dropped it
+            // would have every resume test pass as a fresh start.
+            var plan = new LaunchPlan(
+                "claude",
+                request.ResumeSessionId is { Length: > 0 } resume
+                    ? ["--resume", resume, "-p", "--verbose"]
+                    : ["-p", "--verbose"],
+                "C:/work", [], [], null, 0, 0, null, null, request.Task, request.Mode);
             var preflight = new PreflightResult([], new Dictionary<string, string>());
 
             if (request.DryRun)

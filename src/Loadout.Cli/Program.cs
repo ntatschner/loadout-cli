@@ -640,6 +640,7 @@ public static class Program
             team.AddCommand<TeamEditCommand>("edit");
             team.AddCommand<TeamRemoveCommand>("remove");
             team.AddCommand<TeamRunCommand>("run");
+            team.AddCommand<TeamResumeCommand>("resume");
 
             // A branch whose default is the listing, so 'team runs' means what
             // it always did and 'team runs remove' is a runs command rather
