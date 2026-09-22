@@ -398,7 +398,7 @@ internal sealed class TeamsWindow : Window
             var doing = node.Doing is { Length: > 0 } what ? "  " + what : string.Empty;
 
             lines.Add(
-                $"{Shorten(node.Node, 16),-16} {Shorten(node.Role, 20),-20} {node.State,-10}"
+                $"{Shorten(node.Node, 16),-16} {Shorten(node.Role, 20),-20} {Shorten(run.Activity(node), 24),-15}"
                 + $" {node.Turns} turn(s){doing}");
 
             // The node's own words on their own line, marked as such. Two

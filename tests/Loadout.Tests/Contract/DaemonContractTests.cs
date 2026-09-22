@@ -255,6 +255,35 @@ public sealed class DaemonContractTests
         run.StandardOutput.Should().NotContain("A daemon is already serving");
     }
 
+    /// <remarks>
+    /// Found running on the development machine: one daemon started at login
+    /// and a second from a terminal. The second overwrote the note and the
+    /// first carried on holding 140 MB that nothing knew about - and both
+    /// would have fired every schedule.
+    /// </remarks>
+    [BuiltCliFact]
+    public async Task A_second_daemon_is_refused_while_the_first_is_running()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await DaemonNoteAsync(loadout, live: true);
+
+        // Bounded, because the failure this guards against is a daemon that
+        // starts and never returns, and that would hold the whole suite.
+        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        var run = loadout.RunAsync("team", "daemon", "--no-dashboard");
+
+        var finished = await Task.WhenAny(run, Task.Delay(Timeout.Infinite, patience.Token));
+
+        finished.Should().Be((Task)run, "a second daemon should refuse at once, not start");
+
+        var said = await run;
+
+        said.ExitCode.Should().NotBe(0);
+        (said.StandardOutput + said.StandardError).Should().Contain("already running");
+    }
+
     [BuiltCliFact]
     public async Task Asking_for_a_page_that_cannot_touch_anything_still_serves_one()
     {

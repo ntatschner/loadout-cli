@@ -127,7 +127,7 @@ internal static class DashboardActions
     /// </remarks>
     internal static readonly string[] Verbs =
     [
-        "gate", "gates", "message", "stop", "forget", "pause", "resume", "name", "pr", "say",
+        "gate", "gates", "message", "stop", "forget", "pause", "resume", "name", "pr", "say", "budget",
     ];
 
     /// <summary>
@@ -151,6 +151,7 @@ internal static class DashboardActions
             "gates" or "gate" => ("team gate", Gate(action)),
             "message" => ("team message", new List<string> { action.Run, "--message", action.Message ?? string.Empty }),
             "stop" => ("team halt", [action.Run]),
+            "budget" => ("team budget", [action.Run, "--usd", action.Budget ?? string.Empty]),
 
             // No --yes: naming a run is agreeing to it, so the command does not
             // ask and does not take the option. The page asks, by name, before
@@ -336,6 +337,11 @@ internal static class DashboardActions
         if (action.Verb == "message" && action.Message is not { Length: > 0 })
         {
             return OperationResult.Fail("Say something to say.", ExitCode.InvalidArguments);
+        }
+
+        if (action.Verb == "budget" && action.Budget is not { Length: > 0 })
+        {
+            return OperationResult.Fail("Say what it may spend.", ExitCode.InvalidArguments);
         }
 
         // Said where whoever started the server can see it. A page that can

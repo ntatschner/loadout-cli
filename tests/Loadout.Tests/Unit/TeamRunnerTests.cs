@@ -1914,6 +1914,11 @@ public sealed class TeamRunnerTests : IDisposable
 
         team.Rules.Budget.Usd = 0.10m;
 
+        // Unattended, which is the case this is about. A run somebody is
+        // watching asks whether to raise the budget instead of ending; that
+        // is covered by the tests after this one.
+        _console.CanAsk = false;
+
         _launcher.Script(
             "role.project-lead",
             Init("lead-1"),
@@ -1937,6 +1942,72 @@ public sealed class TeamRunnerTests : IDisposable
         // Two prompts: the brief, and the reminder the lead answered. A third
         // is the turn this is about.
         _launcher.Written("role.project-lead").Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task A_watched_run_at_its_budget_asks_and_ends_when_told_no()
+    {
+        var team = await IteratingProjectAsync();
+
+        team.Rules.Budget.Usd = 0.10m;
+
+        ReportQuestion? asked = null;
+
+        _console.Decide = question =>
+        {
+            asked = question;
+
+            return null;
+        };
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.20m),
+            Result(LeadDone(), 0.30m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync(team)).Value!;
+
+        asked.Should().NotBeNull("somebody is watching, so the run asks before it ends");
+        asked!.Question.Should().Contain("budget");
+
+        outcome.Ended.Should().StartWith("budget spent");
+        _launcher.Written("role.project-lead").Should().HaveCount(2, "no is no: the next turn is not taken");
+    }
+
+    [Fact]
+    public async Task A_watched_run_given_more_carries_on_and_says_so()
+    {
+        var team = await IteratingProjectAsync();
+
+        team.Rules.Budget.Usd = 0.10m;
+
+        // The recommendation, which is the first raise offered.
+        _console.Decide = question => question.Recommendation;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.20m),
+            Result(LeadDone(), 0.30m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync(team)).Value!;
+
+        outcome.Ended.Should().NotStartWith("budget spent");
+        _launcher.Written("role.project-lead").Should().HaveCount(3, "the raise bought the turn it was asked for");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain(l => l.Contains("\"kind\":\"run.budget\"") && l.Contains("\"budget\":2"));
+
+        (await File.ReadAllTextAsync(Path.Combine(outcome.Directory!, RunControl.BudgetFile)))
+            .Should().Be("2", "the raise is kept where the next check reads it");
     }
 
     [Fact]

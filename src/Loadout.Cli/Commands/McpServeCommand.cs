@@ -600,6 +600,14 @@ public sealed class LoadoutTools
         [Description("The agent's own identifier for the call.")] string? tool_use_id = null)
     {
         var policy = _scope.PolicyPath is { Length: > 0 } path ? NodePermissions.Read(path) : null;
+
+        // What the person has agreed to for this role so far in the run, read
+        // on every call because another node's answer may have added to it.
+        if (policy is not null && Path.GetDirectoryName(_scope.PolicyPath) is { Length: > 0 } run)
+        {
+            policy = policy with { Agreed = NodePermissions.Agreed(run, policy.Role) };
+        }
+
         var inputJson = input?.ValueKind is JsonValueKind.Object ? input.Value.GetRawText() : null;
         var decision = NodePermissions.Decide(policy, tool_name, inputJson);
 
@@ -658,6 +666,16 @@ public sealed class LoadoutTools
                 false, "There is nowhere to put this question, so it cannot be asked.");
         }
 
+        // The agent's own three answers: yes, yes and stop asking about ones
+        // like this, and no - with whatever the person types going to the
+        // node as what to do instead. Asking about every call one at a time,
+        // with nothing between once and never, made a supervised run a
+        // question per tool call. Never for a remedy: agreeing to one is
+        // decided per run on purpose, by whoever reads what it does.
+        var rule = remedy is null
+            ? NodePermissions.Rememberable(tool, NodePermissions.Target(inputJson))
+            : null;
+
         var ask = new PendingAsk(
             Id: $"{policy.Node}-{toolUseId ?? Guid.NewGuid().ToString("N")[..8]}",
             Node: policy.Node,
@@ -676,19 +694,47 @@ public sealed class LoadoutTools
             // without going and reading the script, so the question carries
             // what it does, what it assumes and how you would know it worked.
             Kind: remedy is null ? "permission" : "remedy",
-            Asked: remedy?.Asking(policy.Node, policy.Role));
+            Asked: remedy?.Asking(policy.Node, policy.Role),
+            Options: rule is null ? null : ["yes", NodePermissions.AlwaysOption(rule), "no"]);
 
         var answer = await NodePermissions
             .AskAsync(directory, ask, _time)
             .ConfigureAwait(false);
 
-        return answer is null
-            ? new PermissionDecision(
+        if (answer is null)
+        {
+            return new PermissionDecision(
                 false,
                 $"Nobody answered whether you may use {tool} within "
                 + $"{NodePermissions.Patience.TotalMinutes:F0} minutes, so it is refused. "
-                + "Report what you needed and why rather than finding another way to do it.")
-            : new PermissionDecision(answer.Allowed, answer.Reason);
+                + "Report what you needed and why rather than finding another way to do it.");
+        }
+
+        if (answer.Allowed
+            && rule is not null
+            && string.Equals(answer.Chosen, NodePermissions.AlwaysOption(rule), StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                NodePermissions.Agree(directory, policy.Role, rule);
+
+                return new PermissionDecision(
+                    true,
+                    $"The person running this team allowed it, and will not be asked about '{rule}' "
+                    + $"for the {policy.Role} role again this run.");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Allowed either way. Only the remembering failed, and the
+                // cost of that is being asked again.
+                return new PermissionDecision(
+                    true,
+                    "The person running this team allowed it. It could not be remembered, so the next "
+                    + "call like it will be asked about again.");
+            }
+        }
+
+        return new PermissionDecision(answer.Allowed, answer.Reason);
     }
 
     /// <summary>Keeps what was asked, beside the policy it was answered from.</summary>

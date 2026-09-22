@@ -30,6 +30,12 @@ namespace Loadout.Core.Teams;
 /// What this team has registered and what was decided about each, resolved
 /// before the node started. Empty for a team with none.
 /// </param>
+/// <param name="Agreed">
+/// Rules the person running the team agreed to earlier in this run, by
+/// answering "yes, and don't ask again". Never written into the policy file:
+/// read in by the answerer from the run's directory on every call, so a rule
+/// agreed while one node was asking reaches the next node of the same role.
+/// </param>
 public sealed record NodePolicy(
     string Run,
     string Node,
@@ -37,7 +43,8 @@ public sealed record NodePolicy(
     IReadOnlyList<string> Allow,
     IReadOnlyList<string> Deny,
     bool Ask = false,
-    IReadOnlyList<RemedyStanding>? Remedies = null);
+    IReadOnlyList<RemedyStanding>? Remedies = null,
+    IReadOnlyList<string>? Agreed = null);
 
 /// <summary>
 /// One of a team's remedies, and what was decided about it before the node
@@ -267,7 +274,7 @@ public sealed record PermissionDecision(
 /// there to ask, and the reason says which of the two it was.
 /// </para>
 /// </remarks>
-public static class NodePermissions
+public static partial class NodePermissions
 {
     /// <summary>The file a run writes for a node, under the run's own directory.</summary>
     public static string FileName(string node) => $"policy-{Safe(node)}.json";
@@ -608,9 +615,24 @@ public static class NodePermissions
             }
         }
 
-        foreach (var rule in policy.Allow)
+        // The role's own rules first, then what the person agreed to during
+        // the run. Both after the deny list: agreeing to something for a role
+        // cannot reach past what the role forbids, any more than asking can.
+        var agreed = policy.Agreed ?? [];
+
+        foreach (var (rule, person) in policy.Allow.Select(rule => (rule, false))
+            .Concat(agreed.Select(rule => (rule, true))))
         {
             if (!Matches(rule, tool, target))
+            {
+                continue;
+            }
+
+            // A prefix the person agreed to covers that command and nothing
+            // chained after it. "Don't ask again for git status" is not
+            // agreement to "git status && rm -rf .", and the offer was built
+            // from a single command for exactly that reason.
+            if (person && (tool is "Bash" or "PowerShell") && Chained(target))
             {
                 continue;
             }
@@ -649,7 +671,12 @@ public static class NodePermissions
                 };
             }
 
-            return new PermissionDecision(true, $"The {policy.Role} role allows '{rule}'.", rule);
+            return new PermissionDecision(
+                true,
+                person
+                    ? $"The person running this team agreed to '{rule}' for the {policy.Role} role earlier in this run."
+                    : $"The {policy.Role} role allows '{rule}'.",
+                rule);
         }
 
         return new PermissionDecision(
@@ -696,6 +723,198 @@ public static class NodePermissions
 
         return null;
     }
+
+    /// <summary>Where a run keeps what the person agreed to for one role.</summary>
+    public static string AgreedFileName(string role) => $"agreed-{Safe(role)}.jsonl";
+
+    /// <summary>The option that allows a call and stops asking about ones like it.</summary>
+    public static string AlwaysOption(string rule) => $"yes, and don't ask again for {rule}";
+
+    /// <summary>What the node is told when the person allowed it.</summary>
+    public const string AllowedOnce = "The person running this team allowed it, for this call only.";
+
+    /// <summary>What the node is told when the person refused it.</summary>
+    public const string RefusedPlainly =
+        "The person running this team refused it. Report what you needed and why rather than "
+        + "finding another way to do it.";
+
+    /// <summary>
+    /// What a node is told about a permission somebody answered, with their
+    /// own words where they gave any.
+    /// </summary>
+    /// <remarks>
+    /// The person's words are the point of refusing with a reason - "no, use
+    /// the script in build/ instead" - so they are passed on whole, after a
+    /// clause saying which way it went. Words alone read to the node as advice
+    /// with no verdict attached.
+    /// </remarks>
+    public static string Told(bool allowed, string? words) =>
+        words?.Trim() is { Length: > 0 } said
+            ? allowed
+                ? $"The person running this team allowed it, and said: {said}"
+                : $"The person running this team refused it, and said: {said}"
+            : allowed ? AllowedOnce : RefusedPlainly;
+
+    /// <summary>
+    /// The rule a "don't ask again" would agree to for this call, or null
+    /// where there is none worth offering.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same shapes the agent itself offers. A command is agreed to by its
+    /// command and subcommand - <c>Bash(git status:*)</c> - so the next
+    /// <c>git status --short</c> is not asked about. An edit is agreed to for
+    /// the tool as a whole, the way the agent's own "allow all edits" is. A
+    /// fetch is agreed to for its site, not for the web.
+    /// </para>
+    /// <para>
+    /// A chained command gets nothing: a prefix agreed from
+    /// <c>dotnet build &amp;&amp; dotnet test</c> would be a prefix of anything,
+    /// and an exact rule would never match again. A command with no target at
+    /// all gets nothing either, because the only rule left is the whole tool.
+    /// </para>
+    /// <para>
+    /// Nothing is offered that the redactor would change. The option is shown
+    /// on the page and written to disk as it is, because it is matched against
+    /// the answer, so a rule carrying a credential would put one on a screen.
+    /// </para>
+    /// </remarks>
+    public static string? Rememberable(string tool, string? target)
+    {
+        if (string.IsNullOrWhiteSpace(tool))
+        {
+            return null;
+        }
+
+        string? rule;
+
+        if (tool is "Bash" or "PowerShell")
+        {
+            if (target is not { Length: > 0 } command || Chained(command))
+            {
+                return null;
+            }
+
+            var words = command.Split((char[])[' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+
+            if (words.Length == 0)
+            {
+                return null;
+            }
+
+            // The command and its subcommand - "git status", "dotnet test" -
+            // covers the next one like it. Where the second word is a flag, a
+            // path or an argument, a prefix of the first word alone would be
+            // "git:*", which agrees to git push as well; so that one is agreed
+            // to exactly, and only a command of one word gets a bare prefix.
+            if (words.Length == 1)
+            {
+                rule = $"{tool}({words[0]}:*)";
+            }
+            else if (Subcommand().IsMatch(words[1]))
+            {
+                rule = $"{tool}({words[0]} {words[1]}:*)";
+            }
+            else if (command.TrimEnd().EndsWith('*'))
+            {
+                // Exact would be read as a prefix, since that is what a
+                // trailing star means in a rule.
+                return null;
+            }
+            else
+            {
+                rule = $"{tool}({command.Trim()})";
+            }
+        }
+        else if (tool is "WebFetch")
+        {
+            if (target is not { Length: > 0 } url
+                || !Uri.TryCreate(url, UriKind.Absolute, out var site)
+                || site.Scheme is not ("http" or "https"))
+            {
+                return null;
+            }
+
+            rule = $"WebFetch({site.GetLeftPart(UriPartial.Authority)}/*)";
+        }
+        else
+        {
+            rule = tool;
+        }
+
+        try
+        {
+            return SecretRedactor.Redact(rule) == rule ? rule : null;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>What the person has agreed to for one role in this run.</summary>
+    public static IReadOnlyList<string> Agreed(string directory, string role)
+    {
+        var path = Path.Combine(directory, AgreedFileName(role));
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return [];
+            }
+
+            var rules = new List<string>();
+
+            foreach (var line in File.ReadAllLines(path))
+            {
+                try
+                {
+                    if (line.Length > 0 && JsonSerializer.Deserialize<string>(line) is { Length: > 0 } rule)
+                    {
+                        rules.Add(rule);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Half a line from a write in progress. The next call
+                    // reads it whole.
+                }
+            }
+
+            return rules;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Nothing agreed is the safe reading: the call is asked about
+            // again rather than allowed on a file nobody could read.
+            return [];
+        }
+    }
+
+    /// <summary>Records that the person agreed to a rule for one role, for the rest of this run.</summary>
+    /// <remarks>
+    /// Appended a line at a time, because two nodes of one role can each be
+    /// answered at once, in two processes, and a whole-file rewrite would let
+    /// the second lose the first.
+    /// </remarks>
+    public static void Agree(string directory, string role, string rule)
+    {
+        Directory.CreateDirectory(directory);
+
+        File.AppendAllText(
+            Path.Combine(directory, AgreedFileName(role)),
+            JsonSerializer.Serialize(rule) + "\n");
+    }
+
+    /// <summary>Whether a command runs more than one thing.</summary>
+    private static bool Chained(string? command) =>
+        command is { Length: > 0 }
+        && (command.IndexOfAny(['|', ';', '&', '`', '>', '<', '\n', '\r']) >= 0
+            || command.Contains("$(", StringComparison.Ordinal));
+
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_-]*$")]
+    private static partial Regex Subcommand();
 
     /// <summary>
     /// Whether a call is worth putting to a person rather than answering from

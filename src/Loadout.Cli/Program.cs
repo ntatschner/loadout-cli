@@ -679,6 +679,7 @@ public static class Program
             team.AddCommand<TeamGateCommand>("gate");
             team.AddCommand<TeamMessageCommand>("message");
             team.AddCommand<TeamHaltCommand>("halt");
+            team.AddCommand<TeamBudgetCommand>("budget");
             team.AddCommand<TeamNameCommand>("name");
             team.AddCommand<TeamPrCommand>("pr");
             team.AddCommand<TeamSayCommand>("say");

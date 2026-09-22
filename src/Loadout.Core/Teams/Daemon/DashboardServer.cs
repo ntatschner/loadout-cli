@@ -647,7 +647,8 @@ public sealed class DashboardServer : IDisposable
             Text(asked, "message"),
             Text(asked, "room"),
             Text(asked, "node"),
-            Text(asked, "instead"));
+            Text(asked, "instead"),
+            Text(asked, "budget"));
 
         var done = await Act(action, ct).ConfigureAwait(false);
 
@@ -1552,6 +1553,11 @@ public sealed class DashboardServer : IDisposable
             node.Node,
             node.Role,
             node.State,
+
+            // What to show beside it: working, waiting for you, waiting on
+            // another node, done. The state above is what it last reported,
+            // and stays for the page's own logic.
+            activity = run.Activity(node),
             node.Turns,
             cost = node.CostUsd,
             node.Branch,

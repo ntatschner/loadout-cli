@@ -233,6 +233,108 @@ public sealed class AnsweringContractTests
             "the page now sends --agent, and a line the parser refuses never runs");
     }
 
+    /// <summary>Adds a node's permission question, offering the agent's three answers.</summary>
+    private static async Task PermissionAsync(string directory)
+    {
+        var asked = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(directory, "ask-implementer-1-toolu_9.json"),
+            JsonSerializer.Serialize(new
+            {
+                Id = "implementer-1-toolu_9",
+                Node = "implementer/1",
+                Role = "role.implementer",
+                Tool = "Bash",
+                Target = "git status --short",
+                At = asked,
+                Kind = "permission",
+                Options = new[] { "yes", "yes, and don't ask again for Bash(git status:*)", "no" },
+                Until = asked.AddMinutes(5),
+            }));
+    }
+
+    /// <remarks>
+    /// The node's side remembers the rule only when the answer names the
+    /// option it offered, word for word. "always" is what somebody types; the
+    /// option is what has to be written.
+    /// </remarks>
+    [BuiltCliFact]
+    public async Task Always_is_recorded_as_the_dont_ask_again_option_it_stands_for()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false);
+
+        File.Delete(Path.Combine(directory, "ask-gate-b4302e02.json"));
+        await PermissionAsync(directory);
+
+        var run = await loadout.RunAsync("team", "gate", Run, "--answer", "always");
+
+        run.ExitCode.Should().Be(0, run.StandardOutput + run.StandardError);
+
+        var answer = JsonDocument.Parse(await File.ReadAllTextAsync(
+            Path.Combine(directory, "answer-implementer-1-toolu_9.json"))).RootElement;
+
+        answer.GetProperty("Allowed").GetBoolean().Should().BeTrue();
+        answer.GetProperty("Chosen").GetString().Should().Be("yes, and don't ask again for Bash(git status:*)");
+    }
+
+    [BuiltCliFact]
+    public async Task A_no_with_words_tells_the_node_it_was_refused_and_what_to_do_instead()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false);
+
+        File.Delete(Path.Combine(directory, "ask-gate-b4302e02.json"));
+        await PermissionAsync(directory);
+
+        var run = await loadout.RunAsync(
+            "team", "gate", Run, "--answer", "no", "--reason", "read git log instead");
+
+        run.ExitCode.Should().Be(0, run.StandardOutput + run.StandardError);
+
+        var answer = JsonDocument.Parse(await File.ReadAllTextAsync(
+            Path.Combine(directory, "answer-implementer-1-toolu_9.json"))).RootElement;
+
+        answer.GetProperty("Allowed").GetBoolean().Should().BeFalse();
+
+        // The words alone read to the node as advice with no verdict.
+        answer.GetProperty("Reason").GetString().Should().Be(
+            "The person running this team refused it, and said: read git log instead");
+    }
+
+    [BuiltCliFact]
+    public async Task A_budget_set_on_a_running_run_is_left_where_the_run_reads_it()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false);
+
+        var run = await loadout.RunAsync("team", "budget", Run, "--usd", "40");
+
+        run.ExitCode.Should().Be(0, run.StandardOutput + run.StandardError);
+
+        (await File.ReadAllTextAsync(Path.Combine(directory, "control-budget"))).Should().Be("40");
+    }
+
+    [BuiltCliFact]
+    public async Task A_budget_for_a_run_that_has_finished_is_refused_rather_than_written()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: true);
+
+        var run = await loadout.RunAsync("team", "budget", Run, "--usd", "40");
+
+        run.ExitCode.Should().NotBe(0);
+        (run.StandardOutput + run.StandardError).Should().Contain("finished");
+
+        File.Exists(Path.Combine(directory, "control-budget")).Should().BeFalse(
+            "nothing is left to read it, and writing it would report a raise that never happens");
+    }
+
     [BuiltCliFact]
     public async Task A_message_to_a_run_that_is_getting_on_with_it_says_nothing_extra()
     {
