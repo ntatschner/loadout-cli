@@ -83,6 +83,7 @@ public static class ReportSchema
             "outward_taken": { "type": "array", "items": { "type": "string" } },
             "outward_requested": { "type": "array", "items": { "type": "string" } },
             "next": { "type": "string" },
+            "proposed_done_when": { "type": "array", "items": { "type": "string" } },
             "coverage": { "type": "array", "items": {
               "type": "object", "additionalProperties": false, "required": ["criterion", "verdict"],
               "properties": {

@@ -218,13 +218,9 @@ read it. See [Specialists and skills](specialists.md).
 
 ## Saying when it is done
 
-A run takes a goal. Without anything more, it ends when the lead reports `done`
-— and nothing argues. That is fine while you are watching. It is also the whole
-of the check on an **autonomous** run, which is the case where nobody is: a lead
-can miss a whole area of the goal, report done, and the run ends reporting
-success.
-
-So a run can carry criteria:
+A run takes a goal. Set nothing more and **the lead proposes what done means,
+and you agree it** — see [If you say nothing](#if-you-say-nothing) below. Or say
+it yourself, up front:
 
 ```sh
 loadout team run docs-crew "make the docs true" \
@@ -253,6 +249,48 @@ What that changes:
 tried and needs a different approach; one never attempted means a whole area of
 the goal was missed, and that is the thing a run of several rounds loses
 quietly.
+
+### If you say nothing
+
+A run with no criteria used to be held to one: *"the goal is met, with the
+evidence cited from your nodes' reports"*. Read it again — it is a restatement,
+not a check, and the lead writes its own verdict on it. Nothing a lead could
+report was ever wrong.
+
+That is not a theoretical hole. A run asked to *"refine my ones and make some
+suggestions of your own"* dispatched a planner, a reviewer, a verifier and
+another planner, never launched an implementer, produced one design document,
+reported `done`, cited itself, and was right by the only rule it had. It cost
+$20.84. A goal somebody wanted code from would have got exactly the same `done`.
+
+So the lead is now asked. Its first brief — and only when you gave no
+`--done-when` — tells it to propose criteria in `proposed_done_when`: each one a
+thing somebody else could check, each specific to this goal, and not "the goal is
+met". Before a single worker is briefed, what it proposed is put in front of you
+in a box, the same way a brief is:
+
+```
+What this run will be judged on. The lead proposed these; change them if
+they are not what you meant, one per line.
+
+  loadout usage --since 2026-01-01 prints only entries after that date
+  a test fails without the option and passes with it
+```
+
+Whatever comes back is what the run is held to, by the machinery above —
+numbering stripped, because a list handed to somebody in a box comes back as a
+list and `1. the tests pass` would never match a lead's coverage for `the tests
+pass`. The lead is told the agreed list in its next round, since a lead held to
+criteria it has not read cannot report coverage for them. Both the proposal and
+what was agreed go in the journal, so a run where you changed them says so.
+
+Empty the box and the run carries on with nothing checking it, exactly as it did
+before. That is a real answer to the question and not a failure.
+
+**An autonomous run has nobody to ask,** so the lead's proposal stands and the
+journal records `by: nobody`. That is still worth more than what it had: a lead
+held to specifics it wrote itself can report one of them `unmet`, which "the goal
+is met" could never do.
 
 `team status` then shows where each one got to:
 
