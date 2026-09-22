@@ -139,6 +139,55 @@ public sealed class DashboardVerbContractTests
     }
 
     /// <summary>
+    /// Clearing out runs in a batch, filled in as the pane fills it.
+    /// </summary>
+    /// <remarks>
+    /// Every field at once, and then each on its own, because each becomes an
+    /// option and the command refuses an ask that names none of them - which
+    /// it should, and which would hide an option it does not declare if every
+    /// case sent all of them.
+    /// </remarks>
+    public static TheoryData<PruneAction> Clearings =>
+    [
+        new PruneAction("failed", "30d", 20, IncludeUnmerged: true),
+        new PruneAction(Outcome: "needs-decision"),
+        new PruneAction(OlderThan: "12h"),
+        new PruneAction(Keep: 0),
+    ];
+
+    [BuiltCliTheory]
+    [MemberData(nameof(Clearings))]
+    public async Task Every_clear_out_the_pane_can_ask_for_is_a_line_the_parser_accepts(
+        PruneAction asking)
+    {
+        var (command, arguments) = DashboardActions.Clears(asking);
+
+        command.Should().NotBeEmpty();
+
+        using var loadout = new LoadoutProcess();
+
+        // --dry-run last, so it is this test and not the mapping that keeps
+        // the command from deleting anything. The mapping sends --yes, which
+        // is the page's own question already answered.
+        var run = await loadout.RunAsync([.. command.Split(' '), .. arguments, "--dry-run"]);
+
+        var everything = run.StandardOutput + run.StandardError;
+
+        everything.Should().NotContain(
+            "Unknown option",
+            $"the pane types '{command} {string.Join(' ', arguments)}', and every option in it "
+            + "has to be one that command declares");
+
+        everything.Should().NotContain("Unexpected option", "the pane types a line the parser refused");
+        everything.Should().NotContain("Unknown command", "the pane names a command that does not exist");
+
+        // The one thing a clear-out must never do is be read as "everything":
+        // an ask that names a condition has to get past the command's own
+        // guard against saying nothing.
+        everything.Should().NotContain("Say what to take");
+    }
+
+    /// <summary>
     /// The calibration: a verb nothing answers has to be reported as one.
     /// </summary>
     /// <remarks>

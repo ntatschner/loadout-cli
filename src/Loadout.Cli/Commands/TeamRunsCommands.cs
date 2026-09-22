@@ -3,6 +3,7 @@ using System.Globalization;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams;
 using Loadout.Models;
+using Loadout.Models.Teams;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -255,6 +256,17 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
         [Description("Take runs that left a branch nothing merged. Off by default.")]
         public bool IncludeUnmerged { get; init; }
 
+        [CommandOption("--outcome <OUTCOME>")]
+        [Description(
+            "Take only runs that ended this way: done, failed, stopped, limited, blocked, "
+            + "needs-decision, or unrecorded for one that finished without saying how. "
+            + "Repeatable.")]
+        public string[] Outcome { get; init; } = [];
+
+        [CommandOption("--failed")]
+        [Description("Take only the runs that failed. The same as --outcome failed.")]
+        public bool Failed { get; init; }
+
         [CommandOption("--yes")]
         [Description("Do not ask before forgetting them.")]
         public bool Yes { get; init; }
@@ -284,14 +296,46 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
             }
         }
 
-        // Neither given is not "take everything": it is somebody who has not
-        // said what they meant, and the safe reading of an unclear instruction
-        // to delete things is to ask for a clearer one.
-        if (settings.Keep is null && age is null)
+        var outcomes = new List<RunOutcome>();
+
+        if (settings.Failed)
+        {
+            outcomes.Add(RunOutcome.Failed);
+        }
+
+        foreach (var asked in settings.Outcome ?? [])
+        {
+            if (!RunOutcomes.TryParse(asked, out var outcome))
+            {
+                return Task.FromResult(output.Fail(
+                    $"'{asked}' is not an ending. Ask for one of: "
+                    + string.Join(", ", RunOutcomes.Names) + ".",
+                    ExitCode.InvalidArguments));
+            }
+
+            outcomes.Add(outcome);
+        }
+
+        // A run still going is never taken, whatever is asked for, so asking
+        // for them by name is somebody who has misread what this does rather
+        // than somebody who wants nothing to happen.
+        if (outcomes.Contains(RunOutcome.Running))
         {
             return Task.FromResult(output.Fail(
-                "Say what to keep: --keep <count>, --older-than <age>, or both. "
-                + "Both together means 'older than that, but never below the newest count'.",
+                "A run that is still going is never forgotten. Stop it first with "
+                + "'loadout team stop', then forget it.",
+                ExitCode.InvalidArguments));
+        }
+
+        // None of them given is not "take everything": it is somebody who has
+        // not said what they meant, and the safe reading of an unclear
+        // instruction to delete things is to ask for a clearer one.
+        if (settings.Keep is null && age is null && outcomes.Count == 0)
+        {
+            return Task.FromResult(output.Fail(
+                "Say what to take: --keep <count>, --older-than <age>, --failed, "
+                + "--outcome <ending>, or any of them together. Together they narrow each "
+                + "other: 'the failed ones older than that, but never below the newest count'.",
                 ExitCode.InvalidArguments));
         }
 
@@ -308,14 +352,19 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
             .ToList();
 
         var chosen = RunRetention.Choose(
-            runs, settings.Keep, age, _time.GetUtcNow(), settings.IncludeUnmerged);
+            runs, settings.Keep, age, _time.GetUtcNow(), settings.IncludeUnmerged, outcomes);
 
         if (output.IsJson && settings.DryRun)
         {
             output.WriteJson(new
             {
                 dryRun = true,
-                forgetting = chosen.Forgetting.Select(run => new { run = run.RunId, run.Team }),
+                forgetting = chosen.Forgetting.Select(run => new
+                {
+                    run = run.RunId,
+                    run.Team,
+                    outcome = Filed(run),
+                }),
                 keeping = chosen.Keeping.Select(one => new
                 {
                     run = one.Run.RunId,
@@ -350,7 +399,7 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
             {
                 output.WriteLine(
                     $"[dim]Would forget[/] [bold]{Markup.Escape(run.RunId)}[/] "
-                    + $"[dim]({Markup.Escape(run.Team)}, {When(run)})[/]");
+                    + $"[dim]({Markup.Escape(run.Team)}, {When(run)}, {Markup.Escape(Filed(run))})[/]");
             }
 
             Why(output, chosen);
@@ -369,7 +418,8 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
             foreach (var run in chosen.Forgetting)
             {
                 output.WriteLine(
-                    $"  {Markup.Escape(run.RunId)} [dim]({Markup.Escape(run.Team)}, {When(run)})[/]");
+                    $"  {Markup.Escape(run.RunId)} "
+                    + $"[dim]({Markup.Escape(run.Team)}, {When(run)}, {Markup.Escape(Filed(run))})[/]");
             }
 
             Why(output, chosen);
@@ -427,6 +477,15 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
                 $"[dim]Keeping {group.Count()}: {Markup.Escape(group.Key)}.[/]");
         }
     }
+
+    /// <summary>How a run ended, for the line offering it up.</summary>
+    /// <remarks>
+    /// An ending nothing recognises is said as "ended", not guessed at.
+    /// Somebody about to delete a run is owed the difference between "this
+    /// failed" and "nobody here can tell".
+    /// </remarks>
+    private static string Filed(RunSummary run) =>
+        RunOutcomes.Of(run) is { } outcome ? RunOutcomes.Spell(outcome) : "ended";
 
     /// <summary>When a run stopped, for the line offering it up.</summary>
     private static string When(RunSummary run) =>

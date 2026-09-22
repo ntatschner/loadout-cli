@@ -275,6 +275,17 @@ public sealed class DashboardServer : IDisposable
     public Func<ScheduleAction, CancellationToken, Task<OperationResult>>? Plan { get; set; }
 
     /// <summary>
+    /// Clearing out runs in a batch, or null where nothing can.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Act"/> because it names no run. The page can
+    /// forget one run from inside it, which is fine for one and is twenty
+    /// journeys for twenty - and the runs pane is where somebody looking at
+    /// twenty of them is standing.
+    /// </remarks>
+    public Func<PruneAction, CancellationToken, Task<OperationResult>>? Clear { get; set; }
+
+    /// <summary>
     /// Answers whether a trigger may proceed, or null when none may.
     /// </summary>
     /// <remarks>
@@ -1008,6 +1019,25 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // Clearing out runs in a batch. Its own path rather than a verb under
+        // /api/runs/, because every one of those names a run and this one
+        // names none - a path that read as a run called "clear" is the kind of
+        // collision that waits for somebody to name something badly.
+        if (path == "/api/prune")
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await ClearAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         // Writing a team, which belongs to no run either. Behind the token
         // like everything else that changes anything.
         if (path == "/api/teams")
@@ -1414,6 +1444,11 @@ public sealed class DashboardServer : IDisposable
         started = run.Started,
         finished = run.Finished,
         run.Ended,
+
+        // The sentence is what a person reads; this is the word a filter can
+        // act on. Null where the ending is one nothing here knows how to
+        // file, so a page can say "ended" rather than invent a category.
+        outcome = RunOutcomes.Of(run) is { } filed ? RunOutcomes.Spell(filed) : null,
         run.Running,
 
         // Its own state rather than a kind of running. A run working and a run
@@ -1899,6 +1934,86 @@ public sealed class DashboardServer : IDisposable
                 done.Succeeded
                     ? new { planned = true, error = (string?)null }
                     : new { planned = false, error = done.Error },
+                Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Clears out runs in a batch, through whatever can run a command.
+    /// </summary>
+    /// <remarks>
+    /// Like every other action here, this decides nothing: it hands the ask
+    /// to the command, which is the one place that knows which runs a set of
+    /// conditions picks and the one place that refuses to touch a run still
+    /// going.
+    /// </remarks>
+    private async Task ClearAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        Answered++;
+
+        if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, 405, "text/plain; charset=utf-8",
+                "Forgetting runs is a POST.").ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Clear is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "This dashboard is watching only and cannot run commands. "
+                        + "Start it without --watch-only, run the daemon, or use the command line.",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        PruneAction? asking;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+
+            asking = JsonSerializer.Deserialize<PruneAction>(
+                await reader.ReadToEndAsync(ct).ConfigureAwait(false), Json);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            asking = null;
+        }
+
+        if (asking is null)
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Say which runs to forget." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        // An empty ask is "forget everything", which is the one reading of it
+        // nobody means. The command refuses it too; refusing here as well is
+        // what stops a mis-wired page ever putting the question.
+        if (asking is { Outcome: null or "", OlderThan: null or "", Keep: null })
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Say which runs to forget: an ending, an age, a number to keep, or several." },
+                Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var done = await Clear(asking, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 202 : 400,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                done.Succeeded
+                    ? new { cleared = true, error = (string?)null }
+                    : new { cleared = false, error = done.Error },
                 Json)).ConfigureAwait(false);
     }
 

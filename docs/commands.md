@@ -74,7 +74,7 @@
 | `loadout team run <team> "<goal>" --done-when` | Say what the run is judged on, one per use. The lead must report a verdict and evidence for every one |
 | `loadout team capabilities` | The machinery a team's declarations can ask for, and what each one needs |
 | `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |
-| `loadout team runs remove\|prune` | Forget runs you are done with, one by one or by age |
+| `loadout team runs remove\|prune` | Forget runs you are done with, one by one or by age, count or how they ended |
 | `loadout team outbox` | The files a run delivered, resolved from the commits its nodes reported |
 | `loadout team remedies` | What a team has worked out how to fix, and whether it is trusted here |
 | `loadout team remedy show\|trust\|requests` | One remedy in full, trusting or untrusting it, and the remediations waiting on you |

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Instructions;
 using Loadout.Core.Projects;
@@ -492,6 +493,100 @@ internal static class DashboardActions
         arguments.Add("--non-interactive");
 
         return ("team schedule add", arguments);
+    }
+
+    /// <summary>
+    /// Clears out runs in a batch, by typing the command somebody would have
+    /// typed.
+    /// </summary>
+    /// <remarks>
+    /// The page asks its own question before it gets here, by name and with a
+    /// count, because a browser is where somebody clicks before reading. The
+    /// <c>--yes</c> below is that question already answered; everything about
+    /// which runs are picked, and the refusal to touch one still going,
+    /// belongs to the command and stays there.
+    /// </remarks>
+    internal static async Task<OperationResult> ClearedAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        PruneAction asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(asking);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var (command, arguments) = Clears(asking);
+
+        // Said where whoever started the server can see it, like the rest.
+        // This one deletes more than any other button on the page.
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"{Markup.Escape(command)} {Markup.Escape(string.Join(' ', arguments))}");
+
+        var code = await commands.RunAsync(command, arguments, ct).ConfigureAwait(false);
+
+        if (code == (int)ExitCode.Success)
+        {
+            return OperationResult.Ok();
+        }
+
+        return OperationResult.Fail(
+            (ExitCode)code switch
+            {
+                ExitCode.InvalidArguments =>
+                    "Say which runs to forget: an ending, an age, a number to keep, or several "
+                    + "of them together.",
+                _ => $"'{command}' ended with exit code {code}. The terminal serving this page "
+                     + "has the reason.",
+            },
+            (ExitCode)code);
+    }
+
+    /// <summary>
+    /// The command line a batch clear-out stands for.
+    /// </summary>
+    /// <remarks>
+    /// Its own function for the same reason <see cref="Maps"/> and
+    /// <see cref="Plans"/> are: a test runs it against the real parser, and
+    /// "forget" is on record as a button that sent an option its command did
+    /// not declare.
+    /// </remarks>
+    internal static (string Command, IReadOnlyList<string> Arguments) Clears(PruneAction asking)
+    {
+        ArgumentNullException.ThrowIfNull(asking);
+
+        var arguments = new List<string>();
+
+        if (asking.Outcome is { Length: > 0 } ending)
+        {
+            arguments.Add("--outcome");
+            arguments.Add(ending);
+        }
+
+        if (asking.OlderThan is { Length: > 0 } age)
+        {
+            arguments.Add("--older-than");
+            arguments.Add(age);
+        }
+
+        if (asking.Keep is { } floor)
+        {
+            arguments.Add("--keep");
+            arguments.Add(floor.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (asking.IncludeUnmerged)
+        {
+            arguments.Add("--include-unmerged");
+        }
+
+        arguments.Add("--yes");
+        arguments.Add("--non-interactive");
+
+        return ("team runs prune", arguments);
     }
 
     /// <summary>

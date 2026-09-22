@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Loadout.Core.Teams;
+using Loadout.Models.Teams;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -33,7 +34,8 @@ public sealed class RunRetentionTests
         int days,
         bool running = false,
         IReadOnlyList<string>? branches = null,
-        IReadOnlyList<string>? merged = null) =>
+        IReadOnlyList<string>? merged = null,
+        string ended = "done") =>
         new(
             id,
             "C:/runs/" + id,
@@ -42,7 +44,7 @@ public sealed class RunRetentionTests
             "supervised",
             Now.AddDays(-days),
             running ? null : Now.AddDays(-days).AddMinutes(4),
-            running ? null : "done",
+            running ? null : ended,
             0.1m,
             1,
             [],
@@ -58,6 +60,108 @@ public sealed class RunRetentionTests
         chosen.Forgetting.Select(run => run.RunId).Should().Equal("c", "d");
         chosen.Keeping.Select(one => one.Run.RunId).Should().Equal("a", "b");
         chosen.Keeping.Should().OnlyContain(one => one.Because == "one of the newest 2");
+    }
+
+    [Fact]
+    public void Only_the_endings_asked_for_are_taken()
+    {
+        var chosen = RunRetention.Choose(
+            [
+                Run("a", 1, ended: "failed"),
+                Run("b", 2, ended: "done"),
+                Run("c", 3, ended: "stopped by the person"),
+                Run("d", 4, ended: "the lead ended without a report"),
+            ],
+            keep: 0,
+            olderThan: null,
+            Now,
+            outcomes: [RunOutcome.Failed]);
+
+        chosen.Forgetting.Select(run => run.RunId).Should().Equal("a", "d");
+        chosen.Keeping.Select(one => one.Because).Should().Equal("ended done", "ended stopped");
+    }
+
+    [Fact]
+    public void An_ending_nothing_can_file_is_never_taken_by_one()
+    {
+        // The whole point of the filter refusing to guess. A sentence a later
+        // version writes must not be swept up by --failed on the strength of
+        // nobody being able to rule it out.
+        var chosen = RunRetention.Choose(
+            [Run("a", 9, ended: "something a later version writes")],
+            keep: 0,
+            olderThan: null,
+            Now,
+            outcomes: [RunOutcome.Failed]);
+
+        chosen.Forgetting.Should().BeEmpty();
+        chosen.Keeping.Single().Because.Should()
+            .Be("its ending is not one this knows how to file");
+    }
+
+    [Fact]
+    public void An_ending_nothing_can_file_is_still_taken_when_no_ending_was_asked_for()
+    {
+        // The other half: asking by age has never cared how a run ended, and
+        // adding the filter must not quietly narrow the commands that do not
+        // use it.
+        var chosen = RunRetention.Choose(
+            [Run("a", 9, ended: "something a later version writes")],
+            keep: 0,
+            olderThan: null,
+            Now);
+
+        chosen.Forgetting.Select(run => run.RunId).Should().Equal("a");
+    }
+
+    [Fact]
+    public void The_ending_narrows_the_age_rather_than_widening_it()
+    {
+        // Intersection, like the rest: --failed --older-than 5d is the failed
+        // ones older than five days, not the failed ones and the old ones.
+        var chosen = RunRetention.Choose(
+            [
+                Run("old-failure", 9, ended: "failed"),
+                Run("new-failure", 1, ended: "failed"),
+                Run("old-success", 9, ended: "done"),
+            ],
+            keep: null,
+            olderThan: TimeSpan.FromDays(5),
+            Now,
+            outcomes: [RunOutcome.Failed]);
+
+        chosen.Forgetting.Select(run => run.RunId).Should().Equal("old-failure");
+    }
+
+    [Fact]
+    public void A_live_run_is_kept_even_when_its_ending_was_asked_for()
+    {
+        var chosen = RunRetention.Choose(
+            [Run("going", 1, running: true)],
+            keep: 0,
+            olderThan: null,
+            Now,
+            outcomes: [RunOutcome.Running, RunOutcome.Failed]);
+
+        chosen.Forgetting.Should().BeEmpty();
+        chosen.Keeping.Single().Because.Should().Be("still going");
+    }
+
+    [Fact]
+    public void Several_endings_can_be_asked_for_at_once()
+    {
+        var chosen = RunRetention.Choose(
+            [
+                Run("a", 1, ended: "failed"),
+                Run("b", 2, ended: "stopped by request"),
+                Run("c", 3, ended: "done"),
+            ],
+            keep: 0,
+            olderThan: null,
+            Now,
+            outcomes: [RunOutcome.Failed, RunOutcome.Stopped]);
+
+        chosen.Forgetting.Select(run => run.RunId).Should().Equal("a", "b");
     }
 
     [Fact]

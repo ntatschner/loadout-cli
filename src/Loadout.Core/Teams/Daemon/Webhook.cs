@@ -105,6 +105,34 @@ public sealed record ScheduleAction(
     string? On = null,
     string? Autonomy = null);
 
+/// <summary>
+/// Clearing out runs in a batch, as the page asks for it.
+/// </summary>
+/// <param name="Outcome">Only runs that ended this way, or null for any ending.</param>
+/// <param name="OlderThan">Only runs older than this, written 30d, 12h or 90m, or null for any age.</param>
+/// <param name="Keep">Never go below this many of the newest, or null for no floor.</param>
+/// <param name="IncludeUnmerged">Take runs that left a branch nothing merged. Off by default.</param>
+/// <remarks>
+/// <para>
+/// Not a <see cref="RunAction"/>, because it names no run: that is the whole
+/// difference between "forget that one" and "clear out the failed ones", and
+/// the second is the one nobody could do without a terminal. The page had a
+/// Forget button inside each run and nothing above the list, so being rid of
+/// twenty runs meant opening twenty runs.
+/// </para>
+/// <para>
+/// Nothing here decides which runs those are. It ends the same way the rest
+/// do, with the command somebody would have typed - and that command shows
+/// what it picked and asks before it takes anything, which is the property
+/// worth not reimplementing behind a button.
+/// </para>
+/// </remarks>
+public sealed record PruneAction(
+    string? Outcome = null,
+    string? OlderThan = null,
+    int? Keep = null,
+    bool IncludeUnmerged = false);
+
 /// <summary>One team, as a page offering it needs to know it.</summary>
 /// <param name="Name">What to run it by.</param>
 /// <param name="Description">The sentence the team file gives itself.</param>

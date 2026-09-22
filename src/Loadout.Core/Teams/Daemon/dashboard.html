@@ -2747,6 +2747,49 @@
 
     <div class="board" id="board" hidden></div>
 
+    <!--
+      Clearing out in a batch.
+
+      "Forget it" lives inside a run, which is the right place for "get rid of
+      that one" and is twenty journeys for twenty runs. The thing people
+      actually ask for - be rid of the failed ones - could only be typed at a
+      terminal, which is the same gap the start form had before it was filled.
+
+      Folded away, because it deletes more than anything else on this page and
+      should not be the first control a hand lands on. It asks before it goes,
+      with the count in the question.
+    -->
+    <details class="clearing" id="clearing" hidden>
+      <summary>Clear out runs</summary>
+
+      <div class="choices">
+        <label for="clear-outcome">Ended</label>
+        <select id="clear-outcome">
+          <option value="">any way</option>
+          <option value="failed">failed</option>
+          <option value="stopped">stopped by somebody</option>
+          <option value="limited">out of rounds or budget</option>
+          <option value="blocked">blocked</option>
+          <option value="needs-decision">waiting on a decision</option>
+          <option value="done">done</option>
+          <option value="unrecorded">without saying how</option>
+        </select>
+
+        <label for="clear-older">Older than</label>
+        <input type="text" id="clear-older" placeholder="30d, 12h, 90m" size="10">
+
+        <label for="clear-keep">Always keep the newest</label>
+        <input type="number" id="clear-keep" min="0" step="1" placeholder="20">
+
+        <button type="button" id="clear-go">Forget them</button>
+      </div>
+
+      <p class="facts">
+        A run still going is never forgotten, and nor is one that left a branch
+        nothing merged. Their journals are the only copy of what they did.
+      </p>
+    </details>
+
     <ul class="runs" id="list" aria-describedby="status"></ul>
 
     <ul class="rooms" id="office" hidden></ul>
@@ -3589,6 +3632,92 @@
     });
   }
 
+  /*
+    Clearing out runs in a batch.
+
+    Says what it is about to do in words before it does any of it, because
+    "Forget them" with three boxes above it is a sentence somebody has to
+    assemble in their head, and the one thing worse than assembling it wrong
+    is assembling it wrong about a delete. Nothing here works out which runs
+    those are: the command does that, and refuses a live run whatever this
+    page believes it is looking at.
+  */
+  (function () {
+    var go = document.getElementById("clear-go");
+
+    if (!go) { return; }
+
+    function saying(ending, older, keep) {
+      var said = "Forget the runs";
+
+      if (ending) {
+        said += " that ended " + (
+          document.getElementById("clear-outcome")
+            .selectedOptions[0].textContent.trim());
+      }
+
+      if (older) { said += " older than " + older; }
+
+      said += keep === null ? "" : ", keeping the newest " + keep;
+
+      return said + "? Their journals are the only copy.";
+    }
+
+    go.addEventListener("click", function () {
+      var ending = document.getElementById("clear-outcome").value;
+      var older = document.getElementById("clear-older").value.trim();
+      var typed = document.getElementById("clear-keep").value.trim();
+      var keep = typed === "" ? null : parseInt(typed, 10);
+
+      if (keep !== null && (isNaN(keep) || keep < 0)) {
+        announce("Keep the newest how many? A whole number, or leave it empty.");
+
+        return;
+      }
+
+      // The same refusal the command makes, made here so the question is
+      // never put at all: everything, with nothing said about which, is the
+      // one reading of an empty form that nobody means.
+      if (!ending && !older && keep === null) {
+        announce("Say which runs to forget: how they ended, how old they are, "
+          + "how many of the newest to keep, or several of those.");
+
+        return;
+      }
+
+      if (!window.confirm(saying(ending, older, keep))) { return; }
+
+      go.disabled = true;
+
+      fetch("/api/prune?token=" + encodeURIComponent(token), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          outcome: ending || null,
+          olderThan: older || null,
+          keep: keep
+        })
+      }).then(function (answer) {
+        return answer.text().then(function (text) {
+          var why = null;
+
+          try { why = JSON.parse(text).error; } catch (e) { why = null; }
+
+          if (!answer.ok) {
+            throw new Error(why || ("The dashboard answered " + answer.status + "."));
+          }
+
+          go.disabled = false;
+          announce("Cleared out. What is left is in the list.");
+          refresh();
+        });
+      }).catch(function (wrong) {
+        go.disabled = false;
+        announce(wrong.message);
+      });
+    });
+  }());
+
   function drawRail(runs) {
     var rail = document.getElementById("rail");
     var list = document.getElementById("rail-list");
@@ -3901,8 +4030,13 @@
   function onlyWatching() {
     var controls = document.getElementById("controls");
     var note = document.getElementById("watching");
+    var clearing = document.getElementById("clearing");
 
     if (controls) { controls.hidden = !acts; }
+
+    // Same rule as every other control: a page that offers to delete runs
+    // and cannot is worse than one that offers nothing.
+    if (clearing) { clearing.hidden = !acts; }
 
     if (!note) {
       if (acts) { return; }

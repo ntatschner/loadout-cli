@@ -629,6 +629,123 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Clearing_out_runs_goes_to_whatever_can_run_a_command()
+    {
+        PruneAction? asked = null;
+
+        _server.Clear = (action, _) =>
+        {
+            asked = action;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/prune?token=" + _server.Token),
+            new StringContent(
+                @"{""outcome"":""failed"",""olderThan"":""30d"",""keep"":20}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Accepted);
+
+        asked.Should().NotBeNull();
+        asked!.Outcome.Should().Be("failed");
+        asked.OlderThan.Should().Be("30d");
+        asked.Keep.Should().Be(20);
+    }
+
+    [Fact]
+    public void The_page_asks_for_a_clear_out_in_the_words_the_server_reads()
+    {
+        // The failure this exists for has happened three times in this
+        // dashboard: the page sends a field, the server never reads it, the
+        // command runs with its default and the page reports success. A
+        // clear-out whose "keep the newest 20" went missing that way would
+        // delete twenty runs nobody agreed to lose.
+        var page = DashboardServer.Page();
+
+        page.Should().Contain("/api/prune", "the pane has to ask where the server listens");
+
+        var asking = page[page.IndexOf("/api/prune", StringComparison.Ordinal)..];
+        var from = asking.IndexOf("JSON.stringify({", StringComparison.Ordinal);
+
+        from.Should().BeGreaterThan(-1, "the pane sends a body");
+
+        var body = asking[from..asking.IndexOf("})", from, StringComparison.Ordinal)];
+
+        var sent = System.Text.RegularExpressions.Regex
+            .Matches(body, @"(\w+)\s*:")
+            .Select(match => match.Groups[1].Value)
+            .Where(word => word != "stringify")
+            .ToList();
+
+        sent.Should().NotBeEmpty("otherwise this asserts nothing about any field");
+
+        var read = typeof(PruneAction).GetProperties().Select(one => one.Name).ToList();
+
+        foreach (var field in sent)
+        {
+            read.Should().Contain(
+                one => string.Equals(one, field, StringComparison.OrdinalIgnoreCase),
+                $"the pane sends '{field}', so something has to read it");
+        }
+    }
+
+    [Fact]
+    public async Task Clearing_out_runs_needs_the_token()
+    {
+        var cleared = false;
+
+        _server.Clear = (_, _) =>
+        {
+            cleared = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/prune"),
+            new StringContent(@"{""outcome"":""failed""}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        cleared.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_ask_that_names_no_condition_is_refused_before_it_reaches_the_command()
+    {
+        // "Forget everything" is the one reading of an empty form nobody
+        // means. The command refuses it too; refusing here as well is what
+        // stops a mis-wired page ever putting the question.
+        var cleared = false;
+
+        _server.Clear = (_, _) =>
+        {
+            cleared = true;
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/prune?token=" + _server.Token),
+            new StringContent("{}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        cleared.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_server_that_only_watches_refuses_to_clear_anything_out()
+    {
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/prune?token=" + _server.Token),
+            new StringContent(@"{""outcome"":""failed""}"));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("watching only");
+    }
+
+    [Fact]
     public async Task Forgetting_a_run_is_handed_to_the_command_line_like_everything_else()
     {
         RunAction? asked = null;

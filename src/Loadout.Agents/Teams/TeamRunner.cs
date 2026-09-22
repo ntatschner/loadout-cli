@@ -533,10 +533,14 @@ public sealed class TeamRunner : ITeamRunner
 
         if (!await GateAsync(autonomy, console, $"Brief the lead ({leadNode.Role}) with the goal", ct).ConfigureAwait(false))
         {
-            await journal.WriteAsync("run.finished", null, new { ended = "stopped before the lead was briefed" }, ct).ConfigureAwait(false);
+            await journal.WriteAsync(
+                "run.finished",
+                null,
+                new { ended = Stopping, outcome = Filed(Stopping) },
+                ct).ConfigureAwait(false);
 
             return OperationResult<TeamRunOutcome>.Ok(new TeamRunOutcome(
-                runId, directory, "stopped before the lead was briefed", null, 0m, 0, warnings));
+                runId, directory, Stopping, null, 0m, 0, warnings));
         }
 
         await WriteDocumentAsync(directory, $"brief-{Safe(team.Lead)}.json", ReportReader.Write(leadBrief), ct).ConfigureAwait(false);
@@ -545,7 +549,11 @@ public sealed class TeamRunner : ITeamRunner
 
         if (started.Failed)
         {
-            await journal.WriteAsync("run.finished", null, new { ended = "the lead could not be started", error = started.Error }, ct).ConfigureAwait(false);
+            await journal.WriteAsync(
+                "run.finished",
+                null,
+                new { ended = Unstartable, outcome = Filed(Unstartable), error = started.Error },
+                ct).ConfigureAwait(false);
 
             return OperationResult<TeamRunOutcome>.Fail(started.Error!, started.ExitCode);
         }
@@ -1007,7 +1015,8 @@ public sealed class TeamRunner : ITeamRunner
 
         cost += afterwards.Sum();
 
-        await journal.WriteAsync("run.finished", null, new { ended, cost, rounds, merged }, ct).ConfigureAwait(false);
+        await journal.WriteAsync(
+            "run.finished", null, new { ended, outcome = Filed(ended), cost, rounds, merged }, ct).ConfigureAwait(false);
 
         await DeclareAsync(
             slug, runId, team, Landed(ended), request.Goal,
@@ -1122,6 +1131,24 @@ public sealed class TeamRunner : ITeamRunner
     /// something unfinished, and calling that done is the one thing a task
     /// list must not do.
     /// </remarks>
+    /// <summary>The ending written when a person stops a run at its first gate.</summary>
+    private const string Stopping = "stopped before the lead was briefed";
+
+    /// <summary>The ending written when the lead never got going at all.</summary>
+    private const string Unstartable = "the lead could not be started";
+
+    /// <summary>
+    /// The category an ending falls into, written down beside it.
+    /// </summary>
+    /// <remarks>
+    /// Settled here, when the run ends, so that a later change to any of
+    /// these sentences cannot re-categorise a run that has already finished.
+    /// A sentence the classifier does not recognise writes nothing rather
+    /// than a guess, and is read back as a run whose category cannot be said.
+    /// </remarks>
+    private static string? Filed(string? ended) =>
+        RunOutcomes.From(ended) is { } outcome ? RunOutcomes.Spell(outcome) : null;
+
     private static TaskState Landed(string ended) => ended switch
     {
         "done" => TaskState.Done,
