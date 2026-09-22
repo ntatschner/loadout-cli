@@ -78,7 +78,7 @@
 | `loadout team outbox` | The files a run delivered, resolved from the commits its nodes reported |
 | `loadout team remedies` | What a team has worked out how to fix, and whether it is trusted here |
 | `loadout team remedy show\|trust\|requests` | One remedy in full, trusting or untrusting it, and the remediations waiting on you |
-| `loadout team dashboard` | A page on this machine showing every run at once, live. Reads only |
+| `loadout team dashboard` | Every run at once, live, on a page: the daemon's if one is serving, otherwise a new one here |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout team daemon` | Stay running: fire the scheduled runs and serve the dashboard |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |

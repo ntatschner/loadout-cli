@@ -82,6 +82,16 @@ public sealed class TeamAutostartEnableCommand : AsyncCommand<GlobalSettings>
         // command does, and somebody running it to set up a machine they are
         // about to restart does not want a daemon starting now.
         output.WriteLine("[dim]It is not running yet. Start it now with: loadout team daemon[/]");
+
+        // Where the page is, which nothing used to say. The daemon prints its
+        // address once, and at login it prints it into a window nobody is
+        // looking at - so somebody who enabled this and then logged in had a
+        // dashboard running and no way to reach it. The port and the token are
+        // both new every start, so there is nothing to write down either.
+        output.WriteLine(
+            "[dim]Its dashboard gets a fresh address every start. Ask where it is with: "
+            + "loadout team dashboard[/]");
+
         output.WriteLine("[dim]Undo with: loadout team autostart disable[/]");
 
         return CommandOutput.Success();
