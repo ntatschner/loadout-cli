@@ -2005,6 +2005,45 @@ a hostile network: the token is compared in fixed time and that is the whole of
 it. Put it behind something that is, or leave it on loopback and let a local git
 hook be what calls it.
 
+## Changing this machine from the page
+
+The dashboard has a fold, **What this machine is set to**, carrying the settings
+you would otherwise reach through `config set` and the `team` commands: where
+notices go, which art the desks and the waiting area are drawn with, what may be
+started from outside, whether a trigger token exists, what the server listens on,
+and which remedies are trusted to run unattended.
+
+Every control types the command you would have typed. Nothing on that page
+writes `machines.yaml` — `config set` and the team commands own these settings
+and already know what a valid value is, and a second writer would be a second
+set of rules to keep in step. A watch-only dashboard draws no fold at all rather
+than controls it would refuse.
+
+Three things about it are deliberate.
+
+**Where notices go is never shown.** That address is a webhook address, and a
+webhook address *is* the credential: anybody holding it can post into your
+channel as you. The page says whether one is held and never what it is, the box
+you type it into is emptied the moment it is accepted, and — unlike every other
+control here, which prints its whole command line to the terminal serving the
+page — a setting change says what was changed and never to what. Naming the
+setting and not the value is a rule worth having whole rather than one with an
+exception somebody later has to remember.
+
+**Moving the listen address off loopback names what it does, at the moment you
+do it.** `0.0.0.0` puts the dashboard on the network you are on, where the token
+in its address is the only thing between anyone there and answering your gates,
+stopping your runs and starting teams. The command line says that every time it
+serves a page; a dropdown that quietly rebound a listener would be the one place
+it was not said. It takes effect when the daemon next starts.
+
+**Trusting or revoking a remedy needs the passphrase**, not the token that got
+you to the page. It is standing permission for a script to run when nobody is
+watching, which is a different act from reading a run — the same reasoning, and
+the same credential, as typing at a live node. The refusal is in the server, not
+the page, because a page that forgot to ask must still be refused by the thing
+holding the port.
+
 ## Previewing
 
 `--dry-run` on a run says what it would do — which nodes, on which agent, with

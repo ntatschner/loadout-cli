@@ -117,6 +117,85 @@ public sealed class DashboardServerTests : IAsyncLifetime
                 ? (path.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "token=" + _server.Token
                 : string.Empty)));
 
+    /// <remarks>
+    /// Trusting a remedy is standing permission for a script to run when nobody
+    /// is watching. The dashboard's token only ever meant "you may read this
+    /// page", and this refusal is in the server rather than in the page for the
+    /// reason every other one is: a page that forgot to ask must still be
+    /// refused by the thing holding the port.
+    /// </remarks>
+    [Fact]
+    public async Task Trusting_a_remedy_needs_the_passphrase_and_not_just_the_token()
+    {
+        var asked = new List<SettingsChange>();
+
+        _server.Settle = (change, _) =>
+        {
+            asked.Add(change);
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/settings?token=" + _server.Token),
+            new StringContent("""{"what":"remedy","value":"restart-it","off":true}"""));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        (await answer.Content.ReadAsStringAsync()).Should().Contain("passphrase");
+
+        asked.Should().BeEmpty("nothing ran, so nothing was trusted or revoked");
+
+        _server.Settle = null;
+    }
+
+    [Fact]
+    public async Task Everything_else_on_that_pane_needs_only_the_token()
+    {
+        var asked = new List<SettingsChange>();
+
+        _server.Settle = (change, _) =>
+        {
+            asked.Add(change);
+
+            return Task.FromResult(OperationResult.Ok());
+        };
+
+        var answer = await _client.PostAsync(
+            new Uri(_root + "api/settings?token=" + _server.Token),
+            new StringContent("""{"what":"office","value":"open-office"}"""));
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        asked.Should().ContainSingle().Which.Value.Should().Be("open-office");
+
+        _server.Settle = null;
+    }
+
+    /// <remarks>
+    /// A watch-only server draws no pane at all rather than a pane of controls
+    /// it would refuse, which is the fault this whole design keeps returning
+    /// to. The read says there is nothing to show; the write says why.
+    /// </remarks>
+    [Fact]
+    public async Task A_server_that_changes_nothing_offers_no_settings()
+    {
+        var read = await GetAsync("/api/settings");
+
+        read.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var said = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+
+        said.RootElement.GetProperty("settings").ValueKind.Should().Be(JsonValueKind.Null);
+
+        var written = await _client.PostAsync(
+            new Uri(_root + "api/settings?token=" + _server.Token),
+            new StringContent("""{"what":"office","value":"open-office"}"""));
+
+        written.StatusCode.Should().Be(HttpStatusCode.NotImplemented);
+        (await written.Content.ReadAsStringAsync()).Should().Contain("watching only");
+    }
+
     [Fact]
     public async Task What_is_queued_is_answered_as_well_as_what_is_going()
     {
