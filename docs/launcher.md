@@ -227,6 +227,11 @@ Nothing is started or stopped from here. **Enter** opens the run's log, **s**
 its status, **d** the dashboard — each by running the command you'd otherwise
 have typed.
 
+**r** forgets the run the cursor is on, and is the one key here that changes
+anything, so it's the one that asks first: it names the run and defaults to
+no. Saying yes runs `team runs remove`, which is also what refuses a run that
+hasn't finished — those aren't offered at all.
+
 It reads again every two seconds. Under a profile that asked for no redraws or
 for less motion it doesn't, because a screen repainting itself every two seconds
 is what that setting exists to refuse: a screen reader is handed the whole list
