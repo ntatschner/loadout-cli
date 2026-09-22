@@ -1780,6 +1780,11 @@ up.
 **Forget it**, on a run that has ended, runs `team runs remove` against it. A
 run still going does not offer it, and the command refuses one anyway.
 
+**Forget**, beside the identifier on every finished run in the list, is the
+same thing from where you are looking rather than from inside the run: it asks
+by name and runs `team runs remove`. It is on the cards and on the plain rows,
+through one control, and a run still going does not draw it.
+
 **Clear out runs**, folded away above the runs list, is the same thing by the
 handful: pick an ending, an age, how many of the newest to keep, and it runs
 `team runs prune`. It says what it is about to do in a sentence and asks before

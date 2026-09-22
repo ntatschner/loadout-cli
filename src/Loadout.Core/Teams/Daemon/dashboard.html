@@ -6460,10 +6460,70 @@
       var ident = document.createElement("p");
       ident.className = "facts";
       reference(run.id, ident);
+      forgetOne(ident, run);
       box.appendChild(ident);
 
       list.appendChild(box);
     }(run));
+  }
+
+  /*
+    Getting rid of one run, from the list it is in.
+
+    "Forget it" already exists inside a run, which is the right place to be
+    rid of the one you are reading - and the wrong place to be rid of six,
+    because being rid of six meant opening six. The clear-out above the list
+    takes them by the handful on conditions; this is the one in between, for
+    the run somebody is looking straight at.
+
+    One function for both the cards and the plain rows. Two of these would
+    drift, and the one nobody uses would drift furthest.
+
+    It refuses a live run by not being drawn - and the command refuses one
+    too, which is the half that actually holds.
+  */
+  function forgetOne(into, run) {
+    if (!acts || run.running) { return; }
+
+    var drop = document.createElement("button");
+
+    drop.type = "button";
+    drop.className = "as-link forget-one";
+    drop.textContent = "Forget";
+
+    // Two words on a page of twelve runs says nothing about which. The card
+    // says which; this has to say it too, for somebody who arrives at the
+    // button without having read the card.
+    drop.setAttribute("aria-label",
+      "Forget " + nameOf(run) + ". Everything it wrote down goes.");
+
+    drop.addEventListener("click", function (event) {
+      // The name beside it opens the run. This does not.
+      event.stopPropagation();
+
+      // Named in the question. A run's journal is the only copy of what it
+      // did, and this button sits in a list where the next one along is a
+      // different run.
+      if (!window.confirm("Forget " + nameOf(run)
+        + "? Everything it wrote down goes, and there is no other copy.")) {
+        return;
+      }
+
+      drop.disabled = true;
+
+      act(run.id, "forget", {})
+        .then(function () {
+          announce(nameOf(run) + " is forgotten.");
+          refresh();
+        })
+        .catch(function (wrong) {
+          drop.disabled = false;
+          announce(wrong.message);
+        });
+    });
+
+    into.appendChild(document.createTextNode(" "));
+    into.appendChild(drop);
   }
 
   function figures(into, text) {
@@ -6549,6 +6609,7 @@
         (run.goal || ""));
 
       line.appendChild(rest);
+      forgetOne(line, run);
       item.appendChild(line);
 
       if (rich()) {

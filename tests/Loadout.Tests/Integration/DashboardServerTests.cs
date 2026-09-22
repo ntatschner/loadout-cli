@@ -714,6 +714,40 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public void Both_run_listings_offer_to_forget_one_through_the_same_control()
+    {
+        // Being rid of a run you are looking at was only possible from inside
+        // it, so being rid of six meant opening six. Both listings offer it
+        // now - the cards and the plain rows - and both have to go through one
+        // implementation, because the one nobody looks at is the one that
+        // drifts. The plain page is the accessible one, which is exactly the
+        // page a missing control would be missing from unnoticed.
+        //
+        // What this cannot do is press the button: it reads the page rather
+        // than running it. That the verb behind it is a command line the
+        // parser accepts is asserted in the contract tests.
+        var page = DashboardServer.Page();
+
+        Count(page, "function forgetOne(").Should().Be(1, "one implementation, not two");
+        Count(page, "forgetOne(ident, run)").Should().Be(1, "the cards offer it");
+        Count(page, "forgetOne(line, run)").Should().Be(1, "the plain rows offer it");
+    }
+
+    private static int Count(string text, string what)
+    {
+        var found = 0;
+
+        for (var at = text.IndexOf(what, StringComparison.Ordinal);
+            at >= 0;
+            at = text.IndexOf(what, at + what.Length, StringComparison.Ordinal))
+        {
+            found += 1;
+        }
+
+        return found;
+    }
+
+    [Fact]
     public async Task Clearing_out_runs_needs_the_token()
     {
         var cleared = false;
