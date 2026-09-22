@@ -1305,6 +1305,7 @@ public sealed class DashboardServer : IDisposable
                     teams = choosable.Teams,
                     projects = choosable.Projects,
                     here = choosable.Here,
+                    agents = choosable.Agents ?? [],
                 }, Json)).ConfigureAwait(false);
 
             return;

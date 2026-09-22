@@ -24,6 +24,12 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// nothing but its goal. The lead owes a verdict and evidence on every one, and
 /// a done that leaves one unmet or unanswered is sent back to it.
 /// </param>
+/// <param name="Agent">
+/// Which agent runs the team's nodes, or null for the project's own and then
+/// this machine's. Offered as a list for the reason the team name is - a
+/// free-text box accepted a name nothing could resolve, said the run had
+/// started, and sent the refusal to a terminal behind the browser.
+/// </param>
 /// <param name="Model">
 /// A model for every node of the run, spelled as the agent spells it, or null
 /// to leave each node and then the project to decide.
@@ -56,7 +62,8 @@ public sealed record StartRequest(
     int? Rounds = null,
     string? Autonomy = null,
     IReadOnlyList<string>? Criteria = null,
-    string? Model = null);
+    string? Model = null,
+    string? Agent = null);
 
 /// <summary>A team the page asked be written.</summary>
 /// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>
@@ -190,10 +197,18 @@ public sealed record ChoosableTeam(
 /// is how a run launched from the page reported that <c>d:\git</c> is not a
 /// repository — so this is offered as a default and never assumed.
 /// </param>
+/// <param name="Agents">
+/// The agents this launcher knows how to start. Every adapter rather than only
+/// the installed ones: detecting what is installed spawns a process per agent
+/// and this is read on every request, and an agent this machine has not got is
+/// refused by the launcher with its own sentence - the same division of labour
+/// every other field on this form follows.
+/// </param>
 public sealed record Choosable(
     IReadOnlyList<ChoosableTeam> Teams,
     IReadOnlyList<string> Projects,
-    string? Here = null);
+    string? Here = null,
+    IReadOnlyList<string>? Agents = null);
 
 /// <summary>Something the page asked be done to a run.</summary>
 /// <param name="Run">Which run, as the journal names it.</param>

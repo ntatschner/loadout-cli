@@ -137,7 +137,8 @@ public sealed class DaemonStartsWorkTests
             speech: null!,
             teams: null!,
             library: null!,
-            workspace: null!);
+            workspace: null!,
+            agents: null!);
 
     private static CommandOutput Output() => new(Quiet(), new GlobalSettings());
 

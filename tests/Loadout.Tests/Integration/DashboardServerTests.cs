@@ -1612,7 +1612,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         foreach (var field in new[]
         {
             "start-team", "start-goal", "start-project", "start-rounds", "start-autonomy",
-            "start-criteria", "start-model",
+            "start-criteria", "start-model", "start-agent",
         })
         {
             text.Should().Contain($"id=\"{field}\"");
@@ -1628,6 +1628,19 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // rather than measured.
         text.Should().Contain("<select id=\"start-team\" aria-describedby=\"start-team-about\">");
         text.Should().Contain("<select id=\"start-project\">");
+
+        // A list, for the same reason those two are: a free-text box let a name
+        // nothing could resolve through, said the run had started, and sent the
+        // refusal to a terminal behind the browser. The model stays free text
+        // because which models exist is the agent's business; which agents this
+        // launcher can start is this launcher's own.
+        text.Should().Contain("<select id=\"start-agent\">");
+
+        // Empty means no cap, since rounds stopped defaulting to five. It never
+        // meant "the team's own" - a round limit has never come from a team
+        // file - and a placeholder that says so is a placeholder that lies.
+        text.Should().Contain("placeholder=\"no cap\"");
+        text.Should().NotContain("placeholder=\"the team's own\"");
         text.Should().NotContain("known-teams");
         text.Should().NotContain("known-projects");
     }

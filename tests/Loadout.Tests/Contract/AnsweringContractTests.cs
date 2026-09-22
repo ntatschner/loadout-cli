@@ -220,6 +220,20 @@ public sealed class AnsweringContractTests
     }
 
     [BuiltCliFact]
+    public async Task The_agent_the_start_form_sends_is_an_option_team_run_declares()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var run = await loadout.RunAsync(
+            "team", "run", "iterating-project", "Do a thing.",
+            "--project", "demo", "--agent", "claude", "--non-interactive", "--dry-run");
+
+        (run.StandardOutput + run.StandardError).Should().NotContain(
+            "Unknown option",
+            "the page now sends --agent, and a line the parser refuses never runs");
+    }
+
+    [BuiltCliFact]
     public async Task A_message_to_a_run_that_is_getting_on_with_it_says_nothing_extra()
     {
         using var loadout = new LoadoutProcess();

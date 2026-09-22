@@ -68,6 +68,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Core.Teams.ITeamCatalogue _teams;
     private readonly Loadout.Core.Instructions.ISpecialistLibrary _library;
     private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
+    private readonly Loadout.Agents.IAgentRegistry _agents;
 
     public TeamDaemonCommand(
         ISecretProvider secrets,
@@ -87,11 +88,13 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Platform.Abstractions.ISpeech speech,
         Loadout.Core.Teams.ITeamCatalogue teams,
         Loadout.Core.Instructions.ISpecialistLibrary library,
-        Loadout.Core.Workspace.IWorkspaceManager workspace)
+        Loadout.Core.Workspace.IWorkspaceManager workspace,
+        Loadout.Agents.IAgentRegistry agents)
     {
         _teams = teams;
         _library = library;
         _workspace = workspace;
+        _agents = agents;
         _accessible = accessible;
         _speech = speech;
         _secrets = secrets;
@@ -241,7 +244,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // a team written a moment ago, from the page or from a terminal,
             // belongs in the next answer rather than the next restart.
             server.Choices = ct => DashboardActions.OfferedAsync(
-                _teams, _library, _workspace, _projects, ct);
+                _teams, _library, _workspace, _projects, _agents, ct);
 
             // And the second credential, which the dashboard's own token does
             // not grant: typing at a live node is not something the run

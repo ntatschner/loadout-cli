@@ -63,6 +63,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly Loadout.Core.Teams.ITeamCatalogue _teams;
     private readonly Loadout.Core.Instructions.ISpecialistLibrary _library;
     private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
+    private readonly Loadout.Agents.IAgentRegistry _agents;
 
     public TeamDashboardCommand(
         IRunJournal journal,
@@ -83,11 +84,13 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         TimeProvider time,
         Loadout.Core.Teams.ITeamCatalogue teams,
         Loadout.Core.Instructions.ISpecialistLibrary library,
-        Loadout.Core.Workspace.IWorkspaceManager workspace)
+        Loadout.Core.Workspace.IWorkspaceManager workspace,
+        Loadout.Agents.IAgentRegistry agents)
     {
         _teams = teams;
         _library = library;
         _workspace = workspace;
+        _agents = agents;
         _accessible = accessible;
         _speech = speech;
         _commands = commands;
@@ -426,7 +429,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         // read, and a page that cannot start one is still a page somebody is
         // reading to find out what this machine has.
         server.Choices = token => DashboardActions.OfferedAsync(
-            _teams, _library, _workspace, _projects, token);
+            _teams, _library, _workspace, _projects, _agents, token);
 
         if (!settings.WatchOnly)
         {
