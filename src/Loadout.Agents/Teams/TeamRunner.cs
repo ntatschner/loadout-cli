@@ -54,6 +54,13 @@ namespace Loadout.Agents.Teams;
 /// already governs a worker's report, applied at the level of the goal.
 /// </para>
 /// </remarks>
+/// <param name="Resuming">
+/// An ended run to pick up rather than a new one to start. The run keeps its
+/// identifier, directory and journal; its lead resumes its own agent session
+/// where one was recorded, and is otherwise started fresh and told where the
+/// run got to.
+/// </param>
+/// <param name="ResumeMessage">What the person said when picking it up, for the lead.</param>
 /// <param name="Remediation">
 /// What this machine says a remediator may do with each kind of task, by kind.
 /// Passed in rather than read here, for the same reason the outward list is:
@@ -75,7 +82,9 @@ public sealed record TeamRunRequest(
     IReadOnlyList<string>? OutwardAllowed = null,
     IReadOnlyDictionary<string, string>? Remediation = null,
     IReadOnlyList<Loadout.Models.Configuration.TrustedRemedy>? TrustedRemedies = null,
-    IReadOnlyList<string>? Criteria = null);
+    IReadOnlyList<string>? Criteria = null,
+    string? Resuming = null,
+    string? ResumeMessage = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -448,12 +457,29 @@ public sealed class TeamRunner : ITeamRunner
                 ExitCode.InvalidArguments);
         }
 
+        // Picking up an ended run rather than starting one. Read before
+        // anything is made, so a run that cannot be picked up changes nothing.
+        RunResumption? resuming = null;
+
+        if (request.Resuming is { Length: > 0 } picking)
+        {
+            var (read, why) = RunResumption.Read(new RunJournal(_paths), picking);
+
+            if (read is null)
+            {
+                return OperationResult<TeamRunOutcome>.Fail(why!, ExitCode.InvalidArguments);
+            }
+
+            resuming = read;
+        }
+
         // From here on every question goes through one voice, because the
         // watcher below asks from another thread.
         using var one = new OneAtATime(console);
         console = one;
 
-        var runId = $"{_time.GetUtcNow():yyyyMMdd-HHmm}-{Guid.NewGuid().ToString("N")[..4]}";
+        var runId = resuming?.Summary.RunId
+            ?? $"{_time.GetUtcNow():yyyyMMdd-HHmm}-{Guid.NewGuid().ToString("N")[..4]}";
         var warnings = new List<string>();
 
         if (_lifetime is { IsEnforced: false })
@@ -489,7 +515,8 @@ public sealed class TeamRunner : ITeamRunner
         // plainly enough that a lead reading its own brief knows the report it
         // owes - and ReportCheck then refuses a done that does not give it,
         // which is what makes this more than a sentence.
-        var criteria = request.Criteria is { Count: > 0 } asked ? asked : null;
+        var criteria = resuming?.Criteria
+            ?? (request.Criteria is { Count: > 0 } asked ? asked : null);
 
         var leadBrief = MakeBrief(
             runId, team.Lead, parent: null, leadNode, leadRole, request.Goal, inputs: [],
@@ -523,7 +550,8 @@ public sealed class TeamRunner : ITeamRunner
 
         if (request.DryRun)
         {
-            var dry = await StartNodeAsync(request, team, leadNode, leadRole, leadBrief, dryRun: true, ct)
+            var dry = await StartNodeAsync(
+                    request, team, leadNode, leadRole, leadBrief, dryRun: true, ct, resuming?.LeadSession)
                 .ConfigureAwait(false);
 
             if (dry.Failed)
@@ -590,23 +618,47 @@ public sealed class TeamRunner : ITeamRunner
         var slug = await SlugAsync(request, ct).ConfigureAwait(false);
         var where = await PathAsync(request, ct).ConfigureAwait(false);
 
-        await journal.WriteAsync(
-            "run.started",
-            null,
-            new
-            {
-                team = team.Name,
-                goal = request.Goal,
-                autonomy,
-                rounds = request.MaxRounds,
-                project = slug,
-                path = where,
+        if (resuming is null)
+        {
+            await journal.WriteAsync(
+                "run.started",
+                null,
+                new
+                {
+                    team = team.Name,
+                    goal = request.Goal,
+                    autonomy,
+                    rounds = request.MaxRounds,
+                    project = slug,
+                    path = where,
 
-                // What it may spend, so a page watching it can say where the
-                // spend stands rather than only what it has cost.
-                budget = team.Rules.Budget.Usd,
-            },
-            ct).ConfigureAwait(false);
+                    // What it may spend, so a page watching it can say where the
+                    // spend stands rather than only what it has cost.
+                    budget = team.Rules.Budget.Usd,
+                },
+                ct).ConfigureAwait(false);
+        }
+        else
+        {
+            // A stop or a hold left from before it ended would end or hold it
+            // again at the first check, before the lead said a word.
+            RunControl.Resume(directory);
+            RunControl.ClearStop(directory);
+
+            await journal.WriteAsync(
+                "run.reopened",
+                null,
+                new
+                {
+                    was = resuming.Summary.Ended,
+                    session = resuming.LeadSession,
+                    autonomy,
+                    rounds = request.MaxRounds,
+                    message = request.ResumeMessage,
+                    budget = RunControl.Budget(directory) ?? team.Rules.Budget.Usd,
+                },
+                ct).ConfigureAwait(false);
+        }
 
         if (!await GateAsync(autonomy, console, $"Brief the lead ({leadNode.Role}) with the goal", ct).ConfigureAwait(false))
         {
@@ -620,9 +672,15 @@ public sealed class TeamRunner : ITeamRunner
                 runId, directory, Stopping, null, 0m, 0, warnings));
         }
 
-        await WriteDocumentAsync(directory, $"brief-{Safe(team.Lead)}.json", ReportReader.Write(leadBrief), ct).ConfigureAwait(false);
+        // Kept as it was on a resume: it is the brief the lead was given, and
+        // what the run's record says it was asked.
+        if (resuming is null)
+        {
+            await WriteDocumentAsync(directory, $"brief-{Safe(team.Lead)}.json", ReportReader.Write(leadBrief), ct).ConfigureAwait(false);
+        }
 
-        var started = await StartNodeAsync(request, team, leadNode, leadRole, leadBrief, dryRun: false, ct).ConfigureAwait(false);
+        var started = await StartNodeAsync(
+            request, team, leadNode, leadRole, leadBrief, dryRun: false, ct, resuming?.LeadSession).ConfigureAwait(false);
 
         if (started.Failed)
         {
@@ -646,6 +704,7 @@ public sealed class TeamRunner : ITeamRunner
                 launch = lead.LaunchId,
                 role = leadNode.Role,
                 model = request.Model ?? (leadNode.Model is { Length: > 0 } pinned ? pinned : null),
+                resumed = resuming is not null,
             },
             ct).ConfigureAwait(false);
 
@@ -655,28 +714,34 @@ public sealed class TeamRunner : ITeamRunner
         await DeclareAsync(slug, runId, team, TaskState.Doing, request.Goal, $"{autonomy}, running", ct)
             .ConfigureAwait(false);
 
-        var cost = 0m;
-        var rounds = 0;
+        // Carried on from where it stopped on a resume, so the budget and any
+        // round limit count what it has already spent and taken.
+        var cost = resuming?.Summary.CostUsd ?? 0m;
+        var rounds = resuming?.Summary.Rounds ?? 0;
         var quietRounds = 0;
         string ended;
 
         // The budget the run was last held to, so a change is written down
         // once rather than every round.
-        var heldTo = team.Rules.Budget.Usd;
+        var heldTo = resuming is null
+            ? team.Rules.Budget.Usd
+            : RunControl.Budget(directory) ?? team.Rules.Budget.Usd;
         Report? final = null;
 
         // What the run put on branches of its own, and what the team's merge
         // gate nodes decided about it. Both are read at the end, when the
         // question is whether any of it may come back to the repository.
-        var branches = new Dictionary<string, string>(StringComparer.Ordinal);
-        var decisions = new Dictionary<string, string>(StringComparer.Ordinal);
+        var branches = new Dictionary<string, string>(
+            resuming?.Branches ?? new Dictionary<string, string>(), StringComparer.Ordinal);
+        var decisions = new Dictionary<string, string>(
+            resuming?.Decisions ?? new Dictionary<string, string>(), StringComparer.Ordinal);
         var askedAboutTheGate = false;
 
         // Asked once per run, on the lead's first report. A lead that proposes
         // nothing is not asked again: the question was put and it declined to
         // answer, and asking every round would be badgering it with something
         // that costs a turn each time.
-        var proposed = false;
+        var proposed = resuming?.Proposed ?? false;
 
         // What was agreed this round, for the feedback the lead reads next. It
         // has to be told: it proposed them, a person may have rewritten them,
@@ -685,7 +750,9 @@ public sealed class TeamRunner : ITeamRunner
 
         try
         {
-            var prompt = Render(leadBrief);
+            var prompt = resuming is null
+                ? Render(leadBrief)
+                : Picking(resuming, request, lead.Plan, leadBrief, RunControl.Budget(directory) ?? team.Rules.Budget.Usd);
 
             while (true)
             {
@@ -2080,7 +2147,8 @@ public sealed class TeamRunner : ITeamRunner
         SpecialistDocument role,
         Brief brief,
         bool dryRun,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? resumeSession = null)
     {
         var definition = role.Role ?? new RoleDefinition(null, null, null, [], []);
 
@@ -2150,6 +2218,7 @@ public sealed class TeamRunner : ITeamRunner
             Worktree: brief.Constraints.Worktree,
             CreateWorktree: brief.Constraints.Worktree is { Length: > 0 },
             PermissionPolicyPath: policy,
+            ResumeSessionId: resumeSession,
 
             // The directory the brief has just told this node to keep things
             // in. Without it the agent refuses every write there, which is
@@ -2997,6 +3066,101 @@ public sealed class TeamRunner : ITeamRunner
         return digits > 0 && digits < said.Length && said[digits] is '.' or ')'
             ? said[(digits + 1)..].Trim()
             : said;
+    }
+
+    /// <summary>
+    /// What a lead is told when an ended run is picked up.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two cases, told apart by whether the session actually reached the
+    /// agent's command line rather than by whether one was recorded. An agent
+    /// that cannot resume is started fresh with a warning, and a fresh lead
+    /// handed "carry on" with no brief has nothing to carry on from.
+    /// </para>
+    /// <para>
+    /// A lead resuming its own session remembers the run and is told only what
+    /// changed: why it stopped, what it has spent, what the person said. A
+    /// fresh one gets its whole brief and then where the run got to - the last
+    /// report the lead before it wrote, and any work still waiting on the gate
+    /// - so it carries on rather than asking for the same work again.
+    /// </para>
+    /// </remarks>
+    internal static string Picking(
+        RunResumption resuming,
+        TeamRunRequest request,
+        LaunchPlan plan,
+        Brief brief,
+        decimal? budget)
+    {
+        var summary = resuming.Summary;
+        var own = resuming.LeadSession is { Length: > 0 } session
+            && plan.Arguments.Contains(session, StringComparer.Ordinal);
+
+        var text = new StringBuilder();
+
+        if (!own)
+        {
+            text.AppendLine(Render(brief)).AppendLine();
+        }
+
+        text.AppendLine("## This run is being picked up again").AppendLine();
+
+        text.AppendLine(
+            $"It ended: {summary.Ended ?? "without saying why"}. So far it has taken {summary.Rounds} "
+            + $"round(s) and spent ${summary.CostUsd:0.00}"
+            + (budget is { } cap ? $" of a ${cap:0.00} budget" : string.Empty)
+            + ".").AppendLine();
+
+        if (request.ResumeMessage is { Length: > 0 } said)
+        {
+            text.AppendLine("The person running this team says:").AppendLine().AppendLine(said.Trim()).AppendLine();
+        }
+
+        if (!own)
+        {
+            text.AppendLine(
+                "You are a new session. The lead before you worked in another one, so what it knew is "
+                + "only what is written here and in the reports on disk.").AppendLine();
+
+            if (resuming.LastReport is { Length: > 0 } last)
+            {
+                text.AppendLine("Its last report:").AppendLine()
+                    .AppendLine("```json").AppendLine(last.Trim()).AppendLine("```").AppendLine();
+            }
+        }
+
+        if (summary.Outstanding is { Count: > 0 } open)
+        {
+            text.AppendLine("Criteria not yet met:").AppendLine();
+
+            foreach (var one in open)
+            {
+                text.AppendLine($"- {one.Criterion} ({one.Verdict})");
+            }
+
+            text.AppendLine();
+        }
+
+        if (resuming.Branches.Count > 0)
+        {
+            text.AppendLine("Work already done and waiting on the merge gate, which you do not need to ask for again:")
+                .AppendLine();
+
+            foreach (var (node, branch) in resuming.Branches)
+            {
+                text.AppendLine($"- {branch} ({node})");
+            }
+
+            text.AppendLine();
+        }
+
+        text.AppendLine(
+            "Carry on from where it stopped rather than starting over. Decide what happens next: more "
+            + "requests, or finish. Reply with one report/1 document. Keep summary short. Status done "
+            + "needs evidence cited from your nodes' reports.");
+
+        return text.ToString();
     }
 
     /// <summary>

@@ -87,6 +87,7 @@
 | `loadout team message` | Say something to a run's lead, read at its next round |
 | `loadout team halt` | Stop a run after its current round, hold it, or let it carry on |
 | `loadout team budget` | Change what a running team may spend in all, from its next round on |
+| `loadout team resume` | Pick up a team run that has ended, where it stopped: `--usd` for more money, `--rounds` for more rounds, `--message` for the lead |
 | `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
 | `loadout team pr` | Open a pull request for what one node of a run produced |
 | `loadout team say` | Say something to one node while it is still working |

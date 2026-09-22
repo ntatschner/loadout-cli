@@ -89,6 +89,9 @@ public static class RunControl
     public static Task PauseAsync(string directory, CancellationToken ct = default) =>
         WriteAsync(directory, PauseFile, "pause", ct);
 
+    /// <summary>Takes back a stop, for a run that is being picked up again.</summary>
+    public static void ClearStop(string directory) => Remove(directory, StopFile);
+
     /// <summary>Lets a held run carry on.</summary>
     public static void Resume(string directory) => Remove(directory, PauseFile);
 
