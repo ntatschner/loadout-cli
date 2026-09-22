@@ -24,6 +24,16 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// nothing but its goal. The lead owes a verdict and evidence on every one, and
 /// a done that leaves one unmet or unanswered is sent back to it.
 /// </param>
+/// <param name="Model">
+/// A model for every node of the run, spelled as the agent spells it, or null
+/// to leave each node and then the project to decide.
+/// <para>
+/// <c>team run</c> has taken <c>--model</c> since teams existed and nothing
+/// here carried it, so a run started from the page or by a webhook could not
+/// name one at all: it took whatever the team file or the project pinned, and
+/// somebody who chose a model on the page had nowhere to put it.
+/// </para>
+/// </param>
 /// <remarks>
 /// <para>
 /// Nothing here is checked against anything. Whether that team exists, whether
@@ -45,7 +55,8 @@ public sealed record StartRequest(
     string? Project = null,
     int? Rounds = null,
     string? Autonomy = null,
-    IReadOnlyList<string>? Criteria = null);
+    IReadOnlyList<string>? Criteria = null,
+    string? Model = null);
 
 /// <summary>A team the page asked be written.</summary>
 /// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>

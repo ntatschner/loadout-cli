@@ -1605,7 +1605,15 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("aria-labelledby=\"planning-heading\"");
 
         // Every field the command line takes, and nothing it does not.
-        foreach (var field in new[] { "start-team", "start-goal", "start-project", "start-rounds", "start-autonomy" })
+        //
+        // "start-model" is here because it was not: 'team run' has taken
+        // --model since teams existed and this form had no box for it, so a run
+        // started from the page could not name a model at all.
+        foreach (var field in new[]
+        {
+            "start-team", "start-goal", "start-project", "start-rounds", "start-autonomy",
+            "start-criteria", "start-model",
+        })
         {
             text.Should().Contain($"id=\"{field}\"");
         }

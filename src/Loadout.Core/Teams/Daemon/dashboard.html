@@ -2572,6 +2572,17 @@
               <option value="autonomous">autonomous</option>
             </select>
           </div>
+
+          <!-- Free text rather than a list. Which models exist is the agent's
+               business and it changes without this page being rebuilt, so the
+               spelling is the agent's own and whatever is typed goes straight
+               to 'team run --model'. Empty leaves the team file and then the
+               project to decide, which is what happened to every run started
+               from here before this box existed. -->
+          <div>
+            <label for="start-model">Model</label>
+            <input type="text" id="start-model" placeholder="the team's or project's">
+          </div>
         </div>
 
         <button type="button" id="start">Start it</button>
@@ -3341,6 +3352,7 @@
       var project = document.getElementById("start-project").value.trim();
       var rounds = parseInt(document.getElementById("start-rounds").value, 10);
       var autonomy = document.getElementById("start-autonomy").value;
+      var model = document.getElementById("start-model").value.trim();
 
       // One per line, blanks dropped: a criterion nothing can report a verdict
       // on would refuse every done for ever.
@@ -3388,7 +3400,8 @@
           project: project || null,
           rounds: rounds > 0 ? rounds : null,
           autonomy: autonomy || null,
-          criteria: criteria.length ? criteria : null
+          criteria: criteria.length ? criteria : null,
+          model: model || null
         })
       })
         .then(function (answer) {
@@ -6949,6 +6962,53 @@
       card.appendChild(asked);
 
       /*
+        How long is left, which the page never said. The run stops waiting and
+        finishes; an answer sent after that goes into the directory of a run
+        that no longer exists, and this page used to report it as having gone
+        through. A deadline nobody is shown is one people miss.
+      */
+      // Run once the card is built, not here: an already-expired question has
+      // to disable controls that do not exist yet at this point.
+      var countdown = null;
+
+      if (gate.until) {
+        var left = document.createElement("p");
+
+        left.className = "doing";
+        left.setAttribute("role", "timer");
+        card.appendChild(left);
+
+        var tick = function () {
+          var seconds = Math.round((new Date(gate.until) - new Date()) / 1000);
+
+          if (seconds > 0) {
+            // Minutes while there are minutes, seconds once it is close
+            // enough that a minute is the wrong unit to be told in.
+            left.textContent = "Waiting for you - "
+              + (seconds >= 120
+                ? Math.floor(seconds / 60) + " minutes left"
+                : seconds + " seconds left")
+              + ", then the run stops.";
+
+            return;
+          }
+
+          left.textContent = "The run stopped waiting for this. Answering now "
+            + "will not reach it.";
+
+          card.querySelectorAll("button, textarea, input").forEach(function (dead) {
+            dead.disabled = true;
+          });
+
+          window.clearInterval(counting);
+        };
+
+        var counting = window.setInterval(tick, 1000);
+
+        countdown = tick;
+      }
+
+      /*
         A brief is the one question with a third answer. The lead wrote that
         task and can be wrong about it in a way that is obvious from here and
         expensive to find out any other way - the worker goes off and does the
@@ -7010,6 +7070,70 @@
 
         card.appendChild(button);
       });
+
+      /*
+        The fifth option, for a question: an answer in your own words.
+
+        The lead offers a fixed set, and the first real use of this page was
+        somebody who agreed with none of them - they typed what they actually
+        thought into the message box instead. A message is delivered at the
+        start of the lead's next round, and a lead stopped on a question has no
+        next round until it is answered, so what they wrote could never have
+        arrived. It sat in the directory while the run's clock ran out.
+
+        Only on a question. A permission and a confirm are yes or no, and a
+        brief already has its own box for the text to send instead.
+      */
+      if (gate.kind === "question") {
+        var own = document.createElement("label");
+
+        own.className = "said";
+        own.htmlFor = "own-" + gate.id;
+        own.textContent = "Or answer in your own words:";
+        card.appendChild(own);
+
+        var words = document.createElement("textarea");
+
+        words.id = "own-" + gate.id;
+        words.rows = 2;
+        card.appendChild(words);
+
+        var send = document.createElement("button");
+
+        send.type = "button";
+        send.textContent = "Send that as the answer";
+
+        send.addEventListener("click", function () {
+          var said = words.value.trim();
+
+          if (!said) {
+            announce("Type an answer first, or pick one of the options.");
+
+            return;
+          }
+
+          if (!window.confirm("Answer with your own words instead of one of "
+            + "the options the lead offered?\n\n" + said)) {
+            return;
+          }
+
+          send.disabled = true;
+
+          act(run.id, "gates", { gate: gate.id, answer: said })
+            .then(function () {
+              announce("Told " + run.id + ": " + said);
+              card.remove();
+            })
+            .catch(function (e) {
+              send.disabled = false;
+              announce("That did not go through: " + e.message);
+            });
+        });
+
+        card.appendChild(send);
+      }
+
+      if (countdown) { countdown(); }
 
       box.appendChild(card);
     });

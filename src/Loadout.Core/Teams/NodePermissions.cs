@@ -135,6 +135,11 @@ public sealed record RemedyStanding(
 /// confirm are.
 /// </param>
 /// <param name="Recommendation">What the lead would choose, for a question.</param>
+/// <param name="Until">
+/// When whoever asked stops waiting, so a page can say how long is left. Null
+/// on a question written before this was carried, which reads as no deadline
+/// shown rather than as no deadline.
+/// </param>
 /// <remarks>
 /// One shape for all three because they are one thing to whoever is answering:
 /// the run has stopped and wants a person. They were separate while only a
@@ -151,7 +156,8 @@ public sealed record PendingAsk(
     string Kind = "permission",
     string? Asked = null,
     IReadOnlyList<string>? Options = null,
-    string? Recommendation = null)
+    string? Recommendation = null,
+    DateTimeOffset? Until = null)
 {
     /// <summary>The question, as a person reads it.</summary>
     /// <remarks>
@@ -275,8 +281,35 @@ public static class NodePermissions
     /// not about cost. It is about a run that somebody walked away from ending
     /// in a refusal it can report rather than sitting there until the agent's
     /// own timeout kills it with nothing written down.
+    /// <para>
+    /// This is the wait for "may I use Bash for this", where an agent is
+    /// stopped mid-turn and the answer is one word. It is not the wait for a
+    /// question somebody has to think about: see <see cref="PersonPatience" />.
+    /// </para>
     /// </remarks>
     public static readonly TimeSpan Patience = TimeSpan.FromMinutes(5);
+
+    /// <summary>How long a question meant for a person waits.</summary>
+    /// <remarks>
+    /// <para>
+    /// A lead's question, a gate and a brief are all put to somebody who has to
+    /// read them before they can answer, and they had the five minutes above
+    /// because there was one number and nobody had separated the two cases.
+    /// The first real test of the dashboard is what separated them: the lead
+    /// asked which of three retention policies to take - each option a full
+    /// line of prose - at 14:43:55, gave up at 14:48:55, and finished the run
+    /// as "stopped at a decision". The answer arrived at 14:51:33, was written
+    /// into the directory of a run that no longer existed, and the page said it
+    /// had gone through.
+    /// </para>
+    /// <para>
+    /// An hour, rather than no limit at all: a run nobody comes back to should
+    /// still end in something it can report. The page says how long is left, so
+    /// the limit is a fact somebody can act on rather than one they find out
+    /// about afterwards.
+    /// </para>
+    /// </remarks>
+    public static readonly TimeSpan PersonPatience = TimeSpan.FromHours(1);
 
     /// <summary>How often each side looks for the other's file.</summary>
     public static readonly TimeSpan Glance = TimeSpan.FromMilliseconds(250);
@@ -363,21 +396,34 @@ public static class NodePermissions
         }
     }
 
+    /// <remarks>
+    /// <c>patience</c> is <see cref="Patience" /> when omitted, which is the
+    /// node's wait. Anything put to a person passes
+    /// <see cref="PersonPatience" />.
+    /// </remarks>
     public static async Task<AskAnswer?> AskAsync(
         string directory,
         PendingAsk ask,
         TimeProvider time,
+        TimeSpan? patience = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ask);
         ArgumentNullException.ThrowIfNull(time);
 
-        if (!await PutAsync(directory, ask, ct).ConfigureAwait(false))
+        var waiting = patience ?? Patience;
+
+        // Written into the question rather than kept here, because the thing
+        // that has to know is a page in a browser somewhere else. A question
+        // that does not say when it stops being answerable is one somebody
+        // answers too late and is told it worked.
+        if (!await PutAsync(directory, ask with { Until = time.GetUtcNow() + waiting }, ct)
+            .ConfigureAwait(false))
         {
             return null;
         }
 
-        return await WaitAsync(directory, ask.Id, time, ct).ConfigureAwait(false);
+        return await WaitAsync(directory, ask.Id, time, waiting, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -394,11 +440,12 @@ public static class NodePermissions
         string directory,
         string id,
         TimeProvider time,
+        TimeSpan? patience = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(time);
 
-        var until = time.GetUtcNow() + Patience;
+        var until = time.GetUtcNow() + (patience ?? Patience);
 
         while (time.GetUtcNow() < until)
         {

@@ -54,7 +54,10 @@ public sealed class RunAttentionTests
     private static RunNode Node(
         string name = "implementer/1",
         int turns = 2,
-        string state = "running",
+        // "working" is what the journal sets on node.launched. This said
+        // "running", which nothing has ever written, so every test of the
+        // silence rule was run against a state that does not exist.
+        string state = "working",
         DateTimeOffset? lastSeen = null,
         DateTimeOffset? started = null) =>
         new(
@@ -200,9 +203,62 @@ public sealed class RunAttentionTests
     [InlineData("failed")]
     public void A_node_that_has_finished_is_not_quiet_it_is_finished(string state)
     {
+        // Dated so the rule actually runs. This used to put the node's last
+        // word two hours before its own start, which makes Took null and
+        // returns before the state is ever looked at - so it passed whatever
+        // the state meant.
         var over = Run(nodes:
         [
-            Node(turns: 2, state: state, started: Noon.AddMinutes(-14), lastSeen: Noon.AddHours(-2)),
+            Node(turns: 2, state: state,
+                started: Noon.AddMinutes(-25), lastSeen: Noon.AddMinutes(-20)),
+        ]);
+
+        RunAttention.For(over, Noon).Should().BeEmpty();
+    }
+
+    /// <remarks>
+    /// The lead's turn ends when it asks for workers. Its process is gone, its
+    /// last word is as old as the dispatch, and the workers then take twenty
+    /// minutes doing what it asked for - which is the run working exactly as
+    /// intended. Every pass of the daemon said the lead had gone quiet, and a
+    /// notice went out saying so.
+    /// </remarks>
+    [Fact]
+    public void A_lead_waiting_on_the_workers_it_dispatched_is_not_quiet()
+    {
+        var working = Run(nodes:
+        [
+            Node("lead", turns: 1, state: "ended",
+                started: Noon.AddMinutes(-25), lastSeen: Noon.AddMinutes(-20)),
+            Node("implementer/1", turns: 1, state: "working",
+                started: Noon.AddMinutes(-20), lastSeen: Noon.AddSeconds(-5)),
+        ]);
+
+        RunAttention.For(working, Noon).Should().BeEmpty(
+            "nothing is wrong: the lead has nothing to do until its workers report");
+    }
+
+    /// <remarks>
+    /// Silence means something only about a process that could be speaking.
+    /// The skip list named three report statuses and missed every state a node
+    /// reaches by its process ending - including <c>ended</c>, which is where
+    /// the lead sits for most of a run.
+    /// </remarks>
+    [Theory]
+    [InlineData("ended")]
+    [InlineData("blocked")]
+    [InlineData("needs-decision")]
+    public void A_node_whose_process_has_gone_has_nothing_to_say(string state)
+    {
+        // Timed so that silence would be reported if the state did not stop
+        // it: two turns over five minutes average two and a half, and twenty
+        // minutes of quiet is well past three times that. The sibling test
+        // above this one dates its last word before its own start, so Took is
+        // null and the rule never runs - it passes without asserting anything.
+        var over = Run(nodes:
+        [
+            Node(turns: 2, state: state,
+                started: Noon.AddMinutes(-25), lastSeen: Noon.AddMinutes(-20)),
         ]);
 
         RunAttention.For(over, Noon).Should().BeEmpty();

@@ -974,7 +974,8 @@ public sealed class TeamRunner : ITeamRunner
                 }
 
                 feedback.AppendLine(
-                    "Decide what happens next: more requests, or finish. Reply with one report/1 document. "
+                    "Decide what happens next: more requests, or finish. Reply with one report/1 "
+                    + "document. Keep summary short: a few sentences, not a report of its own. "
                     + "Status done needs evidence cited from these reports.");
 
                 prompt = feedback.ToString();
@@ -2649,7 +2650,18 @@ public sealed class TeamRunner : ITeamRunner
         }
 
         text.AppendLine("## The brief as JSON").AppendLine().AppendLine("```json").AppendLine(ReportReader.Write(brief)).AppendLine("```").AppendLine();
-        text.AppendLine("Reply with one report/1 document as your structured output. Status done needs evidence.");
+        // The summary cap is said rather than left to be discovered. The schema
+        // has always enforced it and nothing ever mentioned it, so a node over
+        // the limit was refused and wrote its whole report again - a model call
+        // spent on a number nobody had told it.
+        // Asked for rather than enforced. A length rule in the schema refused
+        // the whole report and the model rewrote it, three times over in one
+        // observed run - and that retry is inside the agent's turn, where
+        // nothing here can reach it. Before the evidence rule, because the last
+        // sentence a node reads is the contract and a test holds it there.
+        text.AppendLine(
+            "Reply with one report/1 document as your structured output. Keep summary short: a "
+            + "few sentences, not a report of its own. Status done needs evidence.");
 
         return text.ToString();
     }
@@ -2692,8 +2704,22 @@ public sealed class TeamRunner : ITeamRunner
                 answer = await console.DecideAsync(question, ct).ConfigureAwait(false);
             }
 
-            await journal.WriteAsync("decision", null, new { question = question.Question, answer, by = autonomy == "autonomous" ? "recommendation" : "person" }, ct)
-                .ConfigureAwait(false);
+            // "by" says who settled it, and a null answer means nobody did:
+            // the wait ran out. It said "person" either way, so a run that
+            // stopped because somebody was still reading the question was
+            // written down as a run somebody had decided to stop.
+            await journal.WriteAsync(
+                "decision",
+                null,
+                new
+                {
+                    question = question.Question,
+                    answer,
+                    by = autonomy == "autonomous" ? "recommendation"
+                        : answer is null ? "nobody"
+                        : "person",
+                },
+                ct).ConfigureAwait(false);
 
             if (answer is null)
             {

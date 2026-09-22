@@ -287,6 +287,83 @@ public sealed class PermissionAskTests : IDisposable
         new AskAnswer(true, "go on").By.Should().Be("terminal");
     }
 
+    /// <remarks>
+    /// The page counts this down. It had nothing to count: the question said
+    /// when it was asked and never when it stopped being answerable, so the
+    /// first thing anybody knew about the deadline was a run that had ended
+    /// while they were reading.
+    /// </remarks>
+    [Fact]
+    public async Task A_question_says_when_the_run_stops_waiting_for_it()
+    {
+        var asking = NodePermissions.AskAsync(
+            _directory, Ask(), _time, NodePermissions.PersonPatience);
+
+        await WaitForAsync(() => NodePermissions.Pending(_directory).Count == 1);
+
+        NodePermissions.Pending(_directory)[0].Until.Should().Be(
+            _time.GetUtcNow() + NodePermissions.PersonPatience);
+
+        await NodePermissions.AnswerAsync(_directory, "impl-1-abc", new AskAnswer(true, "go on"));
+        await asking;
+    }
+
+    [Fact]
+    public async Task A_node_stopped_mid_turn_keeps_the_shorter_wait()
+    {
+        var asking = NodePermissions.AskAsync(_directory, Ask(), _time);
+
+        await WaitForAsync(() => NodePermissions.Pending(_directory).Count == 1);
+
+        NodePermissions.Pending(_directory)[0].Until.Should().Be(
+            _time.GetUtcNow() + NodePermissions.Patience,
+            "an agent is stopped inside a turn and the answer is one word");
+
+        await NodePermissions.AnswerAsync(_directory, "impl-1-abc", new AskAnswer(true, "go on"));
+        await asking;
+    }
+
+    /// <remarks>
+    /// The whole of the bug, as a test: a question put to a person used to give
+    /// up after the wait a node gets. Somebody reading three options of a line
+    /// each does not answer in five minutes, and the run finished without them.
+    /// </remarks>
+    [Fact]
+    public async Task A_person_is_still_waited_for_after_a_node_would_have_been_given_up_on()
+    {
+        var asking = NodePermissions.AskAsync(
+            _directory, Ask(), _time, NodePermissions.PersonPatience);
+
+        await WaitForAsync(() => NodePermissions.Pending(_directory).Count == 1);
+
+        _time.Advance(NodePermissions.Patience + TimeSpan.FromMinutes(1));
+
+        // Long enough for several of the waiting side's own glances, which run
+        // on real time however the deadline is measured.
+        await Task.Delay(TimeSpan.FromMilliseconds(750));
+
+        asking.IsCompleted.Should().BeFalse("a person has an hour, not five minutes");
+
+        await NodePermissions.AnswerAsync(_directory, "impl-1-abc", new AskAnswer(true, "go on"));
+
+        (await asking)!.Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_person_is_eventually_given_up_on_too()
+    {
+        var asking = NodePermissions.AskAsync(
+            _directory, Ask(), _time, NodePermissions.PersonPatience);
+
+        await WaitForAsync(() => NodePermissions.Pending(_directory).Count == 1);
+
+        // A run nobody comes back to still has to end in something it can
+        // report, which is why this is an hour rather than no limit at all.
+        _time.Advance(NodePermissions.PersonPatience + TimeSpan.FromMinutes(1));
+
+        (await asking).Should().BeNull();
+    }
+
     [Fact]
     public void A_policy_says_nothing_may_be_asked_unless_the_run_said_so()
     {

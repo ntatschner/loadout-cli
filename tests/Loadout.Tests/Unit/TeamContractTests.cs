@@ -158,6 +158,27 @@ public sealed class TeamContractTests
             .Should().Be(Report.Version);
     }
 
+    /// <remarks>
+    /// Length is not structure, and enforcing it here refused the whole report
+    /// and made the model write it again - inside its own turn, where nothing
+    /// in this repository can reach the retry. Watched live: 3163 characters
+    /// refused, then 1790 refused, then 1609 refused, three full rewrites about
+    /// forty-five seconds apart. The brief asks for a short summary and the
+    /// places that print one trim it.
+    /// </remarks>
+    [Fact]
+    public void The_schema_puts_no_length_rule_on_the_summary()
+    {
+        using var schema = JsonDocument.Parse(ReportSchema.Version1);
+
+        var summary = schema.RootElement.GetProperty("properties").GetProperty("summary");
+
+        summary.GetProperty("type").GetString().Should().Be("string");
+
+        summary.TryGetProperty("maxLength", out _).Should().BeFalse(
+            "a long summary is not a malformed report, and refusing one costs a rewrite");
+    }
+
     [Fact]
     public void Done_with_passing_evidence_and_a_deliverable_is_accepted()
     {

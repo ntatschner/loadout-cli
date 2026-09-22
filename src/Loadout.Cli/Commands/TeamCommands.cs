@@ -1475,7 +1475,16 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             {
                 output.WriteBlankLine();
                 output.WriteLine($"[bold]The lead's report[/]  [dim]{Markup.Escape(final.Status.ToString().ToLowerInvariant())}[/]");
-                output.WriteLine($"  {Markup.Escape(final.Summary)}");
+
+                // Trimmed here rather than refused when it was written. The
+                // schema used to hold a summary to this length and refuse the
+                // whole report over it, which cost the run a rewrite for
+                // something that only ever mattered to a screen. Every word is
+                // still in the report file, and this says so.
+                output.WriteLine(final.Summary.Length > ReportSchema.SummaryShown
+                    ? $"  {Markup.Escape(final.Summary[..ReportSchema.SummaryShown])}[dim]... "
+                        + "(the rest is in final-report.json)[/]"
+                    : $"  {Markup.Escape(final.Summary)}");
 
                 foreach (var deliverable in final.Deliverables)
                 {

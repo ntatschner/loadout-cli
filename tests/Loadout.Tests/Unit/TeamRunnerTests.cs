@@ -400,6 +400,45 @@ public sealed class TeamRunnerTests : IDisposable
         _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **no**");
     }
 
+    /// <remarks>
+    /// "by" says who settled it, and it said "person" whether or not one had.
+    /// A run whose question timed out while somebody was still reading it was
+    /// written down as a run a person had decided to stop - which is the one
+    /// reading of the record that sends nobody looking at the clock.
+    /// </remarks>
+    [Fact]
+    public async Task A_question_nobody_answered_is_not_recorded_as_a_persons_decision()
+    {
+        _console.Decide = _ => null;
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m), Result(LeadDone(), 0.09m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Ended.Should().Be("stopped at a decision");
+
+        var decision = (await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl")))
+            .First(line => line.Contains("\"decision\"", StringComparison.Ordinal));
+
+        decision.Should().Contain("\"by\":\"nobody\"");
+        decision.Should().NotContain("\"by\":\"person\"");
+    }
+
+    /// <remarks>
+    /// Asked for in the brief, because the schema no longer refuses a long one.
+    /// It used to, and the model answered a refusal by rewriting the whole
+    /// report - three times in one observed run, still over the limit each time.
+    /// </remarks>
+    [Fact]
+    public async Task A_node_is_asked_for_a_short_summary_rather_than_refused_over_one()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        await RunAsync();
+
+        _launcher.Written("role.project-lead")[0].Should().Contain("Keep summary short");
+    }
+
     [Fact]
     public async Task In_autonomous_mode_the_leads_recommendation_is_the_answer()
     {

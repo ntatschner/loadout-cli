@@ -60,6 +60,18 @@ public static class RunAttention
     public const int QuietFactor = 3;
 
     /// <summary>
+    /// The one state a node is in while a process of its own is running.
+    /// </summary>
+    /// <remarks>
+    /// Written down here because the rule that matters is "could this be
+    /// speaking", and answering it by listing the states where it could not
+    /// is how the lead came to be reported as quiet for most of every run.
+    /// The journal sets this on <c>node.launched</c> and replaces it on
+    /// <c>node.reported</c> or <c>node.ended</c>.
+    /// </remarks>
+    public const string Working = "working";
+
+    /// <summary>
     /// The least a node may be silent before any of this applies.
     /// </summary>
     /// <remarks>
@@ -134,14 +146,32 @@ public static class RunAttention
     /// A node that has said nothing for far longer than it usually takes.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Usually a hung process or a rate limit, and both look exactly like
     /// thinking from outside. It needs turns to have an average at all, so the
     /// first turn of any node is never reported - which is correct: nothing is
     /// yet known about how long this one takes.
+    /// </para>
+    /// <para>
+    /// Only of a node that is working, because that is the only state in which
+    /// being silent means anything. This used to name three states it would
+    /// not report on - done, reported and failed - which missed every state a
+    /// node reaches by its process ending, and one of those is where the lead
+    /// sits for most of a run: it asks for workers, its turn ends, and its last
+    /// word is as old as the dispatch while the workers take twenty minutes
+    /// doing what it asked for. That is the run working, and it was reported as
+    /// the lead having gone quiet, to whoever had notices turned on.
+    /// </para>
+    /// <para>
+    /// <c>reported</c> was never one of them. A node's state comes from its own
+    /// report - done, blocked, failed, needs-decision - or from the journal:
+    /// working, then ended. Nothing has ever written "reported", so that arm of
+    /// the condition has never once been true.
+    /// </para>
     /// </remarks>
     private static Attention? Silence(RunNode node, DateTimeOffset now)
     {
-        if (node.Turns < 1 || node.Took is not { } took || node.State is "done" or "reported" or "failed")
+        if (node.Turns < 1 || node.Took is not { } took || node.State is not Working)
         {
             return null;
         }
