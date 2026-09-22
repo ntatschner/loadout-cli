@@ -235,7 +235,7 @@ Grab your platform's archive from the
 ### Linux and macOS
 
 ```sh
-tar -xzf loadout-0.37.1-linux-x64.tar.gz
+tar -xzf loadout-0.38.0-linux-x64.tar.gz
 ./install.sh          # goes to ~/.local/bin, no root
 loadout setup
 ```
@@ -246,7 +246,7 @@ There are `.deb` and `.rpm` packages if you'd rather.
 ### Windows
 
 ```powershell
-msiexec /i loadout-0.37.1-win-x64.msi    # per-user, no elevation
+msiexec /i loadout-0.38.0-win-x64.msi    # per-user, no elevation
 loadout setup
 ```
 
