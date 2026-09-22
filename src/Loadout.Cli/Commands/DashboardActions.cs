@@ -216,6 +216,15 @@ internal static class DashboardActions
             arguments.Add(autonomy);
         }
 
+        // The option 'team run' has always had and nothing here passed, so a
+        // run started from the page could not name a model however carefully
+        // somebody chose one.
+        if (asking.Model is { Length: > 0 } model)
+        {
+            arguments.Add("--model");
+            arguments.Add(model);
+        }
+
         // One option per criterion, because a criterion is a sentence and
         // sentences contain commas. Blank ones are dropped rather than passed:
         // a criterion the lead can never report a verdict on would refuse

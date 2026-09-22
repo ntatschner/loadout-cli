@@ -13,6 +13,26 @@ namespace Loadout.Models.Teams;
 /// </remarks>
 public static class ReportSchema
 {
+    /// <summary>How much of a summary is shown where one is printed.</summary>
+    /// <remarks>
+    /// <para>
+    /// A display length, and nothing more. The schema used to hold summary to
+    /// 1500 characters, which meant a lead that wrote more had its whole report
+    /// refused and wrote the thing again - and the retry is inside the agent's
+    /// own turn, where nothing here can reach it. Watched live: 3163 characters,
+    /// refused; 1790, refused; 1609, refused. Three rewrites of a full report,
+    /// about forty-five seconds apart, shaving a little each time and still
+    /// over.
+    /// </para>
+    /// <para>
+    /// Length is not structure. The schema says what the fields are and a
+    /// summary that runs long is not a malformed report, so the brief asks for
+    /// a short one and this is what gets printed - the journal and the report
+    /// file keep every word the lead wrote.
+    /// </para>
+    /// </remarks>
+    public const int SummaryShown = 1500;
+
     /// <summary>The schema for <see cref="Report.Version"/>.</summary>
     /// <remarks>
     /// No <c>$schema</c> key. Claude Code's validator refuses one naming
@@ -31,7 +51,7 @@ public static class ReportSchema
             "contract": { "const": "report/1" },
             "node": { "type": "string" },
             "status": { "enum": ["done", "blocked", "failed", "needs-decision"] },
-            "summary": { "type": "string", "maxLength": 1500 },
+            "summary": { "type": "string" },
             "deliverables": { "type": "array", "items": {
               "type": "object", "additionalProperties": false, "required": ["kind", "ref"],
               "properties": {

@@ -114,6 +114,26 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
             return output.Fail($"Run {run} is not waiting to be told anything.", ExitCode.InvalidArguments);
         }
 
+        /*
+          A question outlives the run that asked it. The ask file stays in the
+          directory whether or not anybody answered, so "there is a question
+          with no answer beside it" was read as "a run is waiting on this" -
+          and an answer to a run that had already finished was written, and
+          reported as having gone through.
+
+          It has happened: a lead asked at 14:43:55, gave up at 14:48:55, and
+          the run ended. The answer arrived at 14:51:33, landed in the
+          directory of a finished run, and the dashboard said it worked.
+        */
+        if (_journal.Summarise(run) is { Succeeded: true, Value: { Finished: { } finished } over })
+        {
+            return output.Fail(
+                $"Run {run} finished at {finished.ToLocalTime():HH:mm}"
+                + (over.Ended is { Length: > 0 } how ? $" - {how}" : string.Empty)
+                + ". Nothing is waiting for this answer any more.",
+                ExitCode.InvalidArguments);
+        }
+
         var gate = settings.Gate is { Length: > 0 } named
             ? waiting.FirstOrDefault(one => string.Equals(one.Id, named, StringComparison.Ordinal))
             : waiting.Count == 1 ? waiting[0] : null;
@@ -149,7 +169,13 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
             return CommandOutput.Success();
         }
 
-        var yes = answer is "yes" or "y" or "allow" or "true"
+        // A question is answered, not permitted. Whatever was said is the
+        // answer - including words that match none of the options, which is
+        // what the page's own box sends - so recording it as a refusal would
+        // write down the opposite of what happened. The option that ends a run
+        // is one of the lead's own, and whoever asked reads it as that.
+        var yes = gate.Kind == "question"
+            || answer is "yes" or "y" or "allow" or "true"
             || gate.Choices.Any(one => string.Equals(one, answer, StringComparison.OrdinalIgnoreCase))
                 && answer is not ("no" or "n" or "refuse" or "false");
 
@@ -237,11 +263,35 @@ public sealed class TeamMessageCommand : AsyncCommand<TeamMessageCommand.Setting
             return CommandOutput.Success();
         }
 
-        await RunControl.SayAsync(_journal.DirectoryOf(run), message, cancellationToken)
-            .ConfigureAwait(false);
+        var directory = _journal.DirectoryOf(run);
+
+        await RunControl.SayAsync(directory, message, cancellationToken).ConfigureAwait(false);
 
         output.WriteLine(
             $"[green]+[/] The lead of {Markup.Escape(run)} reads that at the start of its next round.");
+
+        /*
+          Which may never come. A message is delivered at the start of the next
+          round, and a lead stopped on a question has no next round until that
+          question is answered - so a message sent instead of an answer sits in
+          the directory, unread, while the run's own clock runs out.
+
+          It is still written, because the person asked for it to be and it
+          will be read if the run carries on. What changes is that they are
+          told, rather than finding out from a run that ended without ever
+          mentioning it.
+        */
+        foreach (var pending in NodePermissions.Pending(directory))
+        {
+            output.WriteLine(
+                $"[yellow]It is waiting on a question first:[/] {Markup.Escape(pending.Asking)}");
+            output.WriteLine(
+                $"[dim]Nothing is read until that is answered. Answer it with: "
+                + $"loadout team gate {run} --gate {pending.Id} --answer <one of "
+                + $"{string.Join(", ", pending.Choices)}>[/]");
+
+            break;
+        }
 
         return CommandOutput.Success();
     }

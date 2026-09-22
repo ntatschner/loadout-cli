@@ -1496,6 +1496,11 @@ public sealed class DashboardServer : IDisposable
             options = gate.Choices,
             gate.Recommendation,
             gate.At,
+
+            // When the run stops waiting. The page counts it down, because a
+            // question with a deadline nobody is shown is one somebody answers
+            // too late and is told it worked.
+            gate.Until,
         }),
 
         // Where the spend stands, which the design asked for and the list

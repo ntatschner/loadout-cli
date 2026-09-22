@@ -88,6 +88,10 @@ public sealed class DashboardTeamConsole : ITeamConsole
                 Kind: "confirm",
                 Asked: what),
             _time,
+
+            // The wait for somebody who has to read this before they can answer
+            // it, which is not the wait for a node stopped mid-turn.
+            NodePermissions.PersonPatience,
             ct).ConfigureAwait(false);
 
         return answer?.Allowed ?? false;
@@ -131,6 +135,10 @@ public sealed class DashboardTeamConsole : ITeamConsole
                 Asked: what,
                 Recommendation: task),
             _time,
+
+            // The wait for somebody who has to read this before they can answer
+            // it, which is not the wait for a node stopped mid-turn.
+            NodePermissions.PersonPatience,
             ct).ConfigureAwait(false);
 
         if (answer is null || !answer.Allowed)
@@ -169,6 +177,10 @@ public sealed class DashboardTeamConsole : ITeamConsole
                 Options: [.. question.Options, Stop],
                 Recommendation: question.Recommendation),
             _time,
+
+            // The wait for somebody who has to read this before they can answer
+            // it, which is not the wait for a node stopped mid-turn.
+            NodePermissions.PersonPatience,
             ct).ConfigureAwait(false);
 
         // Nobody answered, or somebody chose to stop. Both end the run, and
