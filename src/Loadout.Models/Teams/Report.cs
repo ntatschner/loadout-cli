@@ -35,6 +35,21 @@ namespace Loadout.Models.Teams;
 /// the lead and of nothing else: a worker is accountable for its own brief, and
 /// the lead is the node that answers for the goal.
 /// </param>
+/// <param name="ProposedDoneWhen">
+/// What the lead thinks this run should be judged on, when nobody said.
+/// <para>
+/// Asked for in the lead's first brief, and only when the run was started with
+/// no criteria of its own. Such a run used to be held to one criterion - "the
+/// goal is met" - which the lead wrote its own verdict on, so nothing it could
+/// report was ever wrong: a run that produced a design document for a goal
+/// somebody expected code from said done, cited itself, and was right by the
+/// only rule it had.
+/// </para>
+/// <para>
+/// A proposal and not a decision. It goes in front of a person before a single
+/// worker is briefed, and what comes back is what the run is held to.
+/// </para>
+/// </param>
 public sealed record Report(
     [property: JsonPropertyName("node")] string Node,
     [property: JsonPropertyName("status")] ReportStatus Status,
@@ -47,7 +62,8 @@ public sealed record Report(
     [property: JsonPropertyName("requests")] IReadOnlyList<ReportRequest>? Requests = null,
     [property: JsonPropertyName("outward_requested")] IReadOnlyList<string>? OutwardRequested = null,
     [property: JsonPropertyName("next")] string? Next = null,
-    [property: JsonPropertyName("coverage")] IReadOnlyList<ReportCoverage>? Coverage = null)
+    [property: JsonPropertyName("coverage")] IReadOnlyList<ReportCoverage>? Coverage = null,
+    [property: JsonPropertyName("proposed_done_when")] IReadOnlyList<string>? ProposedDoneWhen = null)
 {
     /// <summary>The version of this shape.</summary>
     [JsonPropertyName("contract")]

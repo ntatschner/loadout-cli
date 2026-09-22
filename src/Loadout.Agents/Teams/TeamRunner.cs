@@ -456,7 +456,23 @@ public sealed class TeamRunner : ITeamRunner
         var leadBrief = MakeBrief(
             runId, team.Lead, parent: null, leadNode, leadRole, request.Goal, inputs: [],
             doneWhen: criteria is null
-                ? ["the goal is met, with the evidence cited from your nodes' reports"]
+                ?
+                [
+                    "the goal is met, with the evidence cited from your nodes' reports",
+
+                    // Asked for before anything is briefed, because the answer
+                    // decides what the rest of the run is for. The criterion
+                    // above is the one this run has until somebody agrees
+                    // better ones, and on its own it is unfalsifiable: it says
+                    // the goal is met, the lead writes its own verdict on it,
+                    // and a run that produced a design document for a goal
+                    // somebody wanted code from was right by the only rule it
+                    // had.
+                    "your first report proposes, in 'proposed_done_when', what this run should "
+                        + "actually be judged on: each one a thing somebody else could check, "
+                        + "each one specific to this goal. Say what would have to be true, not "
+                        + "that the goal is met",
+                ]
                 :
                 [
                     "every criterion below is met, with the evidence cited from your nodes' reports",
@@ -614,6 +630,17 @@ public sealed class TeamRunner : ITeamRunner
         var decisions = new Dictionary<string, string>(StringComparer.Ordinal);
         var askedAboutTheGate = false;
 
+        // Asked once per run, on the lead's first report. A lead that proposes
+        // nothing is not asked again: the question was put and it declined to
+        // answer, and asking every round would be badgering it with something
+        // that costs a turn each time.
+        var proposed = false;
+
+        // What was agreed this round, for the feedback the lead reads next. It
+        // has to be told: it proposed them, a person may have rewritten them,
+        // and a lead held to criteria it has not seen cannot report coverage.
+        IReadOnlyList<string>? agreedThisRound = null;
+
         try
         {
             var prompt = Render(leadBrief);
@@ -733,6 +760,49 @@ public sealed class TeamRunner : ITeamRunner
                 }
 
                 final = report;
+
+                /*
+                  What this run is judged on, agreed before a worker is briefed.
+
+                  Only where nobody said: a run started with --done-when was
+                  settled by whoever typed them. Without them the run's only
+                  criterion was "the goal is met", which the lead writes its own
+                  verdict on - so a run that produced a design document for a
+                  goal somebody wanted code from reported done, cited itself,
+                  and was right by the only rule it had.
+
+                  Here rather than after the dispatch, because the workers
+                  briefed in this same round are handed the criteria too, and a
+                  criterion agreed after they have gone is one they never saw.
+                */
+                if (criteria is null && !proposed)
+                {
+                    proposed = true;
+
+                    criteria = await AgreedAsync(report, autonomy, console, journal, ct)
+                        .ConfigureAwait(false);
+
+                    if (criteria is { Count: > 0 })
+                    {
+                        // The brief is what ReportCheck reads, so every later
+                        // done is held to these exactly as it would be to ones
+                        // somebody typed.
+                        leadBrief = leadBrief with
+                        {
+                            Criteria = criteria,
+                            DoneWhen =
+                            [
+                                "every criterion below is met, with the evidence cited from your "
+                                    + "nodes' reports",
+                                "your final report carries one coverage entry per criterion, each "
+                                    + "with a verdict of met, unmet or not-attempted, and every met "
+                                    + "saying in 'because' which node, report and evidence shows it",
+                            ],
+                        };
+
+                        agreedThisRound = criteria;
+                    }
+                }
 
                 // A lead that says done while the team's gate has not been
                 // consulted is told once, because its role says to route
@@ -977,6 +1047,30 @@ public sealed class TeamRunner : ITeamRunner
                 {
                     ended = "no progress: two rounds without a request or a finish";
                     break;
+                }
+
+                // What it is now held to, said once, in the round after it was
+                // agreed. It proposed these and a person may have rewritten
+                // them, so the list it reads here is the list ReportCheck will
+                // hold its done to - and a lead held to criteria it has not
+                // seen cannot report coverage for them.
+                if (agreedThisRound is { Count: > 0 } settled)
+                {
+                    feedback.AppendLine("## What this run is judged on").AppendLine();
+                    feedback.AppendLine(
+                        "Agreed from what you proposed. Your final report needs one coverage entry "
+                        + "per criterion, each with a verdict of met, unmet or not-attempted, and "
+                        + "every met saying in 'because' which node, report and evidence shows it.")
+                        .AppendLine();
+
+                    for (var i = 0; i < settled.Count; i++)
+                    {
+                        feedback.AppendLine($"{i + 1}. {settled[i]}");
+                    }
+
+                    feedback.AppendLine();
+
+                    agreedThisRound = null;
                 }
 
                 if (reports.Count > 0)
@@ -2694,6 +2788,144 @@ public sealed class TeamRunner : ITeamRunner
             + "few sentences, not a report of its own. Status done needs evidence.");
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// What the run will be judged on, from the lead's proposal and a person's
+    /// say-so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The lead proposes, a person disposes. It is put through the same gate a
+    /// brief goes through - text in a box, changed or accepted - because that is
+    /// exactly the shape of the thing: a list somebody reads, disagrees with
+    /// half of, and rewrites.
+    /// </para>
+    /// <para>
+    /// An autonomous run has nobody to ask, so the proposal stands and the
+    /// journal says nobody agreed it. That is worth more than no criteria at
+    /// all: a lead held to specifics it wrote itself can still report a
+    /// criterion unmet, which the one it had before - "the goal is met" - never
+    /// could.
+    /// </para>
+    /// <para>
+    /// Null when there is nothing to hold it to, which is the behaviour a run
+    /// had before any of this: the lead proposed none, or somebody declined
+    /// them. Declining is a real answer and not a failure, so the run carries
+    /// on.
+    /// </para>
+    /// </remarks>
+    private static async Task<IReadOnlyList<string>?> AgreedAsync(
+        Report report,
+        string autonomy,
+        ITeamConsole console,
+        Journal journal,
+        CancellationToken ct)
+    {
+        if (Tidied(report.ProposedDoneWhen) is not { Count: > 0 } proposal)
+        {
+            await journal.WriteAsync("criteria.none", null, new { by = "lead" }, ct).ConfigureAwait(false);
+
+            return null;
+        }
+
+        if (autonomy == "autonomous")
+        {
+            await journal.WriteAsync(
+                "criteria.agreed", null, new { criteria = proposal, by = "nobody" }, ct).ConfigureAwait(false);
+
+            console.Note(
+                "Nobody is watching, so the run is held to the criteria the lead proposed: "
+                + string.Join("; ", proposal));
+
+            return proposal;
+        }
+
+        var answer = await console.ReviseAsync(
+            "What this run will be judged on. The lead proposed these; change them if they are "
+            + "not what you meant, one per line.",
+            string.Join(Environment.NewLine, proposal),
+            ct).ConfigureAwait(false);
+
+        if (Tidied(answer?.Split('\n')) is not { Count: > 0 } agreed)
+        {
+            // Refused, or emptied. Either is somebody saying they do not want
+            // this run held to anything, which is what it would have done
+            // anyway.
+            await journal.WriteAsync(
+                "criteria.none", null, new { by = "person", proposed = proposal }, ct).ConfigureAwait(false);
+
+            return null;
+        }
+
+        await journal.WriteAsync(
+            "criteria.agreed",
+            null,
+            new { criteria = agreed, by = "person", proposed = proposal },
+            ct).ConfigureAwait(false);
+
+        return agreed;
+    }
+
+    /// <summary>
+    /// A list of criteria as somebody typed it, with the typing taken off.
+    /// </summary>
+    /// <remarks>
+    /// A person handed a numbered list in a box sends back a numbered list, and
+    /// the number is not part of the criterion: "1. the tests pass" would be
+    /// matched against a lead's coverage entry for "the tests pass" and miss.
+    /// Blank lines go, because a box people edit acquires them.
+    /// </remarks>
+    private static IReadOnlyList<string>? Tidied(IEnumerable<string>? lines)
+    {
+        if (lines is null)
+        {
+            return null;
+        }
+
+        var kept = lines
+            .Select(line => Unnumbered(line))
+            .Where(line => line.Length > 0)
+            .ToList();
+
+        return kept.Count > 0 ? kept : null;
+    }
+
+    /// <summary>
+    /// One line with any leading "1.", "2)", "-" or "*" taken off.
+    /// </summary>
+    /// <remarks>
+    /// By hand rather than by pattern. What it has to strip is three fixed
+    /// shapes at the front of a string, and the alternative here is a regular
+    /// expression run over text a person typed - which is the shape that has
+    /// already cost this codebase a timeout once, in the redactor.
+    /// </remarks>
+    private static string Unnumbered(string line)
+    {
+        var said = line.Trim();
+
+        if (said.Length == 0)
+        {
+            return said;
+        }
+
+        if (said[0] is '-' or '*' or '•')
+        {
+            return said[1..].Trim();
+        }
+
+        var digits = 0;
+
+        while (digits < said.Length && char.IsAsciiDigit(said[digits]))
+        {
+            digits++;
+        }
+
+        // A number on its own is a criterion nobody could check, but it is also
+        // not a list marker, so it is left exactly as it was typed.
+        return digits > 0 && digits < said.Length && said[digits] is '.' or ')'
+            ? said[(digits + 1)..].Trim()
+            : said;
     }
 
     private static async Task<bool> GateAsync(string autonomy, ITeamConsole console, string what, CancellationToken ct)

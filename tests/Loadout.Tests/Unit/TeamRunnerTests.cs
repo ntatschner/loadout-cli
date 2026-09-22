@@ -1078,6 +1078,153 @@ public sealed class TeamRunnerTests : IDisposable
         (await RunAsync(team, rounds: 0)).Succeeded.Should().BeTrue();
     }
 
+    /// <summary>The proposal a lead makes when the run was started with no criteria.</summary>
+    private static readonly string[] Proposal =
+    [
+        "loadout usage --since 2026-01-01 prints only entries after that date",
+        "a test fails without the option and passes with it",
+    ];
+
+    private static Report LeadProposes(params ReportRequest[] requests) =>
+        LeadRequests(requests) with { ProposedDoneWhen = Proposal };
+
+    /// <remarks>
+    /// The run this exists for reported done having produced a design document
+    /// for a goal somebody expected code from. Its only criterion was "the goal
+    /// is met", which it wrote its own verdict on, so nothing it could have
+    /// said would have been wrong.
+    /// </remarks>
+    [Fact]
+    public async Task A_run_with_no_criteria_asks_the_lead_what_done_means_and_you_agree_it()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadProposes(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        // Put to the person through the same gate a brief goes through.
+        _console.Revisions.Should().ContainSingle()
+            .Which.Should().Contain(Proposal[0]).And.Contain(Proposal[1]);
+
+        var journal = await File.ReadAllTextAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain("criteria.agreed");
+        journal.Should().Contain("\"by\":\"person\"");
+    }
+
+    [Fact]
+    public async Task What_you_write_in_the_box_is_what_the_run_is_held_to()
+    {
+        // Numbered, because a person handed a list in a box sends a list back,
+        // and "1. it builds" would never match a lead's coverage for "it
+        // builds".
+        _console.Revise = _ => "1. it builds on Linux\n2) the docs say so\n- and nothing regressed";
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadProposes(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        var journal = await File.ReadAllTextAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain("it builds on Linux");
+        journal.Should().Contain("the docs say so");
+        journal.Should().Contain("and nothing regressed");
+
+        // The numbering is not part of the criterion.
+        journal.Should().NotContain("1. it builds on Linux");
+
+        // And the lead is told, because it cannot report coverage for criteria
+        // it has not read.
+        var told = string.Join("\n", _launcher.Written("role.project-lead"));
+
+        told.Should().Contain("What this run is judged on");
+        told.Should().Contain("it builds on Linux");
+    }
+
+    [Fact]
+    public async Task With_nobody_watching_the_leads_own_proposal_stands()
+    {
+        _console.Revise = _ => throw new InvalidOperationException("nobody is watching");
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+
+            // With a request, because a lead that reports blocked and asks for
+            // nothing is blocked, and the run would end before the round did.
+            Result(LeadProposes(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(autonomy: "autonomous")).Value!;
+
+        var journal = await File.ReadAllTextAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain("criteria.agreed");
+        journal.Should().Contain("\"by\":\"nobody\"");
+        journal.Should().Contain(Proposal[0]);
+    }
+
+    [Fact]
+    public async Task A_lead_that_proposes_nothing_leaves_the_run_as_it_was()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        outcome.Ended.Should().Be("done");
+
+        var journal = await File.ReadAllTextAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain("criteria.none");
+        _console.Revisions.Should().BeEmpty("there was nothing to put to anybody");
+    }
+
+    /// <remarks>
+    /// The whole point of agreeing them: once they are the run's criteria, a
+    /// done that says nothing about one is refused exactly as it would be for
+    /// criteria somebody typed with --done-when.
+    /// </remarks>
+    [Fact]
+    public async Task A_done_that_ignores_the_agreed_criteria_is_sent_back()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadProposes(AskImplementer()), 0.01m),
+
+            // No coverage for either agreed criterion, twice: a returned report
+            // goes back once and the second answer is the node's.
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        var journal = await File.ReadAllTextAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+        journal.Should().Contain("Status done needs coverage for every criterion");
+
+        outcome.Ended.Should().NotBe(
+            "done", "a done the lead could not account for is not a done");
+    }
+
     [Fact]
     public async Task The_merge_gate_reminder_does_not_buy_the_lead_an_extra_round()
     {
