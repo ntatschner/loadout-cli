@@ -131,9 +131,7 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
                 continue;
             }
 
-            var criterion = one.TryGetProperty("criterion", out var c) && c.ValueKind == JsonValueKind.String
-                ? c.GetString()
-                : null;
+            var criterion = Said(one, "criterion");
 
             if (criterion is not { Length: > 0 })
             {
@@ -142,15 +140,37 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 
             covered.Add(new RunCovered(
                 criterion,
-                one.TryGetProperty("verdict", out var v) && v.ValueKind == JsonValueKind.String
-                    ? v.GetString() ?? "unmet"
-                    : "unmet",
-                one.TryGetProperty("because", out var b) && b.ValueKind == JsonValueKind.String
-                    ? b.GetString()
-                    : null));
+                Said(one, "verdict") ?? "unmet",
+                Said(one, "because")));
         }
 
         return covered;
+    }
+
+    /// <summary>
+    /// One string from a coverage entry, with both spellings tried.
+    /// </summary>
+    /// <remarks>
+    /// The same accommodation <see cref="Word"/> makes, and for the same
+    /// reason. These were written by anonymous-object shorthand for exactly one
+    /// run of one build, which spelt them <c>Criterion</c> and <c>Because</c>;
+    /// asking only for the corrected spelling would read those journals as
+    /// having no coverage at all, which is the thing least worth being wrong
+    /// about in a record of whether a goal was met.
+    /// </remarks>
+    private static string? Said(JsonElement entry, string name)
+    {
+        foreach (var spelling in new[] { name, char.ToUpperInvariant(name[0]) + name[1..] })
+        {
+            if (entry.TryGetProperty(spelling, out var value)
+                && value.ValueKind == JsonValueKind.String
+                && value.GetString() is { Length: > 0 } said)
+            {
+                return said;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>A number from the event's data, or null.</summary>

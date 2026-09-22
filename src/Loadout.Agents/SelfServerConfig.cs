@@ -59,7 +59,36 @@ public static class SelfServerConfig
             return [];
         }
 
-        var executable = executablePath ?? Environment.ProcessPath;
+        /*
+            How this launcher is started, not merely where its process lives.
+
+            Environment.ProcessPath alone is right for the shipped executable
+            and wrong for a development build, where it is dotnet.exe - a real
+            file, so the guard below passed, and the server was declared with
+            the host as its command and "mcp" as its first argument. dotnet has
+            no such command. The agent started, the server did not, and the
+            lead of every team run from a development build died in seconds
+            saying mcp__loadout__loadout_permission was not found, which reads
+            as a broken permission harness rather than as a path.
+
+            executablePath is still honoured ahead of it so a test can say what
+            is running without depending on what is running it.
+        */
+        string? executable;
+        IReadOnlyList<string> prefix;
+
+        if (executablePath is { Length: > 0 })
+        {
+            (executable, prefix) = (executablePath, []);
+        }
+        else if (Loadout.Core.Agents.LauncherInvocation.Parts() is var parts && parts is not null)
+        {
+            (executable, prefix) = (parts.Value.Command, parts.Value.Prefix);
+        }
+        else
+        {
+            (executable, prefix) = (null, []);
+        }
 
         if (executable is not { Length: > 0 } || !File.Exists(executable))
         {
@@ -72,9 +101,12 @@ public static class SelfServerConfig
 
         var path = Path.Combine(runtimeDirectory, FileName);
 
+        // The prefix first: under the development host the executable is
+        // dotnet and the assembly has to be its first argument, before any of
+        // the launcher's own.
         string[] args = policyPath is { Length: > 0 }
-            ? ["mcp", "serve", "--project", slug, "--policy", policyPath]
-            : ["mcp", "serve", "--project", slug];
+            ? [.. prefix, "mcp", "serve", "--project", slug, "--policy", policyPath]
+            : [.. prefix, "mcp", "serve", "--project", slug];
 
         var document = new
         {
