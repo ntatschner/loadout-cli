@@ -46,7 +46,22 @@ rules a run follows, and anything that would stop it running here.
 
 **Rounds.** The lead gets your goal and reports back with requests. Each round
 is: brief the nodes it asked for, run them, read what they wrote, hand it to the
-lead. `--rounds` caps how many times it may come back; the default is five.
+lead. `--rounds` caps how many times it may come back, and by default nothing
+does.
+
+That default used to be five, and it was the wrong ceiling. A round is a crude
+measure of something priced in money, and the team's budget is the cap that
+actually binds: the run that changed this took four of its five rounds while
+spending $20.84 of a $25 budget, so the limit in the way was never the limit
+doing the work. What stops a run is the lead saying done, the budget, two rounds
+without progress, or you.
+
+A run cannot be uncapped in both, though. Two rounds without a request only
+catches a lead asking for *nothing* — one that keeps asking for one more thing
+trips neither that nor a budget its team does not set, and would spend until
+somebody noticed. So a team with no `budget: usd:` and a run with no `--rounds`
+is refused before it briefs anything, naming both. Every team that ships sets a
+budget, so this is about one you wrote or edited.
 
 **Nodes that may run together do.** A node says how many instances may run at
 once, and whether each gets its own git worktree. Briefing stays sequential,

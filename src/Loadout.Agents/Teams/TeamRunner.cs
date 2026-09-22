@@ -68,7 +68,7 @@ public sealed record TeamRunRequest(
     string? Autonomy = null,
     bool DryRun = false,
     string? AgentName = null,
-    int MaxRounds = 5,
+    int MaxRounds = 0,
     bool Offline = false,
     bool NoSync = false,
     string? Model = null,
@@ -387,6 +387,29 @@ public sealed class TeamRunner : ITeamRunner
                 ExitCode.InvalidArguments);
         }
 
+        /*
+          Something has to be able to stop this.
+
+          A round limit is one ceiling and the budget is the other, and a run
+          may have either. It may not have neither: the remaining stops are a
+          lead that says done, a person who says stop, and two rounds that ask
+          for nothing - and the last of those only catches a lead asking for
+          nothing at all. A lead that keeps asking for one more thing trips
+          none of them and spends until somebody notices.
+
+          Every team that ships sets a budget, so this is about a team somebody
+          wrote or edited. Refused here rather than in the command, because the
+          schedules, the webhook and the dashboard all start runs without going
+          near it.
+        */
+        if (request.MaxRounds <= 0 && team.Rules.Budget.Usd is null)
+        {
+            return OperationResult<TeamRunOutcome>.Fail(
+                $"Nothing would stop this run: '{team.Name}' sets no budget and no round limit "
+                + "was given. Set one - either 'budget: usd:' in the team, or --rounds.",
+                ExitCode.InvalidArguments);
+        }
+
         // From here on every question goes through one voice, because the
         // watcher below asks from another thread.
         using var one = new OneAtATime(console);
@@ -603,7 +626,14 @@ public sealed class TeamRunner : ITeamRunner
                 // run that asked for three - a real lead turn, real money, and
                 // a summary that said "round limit: 3 rounds ... 4 rounds" in
                 // one breath. Found by the first run that reached the reminder.
-                if (rounds >= request.MaxRounds)
+                // Only where one was asked for. A round is a crude ceiling on
+                // a thing measured in money: it stopped runs that were working
+                // and let expensive ones through, and the run that prompted
+                // this used four of its five rounds while spending 20.84 of a
+                // 25 budget - the cap doing the work was the money and the cap
+                // in the way was the rounds. Nothing here is uncapped: the
+                // check above refuses a run that has neither.
+                if (request.MaxRounds > 0 && rounds >= request.MaxRounds)
                 {
                     ended = $"round limit: {request.MaxRounds} round{(request.MaxRounds == 1 ? string.Empty : "s")}";
                     break;
