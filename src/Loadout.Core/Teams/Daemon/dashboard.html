@@ -2560,7 +2560,15 @@
         <div class="narrow">
           <div>
             <label for="start-rounds">Rounds</label>
-            <input type="number" id="start-rounds" min="1" max="20" placeholder="the team's own">
+            <!-- "no cap" rather than "the team's own": a round limit never came
+                 from the team file, and since rounds stopped defaulting to five
+                 an empty box means nothing caps them. The budget and two rounds
+                 without progress are what stop the run. -->
+            <input type="number" id="start-rounds" min="1" max="200"
+                   placeholder="no cap" aria-describedby="start-rounds-about">
+            <p class="facts" id="start-rounds-about">Leave it empty and nothing
+              caps the rounds: the team's budget and two rounds without progress
+              stop the run.</p>
           </div>
 
           <div>
@@ -2582,6 +2590,18 @@
           <div>
             <label for="start-model">Model</label>
             <input type="text" id="start-model" placeholder="the team's or project's">
+          </div>
+
+          <!-- A list, unlike the model, because which agents this launcher can
+               start is its own business and it knows the answer. The same
+               reason the team and the project are lists: a free-text box let a
+               name nothing could resolve through, said the run had started, and
+               sent the refusal to a terminal behind the browser. -->
+          <div>
+            <label for="start-agent">Agent</label>
+            <select id="start-agent">
+              <option value="">the project's own</option>
+            </select>
           </div>
         </div>
 
@@ -3199,6 +3219,7 @@
 
       fillTeams(answer.teams || []);
       fillProjects(answer.projects || [], answer.here);
+      fillAgents(answer.agents || []);
     });
   }
 
@@ -3299,6 +3320,43 @@
       + (team.trouble ? " Something is wrong with it: " + team.trouble : "");
   }
 
+  /*
+    The agents this launcher can start, from the server rather than from a list
+    written into this page. Redrawn only when the set changes, like the projects:
+    rebuilding a select somebody has an option chosen in loses the choice.
+  */
+  function fillAgents(agents) {
+    var box = document.getElementById("start-agent");
+    var shape = agents.join("|");
+
+    if (!box || box.getAttribute("data-shape") === shape) { return; }
+
+    box.setAttribute("data-shape", shape);
+
+    var chosen = box.value;
+
+    box.textContent = "";
+
+    var first = document.createElement("option");
+
+    first.value = "";
+    first.textContent = "the project's own";
+    box.appendChild(first);
+
+    agents.forEach(function (name) {
+      var option = document.createElement("option");
+
+      option.value = name;
+      option.textContent = name;
+      box.appendChild(option);
+    });
+
+    // Kept if it is still on offer, because this redraws every thirty seconds
+    // and somebody filling the form in slowly should not have their choice
+    // taken away under them.
+    if (agents.indexOf(chosen) >= 0) { box.value = chosen; }
+  }
+
   function fillProjects(projects, here) {
     var shape = projects.join("|");
 
@@ -3353,6 +3411,7 @@
       var rounds = parseInt(document.getElementById("start-rounds").value, 10);
       var autonomy = document.getElementById("start-autonomy").value;
       var model = document.getElementById("start-model").value.trim();
+      var agent = document.getElementById("start-agent").value.trim();
 
       // One per line, blanks dropped: a criterion nothing can report a verdict
       // on would refuse every done for ever.
@@ -3401,7 +3460,8 @@
           rounds: rounds > 0 ? rounds : null,
           autonomy: autonomy || null,
           criteria: criteria.length ? criteria : null,
-          model: model || null
+          model: model || null,
+          agent: agent || null
         })
       })
         .then(function (answer) {

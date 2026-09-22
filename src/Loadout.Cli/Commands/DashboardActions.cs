@@ -189,13 +189,21 @@ internal static class DashboardActions
     /// failure it is. A run still going by then has passed all of it.
     /// </para>
     /// </remarks>
-    internal static async Task<OperationResult> BeganAsync(
-        ICommandCatalogue commands,
-        TimeProvider time,
-        StartRequest asking,
-        CommandOutput output,
-        CancellationToken ct)
+    /// <summary>
+    /// The command line a start from the page stands for.
+    /// </summary>
+    /// <remarks>
+    /// Its own function, like <see cref="Maps" />, so a test can read it rather
+    /// than infer it. Two fields had already been added to the form and never
+    /// reached the command - the model, which meant a run started from the page
+    /// took whatever the team file pinned however carefully somebody chose
+    /// otherwise - and nothing failed, because a box that is read and dropped
+    /// looks exactly like a box that works.
+    /// </remarks>
+    internal static List<string> Starting(StartRequest asking)
     {
+        ArgumentNullException.ThrowIfNull(asking);
+
         var arguments = new List<string> { asking.Team, asking.Goal };
 
         if (asking.Project is { Length: > 0 } project)
@@ -225,6 +233,12 @@ internal static class DashboardActions
             arguments.Add(model);
         }
 
+        if (asking.Agent is { Length: > 0 } agent)
+        {
+            arguments.Add("--agent");
+            arguments.Add(agent);
+        }
+
         // One option per criterion, because a criterion is a sentence and
         // sentences contain commas. Blank ones are dropped rather than passed:
         // a criterion the lead can never report a verdict on would refuse
@@ -239,6 +253,21 @@ internal static class DashboardActions
         }
 
         arguments.Add("--non-interactive");
+
+        return arguments;
+    }
+
+    internal static async Task<OperationResult> BeganAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        StartRequest asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(asking);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var arguments = Starting(asking);
 
         output.WriteLine(
             $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
@@ -620,12 +649,14 @@ internal static class DashboardActions
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
         IProjectService projects,
+        Loadout.Agents.IAgentRegistry agents,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(teams);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(agents);
 
         var root = workspace.IsAvailable() ? workspace.LocalPath : null;
 
@@ -665,7 +696,16 @@ internal static class DashboardActions
             ? found.Value!.Entry.Slug
             : null;
 
-        return new Choosable(offered, slugs, here);
+        // The adapters rather than a detection sweep: this is read on every
+        // request and detecting what is installed spawns a process per agent.
+        // An agent this machine has not got is refused by the launcher, which
+        // says so properly.
+        var startable = agents.Adapters
+            .Select(one => one.Name)
+            .OrderBy(one => one, StringComparer.Ordinal)
+            .ToList();
+
+        return new Choosable(offered, slugs, here, startable);
     }
 
     /// <summary>Where a team came from, for the page, in the words the listing uses.</summary>
