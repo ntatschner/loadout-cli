@@ -691,6 +691,29 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public void The_clear_out_control_is_not_hidden_waiting_for_a_call_that_never_comes()
+    {
+        // It was, and the page shipped with a control nobody could ever see.
+        // onlyWatching() is what unhides the things a watch-only server may
+        // not offer, and it runs only when 'acts' CHANGES - it starts true,
+        // so on a server that can act it never runs at all. The run controls
+        // have always relied on that by not being hidden in the first place;
+        // this has to do the same.
+        var page = DashboardServer.Page();
+
+        var at = page.IndexOf("id=\"clearing\"", StringComparison.Ordinal);
+
+        at.Should().BeGreaterThan(-1, "the pane is in the page");
+
+        var tag = page[at..page.IndexOf('>', at)];
+
+        tag.Should().NotContain(
+            "hidden",
+            "a watch-only server hides this through onlyWatching, and anything hidden "
+            + "here is hidden for ever on a server that can act");
+    }
+
+    [Fact]
     public async Task Clearing_out_runs_needs_the_token()
     {
         var cleared = false;

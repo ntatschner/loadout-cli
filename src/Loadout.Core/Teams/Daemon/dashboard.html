@@ -2758,12 +2758,24 @@
       Folded away, because it deletes more than anything else on this page and
       should not be the first control a hand lands on. It asks before it goes,
       with the count in the question.
+
+      Not marked hidden here, for the same reason the run controls are not:
+      onlyWatching() runs when 'acts' CHANGES, and it starts true, so on a
+      server that can act it never runs at all. Marked hidden, this block was
+      in the page and invisible for ever - which is how it was first shipped
+      to a browser, and what looking at it found.
     -->
-    <details class="clearing" id="clearing" hidden>
+    <details class="adding clearing" id="clearing">
       <summary>Clear out runs</summary>
 
-      <div class="choices">
-        <label for="clear-outcome">Ended</label>
+      <!--
+        .controls, not .choices: under the rich presentation .choices is a
+        grid, which stacked a select, two boxes and a button down the full
+        width of the page, each one its own row. Everything else on this page
+        that takes a value and does something with it is a .controls row.
+      -->
+      <div class="controls">
+        <label for="clear-outcome" class="said">Ended</label>
         <select id="clear-outcome">
           <option value="">any way</option>
           <option value="failed">failed</option>
@@ -2775,10 +2787,10 @@
           <option value="unrecorded">without saying how</option>
         </select>
 
-        <label for="clear-older">Older than</label>
+        <label for="clear-older" class="said">Older than</label>
         <input type="text" id="clear-older" placeholder="30d, 12h, 90m" size="10">
 
-        <label for="clear-keep">Always keep the newest</label>
+        <label for="clear-keep" class="said">Always keep the newest</label>
         <input type="number" id="clear-keep" min="0" step="1" placeholder="20">
 
         <button type="button" id="clear-go">Forget them</button>
