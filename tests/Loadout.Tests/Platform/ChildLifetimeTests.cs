@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.Versioning;
 using FluentAssertions;
 using Loadout.Platform.Abstractions;
@@ -155,6 +157,158 @@ public sealed class ChildLifetimeTests
         lifetime.Dispose();
 
         Gone(child).Should().BeTrue("the job closed, and the kernel takes everything inside it");
+    }
+
+    [Fact]
+    public void Stopping_nothing_at_exit_names_no_assembly_that_may_not_be_loadable()
+    {
+        // `loadout update` replaces the running executable, and a
+        // self-contained single-file build reads its assemblies back out of
+        // the bundle at its own path: after the swap, anything not already
+        // loaded cannot be loaded at all. The exit handler ran straight into
+        // that, because the JIT resolves the types a method names before it
+        // runs a line of it, and StopAll named System.Diagnostics.Process
+        // even with no children to stop. Every update ended in an unhandled
+        // FileNotFoundException over work that had succeeded.
+        const string Fragile = "System.Diagnostics.Process";
+
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var stopAll = typeof(TrackedChildLifetime).GetMethod("StopAll", flags)!;
+        var stop = typeof(TrackedChildLifetime).GetMethod("Stop", flags)!;
+
+        // The instrument first: a scanner that cannot see the assembly
+        // anywhere would pass this whatever StopAll did. Stop is where the
+        // Process call went, so it is the case whose answer is known.
+        AssembliesNamedBy(stop).Should().Contain(
+            Fragile, "this is the method the call was moved into");
+
+        AssembliesNamedBy(stopAll).Should().NotContain(
+            Fragile,
+            "an exit with no children to stop must not have to load an assembly, "
+            + "because after an update there is nowhere left to load it from");
+    }
+
+    [Fact]
+    public void A_child_that_cannot_be_stopped_does_not_take_the_shutdown_with_it()
+    {
+        // ProcessExit has no frame above it: anything thrown there is
+        // unhandled by definition, and turns a finished command into a crash
+        // report. Stopping a child is not worth that.
+        var lifetime = new RefusesToStop();
+        lifetime.UnderTheNumber(Environment.ProcessId);
+
+        var thrown = Record.Exception(lifetime.StopAllQuietly);
+
+        thrown.Should().BeNull();
+        lifetime.Tried.Should().BeTrue("the guard must swallow the failure, not skip the work");
+    }
+
+    /// <summary>
+    /// The assemblies a method's own body names, read from its IL.
+    /// </summary>
+    /// <remarks>
+    /// Its body rather than its call tree: the question is what the JIT has
+    /// to resolve to compile this one method, which is exactly the tokens it
+    /// carries.
+    /// </remarks>
+    private static IReadOnlyCollection<string> AssembliesNamedBy(MethodBase method)
+    {
+        var module = method.Module;
+        var named = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var token in TokensIn(method))
+        {
+            try
+            {
+                var member = module.ResolveMember(token);
+                var owner = member as Type ?? member?.DeclaringType;
+
+                if (owner?.Assembly.GetName().Name is { } name)
+                {
+                    named.Add(name);
+                }
+            }
+            catch (ArgumentException)
+            {
+                // A token this simple walk cannot resolve on its own, such as
+                // one needing a generic context. Nothing here depends on it.
+            }
+        }
+
+        return named;
+    }
+
+    /// <summary>The metadata tokens a method body carries, walked opcode by opcode.</summary>
+    private static IEnumerable<int> TokensIn(MethodBase method)
+    {
+        var il = method.GetMethodBody()?.GetILAsByteArray() ?? [];
+        var known = typeof(OpCodes)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(field => field.FieldType == typeof(OpCode))
+            .Select(field => (OpCode)field.GetValue(null)!)
+            .ToDictionary(code => (ushort)code.Value);
+
+        var at = 0;
+
+        while (at < il.Length)
+        {
+            var key = (ushort)il[at];
+
+            if (key == 0xFE)
+            {
+                key = (ushort)(0xFE00 | il[at + 1]);
+                at += 2;
+            }
+            else
+            {
+                at += 1;
+            }
+
+            if (!known.TryGetValue(key, out var code))
+            {
+                // An opcode this walk does not know means the rest of the
+                // stream cannot be trusted, so stop rather than read noise.
+                yield break;
+            }
+
+            var operand = code.OperandType switch
+            {
+                OperandType.InlineNone => 0,
+                OperandType.ShortInlineBrTarget or OperandType.ShortInlineI
+                    or OperandType.ShortInlineVar => 1,
+                OperandType.InlineVar => 2,
+                OperandType.InlineI8 or OperandType.InlineR => 8,
+                OperandType.InlineSwitch => 4 + (4 * BitConverter.ToInt32(il, at)),
+                _ => 4,
+            };
+
+            if (code.OperandType is OperandType.InlineMethod or OperandType.InlineField
+                or OperandType.InlineType or OperandType.InlineTok)
+            {
+                yield return BitConverter.ToInt32(il, at);
+            }
+
+            at += operand;
+        }
+    }
+
+    /// <summary>
+    /// A lifetime whose stopping fails, standing in for anything that can go
+    /// wrong on the way out - a load that cannot be satisfied after an
+    /// update, most of all.
+    /// </summary>
+    private sealed class RefusesToStop : TrackedChildLifetime
+    {
+        public bool Tried { get; private set; }
+
+        public void UnderTheNumber(int processId) => Remember(processId, DateTime.Now);
+
+        protected override void Stop(int processId, DateTime startedAt)
+        {
+            Tried = true;
+
+            throw new FileNotFoundException("the assembly is no longer where it was");
+        }
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Loadout.Platform.Abstractions;
 
 namespace Loadout.Platform.Common;
@@ -29,8 +30,8 @@ public class TrackedChildLifetime : IChildLifetime, IDisposable
 
     public TrackedChildLifetime()
     {
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => StopAll();
-        Console.CancelKeyPress += (_, _) => StopAll();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => StopAllQuietly();
+        Console.CancelKeyPress += (_, _) => StopAllQuietly();
     }
 
     /// <inheritdoc />
@@ -87,6 +88,28 @@ public class TrackedChildLifetime : IChildLifetime, IDisposable
         }
     }
 
+    /// <summary>
+    /// Stops the children from a handler that is not allowed to throw.
+    /// </summary>
+    /// <remarks>
+    /// An exception leaving <c>ProcessExit</c> is unhandled by definition:
+    /// there is no frame above it to catch it, so a process that has already
+    /// done what it was asked ends in a crash report anyway. Nothing this
+    /// does is worth that, and an exit handler has nowhere to report it to.
+    /// </remarks>
+    internal void StopAllQuietly()
+    {
+        try
+        {
+            StopAll();
+        }
+        catch (Exception)
+        {
+            // Everything, deliberately: see above. The alternative is a
+            // shutdown taken down by the thing tidying up after it.
+        }
+    }
+
     /// <summary>Stops every child still running. Safe to call more than once.</summary>
     protected void StopAll()
     {
@@ -105,26 +128,55 @@ public class TrackedChildLifetime : IChildLifetime, IDisposable
 
         foreach (var (id, startedAt) in children)
         {
-            try
-            {
-                using var child = Process.GetProcessById(id);
+            Stop(id, startedAt);
+        }
+    }
 
-                // The same number wearing a different process is exactly what
-                // this check is for.
-                if (child.StartTime != startedAt || child.HasExited)
-                {
-                    continue;
-                }
+    /// <summary>Stops one child, if it is still the child that was adopted.</summary>
+    /// <remarks>
+    /// <para>
+    /// Its own method, and never inlined, because this is the only code here
+    /// that names <see cref="Process"/>. The JIT resolves the types a method
+    /// names when it compiles the method, before a line of it runs, so while
+    /// this lived inside <see cref="StopAll"/> every exit had to load
+    /// System.Diagnostics.Process - including the exits with no children to
+    /// stop, which is most of them.
+    /// </para>
+    /// <para>
+    /// <c>loadout update</c> is where that mattered. A self-contained
+    /// single-file build reads its assemblies back out of the bundle at its
+    /// own path, at offsets it recorded when it started, and the update has
+    /// just replaced that path with a different bundle - so an assembly not
+    /// already loaded can no longer be loaded at all. Every successful
+    /// update ended in an unhandled FileNotFoundException from the exit
+    /// handler, after the work itself had succeeded. Reproduced by updating
+    /// one published build into another; a replacement that happens to leave
+    /// this assembly's slice where it was does not show it, which is why
+    /// some updates looked fine.
+    /// </para>
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    protected virtual void Stop(int processId, DateTime startedAt)
+    {
+        try
+        {
+            using var child = Process.GetProcessById(processId);
 
-                child.Kill(entireProcessTree: true);
-            }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException
-                or System.ComponentModel.Win32Exception or NotSupportedException)
+            // The same number wearing a different process is exactly what
+            // this check is for.
+            if (child.StartTime != startedAt || child.HasExited)
             {
-                // Gone between the check and the kill, or not ours to stop.
-                // Either way there is nothing useful to do from an exit
-                // handler, and throwing there takes the shutdown with it.
+                return;
             }
+
+            child.Kill(entireProcessTree: true);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException
+            or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            // Gone between the check and the kill, or not ours to stop.
+            // Either way there is nothing useful to do from an exit
+            // handler, and throwing there takes the shutdown with it.
         }
     }
 }
