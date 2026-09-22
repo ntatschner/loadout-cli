@@ -158,6 +158,24 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             return CommandOutput.Success();
         }
 
+        /*
+          One daemon per machine. A second one started beside the first used to
+          overwrite the note and carry on, so the first was forgotten by
+          everything that reads the note and kept running anyway: found with
+          one started at login still holding 140 MB at 23:00 beside the one
+          started from a terminal at 22:44. Two of them would also each fire
+          every schedule, which is two runs and twice the money.
+        */
+        if (DaemonNote.Live(_paths, _processes) is { } running && running.Pid != Environment.ProcessId)
+        {
+            return output.Fail(
+                $"A daemon is already running (process {running.Pid}, since "
+                + $"{running.Since.ToLocalTime():yyyy-MM-dd HH:mm})"
+                + (running.Address is { Length: > 0 } address ? $", serving {address}" : string.Empty)
+                + ". Stop that one first, or use it.",
+                ExitCode.InvalidArguments);
+        }
+
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var server = settings.NoDashboard ? null : new DashboardServer(_journal, _git);
 

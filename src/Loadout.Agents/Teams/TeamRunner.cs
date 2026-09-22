@@ -137,6 +137,25 @@ public interface ITeamConsole
     async Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default) =>
         await ConfirmAsync($"{what}: {task}", ct).ConfigureAwait(false) ? task : null;
 
+    /// <summary>
+    /// A node's question about a call its role does not cover, and what the
+    /// person said.
+    /// </summary>
+    /// <remarks>
+    /// The ask carries its own choices - yes, yes and don't ask again, no -
+    /// and a console that can offer them should, with room to say what to do
+    /// instead after a no. One that cannot is asked yes or no, which is what
+    /// every console did before.
+    /// </remarks>
+    async Task<AskAnswer> PermitAsync(PendingAsk ask, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ask);
+
+        var allowed = await ConfirmAsync(ask.Question, ct).ConfigureAwait(false);
+
+        return new AskAnswer(allowed, NodePermissions.Told(allowed, null), Chosen: allowed ? "yes" : "no");
+    }
+
     /// <summary>A question the lead could not decide. The option chosen, or null to stop the run.</summary>
     Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default);
 
@@ -230,6 +249,25 @@ internal sealed class OneAtATime(ITeamConsole inner) : ITeamConsole, IDisposable
         try
         {
             return await inner.ReviseAsync(what, task, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    /// <remarks>
+    /// Forwarded for the same reason as <see cref="ReviseAsync"/>: the default
+    /// would ask yes or no through this wrapper, and a console offering the
+    /// three answers would never be asked.
+    /// </remarks>
+    public async Task<AskAnswer> PermitAsync(PendingAsk ask, CancellationToken ct = default)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await inner.PermitAsync(ask, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -621,6 +659,10 @@ public sealed class TeamRunner : ITeamRunner
         var rounds = 0;
         var quietRounds = 0;
         string ended;
+
+        // The budget the run was last held to, so a change is written down
+        // once rather than every round.
+        var heldTo = team.Rules.Budget.Usd;
         Report? final = null;
 
         // What the run put on branches of its own, and what the team's merge
@@ -674,10 +716,39 @@ public sealed class TeamRunner : ITeamRunner
                 // turn, once, which is small; it is also the only check
                 // standing between an unattended run and its budget, and a
                 // ceiling with a way round it is not one.
-                if (team.Rules.Budget.Usd is { } ceiling && cost >= ceiling)
+                //
+                // The team's figure unless somebody changed it while the run
+                // was going, which is read here each round so a raise from the
+                // dashboard or `team budget` lands before the next lead turn.
+                var ceiling = RunControl.Budget(directory) ?? team.Rules.Budget.Usd;
+
+                if (ceiling != heldTo)
                 {
-                    ended = $"budget spent: {cost:0.00} of {ceiling:0.00} USD";
-                    break;
+                    heldTo = ceiling;
+
+                    await journal.WriteAsync("run.budget", null, new { budget = ceiling, by = "you" }, ct)
+                        .ConfigureAwait(false);
+                }
+
+                if (ceiling is { } spendable && cost >= spendable)
+                {
+                    // Somebody is watching, so the run asks rather than ends:
+                    // a run stopped on its budget with the goal half done was
+                    // otherwise a run that could not be picked up again.
+                    if (_asking && await RaiseAsync(console, cost, spendable, ct).ConfigureAwait(false) is { } raised)
+                    {
+                        await RunControl.SetBudgetAsync(directory, raised, ct).ConfigureAwait(false);
+
+                        heldTo = raised;
+
+                        await journal.WriteAsync("run.budget", null, new { budget = raised, by = "you" }, ct)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        ended = $"budget spent: {cost:0.00} of {spendable:0.00} USD";
+                        break;
+                    }
                 }
 
                 // Asked to stop. Between rounds rather than mid-turn, because
@@ -1908,6 +1979,11 @@ public sealed class TeamRunner : ITeamRunner
                 subtype = turn.Result?.Subtype,
                 denials = turn.Result?.Denials.Count ?? 0,
                 unparsed = turn.Unparsed.Count,
+
+                // The agent's own session, which is what picking this node up
+                // again after the run has ended needs: without it a lead that
+                // stopped on its budget can only be started over.
+                session = session.SessionId,
             }, ct).ConfigureAwait(false);
 
             if (!turn.Completed)
@@ -2380,21 +2456,16 @@ public sealed class TeamRunner : ITeamRunner
                         continue;
                     }
 
-                    var allowed = await console.ConfirmAsync(ask.Question, ct).ConfigureAwait(false);
+                    var answer = await console.PermitAsync(ask, ct).ConfigureAwait(false);
 
-                    await NodePermissions.AnswerAsync(
-                        directory,
-                        ask.Id,
-                        new AskAnswer(
-                            allowed,
-                            allowed
-                                ? "The person running this team allowed it, for this call only."
-                                : "The person running this team refused it. Report what you needed and "
-                                    + "why rather than finding another way to do it."),
-                        ct).ConfigureAwait(false);
+                    await NodePermissions.AnswerAsync(directory, ask.Id, answer, ct).ConfigureAwait(false);
 
                     await journal
-                        .WriteAsync("node.answered", ask.Node, new { tool = ask.Tool, allowed }, ct)
+                        .WriteAsync(
+                            "node.answered",
+                            ask.Node,
+                            new { tool = ask.Tool, allowed = answer.Allowed, chosen = answer.Chosen },
+                            ct)
                         .ConfigureAwait(false);
                 }
 
@@ -2415,7 +2486,7 @@ public sealed class TeamRunner : ITeamRunner
                         .WriteAsync(
                             "node.answered",
                             ask.Node,
-                            new { tool = ask.Tool, allowed = said.Allowed, reason = said.Reason },
+                            new { tool = ask.Tool, allowed = said.Allowed, reason = said.Reason, chosen = said.Chosen },
                             ct)
                         .ConfigureAwait(false);
                 }
@@ -2926,6 +2997,60 @@ public sealed class TeamRunner : ITeamRunner
         return digits > 0 && digits < said.Length && said[digits] is '.' or ')'
             ? said[(digits + 1)..].Trim()
             : said;
+    }
+
+    /// <summary>
+    /// Asks the person watching whether a run that has spent its budget may
+    /// have more, and how much. Null ends the run.
+    /// </summary>
+    /// <remarks>
+    /// Two raises offered, half as much again and double, rounded up to a
+    /// whole dollar. An answer in the person's own words is read as the new
+    /// budget when it is a figure above what has been spent - "40" or "$40" -
+    /// and as stopping when it is anything else, since money is the one thing
+    /// here not worth guessing about.
+    /// </remarks>
+    internal static async Task<decimal?> RaiseAsync(
+        ITeamConsole console,
+        decimal spent,
+        decimal budget,
+        CancellationToken ct)
+    {
+        var half = Math.Ceiling(Math.Max(budget * 1.5m, spent + 1m));
+        var twice = Math.Ceiling(Math.Max(budget * 2m, half + 1m));
+
+        string Offer(decimal usd) => $"Raise it to ${usd:0}";
+
+        var chosen = await console.DecideAsync(
+            new ReportQuestion(
+                $"The run has spent ${spent:0.00} of its ${budget:0.00} budget. Give it more",
+                [Offer(half), Offer(twice)],
+                Offer(half)),
+            ct).ConfigureAwait(false);
+
+        if (chosen is null)
+        {
+            return null;
+        }
+
+        if (chosen == Offer(half))
+        {
+            return half;
+        }
+
+        if (chosen == Offer(twice))
+        {
+            return twice;
+        }
+
+        return decimal.TryParse(
+                chosen.Trim().TrimStart('$'),
+                System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var typed)
+            && typed > spent
+                ? typed
+                : null;
     }
 
     private static async Task<bool> GateAsync(string autonomy, ITeamConsole console, string what, CancellationToken ct)

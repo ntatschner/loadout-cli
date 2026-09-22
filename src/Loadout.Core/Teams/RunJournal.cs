@@ -366,6 +366,66 @@ public sealed record RunSummary(
     /// </remarks>
     public bool WaitingForYou => Running && Waiting.Count > 0;
 
+    /// <summary>
+    /// What a node is doing right now, in the words somebody glancing at it
+    /// needs: working, waiting for you, waiting on another node, or finished.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="RunNode.State"/> is what the node last reported, which is
+    /// not the same question. A lead that reported "blocked" and asked for a
+    /// strategist is not stuck, it is waiting for the strategist; a node
+    /// stopped on a permission question still reads "working" because it has
+    /// not reported anything. Both looked like the wrong thing from outside,
+    /// and the one that needed a person looked like the one that did not.
+    /// </para>
+    /// <para>
+    /// Worked out here rather than on each surface, because it needs the
+    /// run's questions and the other nodes, and three surfaces working it out
+    /// three ways is how they come to disagree.
+    /// </para>
+    /// </remarks>
+    public string Activity(RunNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+
+        if (!Running)
+        {
+            return node.State is "working" ? "ended" : node.State;
+        }
+
+        if (Waiting.Any(gate => string.Equals(gate.Node, node.Node, StringComparison.Ordinal)))
+        {
+            return "waiting for you";
+        }
+
+        if (node.State is "working")
+        {
+            return "working";
+        }
+
+        if (node.State is "done" or "ended")
+        {
+            return "done";
+        }
+
+        // The lead is the first node a run launches. Once it has reported it
+        // sits in its session while the nodes it asked for work.
+        if (Nodes.Count > 0 && string.Equals(Nodes[0].Node, node.Node, StringComparison.Ordinal))
+        {
+            var busy = Nodes
+                .Where(other => other.Node != node.Node && other.State is "working")
+                .Select(other => other.Node)
+                .ToList();
+
+            return busy.Count > 0
+                ? $"waiting on {string.Join(", ", busy)}"
+                : "between turns";
+        }
+
+        return node.State;
+    }
+
     /// <summary>Whether the run is still going, as far as its journal knows.</summary>
     /// <remarks>
     /// A run whose coordinator was killed says nothing more and still reads
@@ -811,6 +871,12 @@ public sealed class RunJournal : IRunJournal
                     started = entry.At;
                     break;
 
+                // Raised (or lowered) while it ran. The latest one is what it
+                // is held to now, and what the page measures the spend against.
+                case "run.budget":
+                    budget = entry.Number("budget") ?? budget;
+                    break;
+
                 // How many rounds in a row have asked for nothing. Two ends
                 // the run; one is worth somebody knowing about.
                 case "round.ended":
@@ -1071,6 +1137,8 @@ public sealed class RunJournal : IRunJournal
                 + (entry.Number("rounds") is { } rounds ? $" - {rounds:0} round(s)" : string.Empty)
                 + (entry.Number("cost") is { } spent ? $", ${spent:0.00}" : string.Empty),
             "round.started" => $"round {entry.Number("round")} of {entry.Number("of")}",
+            "run.budget" => $"budget set to ${entry.Number("budget"):0.00}"
+                + (entry.Text("by") is { Length: > 0 } by ? $" by {by}" : string.Empty),
             "node.doing" => entry.Text("doing") ?? "working",
             "node.said" => entry.Text("line") ?? "working",
             // The three lines one decision writes. A node stops and says what
@@ -1082,7 +1150,11 @@ public sealed class RunJournal : IRunJournal
             "node.asked" => $"stopped to ask: {entry.Word("tool")}"
                 + (entry.Word("target") is { Length: > 0 } wanted ? $" {wanted}" : string.Empty),
             "node.answered" => (entry.Yes("allowed") ? "was allowed " : "was refused ")
-                + entry.Word("tool"),
+                + entry.Word("tool")
+                + (entry.Word("chosen") is { } chosen
+                    && chosen.StartsWith("yes, and don't ask again", StringComparison.Ordinal)
+                        ? ", and won't be asked again this run"
+                        : string.Empty),
             "permission.asked" => (entry.Yes("allowed") ? "allowed " : "refused ")
                 + entry.Word("tool")
                 + (entry.Word("target") is { Length: > 0 } at ? $" {at}" : string.Empty),

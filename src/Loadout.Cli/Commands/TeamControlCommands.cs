@@ -74,7 +74,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         public string? Gate { get; init; }
 
         [CommandOption("--answer <ANSWER>")]
-        [Description("yes, no, or one of the options the question offered.")]
+        [Description("yes, no, always (yes, and don't ask again, where a permission offers it), or one of the options the question offered.")]
         public string? Answer { get; init; }
 
         [CommandOption("--instead <TEXT>")]
@@ -82,7 +82,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         public string? Instead { get; init; }
 
         [CommandOption("--reason <WHY>")]
-        [Description("Why, in your words. The node is told.")]
+        [Description("Why, in your words, or what to do instead. The node is told.")]
         public string? Reason { get; init; }
 
         [CommandOption("--by <WHERE>")]
@@ -154,6 +154,22 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
 
         if (settings.Answer is not { Length: > 0 } answer)
         {
+            answer = string.Empty;
+        }
+
+        // "always" for the long option a permission offers, so nobody has to
+        // type "yes, and don't ask again for Bash(git status:*)" at a prompt.
+        // And whatever matches an option is recorded as the option, since the
+        // node's side compares the two to decide whether to remember it.
+        answer = string.Equals(answer, "always", StringComparison.OrdinalIgnoreCase)
+            && gate.Choices.FirstOrDefault(one => one.StartsWith("yes, and don't ask again", StringComparison.Ordinal))
+                is { } always
+                ? always
+                : gate.Choices.FirstOrDefault(one => string.Equals(one, answer, StringComparison.OrdinalIgnoreCase))
+                    ?? answer;
+
+        if (answer.Length == 0)
+        {
             return output.Fail(
                 $"{gate.Asking} Answer with --answer "
                 + string.Join(" or ", gate.Choices),
@@ -184,12 +200,9 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
             gate.Id,
             new AskAnswer(
                 yes,
-                settings.Reason is { Length: > 0 } why
-                    ? why
-                    : yes
-                        ? "The person running this team allowed it, for this call only."
-                        : "The person running this team refused it. Report what you needed and why "
-                            + "rather than finding another way to do it.",
+                gate.Kind is "permission" or "remedy" || settings.Reason is not { Length: > 0 }
+                    ? NodePermissions.Told(yes, settings.Reason)
+                    : settings.Reason,
                 Chosen: answer,
 
                 // Recorded because "somebody allowed this" and "somebody
@@ -489,6 +502,94 @@ public sealed class TeamHaltCommand : AsyncCommand<TeamHaltCommand.Settings>
         output.WriteLine(
             $"[green]+[/] {Markup.Escape(run)} ends when the round it is in comes back. "
             + "Nothing is killed; what it is doing now finishes first.");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Changes what a run that is still going may spend.</summary>
+/// <remarks>
+/// <para>
+/// Read by the run at the same check its team's budget is, between rounds, so
+/// it lands before the lead's next turn. A run that has already stopped on its
+/// budget is finished and is not reached by this: the command says so rather
+/// than writing a file nothing will read.
+/// </para>
+/// <para>
+/// Lower is allowed as well as higher. A budget below what has been spent ends
+/// the run at its next check, which is a gentler stop than halting it.
+/// </para>
+/// </remarks>
+[Description("Change what a running team may spend, from its next round on.")]
+[CommandMeta(CommandCategory.Start, Intent = "budget raise extend increase spend money limit run team", Mutates = true)]
+public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
+{
+    private readonly IRunJournal _journal;
+    private readonly IAnsiConsole _console;
+
+    public TeamBudgetCommand(IRunJournal journal, IAnsiConsole console)
+    {
+        _journal = journal;
+        _console = console;
+    }
+
+    public sealed class Settings : RunSettings
+    {
+        [CommandOption("--usd <AMOUNT>")]
+        [Description("What it may spend in total, in USD. Not an addition: 40 means 40 altogether.")]
+        public decimal? Usd { get; init; }
+    }
+
+    /// <inheritdoc />
+    protected override async Task<int> ExecuteAsync(
+        CommandContext context,
+        Settings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+
+        if (settings.Usd is not { } usd || usd <= 0)
+        {
+            return output.Fail("Say what it may spend with --usd, as a figure above zero.", ExitCode.InvalidArguments);
+        }
+
+        var (run, error) = RunControlling.Resolve(_journal, settings.Run);
+
+        if (run is null)
+        {
+            return output.Fail(error!, ExitCode.ProjectNotFound);
+        }
+
+        var summary = _journal.Summarise(run);
+
+        if (summary is { Succeeded: true, Value: { Finished: { } finished } over })
+        {
+            return output.Fail(
+                $"Run {run} finished at {finished.ToLocalTime():HH:mm}"
+                + (over.Ended is { Length: > 0 } how ? $" - {how}" : string.Empty)
+                + ". A budget only reaches a run that is still going.",
+                ExitCode.InvalidArguments);
+        }
+
+        var spent = summary.Value?.CostUsd ?? 0m;
+
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                $"Would let run {Markup.Escape(run)} spend ${usd:0.00} in all "
+                + $"(${spent:0.00} so far). Nothing was written.");
+
+            return CommandOutput.Success();
+        }
+
+        await RunControl.SetBudgetAsync(_journal.DirectoryOf(run), usd, cancellationToken).ConfigureAwait(false);
+
+        output.WriteLine(
+            $"[green]+[/] {Markup.Escape(run)} may spend ${usd:0.00} in all, from its next round "
+            + $"(${spent:0.00} so far)."
+            + (usd <= spent ? " [yellow]That is below what it has spent, so it stops at its next check.[/]" : string.Empty));
 
         return CommandOutput.Success();
     }

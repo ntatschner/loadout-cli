@@ -220,6 +220,7 @@ public sealed record Choosable(
 /// <param name="Room">What to call the run's room, for a rename.</param>
 /// <param name="Node">Whose work, for anything about one node.</param>
 /// <param name="Instead">For a brief offered for changing: the one to send.</param>
+/// <param name="Budget">What the run may spend in all, in USD, for a budget change.</param>
 /// <remarks>
 /// One shape for all five because they all end the same way: the daemon runs
 /// the command somebody would have typed. Nothing here decides what any of
@@ -234,7 +235,8 @@ public sealed record RunAction(
     string? Message = null,
     string? Room = null,
     string? Node = null,
-    string? Instead = null);
+    string? Instead = null,
+    string? Budget = null);
 
 /// <summary>
 /// Letting something outside this machine start a run.

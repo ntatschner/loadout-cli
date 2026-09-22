@@ -517,6 +517,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     node.Node,
                     node.Role,
                     node.State,
+                    activity = run.Activity(node),
                     node.Turns,
                     cost = node.CostUsd,
                     node.Branch,
@@ -642,7 +643,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         {
             output.WriteLine(
                 $"  {Markup.Escape(node.Node),-16} {Markup.Escape(node.Role),-22} "
-                + $"{State(node.State)} [dim]{node.Turns,3} exchange(s)  ${node.CostUsd,6:0.00}[/]"
+                + $"{State(run.Activity(node))} [dim]{node.Turns,3} exchange(s)  ${node.CostUsd,6:0.00}[/]"
                 + (node.Took is { } took ? $"  [dim]{Elapsed(took)}[/]" : string.Empty)
                 + (node.Denials > 0 ? $"  [yellow]{node.Denials} denial(s)[/]" : string.Empty));
 
@@ -824,10 +825,13 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
 
         return state switch
         {
-            "working" => $"[yellow]{padded}[/]",
-            "done" => $"[green]{padded}[/]",
+            "working" => $"[blue]{padded}[/]",
+            "done" or "ended" => $"[green]{padded}[/]",
             "failed" => $"[red]{padded}[/]",
+            "waiting for you" => $"[bold yellow]{padded}[/]",
             "blocked" or "needs-decision" => $"[yellow]{padded}[/]",
+            _ when state.StartsWith("waiting on ", StringComparison.Ordinal) || state == "between turns"
+                => $"[grey]{padded}[/]",
             _ => padded,
         };
     }
@@ -1140,7 +1144,7 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
                 continue;
             }
 
-            output.WriteLine(Markup.Escape(RunJournal.Describe(entry)));
+            output.WriteLine(TeamStyle.Line(entry));
         }
 
         if (!settings.Follow || read.Value!.Any(entry => entry.Kind == "run.finished"))
@@ -1176,7 +1180,7 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
 
                 if (!settings.Events || RunJournal.Happened(entry))
                 {
-                    output.WriteLine(Markup.Escape(RunJournal.Describe(entry)));
+                    output.WriteLine(TeamStyle.Line(entry));
                 }
 
                 if (entry.Kind == "run.finished")
@@ -1437,7 +1441,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         ITeamConsole console = settings.AllowsPrompting
             ? new TerminalTeamConsole(_console, settings, _reading)
             : Serving()
-                ? new DashboardTeamConsole(TimeProvider.System, line => output.WriteLine($"[dim]{Markup.Escape(line)}[/]"))
+                ? new DashboardTeamConsole(TimeProvider.System, line => output.WriteLine(TeamStyle.Note(line)))
                 : new TerminalTeamConsole(_console, settings, _reading);
 
         await SayWhereAsync(output, project, cancellationToken).ConfigureAwait(false);
@@ -1652,7 +1656,39 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
                 return Task.FromResult(false);
             }
 
-            return Task.FromResult(_console.Confirm($"{Markup.Escape(what)}?", defaultValue: true));
+            return Task.FromResult(_console.Confirm($"[yellow]{Markup.Escape(what)}?[/]", defaultValue: true));
+        }
+
+        /// <summary>
+        /// The agent's own three answers to a permission: yes, yes and don't
+        /// ask again, and no with room to say what to do instead.
+        /// </summary>
+        public Task<AskAnswer> PermitAsync(PendingAsk ask, CancellationToken ct = default)
+        {
+            ArgumentNullException.ThrowIfNull(ask);
+
+            if (!_settings.AllowsPrompting)
+            {
+                return Task.FromResult(new AskAnswer(false, NodePermissions.Told(false, null), Chosen: "no"));
+            }
+
+            // The title is markup on an arrow-key menu and plain text on a
+            // numbered one, so it is the one thing here left unescaped and
+            // uncoloured: a command with a bracket in it would otherwise be
+            // read as a style on one path and printed doubled on the other.
+            var chosen = _reading.Ask(_console, ask.Asking.Replace("[", "(").Replace("]", ")"), ask.Choices, option => option);
+
+            var allowed = !string.Equals(chosen, "no", StringComparison.OrdinalIgnoreCase);
+
+            // "No, and tell it what to do differently." Optional: an empty
+            // line is a plain no.
+            var words = allowed
+                ? null
+                : _console.Prompt(
+                    new TextPrompt<string>("[yellow]What should it do instead?[/] [grey](Enter for nothing)[/]")
+                        .AllowEmpty());
+
+            return Task.FromResult(new AskAnswer(allowed, NodePermissions.Told(allowed, words), Chosen: chosen));
         }
 
         public Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default)
@@ -1674,6 +1710,6 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             return Task.FromResult(chosen == Stop ? null : chosen);
         }
 
-        public void Note(string line) => _console.MarkupLine($"[dim]{Markup.Escape(line)}[/]");
+        public void Note(string line) => _console.MarkupLine(TeamStyle.Note(line));
     }
 }

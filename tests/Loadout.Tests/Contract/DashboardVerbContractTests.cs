@@ -64,7 +64,8 @@ public sealed class DashboardVerbContractTests
         Message: "something to say",
         Room: "The Back Office",
         Node: "implementer/1",
-        Instead: "do the other thing");
+        Instead: "do the other thing",
+        Budget: "40");
 
     [BuiltCliTheory]
     [MemberData(nameof(Verbs))]

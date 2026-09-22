@@ -2156,7 +2156,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         await _client.PostAsync(
             new Uri(_root + "api/runs/r/anything?token=" + _server.Token),
             new StringContent(
-                """{"gate":"toolu_1","answer":"yes","reason":"it needs the suite","message":"leave the tests alone","room":"The Haunted Meeting Room","node":"implementer/1","instead":"do something else"}""",
+                """{"gate":"toolu_1","answer":"yes","reason":"it needs the suite","message":"leave the tests alone","room":"The Haunted Meeting Room","node":"implementer/1","instead":"do something else","budget":"40"}""",
                 System.Text.Encoding.UTF8,
                 "application/json"));
 
@@ -2169,6 +2169,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         asked.Room.Should().Be("The Haunted Meeting Room");
         asked.Node.Should().Be("implementer/1");
         asked.Instead.Should().Be("do something else");
+        asked.Budget.Should().Be("40");
     }
 
     [Fact]

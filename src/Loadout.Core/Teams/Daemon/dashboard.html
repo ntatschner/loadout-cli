@@ -2986,6 +2986,12 @@
            directory for the answers it is waiting on, and `team runs remove`
            refuses one anyway. -->
       <button type="button" id="forget">Forget it</button>
+      <!-- What it may spend in all, changed while it runs. Read by the run
+           between rounds, the same as hold and stop. -->
+      <label for="budget-usd" class="said">What it may spend in all (USD)</label>
+      <input type="number" id="budget-usd" min="1" step="1" inputmode="decimal">
+      <button type="button" id="set-budget">Set budget</button>
+
       <label for="say" class="said">Say something to the lead</label>
       <input type="text" id="say" placeholder="read after its current round">
       <button type="button" id="send">Send</button>
@@ -4954,7 +4960,7 @@
     button.appendChild(plate);
 
     var role = node.role.replace(/^role\./, "");
-    var doing = gone ? "left" : node.state;
+    var doing = gone ? "left" : (node.activity || node.state);
 
     var who = document.createElement("span");
 
@@ -4970,7 +4976,7 @@
     // On a floor plan the plate says who and how they are; which role they
     // are playing is on the card, along with everything else. A plate wide
     // enough for all three covers the desk next to it.
-    state.className = "state";
+    state.className = "state" + (doing === "waiting for you" ? " stopped" : "");
     state.textContent = doing;
     plate.appendChild(state);
 
@@ -5907,7 +5913,7 @@
     link.setAttribute("tabindex", "0");
     link.setAttribute("role", "button");
     link.setAttribute("aria-label", node.node + ", " + node.role.replace(/^role\./, "")
-      + ", " + node.state + ", $" + (node.cost || 0).toFixed(2)
+      + ", " + (node.activity || node.state) + ", $" + (node.cost || 0).toFixed(2)
       + (stuck ? ", waiting for you" : ""));
 
     rect.setAttribute("class", "box"
@@ -5918,7 +5924,13 @@
     rect.setAttribute("height", 46);
     rect.setAttribute("rx", 4);
 
-    [node.node, node.state + ", $" + (node.cost || 0).toFixed(2)].forEach(function (line, i) {
+    // The box is 124 wide. "waiting on strategist, scheduler" is not, and the
+    // full list is in the label a screen reader reads and on the card.
+    var now = node.activity || node.state;
+
+    if (now.indexOf("waiting on ") === 0 && now.length > 20) { now = "waiting on others"; }
+
+    [node.node, now + ", $" + (node.cost || 0).toFixed(2)].forEach(function (line, i) {
       var text = svg("text", link);
 
       text.setAttribute("x", x);
@@ -6868,7 +6880,7 @@
         row.appendChild(sep);
         row.appendChild(document.createTextNode(" "));
 
-        part(row, "node-state " + node.state.replace(/[^a-z-]/g, ""), node.state, ",");
+        part(row, "node-state " + node.state.replace(/[^a-z-]/g, ""), node.activity || node.state, ",");
         part(row, "turns", many(node.turns, "exchange", "exchanges"), ",");
         part(row, "money", "$" + node.cost.toFixed(2), node.tookSeconds ? "," : "");
 
@@ -7037,6 +7049,12 @@
     if (gate.kind === "permission" && option === "no") {
       return "Refuse \u201c" + asking(gate.question) + "\u201d "
         + gate.node + " is told no and carries on without it.";
+    }
+
+    if (option.indexOf("yes, and don't ask again for ") === 0) {
+      return "Allow \u201c" + asking(gate.question) + "\u201d and stop asking the "
+        + gate.role + " role about " + option.slice("yes, and don't ask again for ".length)
+        + " for the rest of this run?";
     }
 
     return "Answer \u201c" + asking(gate.question) + "\u201d with \u201c" + option + "\u201d?";
@@ -7213,6 +7231,29 @@
         card.appendChild(hint);
       }
 
+      /*
+        The agent's own third answer: no, and tell it what to do differently.
+        A bare no leaves the node guessing why and trying the next thing it
+        thinks of; a no with "use the script in build/ instead" is a
+        direction. Optional, and only sent with a no.
+      */
+      var direction = null;
+
+      if (gate.kind === "permission" || gate.kind === "remedy") {
+        var told = document.createElement("label");
+
+        told.className = "said";
+        told.htmlFor = "told-" + gate.id;
+        told.textContent = "If you say no: what should it do instead? (optional)";
+        card.appendChild(told);
+
+        direction = document.createElement("textarea");
+
+        direction.id = "told-" + gate.id;
+        direction.rows = 2;
+        card.appendChild(direction);
+      }
+
       (gate.options || ["yes", "no"]).forEach(function (option) {
         var button = document.createElement("button");
         button.type = "button";
@@ -7232,7 +7273,11 @@
             ? instead.value.trim()
             : null;
 
-          act(run.id, "gates", { gate: gate.id, answer: option, instead: changed })
+          var reason = direction && option === "no" && direction.value.trim()
+            ? direction.value.trim()
+            : null;
+
+          act(run.id, "gates", { gate: gate.id, answer: option, instead: changed, reason: reason })
             .then(function () {
               announce("Told " + run.id + ": " + option + ".");
               card.remove();
@@ -7331,6 +7376,38 @@
 
       act(run.id, "stop", {})
         .then(function () { announce(run.id + " ends when its current round comes back."); })
+        .catch(function (e) { announce(e.message); });
+    };
+
+    var usd = document.getElementById("budget-usd");
+
+    // Filled in from what it may spend now, and left alone while somebody is
+    // typing in it: this is called on every refresh, and a box that reset
+    // itself every few seconds could never be changed.
+    if (document.activeElement !== usd) {
+      usd.value = run.budget && run.budget.cap ? run.budget.cap : "";
+    }
+
+    document.getElementById("set-budget").onclick = function () {
+      var wanted = Number(usd.value);
+
+      if (!(wanted > 0)) {
+        announce("Type what it may spend, as a figure above zero.");
+
+        return;
+      }
+
+      var spent = run.budget ? run.budget.spent || 0 : 0;
+
+      if (!window.confirm("Let " + run.id + " spend $" + wanted.toFixed(2) + " in all? It has spent $"
+        + spent.toFixed(2) + " so far"
+        + (wanted <= spent ? ", so it stops at its next check." : ".")))
+      {
+        return;
+      }
+
+      act(run.id, "budget", { budget: String(wanted) })
+        .then(function () { announce(run.id + " may spend $" + wanted.toFixed(2) + " from its next round."); })
         .catch(function (e) { announce(e.message); });
     };
 
