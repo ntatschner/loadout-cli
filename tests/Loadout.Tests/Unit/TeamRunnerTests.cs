@@ -981,6 +981,103 @@ public sealed class TeamRunnerTests : IDisposable
         second.Requests[0].Request.Model.Should().Be("opus");
     }
 
+    /// <remarks>
+    /// A round is a crude ceiling on something measured in money, and it was
+    /// the one in everybody's way: the run that prompted this took four of its
+    /// five rounds while spending 20.84 of a 25 budget. The budget is the cap
+    /// that did the work, so rounds default to none.
+    /// </remarks>
+    [Fact]
+    public async Task With_no_round_cap_a_lead_may_keep_asking_past_where_five_would_have_stopped()
+    {
+        var team = await IteratingProjectAsync();
+
+        // Seven rounds of asking for a worker, then done. Five would have cut
+        // this off with "round limit" and no answer to the goal.
+        var lead = new List<string> { Init("lead-1") };
+
+        for (var round = 0; round < 7; round++)
+        {
+            lead.Add(Result(LeadRequests(AskImplementer()), 0.01m));
+        }
+
+        // Twice, because a done is sent back once for its coverage and the
+        // lead answers again - the same shape every other multi-round test
+        // here uses.
+        lead.Add(Result(LeadDone(), 0.01m));
+        lead.Add(Result(LeadDone(), 0.01m));
+
+        _launcher.Script("role.project-lead", [.. lead]);
+
+        // One scripted session per launch: the lead keeps its session across
+        // rounds and a worker is started fresh for each.
+        for (var round = 0; round < 7; round++)
+        {
+            _launcher.Script("role.implementer", Init($"impl-{round}"), Result(ImplementerDone(), 0.01m));
+        }
+
+        var outcome = (await RunAsync(team, rounds: 0)).Value!;
+
+        outcome.Ended.Should().Be("done");
+        outcome.Rounds.Should().BeGreaterThan(5);
+    }
+
+    [Fact]
+    public async Task A_round_cap_that_was_asked_for_still_stops_it()
+    {
+        var team = await IteratingProjectAsync();
+
+        var lead = new List<string> { Init("lead-1") };
+
+        for (var round = 0; round < 7; round++)
+        {
+            lead.Add(Result(LeadRequests(AskImplementer()), 0.01m));
+        }
+
+        _launcher.Script("role.project-lead", [.. lead]);
+
+        for (var round = 0; round < 7; round++)
+        {
+            _launcher.Script("role.implementer", Init($"impl-{round}"), Result(ImplementerDone(), 0.01m));
+        }
+
+        (await RunAsync(team, rounds: 3)).Value!.Ended.Should().StartWith("round limit: 3");
+    }
+
+    /// <remarks>
+    /// The one case uncapping rounds would otherwise leave with nothing to stop
+    /// it. Two rounds without a request only catches a lead asking for nothing;
+    /// a lead that keeps asking for one more thing trips neither that nor a
+    /// budget the team does not set. Every team that ships sets one, so this is
+    /// about a team somebody wrote or edited.
+    /// </remarks>
+    [Fact]
+    public async Task A_run_with_no_budget_and_no_round_cap_is_refused_before_it_spends()
+    {
+        var team = await IteratingProjectAsync();
+        team.Rules.Budget.Usd = null;
+
+        var refused = await RunAsync(team, rounds: 0);
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain("Nothing would stop this run");
+        refused.Error.Should().Contain("--rounds");
+
+        _launcher.Requests.Should().BeEmpty("it is refused before anything is briefed");
+    }
+
+    [Fact]
+    public async Task A_team_with_a_budget_needs_no_round_cap()
+    {
+        var team = await IteratingProjectAsync();
+
+        team.Rules.Budget.Usd.Should().NotBeNull("every team that ships sets one");
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        (await RunAsync(team, rounds: 0)).Succeeded.Should().BeTrue();
+    }
+
     [Fact]
     public async Task The_merge_gate_reminder_does_not_buy_the_lead_an_extra_round()
     {

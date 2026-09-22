@@ -1254,9 +1254,20 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         [Description("manual, supervised or autonomous. Defaults to the team's own setting.")]
         public string? Autonomy { get; init; }
 
+        /// <summary>A ceiling on lead turns, or none.</summary>
+        /// <remarks>
+        /// Defaulted to no cap. A round is a crude ceiling on something
+        /// measured in money, and the team's budget is the one that does the
+        /// work: the run that prompted this took four of its five rounds while
+        /// spending 20.84 of a 25 budget, so the limit in the way was never the
+        /// limit that mattered. A run still cannot be uncapped in both - the
+        /// runner refuses one with no budget and no rounds.
+        /// </remarks>
         [CommandOption("--rounds <N>")]
-        [Description("How many times the lead may come back with more requests. Default 5.")]
-        public int Rounds { get; init; } = 5;
+        [Description(
+            "A ceiling on how many times the lead may come back with more requests. "
+            + "None by default: the team's budget and two rounds without progress stop it.")]
+        public int Rounds { get; init; }
 
         [CommandOption("--model <MODEL>")]
         [Description("A model for every node, overriding the team's and the project's. Written as the agent spells it.")]
