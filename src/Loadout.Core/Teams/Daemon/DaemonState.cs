@@ -52,6 +52,26 @@ public static class DaemonNote
             return null;
         }
     }
+
+    /// <summary>
+    /// What the note says, when the daemon that wrote it is still there.
+    /// </summary>
+    /// <remarks>
+    /// The note alone is not enough and never was: a daemon that was killed
+    /// rather than stopped leaves one behind, identifiers are reused, and a
+    /// machine that has restarted has a note describing somebody else's
+    /// process. Asking whether that process is still the one that wrote it is
+    /// the difference between pointing somebody at a dashboard and pointing
+    /// them at a closed port.
+    /// </remarks>
+    public static DaemonState? Live(IPlatformPaths paths, IProcessInspector processes)
+    {
+        ArgumentNullException.ThrowIfNull(processes);
+
+        return Read(paths) is { } note && processes.IsRunning(note.Pid, note.StartedAt)
+            ? note
+            : null;
+    }
 }
 
 /// <summary>

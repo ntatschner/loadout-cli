@@ -23,14 +23,24 @@ namespace Loadout.Cli.Commands;
 /// only one that shows every run at once.
 /// </para>
 /// <para>
-/// It reads and nothing else. Approving a gate or stopping a run from a page
-/// has to go through the same parser somebody would type at, which is the rule
-/// the launcher already follows; and there is nothing yet on the other end to
-/// receive it, because a run is a process its own command is holding. That
-/// arrives with the daemon, which will serve this same page.
+/// It watches and it acts, and every control on it runs the command somebody
+/// would have typed - the rule the launcher already follows, so that there is
+/// one behaviour rather than two that drift. It read and nothing else until 20
+/// September 2026, while the page drew all of those controls and this server
+/// answered each of them with "this server only reads": a page offering a
+/// button it cannot honour is worse than one that does not offer it.
+/// <c>--watch-only</c> is that older behaviour, asked for on purpose.
+/// </para>
+/// <para>
+/// And where a daemon is already serving this page, this command hands back its
+/// address rather than starting a second server. Two of them over one journal
+/// is two ports, two tokens and two sets of buttons; worse, the daemon prints
+/// its address once, into a window that starts minimised at login, so the
+/// command somebody would reach for to find that page was the one that sent
+/// them to a different one.
 /// </para>
 /// </remarks>
-[Description("Serve a page on this machine showing what the team runs are doing. Reads only; nothing can be changed from it.")]
+[Description("Show what the team runs are doing on a page: the one a daemon is already serving, or a new one on this machine. Every control on it runs the command you would have typed.")]
 [CommandMeta(CommandCategory.Start, Intent = "team dashboard web page browser watch runs live")]
 public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Settings>
 {
@@ -48,6 +58,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly Loadout.Platform.Abstractions.ISpeech _speech;
     private readonly ICommandCatalogue _commands;
     private readonly ISecretProvider _secrets;
+    private readonly IProcessInspector _processes;
     private readonly TimeProvider _time;
     private readonly Loadout.Core.Teams.ITeamCatalogue _teams;
     private readonly Loadout.Core.Instructions.ISpecialistLibrary _library;
@@ -68,6 +79,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         Loadout.Platform.Abstractions.ISpeech speech,
         ICommandCatalogue commands,
         ISecretProvider secrets,
+        IProcessInspector processes,
         TimeProvider time,
         Loadout.Core.Teams.ITeamCatalogue teams,
         Loadout.Core.Instructions.ISpecialistLibrary library,
@@ -80,6 +92,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         _speech = speech;
         _commands = commands;
         _secrets = secrets;
+        _processes = processes;
         _time = time;
         _journal = journal;
         _git = git;
@@ -243,6 +256,84 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             + "address - so treat the address as the credential it is.");
     }
 
+    /// <summary>This machine and nowhere else, which is what it serves unless asked otherwise.</summary>
+    internal const string Loopback = "127.0.0.1";
+
+    /// <summary>
+    /// Whether these flags ask for a server of this command's own.
+    /// </summary>
+    /// <remarks>
+    /// A port or an address is asking for one here, on that address, and a
+    /// watch-only page is asking for one the daemon's page is not: it can
+    /// answer gates and stop runs, and "for a screen in a corner" means one
+    /// that cannot. Everything else is about what the page looks like, which a
+    /// daemon already serving has decided.
+    /// </remarks>
+    internal static bool Insists(Settings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return settings.Port != 0
+            || !string.Equals(settings.Listen, Loopback, StringComparison.Ordinal)
+            || settings.WatchOnly;
+    }
+
+    /// <summary>
+    /// Says where the daemon is serving, rather than serving it again.
+    /// </summary>
+    /// <remarks>
+    /// The address carries the token, which is the whole of what gets somebody
+    /// in, and printing it here is the point: it is otherwise written down in
+    /// exactly one place - the daemon's own output - and that scrolls past at
+    /// login.
+    /// </remarks>
+    private async Task<int> PointAtAsync(
+        CommandOutput output,
+        DaemonState daemon,
+        Settings settings,
+        CancellationToken ct)
+    {
+        if (settings.DryRun)
+        {
+            output.WriteLine(
+                "[dim]Dry run: nothing was served and no window was opened.[/] A daemon is "
+                + "already serving this page, so this would have pointed at it rather than "
+                + "starting a second one.");
+
+            return CommandOutput.Success();
+        }
+
+        if (output.IsJson)
+        {
+            // The same shape this command has always answered --json with, so
+            // whatever reads it gets an address either way and never has to
+            // know which of the two served it.
+            output.WriteJson(new
+            {
+                address = daemon.Address,
+                port = new Uri(daemon.Address!).Port,
+                daemon = true,
+            });
+        }
+        else
+        {
+            output.WriteLine("[dim]A daemon is already serving this page.[/]");
+            output.WriteLine($"[bold]{Markup.Escape(daemon.Address!)}[/]");
+            output.WriteLine(
+                $"[dim]serving since {daemon.Since.ToLocalTime():HH:mm}, and it keeps going "
+                + "when this window closes.[/]");
+            output.WriteLine(
+                "[dim]Serve a separate one here with: loadout team dashboard --port <port>[/]");
+        }
+
+        if (settings.Open && output.CanOpenAWindow)
+        {
+            await _opener.OpenUrlAsync(daemon.Address!, ct).ConfigureAwait(false);
+        }
+
+        return CommandOutput.Success();
+    }
+
     public sealed class Settings : GlobalSettings
     {
         [CommandOption("--port <PORT>")]
@@ -253,7 +344,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         [Description(
             "The address to listen on. 127.0.0.1 by default, which is this machine only. "
             + "0.0.0.0 reaches the network you are on.")]
-        public string Listen { get; init; } = "127.0.0.1";
+        public string Listen { get; init; } = Loopback;
 
         [CommandOption("--open")]
         [Description("Open the page in a browser once it is listening.")]
@@ -281,6 +372,24 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        /*
+          A daemon already serving this page is the page somebody meant.
+
+          Until now this looked for nothing and started a second server: its own
+          port, its own token, its own set of buttons, over the same journal. The
+          launcher's Team runs screen binds "d" to this command, so the obvious
+          way in led away from the thing somebody had switched on rather than to
+          it - and since the daemon prints its address once, into a window that
+          starts minimised at login, there was nothing else that would say where
+          the page was. Somebody enabled the daemon and was never shown a door.
+        */
+        if (!Insists(settings)
+            && DaemonNote.Live(_paths, _processes) is { Address.Length: > 0 } daemon)
+        {
+            return await PointAtAsync(output, daemon, settings, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         using var server = new DashboardServer(_journal, _git);
 

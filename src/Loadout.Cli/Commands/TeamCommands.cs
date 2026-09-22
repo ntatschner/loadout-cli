@@ -1530,8 +1530,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
     /// between sending a question somewhere and sending it nowhere.
     /// </remarks>
     private bool Serving() =>
-        Loadout.Core.Teams.Daemon.DaemonNote.Read(_paths) is { } note
-        && _processes.IsRunning(note.Pid, note.StartedAt);
+        Loadout.Core.Teams.Daemon.DaemonNote.Live(_paths, _processes) is not null;
 
     /// <summary>
     /// Says which tree the run will work on, before it spends anything.

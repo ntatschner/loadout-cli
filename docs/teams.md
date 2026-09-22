@@ -612,6 +612,14 @@ there is one account of what happened rather than three that can disagree.
   corner: the server refuses anything that would change a run or start one, the
   page is told so, and it puts the controls away and hides the form rather than
   leaving buttons that do nothing.
+
+  **If a daemon is already serving, this command points at it** — it prints the
+  daemon's address, opens it with `--open`, and starts nothing. A second server
+  is a second port, a second token and a second set of buttons over one journal,
+  and until 22 September 2026 that is what you got: somebody who had enabled the
+  daemon and reached for the obvious command was quietly sent to a different
+  page. `--port`, `--listen` and `--watch-only` are asking for a server of your
+  own and still get one.
 - **Tools → Team runs…** in the launcher — the same, in the terminal UI. See
   [The launcher](launcher.md).
 
@@ -1870,6 +1878,14 @@ they write are covered.
 
 It records the launcher as it was invoked, so run it again after updating
 Loadout if the launcher moved.
+
+**Finding the dashboard it serves.** The port and the token are both new at
+every start, and the daemon prints the address once — into its own output, which
+at login is a minimised window nobody is looking at. `loadout team dashboard`
+gets it back: with a daemon serving, that command prints its address rather than
+starting a page of its own. Before that it started a second one, so enabling
+autostart and then logging in left you with a dashboard running, no way to reach
+it, and a second dashboard offered by the command you would reach for.
 
 A schedule is machine-local. It may not name a manual team, nothing may repeat
 faster than five minutes, and a missed one is not made up for: a run that should

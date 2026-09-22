@@ -168,4 +168,106 @@ public sealed class DaemonContractTests
         JsonDocument.Parse(run.StandardOutput).RootElement
             .TryGetProperty("schedules", out _).Should().BeTrue();
     }
+
+    /// <summary>The address a daemon in these tests claims to be serving on.</summary>
+    /// <remarks>
+    /// Nothing listens on it. What is under test is which address the command
+    /// answers with, and a port that is genuinely open would make the test pass
+    /// for a reason it is not asserting.
+    /// </remarks>
+    private const string Claimed = "http://127.0.0.1:65123/?token=0123456789abcdef";
+
+    /// <summary>
+    /// Writes the note a daemon leaves about itself, straight into the
+    /// throwaway home.
+    /// </summary>
+    /// <remarks>
+    /// The process it names is this test run, because "is it still there" is
+    /// answered by asking the operating system and a made-up identifier would
+    /// be answered differently on a machine that had reused it. Moving the
+    /// start time by an hour is the stale case exactly: the identifier is live,
+    /// the process bearing it is not the one that wrote the note, and that is
+    /// the reuse the start time exists to catch.
+    /// </remarks>
+    private static async Task DaemonNoteAsync(LoadoutProcess loadout, bool live)
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+
+        var started = self.StartTime.ToUniversalTime();
+
+        var state = Path.Combine(await StateAsync(loadout), "teams");
+
+        Directory.CreateDirectory(state);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(state, "daemon.json"),
+            JsonSerializer.Serialize(new
+            {
+                Pid = Environment.ProcessId,
+                StartedAt = live ? started : started.AddHours(-1),
+                Address = Claimed,
+                Since = DateTimeOffset.UtcNow.AddMinutes(-5),
+            }));
+    }
+
+    /// <remarks>
+    /// The reason this is a contract rather than a nicety: the daemon prints
+    /// its address once, and at login it prints it into a window nobody is
+    /// looking at. This command was the only other thing anybody would type,
+    /// and it used to start a second server - so somebody who enabled the
+    /// daemon was handed a different page and never found the one they had
+    /// switched on.
+    /// </remarks>
+    [BuiltCliFact]
+    public async Task The_dashboard_hands_back_the_address_of_a_daemon_that_is_serving()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await DaemonNoteAsync(loadout, live: true);
+
+        var run = await loadout.RunAsync("team", "dashboard", "--json");
+
+        run.ExitCode.Should().Be(0);
+
+        var answer = run.Json();
+
+        answer.GetProperty("address").GetString().Should().Be(
+            Claimed,
+            "the page somebody meant is the one already being served");
+
+        answer.GetProperty("port").GetInt32().Should().Be(65123);
+    }
+
+    [BuiltCliFact]
+    public async Task A_note_left_behind_by_a_daemon_that_has_gone_is_not_pointed_at()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await DaemonNoteAsync(loadout, live: false);
+
+        var run = await loadout.RunAsync("team", "dashboard", "--dry-run");
+
+        run.ExitCode.Should().Be(0);
+        run.StandardOutput.Should().Contain(
+            "A dashboard would listen on",
+            "a closed port is not a page, so this serves its own");
+
+        run.StandardOutput.Should().NotContain("A daemon is already serving");
+    }
+
+    [BuiltCliFact]
+    public async Task Asking_for_a_page_that_cannot_touch_anything_still_serves_one()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await DaemonNoteAsync(loadout, live: true);
+
+        var run = await loadout.RunAsync("team", "dashboard", "--watch-only", "--dry-run");
+
+        run.ExitCode.Should().Be(0);
+        run.StandardOutput.Should().Contain(
+            "A dashboard would listen on",
+            "the daemon's page can answer gates and stop runs, which is what --watch-only "
+            + "is asking for a page without");
+    }
 }
