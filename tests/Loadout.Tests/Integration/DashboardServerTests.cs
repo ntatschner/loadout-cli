@@ -385,6 +385,12 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // which is a failure that looks exactly like having no art.
         policy.Should().Contain("img-src 'self'");
 
+        // And data:, for the drawings the page carries in itself - the state
+        // glyphs, the select chevron and the mark in the top bar - and its
+        // three inlined fonts. Bytes already in the page, not a fetch.
+        policy.Should().Contain("img-src 'self' data:");
+        policy.Should().Contain("font-src data:");
+
         // And still nothing from anywhere else.
         policy.Should().Contain("default-src 'none'");
     }
@@ -1259,9 +1265,13 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // The page is a grid at least a window tall. With nothing saying which
         // row takes the spare height, a short view - Waiting, Settings - shared
         // it out, and the header row grew to 192 pixels over 69 of header.
+        //
+        // The page is no longer that grid; the panes are. The detail pane runs
+        // down beside the totals, Needs you and the runs, so the same thing
+        // happens there if nothing says the runs take the spare height.
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        text.Should().Contain("grid-template-rows: auto minmax(0, 1fr);");
+        text.Should().Contain("grid-template-rows: auto auto minmax(0, 1fr);");
     }
 
     [Fact]
@@ -1272,7 +1282,11 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // horizontal scrollbar and the last two accents were off to the side.
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        text.Should().Contain("[data-presentation=\"rich\"] .choices.row { display: flex; flex-wrap: wrap; }");
+        // The kit's choice cards: a grid that fills as many columns of 150
+        // pixels as there is room for and wraps the rest.
+        text.Should().Contain(".lk-choices { display: grid; gap: var(--space-2); "
+            + "grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));");
+        text.Should().Contain("list.className = \"choices lk-choices\";");
         text.Should().NotContain("grid-auto-flow: column");
     }
 
@@ -1294,7 +1308,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_page_is_one_column_until_there_is_room_for_three()
+    public async Task The_page_is_one_column_until_there_is_room_for_two()
     {
         // The narrow case is a phone answering a gate from the sofa, and a
         // layout that starts wide and is squeezed reads as an afterthought
@@ -1303,11 +1317,11 @@ public sealed class DashboardServerTests : IAsyncLifetime
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
         text.Should().Contain(".panes { display: grid;");
-        text.Should().Contain("@media (min-width: 64rem)");
+        text.Should().Contain("@media (min-width: 75rem)");
 
-        // The three-column rule must live inside that query and nowhere else.
+        // The two-column rule must live inside that query and nowhere else.
         var columns = text.IndexOf("grid-template-columns", StringComparison.Ordinal);
-        var breakpoint = text.IndexOf("@media (min-width: 64rem)", StringComparison.Ordinal);
+        var breakpoint = text.IndexOf("@media (min-width: 75rem)", StringComparison.Ordinal);
 
         columns.Should().BeGreaterThan(breakpoint, "columns are added by width, not removed by it");
     }
@@ -1322,9 +1336,9 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // On the sections themselves, not merely somewhere in the page: the
         // log inside the detail pane carries the same label, so asking
         // whether the string exists anywhere passed with the pane unnamed.
-        text.Should().Contain("<section id=\"rail\" class=\"pane\" hidden aria-labelledby=\"rail-heading\">");
+        text.Should().Contain("<section id=\"rail\" class=\"pane lk-rail\" hidden aria-labelledby=\"rail-heading\">");
         text.Should().Contain("<section class=\"pane\" aria-labelledby=\"runs\">");
-        text.Should().Contain("<section id=\"detail\" class=\"pane\" hidden aria-labelledby=\"detail-heading\">");
+        text.Should().Contain("<section id=\"detail\" class=\"pane lk-pane\" hidden aria-labelledby=\"detail-heading\">");
     }
 
     [Fact]
@@ -1637,7 +1651,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // looks like: three tabs, one selected, three panels below them.
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        text.Should().Contain("""<div class="depths" role="tablist" aria-label="How much detail">""");
+        text.Should().Contain("""<div class="depths lk-segment" role="tablist" aria-label="How much detail">""");
 
         foreach (var tab in new[] { "messages", "turns", "papers", "changes" })
         {
@@ -1795,7 +1809,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         // Folded away, because the page is for watching what is already going
         // and a form that is always open is one somebody fills in by accident.
-        text.Should().Contain("<details class=\"start\" id=\"starting\">");
+        text.Should().Contain("<details class=\"start lk-disclosure\" id=\"starting\">");
 
         // "Run a team", not "Start a team". The old heading sat above a form
         // asking for a team name, what it was for and a project, and somebody
@@ -1841,15 +1855,15 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // somebody who cannot see it appear. axe passes either way - a
         // paragraph beside a control is not a violation - so this is asserted
         // rather than measured.
-        text.Should().Contain("<select id=\"start-team\" aria-describedby=\"start-team-about\">");
-        text.Should().Contain("<select id=\"start-project\">");
+        text.Should().Contain("<select id=\"start-team\" aria-describedby=\"start-team-about\" class=\"lk-select\">");
+        text.Should().Contain("<select id=\"start-project\" class=\"lk-select\">");
 
         // A list, for the same reason those two are: a free-text box let a name
         // nothing could resolve through, said the run had started, and sent the
         // refusal to a terminal behind the browser. The model stays free text
         // because which models exist is the agent's business; which agents this
         // launcher can start is this launcher's own.
-        text.Should().Contain("<select id=\"start-agent\">");
+        text.Should().Contain("<select id=\"start-agent\" class=\"lk-select\">");
 
         // Empty means no cap, since rounds stopped defaulting to five. It never
         // meant "the team's own" - a round limit has never come from a team
@@ -2153,7 +2167,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // And the board, which shows several of them at once.
         text.Should().Contain("id=\"view-board\"");
         text.Should().Contain("<div class=\"board\" id=\"board\" hidden></div>");
-        text.Should().Contain("<div class=\"terminal\" id=\"terminal\" hidden></div>");
+        text.Should().Contain("<div class=\"terminal lk-terminal\" id=\"terminal\" hidden></div>");
 
         // A destination, not a way of looking at runs, and last in the drawer
         // for the same reason.
@@ -2177,7 +2191,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // straight to a part of the page instead of tabbing from the top.
         // This had one - main - with the title, the status, the preferences
         // and the seven views all inside it and nothing to aim at.
-        text.Should().Contain("<header>");
+        text.Should().Contain("<header class=\"lk-topbar\">");
         text.Should().Contain("<nav class=\"views\"");
         text.Should().Contain("<main>");
 
@@ -2186,8 +2200,12 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().NotContain("<div class=\"views\"");
 
         // The skip link still comes first, before any of them.
-        text.IndexOf("class=\"skip\"", StringComparison.Ordinal)
-            .Should().BeLessThan(text.IndexOf("<header>", StringComparison.Ordinal));
+        text.IndexOf("class=\"skip lk-skip\"", StringComparison.Ordinal)
+            .Should().BeLessThan(text.IndexOf("<header class=\"lk-topbar\">", StringComparison.Ordinal));
+
+        // And main after the header, so the order is skip, banner, main.
+        text.IndexOf("<header class=\"lk-topbar\">", StringComparison.Ordinal)
+            .Should().BeLessThan(text.IndexOf("<main>", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -2232,13 +2250,22 @@ public sealed class DashboardServerTests : IAsyncLifetime
         */
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        text.Should().Contain(".panes:has(#rail[hidden]):has(#detail[hidden])");
-        text.Should().Contain(".panes:has(#rail[hidden]):has(#detail:not([hidden]))");
-        text.Should().Contain(".panes:has(#rail:not([hidden])):has(#detail[hidden])");
+        //
+        // The kit's layout has two columns rather than three - Needs you sits
+        // above the runs - so the one pane that can hold a column open is the
+        // detail pane, and the second column is declared only while it is
+        // showing.
+        text.Should().Contain(".panes:has(#detail:not([hidden])) {\n"
+            + "      grid-template-columns: minmax(0, 1fr) var(--detail-width);");
 
-        // And the three-pane default is still there, so a browser without
-        // :has() gets what it always got rather than something worse.
-        text.Should().Contain("minmax(16rem, 22rem) minmax(18rem, 24rem) minmax(0, 1fr)");
+        // And nowhere else: not as a class the markup always carries, which
+        // would hold the column open with nothing in it.
+        text.Should().NotContain("lk-layout has-detail");
+
+        // A browser without :has() gets the one column a narrow window gets,
+        // which loses nothing - never the empty second column.
+        text.IndexOf("var(--detail-width);", StringComparison.Ordinal)
+            .Should().BeGreaterThan(text.IndexOf(".panes:has(#detail:not([hidden]))", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -2249,11 +2276,19 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // which is the first thing anybody touches.
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        text.Should().Contain(".prefs button");
-        text.Should().Contain(".prefs input[type=\"checkbox\"]");
+        //
+        // They are the kit's small button and its switch now, and the header
+        // has to use them: a control that loses its class is back to what the
+        // browser draws.
+        text.Should().Contain("id=\"plainly\" class=\"plainly lk-btn lk-btn--sm\"");
+        text.Should().Contain("id=\"notify\" class=\"lk-btn lk-btn--sm lk-btn--quiet\"");
+        text.Should().Contain("<label class=\"lk-switch\"><input type=\"checkbox\" id=\"sound\">");
 
-        // 2.5rem is what every other button on the page already asked for.
-        text.Should().Contain("min-height: 2.5rem");
+        // The small button is 28 pixels, and the switch's label - the whole
+        // of which is its target - is at least 24.
+        text.Should().Contain(".lk-btn--sm { min-height: var(--control-sm);");
+        text.Should().Contain("--control-sm: 28px;");
+        text.Should().Contain("cursor: pointer; min-height: 24px; }");
     }
 
     [Fact]
@@ -2264,11 +2299,11 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // are boxes to be filled in, and what fills them only ever opens a run.
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        text.Should().Contain("<ul class=\"rooms\" id=\"office\" hidden></ul>");
+        text.Should().Contain("<ul class=\"rooms lk-rooms\" id=\"office\" hidden></ul>");
         text.Should().Contain("<div id=\"graph\" hidden></div>");
         text.Should().Contain("<div id=\"when\" hidden></div>");
-        text.Should().Contain("<ul class=\"queue\" id=\"waiting\" hidden></ul>");
-        text.Should().Contain("<div class=\"terminal\" id=\"terminal\" hidden></div>");
+        text.Should().Contain("<ul class=\"queue lk-queue\" id=\"waiting\" hidden></ul>");
+        text.Should().Contain("<div class=\"terminal lk-terminal\" id=\"terminal\" hidden></div>");
     }
 
     [Fact]
@@ -2316,7 +2351,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // Hidden until somebody opens a live node's own stream, which is the
         // only moment at which saying something to it rather than to the lead
         // makes any sense.
-        text.Should().Contain("<div class=\"controls\" id=\"steer\" hidden>");
+        text.Should().Contain("<div class=\"controls lk-inline\" id=\"steer\" hidden>");
         text.Should().Contain("<label for=\"steer-said\"");
         text.Should().Contain("id=\"steer-send\"");
 

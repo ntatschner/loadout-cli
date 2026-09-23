@@ -54,7 +54,7 @@ loadout team dashboard --open
 
 Your web browser opens. Only your own computer can see this page.
 
-![The dashboard's run list. A ledger of totals across the top, then one run under "Needs you" waiting for an answer, one under "Running", and the first of two under "Finished". Each card states its run's state as a word.](../images/dashboard-list-rich.png)
+![The dashboard's run list. A band of totals across the top, then one run under "Needs you" waiting for an answer, one under "Running", and the start of "Finished". Each card states its run's state as a word, with a glyph beside it.](../images/dashboard-list-rich.png)
 
 You'll see your team's work on a card. The card says in words what state it's
 in.

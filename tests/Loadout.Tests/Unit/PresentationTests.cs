@@ -146,16 +146,29 @@ public sealed class PresentationTests
         boot.Should().BeGreaterThan(0, "the page reads the kept look");
         boot.Should().BeLessThan(body, "and reads it before anything is drawn");
 
-        // Every theme the settings page offers has to exist as a rule, or
+        // Every theme the settings page can draw has to exist as a rule, or
         // choosing it changes an attribute and nothing else.
-        foreach (var theme in new[] { "paper", "slate", "oxblood", "contrast" })
+        foreach (var theme in new[] { "graphite", "daylight", "carbon", "contrast-dark", "contrast-light" })
         {
             page.Should().Contain($"[data-theme=\"{theme}\"]", $"{theme} is offered");
         }
 
-        foreach (var accent in new[] { "ink", "oxblood", "forest", "slate", "plum", "rust" })
+        foreach (var accent in new[] { "bay", "signal", "orchid", "sand", "frost" })
         {
             page.Should().Contain($"[data-accent=\"{accent}\"]", $"{accent} is offered");
+        }
+
+        // And a look kept under the names the page used before is carried
+        // over rather than put on the element, where it would match no rule
+        // at all: every old theme and accent is named in the migration.
+        foreach (var old in new[] { "paper", "slate", "oxblood" })
+        {
+            page.Should().Contain($"{old}: \"graphite\"", $"the {old} theme is migrated");
+        }
+
+        foreach (var old in new[] { "ink", "oxblood", "forest", "slate", "plum", "rust" })
+        {
+            page.Should().Contain($"{old}: \"bay\"", $"the {old} accent is migrated");
         }
     }
 
