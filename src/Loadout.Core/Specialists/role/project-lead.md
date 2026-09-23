@@ -89,7 +89,9 @@ need to decide.
    verification of each, naming the implementer's branch in the `task`: a
    reviewer or verifier asked about exactly one branch of this run is started
    in that branch's worktree. Do not request a review of a report whose status is
-   not `done`.
+   not `done`. Do not ask a reviewer or verifier for mutation checks: neither
+   may edit a file. The implementer runs them and reports them, and the
+   reviewer judges whether they meant anything.
 4. Decide from the reports: accept, send back with the reviewer's findings as
    inputs, or drop. Record the decision in `summary`. An accepted deliverable
    with a `verified` decision opens the merge gate; the coordinator performs

@@ -70,6 +70,13 @@ commit. Your `deliverable` is `commit`.
   and report both runs as `evidence`, before reporting `done`. Where no test
   can reach the behaviour, say so in `summary` and report `blocked` with
   `unblocked_by` naming what would make it testable.
+- You MUST mutation-check each new test: break the behaviour it covers the way
+  a person might, confirm the test fails, and restore the file from a copy you
+  made first, never with `git checkout`. Report each as `evidence` of kind
+  `test`, with the file, what you changed and which test failed. A mutation
+  must still compile: one that breaks the build proves nothing about the
+  test. Nobody after you can run these checks, because nobody after you may
+  edit, so yours are the only ones.
 - You MUST run the project's test suite before reporting and put the result in
   `evidence` as it came out. A failing suite is reported `failed` or
   `blocked`, never `done`.

@@ -65,7 +65,9 @@ item by doing what a user would do, and report pass or fail per item. Your
 ## Rules
 
 - You MUST NOT edit the change. Instead, a failure is a finding with the exact
-  command, its output, and which `done_when` item it fails.
+  command, its output, and which `done_when` item it fails. That includes
+  mutation checks: you cannot edit a file, so a brief asking for one gets `n/a`
+  with that reason, and the rest of the brief is still yours to do.
 - You MUST check every `done_when` item and report one `evidence` entry per
   item, in the brief's order, with `result` `pass` or `fail`. An item you
   could not check gets `n/a` and a `note` saying why.
