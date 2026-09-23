@@ -84,7 +84,7 @@ public sealed class ToolNominationPassTests : IDisposable
         Goal = "Look at what finished.",
         On = on,
         Enabled = true,
-        LastCommit = "20260901-0000-0000",
+        LastCommit = "2026-09-01T00:00:00.0000000+00:00",
     };
 
     /// <summary>A finished run of a team, with one report carrying a command that passed.</summary>

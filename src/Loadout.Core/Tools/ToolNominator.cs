@@ -12,7 +12,17 @@ namespace Loadout.Core.Tools;
 /// <param name="Summary">One line saying what it is.</param>
 /// <param name="Text">Where it was seen, for the Creator to follow up.</param>
 /// <param name="Script">The script, where it is a remedy.</param>
-public sealed record ToolNomination(int Rule, string Key, string Summary, string Text, string? Script);
+/// <param name="Also">
+/// Other keys it may have been filed under before, so a cluster that grows by
+/// a shelf is still filed once.
+/// </param>
+public sealed record ToolNomination(
+    int Rule,
+    string Key,
+    string Summary,
+    string Text,
+    string? Script,
+    IReadOnlyList<string>? Also = null);
 
 /// <summary>
 /// Finds what finished work keeps doing again, and files it for the Creator.
@@ -49,7 +59,11 @@ public sealed partial class ToolNominator
     /// <summary>How many runs back it reads.</summary>
     public int Depth { get; init; } = 200;
 
-    /// <summary>Finds and files every nomination not already filed.</summary>
+    /// <summary>
+    /// Files every nomination not already filed: a candidate for the Creator,
+    /// or, where an active tool already covers it, an idea about that tool for
+    /// the Refiner, as a use it can weigh.
+    /// </summary>
     /// <param name="lessons">The text of every memory topic of kind lesson.</param>
     /// <returns>Each nomination found, with what filing it came to; null where it was filed before.</returns>
     public IReadOnlyList<(ToolNomination Nomination, OperationResult<ToolSubmitted>? Filed)> Scan(IReadOnlyList<string> lessons)
@@ -59,23 +73,37 @@ public sealed partial class ToolNominator
             .Select(one => one.Note ?? string.Empty)
             .ToList();
 
+        bool Filed(string key) => filed.Any(note => note.EndsWith(" key " + KeyOf(key), StringComparison.Ordinal));
+
         return
         [
-            .. Find(lessons).Select(one =>
+            .. Sorted(lessons).Select(sorted =>
             {
-                var key = KeyOf(one);
+                var (one, tool) = sorted;
+                var prefix = tool is null ? string.Empty : "hint " + tool + " ";
 
-                return (one, filed.Any(note => note.EndsWith(" key " + key, StringComparison.Ordinal))
-                    ? null
-                    : _registry.Nominate(
-                        new ToolSubmission("candidate", one.Text, By: "nominator", Script: one.Script, Summary: one.Summary),
-                        key));
+                if (new[] { one.Key }.Concat(one.Also ?? []).Any(key => Filed(prefix + key)))
+                {
+                    return (one, (OperationResult<ToolSubmitted>?)null);
+                }
+
+                var text = tool is null
+                    ? one.Text
+                    : $"{one.Text} The active tool {tool} already covers this, so it is a use of that tool rather than a new one.";
+
+                return (one, _registry.Nominate(
+                    new ToolSubmission("candidate", text, Tool: tool, By: "nominator", Script: one.Script, Summary: one.Summary),
+                    KeyOf(prefix + one.Key)));
             }),
         ];
     }
 
     /// <summary>Every nomination the rules find, leaving out what an active tool already covers.</summary>
-    public IReadOnlyList<ToolNomination> Find(IReadOnlyList<string> lessons)
+    public IReadOnlyList<ToolNomination> Find(IReadOnlyList<string> lessons) =>
+        [.. Sorted(lessons).Where(one => one.CoveredBy is null).Select(one => one.Nomination)];
+
+    /// <summary>Every nomination the rules find, with the active tool that covers it, if one does.</summary>
+    private List<(ToolNomination Nomination, string? CoveredBy)> Sorted(IReadOnlyList<string> lessons)
     {
         ArgumentNullException.ThrowIfNull(lessons);
 
@@ -87,21 +115,35 @@ public sealed partial class ToolNominator
         found.AddRange(RevisedAndRunTwice(shelves, evidence));
         found.AddRange(Commands(evidence, lessons));
 
-        var active = _registry.Offerable()
-            .Select(one => new ToolShape(one.Record.Capabilities, one.Record.Summary, one.Script))
-            .ToList();
+        var active = _registry.Offerable();
 
         // What an active tool already does is the Refiner's to hear about,
         // not the Creator's to build again.
-        return
-        [
-            .. found.Where(one =>
-            {
-                var shape = new ToolShape([], one.Summary, one.Script ?? one.Text);
+        return [.. found.Select(one => (one, active.FirstOrDefault(tool => Covers(tool, one))?.Record.Name))];
+    }
 
-                return !active.Any(tool => ToolOverlap.Score(shape, tool).Overlaps);
-            }),
-        ];
+    /// <summary>Whether an active tool already does what a nomination found.</summary>
+    /// <remarks>
+    /// A remedy is compared script to script. A command has no script, and a
+    /// sentence about it shares too little with a tool's script to overlap,
+    /// so it is covered where the tool's examples run the same shape, or its
+    /// script or capabilities name the command.
+    /// </remarks>
+    private static bool Covers(ToolOffered tool, ToolNomination nomination)
+    {
+        if (nomination.Script is { } script)
+        {
+            return ToolOverlap.Score(
+                new ToolShape([], nomination.Summary, script),
+                new ToolShape(tool.Record.Capabilities, tool.Record.Summary, tool.Script)).Overlaps;
+        }
+
+        var shape = nomination.Key[(nomination.Key.IndexOf(' ', StringComparison.Ordinal) + 1)..];
+        var named = Named(shape) ?? shape;
+
+        return tool.Version.Examples.Any(one => string.Equals(Shape(one.Command), shape, StringComparison.Ordinal))
+            || tool.Script.Contains(named, StringComparison.OrdinalIgnoreCase)
+            || tool.Record.Capabilities.Any(one => string.Equals(one, named, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>A command with its arguments replaced, so two runs of it compare equal.</summary>
@@ -140,8 +182,8 @@ public sealed partial class ToolNominator
         return head.Count >= 2 ? string.Join(' ', head) : null;
     }
 
-    private static string KeyOf(ToolNomination nomination) =>
-        RemedyCeiling.Fingerprint(nomination.Key)[..16];
+    private static string KeyOf(string key) =>
+        RemedyCeiling.Fingerprint(key)[..16];
 
     private sealed record Shelved(string Team, Remedy Remedy, string Script);
 
@@ -255,16 +297,29 @@ public sealed partial class ToolNominator
 
             var names = members.Select(one => one.Team + "/" + one.Remedy.Name).Order(StringComparer.Ordinal).ToList();
 
+            // Keyed by what the scripts are rather than who keeps them, so a
+            // third shelf joining the cluster is the same nomination.
+            var keys = members
+                .Select(one => "1 " + RemedyCeiling.Fingerprint(one.Script))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToList();
+
             yield return new ToolNomination(
                 1,
-                "1 " + string.Join(' ', names),
+                keys[0],
                 members[0].Remedy.What,
                 $"The same remedy is kept on {names.Count} team shelves: {string.Join(", ", names)}.",
-                members[0].Script);
+                members[0].Script,
+                keys[1..]);
         }
     }
 
-    /// <summary>Rule 2: a remedy improved at least once and seen to pass in two or more runs.</summary>
+    /// <summary>Rule 2: a remedy improved at least once and seen to pass in two or more of its team's runs.</summary>
+    /// <remarks>
+    /// The file by its whole name, and only in the owning team's runs: another
+    /// team's fix.ps1 is another script, and so is this team's prefix.ps1.
+    /// </remarks>
     private static IEnumerable<ToolNomination> RevisedAndRunTwice(List<Shelved> shelves, List<Seen> evidence)
     {
         foreach (var shelved in shelves.Where(one => one.Remedy.Revision >= 1))
@@ -277,7 +332,9 @@ public sealed partial class ToolNominator
             }
 
             var runs = evidence
-                .Where(one => (one.Evidence.Ref + " " + one.Evidence.Note).Contains(file, StringComparison.OrdinalIgnoreCase))
+                .Where(one => string.Equals(one.Team, shelved.Team, StringComparison.OrdinalIgnoreCase)
+                    && Words(one.Evidence.Ref + " " + one.Evidence.Note)
+                        .Any(word => string.Equals(Path.GetFileName(word), file, StringComparison.OrdinalIgnoreCase)))
                 .Select(one => one.Run)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
@@ -334,6 +391,10 @@ public sealed partial class ToolNominator
             }
         }
     }
+
+    /// <summary>The words of a command line, without the quotes around a path.</summary>
+    private static IEnumerable<string> Words(string text) =>
+        text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(one => one.Trim('\'', '"', '`', ',', ';'));
 
     private static ToolShape ShapeOf(Shelved shelved) =>
         new([shelved.Remedy.Kind], shelved.Remedy.What, shelved.Script);

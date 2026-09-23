@@ -72,6 +72,67 @@ public sealed class ToolNominatorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_covered_hit_becomes_a_refiner_hint()
+    {
+        var (registry, _) = _store.Registry();
+        await _store.PromoteAsync(registry, ToolStoreFixture.Manifest("free-cache", "1.0"), Cache, ToolStoreFixture.Cases());
+
+        Shelve("alpha", "clear-cache", Cache);
+        Shelve("beta", "free-disk", Cache);
+
+        Nominator().Scan([]).Should().ContainSingle(one => one.Filed != null && one.Filed.Succeeded);
+
+        var filed = File.ReadAllText(Directory.EnumerateFiles(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Single());
+        filed.Should().Contain("kind: idea").And.Contain("tool: free-cache").And.Contain("by: nominator");
+    }
+
+    [Fact]
+    public async Task A_command_an_active_tool_wraps_is_not_nominated()
+    {
+        var (registry, _) = _store.Registry();
+        await _store.PromoteAsync(
+            registry, ToolStoreFixture.Manifest("prune-layers", "1.0"), "docker system prune --force\n", ToolStoreFixture.Cases());
+
+        Run("20260901-1000-a001", "alpha", Command("docker system prune --force"));
+        Run("20260902-1000-b001", "beta", Command("docker system prune --force"));
+
+        Nominator().Find(["When the disk fills, docker system prune clears the build layers."]).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Another_teams_same_named_script_does_not_count()
+    {
+        Shelve("alpha", "clear-cache", Cache, revision: 1);
+        Run("20260901-1000-b001", "beta", Command("pwsh -NoProfile -File remedies/clear-cache.ps1"));
+        Run("20260902-1000-b002", "beta", Command("pwsh -NoProfile -File remedies/clear-cache.ps1"));
+
+        Nominator().Find([]).Should().NotContain(one => one.Rule == 2);
+    }
+
+    [Fact]
+    public void fix_ps1_does_not_match_prefix_ps1()
+    {
+        Shelve("alpha", "fix", Cache, revision: 1);
+        Run("20260901-1000-a001", "alpha", Command("pwsh -NoProfile -File remedies/prefix.ps1"));
+        Run("20260902-1000-a002", "alpha", Command("pwsh -NoProfile -File remedies/prefix.ps1"));
+
+        Nominator().Find([]).Should().NotContain(one => one.Rule == 2);
+    }
+
+    [Fact]
+    public void A_third_team_joining_a_cluster_is_not_filed_again()
+    {
+        Shelve("alpha", "clear-cache", Cache);
+        Shelve("beta", "free-disk", Cache);
+        Nominator().Scan([]).Should().ContainSingle(one => one.Filed != null && one.Filed.Succeeded);
+
+        Shelve("gamma", "tidy-cache", Cache);
+
+        Nominator().Scan([]).Should().OnlyContain(one => one.Filed == null, "the cluster was filed before gamma joined it");
+        Directory.EnumerateFiles(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Should().ContainSingle();
+    }
+
+    [Fact]
     public void A_nomination_never_carries_a_secret_value()
     {
         const string Key = "AKIAABCDEFGHIJKLMNOP";

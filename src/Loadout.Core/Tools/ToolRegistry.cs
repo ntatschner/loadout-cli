@@ -89,6 +89,8 @@ public interface IToolRegistry
     /// Files the nominator's candidate: screened for secrets and audited, but
     /// not for genericity, because a nomination quotes where it was seen.
     /// Not on the command line or MCP; only <see cref="ToolNominator" /> calls it.
+    /// A submission naming a tool is filed as an idea about that tool, for the
+    /// Refiner, rather than as a candidate.
     /// </summary>
     /// <param name="submission">What was found.</param>
     /// <param name="key">What makes it this nomination, recorded so it is filed once.</param>
@@ -304,7 +306,11 @@ public sealed partial class ToolRegistry : IToolRegistry
         ArgumentNullException.ThrowIfNull(submission);
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
-        return Put(submission with { Kind = "candidate", By = "nominator" }, generic: false, key);
+        // Naming a tool makes it a use of that tool for the Refiner to weigh,
+        // not a candidate for the Creator to build again.
+        var kind = submission.Tool is null ? "candidate" : "idea";
+
+        return Put(submission with { Kind = kind, By = "nominator" }, generic: false, key);
     }
 
     private OperationResult<ToolSubmitted> Put(ToolSubmission submission, bool generic, string? key)

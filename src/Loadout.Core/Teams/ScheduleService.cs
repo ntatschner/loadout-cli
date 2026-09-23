@@ -1,3 +1,4 @@
+using System.Globalization;
 using Loadout.Core.Configuration;
 using Loadout.Models;
 using Loadout.Models.Results;
@@ -326,10 +327,13 @@ public sealed class ScheduleService : IScheduleService
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The watermark is the newest run identifier seen, kept where a commit
-    /// watcher keeps its commit; identifiers start with the time a run began,
-    /// so ordinal order is the order they started in. The first look writes it
-    /// down and does not fire, for the reason <see cref="Moved" /> gives.
+    /// The watermark is the latest time a run was seen to finish, kept where a
+    /// commit watcher keeps its commit. Not the run identifier: that starts
+    /// with the time a run began, so a long run that began first and finished
+    /// last sorts below a short one already seen, and would never fire. The
+    /// first look writes it down and does not fire, for the reason
+    /// <see cref="Moved" /> gives; so does a watermark that is not a time,
+    /// which is one an older build wrote.
     /// </para>
     /// <para>
     /// Never on a tool-works run, nor on the schedule's own team: either would
@@ -355,26 +359,29 @@ public sealed class ScheduleService : IScheduleService
             .Where(one => one.Finished is not null
                 && !string.Equals(one.Team, ToolWorksTeam, StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(one.Team, schedule.Team, StringComparison.OrdinalIgnoreCase))
-            .Select(one => one.RunId)
-            .OrderByDescending(one => one, StringComparer.Ordinal)
-            .FirstOrDefault();
+            .Select(one => one.Finished)
+            .Max();
 
-        if (schedule.LastCommit.Length == 0)
+        if (!DateTimeOffset.TryParseExact(
+                schedule.LastCommit, "o", CultureInfo.InvariantCulture, DateTimeStyles.None, out var watermark))
         {
-            // Below every run identifier, so a baseline taken before any run
-            // has finished still lets the first one fire.
-            return (false, newest ?? "0");
+            // Before every finish, so a baseline taken before any run has
+            // finished still lets the first one fire.
+            return (false, Watermark(newest ?? DateTimeOffset.MinValue));
         }
 
-        if (newest is null
-            || string.CompareOrdinal(newest, schedule.LastCommit) <= 0
+        if (newest is not { } latest
+            || latest <= watermark
             || (schedule.LastRun is { } last && now - last < RunFinishedQuiet))
         {
             return (false, null);
         }
 
-        return (true, newest);
+        return (true, Watermark(latest));
     }
+
+    private static string Watermark(DateTimeOffset finished) =>
+        finished.ToString("o", CultureInfo.InvariantCulture);
 
     /// <summary>What is wrong with a schedule, or null when nothing is.</summary>
     private static string? Check(TeamSchedule schedule)
