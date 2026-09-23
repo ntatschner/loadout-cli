@@ -118,8 +118,8 @@ internal static class SpecialistValidator
         }
 
         // Modes are chosen rather than detected, so having no evidence is
-        // correct for them.
-        if (specialist.Kind is SpecialistKind.Mode)
+        // correct for them. So are roles: the team that uses one names it.
+        if (specialist.Kind is SpecialistKind.Mode or SpecialistKind.Role)
         {
             return;
         }
