@@ -125,7 +125,14 @@ internal sealed class DaemonDiagnosticContributor : IDiagnosticContributor
                     $"Running since {note!.Since.ToLocalTime():yyyy-MM-dd HH:mm}"
                     + (note.Address is { Length: > 0 } address
                         ? $", serving the dashboard at {address}"
-                        : ", serving no dashboard")),
+                        : ", serving no dashboard")
+
+                    // Said here because a held daemon looks exactly like a
+                    // working one from outside: it is running, it serves the
+                    // page, and nothing fires.
+                    + (DaemonControl.Paused(_paths)
+                        ? ". Paused: no schedule fires until 'loadout team daemon resume'"
+                        : string.Empty)),
             ];
         }
 

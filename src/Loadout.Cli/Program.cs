@@ -668,7 +668,22 @@ public static class Program
             });
             team.AddCommand<TeamDashboardCommand>("dashboard");
 
-            team.AddCommand<TeamDaemonCommand>("daemon");
+            // A branch whose default starts it, so 'team daemon' means what it
+            // always did and the controls are daemon commands rather than team
+            // commands called daemon-stop.
+            team.AddBranch("daemon", daemon =>
+            {
+                daemon.SetDescription("Stay running: fire the scheduled team runs and serve the dashboard.");
+                daemon.SetDefaultCommand<TeamDaemonCommand>();
+                daemon.AddCommand<TeamDaemonStopCommand>("stop");
+                daemon.AddCommand<TeamDaemonRestartCommand>("restart");
+                daemon.AddCommand<TeamDaemonPauseCommand>("pause");
+                daemon.AddCommand<TeamDaemonResumeCommand>("resume");
+
+                // The word somebody reaches for after "pause" as often as
+                // "resume", so it answers too rather than being an error.
+                daemon.AddCommand<TeamDaemonResumeCommand>("continue");
+            });
 
             team.AddBranch("schedule", schedule =>
             {
