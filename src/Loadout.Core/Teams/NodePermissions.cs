@@ -648,6 +648,8 @@ public static partial class NodePermissions
     */
     private static PermissionDecision DecideShell(NodePolicy policy, string tool, string command)
     {
+        command = Literal(command);
+
         if (command.Contains("$(", StringComparison.Ordinal) || command.Contains('`', StringComparison.Ordinal))
         {
             return new PermissionDecision(
@@ -1023,6 +1025,29 @@ public static partial class NodePermissions
             Path.Combine(directory, AgreedFileName(role)),
             JsonSerializer.Serialize(rule) + "\n");
     }
+
+    /// <summary>
+    /// A command with each <c>$(cat &lt;&lt;'EOF' ... EOF)</c> replaced by the
+    /// word it stands for.
+    /// </summary>
+    /// <remarks>
+    /// That is how Claude Code writes every commit message, and the first
+    /// trial of part-by-part judging refused it: a command inside a command
+    /// cannot be checked, as a rule. This one can. With its delimiter quoted,
+    /// a here-document expands nothing, so the substitution runs <c>cat</c> on
+    /// literal text and yields that text - a quoted word, as far as whatever
+    /// surrounds it is concerned. An unquoted delimiter expands <c>$( )</c> in
+    /// the body, and anything but white space between the delimiter and the
+    /// closing bracket runs something else, so neither matches and both stay
+    /// refused.
+    /// </remarks>
+    internal static string Literal(string command) =>
+        command.Contains("<<", StringComparison.Ordinal)
+            ? QuotedHereDocument().Replace(command, "text")
+            : command;
+
+    [GeneratedRegex("""\$\(\s*cat\s+<<-?\s*(['"])([A-Za-z_][A-Za-z0-9_]*)\1[ \t]*\r?\n.*?\r?\n[ \t]*\2[ \t]*\r?\n?\s*\)""", RegexOptions.Singleline)]
+    private static partial Regex QuotedHereDocument();
 
     /// <summary>
     /// A command split where the shell would split it, or null where its

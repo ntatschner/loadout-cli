@@ -25,6 +25,7 @@ tools:
     - 'Bash(tail :*)'
     - 'Bash(wc :*)'
     - 'Bash(grep :*)'
+    - 'Bash(cp :*)'
     - 'Edit'
     - 'Write'
     - 'MultiEdit'

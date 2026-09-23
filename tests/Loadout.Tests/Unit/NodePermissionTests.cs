@@ -176,11 +176,33 @@ public sealed class NodePermissionTests
         NodePermissions.Decide(implementer, "Bash", Command(command)).Allowed.Should().BeTrue();
     }
 
+    /// <remarks>
+    /// How Claude Code writes every commit message. The first trial run's
+    /// implementer was refused it and had to find another way to commit.
+    /// </remarks>
+    [Theory]
+    [InlineData("git commit -m \"$(cat <<'EOF'\nAdd Hello\n\nReturns a greeting.\nEOF\n)\"")]
+    [InlineData("git diff && git commit -m \"$(cat <<\"EOF\"\nAdd Hello\nEOF\n)\"")]
+    [InlineData("git commit -m \"$(cat <<'EOF'\nA body that mentions $(rm -rf .) is only text\nEOF\n)\"")]
+    public void A_commit_message_from_a_quoted_here_document_is_only_text(string command)
+    {
+        var decision = NodePermissions.Decide(Implementer(), "Bash", Command(command));
+
+        decision.Allowed.Should().BeTrue(decision.Reason);
+    }
+
     [Theory]
     [InlineData("dotnet test $(rm -rf .)")]
     [InlineData("dotnet test `whoami`")]
     [InlineData("cat > script.py <<'EOF'\nprint(1)\nEOF")]
     [InlineData("git diff \"unclosed")]
+
+    // Unquoted, the body's $( ) runs.
+    [InlineData("git commit -m \"$(cat <<EOF\n$(rm -rf .)\nEOF\n)\"")]
+
+    // Something other than cat, or something after the here-document.
+    [InlineData("git commit -m \"$(sh <<'EOF'\nrm -rf .\nEOF\n)\"")]
+    [InlineData("git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n; rm -rf .)\"")]
     public void What_cannot_be_split_into_parts_is_refused_whole(string command)
     {
         NodePermissions.Decide(Reader(), "Bash", Command(command)).Allowed.Should().BeFalse();

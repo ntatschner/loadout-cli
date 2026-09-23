@@ -93,6 +93,17 @@ public sealed class RoleLibraryTests
     [InlineData("role.implementer", "dotnet test --filter \"FullyQualifiedName~Tool\"")]
     [InlineData("role.verifier", "dotnet build")]
     [InlineData("role.verifier", "dotnet test")]
+
+    // The first trial of part-by-part judging, in a worktree: a reviewer
+    // told to run the tests the implementer named was refused both, because
+    // its role had never been given dotnet at all.
+    [InlineData("role.reviewer", "dotnet test --filter \"FullyQualifiedName~GreetingsTests\"")]
+    [InlineData("role.reviewer", "cd \"C:\\trees\\one\" && dotnet test 2>&1 | tail -5")]
+
+    // And an implementer keeping a copy to mutation-check from, as its role
+    // tells it to, and committing the way Claude Code commits.
+    [InlineData("role.implementer", "cp src/Greeter/Greetings.cs /tmp/Greetings.cs.bak")]
+    [InlineData("role.implementer", "git add src tests && git commit -m \"$(cat <<'EOF'\nAdd Hello\n\nWith tests.\nEOF\n)\"")]
     public async Task The_roles_that_prove_a_change_may_build_and_test_it(string id, string command)
     {
         // Run 20260923-1216-be60 stopped here: the implementer's own probe
