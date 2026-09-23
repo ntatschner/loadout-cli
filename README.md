@@ -180,14 +180,14 @@ No VM and no container. Grab your platform's archive from the
 anything, and installs to `~/.local/bin` without root:
 
 ```sh
-tar -xzf loadout-0.42.1-linux-x64.tar.gz
+tar -xzf loadout-0.42.2-linux-x64.tar.gz
 ./install.sh
 ```
 
 **Windows** — the MSI installs per user, with no elevation:
 
 ```powershell
-msiexec /i loadout-0.42.1-win-x64.msi
+msiexec /i loadout-0.42.2-win-x64.msi
 ```
 
 [Installing, step by step](docs/guides/installing.md) covers checking it worked,
