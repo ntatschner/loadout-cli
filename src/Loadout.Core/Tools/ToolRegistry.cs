@@ -100,6 +100,13 @@ public interface IToolRegistry
     /// <summary>The audit log, oldest first.</summary>
     IReadOnlyList<ToolAuditEntry> Audit(string? tool = null, DateTimeOffset? since = null);
 
+    /// <summary>
+    /// Whether a draft can be read at all: under drafts/, with a manifest and
+    /// the script it names. What a dry run of verify or promote checks, so a
+    /// preview refuses what the real run would.
+    /// </summary>
+    OperationResult CheckDraft(string draft);
+
     /// <summary>Runs a draft's harness and the regression gate, where this machine allows it.</summary>
     Task<OperationResult<ToolVerification>> VerifyAsync(
         string draft,
@@ -452,6 +459,12 @@ public sealed partial class ToolRegistry : IToolRegistry
             (tool is null || string.Equals(one.Tool, tool, StringComparison.OrdinalIgnoreCase))
             && (since is null || one.At >= since)),
     ];
+
+    /// <inheritdoc />
+    public OperationResult CheckDraft(string draft) =>
+        ReadDraft(draft) is { Failed: true } read
+            ? OperationResult.Fail(read.Error!, ExitCode.InvalidArguments)
+            : OperationResult.Ok();
 
     /// <inheritdoc />
     public async Task<OperationResult<ToolVerification>> VerifyAsync(

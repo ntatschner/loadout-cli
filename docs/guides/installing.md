@@ -139,7 +139,7 @@ Instructions
 + Tasks nobody is shown: storefront  2 task(s) are recorded for storefront and 
 its sessions are not shown any of them. Carrying them costs a heading and a line
 each. (fixable)
-+ Specialist library  101 specialists loaded and valid.
++ Specialist library  103 specialists loaded and valid.
 
 Editor
 + code  C:\Program Files\Microsoft VS Code\bin\code.cmd

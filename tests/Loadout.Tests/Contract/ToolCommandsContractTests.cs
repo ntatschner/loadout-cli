@@ -150,6 +150,29 @@ public sealed class ToolCommandsContractTests
     }
 
     [BuiltCliFact]
+    public async Task Dry_run_on_a_missing_draft_says_so()
+    {
+        var (loadout, root) = await CatalogueAsync();
+        using var _ = loadout;
+        var missing = Path.Combine(root, "drafts", "no-such-tool", "1");
+
+        string[][] asked =
+        [
+            ["tools", "verify", missing, "--dry-run"],
+            ["tools", "promote", missing, "--because", "lesson", "--source", "inbox/x", "--dry-run"],
+        ];
+
+        foreach (var one in asked)
+        {
+            var run = await loadout.RunAsync(one);
+
+            run.ExitCode.Should().NotBe(0, string.Join(' ', one));
+            (run.StandardOutput + run.StandardError).Should().Contain("no readable manifest.yaml", string.Join(' ', one));
+            (run.StandardOutput + run.StandardError).Should().NotContain("would be", string.Join(' ', one));
+        }
+    }
+
+    [BuiltCliFact]
     public async Task Trust_fingerprints_the_script_on_disk_not_the_manifest_field()
     {
         var (loadout, root) = await CatalogueAsync();

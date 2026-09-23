@@ -537,6 +537,13 @@ public sealed class ToolVerifyCommand : AsyncCommand<ToolVerifyCommand.Settings>
 
         if (settings.DryRun)
         {
+            // A preview that says it would verify a draft the real run
+            // cannot even read is the optimism --dry-run is meant to prevent.
+            if (_registry.CheckDraft(settings.Draft) is { Failed: true } unreadable)
+            {
+                return output.Fail(unreadable);
+            }
+
             if (output.IsJson)
             {
                 output.WriteJson(new { dry_run = true, draft = settings.Draft });
@@ -655,6 +662,11 @@ public sealed class ToolPromoteCommand : Command<ToolPromoteCommand.Settings>
 
         if (settings.DryRun)
         {
+            if (_registry.CheckDraft(settings.Draft) is { Failed: true } unreadable)
+            {
+                return output.Fail(unreadable);
+            }
+
             if (output.IsJson)
             {
                 output.WriteJson(new { dry_run = true, draft = settings.Draft });

@@ -107,6 +107,10 @@ public sealed class RoleLibraryTests
         Allowed("loadout tools search disk cache").Should().BeTrue();
         Allowed("loadout tools submit --kind candidate --text x").Should().BeTrue();
 
+        // A draft runs only through 'loadout tools verify', which goes through
+        // the same gate as every other script; running it directly would not.
+        Allowed("pwsh -NoProfile -File x.ps1").Should().BeFalse();
+
         // Lifecycle is the Refiner's alone, and changes nothing that runs.
         Allowed("loadout tools deprecate free-disk-by-cache --reason unused")
             .Should().Be(id == "role.tool-refiner");

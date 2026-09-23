@@ -20,7 +20,6 @@ tools:
     - 'Bash(loadout tools deprecate:*)'
     - 'Bash(loadout tools retire:*)'
     - 'Bash(loadout memory find:*)'
-    - 'Bash(pwsh -NoProfile -File:*)'
   denied:
     - 'Bash(loadout tools promote:*)'
     - 'Bash(loadout tools trust:*)'

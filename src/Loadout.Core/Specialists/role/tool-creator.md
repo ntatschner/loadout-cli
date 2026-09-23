@@ -18,7 +18,6 @@ tools:
     - 'Bash(loadout tools audit:*)'
     - 'Bash(loadout tools verify:*)'
     - 'Bash(loadout memory find:*)'
-    - 'Bash(pwsh -NoProfile -File:*)'
   denied:
     - 'Bash(loadout tools promote:*)'
     - 'Bash(loadout tools trust:*)'
