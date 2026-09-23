@@ -2023,6 +2023,40 @@ they write are covered.
 It records the launcher as it was invoked, so run it again after updating
 Loadout if the launcher moved.
 
+**Stopping it, holding it, and restarting it** — from any shell, because the
+daemon is usually somewhere you are not looking:
+
+```sh
+loadout team daemon pause      # no schedule fires; the page stays up
+loadout team daemon resume     # 'continue' works too
+loadout team daemon stop       # once the runs it started have finished
+loadout team daemon restart    # the same, then starts again with the same settings
+loadout team daemon stop --now # ends its runs at once, as Ctrl+C in its window would
+```
+
+A stop waits for the runs the daemon started — from a schedule, the page or a
+webhook, since they all run inside it — and starts nothing new meanwhile. A node
+mid-turn that is killed loses the turn and what was paid for it, which is the
+same reason a run's own stop lands between rounds. `--now` is there for when
+you would rather lose that than wait. The command watches for ten seconds and
+says whether the daemon has gone or is still finishing.
+
+A hold is only on the clock. Runs already going carry on, and anything started
+from the page or a webhook still starts, because that is somebody asking now.
+It also outlives the daemon: one held and then stopped starts held next time,
+and says so, because stopping the schedules and then rebooting is not a change
+of mind. `resume` lifts a hold even with no daemon running. `doctor` says when
+a running daemon is paused, since from outside it looks exactly like one that
+is working.
+
+A restart is done by the daemon itself, when its runs have finished: it is the
+only thing that knows how it was started. The new one keeps the port the old
+one was serving, even when that was left to the machine to choose, so a
+bookmarked page is still there. On Windows it opens in a console window of its
+own. **Restart has been tried by hand on Windows only**, not on macOS or Linux,
+and not on a daemon started at login; the new one is started the way the status
+line starts the launcher in the background.
+
 **Finding the dashboard it serves.** The port and the token are both new at
 every start, and the daemon prints the address once — into its own output, which
 at login is a minimised window nobody is looking at. `loadout team dashboard`

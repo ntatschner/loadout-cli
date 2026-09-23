@@ -381,6 +381,16 @@
 
   .sheet-buttons { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 
+  /* Starting a team, making one, scheduling one, clearing runs out and how the
+     roles have done are all about the list of runs. Above the office, the
+     graph or the timeline they pushed the view itself most of a screen down. */
+  .pane[data-view]:not([data-view="list"]) :is(#starting, #doing, #clearing, #roles) { display: none; }
+
+  /* What this machine is set to belongs on the Settings page, and is moved
+     there when that page is first drawn. Until then it waits in the runs pane,
+     where showing it would put machine settings under the list of runs. */
+  section.pane > #machine { display: none; }
+
   /* The questions are written with line breaks in them - a goal, then its
      criteria one to a line - and were laid out by the browser's own box. */
   .sheet .question { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
@@ -1535,6 +1545,11 @@
     display: grid;
     grid-template-columns: var(--rail) minmax(0, 1fr);
     grid-template-areas: "rail head" "rail main";
+
+    /* The spare height goes to the content. Unsaid, a short view - Waiting,
+       Settings - shared it out between the rows, and the header row grew to
+       192 pixels over 69 of header, pushing everything under it down. */
+    grid-template-rows: auto minmax(0, 1fr);
     align-items: start;
     min-height: 100vh;
   }
@@ -1627,6 +1642,7 @@
     [data-presentation="rich"] body {
       grid-template-columns: minmax(0, 1fr);
       grid-template-areas: "rail" "head" "main";
+      grid-template-rows: auto auto minmax(0, 1fr);
     }
 
     [data-presentation="rich"] #shell {
@@ -2047,11 +2063,14 @@
   }
 
   [data-presentation="rich"] .choices { display: grid; gap: var(--s2); }
-  [data-presentation="rich"] .choices.row { grid-auto-flow: column; grid-auto-columns: max-content; }
+  /* A row that wraps. It was a grid adding a column per option, which never
+     wraps: the six accents made the settings pane scroll sideways at an
+     ordinary 1280 wide, with the last two off to the side. */
+  [data-presentation="rich"] .choices.row { display: flex; flex-wrap: wrap; }
   [data-presentation="rich"] .choices.grid { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
 
   @media (max-width: 48rem) {
-    [data-presentation="rich"] .choices.row { grid-auto-flow: row; grid-auto-columns: auto; }
+    [data-presentation="rich"] .choices.row { flex-direction: column; }
   }
 
   [data-presentation="rich"] .choice {
@@ -2491,7 +2510,7 @@
       own form, which says so in its heading. And a failure comes back to the
       page.
     -->
-    <details class="start">
+    <details class="start" id="starting">
       <summary>Run a team</summary>
 
       <!--
@@ -2935,7 +2954,7 @@
       dashboard refuses the POST, and a pane of controls that are always refused
       is the fault this whole design keeps coming back to.
     -->
-    <details class="start" id="settings" hidden>
+    <details class="start" id="machine" hidden>
       <summary>What this machine is set to</summary>
 
       <div class="fields">
@@ -4935,7 +4954,31 @@
     if (shown) { drawOpenScreens(shown); }
   }
 
-  function showView(which) {
+  // What each view is called at the top of the pane. It read "Runs on this
+  // machine" over all of them, so switching view changed nothing a screen
+  // reader would say and nothing a glance would catch.
+  function headingFor(box) {
+    return {
+      office: "The office",
+      graph: "Who asked whom",
+      when: "When runs ran",
+      waiting: "Waiting to run",
+      terminal: "Terminal"
+    }[box] || "Runs on this machine";
+  }
+
+  // Which view the address names, or -1 for none of them.
+  function viewInAddress() {
+    var named = location.hash.replace(/^#/, "");
+
+    for (var i = 0; i < views.length; i++) {
+      if (views[i].box === named) { return i; }
+    }
+
+    return -1;
+  }
+
+  function showView(which, person) {
     if (board.on) {
       // Take the screens back off the board before showing one on its own.
       board.on = false;
@@ -4962,7 +5005,36 @@
     // none of it belongs above a page of preferences.
     onlySettings(views[which].box === "settings");
 
+    var heading = document.getElementById("runs");
+
+    if (heading) {
+      heading.textContent = headingFor(views[which].box);
+      heading.parentElement.setAttribute("data-view", views[which].box);
+    }
+
     if (shown) { views[which].draw(shown); }
+
+    // Moved to when somebody chose it, and not when the page opens on it: a
+    // view that changes and leaves focus on the button it was chosen with is
+    // one a keyboard user has to go and find, and a screen reader says
+    // nothing about. Settings draws its heading above, so it exists by now.
+    if (person) {
+      var top = views[which].box === "settings"
+        ? document.getElementById("settings-heading")
+        : heading;
+
+      if (top) {
+        top.setAttribute("tabindex", "-1");
+        heading = top;
+        heading.focus();
+      }
+    }
+
+    // The address says which view this is, so Back goes to the last one and a
+    // bookmark opens this one. The token stays where it is, in the query.
+    if (person && location.hash !== "#" + views[which].box) {
+      history.pushState(null, "", "#" + views[which].box);
+    }
   }
 
   // The runs as they were last drawn, so switching view does not have to wait
@@ -5032,7 +5104,7 @@
   (function () {
     views.forEach(function (one, i) {
       document.getElementById(one.button).addEventListener("click", function () {
-        showView(i);
+        showView(i, true);
       });
     });
 
@@ -5044,6 +5116,16 @@
       railUp();
       plainly();
       askTheMachine();
+
+      // Opened on the view the address names, and moved by Back and Forward.
+      // Neither takes the focus: nobody chose them on this page.
+      var named = viewInAddress();
+
+      if (named > 0) { showView(named, false); }
+
+      window.addEventListener("popstate", function () {
+        showView(Math.max(0, viewInAddress()), false);
+      });
     }
 
     if (solo) {
@@ -6628,6 +6710,20 @@
 
     if (prefs) { telling.appendChild(prefs); }
 
+    // ---- this machine ----
+    // Where notices go, what may start a run from outside, where this page
+    // listens and which office art it draws. It sat under the runs list, where
+    // nothing about it belonged, and is settings - of the machine rather than
+    // the screen, which is why it says so and types a command for each change.
+    // Moved rather than rebuilt, so its controls keep what they were wired to;
+    // fillSettings still decides whether it shows at all.
+    var machine = document.getElementById("machine");
+
+    if (machine) {
+      page.appendChild(machine);
+      machine.open = true;
+    }
+
     // ---- what is not here ----
     var elsewhere = group(page, "Everything else");
 
@@ -7884,7 +7980,12 @@
   */
   function fillSettings() {
     return api("/api/settings").then(function (answer) {
-      var fold = document.getElementById("settings");
+      // Its own id. It was "settings", the same as the Settings page, and
+      // getElementById returns the first: this unhid the page rather than the
+      // fold, and where notices go, the trigger token, the listen address and
+      // the office art were out of reach from the dashboard from the day the
+      // Settings page arrived.
+      var fold = document.getElementById("machine");
 
       if (!fold) { return; }
 

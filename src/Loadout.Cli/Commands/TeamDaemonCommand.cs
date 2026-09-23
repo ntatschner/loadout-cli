@@ -49,6 +49,17 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </remarks>
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
 
+    /// <summary>How often the controls beside the note are looked at.</summary>
+    /// <remarks>
+    /// Far oftener than the schedules, because somebody who typed "stop" is
+    /// waiting for it; a minute of nothing reads as a command that did not
+    /// work. Two seconds of reading two small files costs nothing.
+    /// </remarks>
+    internal static readonly TimeSpan Glance = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long a successor waits for the daemon it replaces to go.</summary>
+    private static readonly TimeSpan Handover = TimeSpan.FromSeconds(30);
+
     private readonly IScheduleService _schedules;
     private readonly IRunJournal _journal;
     private readonly ICommandCatalogue _commands;
@@ -69,6 +80,17 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Core.Instructions.ISpecialistLibrary _library;
     private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
     private readonly Loadout.Agents.IAgentRegistry _agents;
+    private readonly IProcessLauncher _launcher;
+
+    /// <summary>
+    /// Every command this daemon runs, counted while it runs.
+    /// </summary>
+    /// <remarks>
+    /// A stop that is not "now" waits for these, and they are all of the runs
+    /// this process has in hand: the schedules', the page's and the webhook's
+    /// all go through the one catalogue.
+    /// </remarks>
+    private readonly InFlight _inFlight;
 
     public TeamDaemonCommand(
         ISecretProvider secrets,
@@ -89,8 +111,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Teams.ITeamCatalogue teams,
         Loadout.Core.Instructions.ISpecialistLibrary library,
         Loadout.Core.Workspace.IWorkspaceManager workspace,
-        Loadout.Agents.IAgentRegistry agents)
+        Loadout.Agents.IAgentRegistry agents,
+        IProcessLauncher launcher)
     {
+        _launcher = launcher;
+        _inFlight = new InFlight(commands);
+        commands = _inFlight;
         _teams = teams;
         _library = library;
         _workspace = workspace;
@@ -127,6 +153,18 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         [CommandOption("--no-dashboard")]
         [Description("Fire the schedules and serve nothing.")]
         public bool NoDashboard { get; init; }
+
+        /// <summary>
+        /// The daemon this one is replacing, which it waits to see gone.
+        /// </summary>
+        /// <remarks>
+        /// Hidden because it is how a restart hands over, not something
+        /// anybody types. The old daemon starts its successor on its way out
+        /// and is still, for a moment, the running daemon - without this the
+        /// successor would refuse, correctly, because one is already running.
+        /// </remarks>
+        [CommandOption("--after <PID>", IsHidden = true)]
+        public int? After { get; init; }
     }
 
     /// <inheritdoc />
@@ -166,6 +204,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
           started from a terminal at 22:44. Two of them would also each fire
           every schedule, which is two runs and twice the money.
         */
+        if (settings.After is { } predecessor)
+        {
+            await PredecessorGoneAsync(predecessor, cancellationToken).ConfigureAwait(false);
+        }
+
         if (DaemonNote.Live(_paths, _processes) is { } running && running.Pid != Environment.ProcessId)
         {
             return output.Fail(
@@ -175,6 +218,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 + ". Stop that one first, or use it.",
                 ExitCode.InvalidArguments);
         }
+
+        // A stop left behind by the daemon before this one would end this one
+        // the moment it looked. A hold is kept: see DaemonControl.
+        DaemonControl.ClearStop(_paths);
+
+        _started = settings;
 
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var server = settings.NoDashboard ? null : new DashboardServer(_journal, _git);
@@ -313,14 +362,22 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         await WriteStatusAsync(server?.Address, cancellationToken).ConfigureAwait(false);
 
         output.WriteLine("[dim]Watching the schedules. " + (Console.IsInputRedirected
-            ? "It stops when whatever started it closes its input.[/]"
-            : "Press Ctrl+C to stop.[/]"));
+            ? "It stops when whatever started it closes its input, or on 'loadout team daemon stop'.[/]"
+            : "Press Ctrl+C or run 'loadout team daemon stop' to stop.[/]"));
+
+        if (DaemonControl.Paused(_paths))
+        {
+            output.WriteLine(
+                "[yellow]Paused:[/] no schedule fires until 'loadout team daemon resume'. "
+                + "It was held when the last daemon stopped, and a hold is kept until it is lifted.");
+        }
 
         var serving = server is null
             ? Task.CompletedTask
             : server.ListenAsync(stopping.Token);
 
         var ending = TeamDashboardCommand.Ends(stopping);
+        var watching = WatchAsync(stopping, output);
 
         try
         {
@@ -341,11 +398,227 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
         }
 
-        await ending.ConfigureAwait(false);
+        // Not waited for when the stop came from somewhere else. It is a read
+        // of standard input waiting to see it close, and a read of a pipe on
+        // Windows does not hear its cancellation: a daemon told to stop by
+        // 'team daemon stop' sat here, stopped in every other sense, until
+        // whatever started it closed its input - which for a daemon started
+        // with its input held open is never. The process ending takes it.
+        await Task.WhenAny(ending, Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None))
+            .ConfigureAwait(false);
+        await watching.ConfigureAwait(false);
+
+        var request = DaemonControl.Stopping(_paths);
+
+        DaemonControl.ClearStop(_paths);
 
         Forget();
 
+        if (request is { Restart: true } && _started is { } was)
+        {
+            Succeed(output, server?.Address, was);
+        }
+
         return (int)ExitCode.Success;
+    }
+
+    /// <summary>The settings this daemon was started with, for a restart to use again.</summary>
+    private Settings? _started;
+
+    /// <summary>
+    /// Starts the daemon that replaces this one, with the settings this one had.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The daemon restarts itself rather than being restarted from outside,
+    /// because it is the only thing that knows how it was started and it is
+    /// the thing that knows when its runs have finished. A restart asked for
+    /// while a run is going would otherwise mean the command that asked
+    /// sitting in somebody's terminal for twenty minutes, or giving up and
+    /// starting nothing.
+    /// </para>
+    /// <para>
+    /// The same port as before when this one was serving, even if it had
+    /// been left to the machine to choose: a bookmarked page should still be
+    /// there after a restart. Started detached, the way the status line
+    /// starts the launcher, so it outlives this process; on Windows that
+    /// means a console window of its own.
+    /// </para>
+    /// </remarks>
+    internal void Succeed(CommandOutput output, string? address, Settings was)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(was);
+
+        if (Loadout.Core.Agents.LauncherInvocation.Parts() is not ({ Length: > 0 } command, var prefix))
+        {
+            output.WriteLine("[red]Could not restart:[/] this launcher cannot say how it was started. "
+                + "Start the daemon again with: loadout team daemon");
+
+            return;
+        }
+
+        var arguments = new List<string>(prefix)
+        {
+            "team", "daemon",
+            "--after", _processes.CurrentProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+
+        var port = was.Port;
+
+        if (port == 0 && address is { Length: > 0 } && Uri.TryCreate(address, UriKind.Absolute, out var served))
+        {
+            port = served.Port;
+        }
+
+        if (was.NoDashboard)
+        {
+            arguments.Add("--no-dashboard");
+        }
+        else if (port > 0)
+        {
+            arguments.Add("--port");
+            arguments.Add(port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (was.Listen is { Length: > 0 } listen)
+        {
+            arguments.Add("--listen");
+            arguments.Add(listen);
+        }
+
+        var started = _launcher.StartDetached(new ProcessRequest(
+            command,
+            arguments,
+            WorkingDirectory: CurrentDirectory()));
+
+        output.WriteLine(started.Succeeded
+            ? "Restarting: a new daemon is starting with the same settings."
+            : $"[red]Could not restart:[/] {Shown.Safely(started.Error ?? "the new daemon did not start")}. "
+              + "Start it again with: loadout team daemon");
+    }
+
+    private static string? CurrentDirectory()
+    {
+        try
+        {
+            return Directory.GetCurrentDirectory();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Waits for the daemon this one replaces to have gone, for a little while.
+    /// </summary>
+    /// <remarks>
+    /// Bounded, because a predecessor that never goes must not leave its
+    /// successor waiting in a window for ever. If it is still there, the
+    /// ordinary one-daemon check below refuses and says so.
+    /// </remarks>
+    private async Task PredecessorGoneAsync(int pid, CancellationToken ct)
+    {
+        var until = _time.GetUtcNow() + Handover;
+
+        while (_time.GetUtcNow() < until
+            && DaemonNote.Read(_paths) is { } note
+            && note.Pid == pid
+            && _processes.IsRunning(note.Pid, note.StartedAt))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250), _time, ct).ConfigureAwait(false);
+        }
+
+        // The note can be gone while the process is still closing its port.
+        // A moment more is cheaper than a restart that fails to listen.
+        await Task.Delay(TimeSpan.FromSeconds(1), _time, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Watches for somebody asking this daemon to stop or restart, and ends it
+    /// when it should.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// "Now" ends it at once, which ends the runs it started the way Ctrl+C
+    /// always has: they are commands inside this process. Otherwise it stops
+    /// starting anything new and waits for what it is running to finish,
+    /// because a node mid-turn that is killed loses the turn and the money
+    /// spent on it - the same reasoning that makes a run's own stop land
+    /// between rounds.
+    /// </para>
+    /// <para>
+    /// Internal so the tests can drive it with a request and a held run
+    /// rather than a whole daemon.
+    /// </para>
+    /// </remarks>
+    internal async Task WatchAsync(CancellationTokenSource stopping, CommandOutput output)
+    {
+        ArgumentNullException.ThrowIfNull(stopping);
+
+        var said = false;
+
+        try
+        {
+            while (!stopping.IsCancellationRequested)
+            {
+                if (DaemonControl.Stopping(_paths) is { } asked)
+                {
+                    var what = asked.Restart ? "Restarting" : "Stopping";
+
+                    if (asked.Now || _inFlight.Running == 0)
+                    {
+                        output.WriteLine($"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] {what}"
+                            + (_inFlight.Running > 0 ? $", ending {_inFlight.Running} run(s) it started." : "."));
+
+                        await stopping.CancelAsync().ConfigureAwait(false);
+
+                        return;
+                    }
+
+                    if (!said)
+                    {
+                        output.WriteLine($"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] {what} when the "
+                            + $"{_inFlight.Running} run(s) it started have finished. Nothing new starts meanwhile.");
+                        said = true;
+                    }
+                }
+
+                await Task.Delay(Glance, _time, stopping.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopped some other way: Ctrl+C, or the input closing.
+        }
+    }
+
+    /// <summary>
+    /// The command catalogue, counting what is running through it.
+    /// </summary>
+    internal sealed class InFlight(ICommandCatalogue inner) : ICommandCatalogue
+    {
+        private int _running;
+
+        /// <summary>How many commands are running through this now.</summary>
+        public int Running => Volatile.Read(ref _running);
+
+        public IReadOnlyList<CatalogueEntry> Commands => inner.Commands;
+
+        public async Task<int> RunAsync(string path, IReadOnlyList<string> arguments, CancellationToken ct = default)
+        {
+            Interlocked.Increment(ref _running);
+
+            try
+            {
+                return await inner.RunAsync(path, arguments, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _running);
+            }
+        }
     }
 
     /// <summary>
@@ -547,11 +820,16 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             await NoticeAsync(output, _sendTo, ct).ConfigureAwait(false);
 
             var now = _time.GetUtcNow();
-            var ready = await ReadyAsync(now, record: true, ct).ConfigureAwait(false);
+
+            // Nothing is read as due while held or stopping. Reading them would
+            // arm a commit watcher on a head it then never fires for.
+            var ready = Firing(output)
+                ? await ReadyAsync(now, record: true, ct).ConfigureAwait(false)
+                : [];
 
             foreach (var schedule in ready)
             {
-                if (ct.IsCancellationRequested)
+                if (ct.IsCancellationRequested || !Firing(output))
                 {
                     break;
                 }
@@ -598,7 +876,64 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                     + (code == 0 ? "finished" : $"ended with exit code {code}"));
             }
 
-            await Task.Delay(Interval, ct).ConfigureAwait(false);
+            await RestAsync(output, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Whether the schedules were held at the last look.</summary>
+    private bool _held;
+
+    /// <summary>
+    /// Whether schedules may fire now, saying so once each time that changes.
+    /// </summary>
+    /// <remarks>
+    /// Internal so a test can hold and release the daemon and see what it
+    /// would do, without a minute's wait between the two.
+    /// </remarks>
+    internal bool Firing(CommandOutput output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+
+        var held = DaemonControl.Paused(_paths);
+
+        if (held != _held)
+        {
+            _held = held;
+
+            output.WriteLine($"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] " + (held
+                ? "Paused: no schedule fires until 'loadout team daemon resume'. The dashboard is still served, "
+                  + "and runs already going carry on."
+                : "Resumed: schedules fire again."));
+        }
+
+        return !held && DaemonControl.Stopping(_paths) is null;
+    }
+
+    /// <summary>
+    /// Waits for the next look at the schedules, a glance at a time.
+    /// </summary>
+    /// <remarks>
+    /// In glances rather than one minute's sleep, so a hold lifted a second
+    /// after a look is noticed within seconds, not at the next minute.
+    /// </remarks>
+    private async Task RestAsync(CommandOutput output, CancellationToken ct)
+    {
+        var until = _time.GetUtcNow() + Interval;
+        var held = _held;
+
+        while (_time.GetUtcNow() < until)
+        {
+            await Task.Delay(Glance, _time, ct).ConfigureAwait(false);
+
+            // Looked at every glance rather than every minute, so the daemon's
+            // own output says it is held within seconds of being asked - which
+            // is where somebody who paused it will look to see that it did.
+            Firing(output);
+
+            if (held && !_held)
+            {
+                return;
+            }
         }
     }
 

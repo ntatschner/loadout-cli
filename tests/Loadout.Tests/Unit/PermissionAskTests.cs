@@ -364,6 +364,34 @@ public sealed class PermissionAskTests : IDisposable
         (await asking).Should().BeNull();
     }
 
+    /// <summary>
+    /// The deadline a question is given up at is the one written into it.
+    /// </summary>
+    /// <remarks>
+    /// Asking read the clock once to write "answer by" into the question, and
+    /// waiting read it again after the question was on disk to set the deadline
+    /// it enforced. A clock that moved between the two - which is exactly what
+    /// the test above does the moment it sees the question - put the enforced
+    /// deadline an hour past a clock that never moved again, and the wait ran
+    /// until the hang detector killed the suite on macOS CI. It is not only a
+    /// test's problem: the page showed one deadline and the node kept another.
+    /// This clock jumps on its second read, so it loses the race every time.
+    /// </remarks>
+    [Fact]
+    public async Task A_question_is_given_up_on_at_the_deadline_it_was_written_with()
+    {
+        var clock = new JumpsOnSecondRead(
+            new DateTimeOffset(2026, 9, 16, 12, 0, 0, TimeSpan.Zero),
+            NodePermissions.PersonPatience + TimeSpan.FromMinutes(1));
+
+        var asking = NodePermissions.AskAsync(_directory, Ask(), clock, NodePermissions.PersonPatience);
+
+        var finished = await Task.WhenAny(asking, Task.Delay(TimeSpan.FromSeconds(5)));
+
+        finished.Should().BeSameAs(asking, "the clock is already past the deadline written into the question");
+        (await asking).Should().BeNull();
+    }
+
     [Fact]
     public void A_policy_says_nothing_may_be_asked_unless_the_run_said_so()
     {
@@ -389,6 +417,15 @@ public sealed class PermissionAskTests : IDisposable
     /// is on this clock, which is what makes the patience test finish in
     /// milliseconds rather than five minutes.
     /// </remarks>
+    /// <summary>A clock that moves once, by a set amount, on its second read.</summary>
+    private sealed class JumpsOnSecondRead(DateTimeOffset now, TimeSpan jump) : TimeProvider
+    {
+        private int _reads;
+
+        public override DateTimeOffset GetUtcNow() =>
+            Interlocked.Increment(ref _reads) >= 2 ? now + jump : now;
+    }
+
     private sealed class Clock(DateTimeOffset now) : TimeProvider
     {
         private long _ticks = now.UtcTicks;

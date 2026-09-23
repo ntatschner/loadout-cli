@@ -1214,6 +1214,69 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Every_id_on_the_page_is_used_once()
+    {
+        // The Settings page and the "What this machine is set to" fold were both
+        // id="settings". getElementById returns the first, so the code meant to
+        // show the fold unhid the page instead, and where notices go, the
+        // trigger token, the listen address and the office art could not be
+        // reached from the dashboard at all.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        var ids = System.Text.RegularExpressions.Regex.Matches(text, "\\sid=\"([^\"]+)\"")
+            .Select(match => match.Groups[1].Value)
+            .GroupBy(id => id)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key);
+
+        ids.Should().BeEmpty("an id names one element");
+
+        // And the machine's settings wait out of sight until the Settings page
+        // takes them, rather than appearing under the list of runs.
+        text.Should().Contain("section.pane > #machine { display: none; }");
+    }
+
+    [Fact]
+    public async Task A_view_says_what_it_is_and_takes_the_focus()
+    {
+        // Switching view left focus on the button and the heading reading
+        // "Runs on this machine" over the office, the graph and the timeline,
+        // so somebody on a screen reader was told nothing had changed.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("function headingFor(box)");
+        text.Should().Contain("heading.textContent = headingFor(views[which].box);");
+        text.Should().Contain("top.setAttribute(\"tabindex\", \"-1\");");
+
+        // And the address says which view it is, so Back and a bookmark work.
+        text.Should().Contain("history.pushState(null, \"\", \"#\" + views[which].box);");
+        text.Should().Contain("window.addEventListener(\"popstate\"");
+    }
+
+    [Fact]
+    public async Task A_short_view_does_not_push_the_page_down()
+    {
+        // The page is a grid at least a window tall. With nothing saying which
+        // row takes the spare height, a short view - Waiting, Settings - shared
+        // it out, and the header row grew to 192 pixels over 69 of header.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("grid-template-rows: auto minmax(0, 1fr);");
+    }
+
+    [Fact]
+    public async Task A_row_of_choices_wraps_rather_than_widening_the_pane()
+    {
+        // The six accents sat in a grid that added a column per option and
+        // never wrapped, so at an ordinary 1280 wide the settings pane grew a
+        // horizontal scrollbar and the last two accents were off to the side.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("[data-presentation=\"rich\"] .choices.row { display: flex; flex-wrap: wrap; }");
+        text.Should().NotContain("grid-auto-flow: column");
+    }
+
+    [Fact]
     public async Task What_you_just_did_is_said_somewhere_the_refresh_does_not_overwrite()
     {
         // Found by clicking the buttons: the confirmation went into the same
@@ -1732,7 +1795,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         // Folded away, because the page is for watching what is already going
         // and a form that is always open is one somebody fills in by accident.
-        text.Should().Contain("<details class=\"start\">");
+        text.Should().Contain("<details class=\"start\" id=\"starting\">");
 
         // "Run a team", not "Start a team". The old heading sat above a form
         // asking for a team name, what it was for and a project, and somebody

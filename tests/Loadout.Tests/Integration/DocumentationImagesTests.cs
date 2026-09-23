@@ -203,20 +203,12 @@ public sealed class DocumentationImagesTests
                 BudgetUsd: 10m),
         ];
 
-        TeamsWindow? screen = null;
-
         using var session = TuiSession.Start(
-            app => screen = new TeamsWindow(runs, _ => Task.FromResult(runs), live: false, app),
+            app => new TeamsWindow(runs, _ => Task.FromResult(runs), live: false, app),
             Width,
             Height);
 
-        // The nodes pane fills when the cursor moves onto a run, and a screen
-        // that opens on the first row has not moved it yet.
-        var list = Views(screen!).OfType<ListView>().Single(view => view.Id == "teams-runs");
-
-        list.SelectedItem = null;
-        list.SelectedItem = 0;
-
+        // Nothing touched: the screen opens on the first run with its nodes.
         var drawn = session.ScreenShowing("writer");
 
         drawn.Should().Contain("writer", "a picture of the team runs screen should show a run's nodes");

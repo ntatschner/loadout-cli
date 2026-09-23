@@ -284,6 +284,80 @@ public sealed class DaemonContractTests
         (said.StandardOutput + said.StandardError).Should().Contain("already running");
     }
 
+    [BuiltCliTheory]
+    [InlineData("stop")]
+    [InlineData("restart")]
+    [InlineData("pause")]
+    public async Task Controlling_a_daemon_that_is_not_there_says_so(string verb)
+    {
+        using var loadout = new LoadoutProcess();
+
+        var run = await loadout.RunAsync("team", "daemon", verb);
+
+        run.ExitCode.Should().NotBe(0, "nothing was controlled");
+        (run.StandardOutput + run.StandardError).Should().Contain("No daemon is running");
+    }
+
+    [BuiltCliFact]
+    public async Task Pausing_in_a_dry_run_writes_nothing()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await DaemonNoteAsync(loadout, live: true);
+
+        var run = await loadout.RunAsync("team", "daemon", "pause", "--dry-run");
+
+        run.ExitCode.Should().Be(0);
+        run.StandardOutput.Should().Contain("Would pause");
+
+        File.Exists(Path.Combine(await StateAsync(loadout), "teams", "daemon-pause"))
+            .Should().BeFalse("a dry run changes nothing");
+    }
+
+    [BuiltCliFact]
+    public async Task A_pause_is_written_where_the_daemon_looks_and_lifted_by_continue()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await DaemonNoteAsync(loadout, live: true);
+
+        var hold = Path.Combine(await StateAsync(loadout), "teams", "daemon-pause");
+
+        (await loadout.RunAsync("team", "daemon", "pause")).ExitCode.Should().Be(0);
+
+        File.Exists(hold).Should().BeTrue();
+
+        // "continue" as well as "resume": the word people reach for after
+        // "pause" is either, and one of them being an error is a trap.
+        var resumed = await loadout.RunAsync("team", "daemon", "continue");
+
+        resumed.ExitCode.Should().Be(0);
+        resumed.StandardOutput.Should().Contain("Resumed");
+        File.Exists(hold).Should().BeFalse();
+    }
+
+    /// <remarks>
+    /// A hold outlives the daemon on purpose, so resume has to be able to lift
+    /// one with no daemon there - or the next daemon starts held for a reason
+    /// nobody remembers.
+    /// </remarks>
+    [BuiltCliFact]
+    public async Task Resume_lifts_a_hold_left_by_a_daemon_that_has_gone()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var teams = Path.Combine(await StateAsync(loadout), "teams");
+
+        Directory.CreateDirectory(teams);
+        await File.WriteAllTextAsync(Path.Combine(teams, "daemon-pause"), "pause");
+
+        var run = await loadout.RunAsync("team", "daemon", "resume");
+
+        run.ExitCode.Should().Be(0);
+        run.StandardOutput.Should().Contain("hold it left is lifted");
+        File.Exists(Path.Combine(teams, "daemon-pause")).Should().BeFalse();
+    }
+
     [BuiltCliFact]
     public async Task Asking_for_a_page_that_cannot_touch_anything_still_serves_one()
     {

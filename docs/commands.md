@@ -81,6 +81,7 @@
 | `loadout team dashboard` | Every run at once, live, on a page: the daemon's if one is serving, otherwise a new one here |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout team daemon` | Stay running: fire the scheduled runs and serve the dashboard |
+| `loadout team daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
 | `loadout team autostart enable\|disable\|show` | Start the daemon when you log in, per user |
 | `loadout team gate` | Answer something a run stopped to ask |

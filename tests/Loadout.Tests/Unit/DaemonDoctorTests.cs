@@ -143,6 +143,27 @@ public sealed class DaemonDoctorTests : IDisposable
         checks[0].Detail.Should().Contain("http://127.0.0.1:51999");
     }
 
+    /// <summary>
+    /// A held daemon looks exactly like a working one from outside: it is
+    /// running and it serves the page. Only this line says nothing fires.
+    /// </summary>
+    [Fact]
+    public async Task A_paused_one_says_that_nothing_fires()
+    {
+        await ScheduleAsync();
+        Note(alive: true);
+        await DaemonControl.PauseAsync(_paths);
+
+        var checks = await AskAsync(alive: true);
+
+        checks.Should().ContainSingle()
+            .Which.Detail.Should().Contain("Paused").And.Contain("loadout team daemon resume");
+
+        DaemonControl.Resume(_paths);
+
+        (await AskAsync(alive: true)).Single().Detail.Should().NotContain("Paused");
+    }
+
     [Fact]
     public async Task A_running_one_is_reported_even_with_nothing_scheduled()
     {
