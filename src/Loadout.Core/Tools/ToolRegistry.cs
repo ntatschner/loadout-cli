@@ -85,6 +85,15 @@ public interface IToolRegistry
     /// <summary>Puts a candidate, idea, bug or lesson in the inbox, after the screens.</summary>
     OperationResult<ToolSubmitted> Submit(ToolSubmission submission);
 
+    /// <summary>
+    /// Files the nominator's candidate: screened for secrets and audited, but
+    /// not for genericity, because a nomination quotes where it was seen.
+    /// Not on the command line or MCP; only <see cref="ToolNominator" /> calls it.
+    /// </summary>
+    /// <param name="submission">What was found.</param>
+    /// <param name="key">What makes it this nomination, recorded so it is filed once.</param>
+    OperationResult<ToolSubmitted> Nominate(ToolSubmission submission, string key);
+
     /// <summary>Records one use.</summary>
     OperationResult RecordUsage(ToolUsage usage);
 
@@ -279,7 +288,19 @@ public sealed partial class ToolRegistry : IToolRegistry
     }
 
     /// <inheritdoc />
-    public OperationResult<ToolSubmitted> Submit(ToolSubmission submission)
+    public OperationResult<ToolSubmitted> Submit(ToolSubmission submission) =>
+        Put(submission, generic: true, key: null);
+
+    /// <inheritdoc />
+    public OperationResult<ToolSubmitted> Nominate(ToolSubmission submission, string key)
+    {
+        ArgumentNullException.ThrowIfNull(submission);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        return Put(submission with { Kind = "candidate", By = "nominator" }, generic: false, key);
+    }
+
+    private OperationResult<ToolSubmitted> Put(ToolSubmission submission, bool generic, string? key)
     {
         ArgumentNullException.ThrowIfNull(submission);
 
@@ -302,7 +323,7 @@ public sealed partial class ToolRegistry : IToolRegistry
                 ExitCode.PolicyViolation);
         }
 
-        if (kind == "candidate" && ToolGenericity.Check(everything, _known()) is { Count: > 0 } specific)
+        if (generic && kind == "candidate" && ToolGenericity.Check(everything, _known()) is { Count: > 0 } specific)
         {
             return OperationResult<ToolSubmitted>.Fail(
                 "A candidate has to work for any project, and this carries one: "
@@ -353,7 +374,13 @@ public sealed partial class ToolRegistry : IToolRegistry
             return OperationResult<ToolSubmitted>.Fail($"That submission could not be written: {ex.Message}");
         }
 
-        Record("submit", submission.Tool ?? string.Empty, null, submission.By, submission.Run, $"{kind} {id}");
+        Record(
+            key is null ? "submit" : "nominate",
+            submission.Tool ?? string.Empty,
+            null,
+            submission.By,
+            submission.Run,
+            key is null ? $"{kind} {id}" : $"{kind} {id} key {key}");
 
         return OperationResult<ToolSubmitted>.Ok(new ToolSubmitted(id, overlapping));
     }

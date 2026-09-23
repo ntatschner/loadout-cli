@@ -984,6 +984,28 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 continue;
             }
 
+            if (string.Equals(schedule.On, ScheduleService.RunFinishedEvent, StringComparison.OrdinalIgnoreCase))
+            {
+                var runs = _journal.List(50)
+                    .Select(_journal.Summarise)
+                    .Where(one => one.Succeeded)
+                    .Select(one => one.Value!)
+                    .ToList();
+                var (fire, seen) = ScheduleService.RunFinished(schedule, runs, now);
+
+                if (record && seen is not null)
+                {
+                    await _schedules.SawAsync(schedule.Id, seen, ct).ConfigureAwait(false);
+                }
+
+                if (fire)
+                {
+                    ready.Add(schedule);
+                }
+
+                continue;
+            }
+
             if (await MovedAsync(schedule, record, ct).ConfigureAwait(false))
             {
                 ready.Add(schedule);
@@ -1005,7 +1027,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </remarks>
     private async Task SeenAsync(TeamSchedule schedule, CancellationToken ct)
     {
-        if (schedule.On.Length == 0)
+        // A run-finished schedule keeps a run identifier where this would
+        // write a commit, and its watermark was written when it fired.
+        if (schedule.On.Length == 0
+            || string.Equals(schedule.On, ScheduleService.RunFinishedEvent, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }

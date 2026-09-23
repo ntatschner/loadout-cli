@@ -309,7 +309,72 @@ public sealed class ScheduleService : IScheduleService
     /// the daemon answers it; this only says the word is one that means
     /// something.
     /// </remarks>
-    public static IReadOnlyList<string> Events { get; } = ["commit"];
+    public static IReadOnlyList<string> Events { get; } = ["commit", RunFinishedEvent];
+
+    /// <summary>The event for another team's run reaching its end.</summary>
+    public const string RunFinishedEvent = "run-finished";
+
+    /// <summary>The standing team that looks after the tool catalogue.</summary>
+    public const string ToolWorksTeam = "tool-works";
+
+    /// <summary>The least time between two starts on run-finished.</summary>
+    public static readonly TimeSpan RunFinishedQuiet = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Whether a schedule waiting for a finished run should start, and the
+    /// newest finished run to write down as seen, or null to write nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The watermark is the newest run identifier seen, kept where a commit
+    /// watcher keeps its commit; identifiers start with the time a run began,
+    /// so ordinal order is the order they started in. The first look writes it
+    /// down and does not fire, for the reason <see cref="Moved" /> gives.
+    /// </para>
+    /// <para>
+    /// Never on a tool-works run, nor on the schedule's own team: either would
+    /// start a run whose finishing starts another. At most once an hour, and a
+    /// run that finished inside the hour is not lost - the watermark is not
+    /// moved until the schedule fires, so it is seen at the next look after.
+    /// </para>
+    /// </remarks>
+    public static (bool Fire, string? Seen) RunFinished(
+        TeamSchedule schedule,
+        IEnumerable<RunSummary> runs,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(schedule);
+        ArgumentNullException.ThrowIfNull(runs);
+
+        if (!schedule.Enabled || !string.Equals(schedule.On, RunFinishedEvent, StringComparison.OrdinalIgnoreCase))
+        {
+            return (false, null);
+        }
+
+        var newest = runs
+            .Where(one => one.Finished is not null
+                && !string.Equals(one.Team, ToolWorksTeam, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(one.Team, schedule.Team, StringComparison.OrdinalIgnoreCase))
+            .Select(one => one.RunId)
+            .OrderByDescending(one => one, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        if (schedule.LastCommit.Length == 0)
+        {
+            // Below every run identifier, so a baseline taken before any run
+            // has finished still lets the first one fire.
+            return (false, newest ?? "0");
+        }
+
+        if (newest is null
+            || string.CompareOrdinal(newest, schedule.LastCommit) <= 0
+            || (schedule.LastRun is { } last && now - last < RunFinishedQuiet))
+        {
+            return (false, null);
+        }
+
+        return (true, newest);
+    }
 
     /// <summary>What is wrong with a schedule, or null when nothing is.</summary>
     private static string? Check(TeamSchedule schedule)

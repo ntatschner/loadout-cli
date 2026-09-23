@@ -2275,9 +2275,49 @@ public sealed class TeamRunner : ITeamRunner
             // in. Without it the agent refuses every write there, which is
             // what it did: the directory existed, the path in the brief was
             // right, the declaration was clear, and nothing could be written.
-            ReachableDirectories: brief.TeamDirectory is { Length: > 0 } kept ? [kept] : null);
+            ReachableDirectories: Reachable(brief, role.Id, dryRun));
 
         return await _launcher.StartHeadlessAsync(launch, options, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The roles that write drafts and read the inbox of the tool catalogue.</summary>
+    private static readonly HashSet<string> CatalogueWriters =
+        new(StringComparer.Ordinal) { "role.tool-creator", "role.tool-refiner" };
+
+    /// <summary>
+    /// The directories a node may write outside its tree: the team's own, and
+    /// for the catalogue's creator and refiner its drafts and inbox.
+    /// </summary>
+    /// <remarks>
+    /// Those two and never the catalogue's root. The verify records, the audit
+    /// log, the heads and the versions sit beside them, and a node that could
+    /// write those could forge any of them.
+    /// </remarks>
+    private List<string>? Reachable(Brief brief, string role, bool dryRun)
+    {
+        var reach = new List<string>();
+
+        if (brief.TeamDirectory is { Length: > 0 } kept)
+        {
+            reach.Add(kept);
+        }
+
+        if (CatalogueWriters.Contains(role))
+        {
+            foreach (var one in new[] { "drafts", "inbox" })
+            {
+                var directory = Path.Combine(_paths.Paths.State, "tools", one);
+
+                if (!dryRun)
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                reach.Add(directory);
+            }
+        }
+
+        return reach.Count > 0 ? reach : null;
     }
 
     /// <summary>Where a run keeps everything it writes.</summary>

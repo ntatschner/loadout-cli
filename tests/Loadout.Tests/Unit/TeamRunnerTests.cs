@@ -1090,6 +1090,42 @@ public sealed class TeamRunnerTests : IDisposable
 
         (await RunAsync(team)).Succeeded.Should().BeTrue();
 
+        CatalogueReachIsOnlyDraftsAndInbox();
+    }
+
+    [Fact]
+    public async Task A_tool_works_node_reaches_drafts_and_inbox_and_nothing_else_of_the_catalogue()
+    {
+        // The guard above on the team that has catalogue writers, so the
+        // drafts-and-inbox branch actually runs rather than passing vacuously.
+        var team = (await new TeamCatalogue().LoadAsync(null, null, await SpecialistsAsync())).Find("tool-works")!;
+        var creator = new Report(
+            "creator", ReportStatus.Done, "Drafted nothing; searched first.",
+            [new ReportDeliverable(DeliverableKind.File, "drafts/none")], [Passed], []);
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(new ReportRequest("creator", "Look at the inbox.", DeliverableKind.File, [])), 0.05m),
+            Result(LeadDone(), 0.09m),
+            Result(LeadDone(), 0.09m));
+        _launcher.Script("role.tool-creator", Init("creator-1"), Result(creator, 0.02m));
+
+        (await RunAsync(team)).Succeeded.Should().BeTrue();
+
+        var catalogue = Path.GetFullPath(Path.Combine(_paths.Paths.State, "tools"));
+        var reached = _launcher.Requests
+            .Where(one => one.Request.Specialists?.Contains("role.tool-creator") == true)
+            .SelectMany(one => one.Request.ReachableDirectories ?? [])
+            .Select(Path.GetFullPath)
+            .ToList();
+
+        reached.Should().Contain(Path.Combine(catalogue, "drafts")).And.Contain(Path.Combine(catalogue, "inbox"));
+        CatalogueReachIsOnlyDraftsAndInbox();
+    }
+
+    private void CatalogueReachIsOnlyDraftsAndInbox()
+    {
         var catalogue = Path.GetFullPath(Path.Combine(_paths.Paths.State, "tools"));
         var allowed = new[] { Path.Combine(catalogue, "drafts"), Path.Combine(catalogue, "inbox") };
 
