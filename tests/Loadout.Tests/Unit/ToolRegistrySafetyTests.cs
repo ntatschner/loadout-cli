@@ -31,6 +31,25 @@ public sealed class ToolRegistrySafetyTests : IDisposable
 
     public void Dispose() => _store.Dispose();
 
+    [Theory]
+    [InlineData("drafts")]
+    [InlineData("inbox")]
+    [InlineData("verified")]
+    public async Task A_tool_named_after_the_catalogues_own_directories_is_refused(string name)
+    {
+        var (registry, _) = _store.Registry();
+        var cases = ToolStoreFixture.Cases();
+        var manifest = ToolStoreFixture.Manifest(name, "1.0");
+        var draft = _store.Draft(manifest, Script, cases);
+
+        var verified = await registry.VerifyAsync(draft, ToolStoreFixture.Agreed(manifest, Script, cases));
+        var promoted = registry.Promote(draft, new("lesson", "inbox/test"));
+
+        verified.Failed.Should().BeTrue();
+        promoted.Failed.Should().BeTrue();
+        File.Exists(Path.Combine(registry.Root(), name, "tool.yaml")).Should().BeFalse();
+    }
+
     [Fact]
     public void A_draft_claiming_verified_without_a_verify_record_is_refused()
     {

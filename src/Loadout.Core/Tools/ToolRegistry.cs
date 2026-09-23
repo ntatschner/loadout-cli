@@ -157,6 +157,14 @@ public sealed partial class ToolRegistry : IToolRegistry
 
     private static readonly HashSet<string> Kinds = new(StringComparer.Ordinal) { "candidate", "idea", "bug", "lesson" };
 
+    /// <summary>
+    /// The directories the catalogue keeps beside its tools, which a tool of the
+    /// same name would share: a tool called <c>drafts</c> would put its versions
+    /// where agents can write.
+    /// </summary>
+    public static readonly IReadOnlySet<string> Reserved =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "drafts", "inbox", "verified" };
+
     private readonly IPlatformPaths _paths;
     private readonly ToolHarness _harness;
     private readonly TimeProvider _clock;
@@ -411,6 +419,7 @@ public sealed partial class ToolRegistry : IToolRegistry
         // Checked here as well as at promotion, because the version names the
         // file the verify record is written to.
         if (!string.Equals(version.Name, RemedyBook.Slug(version.Name), StringComparison.Ordinal)
+            || Reserved.Contains(version.Name)
             || !VersionShape().IsMatch(version.Version))
         {
             return OperationResult<ToolVerification>.Fail(
@@ -533,6 +542,11 @@ public sealed partial class ToolRegistry : IToolRegistry
         if (!string.Equals(version.Name, RemedyBook.Slug(version.Name), StringComparison.Ordinal))
         {
             return Refuse($"'{version.Name}' is not a tool name: lowercase and hyphens only.");
+        }
+
+        if (Reserved.Contains(version.Name))
+        {
+            return Refuse($"'{version.Name}' is where the catalogue keeps its own files, so no tool can have it.");
         }
 
         if (!VersionShape().IsMatch(version.Version))
