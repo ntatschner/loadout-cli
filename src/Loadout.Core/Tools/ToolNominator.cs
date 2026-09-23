@@ -68,12 +68,15 @@ public sealed partial class ToolNominator
     /// <returns>Each nomination found, with what filing it came to; null where it was filed before.</returns>
     public IReadOnlyList<(ToolNomination Nomination, OperationResult<ToolSubmitted>? Filed)> Scan(IReadOnlyList<string> lessons)
     {
+        // A note ends "key " and every key the nomination was filed under.
         var filed = _registry.Audit()
             .Where(one => one.Action == "nominate")
             .Select(one => one.Note ?? string.Empty)
-            .ToList();
+            .Where(note => note.Contains(" key ", StringComparison.Ordinal))
+            .SelectMany(note => note[(note.IndexOf(" key ", StringComparison.Ordinal) + 5)..].Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .ToHashSet(StringComparer.Ordinal);
 
-        bool Filed(string key) => filed.Any(note => note.EndsWith(" key " + KeyOf(key), StringComparison.Ordinal));
+        bool Filed(string key) => filed.Contains(KeyOf(key));
 
         return
         [
@@ -82,7 +85,9 @@ public sealed partial class ToolNominator
                 var (one, tool) = sorted;
                 var prefix = tool is null ? string.Empty : "hint " + tool + " ";
 
-                if (new[] { one.Key }.Concat(one.Also ?? []).Any(key => Filed(prefix + key)))
+                var keys = new[] { one.Key }.Concat(one.Also ?? []).ToList();
+
+                if (keys.Any(key => Filed(prefix + key)))
                 {
                     return (one, (OperationResult<ToolSubmitted>?)null);
                 }
@@ -93,7 +98,9 @@ public sealed partial class ToolNominator
 
                 return (one, _registry.Nominate(
                     new ToolSubmission("candidate", text, Tool: tool, By: "nominator", Script: one.Script, Summary: one.Summary),
-                    KeyOf(prefix + one.Key)));
+                    // Every member's key, so the cluster is still recognised
+                    // after the script it was keyed by leaves it.
+                    string.Join(' ', keys.Select(key => KeyOf(prefix + key)))));
             }),
         ];
     }
@@ -126,8 +133,8 @@ public sealed partial class ToolNominator
     /// <remarks>
     /// A remedy is compared script to script. A command has no script, and a
     /// sentence about it shares too little with a tool's script to overlap,
-    /// so it is covered where the tool's examples run the same shape, or its
-    /// script or capabilities name the command.
+    /// so it is covered where the tool's examples run the same shape, its
+    /// script runs the command, or its capabilities name it.
     /// </remarks>
     private static bool Covers(ToolOffered tool, ToolNomination nomination)
     {
@@ -142,8 +149,23 @@ public sealed partial class ToolNominator
         var named = Named(shape) ?? shape;
 
         return tool.Version.Examples.Any(one => string.Equals(Shape(one.Command), shape, StringComparison.Ordinal))
-            || tool.Script.Contains(named, StringComparison.OrdinalIgnoreCase)
+            || Runs(tool.Script, named)
             || tool.Record.Capabilities.Any(one => string.Equals(one, named, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Whether a script runs a command: its words, whole, where a command starts.</summary>
+    /// <remarks>
+    /// Where a command starts is the start of a line or after a pipe, a
+    /// separator or an opening bracket, so "make sure" in a comment or a
+    /// quoted sentence is not running make, and "remake" is not either.
+    /// </remarks>
+    private static bool Runs(string script, string command)
+    {
+        var words = command.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Regex.Escape);
+        var pattern = @"(?:^|[|;&({])[ \t]*(?:[^\s|;&(){}'""#]*[/\\])?" + string.Join(@"[ \t]+", words) + @"(?![\w.-])";
+
+        return Regex.IsMatch(
+            script, pattern, RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
     }
 
     /// <summary>A command with its arguments replaced, so two runs of it compare equal.</summary>

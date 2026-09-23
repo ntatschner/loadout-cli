@@ -8,6 +8,7 @@ using Loadout.Models.Instructions;
 using Loadout.Models.Results;
 using Loadout.Models.Teams;
 using Loadout.Tests.Fakes;
+using Loadout.Tests.Platform;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -61,7 +62,7 @@ public sealed class ToolNominationPassTests : IDisposable
         Directory.Exists(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Should().BeFalse();
     }
 
-    [Fact]
+    [DeniableFact]
     public async Task An_unreadable_run_folder_does_not_stop_the_pass()
     {
         FinishedRun("20260923-1000-a001", "alpha", "docker system prune --force");

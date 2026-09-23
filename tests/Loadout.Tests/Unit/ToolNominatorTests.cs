@@ -126,11 +126,62 @@ public sealed class ToolNominatorTests : IDisposable
         Shelve("beta", "free-disk", Cache);
         Nominator().Scan([]).Should().ContainSingle(one => one.Filed != null && one.Filed.Succeeded);
 
-        Shelve("gamma", "tidy-cache", Cache);
+        // A near copy that sorts first, so the cluster's key moves to it and
+        // only the keys it was filed under before can recognise it.
+        var lowest = NearCopies(8).First(one =>
+            string.CompareOrdinal(RemedyCeiling.Fingerprint(one), RemedyCeiling.Fingerprint(Cache)) < 0);
+        Shelve("gamma", "tidy-cache", lowest);
 
-        Nominator().Scan([]).Should().OnlyContain(one => one.Filed == null, "the cluster was filed before gamma joined it");
+        var again = Nominator().Scan([]);
+
+        again.Should().ContainSingle(one => one.Nomination.Rule == 1, "gamma's near copy joins the same cluster");
+        again.Single().Nomination.Key.Should().Be("1 " + RemedyCeiling.Fingerprint(lowest));
+        again.Should().OnlyContain(one => one.Filed == null, "the cluster was filed before gamma joined it");
         Directory.EnumerateFiles(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Should().ContainSingle();
     }
+
+    [Fact]
+    public void A_cluster_that_loses_its_filed_key_is_not_filed_again()
+    {
+        var copies = NearCopies(3)
+            .OrderBy(RemedyCeiling.Fingerprint, StringComparer.Ordinal)
+            .ToList();
+
+        Shelve("alpha", "clear-cache", copies[0]);
+        Shelve("beta", "free-disk", copies[1]);
+        Nominator().Scan([]).Should().ContainSingle(one => one.Filed != null && one.Filed.Succeeded);
+
+        // The script the cluster was keyed by goes, and another joins.
+        Directory.Delete(Path.Combine(_store.Paths.Paths.State, "teams", "work", "alpha"), recursive: true);
+        Shelve("gamma", "tidy-cache", copies[2]);
+
+        var again = Nominator().Scan([]);
+
+        again.Should().ContainSingle(one => one.Nomination.Rule == 1, "beta and gamma still keep the same remedy");
+        again.Should().OnlyContain(one => one.Filed == null, "beta's script was one of the cluster filed before");
+        Directory.EnumerateFiles(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_one_word_command_is_not_covered_by_a_script_mentioning_it_in_prose()
+    {
+        var (registry, _) = _store.Registry();
+        await _store.PromoteAsync(
+            registry,
+            ToolStoreFixture.Manifest("free-cache", "1.0"),
+            "# Make sure the cache path exists before clearing it.\n" + Cache,
+            ToolStoreFixture.Cases());
+
+        Run("20260901-1000-a001", "alpha", Command("make"));
+        Run("20260902-1000-b001", "beta", Command("make"));
+
+        Nominator().Find([]).Should().ContainSingle(one => one.Rule == 3 && one.Key == "3 make",
+            "the tool's script says 'make sure', which is not running make");
+    }
+
+    /// <summary>Copies of the cache script differing only in what they print, so each has its own fingerprint.</summary>
+    private static List<string> NearCopies(int count) =>
+        [.. Enumerable.Range(0, count).Select(one => Cache + $"Write-Output 'pass {one}'\n")];
 
     [Fact]
     public void A_nomination_never_carries_a_secret_value()
