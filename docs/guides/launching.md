@@ -77,7 +77,53 @@ To see the whole launch described without starting anything:
 loadout starstats --dry-run
 ```
 
-<!-- capture: docs/captures/launch-dry-run.txt — the caption says which agent the sandbox had, since output differs without one. -->
+Taken with Claude Code installed. Without an agent, the Agent line says none was found.
+
+```text
+$ loadout starstats --dry-run
+warning Pre-commit protection: not installed in this clone; hooks are per-clone 
+and never travel. Install it with: loadout protect
+warning Dry run: nothing was launched.
+
+What would run
+  Agent        claude  C:\Users\example\.local\bin\claude.exe
+  Directory    C:\Users\Public\example\src\starstats
+  Mode         implement  chosen by the task
+  Context      7.3 KB from 8 source(s), profile 'default'  
+C:\Users\Public\example\AppData\Local\Loadout\runtime\20260923-005527-4402d292\c
+ompiled-context.md
+  MCP          
+C:\Users\Public\example\AppData\Local\Loadout\runtime\20260923-005527-4402d292\l
+oadout-mcp.json
+
+Command
+  C:\Users\example\.local\bin\claude.exe
+    --mcp-config
+    
+C:\Users\Public\example\AppData\Local\Loadout\runtime\20260923-005527-4402d292\l
+oadout-mcp.json
+    --append-system-prompt-file
+    
+C:\Users\Public\example\AppData\Local\Loadout\runtime\20260923-005527-4402d292\c
+ompiled-context.md
+    --add-dir
+    C:\Users\Public\example\AppData\Local\Loadout\workspace\projects\starstats
+    --plugin-dir
+    
+C:\Users\Public\example\AppData\Local\Loadout\runtime\20260923-005527-4402d292\s
+kills\loadout-starstats
+
+Specialists
+  + foundation.change-safety         always applies
+  + foundation.engineering-core      always applies
+  + foundation.evidence-first        always applies
+  + foundation.forward-motion        always applies
+  + foundation.verification          always applies
+  + mode.implement                   implement mode
+  + language.csharp                  required by framework.dotnet
+  + framework.dotnet                 Microsoft.Extensions. dependency declared
+  about 1,873 tokens, 16% of 12,000
+```
 
 You should see the executable, the working directory, the compiled context and
 where it went, the environment variables by name, the full command line, and
@@ -92,7 +138,19 @@ loadout instructions explain "why is this postgres query so slow" \
     --mode investigate --against-task "add a retry to the upload step"
 ```
 
-<!-- capture: docs/captures/instructions-explain.txt — which specialists a task would load, why, and the token cost against the budget. -->
+Which specialists a task would load, why, and the token cost against the budget.
+
+```text
+$ loadout instructions explain "why is this postgres query so slow" --mode investigate --against-task "add a retry to the upload step"
+- database.postgresql                   297  task mentions "postgres"
+- function.database                     223  task mentions "query"
+- function.performance                  217  task mentions "slow"
+- function.debugging                    183  task mentions "why is"
++ function.distributed-systems          172  task mentions "retry"
+
+  Unchanged  8
+  Estimated  2,820 to 2,072 (-748)
+```
 
 You should see only the specialists that differ, the costliest first, and the
 change in the total. [What you get](../features.md) has a full worked example.

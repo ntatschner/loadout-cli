@@ -79,7 +79,88 @@ found three releases behind the one somebody thought they were running.
 loadout doctor
 ```
 
-<!-- capture: docs/captures/doctor.txt — `loadout doctor` on a new machine, naming which agent it found. -->
+`loadout doctor` on a new machine, naming which agent it found.
+
+```text
+$ loadout doctor
+Loadout Diagnostics
+
+Platform
++ Windows X64  Microsoft Windows 10.0.26200 (win-x64)
++ Machine  EXAMPLE-PC
+
+Launcher
++ Configuration  C:\Users\Public\example\AppData\Roaming\Loadout\config.yaml
++ State  C:\Users\Public\example\AppData\Local\Loadout
++ Logs  C:\Users\Public\example\AppData\Local\Loadout\logs
++ Machine configuration  
+C:\Users\Public\example\AppData\Local\Loadout\machines.yaml
+
+Git
++ Installed  git version 2.54.0.windows.1
++ Credential helper  manager
+! Global exclude file  not configured; agent files are not globally ignored 
+(spec section 50) (fixable)
+
+Workspace
++ Central workspace  not configured; running with local state only
+
+Discovery
++ C:\Users\Public\example\src  case-insensitive
+
+Secrets
++ Provider  credential-manager
+
+Repository
++ Agent files  none tracked
+! Pre-commit protection  not installed in this clone; hooks are per-clone 
+(fixable)
+! Global excludes  no global exclude file is configured, so agent files are only
+kept out of repositories that ignore them individually (fixable)
+
+Capabilities
++ NativeSecretStore  credential-manager
++ PseudoTerminal  ConPTY
++ PseudoTerminalWindowSize  ConPTY resize
+! UnixFilePermissions  Windows has no Unix mode bits; restricted ACLs are 
+applied instead.
++ DesktopIntegration  available, not installed
++ FileManagerIntegration  explorer
++ Clipboard  clip
++ TerminalSpawning  Windows Terminal, PowerShell, Windows PowerShell
+! GraphicalSession  Output is redirected or no terminal is attached, so prompts 
+are suppressed.
++ ChildProcessLifetime  a job object the kernel closes with the launcher, which 
+takes its children with it however it ends
+
+Instructions
++ Memory content  No credential-shaped content in project memory.
++ Instruction budget  No project loads an oversized instruction layer.
++ Tasks nobody is shown: storefront  2 task(s) are recorded for storefront and 
+its sessions are not shown any of them. Carrying them costs a heading and a line
+each. (fixable)
++ Specialist library  101 specialists loaded and valid.
+
+Editor
++ code  C:\Program Files\Microsoft VS Code\bin\code.cmd
++ Profiles  could not be read, so nothing here is checked against them
+
+Sessions
++ Running  none
+
+Teams
+! Daemon  1 schedule(s) are written down and nothing is firing them. Start one 
+with: loadout team daemon
+
+Agents
++ Claude Code  2.1.280 (Claude Code) at C:\Users\example\.local\bin\claude.exe
++ Codex  codex-cli 0.154.0 at C:\Users\example\AppData\Roaming\npm\codex.cmd
+
+Overall: DEGRADED
+2 of these can be put right for you: loadout doctor --fix
+1 thing(s) here are available and switched off. Nothing is wrong with them: 
+loadout doctor --fix
+```
 
 You should see a list of checks, each with its result in words, and the agent
 it found named. If it says no agent was found, install Claude Code or Codex and

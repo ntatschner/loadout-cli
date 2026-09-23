@@ -38,7 +38,7 @@ Copy the whole address, token included, into your browser. Or start it with
 loadout team dashboard --open
 ```
 
-![The dashboard's run list. A ledger of totals across the top, then one run under "Needs you" waiting for an answer, one under "Running" and two under "Finished". Each card states its run's state as a word.](../images/dashboard-list-rich.png)
+![The dashboard's run list. A ledger of totals across the top, then one run under "Needs you" waiting for an answer, one under "Running", and the first of two under "Finished". Each card states its run's state as a word.](../images/dashboard-list-rich.png)
 
 You should see a band of totals across the top, then your runs grouped under
 *Needs you*, *Running* and *Finished*. *Needs you* comes first because a run
@@ -70,20 +70,18 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 - **Office** — one room per run, a desk per node. The one to leave on a spare
   screen.
 
-  ![The office screen. One room for a docs-crew run with a desk for each of its three nodes, each desk a square with the node's name and state written in it.](../images/dashboard-office.png)
-
 - **Graph** — who asked whom. Reach for it when something is stuck.
 
   ![The graph screen. The lead at the top, with lines to the two workers it asked for. One is marked "waiting for you".](../images/dashboard-graph.png)
 
 - **Timeline** — where the time and money went, a strip per day.
 
-  ![The timeline screen. Two days, each a strip showing when runs started and ended, with that day's time and cost written beside it.](../images/dashboard-timeline.png)
+  ![The timeline screen. Three days, each a strip showing when runs started and ended, with that day's time and cost written beside it.](../images/dashboard-timeline.png)
 
 - **Waiting** — schedules that haven't fired and tasks nobody has finished.
   Anything held says what's holding it, in words.
 
-  ![The waiting screen. One scheduled team run due tomorrow morning, then two open tasks. The last one is marked "held: blocked" in words.](../images/dashboard-waiting.png)
+  ![The waiting screen. One scheduled team run, due today at 07:00, then two open tasks. The last one says "blocked" in words, and why.](../images/dashboard-waiting.png)
 
 - **Terminal** — a node's output, line by line, as it happens.
 

@@ -47,7 +47,12 @@ cd path/to/your/repository
 loadout project add .
 ```
 
-<!-- capture: docs/captures/project-add.txt — registering a repository under the slug storefront. -->
+Registering a repository under the slug storefront.
+
+```text
+$ loadout project add .
+Registered storefront (storefront)
+```
 
 You should see the repository registered under a short name, its slug. The slug
 is what `loadout <project>` takes and what memory and launch history are filed
@@ -83,7 +88,7 @@ on this machine, or its agent isn't installed.
 
 Press `Ctrl+P`.
 
-![The command palette open over the launcher, listing commands grouped by purpose. One is marked "terminal only".](../images/command-palette.svg)
+![The command palette open over the launcher, listing commands with what each does. One is marked "terminal only".](../images/command-palette.svg)
 
 You should see every command, grouped by what it's for. Type what you want to
 do rather than a command's name: `undo` finds `backup restore`, `broken` finds

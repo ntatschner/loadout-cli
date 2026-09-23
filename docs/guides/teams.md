@@ -19,7 +19,40 @@ agreed, and a list of what it delivered.
 loadout team list
 ```
 
-<!-- capture: docs/captures/team-list.txt — the teams available on this machine. -->
+The teams available on this machine.
+
+```text
+$ loadout team list
+bug-hunt  5 node(s), supervised
+  Reproduces a bug without a person watching, proves its cause, fixes the proven
+cause, and proves the fix holds.
+dependency-sweep  4 node(s), supervised
+  Updates dependencies one branch per bump, in parallel, and verifies each with 
+the suite green before it is offered for merge.
+docs-crew  4 node(s), supervised
+  Finds where the documentation and the code disagree, fixes it in the voice the
+docs already have, and follows the changed pages as a new reader would.
+iterating-project  5 node(s), supervised
+  Plans, implements, reviews and verifies in rounds until the goal is met, the 
+budget is spent, or two rounds make no progress.
+marketing-studio  5 node(s), supervised
+  Turns a goal into a strategy, writes the pieces, edits every claim against the
+facts, and stages each send for you. Nothing is sent in any mode; your own copy 
+may allow a named channel.
+product-company  template  17 node(s), supervised
+  A shape to copy, not a team to run. An executive lead splits a goal across 
+department leads, each with its own workers. Deliberately shallow, because every
+level between you and the work costs a session and loses part of the brief.
+release-crew  4 node(s), supervised
+  Checks the tree is fit to release, writes the notes for somebody deciding 
+whether to update, and tags. The push is a gate in manual and supervised runs; 
+an autonomous run may push the tag.
+system-watch  6 node(s), supervised
+  Investigates a system problem, proves the cause, fixes it, and turns the fix 
+into something the team keeps and reuses.
+
+Run one with: loadout team run <team> "<goal>"
+```
 
 You should see each team with where it came from: shipped, from a pack, or
 written by you. `iterating-project` plans, implements, reviews and verifies in
@@ -76,7 +109,39 @@ team file, because the team file is shared and anybody can edit it.
 loadout team status
 ```
 
-<!-- capture: docs/captures/team-status.txt — a team run's progress, with two of three criteria met, written as words. -->
+A team run's progress, with two of three criteria met, written as words.
+
+```text
+$ loadout team status
+20260923-0840-3f1a  docs-crew  storefront  supervised  waiting for you  2 
+round(s), 50m so far, $2.45
+
+  waiting Open a pull request for the README change?
+    loadout team gate 20260923-0840-3f1a --gate gate-5e1d9a20 --answer Approve
+  Bring the storefront README up to date with the new checkout flow
+
+  Done when 2 of 3 met
+  + met           The README describes the new checkout flow step by step
+      writer/1 rewrote the section; checker/1 followed it end to end
+  + met           Every command in the README runs as written
+      checker/1 ran all nine commands; each exited 0
+  ? notattempted  Screenshots of the checkout pages are current
+      Needs the pull request's preview build
+
+  lead             role.project-lead      done               10 exchange(s)  $  
+0.70  34m
+  writer           role.docs-writer       waiting for you    14 exchange(s)  $  
+1.12  46m
+                   Bash gh pr create --title "Describe the new checkout flow"
+                   says: 2 of 3: Rewriting the checkout section.
+  checker          role.docs-checker      done                9 exchange(s)  $  
+0.63  8m
+
+journal: 
+C:\Users\Public\example\AppData\Local\Loadout\teams\runs\20260923-0840-3f1a\jour
+nal.jsonl
+Read it with: loadout team log 20260923-0840-3f1a
+```
 
 You should see each node, what it's doing and what it has cost, and then the
 criteria. For example, part way through a run:
@@ -94,7 +159,7 @@ The same account is in the launcher under **Tools → Team runs…** and on the
 [dashboard](dashboard.md). All three read one journal the run writes, so they
 can't disagree.
 
-![The launcher's team runs screen, showing one docs-crew run in progress on storefront, with its round, its nodes and what it has spent.](../images/team-runs.svg)
+![The launcher's team runs screen, showing one docs-crew run in progress on storefront, and below it that run's three nodes, each with its role, its state and how many turns it has taken.](../images/team-runs.svg)
 
 ### 6. Answer it when it asks
 

@@ -34,7 +34,41 @@ sentences.
 loadout team list --accessible
 ```
 
-<!-- capture: docs/captures/team-list-accessible.txt — the same list under the screen-reader profile, one labelled line per value. -->
+The same list under the screen-reader profile, one labelled line per value.
+
+```text
+$ loadout team list --accessible
+Accessible output is on (screen-reader). Change it with: loadout config set accessibility-preset <name>
+bug-hunt  5 node(s), supervised
+  Reproduces a bug without a person watching, proves its cause, fixes the proven
+cause, and proves the fix holds.
+dependency-sweep  4 node(s), supervised
+  Updates dependencies one branch per bump, in parallel, and verifies each with 
+the suite green before it is offered for merge.
+docs-crew  4 node(s), supervised
+  Finds where the documentation and the code disagree, fixes it in the voice the
+docs already have, and follows the changed pages as a new reader would.
+iterating-project  5 node(s), supervised
+  Plans, implements, reviews and verifies in rounds until the goal is met, the 
+budget is spent, or two rounds make no progress.
+marketing-studio  5 node(s), supervised
+  Turns a goal into a strategy, writes the pieces, edits every claim against the
+facts, and stages each send for you. Nothing is sent in any mode; your own copy 
+may allow a named channel.
+product-company  template  17 node(s), supervised
+  A shape to copy, not a team to run. An executive lead splits a goal across 
+department leads, each with its own workers. Deliberately shallow, because every
+level between you and the work costs a session and loses part of the brief.
+release-crew  4 node(s), supervised
+  Checks the tree is fit to release, writes the notes for somebody deciding 
+whether to update, and tags. The push is a gate in manual and supervised runs; 
+an autonomous run may push the tag.
+system-watch  6 node(s), supervised
+  Investigates a system problem, proves the cause, fixes it, and turns the fix 
+into something the team keeps and reuses.
+
+Run one with: loadout team run <team> "<goal>"
+```
 
 To try a particular preset, name it: `--accessible=dyslexia`.
 
@@ -78,7 +112,6 @@ loadout
 Under `screen-reader`, you should see a numbered text menu instead of the
 full-screen launcher, answered by typing a number.
 
-<!-- capture: docs/captures/text-launcher.txt — the text launcher, a numbered menu answered by number. -->
 
 The text launcher is the tested path. Under the other presets you get the
 full-screen launcher, drawn in the sixteen colours your terminal theme defines,
