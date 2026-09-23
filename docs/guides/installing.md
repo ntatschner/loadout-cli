@@ -178,7 +178,7 @@ run it again.
 ## What this doesn't do
 
 - It doesn't install Claude Code or Codex; see
-  [Claude Code's install page](https://docs.claude.com/en/docs/claude-code/setup)
+  [Claude Code's install page](https://code.claude.com/docs/en/setup)
   or [Codex's install page](https://github.com/openai/codex) for what each needs.
 - The macOS binary isn't signed or notarised yet.
 - Nothing updates on its own. `loadout update` checks and installs when you ask;

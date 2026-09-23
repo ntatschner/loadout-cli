@@ -52,7 +52,7 @@ Nothing to install for these — they're part of the operating system.
 | | What it does here |
 | --- | --- |
 | [Spectre.Console](https://spectreconsole.net/) and Spectre.Console.Cli | The command line: parsing, tables, prompts, colour |
-| [Terminal.Gui](https://github.com/gui-cs/Terminal.Gui) | The launcher's full-screen screens |
+| [Terminal.Gui](https://github.com/tui-cs/Terminal.Gui) | The launcher's full-screen screens |
 | [YamlDotNet](https://github.com/aaubry/YamlDotNet) | Reading and writing `config.yaml` and the project manifests |
 | [ModelContextProtocol](https://github.com/modelcontextprotocol/csharp-sdk) | Serving Loadout's own tools to an agent over MCP |
 | Microsoft.Extensions.DependencyInjection | Wiring the services together at startup |
