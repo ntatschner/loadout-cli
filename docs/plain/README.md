@@ -40,7 +40,7 @@ tidy.
 
 - **A computer running Windows, macOS or Linux.**
 - **A coding agent.** You'll also need Claude Code or Codex. Loadout doesn't
-  install them. [Claude Code's install page](https://docs.claude.com/en/docs/claude-code/setup)
+  install them. [Claude Code's install page](https://code.claude.com/docs/en/setup)
   and [Codex's install page](https://github.com/openai/codex) say what each
   one needs.
 - **Git.** Git is a program that keeps track of changes to files. Loadout uses
