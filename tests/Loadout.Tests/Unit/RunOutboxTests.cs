@@ -159,6 +159,30 @@ public sealed class RunOutboxTests : IDisposable
     }
 
     [Fact]
+    public async Task A_node_started_in_another_node_s_tree_does_not_say_where_the_run_worked()
+    {
+        // A reviewer has no worktree of its own and is started in the one it
+        // reviews, which is gone once the work is merged. Taken for the
+        // repository, it would resolve every commit against a directory that
+        // is not there.
+        Journal(
+            Launched("implementer/1", "teams/r/impl-1"),
+            "{\"at\":\"2026-09-15T22:56:02+00:00\",\"run\":\"r\",\"node\":\"reviewer\",\"kind\":\"node.launched\","
+            + "\"data\":{\"launch\":\"L\",\"role\":\"role.reviewer\",\"directory\":\"D:\\\\trees\\\\impl-1\","
+            + "\"worktree\":null,\"reviewing\":\"teams-r-implementer-1\"}}",
+            Launched("verifier", null));
+        Report("report-implementer-1-1.json", Delivering("implementer/1", "3469742"));
+
+        var git = new FakeGit(Repository);
+
+        git.Touched["3469742"] = [new GitFileChange("farewell.txt", "added")];
+
+        var outbox = (await Outbox(git).ForAsync(Run)).Value!;
+
+        outbox.Repository.Should().Be(@"D:\git\somewhere");
+    }
+
+    [Fact]
     public async Task A_run_that_never_says_where_it_worked_says_so_rather_than_nothing()
     {
         // Every node had a worktree of its own, so no event names the

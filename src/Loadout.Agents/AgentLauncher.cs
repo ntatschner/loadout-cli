@@ -32,6 +32,10 @@ namespace Loadout.Agents;
 /// branch. A person naming a worktree means one that exists, so this is off
 /// unless asked for.
 /// </param>
+/// <param name="WorktreeFrom">
+/// The commit or branch a worktree made for this launch starts from, or null
+/// for the repository's head. Ignored where the tree already exists.
+/// </param>
 /// <param name="Profile">Context profile to apply (spec section 34).</param>
 /// <param name="IncludeHandoff">Append the most recent handoff to the context (spec section 69).</param>
 /// <param name="Environment">Environment to work in, such as production (spec section 57).</param>
@@ -93,7 +97,8 @@ public sealed record LaunchRequest(
     string? Model = null,
     bool CreateWorktree = false,
     string? PermissionPolicyPath = null,
-    IReadOnlyList<string>? ReachableDirectories = null);
+    IReadOnlyList<string>? ReachableDirectories = null,
+    string? WorktreeFrom = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -1321,7 +1326,7 @@ public sealed class AgentLauncher : IAgentLauncher
             project.LocalPath!,
             path,
             worktree,
-            baseRef: null,
+            baseRef: request.WorktreeFrom,
             ct).ConfigureAwait(false);
 
         return created.Failed

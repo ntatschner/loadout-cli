@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Loadout.Core.Security;
@@ -619,6 +620,108 @@ public static partial class NodePermissions
 
         var target = Target(inputJson);
 
+        return tool is "Bash" or "PowerShell" && target is { Length: > 0 }
+            ? DecideShell(policy, tool, target)
+            : DecideOne(policy, tool, target);
+    }
+
+    /*
+      A shell command, judged part by part.
+
+      A role's rule is a prefix, and it used to be matched against the whole
+      command line. That was wrong both ways. It let through anything chained
+      after an allowed first word - Bash(dotnet test:*) allowed
+      "dotnet test ; rm -rf ." - and it refused anything whose first word was
+      not a rule, however harmless every part of it was. The first long team
+      run was refused "cd <its worktree> && dotnet build" all afternoon, and
+      "dotnet test ... | tail -5", and "git -C <tree> status": every one of
+      them made of things the role allows.
+
+      So the command is split where the shell would split it - &&, ||, ;, |,
+      a lone & and a new line, outside quotes - and every part has to be
+      allowed on its own, with the deny list read against every part. A part
+      that only changes directory or sets a variable does nothing by itself
+      and needs no rule; what runs after it still does. Writing a file with >
+      is a write, and is allowed only where the role may write. A command
+      inside a command, $( ) or backticks, is refused whole: nothing here can
+      say what it runs.
+    */
+    private static PermissionDecision DecideShell(NodePolicy policy, string tool, string command)
+    {
+        command = Literal(command);
+
+        if (command.Contains("$(", StringComparison.Ordinal) || command.Contains('`', StringComparison.Ordinal))
+        {
+            return new PermissionDecision(
+                false,
+                "That runs a command inside a command ($( ) or backticks), and what it runs cannot be "
+                + "checked. Run the parts as separate commands.");
+        }
+
+        if (command.Contains("<<", StringComparison.Ordinal))
+        {
+            return new PermissionDecision(
+                false,
+                "A here-document cannot be checked part by part. Write the file with the Write tool, "
+                + "or run the command without one.");
+        }
+
+        var parts = Parts(command);
+
+        if (parts is null)
+        {
+            return new PermissionDecision(
+                false,
+                "That command's quotes do not close, so where one part ends and the next begins "
+                + "cannot be told. Run it again with its quotes balanced.");
+        }
+
+        var several = parts.Count > 1;
+        PermissionDecision? decided = null;
+
+        foreach (var part in parts)
+        {
+            var (words, writes) = Redirected(part);
+
+            words = Unassigned(words);
+
+            // Nothing but a variable being set, or a change of directory:
+            // neither runs anything, and whatever follows is judged itself.
+            if (words.Length == 0 || IsChangeOfDirectory(words))
+            {
+                continue;
+            }
+
+            if (writes && !DecideOne(policy, "Write", null).Allowed)
+            {
+                return new PermissionDecision(
+                    false,
+                    $"'{Shorten(part)}' writes a file with >, and the {policy.Role} role may not write "
+                    + "files. Report what you needed and why, and let whoever briefed you decide.");
+            }
+
+            var one = DecideOne(policy, tool, WithoutDirectory(words));
+
+            if (!one.Allowed)
+            {
+                return several
+                    ? one with { Reason = $"Part of that command, '{Shorten(words)}': {one.Reason}" }
+                    : one;
+            }
+
+            decided ??= one;
+        }
+
+        // Every part changes directory or sets a variable: nothing runs.
+        return decided ?? new PermissionDecision(
+            true,
+            "Nothing in that command runs anything by itself.",
+            "cd");
+    }
+
+    /// <summary>Whether one call, one command, may be made.</summary>
+    private static PermissionDecision DecideOne(NodePolicy policy, string tool, string? target)
+    {
         foreach (var rule in policy.Deny)
         {
             if (Matches(rule, tool, target))
@@ -922,6 +1025,254 @@ public static partial class NodePermissions
             Path.Combine(directory, AgreedFileName(role)),
             JsonSerializer.Serialize(rule) + "\n");
     }
+
+    /// <summary>
+    /// A command with each <c>$(cat &lt;&lt;'EOF' ... EOF)</c> replaced by the
+    /// word it stands for.
+    /// </summary>
+    /// <remarks>
+    /// That is how Claude Code writes every commit message, and the first
+    /// trial of part-by-part judging refused it: a command inside a command
+    /// cannot be checked, as a rule. This one can. With its delimiter quoted,
+    /// a here-document expands nothing, so the substitution runs <c>cat</c> on
+    /// literal text and yields that text - a quoted word, as far as whatever
+    /// surrounds it is concerned. An unquoted delimiter expands <c>$( )</c> in
+    /// the body, and anything but white space between the delimiter and the
+    /// closing bracket runs something else, so neither matches and both stay
+    /// refused.
+    /// </remarks>
+    internal static string Literal(string command) =>
+        command.Contains("<<", StringComparison.Ordinal)
+            ? QuotedHereDocument().Replace(command, "text")
+            : command;
+
+    [GeneratedRegex("""\$\(\s*cat\s+<<-?\s*(['"])([A-Za-z_][A-Za-z0-9_]*)\1[ \t]*\r?\n.*?\r?\n[ \t]*\2[ \t]*\r?\n?\s*\)""", RegexOptions.Singleline)]
+    private static partial Regex QuotedHereDocument();
+
+    /// <summary>
+    /// A command split where the shell would split it, or null where its
+    /// quotes do not close.
+    /// </summary>
+    internal static IReadOnlyList<string>? Parts(string command)
+    {
+        var parts = new List<string>();
+        var current = new StringBuilder();
+        char? quote = null;
+
+        void Finish()
+        {
+            var text = current.ToString().Trim();
+
+            if (text.Length > 0)
+            {
+                parts.Add(text);
+            }
+
+            current.Clear();
+        }
+
+        for (var i = 0; i < command.Length; i++)
+        {
+            var c = command[i];
+
+            if (quote is { } open)
+            {
+                if (c == open)
+                {
+                    quote = null;
+                }
+                else if (c == '\\' && open == '"' && i + 1 < command.Length)
+                {
+                    current.Append(c);
+                    c = command[++i];
+                }
+
+                current.Append(c);
+
+                continue;
+            }
+
+            if (c is '\'' or '"')
+            {
+                quote = c;
+                current.Append(c);
+
+                continue;
+            }
+
+            var next = i + 1 < command.Length ? command[i + 1] : '\0';
+            var previous = i > 0 ? command[i - 1] : '\0';
+
+            // An & that belongs to a redirection - 2>&1, &> file - is part of
+            // the command it redirects, not a place it splits.
+            if (c == '&' && (previous == '>' || next == '>'))
+            {
+                current.Append(c);
+
+                continue;
+            }
+
+            if (c is ';' or '\n' or '\r' or '|' or '&')
+            {
+                Finish();
+
+                if ((c == '&' && next == '&') || (c == '|' && next is '|' or '&'))
+                {
+                    i++;
+                }
+
+                continue;
+            }
+
+            current.Append(c);
+        }
+
+        if (quote is not null)
+        {
+            return null;
+        }
+
+        Finish();
+
+        return parts;
+    }
+
+    /// <summary>
+    /// A part without its redirections, and whether any of them writes a file.
+    /// </summary>
+    /// <remarks>
+    /// Sending output nowhere, or joining one stream to another, writes
+    /// nothing: <c>2&gt;&amp;1</c> and <c>&gt;/dev/null</c> are left out and
+    /// cost nothing. Anything else with a <c>&gt;</c> is a file being written.
+    /// Reading one with <c>&lt;</c> is reading.
+    /// </remarks>
+    internal static (string Words, bool Writes) Redirected(string part)
+    {
+        var words = new StringBuilder();
+        var writes = false;
+        char? quote = null;
+
+        for (var i = 0; i < part.Length; i++)
+        {
+            var c = part[i];
+
+            if (quote is { } open)
+            {
+                if (c == open)
+                {
+                    quote = null;
+                }
+
+                words.Append(c);
+
+                continue;
+            }
+
+            if (c is '\'' or '"')
+            {
+                quote = c;
+                words.Append(c);
+
+                continue;
+            }
+
+            if (c is not ('>' or '<'))
+            {
+                words.Append(c);
+
+                continue;
+            }
+
+            // A stream number or & written against the operator belongs to it:
+            // the 2 of 2>, the & of &>.
+            while (words.Length > 0 && (char.IsDigit(words[^1]) || words[^1] == '&'))
+            {
+                words.Length--;
+            }
+
+            var reads = c == '<';
+            var j = i + 1;
+
+            // >> appends, which is still writing.
+            if (!reads && j < part.Length && part[j] == '>')
+            {
+                j++;
+            }
+
+            // >&2, 2>&1, <&0: one stream joined to another, which touches no file.
+            if (j < part.Length && part[j] == '&')
+            {
+                j++;
+
+                while (j < part.Length && (char.IsDigit(part[j]) || part[j] == '-'))
+                {
+                    j++;
+                }
+
+                i = j - 1;
+
+                continue;
+            }
+
+            while (j < part.Length && part[j] == ' ')
+            {
+                j++;
+            }
+
+            var from = j;
+
+            while (j < part.Length && part[j] != ' ')
+            {
+                j++;
+            }
+
+            var target = part[from..j];
+
+            if (!reads && target is not ("/dev/null" or "nul" or "NUL" or "$null"))
+            {
+                writes = true;
+            }
+
+            i = j - 1;
+        }
+
+        return (words.ToString().Trim(), writes);
+    }
+
+    /// <summary>A command without the variables set in front of it: <c>A=1 B=2 git log</c> is <c>git log</c>.</summary>
+    internal static string Unassigned(string words)
+    {
+        var rest = words.TrimStart();
+
+        while (Assignment().Match(rest) is { Success: true } set)
+        {
+            rest = rest[set.Length..].TrimStart();
+        }
+
+        return rest;
+    }
+
+    [GeneratedRegex("""^[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|\S*)(\s+|$)""")]
+    private static partial Regex Assignment();
+
+    /// <summary>Whether a command only changes directory.</summary>
+    private static bool IsChangeOfDirectory(string words) =>
+        words is "cd" or "pushd" or "popd"
+        || words.StartsWith("cd ", StringComparison.Ordinal)
+        || words.StartsWith("pushd ", StringComparison.Ordinal);
+
+    /// <summary>
+    /// A git command without the directory it was pointed at:
+    /// <c>git -C some/tree status</c> is <c>git status</c>, and is allowed or
+    /// refused as that. Pointing git elsewhere changes where, not what.
+    /// </summary>
+    internal static string WithoutDirectory(string words) =>
+        GitDirectory().Replace(words, "git ", 1);
+
+    [GeneratedRegex("""^git\s+-C\s+("[^"]*"|'[^']*'|\S+)\s+""")]
+    private static partial Regex GitDirectory();
+
+    private static string Shorten(string text) => text.Length > 120 ? text[..120] + "…" : text;
 
     /// <summary>Whether a command runs more than one thing.</summary>
     private static bool Chained(string? command) =>

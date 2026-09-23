@@ -192,8 +192,19 @@ public sealed record ReportQuestion(
     [property: JsonPropertyName("recommendation")] string Recommendation);
 
 /// <summary>A lead asking for a node to be briefed.</summary>
+/// <param name="Node">The node to brief, or an instance of it such as <c>implementer/2</c>.</param>
+/// <param name="Task">What it is to do.</param>
+/// <param name="Deliverable">What it hands back.</param>
+/// <param name="Inputs">What it should read first, or null.</param>
+/// <param name="From">
+/// The commit or branch a node given a new worktree starts from, or null for
+/// whatever the repository has checked out. A second piece of work built on
+/// the first needs the first under it, and saying so in the task's words
+/// changed nothing: the tree was made from the repository's head regardless.
+/// </param>
 public sealed record ReportRequest(
     [property: JsonPropertyName("node")] string Node,
     [property: JsonPropertyName("task")] string Task,
     [property: JsonPropertyName("deliverable")] DeliverableKind Deliverable,
-    [property: JsonPropertyName("inputs")] IReadOnlyList<string>? Inputs = null);
+    [property: JsonPropertyName("inputs")] IReadOnlyList<string>? Inputs = null,
+    [property: JsonPropertyName("from")] string? From = null);

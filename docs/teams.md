@@ -73,6 +73,22 @@ instance name so it lands in the same worktree, told the branch, the target and
 the files, and forbidden to touch the target or merge anywhere. It is retried
 once and never again.
 
+**A piece built on another starts on it.** A lead's request can say `from`: the
+commit or branch a new worktree starts from, for a second implementer whose work
+needs the first one's, not yet merged. Without it the tree starts at the
+repository's head, whatever the task's words say. Given to a reviewer or
+verifier, `from` names the work it reads instead: the node is started in
+whichever of this run's worktrees stands at that commit or is that branch, and
+where none does it runs in the repository and the run says so. A `from` that is
+not the name of a commit or branch is refused and the lead told why.
+
+**A reviewer or verifier is started where the work is.** When its brief names
+exactly one of this run's branches, it is launched in that branch's worktree
+and told so, and told not to commit or check anything out there. Naming two, or
+none, leaves it in the repository — a node put in the wrong tree reviews the
+wrong work and calls it fine — and a branch whose worktree has already gone is a
+warning in the run.
+
 **A run that gets nowhere stops.** Two rounds without a request is no progress,
 and no progress is a stop condition like any other.
 
@@ -130,6 +146,25 @@ edit it. So it may ask for things and it may never grant them.
   is exact: agreeing to `git push` does not agree to `git push --force`.
 - **Each node's permissions come from its role**, not from the team file. They
   are written out before the run starts, and deny wins.
+- **No node can start a subagent.** Work a node wants done is asked for in its
+  report, so that it gets a node, a branch, a review and a line in the journal.
+  Claude Code starts a subagent without asking, so being left off a role's
+  allow list does not stop one; `Agent` and `Task` are denied to every node
+  whatever its role says. A lead in a trial run started one to write the code
+  itself, and the run was over in a round.
+- **A shell command is judged part by part.** `cd tree && dotnet test | tail -5`
+  runs if every part is one the role allows, and is refused, naming the part, if
+  any one is not — so an allowed first word no longer carries whatever follows
+  it. Changing directory is never the part refused. Writing a file with `>`
+  needs a role that may write files. What cannot be split safely — `$( )`,
+  backticks, a here-document, an unclosed quote — is refused whole, with one
+  exception: `git commit -m "$(cat <<'EOF' … EOF)"`, which is how Claude Code
+  writes a commit message. With its delimiter quoted, that expands nothing and
+  runs nothing but `cat`, so it is read as the text it is. Nodes that
+  do not implement used to be left to the agent's own matcher, which reads a
+  rule as the start of the whole line and refused every one of those examples:
+  the first long team run's verifier was refused its first command three times
+  over and verified nothing.
 - **What no rule covers is put to you**, if you are there to answer — the
   question names the node, its role and what the call is pointed at. You are
   never asked about something a rule already settled, either way: a deny you
@@ -575,8 +610,9 @@ reading of *I cannot tell whether this is what you agreed to* is to ask.
 
 ### Who can run one
 
-Exactly one role: **`role.remediator`**. Every other role in the library has
-`Bash(git …)` and nothing else, so it cannot execute a script at all — which
+Exactly one role: **`role.remediator`**. Every other role in the library may run
+git, `dotnet build` and `dotnet test`, and commands that only read — `ls`,
+`cat`, `grep` and the like — and no interpreter, so it cannot execute a script at all — which
 means that until this role existed the whole harness gated something nothing
 could attempt.
 
@@ -865,9 +901,10 @@ list that simply leaves the second one out, and that difference is the whole
 question.
 
 Which repository a run used is not recorded directly, and is recovered: a node
-given its own worktree is launched in that worktree, and a node without one is
-launched in the repository itself, so the first node launched without a worktree
-says where the run was working. That path outlives the worktrees, which are
+given its own worktree is launched in that worktree, a reviewer or verifier sent
+to read one is launched in that one too, and any other node is launched in the
+repository itself, so the first node launched in neither says where the run was
+working. That path outlives the worktrees, which are
 cleared away after a merge. A run where every node had a worktree cannot be
 resolved, and says so instead of printing an empty list.
 

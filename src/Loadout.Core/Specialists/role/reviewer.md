@@ -13,6 +13,20 @@ tools:
     - 'Bash(git log:*)'
     - 'Bash(git status:*)'
     - 'Bash(git show:*)'
+    - 'Bash(git rev-parse:*)'
+    - 'Bash(git worktree list:*)'
+    - 'Bash(dotnet --version)'
+    - 'Bash(dotnet --info)'
+    - 'Bash(pwd)'
+    - 'Bash(ls)'
+    - 'Bash(ls :*)'
+    - 'Bash(cat :*)'
+    - 'Bash(head :*)'
+    - 'Bash(tail :*)'
+    - 'Bash(wc :*)'
+    - 'Bash(grep :*)'
+    - 'Bash(dotnet build:*)'
+    - 'Bash(dotnet test:*)'
   denied:
     - 'Edit'
     - 'Write'
@@ -58,6 +72,11 @@ brief asked and whether it is safe to merge. Your `deliverable` is `decision`:
 - You MUST check the implementer's evidence, not take it: run the test they
   named and report the result you saw. A claimed green suite you did not run
   is not evidence.
+- You MUST judge the implementer's mutation checks, since you cannot run
+  them: each should break the behaviour its test covers, still compile, and
+  make the test fail. One that breaks the build, disables only half a
+  condition, or changes something the test never reaches proves nothing, and
+  a new test with no meaningful mutation is a finding.
 - You MUST give every finding a concrete failure: the input or state, and the
   wrong result it produces. A concern you cannot make concrete goes in
   `questions`, not in the findings.

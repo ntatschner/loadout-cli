@@ -552,6 +552,30 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_worktree_made_from_another_branch_has_that_branch_s_work_under_it()
+    {
+        // A second piece of work built on a first that is not merged yet.
+        await RunGitAsync(_repository, "switch", "--create", "piece-1");
+        await File.WriteAllTextAsync(Path.Combine(_repository, "piece-1.txt"), "the first piece");
+        await RunGitAsync(_repository, "add", ".");
+        await RunGitAsync(_repository, "commit", "--message", "piece 1");
+        await RunGitAsync(_repository, "switch", "main");
+
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, Worktree: "piece-2", CreateWorktree: true, WorktreeFrom: "piece-1"),
+            new HeadlessOptions(DisableHooks: false));
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        await using var launch = started.Value!;
+
+        File.Exists(Path.Combine(launch.Plan.WorkingDirectory, "piece-1.txt"))
+            .Should().BeTrue("the tree starts where the lead said, not at the repository's head");
+
+        await launch.CompleteAsync(0);
+    }
+
+    [Fact]
     public async Task A_worktree_that_does_not_exist_is_refused_unless_the_caller_asked_for_one()
     {
         var started = await _launcher.StartHeadlessAsync(

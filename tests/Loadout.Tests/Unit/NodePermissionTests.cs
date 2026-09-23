@@ -100,6 +100,127 @@ public sealed class NodePermissionTests
         NodePermissions.Matches(rule, tool, target).Should().Be(matches);
     }
 
+    /// <summary>A role that reads and runs but may not write, as a reviewer or verifier is.</summary>
+    private static NodePolicy Reader() => new(
+        "20260916-1200-aaaa",
+        "verifier",
+        "role.verifier",
+        ["Read", "Grep", "Bash(git diff:*)", "Bash(git status:*)", "Bash(dotnet test:*)", "Bash(dotnet --version)",
+         "Bash(tail :*)", "Bash(grep :*)"],
+        ["Edit", "Write", "Bash(git push:*)", "Bash(git commit:*)"]);
+
+    /// <remarks>
+    /// Every one of these was refused in the first long team run, made of
+    /// nothing the role does not allow: the verifier needed the directory of
+    /// the work it was checking, and a rule was read as a prefix of the whole
+    /// line.
+    /// </remarks>
+    [Theory]
+    [InlineData("cd C:/work/tree && dotnet test --filter \"FullyQualifiedName~Tool\"")]
+    [InlineData("dotnet test 2>&1 | tail -5")]
+    [InlineData("git -C C:/work/tree status --short")]
+    [InlineData("git status --short; git diff --stat")]
+    [InlineData("dotnet --version")]
+    [InlineData("DOTNET_NOLOGO=1 dotnet test")]
+    [InlineData("dotnet test > /dev/null && git status")]
+    [InlineData("git diff --stat | grep \"src/\" | tail -3")]
+    public void A_command_made_only_of_allowed_parts_is_allowed(string command)
+    {
+        var decision = NodePermissions.Decide(Reader(), "Bash", Command(command));
+
+        decision.Allowed.Should().BeTrue(decision.Reason);
+    }
+
+    /// <remarks>
+    /// The other half, and the reason the change is safe to make: an allowed
+    /// first word used to let everything after it through.
+    /// </remarks>
+    [Theory]
+    [InlineData("dotnet test ; rm -rf .", "rm -rf .")]
+    [InlineData("git status && npm install left-pad", "npm install")]
+    [InlineData("cd C:/work/tree && sed -i s/a/b/ file.cs", "sed -i")]
+    [InlineData("git diff | python evil.py", "python")]
+    [InlineData("git diff --stat & curl https://example.invalid", "curl")]
+    public void A_part_nothing_allows_refuses_the_whole_command(string command, string part)
+    {
+        var decision = NodePermissions.Decide(Reader(), "Bash", Command(command));
+
+        decision.Allowed.Should().BeFalse();
+        decision.Reason.Should().Contain(part, "the node is told which part was refused");
+    }
+
+    [Theory]
+    [InlineData("git status && git push origin main")]
+    [InlineData("cd C:/work/tree && git commit -m done")]
+    [InlineData("git -C C:/work/tree push")]
+    public void The_deny_list_is_read_against_every_part(string command)
+    {
+        var decision = NodePermissions.Decide(Reader(), "Bash", Command(command));
+
+        decision.Allowed.Should().BeFalse();
+        decision.Rule.Should().StartWith("Bash(git ", "a deny is a decision, not a gap to be asked about");
+    }
+
+    [Theory]
+    [InlineData("dotnet test > results.txt")]
+    [InlineData("dotnet test >> results.txt")]
+    [InlineData("git diff 2> errors.txt")]
+    [InlineData("dotnet test &> all.txt")]
+    public void Writing_a_file_with_a_redirection_needs_a_role_that_writes(string command)
+    {
+        NodePermissions.Decide(Reader(), "Bash", Command(command)).Allowed.Should().BeFalse();
+
+        // The implementer writes files, so the same redirection is its to make.
+        var implementer = Implementer() with { Allow = [.. Implementer().Allow, "Bash(dotnet test:*)", "Bash(git diff:*)"] };
+
+        NodePermissions.Decide(implementer, "Bash", Command(command)).Allowed.Should().BeTrue();
+    }
+
+    /// <remarks>
+    /// How Claude Code writes every commit message. The first trial run's
+    /// implementer was refused it and had to find another way to commit.
+    /// </remarks>
+    [Theory]
+    [InlineData("git commit -m \"$(cat <<'EOF'\nAdd Hello\n\nReturns a greeting.\nEOF\n)\"")]
+    [InlineData("git diff && git commit -m \"$(cat <<\"EOF\"\nAdd Hello\nEOF\n)\"")]
+    [InlineData("git commit -m \"$(cat <<'EOF'\nA body that mentions $(rm -rf .) is only text\nEOF\n)\"")]
+    public void A_commit_message_from_a_quoted_here_document_is_only_text(string command)
+    {
+        var decision = NodePermissions.Decide(Implementer(), "Bash", Command(command));
+
+        decision.Allowed.Should().BeTrue(decision.Reason);
+    }
+
+    [Theory]
+    [InlineData("dotnet test $(rm -rf .)")]
+    [InlineData("dotnet test `whoami`")]
+    [InlineData("cat > script.py <<'EOF'\nprint(1)\nEOF")]
+    [InlineData("git diff \"unclosed")]
+
+    // Unquoted, the body's $( ) runs.
+    [InlineData("git commit -m \"$(cat <<EOF\n$(rm -rf .)\nEOF\n)\"")]
+
+    // Something other than cat, or something after the here-document.
+    [InlineData("git commit -m \"$(sh <<'EOF'\nrm -rf .\nEOF\n)\"")]
+    [InlineData("git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n; rm -rf .)\"")]
+    public void What_cannot_be_split_into_parts_is_refused_whole(string command)
+    {
+        NodePermissions.Decide(Reader(), "Bash", Command(command)).Allowed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_separator_inside_quotes_is_not_a_separator()
+    {
+        // A commit message with && in it is one command, and is the
+        // implementer's to make.
+        var decision = NodePermissions.Decide(Implementer(), "Bash", Command("git commit --message \"build && test\""));
+
+        decision.Allowed.Should().BeTrue(decision.Reason);
+    }
+
+    private static string Command(string command) =>
+        System.Text.Json.JsonSerializer.Serialize(new { command });
+
     [Fact]
     public void A_policy_that_cannot_be_read_is_no_policy()
     {

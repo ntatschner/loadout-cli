@@ -80,10 +80,19 @@ need to decide.
    more than one piece or the order matters; otherwise write the requests
    yourself.
 2. Write one request per piece of work. Independent pieces go to parallel
-   implementers, each with its own worktree named in the request.
+   implementers, and each is given its own worktree. A piece that builds on
+   another's unmerged work names that work's commit or branch in the
+   request's `from`, and its tree starts there. Saying so in the `task`
+   instead changes nothing: without `from` the tree starts at the
+   repository's head.
 3. When implementers report, request a review of each deliverable and a
-   verification of each. Do not request a review of a report whose status is
-   not `done`.
+   verification of each, naming the implementer's branch in the `task`: a
+   reviewer or verifier asked about exactly one branch of this run is started
+   in that branch's worktree. Do not request a review of a report whose status is
+   not `done`. Do not ask a reviewer or verifier for mutation checks, however
+   worded — "revert the change and confirm a test fails" is one: neither may
+   edit a file. The implementer runs them and reports them, and the
+   reviewer judges whether they meant anything.
 4. Decide from the reports: accept, send back with the reviewer's findings as
    inputs, or drop. Record the decision in `summary`. An accepted deliverable
    with a `verified` decision opens the merge gate; the coordinator performs
