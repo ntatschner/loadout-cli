@@ -265,18 +265,23 @@ public sealed class GlobalToolLifecycleTests : IDisposable
         var (registry, _) = _store.Registry();
 
         // Each way a project can ride along: in the script, the origin, a
-        // case's argument, and an example.
+        // case's argument (as an absolute path, and by name inside {tmp}),
+        // and an example.
         var drafts = new List<(ToolVersion Manifest, string Script, List<ToolCase> Cases)>
         {
             (Manifest("from-script", "1.0"), HardCoded, ToolStoreFixture.Cases()),
             (Manifest("from-origin", "1.0"),Generic, ToolStoreFixture.Cases()),
             (Manifest("from-case", "1.0"), Generic, ToolStoreFixture.Cases()),
             (Manifest("from-example", "1.0"), Generic, ToolStoreFixture.Cases()),
+            (Manifest("from-case-name", "1.0"), Generic, ToolStoreFixture.Cases()),
         };
 
         drafts[1].Manifest.Origin = "The system-watch team's cache kept filling the disk.";
         drafts[2].Cases[0].Args["CachePath"] = "/home/nigel/alpha/cache";
         drafts[3].Manifest.Examples[0].Command = "pwsh -File tool.ps1 -CachePath C:\\work\\beta\\cache";
+
+        // Only the genericity check sees this one: the harness takes {tmp}.
+        drafts[4].Cases[0].Args["CachePath"] = "{tmp}/alpha/cache";
 
         foreach (var (manifest, script, cases) in drafts)
         {
