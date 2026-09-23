@@ -76,9 +76,11 @@ once and never again.
 **A piece built on another starts on it.** A lead's request can say `from`: the
 commit or branch a new worktree starts from, for a second implementer whose work
 needs the first one's, not yet merged. Without it the tree starts at the
-repository's head, whatever the task's words say. A `from` that is not the name
-of a commit or branch, or one given to a node with no worktree of its own, is
-refused and the lead told why, rather than quietly ignored.
+repository's head, whatever the task's words say. Given to a reviewer or
+verifier, `from` names the work it reads instead: the node is started in
+whichever of this run's worktrees stands at that commit or is that branch, and
+where none does it runs in the repository and the run says so. A `from` that is
+not the name of a commit or branch is refused and the lead told why.
 
 **A reviewer or verifier is started where the work is.** When its brief names
 exactly one of this run's branches, it is launched in that branch's worktree
@@ -149,7 +151,10 @@ edit it. So it may ask for things and it may never grant them.
   any one is not — so an allowed first word no longer carries whatever follows
   it. Changing directory is never the part refused. Writing a file with `>`
   needs a role that may write files. What cannot be split safely — `$( )`,
-  backticks, a here-document, an unclosed quote — is refused whole. Nodes that
+  backticks, a here-document, an unclosed quote — is refused whole, with one
+  exception: `git commit -m "$(cat <<'EOF' … EOF)"`, which is how Claude Code
+  writes a commit message. With its delimiter quoted, that expands nothing and
+  runs nothing but `cat`, so it is read as the text it is. Nodes that
   do not implement used to be left to the agent's own matcher, which reads a
   rule as the start of the whole line and refused every one of those examples:
   the first long team run's verifier was refused its first command three times

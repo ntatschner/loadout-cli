@@ -1104,28 +1104,18 @@ public sealed partial class TeamRunner : ITeamRunner
                         continue;
                     }
 
-                    // Handed to git as the base of a new tree, so it has to be
-                    // a name and nothing else: one starting with a dash would
-                    // be read as an option. And only where there is a new tree
-                    // to start: said to a node that works in the repository or
-                    // another node's tree, it would be quietly ignored, and
-                    // the lead would go on believing the work sat on it.
-                    if (ask.From is { } from)
+                    // Handed to git, so it has to be a name and nothing else:
+                    // one starting with a dash would be read as an option. To
+                    // a node with a tree of its own it is where the tree
+                    // starts; to one without, the work it reads, which is how
+                    // the first lead to have it used it on a reviewer.
+                    if (ask.From is { } from && !IsRef(from))
                     {
-                        var why = !IsRef(from)
-                            ? $"'{from}' is not the name of a commit or branch"
-                            : !node.Worktree
-                                ? $"'{ask.Node}' gets no worktree of its own, so there is no new tree to start from '{from}'"
-                                : null;
-
-                        if (why is not null)
-                        {
-                            var reason = $"The lead asked for '{ask.Node}' from '{from}', which was refused: {why}.";
-                            warnings.Add(reason);
-                            refused.Add(reason);
-                            await journal.WriteAsync("request.refused", team.Lead, new { node = ask.Node, reason }, ct).ConfigureAwait(false);
-                            continue;
-                        }
+                        var reason = $"The lead asked for '{ask.Node}' from '{from}', which was refused: '{from}' is not the name of a commit or branch.";
+                        warnings.Add(reason);
+                        refused.Add(reason);
+                        await journal.WriteAsync("request.refused", team.Lead, new { node = ask.Node, reason }, ct).ConfigureAwait(false);
+                        continue;
                     }
 
                     // The one checkpoint that offers a third answer. Yes and no
@@ -2307,7 +2297,7 @@ public sealed partial class TeamRunner : ITeamRunner
             // Where the lead said the work builds on something not yet
             // merged. Only a tree being made reads it: an instance sent back
             // to its own tree finds it there, already on its branch.
-            WorktreeFrom: brief.Constraints.From,
+            WorktreeFrom: brief.Constraints.Worktree is { Length: > 0 } ? brief.Constraints.From : null,
             PermissionPolicyPath: policy,
             ResumeSessionId: resumeSession,
 
@@ -2759,10 +2749,12 @@ public sealed partial class TeamRunner : ITeamRunner
         CancellationToken ct)
     {
         var mode = role.Role?.Mode;
+        var named = BranchNamed(brief);
+        var from = brief.Constraints.From;
 
         if (brief.Constraints.Worktree is { Length: > 0 }
             || string.Equals(mode, "implement", StringComparison.OrdinalIgnoreCase)
-            || BranchNamed(brief) is not { } branch
+            || (named is null && from is null)
             || _projects is null
             || _git is null)
         {
@@ -2776,14 +2768,59 @@ public sealed partial class TeamRunner : ITeamRunner
             return null;
         }
 
-        var trees = await _git.ListWorktreesAsync(repository, ct).ConfigureAwait(false);
+        var listed = await _git.ListWorktreesAsync(repository, ct).ConfigureAwait(false);
+        var ours = (listed.Value ?? [])
+            .Where(tree => !tree.IsPrimary && tree.Branch is { } b && b.StartsWith($"teams-{brief.Run}-", StringComparison.Ordinal))
+            .ToList();
 
-        if (trees.Value?.Any(tree => !tree.IsPrimary && string.Equals(tree.Branch, branch, StringComparison.Ordinal)) == true)
+        // What the lead said as data wins over what its words mention. A
+        // commit is placed by the tree whose branch it is the head of: that
+        // is the work as it stands, and a commit further back is history the
+        // node can read from any tree.
+        if (from is not null)
         {
-            return branch;
+            if (ours.FirstOrDefault(tree => string.Equals(tree.Branch, from, StringComparison.Ordinal)) is { } byName)
+            {
+                return byName.Branch;
+            }
+
+            var wanted = await _git.ResolveAsync(repository, from, ct).ConfigureAwait(false);
+            var heads = new List<string>();
+
+            if (wanted.Succeeded)
+            {
+                foreach (var tree in ours)
+                {
+                    var head = await _git.ResolveAsync(repository, tree.Branch!, ct).ConfigureAwait(false);
+
+                    if (head.Succeeded && string.Equals(head.Value, wanted.Value, StringComparison.OrdinalIgnoreCase))
+                    {
+                        heads.Add(tree.Branch!);
+                    }
+                }
+            }
+
+            if (heads.Count == 1)
+            {
+                return heads[0];
+            }
+
+            if (named is null)
+            {
+                warnings.Add(
+                    $"{brief.Node} was asked to read {from}, which is not where any one of this run's worktrees stands, "
+                    + "so it runs in the repository.");
+
+                return null;
+            }
         }
 
-        warnings.Add($"{brief.Node} was asked about {branch}, which has no worktree any more, so it runs in the repository.");
+        if (ours.Any(tree => string.Equals(tree.Branch, named, StringComparison.Ordinal)))
+        {
+            return named;
+        }
+
+        warnings.Add($"{brief.Node} was asked about {named}, which has no worktree any more, so it runs in the repository.");
 
         return null;
     }
@@ -2927,7 +2964,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 // the branch list can tell which run made what.
                 Worktree: node.Worktree ? BranchFor(runId, nodeName) : null,
                 OutwardAllowed: outwardAllowed,
-                From: node.Worktree ? from : null),
+                From: from),
             doneWhen,
             node.Parameters.Count > 0 ? node.Parameters : null,
             delegates,
