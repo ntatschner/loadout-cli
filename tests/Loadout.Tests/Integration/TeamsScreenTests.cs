@@ -54,6 +54,23 @@ public sealed class TeamsScreenTests
         (app.Driver?.ToString() ?? string.Empty).Should().NotBeEmpty();
     }
 
+    /// <summary>
+    /// The screen opened with its Nodes pane empty until the cursor moved:
+    /// the detail was drawn for the selected run, and nothing was selected
+    /// until somebody pressed a key.
+    /// </summary>
+    [Fact]
+    public void The_first_run_s_nodes_show_as_soon_as_the_screen_opens()
+    {
+        using var session = TuiSession.Start(
+            app => new TeamsWindow(Runs(), Read(Runs()), live: false, app),
+            Width,
+            Height);
+
+        session.ScreenShowing("implementer-1").Should().Contain("implementer-1",
+            "the first run is the one on screen, so its nodes should be too");
+    }
+
     [Fact]
     public void A_machine_that_has_run_nothing_is_told_how_to_start_one()
     {

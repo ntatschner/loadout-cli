@@ -2059,11 +2059,14 @@
   }
 
   [data-presentation="rich"] .choices { display: grid; gap: var(--s2); }
-  [data-presentation="rich"] .choices.row { grid-auto-flow: column; grid-auto-columns: max-content; }
+  /* A row that wraps. It was a grid adding a column per option, which never
+     wraps: the six accents made the settings pane scroll sideways at an
+     ordinary 1280 wide, with the last two off to the side. */
+  [data-presentation="rich"] .choices.row { display: flex; flex-wrap: wrap; }
   [data-presentation="rich"] .choices.grid { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
 
   @media (max-width: 48rem) {
-    [data-presentation="rich"] .choices.row { grid-auto-flow: row; grid-auto-columns: auto; }
+    [data-presentation="rich"] .choices.row { flex-direction: column; }
   }
 
   [data-presentation="rich"] .choice {

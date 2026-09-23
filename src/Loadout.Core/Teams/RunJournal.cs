@@ -140,7 +140,10 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 
             covered.Add(new RunCovered(
                 criterion,
-                Said(one, "verdict") ?? "unmet",
+
+                // Runs before 0.41.2 wrote "not attempted" as the enum's name
+                // lower-cased, which nothing that reads a verdict recognised.
+                Said(one, "verdict") is "notattempted" ? "not-attempted" : Said(one, "verdict") ?? "unmet",
                 Said(one, "because")));
         }
 
@@ -820,6 +823,22 @@ public sealed class RunJournal : IRunJournal
         return OperationResult<RunForgotten>.Ok(
             new RunForgotten(runId, run.Team, bytes, files, unmerged));
     }
+
+    /// <summary>
+    /// A criterion's verdict as the journal records it: the report schema's
+    /// word, which is what every reader of a verdict expects.
+    /// </summary>
+    /// <remarks>
+    /// Not the enum's name lower-cased. That made "not attempted" into
+    /// "notattempted", which the dashboard printed as NOTATTEMPTED and
+    /// team status as a question mark.
+    /// </remarks>
+    public static string VerdictWord(Loadout.Models.Teams.CoverageVerdict verdict) => verdict switch
+    {
+        Loadout.Models.Teams.CoverageVerdict.Met => "met",
+        Loadout.Models.Teams.CoverageVerdict.NotAttempted => "not-attempted",
+        _ => "unmet",
+    };
 
     /// <summary>Folds a run's events into where everything got to.</summary>
     public static RunSummary Fold(string runId, string directory, IReadOnlyList<RunEvent> events)

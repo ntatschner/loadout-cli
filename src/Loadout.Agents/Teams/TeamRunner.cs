@@ -2101,7 +2101,7 @@ public sealed class TeamRunner : ITeamRunner
                     ? report.Coverage.Select(one => new
                     {
                         criterion = one.Criterion,
-                        verdict = one.Verdict.ToString().ToLowerInvariant(),
+                        verdict = RunJournal.VerdictWord(one.Verdict),
                         because = one.Because,
                     })
                     : null,

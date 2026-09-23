@@ -194,6 +194,8 @@ internal sealed class TeamsWindow : Window
             return true;
         });
 
+        // Once the detail pane exists, because selecting draws it.
+        SelectFirst();
         ShowDetail();
 
         if (_live)
@@ -353,7 +355,24 @@ internal sealed class TeamsWindow : Window
             }
         }
 
+        SelectFirst();
         ShowDetail();
+    }
+
+    /// <summary>
+    /// Puts the cursor on the first run when it is on none.
+    /// </summary>
+    /// <remarks>
+    /// A list is filled with nothing selected, and the Nodes pane shows the
+    /// selected run, so the screen opened with that pane empty until somebody
+    /// pressed a key. A run that vanished on a refresh left the same gap.
+    /// </remarks>
+    private void SelectFirst()
+    {
+        if (_runs.Count > 0 && Selected() is null)
+        {
+            _rows.SelectedItem = 0;
+        }
     }
 
     /// <summary>One line per run: what it is, where it got to, how long.</summary>
