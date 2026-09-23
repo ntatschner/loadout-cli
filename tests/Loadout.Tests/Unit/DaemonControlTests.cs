@@ -234,10 +234,36 @@ public sealed class DaemonControlTests : IDisposable
             .Should().Contain("--no-dashboard").And.NotContain("--port");
     }
 
+    [Fact]
+    public async Task The_daemon_still_starts_the_run_when_the_nomination_pass_throws()
+    {
+        var commands = new Asked();
+        var daemon = Daemon(commands, nominations: new ThrowingPass());
+        var schedule = new Loadout.Models.Teams.TeamSchedule
+        {
+            Id = "tools-on-finish",
+            Team = "tool-works",
+            Project = "loadout-cli",
+            Goal = "Look at what finished.",
+            On = "run-finished",
+            Autonomy = "autonomous",
+        };
+
+        var code = await daemon.StartAsync(schedule, DateTimeOffset.UtcNow, Output(), CancellationToken.None);
+
+        code.Should().Be(0);
+        commands.Paths.Should().ContainSingle().Which.Should().Be("team run",
+            "a pass that cannot read what finished is no reason not to start what was scheduled");
+        _said.ToString().Should().Contain("nominated nothing before tools-on-finish");
+    }
+
     private static int Occurrences(string text, string word) =>
         (text.Length - text.Replace(word, string.Empty, StringComparison.Ordinal).Length) / word.Length;
 
-    private TeamDaemonCommand Daemon(ICommandCatalogue commands, IProcessLauncher? launcher = null) =>
+    private TeamDaemonCommand Daemon(
+        ICommandCatalogue commands,
+        IProcessLauncher? launcher = null,
+        Loadout.Core.Tools.IToolNominationPass? nominations = null) =>
         new(
             secrets: null!,
             client: null!,
@@ -259,7 +285,30 @@ public sealed class DaemonControlTests : IDisposable
             workspace: null!,
             agents: null!,
             launcher ?? new StubProcessLauncher(string.Empty),
-            nominations: null!);
+            nominations: nominations!);
+
+    /// <summary>A nomination pass whose folders cannot be read.</summary>
+    private sealed class ThrowingPass : Loadout.Core.Tools.IToolNominationPass
+    {
+        public Task<IReadOnlyList<(Loadout.Core.Tools.ToolNomination Nomination,
+            Loadout.Models.Results.OperationResult<Loadout.Core.Tools.ToolSubmitted>? Filed)>> BeforeAsync(
+            Loadout.Models.Teams.TeamSchedule schedule, Action<string>? log = null, CancellationToken ct = default) =>
+            throw new UnauthorizedAccessException("Access to the path 'runs' is denied.");
+    }
+
+    /// <summary>A command that finishes at once, remembering what it was asked.</summary>
+    private sealed class Asked : ICommandCatalogue
+    {
+        public List<string> Paths { get; } = [];
+
+        public IReadOnlyList<CatalogueEntry> Commands => [];
+
+        public Task<int> RunAsync(string path, IReadOnlyList<string> arguments, CancellationToken ct = default)
+        {
+            Paths.Add(path);
+            return Task.FromResult(0);
+        }
+    }
 
     private CommandOutput Output() =>
         new(

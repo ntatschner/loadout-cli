@@ -199,20 +199,38 @@ public sealed partial class ToolNominator
             return shelved;
         }
 
-        foreach (var team in Directory.EnumerateDirectories(work).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal))
-        {
-            if (string.Equals(team, ScheduleService.ToolWorksTeam, StringComparison.OrdinalIgnoreCase)
-                || _remedies.All(team) is not { Succeeded: true } all)
-            {
-                continue;
-            }
+        List<string> teams;
 
-            foreach (var remedy in all.Value!)
+        try
+        {
+            teams = [.. Directory.EnumerateDirectories(work).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return shelved;
+        }
+
+        foreach (var team in teams)
+        {
+            // One team's shelf that cannot be read is passed over, and only it.
+            try
             {
-                if (_remedies.ScriptOf(team, remedy) is { Succeeded: true } script)
+                if (string.Equals(team, ScheduleService.ToolWorksTeam, StringComparison.OrdinalIgnoreCase)
+                    || _remedies.All(team) is not { Succeeded: true } all)
                 {
-                    shelved.Add(new Shelved(team, remedy, script.Value!));
+                    continue;
                 }
+
+                foreach (var remedy in all.Value!)
+                {
+                    if (_remedies.ScriptOf(team, remedy) is { Succeeded: true } script)
+                    {
+                        shelved.Add(new Shelved(team, remedy, script.Value!));
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
             }
         }
 
@@ -225,14 +243,30 @@ public sealed partial class ToolNominator
 
         foreach (var id in _journal.List(Depth))
         {
-            if (_journal.Summarise(id) is not { Succeeded: true } summarised
-                || summarised.Value! is not { Finished: not null } run
-                || string.Equals(run.Team, ScheduleService.ToolWorksTeam, StringComparison.OrdinalIgnoreCase))
+            RunSummary run;
+            IReadOnlyList<RunDocument> documents;
+
+            // A run folder that cannot be listed is passed over, and only it:
+            // the other runs are still worth reading. Summarising lists the
+            // folder too, so both are inside the guard.
+            try
+            {
+                if (_journal.Summarise(id) is not { Succeeded: true } summarised
+                    || summarised.Value! is not { Finished: not null } finished
+                    || string.Equals(finished.Team, ScheduleService.ToolWorksTeam, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                run = finished;
+                documents = RunDocuments.In(run.Directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 continue;
             }
 
-            foreach (var document in RunDocuments.In(run.Directory).Where(one => one.Kind == "report"))
+            foreach (var document in documents.Where(one => one.Kind == "report"))
             {
                 string text;
 

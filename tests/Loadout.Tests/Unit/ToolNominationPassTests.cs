@@ -61,6 +61,64 @@ public sealed class ToolNominationPassTests : IDisposable
         Directory.Exists(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task An_unreadable_run_folder_does_not_stop_the_pass()
+    {
+        FinishedRun("20260923-1000-a001", "alpha", "docker system prune --force");
+        FinishedRun("20260923-1100-b002", "beta", "git gc --aggressive");
+        var locked = new RunJournal(_store.Paths).DirectoryOf("20260923-1100-b002");
+
+        Unlistable(locked, true);
+
+        try
+        {
+            FluentActions.Invoking(() => Directory.EnumerateFiles(locked).ToList())
+                .Should().Throw<UnauthorizedAccessException>("the fixture has to be a folder that cannot be listed");
+
+            var nominated = await Pass().BeforeAsync(Schedule("tools-on-finish", "tidy-up", ScheduleService.RunFinishedEvent));
+
+            nominated.Should().ContainSingle(one => one.Filed!.Succeeded,
+                "the run that can be read is still read, and only the one that cannot is passed over");
+        }
+        finally
+        {
+            Unlistable(locked, false);
+        }
+    }
+
+    /// <summary>Takes away, or gives back, the right to list a folder's contents.</summary>
+    private static void Unlistable(string directory, bool locked)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var info = new DirectoryInfo(directory);
+            var security = info.GetAccessControl();
+            var rule = new System.Security.AccessControl.FileSystemAccessRule(
+                System.Security.Principal.WindowsIdentity.GetCurrent().User!,
+                System.Security.AccessControl.FileSystemRights.ListDirectory,
+                System.Security.AccessControl.AccessControlType.Deny);
+
+            if (locked)
+            {
+                security.AddAccessRule(rule);
+            }
+            else
+            {
+                security.RemoveAccessRule(rule);
+            }
+
+            info.SetAccessControl(security);
+        }
+        else
+        {
+            // Execute alone: a file whose name is known can still be opened,
+            // but the folder cannot be listed.
+            File.SetUnixFileMode(directory, locked
+                ? UnixFileMode.UserExecute
+                : UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
     private ToolNominationPass Pass()
     {
         var workspace = new WorkspaceManager(

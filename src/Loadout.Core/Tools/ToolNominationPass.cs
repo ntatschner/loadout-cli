@@ -9,6 +9,19 @@ using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Tools;
 
+/// <summary>What the daemon runs before starting a schedule that reads the tool catalogue.</summary>
+public interface IToolNominationPass
+{
+    /// <summary>Files what the nominator finds, when this schedule is one that reads it.</summary>
+    /// <param name="schedule">The schedule about to start.</param>
+    /// <param name="log">Where a line goes for each thing passed over.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<IReadOnlyList<(ToolNomination Nomination, OperationResult<ToolSubmitted>? Filed)>> BeforeAsync(
+        TeamSchedule schedule,
+        Action<string>? log = null,
+        CancellationToken ct = default);
+}
+
 /// <summary>
 /// The nominator's pass over finished work, run when something is about to
 /// look at the tool catalogue.
@@ -26,7 +39,7 @@ namespace Loadout.Core.Tools;
 /// failing the pass; the runs and shelves are still worth reading without it.
 /// </para>
 /// </remarks>
-public sealed class ToolNominationPass
+public sealed class ToolNominationPass : IToolNominationPass
 {
     private readonly IToolRegistry _registry;
     private readonly IRunJournal _journal;
@@ -67,6 +80,7 @@ public sealed class ToolNominationPass
     /// <returns>Each nomination found, as <see cref="ToolNominator.Scan" /> gives it; empty when none is due.</returns>
     public async Task<IReadOnlyList<(ToolNomination Nomination, OperationResult<ToolSubmitted>? Filed)>> BeforeAsync(
         TeamSchedule schedule,
+        Action<string>? log = null,
         CancellationToken ct = default)
     {
         if (!Precedes(schedule))
@@ -74,18 +88,19 @@ public sealed class ToolNominationPass
             return [];
         }
 
-        var lessons = await LessonsAsync(ct).ConfigureAwait(false);
+        var lessons = await LessonsAsync(log, ct).ConfigureAwait(false);
 
         return new ToolNominator(_registry, _journal, _remedies, _paths).Scan(lessons);
     }
 
     /// <summary>The text of every lesson topic of every registered project.</summary>
-    private async Task<IReadOnlyList<string>> LessonsAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<string>> LessonsAsync(Action<string>? log, CancellationToken ct)
     {
         var listed = await _projects.ListAsync(ct).ConfigureAwait(false);
 
         if (listed.Failed)
         {
+            log?.Invoke("nominating without lessons: the projects could not be listed");
             return [];
         }
 
@@ -93,14 +108,22 @@ public sealed class ToolNominationPass
 
         foreach (var project in listed.Value!)
         {
-            var topics = await _memory.ListAsync(_workspace.LocalPath, project.Entry.Slug, ct).ConfigureAwait(false);
+            IReadOnlyList<MemoryTopic> topics;
 
-            if (topics.Failed)
+            // The memory service leaves out a scope it cannot read rather than
+            // failing, so what reaches here unreadable arrives as a throw.
+            try
             {
+                topics = (await _memory.ListAsync(_workspace.LocalPath, project.Entry.Slug, ct).ConfigureAwait(false))
+                    .Value ?? [];
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                log?.Invoke($"passed over the lessons of {project.Entry.Slug}: {ex.Message}");
                 continue;
             }
 
-            lessons.AddRange(topics.Value!
+            lessons.AddRange(topics
                 .Where(one => one.Kind == MemoryKind.Lesson)
                 .Select(one => string.Join('\n', [one.Description, .. one.Facts])));
         }

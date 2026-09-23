@@ -81,7 +81,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
     private readonly Loadout.Agents.IAgentRegistry _agents;
     private readonly IProcessLauncher _launcher;
-    private readonly Loadout.Core.Tools.ToolNominationPass _nominations;
+    private readonly Loadout.Core.Tools.IToolNominationPass _nominations;
 
     /// <summary>
     /// Every command this daemon runs, counted while it runs.
@@ -114,7 +114,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Workspace.IWorkspaceManager workspace,
         Loadout.Agents.IAgentRegistry agents,
         IProcessLauncher launcher,
-        Loadout.Core.Tools.ToolNominationPass nominations)
+        Loadout.Core.Tools.IToolNominationPass nominations)
     {
         _launcher = launcher;
         _nominations = nominations;
@@ -843,25 +843,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                     $"[dim]{now.ToLocalTime():HH:mm}[/] starting {Markup.Escape(schedule.Id)}: "
                     + $"{Markup.Escape(schedule.Team)} on {Markup.Escape(schedule.Project)}");
 
-                // Before the team starts, so what finished work nominated is
-                // in the inbox the Creator is about to read.
-                var nominated = await _nominations.BeforeAsync(schedule, ct).ConfigureAwait(false);
-
-                if (nominated.Count(one => one.Filed is { Succeeded: true }) is > 0 and var filed)
-                {
-                    output.WriteLine($"[dim]{now.ToLocalTime():HH:mm}[/] nominated {filed} for the tool catalogue");
-                }
-
-                var code = await _commands.RunAsync(
-                    "team run",
-                    [
-                        schedule.Team,
-                        schedule.Goal,
-                        "--project", schedule.Project,
-                        "--autonomy", schedule.Autonomy,
-                        "--non-interactive",
-                    ],
-                    ct).ConfigureAwait(false);
+                var code = await StartAsync(schedule, now, output, ct).ConfigureAwait(false);
 
                 // The run names itself, and the newest one on this machine is
                 // the one just finished. Recorded afterwards so the schedule
@@ -890,6 +872,47 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             await RestAsync(output, ct).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>Starts one schedule's team, nominating first where it reads the catalogue.</summary>
+    /// <returns>The run's exit code.</returns>
+    /// <remarks>
+    /// The nomination goes before the team starts, so what finished work
+    /// nominated is in the inbox the Creator is about to read. It is not
+    /// allowed to stop the run: a pass that cannot read something says so in
+    /// one line and the team starts anyway, because the run is what was
+    /// scheduled and the nominations can wait for the next one.
+    /// </remarks>
+    internal async Task<int> StartAsync(TeamSchedule schedule, DateTimeOffset now, CommandOutput output, CancellationToken ct)
+    {
+        void Log(string line) =>
+            output.WriteLine($"[dim]{now.ToLocalTime():HH:mm}[/] {Markup.Escape(line)}");
+
+        try
+        {
+            var nominated = await _nominations.BeforeAsync(schedule, Log, ct).ConfigureAwait(false);
+
+            if (nominated.Count(one => one.Filed is { Succeeded: true }) is > 0 and var filed)
+            {
+                Log($"nominated {filed} for the tool catalogue");
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            Log($"nominated nothing before {schedule.Id}: {ex.Message}");
+        }
+
+        return await _commands.RunAsync(
+            "team run",
+            [
+                schedule.Team,
+                schedule.Goal,
+                "--project", schedule.Project,
+                "--autonomy", schedule.Autonomy,
+                "--non-interactive",
+            ],
+            ct).ConfigureAwait(false);
     }
 
     /// <summary>Whether the schedules were held at the last look.</summary>

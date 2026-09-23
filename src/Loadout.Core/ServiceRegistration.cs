@@ -166,7 +166,7 @@ public static class ServiceRegistration
             provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>(),
             provider.GetRequiredService<Tools.ToolHarness>(),
             provider.GetRequiredService<TimeProvider>()));
-        services.AddSingleton<Tools.ToolNominationPass>();
+        services.AddSingleton<Tools.IToolNominationPass, Tools.ToolNominationPass>();
         services.AddSingleton<Teams.IScheduleService, Teams.ScheduleService>();
         services.AddSingleton<Diagnostics.IDiagnosticContributor, Teams.Daemon.DaemonDiagnosticContributor>();
 
