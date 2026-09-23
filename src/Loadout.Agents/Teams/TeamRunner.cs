@@ -350,7 +350,7 @@ public interface ITeamRunner
 /// outcome's warnings rather than implied.
 /// </para>
 /// </remarks>
-public sealed class TeamRunner : ITeamRunner
+public sealed partial class TeamRunner : ITeamRunner
 {
     private static readonly TimeSpan EndGrace = TimeSpan.FromSeconds(15);
 
@@ -1104,6 +1104,30 @@ public sealed class TeamRunner : ITeamRunner
                         continue;
                     }
 
+                    // Handed to git as the base of a new tree, so it has to be
+                    // a name and nothing else: one starting with a dash would
+                    // be read as an option. And only where there is a new tree
+                    // to start: said to a node that works in the repository or
+                    // another node's tree, it would be quietly ignored, and
+                    // the lead would go on believing the work sat on it.
+                    if (ask.From is { } from)
+                    {
+                        var why = !IsRef(from)
+                            ? $"'{from}' is not the name of a commit or branch"
+                            : !node.Worktree
+                                ? $"'{ask.Node}' gets no worktree of its own, so there is no new tree to start from '{from}'"
+                                : null;
+
+                        if (why is not null)
+                        {
+                            var reason = $"The lead asked for '{ask.Node}' from '{from}', which was refused: {why}.";
+                            warnings.Add(reason);
+                            refused.Add(reason);
+                            await journal.WriteAsync("request.refused", team.Lead, new { node = ask.Node, reason }, ct).ConfigureAwait(false);
+                            continue;
+                        }
+                    }
+
                     // The one checkpoint that offers a third answer. Yes and no
                     // make somebody choose between the wrong brief and no brief,
                     // and the lead being wrong about a task is both ordinary and
@@ -1142,7 +1166,7 @@ public sealed class TeamRunner : ITeamRunner
                     var role = request.Specialists.Find(node.Role)!;
                     var brief = MakeBrief(
                         runId, ask.Node, team.Lead, node, role, task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
-                        request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory, criteria);
+                        request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory, criteria, ask.From);
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
@@ -2279,6 +2303,11 @@ public sealed class TeamRunner : ITeamRunner
             // fresh empty branch and review nothing.
             Worktree: brief.Constraints.Worktree ?? reviewing,
             CreateWorktree: brief.Constraints.Worktree is { Length: > 0 },
+
+            // Where the lead said the work builds on something not yet
+            // merged. Only a tree being made reads it: an instance sent back
+            // to its own tree finds it there, already on its branch.
+            WorktreeFrom: brief.Constraints.From,
             PermissionPolicyPath: policy,
             ResumeSessionId: resumeSession,
 
@@ -2801,6 +2830,12 @@ public sealed class TeamRunner : ITeamRunner
     internal static string BranchFor(string runId, string nodeName) =>
         $"teams-{runId}-{Safe(nodeName)}";
 
+    /// <summary>Whether a lead's <c>from</c> is a commit or branch name git can take as an argument, and nothing more.</summary>
+    internal static bool IsRef(string value) => RefName().IsMatch(value);
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^(?!.*\.\.)[A-Za-z0-9_][A-Za-z0-9_./-]{0,199}$")]
+    private static partial System.Text.RegularExpressions.Regex RefName();
+
     /// <summary>The permission tier a posture gets: edits accepted only for one that changes the repository.</summary>
     /// <remarks>
     /// <para>
@@ -2852,7 +2887,8 @@ public sealed class TeamRunner : ITeamRunner
         IReadOnlyList<string> allowed,
         Func<string, SpecialistDocument?> specialistsOf,
         string? teamDirectory,
-        IReadOnlyList<string>? criteria = null)
+        IReadOnlyList<string>? criteria = null,
+        string? from = null)
     {
         var definition = role.Role;
 
@@ -2890,7 +2926,8 @@ public sealed class TeamRunner : ITeamRunner
                 // two runs of the same team never meet and a person reading
                 // the branch list can tell which run made what.
                 Worktree: node.Worktree ? BranchFor(runId, nodeName) : null,
-                OutwardAllowed: outwardAllowed),
+                OutwardAllowed: outwardAllowed,
+                From: node.Worktree ? from : null),
             doneWhen,
             node.Parameters.Count > 0 ? node.Parameters : null,
             delegates,
@@ -3060,6 +3097,11 @@ public sealed class TeamRunner : ITeamRunner
             text.AppendLine(
                 $"- worktree: you are in a git worktree of your own, on branch `{worktree}`. Commit here. "
                 + "Do not switch branches, do not touch the repository's other trees, and do not merge.");
+
+            if (c.From is { Length: > 0 } from)
+            {
+                text.AppendLine($"- started from: `{from}`, which is already under your branch. Do not cherry-pick or merge it in.");
+            }
         }
 
         text.AppendLine($"- turns: {(c.MaxTurns is { } t ? t.ToString(System.Globalization.CultureInfo.InvariantCulture) : "the agent's default")}");

@@ -2002,6 +2002,61 @@ public sealed class TeamRunnerTests : IDisposable
             .Which.Should().Contain("cleared away with its tree");
     }
 
+    /// <remarks>
+    /// The first long team run briefed a second and third implementer to build
+    /// on the first one's commit "in your own worktree branched from commit
+    /// 9c5e7b2". Both trees were made from main whatever the words said, and
+    /// both nodes spent their turns being refused the cherry-pick that would
+    /// have fixed it.
+    /// </remarks>
+    [Fact]
+    public async Task A_new_worktree_starts_from_what_the_lead_says_it_builds_on()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadRequests(AskImplementer() with { From = "9c5e7b2" }), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        await RunAsync();
+
+        var (worker, _) = _launcher.Requests[1];
+
+        worker.CreateWorktree.Should().BeTrue();
+        worker.WorktreeFrom.Should().Be("9c5e7b2");
+        _launcher.Written("role.implementer")[0].Should().Contain("started from: `9c5e7b2`");
+    }
+
+    [Fact]
+    public async Task A_worktree_with_nothing_said_starts_from_the_repository_s_head()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        await RunAsync();
+
+        _launcher.Requests[1].Request.WorktreeFrom.Should().BeNull();
+        _launcher.Written("role.implementer")[0].Should().NotContain("started from:");
+    }
+
+    [Theory]
+    [InlineData("implementer", "--upload-pack=touch x", "is not the name of a commit or branch")]
+    [InlineData("implementer", "main..HEAD", "is not the name of a commit or branch")]
+    [InlineData("reviewer", "9c5e7b2", "gets no worktree of its own")]
+    public async Task A_from_that_cannot_be_honoured_is_refused_and_the_lead_is_told(string node, string from, string because)
+    {
+        // Ignoring it would be worse than refusing: the node would work on the
+        // repository's head and the lead would believe it had not.
+        var ask = new ReportRequest(node, "do it", node == "reviewer" ? DeliverableKind.Decision : DeliverableKind.Commit, From: from);
+        var lead = LeadRequests(ask) with { Status = ReportStatus.Blocked };
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(lead, 0.05m), Result(LeadDone(), 0.09m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        _launcher.Requests.Should().HaveCount(1, "the refused node was never launched");
+        outcome.Warnings.Should().Contain(w => w.Contains(because));
+        _launcher.Written("role.project-lead")[1].Should().Contain("## Requests refused").And.Contain(because);
+    }
+
     [Fact]
     public async Task The_same_notice_from_every_node_is_said_once()
     {

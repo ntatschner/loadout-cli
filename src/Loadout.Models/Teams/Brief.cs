@@ -99,13 +99,15 @@ public sealed record BriefDelegate(
 /// <param name="Worktree">The git worktree the node works in, or null to work in the repository itself.</param>
 /// <param name="OutwardAllowed">Outward actions this node may take, each named exactly. Empty means none.</param>
 /// <param name="Home">A throwaway home directory for roles that run documented commands, or null.</param>
+/// <param name="From">The commit or branch a new worktree is made from, or null for the repository's head.</param>
 public sealed record BriefConstraints(
     [property: JsonPropertyName("mode")] string Mode,
     [property: JsonPropertyName("budget_usd")] decimal? BudgetUsd = null,
     [property: JsonPropertyName("max_turns")] int? MaxTurns = null,
     [property: JsonPropertyName("worktree")] string? Worktree = null,
     [property: JsonPropertyName("outward_allowed")] IReadOnlyList<string>? OutwardAllowed = null,
-    [property: JsonPropertyName("home")] string? Home = null);
+    [property: JsonPropertyName("home")] string? Home = null,
+    [property: JsonPropertyName("from")] string? From = null);
 
 /// <summary>What kind of thing a node hands back.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<DeliverableKind>))]

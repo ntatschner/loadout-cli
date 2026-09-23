@@ -73,6 +73,13 @@ instance name so it lands in the same worktree, told the branch, the target and
 the files, and forbidden to touch the target or merge anywhere. It is retried
 once and never again.
 
+**A piece built on another starts on it.** A lead's request can say `from`: the
+commit or branch a new worktree starts from, for a second implementer whose work
+needs the first one's, not yet merged. Without it the tree starts at the
+repository's head, whatever the task's words say. A `from` that is not the name
+of a commit or branch, or one given to a node with no worktree of its own, is
+refused and the lead told why, rather than quietly ignored.
+
 **A reviewer or verifier is started where the work is.** When its brief names
 exactly one of this run's branches, it is launched in that branch's worktree
 and told so, and told not to commit or check anything out there. Naming two, or
