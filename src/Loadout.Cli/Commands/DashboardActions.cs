@@ -468,6 +468,12 @@ internal static class DashboardActions
             arguments.Add(agent);
         }
 
+        if (asking.TakeRecommendationAfter is { Length: > 0 } after)
+        {
+            arguments.Add("--take-recommendation-after");
+            arguments.Add(after.Trim());
+        }
+
         // One option per criterion, because a criterion is a sentence and
         // sentences contain commas. Blank ones are dropped rather than passed:
         // a criterion the lead can never report a verdict on would refuse
@@ -930,7 +936,9 @@ internal static class DashboardActions
                     .Select(finding => finding.Detail)
                     .FirstOrDefault(),
                 team.Nodes.Count,
-                team.Rules.Autonomy))
+                team.Rules.Autonomy,
+                team.DoneWhen,
+                team.Rules.TakeRecommendationAfter))
             .ToList();
 
         var here = (await projects

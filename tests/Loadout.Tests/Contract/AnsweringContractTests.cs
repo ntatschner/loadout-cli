@@ -117,6 +117,42 @@ public sealed class AnsweringContractTests
             "writing it would leave an answer nothing will ever read");
     }
 
+    /// <summary>
+    /// A lead's question can be sent back rather than answered, from the
+    /// terminal as from the page: the answer the run reads is "Think again".
+    /// </summary>
+    [BuiltCliFact]
+    public async Task A_question_can_be_sent_back_to_the_lead_to_think_again()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false);
+
+        var run = await loadout.RunAsync("team", "gate", Run, "--gate", "gate-b4302e02", "--think-again");
+
+        run.ExitCode.Should().Be(0, run.StandardOutput + run.StandardError);
+
+        var answer = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(directory, "answer-gate-b4302e02.json"))).RootElement;
+
+        answer.GetProperty("Chosen").GetString().Should().Be("Think again");
+    }
+
+    [BuiltCliFact]
+    public async Task Think_again_and_an_answer_together_is_refused()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false);
+
+        var run = await loadout.RunAsync(
+            "team", "gate", Run, "--gate", "gate-b4302e02", "--think-again", "--answer", "Ratchet");
+
+        run.ExitCode.Should().NotBe(0);
+        (run.StandardOutput + run.StandardError).Should().Contain("not both");
+        File.Exists(Path.Combine(directory, "answer-gate-b4302e02.json")).Should().BeFalse();
+    }
+
     [BuiltCliFact]
     public async Task An_answer_to_a_run_that_is_still_waiting_goes_through()
     {

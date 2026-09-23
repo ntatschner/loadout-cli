@@ -90,7 +90,10 @@ public sealed class TeamRunnerTests : IDisposable
         IChildLifetime? lifetime = null,
         Loadout.Core.Tasks.ITaskService? tasks = null,
         FakeGit? git = null,
-        int rounds = 5)
+        int rounds = 5,
+        IReadOnlyList<string>? criteria = null,
+        TimeSpan? takeRecommendationAfter = null,
+        ITeamConsole? console = null)
     {
         return await new TeamRunner(
             _launcher,
@@ -101,8 +104,9 @@ public sealed class TeamRunnerTests : IDisposable
             lifetime,
             tasks).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
-                "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true),
-            _console);
+                "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
+                Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter),
+            console ?? _console);
     }
 
     // ------------------------------------------------------------ scripts
@@ -386,6 +390,159 @@ public sealed class TeamRunnerTests : IDisposable
 
         outcome.Ended.Should().StartWith("halted: implementer took an outward action");
         _launcher.Written("role.project-lead").Should().HaveCount(1, "the lead never got the floor back");
+    }
+
+    // ------------------------------------------------ done-when, readings, timed answers
+
+    private static async Task<TeamDefinition> JudgedTeamAsync(params string[] doneWhen)
+    {
+        var team = await IteratingProjectAsync();
+
+        // A copy, so no other test's team is changed underneath it.
+        return new TeamDefinition
+        {
+            Name = team.Name,
+            Description = team.Description,
+            Lead = team.Lead,
+            Nodes = team.Nodes,
+            Rules = team.Rules,
+            DoneWhen = [.. doneWhen],
+        };
+    }
+
+    private static Report LeadDoneCovering(params string[] met) => LeadDone() with
+    {
+        Coverage = [.. met.Select(one => new ReportCoverage(
+            one, CoverageVerdict.Met, "implementer/1's report: dotnet test, 1612 passed", Understood: $"read as: {one}"))],
+        GoalUnderstood = "a --since option on loadout usage, with a test",
+    };
+
+    private async Task<IReadOnlyList<string>> JournalAsync(TeamRunOutcome outcome) =>
+        await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
+
+    /// <summary>
+    /// A run given no done-when is held to the team's own, and the lead is not
+    /// asked to propose any: the team's author already said what done means.
+    /// </summary>
+    [Fact]
+    public async Task A_run_given_no_done_when_is_held_to_the_team_s_own()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadDoneCovering("the suite passes"), 0.05m), Result(LeadDoneCovering("the suite passes"), 0.06m));
+
+        var outcome = (await RunAsync(team: await JudgedTeamAsync("the suite passes"))).Value!;
+
+        var brief = _launcher.Written("role.project-lead")[0];
+
+        brief.Should().Contain("the suite passes");
+        brief.Should().NotContain("proposed_done_when", "the team's author already answered that question");
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"criteria.agreed\"") && line.Contains("\"by\":\"team\""));
+    }
+
+    /// <summary>A run's own done-when replaces the team's; the two are never merged.</summary>
+    [Fact]
+    public async Task A_run_s_own_done_when_replaces_the_team_s()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadDoneCovering("mine"), 0.05m), Result(LeadDoneCovering("mine"), 0.06m));
+
+        var outcome = (await RunAsync(team: await JudgedTeamAsync("the team's"), criteria: ["mine"])).Value!;
+
+        var brief = _launcher.Written("role.project-lead")[0];
+
+        brief.Should().Contain("mine");
+        brief.Should().NotContain("the team's");
+
+        (await JournalAsync(outcome)).Should().NotContain(line => line.Contains("\"by\":\"team\""));
+    }
+
+    [Fact]
+    public async Task The_lead_is_asked_what_it_took_the_goal_and_each_criterion_to_mean()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadDoneCovering("the suite passes"), 0.05m), Result(LeadDoneCovering("the suite passes"), 0.06m));
+
+        var outcome = (await RunAsync(criteria: ["the suite passes"])).Value!;
+
+        var brief = _launcher.Written("role.project-lead")[0];
+
+        brief.Should().Contain("'understood'").And.Contain("'goal_understood'");
+
+        // And what it said reaches the journal, where every view reads it.
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"report.checked\"")
+            && line.Contains("\"understood\":\"read as: the suite passes\"")
+            && line.Contains("\"goalUnderstood\":\"a --since option on loadout usage, with a test\""));
+    }
+
+    /// <summary>
+    /// A question nobody answers is answered with the lead's recommendation
+    /// once the wait is up, the way a person would answer it: through the
+    /// question's own file, which the waiting console reads like any other.
+    /// </summary>
+    [Fact]
+    public async Task A_question_nobody_answers_in_time_takes_the_lead_s_recommendation()
+    {
+        var console = new Loadout.Cli.Commands.DashboardTeamConsole(TimeProvider.System, _ => { });
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m), Result(LeadDone(), 0.09m));
+
+        var outcome = (await RunAsync(takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console)).Value!;
+
+        outcome.Ended.Should().Be("done");
+        _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **yes**");
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"decision\"") && line.Contains("\"by\":\"timed default\""));
+
+        // Answered in the question's own file, so the page stops offering it.
+        Directory.GetFiles(outcome.Directory!, "answer-gate-*.json")
+            .Select(File.ReadAllText)
+            .Should().ContainSingle().Which.Should().Contain("\"By\":\"timed default\"");
+    }
+
+    /// <summary>
+    /// A console that asks a person directly - a terminal - is never answered
+    /// for them. Its prompt blocks, and nothing here could answer it anyway.
+    /// </summary>
+    [Fact]
+    public async Task A_console_that_does_not_answer_in_place_waits_for_the_person()
+    {
+        _console.AnswersInPlace = false;
+        _console.Decide = q => q.Options[1];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m), Result(LeadDone(), 0.09m));
+
+        var outcome = (await RunAsync(takeRecommendationAfter: TimeSpan.FromMilliseconds(1))).Value!;
+
+        _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **no**");
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"decision\"") && line.Contains("\"by\":\"person\""));
+    }
+
+    /// <summary>
+    /// "Think again" is not a decision: the lead is told none of its options
+    /// was chosen and to decide it itself or ask a better question.
+    /// </summary>
+    [Fact]
+    public async Task Think_again_sends_the_question_back_to_the_lead_as_something_it_can_act_on()
+    {
+        _console.Decide = _ => TeamRunner.ThinkAgain;
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m), Result(LeadDone(), 0.09m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        _launcher.Written("role.project-lead")[1].Should()
+            .Contain("Proceed with one implementer?")
+            .And.Contain("None of the options was chosen")
+            .And.NotContain("**Think again**");
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"decision\"") && line.Contains("\"answer\":\"think again\""));
     }
 
     [Fact]

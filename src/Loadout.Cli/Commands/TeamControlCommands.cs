@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Loadout.Agents.Teams;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams;
 using Loadout.Models;
@@ -88,6 +89,10 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         [CommandOption("--by <WHERE>")]
         [Description("Where the answer came from: terminal or dashboard. For the daemon.")]
         public string? By { get; init; }
+
+        [CommandOption("--think-again")]
+        [Description("For a lead's question: choose none of its options and send it back to think again.")]
+        public bool ThinkAgain { get; init; }
     }
 
     /// <inheritdoc />
@@ -152,7 +157,25 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
             return output.Fail("Say which with --gate.", ExitCode.InvalidArguments);
         }
 
-        if (settings.Answer is not { Length: > 0 } answer)
+        // Only where there are options to reject. A permission or a
+        // confirmation is yes or no, and "think again" there would read as a
+        // yes to a question nobody answered.
+        if (settings.ThinkAgain)
+        {
+            if (gate.Kind != "question")
+            {
+                return output.Fail(
+                    "--think-again sends a lead's question back to it. This is not a question with options: answer it with --answer.",
+                    ExitCode.InvalidArguments);
+            }
+
+            if (settings.Answer is { Length: > 0 })
+            {
+                return output.Fail("Say --think-again or --answer, not both.", ExitCode.InvalidArguments);
+            }
+        }
+
+        if ((settings.ThinkAgain ? TeamRunner.ThinkAgain : settings.Answer) is not { Length: > 0 } answer)
         {
             answer = string.Empty;
         }

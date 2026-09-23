@@ -81,9 +81,16 @@ loadout team run docs-crew "make the docs true" \
 Give `--done-when` once per criterion. Every node is told them, and the lead's
 final report has to give a verdict on each: met, unmet or not attempted.
 
-If you give none, the lead proposes criteria and they're put in front of you
-before any worker starts. Change them, accept them, or empty the box to run
-with nothing checking it.
+If you give none, the team's own apply, where its file gives some —
+`team show docs-crew` lists them. Yours replace the team's rather than add to
+them. If the team has none either, the lead proposes criteria and they're put in
+front of you before any worker starts. Change them, accept them, or empty the
+box to run with nothing checking it.
+
+For a run you won't be watching, `--take-recommendation-after 30m` takes the
+lead's recommendation on any of its questions that nobody has answered in that
+time. It only applies to runs answered from the dashboard, and never to a merge
+or anything that leaves your machine.
 
 A run with no budget in its team file and no `--rounds` is refused before it
 starts, naming both — without either, a lead that keeps asking for one more

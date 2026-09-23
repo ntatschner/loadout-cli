@@ -252,7 +252,9 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
                     budget = new { team.Rules.Budget.Usd, team.Rules.Budget.TurnsPerNode, team.Rules.Budget.WallClock },
                     gates = new { team.Rules.Gates.Outward, team.Rules.Gates.Merge, team.Rules.Gates.OutwardAllowedWhenAutonomous },
                     team.Rules.StopWhen,
+                    team.Rules.TakeRecommendationAfter,
                 },
+                doneWhen = team.DoneWhen,
                 findings = problems.Select(f => new { f.Kind, f.Detail }),
             });
 
@@ -280,6 +282,19 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
             foreach (var rule in team.Declarations)
             {
                 output.WriteLine($"  - {Markup.Escape(rule)}");
+            }
+        }
+
+        // What a run is judged on when nobody says, before the nodes for the
+        // same reason as the goal: it is what the nodes are working towards.
+        if (team.DoneWhen.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine("  [bold]done when, unless the run says otherwise[/]");
+
+            foreach (var criterion in team.DoneWhen)
+            {
+                output.WriteLine($"  - {Markup.Escape(criterion)}");
             }
         }
 
@@ -312,6 +327,13 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
             + (team.Rules.Budget.WallClock is { Length: > 0 } clock ? $", {Markup.Escape(clock)}" : string.Empty));
         output.WriteLine($"  merge      {(team.Rules.Gates.Merge.Count > 0 ? Markup.Escape(string.Join(" and ", team.Rules.Gates.Merge)) : "no merge gate")}");
         output.WriteLine($"  stops when {Markup.Escape(string.Join(", ", team.Rules.StopWhen))}");
+
+        if (TeamDuration.Parse(team.Rules.TakeRecommendationAfter) is { } after)
+        {
+            output.WriteLine(
+                $"  questions  the lead's recommendation is taken after {TeamDuration.Spell(after)} with no answer, "
+                + "on a run answered from the dashboard");
+        }
 
         if (team.Rules.Gates.OutwardAllowedWhenAutonomous.Count > 0)
         {
@@ -531,10 +553,13 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                 }),
                 run.Branches,
                 run.Merged,
+                run.GoalUnderstood,
                 coverage = run.Coverage.Select(one => new
                 {
                     one.Criterion,
+                    one.Understood,
                     one.Verdict,
+                    verdictInWords = one.InWords,
                     one.Because,
                 }),
                 delivered = behind.Delivered.Select(one => new
@@ -602,6 +627,14 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             output.WriteLine($"  {Markup.Escape(run.Goal)}");
         }
 
+        // What the lead made of it, straight under the goal, so the two can be
+        // read against each other. A run working hard on a nearby, easier goal
+        // looks busy and on track until somebody puts the two side by side.
+        if (run.GoalUnderstood is { Length: > 0 } reading)
+        {
+            output.WriteLine($"    [dim]taken to mean: {Markup.Escape(reading)}[/]");
+        }
+
         // What the goal was broken into, and where each part got to. Above the
         // nodes rather than below, because "is this run done" is answered here
         // and "what is each node up to" is the question after it.
@@ -615,7 +648,14 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
             foreach (var one in run.Coverage)
             {
                 output.WriteLine(
-                    $"  {Verdict(one.Verdict)} {Markup.Escape(one.Criterion)}");
+                    $"  {Verdict(one.InWords)} {Markup.Escape(one.Criterion)}");
+
+                // How the lead read it, before why it says it got there: a
+                // verdict is only worth the reading it was given.
+                if (one.Understood is { Length: > 0 } understood)
+                {
+                    output.WriteLine($"      [dim]taken to mean: {Markup.Escape(understood)}[/]");
+                }
 
                 // The evidence, under the criterion it is for. A met with
                 // nothing behind it never reaches here - the report is sent
@@ -809,7 +849,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     {
         "met" => "[green]+ met          [/]",
         "unmet" => "[yellow]- unmet        [/]",
-        "not-attempted" => "[yellow]! not attempted[/]",
+        "not attempted" => "[yellow]! not attempted[/]",
         _ => $"[dim]? {Markup.Escape(verdict).PadRight(13)}[/]",
     };
 
@@ -1296,6 +1336,22 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             "Something that must be true for the run to be done. Repeat it for each. "
             + "The lead must report a verdict and evidence for every one.")]
         public string[] DoneWhen { get; init; } = [];
+
+        /// <summary>
+        /// How long the lead's questions wait for an answer before its
+        /// recommendation is taken, overriding the team's own rule.
+        /// </summary>
+        /// <remarks>
+        /// For a run nobody is going to sit and watch. Only the lead's own
+        /// questions - never a gate on an outward action or a merge - and only
+        /// where the answer arrives as a file, which is a run started from the
+        /// dashboard or the daemon. A terminal prompt waits for you.
+        /// </remarks>
+        [CommandOption("--take-recommendation-after <DURATION>")]
+        [Description(
+            "Take the lead's recommendation when one of its questions has had no answer for this long: "
+            + "30m, 2h. Only on a run answered from the dashboard; never for an outward action or a merge.")]
+        public string? TakeRecommendationAfter { get; init; }
     }
 
     /// <summary>
@@ -1358,7 +1414,11 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             // every done for ever.
             Criteria: [.. settings.DoneWhen
                 .Select(one => one.Trim())
-                .Where(one => one.Length > 0)]);
+                .Where(one => one.Length > 0)],
+
+            // The run's own, then the team's. Neither means a person answers.
+            TakeRecommendationAfter: TeamDuration.Parse(settings.TakeRecommendationAfter)
+                ?? TeamDuration.Parse(team.Rules.TakeRecommendationAfter));
     }
 
     /// <inheritdoc />
@@ -1398,6 +1458,17 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         if (string.IsNullOrWhiteSpace(settings.Goal))
         {
             return output.Fail("A run needs a goal: what the lead is for, in your words.", ExitCode.InvalidArguments);
+        }
+
+        // Refused rather than ignored: a duration nobody could read would
+        // otherwise mean "wait for a person" without saying so, and somebody
+        // who asked for their run to keep moving overnight would find it had
+        // not.
+        if (settings.TakeRecommendationAfter is { Length: > 0 } after && TeamDuration.Parse(after) is null)
+        {
+            return output.Fail(
+                $"'{after}' is not a duration. Write it as 30m, 2h or 1d.",
+                ExitCode.InvalidArguments);
         }
 
         var autonomy = (settings.Autonomy ?? team.Rules.Autonomy).Trim().ToLowerInvariant();
@@ -1732,7 +1803,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             var chosen = _reading.Ask(
                 _console,
                 $"{question.Question} (the lead recommends: {question.Recommendation})",
-                [.. question.Options, Stop],
+                [.. question.Options, TeamRunner.ThinkAgain, Stop],
                 option => option);
 
             return Task.FromResult(chosen == Stop ? null : chosen);

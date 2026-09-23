@@ -208,7 +208,13 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
             Remediation: machine.Value?.Teams.Remediation,
             TrustedRemedies: machine.Value?.Teams.TrustedRemedies,
             Resuming: run,
-            ResumeMessage: settings.Message is { Length: > 0 } said ? said.Trim() : null);
+            ResumeMessage: settings.Message is { Length: > 0 } said ? said.Trim() : null,
+
+            // The team's rule. A wait the run was started with on the command
+            // line is not carried over: the journal records it for reading, not
+            // as a setting, and a resume that quietly reapplied an old flag
+            // would be one somebody had not asked for this time.
+            TakeRecommendationAfter: Loadout.Models.Teams.TeamDuration.Parse(team.Rules.TakeRecommendationAfter));
 
         if (!settings.DryRun && settings.Usd is { } raised)
         {

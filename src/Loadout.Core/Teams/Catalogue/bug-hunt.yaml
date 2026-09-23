@@ -1,5 +1,8 @@
 name: bug-hunt
 description: Reproduces a bug without a person watching, proves its cause, fixes the proven cause, and proves the fix holds.
+done_when:
+  - "a test reproduces the bug: it fails without the fix and passes with it"
+  - "the full test suite passes with the fix in place"
 lead: lead
 nodes:
   lead:

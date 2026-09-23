@@ -1,5 +1,7 @@
 name: dependency-sweep
 description: Updates dependencies one branch per bump, in parallel, and verifies each with the suite green before it is offered for merge.
+done_when:
+  - "every dependency this run updated builds and passes the full test suite on its own branch"
 lead: lead
 nodes:
   lead:

@@ -50,6 +50,11 @@ namespace Loadout.Models.Teams;
 /// worker is briefed, and what comes back is what the run is held to.
 /// </para>
 /// </param>
+/// <param name="GoalUnderstood">
+/// What the lead took the goal to mean, in a sentence, so a person can see the
+/// run was working to what they asked rather than to a nearby thing that was
+/// easier. Optional, as the coverage's own reading is.
+/// </param>
 public sealed record Report(
     [property: JsonPropertyName("node")] string Node,
     [property: JsonPropertyName("status")] ReportStatus Status,
@@ -63,7 +68,8 @@ public sealed record Report(
     [property: JsonPropertyName("outward_requested")] IReadOnlyList<string>? OutwardRequested = null,
     [property: JsonPropertyName("next")] string? Next = null,
     [property: JsonPropertyName("coverage")] IReadOnlyList<ReportCoverage>? Coverage = null,
-    [property: JsonPropertyName("proposed_done_when")] IReadOnlyList<string>? ProposedDoneWhen = null)
+    [property: JsonPropertyName("proposed_done_when")] IReadOnlyList<string>? ProposedDoneWhen = null,
+    [property: JsonPropertyName("goal_understood")] string? GoalUnderstood = null)
 {
     /// <summary>The version of this shape.</summary>
     [JsonPropertyName("contract")]
@@ -106,10 +112,18 @@ public enum ReportStatus
 /// What shows it: which node, which report, which evidence. Required for met,
 /// because a claim with nothing behind it is what this exists to stop.
 /// </param>
+/// <param name="Understood">
+/// What the lead took the criterion to mean, in its own words. A criterion is
+/// a sentence somebody wrote in a hurry, and a verdict on it is only worth as
+/// much as the reading it was given: "the tests pass" read as "the new test
+/// passes" can be met while the suite is red. Optional, because runs written
+/// before it was asked for have none.
+/// </param>
 public sealed record ReportCoverage(
     [property: JsonPropertyName("criterion")] string Criterion,
     [property: JsonPropertyName("verdict")] CoverageVerdict Verdict,
-    [property: JsonPropertyName("because")] string? Because = null);
+    [property: JsonPropertyName("because")] string? Because = null,
+    [property: JsonPropertyName("understood")] string? Understood = null);
 
 /// <summary>What became of one criterion.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<CoverageVerdict>))]

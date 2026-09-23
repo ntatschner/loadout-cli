@@ -1399,6 +1399,41 @@ public sealed class DashboardServerTests : IAsyncLifetime
             .ContainSingle().Which.Should().Contain("connect-src 'self'");
     }
 
+    /// <summary>
+    /// How the lead read the goal and each criterion reaches the page, and a
+    /// verdict comes as words - the stored "notattempted" was once printed as
+    /// it was, in capitals.
+    /// </summary>
+    [Fact]
+    public async Task A_run_s_readings_and_verdicts_in_words_reach_the_page()
+    {
+        var run = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync())
+            .RootElement.GetProperty("runs")[0];
+
+        run.GetProperty("goalUnderstood").GetString().Should().Be("a --since option on loadout usage");
+
+        var criterion = run.GetProperty("coverage")[0];
+
+        criterion.GetProperty("understood").GetString().Should().Be("a test that fails without --since");
+        criterion.GetProperty("verdictInWords").GetString().Should().Be("not attempted");
+    }
+
+    /// <summary>
+    /// The page shows those readings, offers the timed recommendation on the
+    /// start form and sends it, and says what the team is judged on by default.
+    /// </summary>
+    [Fact]
+    public async Task The_page_shows_readings_and_offers_the_timed_recommendation()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("label.textContent = \"Taken to mean: \";");
+        text.Should().Contain("var words = one.verdictInWords || one.verdict;");
+        text.Should().Contain("id=\"start-take\"");
+        text.Should().Contain("takeRecommendationAfter: take || null");
+        text.Should().Contain("function aboutDefaults(team)");
+    }
+
     [Fact]
     public async Task The_runs_come_back_as_the_page_needs_them()
     {
@@ -2576,6 +2611,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         [
             """{"at":"2026-09-16T12:00:00+00:00","run":"r","node":null,"kind":"run.started","data":{"team":"iterating-project","goal":"Add --since","autonomy":"autonomous","rounds":5,"path":"D:/repo"}}""",
             """{"at":"2026-09-16T12:00:02+00:00","run":"r","node":"lead","kind":"node.launched","data":{"role":"role.project-lead","worktree":"teams-r-lead","base":"1111111111111111111111111111111111111111"}}""",
+            """{"at":"2026-09-16T12:00:10+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"working","outcome":"accepted","goalUnderstood":"a --since option on loadout usage","coverage":[{"criterion":"a test covers it","verdict":"notattempted","because":"not reached yet","understood":"a test that fails without --since"}]}}""",
             """{"at":"2026-09-16T12:00:20+00:00","run":"r","node":"lead","kind":"node.doing","data":{"doing":"Read docs/commands.md"}}""",
         ];
 

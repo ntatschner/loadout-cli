@@ -40,6 +40,11 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// somebody who chose a model on the page had nowhere to put it.
 /// </para>
 /// </param>
+/// <param name="TakeRecommendationAfter">
+/// How long the lead's questions wait for somebody before its recommendation
+/// is taken, as 30m or 2h, or null for the team's own rule and then waiting on
+/// a person.
+/// </param>
 /// <remarks>
 /// <para>
 /// Nothing here is checked against anything. Whether that team exists, whether
@@ -63,7 +68,8 @@ public sealed record StartRequest(
     string? Autonomy = null,
     IReadOnlyList<string>? Criteria = null,
     string? Model = null,
-    string? Agent = null);
+    string? Agent = null,
+    string? TakeRecommendationAfter = null);
 
 /// <summary>A team the page asked be written.</summary>
 /// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>
@@ -159,6 +165,14 @@ public sealed record PruneAction(
 /// <param name="Trouble">What is wrong with it, or null where nothing is.</param>
 /// <param name="Nodes">How many nodes it has, so a page can say how big a thing this is.</param>
 /// <param name="Autonomy">manual, supervised or autonomous, as its own rules set it.</param>
+/// <param name="DoneWhen">
+/// What a run of it is judged on when the form's own box is left empty, so the
+/// page can say so before somebody starts one rather than after.
+/// </param>
+/// <param name="TakeRecommendationAfter">
+/// How long the lead's questions wait before its recommendation is taken, as
+/// the team file says it, or null for waiting on a person.
+/// </param>
 public sealed record ChoosableTeam(
     string Name,
     string Description,
@@ -166,7 +180,9 @@ public sealed record ChoosableTeam(
     bool Template,
     string? Trouble,
     int Nodes,
-    string Autonomy);
+    string Autonomy,
+    IReadOnlyList<string>? DoneWhen = null,
+    string? TakeRecommendationAfter = null);
 
 /// <summary>
 /// What can be started from this page.
