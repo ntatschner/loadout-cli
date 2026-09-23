@@ -32,7 +32,7 @@ namespace Loadout.Cli.Commands;
 /// a control it cannot honour is worse than one that does not offer it.
 /// </para>
 /// </remarks>
-internal static class DashboardActions
+internal static partial class DashboardActions
 {
     /// <summary>Every setting the page can change.</summary>
     /// <remarks>
@@ -433,7 +433,7 @@ internal static class DashboardActions
     {
         ArgumentNullException.ThrowIfNull(asking);
 
-        var arguments = new List<string> { asking.Team, asking.Goal };
+        var arguments = new List<string> { asking.Team, Unlisted(asking.Goal) };
 
         if (asking.Project is { Length: > 0 } project)
         {
@@ -468,7 +468,10 @@ internal static class DashboardActions
             arguments.Add(agent);
         }
 
-        if (asking.TakeRecommendationAfter is { Length: > 0 } after)
+        // "never" is what the box shows when it is empty, so it is what people
+        // type when they mean that. It asks for nothing, so nothing is passed.
+        if (asking.TakeRecommendationAfter is { Length: > 0 } after
+            && !Loadout.Models.Teams.TeamDuration.IsNever(after))
         {
             arguments.Add("--take-recommendation-after");
             arguments.Add(after.Trim());
@@ -478,12 +481,17 @@ internal static class DashboardActions
         // sentences contain commas. Blank ones are dropped rather than passed:
         // a criterion the lead can never report a verdict on would refuse
         // every done for ever.
+        //
+        // A line typed as a list item - "- tests pass", "1. tests pass" - has
+        // its marker taken off: it is how the list was written, not part of the
+        // criterion, and a value that starts with a dash is read as an option,
+        // which refused the whole run. Joined with = as well, so a criterion
+        // that genuinely starts with one still reaches the run as a value.
         foreach (var criterion in asking.Criteria ?? [])
         {
-            if (criterion.Trim() is { Length: > 0 } said)
+            if (Unlisted(criterion) is { Length: > 0 } said)
             {
-                arguments.Add("--done-when");
-                arguments.Add(said);
+                arguments.Add("--done-when=" + said);
             }
         }
 
@@ -491,6 +499,13 @@ internal static class DashboardActions
 
         return arguments;
     }
+
+    /// <summary>A line with any list marker it was typed with taken off.</summary>
+    internal static string Unlisted(string? line) =>
+        ListMarker().Replace(line ?? string.Empty, string.Empty).Trim();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(?:[-*\u2022]|\d+[.)])\s+")]
+    private static partial System.Text.RegularExpressions.Regex ListMarker();
 
     internal static async Task<OperationResult> BeganAsync(
         ICommandCatalogue commands,
@@ -501,6 +516,17 @@ internal static class DashboardActions
     {
         ArgumentNullException.ThrowIfNull(asking);
         ArgumentNullException.ThrowIfNull(output);
+
+        // Refused here, in the words the command would use, because the page
+        // cannot see the command's words: only its exit code comes back. A
+        // duration it could not read was reported as a template somebody had
+        // tried to run, which sent people looking for a template.
+        if (asking.TakeRecommendationAfter is { Length: > 0 } after
+            && !Loadout.Models.Teams.TeamDuration.IsNever(after)
+            && Loadout.Models.Teams.TeamDuration.Parse(after) is null)
+        {
+            return OperationResult.Fail(Loadout.Models.Teams.TeamDuration.Refusal(after), ExitCode.InvalidArguments);
+        }
 
         var arguments = Starting(asking);
 
@@ -537,8 +563,11 @@ internal static class DashboardActions
                 ExitCode.PolicyViolation =>
                     "That run was refused before it spent anything. The terminal serving this page "
                     + "has the rule it broke.",
+                // Not "a template": the page never offers one, so that guess
+                // was never the answer when the refusal came from here.
                 ExitCode.InvalidArguments =>
-                    "That is not a run this can start — a template cannot be run, only copied.",
+                    "That run was refused because one of the values given is not one it can use. "
+                    + "The terminal serving this page says which.",
                 _ => $"That run ended immediately, with exit code {exit}. The terminal serving this "
                      + "page has the reason.",
             },

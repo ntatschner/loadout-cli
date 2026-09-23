@@ -1350,7 +1350,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         [CommandOption("--take-recommendation-after <DURATION>")]
         [Description(
             "Take the lead's recommendation when one of its questions has had no answer for this long: "
-            + "30m, 2h. Only on a run answered from the dashboard; never for an outward action or a merge.")]
+            + "30m, 2h, or never. Only on a run answered from the dashboard; never for an outward action or a merge.")]
         public string? TakeRecommendationAfter { get; init; }
     }
 
@@ -1416,9 +1416,12 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
                 .Select(one => one.Trim())
                 .Where(one => one.Length > 0)],
 
-            // The run's own, then the team's. Neither means a person answers.
-            TakeRecommendationAfter: TeamDuration.Parse(settings.TakeRecommendationAfter)
-                ?? TeamDuration.Parse(team.Rules.TakeRecommendationAfter));
+            // The run's own, then the team's. Neither means a person answers,
+            // and so does "never" given for the run, whatever the team says.
+            TakeRecommendationAfter: TeamDuration.IsNever(settings.TakeRecommendationAfter)
+                ? null
+                : TeamDuration.Parse(settings.TakeRecommendationAfter)
+                    ?? TeamDuration.Parse(team.Rules.TakeRecommendationAfter));
     }
 
     /// <inheritdoc />
@@ -1464,11 +1467,11 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         // otherwise mean "wait for a person" without saying so, and somebody
         // who asked for their run to keep moving overnight would find it had
         // not.
-        if (settings.TakeRecommendationAfter is { Length: > 0 } after && TeamDuration.Parse(after) is null)
+        if (settings.TakeRecommendationAfter is { Length: > 0 } after
+            && !TeamDuration.IsNever(after)
+            && TeamDuration.Parse(after) is null)
         {
-            return output.Fail(
-                $"'{after}' is not a duration. Write it as 30m, 2h or 1d.",
-                ExitCode.InvalidArguments);
+            return output.Fail(TeamDuration.Refusal(after), ExitCode.InvalidArguments);
         }
 
         var autonomy = (settings.Autonomy ?? team.Rules.Autonomy).Trim().ToLowerInvariant();
