@@ -146,6 +146,23 @@ public sealed class RunAttentionTests
         said[0].Clears.Should().Be("it says anything at all");
     }
 
+    /// <summary>
+    /// A node waiting on your answer is silent because of you, and the answer
+    /// it is waiting for is already the first thing listed. Saying it had gone
+    /// quiet as well told somebody the run had two problems when it had one,
+    /// and the wrong one of the two suggested it had hung.
+    /// </summary>
+    [Fact]
+    public void A_node_waiting_on_your_answer_is_not_called_silent()
+    {
+        var waiting = Run(
+            nodes: [Node(turns: 2, started: Noon.AddMinutes(-14), lastSeen: Noon.AddMinutes(-10))],
+            gates: [Gate()]);
+
+        RunAttention.For(waiting, Noon)
+            .Should().ContainSingle().Which.Kind.Should().Be(AttentionKind.Asking);
+    }
+
     [Fact]
     public void And_stops_being_mentioned_the_moment_it_speaks()
     {
@@ -291,13 +308,15 @@ public sealed class RunAttentionTests
     public void Several_reasons_are_all_reported_rather_than_the_first_one()
     {
         // Somebody looking at the rail wants to know everything that is wrong
-        // with a run, not the first thing this happened to check.
+        // with a run, not the first thing this happened to check. The silent
+        // node is not the one asking: a node waiting on an answer is not
+        // silent, it is waiting.
         var bad = Run(
             gates: [Gate()],
             quietRounds: 1,
             cost: 6m,
             budget: 5m,
-            nodes: [Node(turns: 2, started: Noon.AddMinutes(-14), lastSeen: Noon.AddMinutes(-10))]);
+            nodes: [Node("verifier/1", turns: 2, started: Noon.AddMinutes(-14), lastSeen: Noon.AddMinutes(-10))]);
 
         RunAttention.For(bad, Noon).Select(r => r.Kind).Should().BeEquivalentTo(
         [

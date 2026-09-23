@@ -128,6 +128,12 @@ public static class RunAttention
 
         foreach (var node in run.Nodes)
         {
+            // Silent because it is waiting on you, which is said above.
+            if (run.Waiting.Any(gate => string.Equals(gate.Node, node.Node, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
             if (Silence(node, now) is { } silent)
             {
                 reasons.Add(silent);
