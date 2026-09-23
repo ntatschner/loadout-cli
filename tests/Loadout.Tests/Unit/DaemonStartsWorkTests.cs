@@ -139,7 +139,8 @@ public sealed class DaemonStartsWorkTests
             library: null!,
             workspace: null!,
             agents: null!,
-            launcher: null!);
+            launcher: null!,
+            nominations: null!);
 
     private static CommandOutput Output() => new(Quiet(), new GlobalSettings());
 

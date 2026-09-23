@@ -81,6 +81,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
     private readonly Loadout.Agents.IAgentRegistry _agents;
     private readonly IProcessLauncher _launcher;
+    private readonly Loadout.Core.Tools.ToolNominationPass _nominations;
 
     /// <summary>
     /// Every command this daemon runs, counted while it runs.
@@ -112,9 +113,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Instructions.ISpecialistLibrary library,
         Loadout.Core.Workspace.IWorkspaceManager workspace,
         Loadout.Agents.IAgentRegistry agents,
-        IProcessLauncher launcher)
+        IProcessLauncher launcher,
+        Loadout.Core.Tools.ToolNominationPass nominations)
     {
         _launcher = launcher;
+        _nominations = nominations;
         _inFlight = new InFlight(commands);
         commands = _inFlight;
         _teams = teams;
@@ -839,6 +842,15 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 output.WriteLine(
                     $"[dim]{now.ToLocalTime():HH:mm}[/] starting {Markup.Escape(schedule.Id)}: "
                     + $"{Markup.Escape(schedule.Team)} on {Markup.Escape(schedule.Project)}");
+
+                // Before the team starts, so what finished work nominated is
+                // in the inbox the Creator is about to read.
+                var nominated = await _nominations.BeforeAsync(schedule, ct).ConfigureAwait(false);
+
+                if (nominated.Count(one => one.Filed is { Succeeded: true }) is > 0 and var filed)
+                {
+                    output.WriteLine($"[dim]{now.ToLocalTime():HH:mm}[/] nominated {filed} for the tool catalogue");
+                }
 
                 var code = await _commands.RunAsync(
                     "team run",

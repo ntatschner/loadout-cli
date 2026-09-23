@@ -258,7 +258,8 @@ public sealed class DaemonControlTests : IDisposable
             library: null!,
             workspace: null!,
             agents: null!,
-            launcher ?? new StubProcessLauncher(string.Empty));
+            launcher ?? new StubProcessLauncher(string.Empty),
+            nominations: null!);
 
     private CommandOutput Output() =>
         new(
