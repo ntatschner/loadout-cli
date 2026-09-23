@@ -1,0 +1,42 @@
+name: tool-works
+description: Turns fixes that worked in more than one run into tools every team on this machine can find, and keeps those tools worth using.
+
+# A standing team: the daemon starts it on a schedule and when another team's
+# run finishes, never from inside somebody else's run. It reads only runs that
+# have ended, so it cannot disrupt one that has not.
+goal: >
+  Every team on this machine should find a working tool for a problem another
+  team has already solved, without knowing which team solved it. Nothing
+  becomes a tool until it has worked twice, and nothing is kept once it has
+  stopped being worth using.
+
+declarations:
+  - Search the tool catalogue before drafting anything, and quote what the
+    search returned.
+  - Draft a tool only when its purpose names no project, it has at least two
+    independent uses, it has been seen to work, and a harness case can check it.
+  - Every project-specific value in a draft becomes a named input with no
+    project default.
+  - Propose a refinement only with a measured gain against the active version;
+    otherwise record a stand-down with the reason.
+  - Nothing here promotes a tool or trusts one. Promotion is the gate's and
+    trust is a person's.
+
+lead: lead
+nodes:
+  lead:
+    role: role.project-lead
+    delegates: [creator, refiner]
+  creator:
+    role: role.tool-creator
+  refiner:
+    role: role.tool-refiner
+rules:
+  autonomy: autonomous
+  budget:
+    usd: 3
+    turns_per_node: 30
+    wall_clock: 30m
+  gates:
+    outward: ask
+  stop_when: [goal_met, budget_spent, no_progress_2_rounds]
