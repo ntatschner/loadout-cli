@@ -2175,6 +2175,13 @@ public sealed class TeamRunner : ITeamRunner
         return one.Length > 400 ? one[..400] + "…" : one;
     }
 
+    /// <summary>The launcher's own tools that role.member requires every node to call.</summary>
+    internal static readonly IReadOnlyList<string> MemberTools =
+    [
+        "mcp__loadout__loadout_progress",
+        "mcp__loadout__loadout_task_declare",
+    ];
+
     private async Task<OperationResult<HeadlessLaunch>> StartNodeAsync(
         TeamRunRequest request,
         TeamDefinition team,
@@ -2186,6 +2193,11 @@ public sealed class TeamRunner : ITeamRunner
         string? resumeSession = null)
     {
         var definition = role.Role ?? new RoleDefinition(null, null, null, [], []);
+
+        // What role.member says every node MUST call, on the launcher's own
+        // server. The contract belongs to no one job, so no role's list named
+        // them and every node was refused both. A role's deny list still wins.
+        var allowed = (definition.AllowedTools ?? []).Union(MemberTools, StringComparer.Ordinal).ToList();
 
         // Written before the node starts, because whatever answers its
         // permission questions is a separate process with nothing else to
@@ -2199,7 +2211,7 @@ public sealed class TeamRunner : ITeamRunner
                     brief.Run,
                     brief.Node,
                     role.Id,
-                    definition.AllowedTools ?? [],
+                    allowed,
                     definition.DeniedTools ?? [],
 
                     // Only where somebody is watching. An autonomous run has
@@ -2216,7 +2228,7 @@ public sealed class TeamRunner : ITeamRunner
 
         var options = new HeadlessOptions(
             Permission: Tier(definition.Mode),
-            AllowedTools: definition.AllowedTools,
+            AllowedTools: allowed,
             DeniedTools: definition.DeniedTools,
 
             // Named as the agent addresses a tool on the launcher's own

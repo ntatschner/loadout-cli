@@ -631,6 +631,26 @@ public sealed class TeamRunnerTests : IDisposable
         request.PermissionPolicyPath.Should().EndWith("policy-lead.json");
     }
 
+    [Theory]
+    [InlineData("mcp__loadout__loadout_progress")]
+    [InlineData("mcp__loadout__loadout_task_declare")]
+    public async Task Every_node_may_call_the_tools_the_member_role_requires_of_it(string tool)
+    {
+        // role.member says every node MUST call these, and no role's own list
+        // named them, so every node in run 20260923-1216-be60 was refused both
+        // in every round and the dashboard's progress stayed empty. Both the
+        // agent's allow list and the policy answering its questions carry them.
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        var policy = NodePermissions.Read(
+            Path.Combine(outcome.Directory!, NodePermissions.FileName("lead")))!;
+
+        NodePermissions.Decide(policy, tool, "{}").Allowed.Should().BeTrue();
+        _launcher.Requests[0].Options.AllowedTools.Should().Contain(tool);
+    }
+
     [Fact]
     public async Task A_dry_run_writes_no_policy_and_names_no_answerer()
     {
