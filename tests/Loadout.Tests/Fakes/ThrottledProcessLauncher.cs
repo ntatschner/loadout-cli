@@ -107,6 +107,29 @@ public sealed class ThrottledProcessLauncher : IProcessLauncher
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Gated for the start only. The gate bounds how many processes are
+    /// coming up at once, and a piped process is up the moment the start
+    /// returns; holding the slot for the whole conversation would starve the
+    /// rest of the suite for as long as an agent chose to talk.
+    /// </remarks>
+    public async Task<OperationResult<IPipedProcess>> StartPipedAsync(
+        ProcessRequest request,
+        CancellationToken ct = default)
+    {
+        await EnterGateAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await _inner.StartPipedAsync(request, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<int>> RunInteractiveAsync(
         ProcessRequest request,
         CancellationToken ct = default)

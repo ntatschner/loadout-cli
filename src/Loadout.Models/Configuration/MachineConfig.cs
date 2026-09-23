@@ -25,6 +25,161 @@ public sealed class MachineConfig
 
     /// <summary>Local path and launch history per project, keyed by project slug.</summary>
     public Dictionary<string, MachineProjectEntry> Projects { get; set; } = [];
+
+    /// <summary>What a team run may do here, whatever a team file asks for.</summary>
+    public MachineTeams Teams { get; set; } = new();
+}
+
+/// <summary>
+/// This machine's ceiling on team runs.
+/// </summary>
+/// <remarks>
+/// Machine-local because it is a decision, and the file a team is described in
+/// is shared: anybody who can push to the workspace can edit a team, so a team
+/// file may ask and only this may grant. The same split as command policy and
+/// as specialist packs, and worth having a third time because the failure it
+/// prevents is the same one — a change that reaches your machine because it
+/// reached somebody else's repository.
+/// </remarks>
+/// <summary>One remedy somebody at this machine agreed may run.</summary>
+/// <remarks>
+/// The fingerprint is the point: trust is granted to a script, not to a name,
+/// so a remedy that has been improved since is a remedy nobody has agreed to
+/// yet.
+/// </remarks>
+public sealed class TrustedRemedy
+{
+    /// <summary>The team whose directory it is in.</summary>
+    public string Team { get; set; } = string.Empty;
+
+    /// <summary>The remedy, by name.</summary>
+    public string Remedy { get; set; } = string.Empty;
+
+    /// <summary>The script as it was when it was agreed to.</summary>
+    public string Fingerprint { get; set; } = string.Empty;
+
+    /// <summary>Who said so.</summary>
+    public string By { get; set; } = string.Empty;
+
+    /// <summary>When.</summary>
+    public DateTimeOffset? At { get; set; }
+}
+
+public sealed class MachineTeams
+{
+    /// <summary>
+    /// Outward actions a team may allow its nodes in an autonomous run, each
+    /// named exactly as the team file names it.
+    /// </summary>
+    /// <remarks>
+    /// Empty by default, and empty means none. A fresh machine does not push
+    /// anything unattended because a file somebody else edited said it could.
+    /// </remarks>
+    public List<string> OutwardAllowed { get; set; } = [];
+
+    /// <summary>
+    /// Teams something outside this machine may start, each named exactly.
+    /// </summary>
+    /// <remarks>
+    /// Empty by default, and empty means none. Turning the webhook on grants
+    /// nothing by itself: a token says who is asking, and this says what they
+    /// may ask for. Two separate acts, because "let my git hook start the docs
+    /// crew" and "let anything with the token start anything" are different
+    /// decisions and only one of them is usually meant.
+    /// </remarks>
+    public List<string> WebhookTeams { get; set; } = [];
+
+    /// <summary>
+    /// What a remediator may do with each kind of task, by kind.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>never</c>, <c>ask</c> or <c>trusted</c>. A kind nobody has written a
+    /// rule for is asked about, every time.
+    /// </para>
+    /// <para>
+    /// By kind rather than one switch for "automated remediation", because
+    /// "may it restart a service unattended" and "may it delete files off a
+    /// full disk" are different questions with different answers and a single
+    /// switch cannot tell them apart.
+    /// </para>
+    /// <para>
+    /// <c>trusted</c> is not a grant on its own. It says a remedy of that kind
+    /// may run unattended <em>if somebody at this machine has trusted that
+    /// exact script</em>, which is the other key and the one an agent can
+    /// never turn.
+    /// </para>
+    /// </remarks>
+    public Dictionary<string, string> Remediation { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Remedies somebody at this machine has said may run, each naming the
+    /// exact script they agreed to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here rather than in the team's directory, and that is the whole point.
+    /// The team's directory is written by the team's own nodes - they are told
+    /// where it is and told to put things in it - so a record kept there is a
+    /// record an agent can write. It held the trust, and a node with Write
+    /// could set it: claim trusted, compute the fingerprint over its own
+    /// script, and it ran unasked. That was demonstrated rather than feared.
+    /// </para>
+    /// <para>
+    /// Trust is a decision this machine makes, so it lives where this
+    /// machine's decisions live, behind the same boundary as everything else
+    /// here. What the remedy's own record says about its trustworthiness is
+    /// read as a claim and ignored.
+    /// </para>
+    /// </remarks>
+    public List<TrustedRemedy> TrustedRemedies { get; set; } = [];
+
+    /// <summary>
+    /// The address the dashboard and its webhook listen on.
+    /// </summary>
+    /// <remarks>
+    /// Loopback unless somebody changed it, and changing it is the deliberate
+    /// act of putting a port on the network. Never inferred from the webhook
+    /// being on: a machine that accepts triggered runs from its own git hook
+    /// wants nothing bound outside itself.
+    /// </remarks>
+    public string WebhookListen { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// Where a run's call for help is sent: slack, discord, teams, telegram,
+    /// generic, or empty for nowhere.
+    /// </summary>
+    /// <remarks>
+    /// Machine-local, like everything else here: which chat somebody watches
+    /// is a fact about them and their machine, not about the team.
+    /// </remarks>
+    public string NotifyKind { get; set; } = string.Empty;
+
+    /// <summary>The Telegram chat to send to. Meaningless for the others.</summary>
+    public string NotifyChat { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which set of office art the dashboard draws desks with, or empty for
+    /// none.
+    /// </summary>
+    /// <remarks>
+    /// Machine-local because the art is: Loadout ships none of it, and a set is
+    /// a directory somebody filled on this computer from packs they bought. A
+    /// name here that no directory answers to draws nothing, which is the same
+    /// as drawing nothing.
+    /// </remarks>
+    public string OfficeSet { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Which set the waiting area draws with, or empty for none.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="OfficeSet"/> rather than shared: a reception
+    /// of people waiting and a floor of people working are different rooms, and
+    /// the whole reason sets exist is that somebody may want them to look
+    /// different.
+    /// </remarks>
+    public string WaitingSet { get; set; } = string.Empty;
 }
 
 /// <summary>This machine's view of one project.</summary>

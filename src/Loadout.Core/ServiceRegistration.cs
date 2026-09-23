@@ -155,6 +155,14 @@ public static class ServiceRegistration
         services.AddSingleton<Manager.IManagerInventory, Manager.ManagerInventory>();
         services.AddSingleton<Statusline.ILoadedSpecialistStore, Statusline.LoadedSpecialistStore>();
         services.AddSingleton<Checkpoints.ICheckpointService, Checkpoints.CheckpointService>();
+        services.AddSingleton<Teams.ITeamCatalogue>(provider =>
+            new Teams.TeamCatalogue(ct => Packs.PackDirectories.ApprovedAsync(
+                provider.GetRequiredService<Packs.IPackService>(), "teams", ct)));
+        services.AddSingleton<Teams.IRunJournal, Teams.RunJournal>();
+        services.AddSingleton<Teams.IRunOutbox, Teams.RunOutbox>();
+        services.AddSingleton<Teams.IRemedyBook, Teams.RemedyBook>();
+        services.AddSingleton<Teams.IScheduleService, Teams.ScheduleService>();
+        services.AddSingleton<Diagnostics.IDiagnosticContributor, Teams.Daemon.DaemonDiagnosticContributor>();
 
         // The specialist layer: what an agent is told, and why. The library and
         // resolver hold no state of their own, so a singleton each is enough.
@@ -164,27 +172,8 @@ public static class ServiceRegistration
         // gate decides that, and its content becomes instructions an agent
         // follows.
         services.AddSingleton<Instructions.ISpecialistLibrary>(provider =>
-            new Instructions.SpecialistLibrary(async ct =>
-            {
-                var packs = provider.GetRequiredService<Packs.IPackService>();
-                var standing = await packs.StandingAsync(ct).ConfigureAwait(false);
-
-                if (standing.Failed)
-                {
-                    // No packs rather than a failure. A workspace that cannot
-                    // be read must not stop the built-in library loading.
-                    return [];
-                }
-
-                return
-                [
-                    .. standing.Value!
-                        .Where(entry => entry.IsActive)
-                        .Select(entry => packs.DirectoryFor(entry.Pack.Name))
-                        .Where(directory => directory is { Length: > 0 })
-                        .Select(directory => System.IO.Path.Combine(directory!, "specialists")),
-                ];
-            }));
+            new Instructions.SpecialistLibrary(ct => Packs.PackDirectories.ApprovedAsync(
+                provider.GetRequiredService<Packs.IPackService>(), "specialists", ct)));
         services.AddSingleton<ISpecialistResolver, SpecialistResolver>();
         services.AddSingleton<IRepositoryEvidenceReader, RepositoryEvidenceReader>();
         services.AddSingleton<IInstructionService, InstructionService>();

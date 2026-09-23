@@ -22,6 +22,7 @@ public sealed class YamlStore
     private readonly IDeserializer _deserializer = new DeserializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance)
         .WithTypeConverter(new DateTimeOffsetConverter())
+        .WithTypeConverter(new TimeOnlyConverter())
         // A workspace written by a newer launcher may carry keys this version
         // does not know. Ignoring them lets an older client keep working
         // instead of refusing the whole file; genuine incompatibility is
@@ -32,6 +33,7 @@ public sealed class YamlStore
     private readonly ISerializer _serializer = new SerializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance)
         .WithTypeConverter(new DateTimeOffsetConverter())
+        .WithTypeConverter(new TimeOnlyConverter())
         .DisableAliases()
         .Build();
 

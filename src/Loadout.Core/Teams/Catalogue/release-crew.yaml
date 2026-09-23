@@ -1,0 +1,24 @@
+name: release-crew
+description: Checks the tree is fit to release, writes the notes for somebody deciding whether to update, and tags. The push is a gate in manual and supervised runs; an autonomous run may push the tag.
+lead: lead
+nodes:
+  lead:
+    role: role.project-lead
+    delegates: [release-validator, notes-writer, tagger]
+  release-validator:
+    role: role.release-validator
+  notes-writer:
+    role: role.notes-writer
+  tagger:
+    role: role.tagger
+rules:
+  autonomy: supervised
+  budget:
+    usd: 10
+    turns_per_node: 30
+    wall_clock: 1h
+  gates:
+    outward: ask
+    merge: []
+    outward_allowed_when_autonomous: ["git push --tags"]
+  stop_when: [goal_met, budget_spent]

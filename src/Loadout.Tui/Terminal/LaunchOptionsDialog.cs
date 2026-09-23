@@ -216,7 +216,7 @@ internal sealed class LaunchOptionsDialog : Window
         Title = $"Launch {project.Entry.Name}";
         Width = Dim.Fill(2);
         Height = Dim.Fill(1);
-        BorderStyle = LineStyle.Rounded;
+        BorderStyle = LauncherTheme.Lines;
 
         Add(new Label { X = 1, Y = 0, Text = "What are you about to do?" });
 

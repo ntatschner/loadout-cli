@@ -55,7 +55,7 @@ internal sealed class NewProjectDialog : Window
         Title = "New project";
         Width = Dim.Percent(70);
         Height = 17;
-        BorderStyle = LineStyle.Rounded;
+        BorderStyle = LauncherTheme.Lines;
 
         Add(new Label { X = 1, Y = 0, Text = "What is it called?" });
 

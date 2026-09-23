@@ -82,12 +82,23 @@ public static class ConfigKeys
         public const string Instructions = "Agent instructions";
         public const string Telemetry = "Usage reporting";
         public const string Machine = "This machine";
+        public const string Accessibility = "Accessibility";
+
+        // Three sections rather than one. Twenty-seven settings under a single
+        // heading do not fit a page at eighty by twenty-four, which is the
+        // size this application is meant to work at, and a setting nobody can
+        // scroll to is a setting nobody can change. They divide the way the
+        // settings themselves do: how a question arrives, what the prose looks
+        // like, and what gets drawn.
+        public const string Writing = "Writing";
+        public const string Display = "Display";
 
         /// <summary>In the order a screen should show them.</summary>
         public static IReadOnlyList<string> InOrder =>
         [
             Workspace, Agents, Editor, Syncing, Secrets, Updates,
-            Statusline, Instructions, Telemetry, Machine, General,
+            Statusline, Instructions, Accessibility, Writing, Display,
+            Telemetry, Machine, General,
         ];
     }
 
@@ -291,6 +302,88 @@ public static class ConfigKeys
             (_, m, v) => m.DefaultCloneRoot = v, true,
             Group: Groups.Machine),
 
+        new("team-outward-allowed",
+            "Comma-separated outward actions a team may allow its nodes in an autonomous run",
+            (_, m) => string.Join(", ", m.Teams.OutwardAllowed),
+            (_, m, v) => m.Teams.OutwardAllowed = SplitActions(v),
+            true,
+            Sample: "git push --tags",
+            Group: Groups.Machine,
+            WhenUnset: "a team may allow nothing; every outward action is held for you"),
+
+        new("team-remediation",
+            "What a remediator may do with each kind of task, as kind=rule pairs: never, ask or trusted",
+            (_, m) => string.Join(", ", m.Teams.Remediation.Select(one => $"{one.Key}={one.Value}")),
+            (_, m, v) => m.Teams.Remediation = Remediation(v),
+            true,
+            Sample: "disk=trusted, service=ask, network=never",
+            Group: Groups.Machine,
+            WhenUnset: "every remediation is held for you, whatever the team trusts"),
+
+        new("show-speech",
+            "Whether the full-screen launcher speaks what it shows: off, screen-reader",
+            (c, _) => c.Accessibility.Display.Speech,
+            (c, _, v) => c.Accessibility.Display.Speech = OneOf(v, "show-speech", "off", "screen-reader"),
+            false,
+            Sample: "off",
+            Group: Groups.Display,
+            WhenUnset: "the launcher says nothing; a screen reader reads the terminal as it always has"),
+
+        new("team-notify",
+            "Where a run's call for help is sent: slack, discord, teams, telegram, generic",
+            (_, m) => m.Teams.NotifyKind,
+            (_, m, v) => m.Teams.NotifyKind =
+                OneOf(v, "team-notify", "", "slack", "discord", "teams", "telegram", "generic"),
+            true,
+            Sample: "slack",
+            Group: Groups.Machine,
+            WhenUnset: "nothing is sent anywhere; the dashboard and the tab title still say"),
+
+        new("team-notify-chat",
+            "The Telegram chat to send to. Meaningless for the others",
+            (_, m) => m.Teams.NotifyChat,
+            (_, m, v) => m.Teams.NotifyChat = v.Trim(),
+            true,
+            Sample: "-1001234567890",
+            Group: Groups.Machine,
+            WhenUnset: "nothing, which Telegram refuses"),
+
+        new("team-office-set",
+            "Which set of office art the dashboard draws desks with",
+            (_, m) => m.Teams.OfficeSet,
+            (_, m, v) => m.Teams.OfficeSet = v.Trim(),
+            true,
+            Sample: "open-office",
+            Group: Groups.Machine,
+            WhenUnset: "a desk is a square with the node's name in it, which is what it has always been"),
+
+        new("team-waiting-set",
+            "Which set of art the dashboard's waiting area draws with",
+            (_, m) => m.Teams.WaitingSet,
+            (_, m, v) => m.Teams.WaitingSet = v.Trim(),
+            true,
+            Sample: "lobby",
+            Group: Groups.Machine,
+            WhenUnset: "the waiting area is a list of words, which is what it has always been"),
+
+        new("team-webhook-teams",
+            "Comma-separated teams something outside this machine may start",
+            (_, m) => string.Join(", ", m.Teams.WebhookTeams),
+            (_, m, v) => m.Teams.WebhookTeams = SplitActions(v),
+            true,
+            Sample: "docs-crew",
+            Group: Groups.Machine,
+            WhenUnset: "nothing outside this machine may start a run, whatever token it has"),
+
+        new("team-webhook-listen",
+            "Address the dashboard and its webhook listen on",
+            (_, m) => m.Teams.WebhookListen,
+            (_, m, v) => m.Teams.WebhookListen = v.Trim(),
+            true,
+            Sample: "127.0.0.1",
+            Group: Groups.Machine,
+            WhenUnset: "loopback only, reachable from this machine and nowhere else"),
+
         new("discovery-roots", "Comma-separated directories scanned for repositories",
             (_, m) => string.Join(", ", m.DiscoveryRoots),
             (_, m, v) => m.DiscoveryRoots = SplitDirectories(v),
@@ -303,6 +396,184 @@ public static class ConfigKeys
             false,
             Group: Groups.Agents,
             WhenUnset: "agents are looked for on PATH and their usual install directories"),
+
+        // How this person wants to be written to and asked. Every one of these
+        // is settable on its own, because a preset is a starting point rather
+        // than a mode: somebody can take the dyslexia bundle and still ask for
+        // the field's own vocabulary, and a bundle nobody can adjust is one
+        // people abandon whole.
+        //
+        // Named ask-, write- and show- rather than accessibility-something,
+        // because the settings screen draws a key in a column twenty-four
+        // characters wide and every one of these was wider than that. The
+        // three words are what the settings actually divide into: how a
+        // question arrives, what the prose looks like, and what gets drawn.
+        new("accessibility-preset", "screen-reader, low-vision, colour-blind, dyslexia, adhd, plain-language or none",
+            (c, _) => c.Accessibility.Preset,
+            (c, _, v) => c.Accessibility.Preset = OneOf(v, [.. AccessibilityPresets.All]), false,
+            Sample: AccessibilityPresets.None,
+            Group: Groups.Accessibility,
+            WhenUnset: "nothing is changed about how an agent writes to you"),
+
+        new("ask-style", "choices, written or mixed",
+            (c, _) => c.Accessibility.Questions.Style,
+            (c, _, v) => c.Accessibility.Questions.Style = OneOf(v, "choices", "written", "mixed"), false,
+            Sample: "choices",
+            Group: Groups.Accessibility),
+
+        new("ask-one-at-a-time", "Ask one question per message and wait",
+            (c, _) => Boolean(c.Accessibility.Questions.OneAtATime),
+            (c, _, v) => c.Accessibility.Questions.OneAtATime = Flag(v), false,
+            Group: Groups.Accessibility,
+            IsFlag: true),
+
+        new("ask-why", "Say in one sentence why a question is being asked",
+            (c, _) => Boolean(c.Accessibility.Questions.Why),
+            (c, _, v) => c.Accessibility.Questions.Why = Flag(v), false,
+            Group: Groups.Accessibility,
+            IsFlag: true),
+
+        new("ask-explain", "on-request, always or never: how much a question is unpacked",
+            (c, _) => c.Accessibility.Questions.Explain,
+            (c, _, v) => c.Accessibility.Questions.Explain = OneOf(v, "on-request", "always", "never"), false,
+            Sample: "on-request",
+            Group: Groups.Accessibility),
+
+        new("ask-recommend", "Label the option the agent would choose, with its downside",
+            (c, _) => Boolean(c.Accessibility.Questions.Recommend),
+            (c, _, v) => c.Accessibility.Questions.Recommend = Flag(v), false,
+            Group: Groups.Accessibility,
+            IsFlag: true),
+
+        new("ask-unsure", "Offer \"I don\'t know\" as a real answer",
+            (c, _) => Boolean(c.Accessibility.Questions.UnsureOption),
+            (c, _, v) => c.Accessibility.Questions.UnsureOption = Flag(v), false,
+            Group: Groups.Accessibility,
+            IsFlag: true),
+
+        new("ask-progress", "Say \"question 2 of 4\" when more than one is coming",
+            (c, _) => Boolean(c.Accessibility.Questions.Progress),
+            (c, _, v) => c.Accessibility.Questions.Progress = Flag(v), false,
+            Group: Groups.Accessibility,
+            IsFlag: true),
+
+        new("ask-before-risky", "Restate what will happen before anything that cannot be undone",
+            (c, _) => Boolean(c.Accessibility.Output.ConfirmBeforeIrreversible),
+            (c, _, v) => c.Accessibility.Output.ConfirmBeforeIrreversible = Flag(v), false,
+            Group: Groups.Accessibility,
+            IsFlag: true),
+
+        new("write-verbosity", "concise, standard or full",
+            (c, _) => c.Accessibility.Output.Verbosity,
+            (c, _, v) => c.Accessibility.Output.Verbosity = OneOf(v, "concise", "standard", "full"), false,
+            Sample: "standard",
+            Group: Groups.Writing),
+
+        new("write-technicality", "plain, mixed or technical",
+            (c, _) => c.Accessibility.Output.Technicality,
+            (c, _, v) => c.Accessibility.Output.Technicality = OneOf(v, "plain", "mixed", "technical"), false,
+            Sample: "mixed",
+            Group: Groups.Writing),
+
+        new("write-summary-first", "Start anything longer than a screen with a summary",
+            (c, _) => Boolean(c.Accessibility.Output.SummaryFirst),
+            (c, _, v) => c.Accessibility.Output.SummaryFirst = Flag(v), false,
+            Group: Groups.Writing,
+            IsFlag: true),
+
+        new("write-sentence-words", "Split a sentence longer than this many words",
+            (c, _) => c.Accessibility.Output.Sentences.ToString(CultureInfo.InvariantCulture),
+            (c, _, v) => c.Accessibility.Output.Sentences = Count(v), false,
+            Sample: "25",
+            Group: Groups.Writing),
+
+        new("write-paragraph", "At most this many sentences in a paragraph",
+            (c, _) => c.Accessibility.Output.Paragraph.ToString(CultureInfo.InvariantCulture),
+            (c, _, v) => c.Accessibility.Output.Paragraph = Count(v), false,
+            Sample: "5",
+            Group: Groups.Writing),
+
+        new("write-steps", "numbered or prose: how instructions are given",
+            (c, _) => c.Accessibility.Output.Steps,
+            (c, _, v) => c.Accessibility.Output.Steps = OneOf(v, "numbered", "prose"), false,
+            Sample: "numbered",
+            Group: Groups.Writing),
+
+        new("write-emphasis", "bold-only or any",
+            (c, _) => c.Accessibility.Output.Emphasis,
+            (c, _, v) => c.Accessibility.Output.Emphasis = OneOf(v, "bold-only", "any"), false,
+            Sample: "bold-only",
+            Group: Groups.Writing),
+
+        new("write-same-word", "One word for one thing, abbreviations expanded first time",
+            (c, _) => Boolean(c.Accessibility.Output.SameWord),
+            (c, _, v) => c.Accessibility.Output.SameWord = Flag(v), false,
+            Group: Groups.Writing,
+            IsFlag: true),
+
+        // Offered with its evidence: every controlled study of this finds no
+        // reading gain and one finds it slower. It is here because people
+        // preferred styled text even where it did not help them, and a
+        // preference somebody can switch off is a fair thing to offer.
+        new("write-bionic", "Bold the first half of each word in the agent\'s prose. No study finds this helps reading",
+            (c, _) => Boolean(c.Accessibility.Output.Bionic),
+            (c, _, v) => c.Accessibility.Output.Bionic = Flag(v), false,
+            Group: Groups.Writing,
+            IsFlag: true),
+
+        new("show-colour", "full, sixteen or none",
+            (c, _) => c.Accessibility.Display.Colour,
+            (c, _, v) => c.Accessibility.Display.Colour = OneOf(v, "full", "sixteen", "none"), false,
+            Sample: "full",
+            Group: Groups.Display),
+
+        new("show-colour-safe", "Avoid red and green as a pair",
+            (c, _) => Boolean(c.Accessibility.Display.ColourSafe),
+            (c, _, v) => c.Accessibility.Display.ColourSafe = Flag(v), false,
+            Group: Groups.Display,
+            IsFlag: true),
+
+        new("show-glyphs", "unicode or ascii",
+            (c, _) => c.Accessibility.Display.Glyphs,
+            (c, _, v) => c.Accessibility.Display.Glyphs = OneOf(v, "unicode", "ascii"), false,
+            Sample: "unicode",
+            Group: Groups.Display),
+
+        new("show-motion", "full, reduced or none",
+            (c, _) => c.Accessibility.Display.Motion,
+            (c, _, v) => c.Accessibility.Display.Motion = OneOf(v, "full", "reduced", "none"), false,
+            Sample: "full",
+            Group: Groups.Display),
+
+        new("show-redraw", "allowed or never: spinners, timers and in-place edits",
+            (c, _) => c.Accessibility.Display.Redraw,
+            (c, _, v) => c.Accessibility.Display.Redraw = OneOf(v, "allowed", "never"), false,
+            Sample: "allowed",
+            Group: Groups.Display),
+
+        new("show-tables", "tables or lists",
+            (c, _) => c.Accessibility.Display.Tables,
+            (c, _, v) => c.Accessibility.Display.Tables = OneOf(v, "tables", "lists"), false,
+            Sample: "tables",
+            Group: Groups.Display),
+
+        new("show-menus", "arrows or numbered",
+            (c, _) => c.Accessibility.Display.Menus,
+            (c, _, v) => c.Accessibility.Display.Menus = OneOf(v, "arrows", "numbered"), false,
+            Sample: "arrows",
+            Group: Groups.Display),
+
+        new("show-launcher", "full or text: no terminal toolkit can announce a full-screen one",
+            (c, _) => c.Accessibility.Display.Launcher,
+            (c, _, v) => c.Accessibility.Display.Launcher = OneOf(v, "full", "text"), false,
+            Sample: "full",
+            Group: Groups.Display),
+
+        new("show-bell", "Ring the terminal bell when input is needed",
+            (c, _) => Boolean(c.Accessibility.Display.Bell),
+            (c, _, v) => c.Accessibility.Display.Bell = Flag(v), false,
+            Group: Groups.Display,
+            IsFlag: true),
     ];
 
     /// <summary>
@@ -321,10 +592,75 @@ public static class ConfigKeys
     /// two roots that are each nonsense.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Splits a list of commands on commas only.
+    /// </summary>
+    /// <remarks>
+    /// Not on semicolons, which directories are split on: a shell command may
+    /// contain one, and splitting there would turn one action somebody agreed
+    /// to into two they did not.
+    /// </remarks>
+    /// <summary>
+    /// Reads "disk=trusted, service=ask" into what a remediator may do.
+    /// </summary>
+    /// <remarks>
+    /// A pair whose rule is not one of the three is refused by name rather than
+    /// dropped: a typo that silently became "ask" would be the safe reading,
+    /// and a typo that silently became nothing at all would not be.
+    /// </remarks>
+    private static Dictionary<string, string> Remediation(string value)
+    {
+        var rules = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var pair in (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var split = pair.Split('=', 2, StringSplitOptions.TrimEntries);
+
+            if (split.Length != 2 || split[0].Length == 0)
+            {
+                throw new ArgumentException(
+                    $"'{pair}' is not a kind and a rule. Write them as kind=rule, "
+                    + "such as disk=trusted.");
+            }
+
+            rules[split[0]] = OneOf(
+                split[1],
+                $"team-remediation ({split[0]})",
+                Loadout.Models.Teams.RemedyRules.Never,
+                Loadout.Models.Teams.RemedyRules.Ask,
+                Loadout.Models.Teams.RemedyRules.Trusted);
+        }
+
+        return rules;
+    }
+
+    private static List<string> SplitActions(string value) =>
+        [.. value.Split(
+            ',',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
     private static List<string> SplitDirectories(string value) =>
         [.. value.Split(
             [',', ';'],
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
+    /// <summary>
+    /// Takes one of a fixed set of words, or says which words there are.
+    /// </summary>
+    /// <remarks>
+    /// Refused rather than ignored. A setting whose value is a word from a
+    /// list will be typed wrong eventually, and quietly falling back to the
+    /// default leaves a person who asked for plain language reading jargon
+    /// and no way to find out why.
+    /// </remarks>
+    private static string OneOf(string value, params string[] allowed)
+    {
+        var trimmed = value.Trim().ToLowerInvariant();
+
+        return Array.Exists(allowed, a => string.Equals(a, trimmed, StringComparison.Ordinal))
+            ? trimmed
+            : throw new FormatException($"'{value.Trim()}' is not one of: {string.Join(", ", allowed)}.");
+    }
 
     /// <summary>How a flag is shown, in the spelling the setter accepts back.</summary>
     private static string Boolean(bool value) => value ? "true" : "false";

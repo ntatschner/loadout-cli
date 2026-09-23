@@ -134,7 +134,7 @@ internal sealed class SettingsWindow : Window
         _application = application;
 
         Title = "Settings";
-        BorderStyle = LineStyle.Rounded;
+        BorderStyle = LauncherTheme.Lines;
 
         // Grouped down the side rather than scrolled. Twenty-one settings do
         // not fit a short terminal, and a scrolling pane whose fields take the
@@ -167,7 +167,7 @@ internal sealed class SettingsWindow : Window
             Width = Dim.Absolute(columnWidth),
             Height = Dim.Fill(3),
             Title = "Sections",
-            BorderStyle = LineStyle.Rounded,
+            BorderStyle = LauncherTheme.Lines,
         };
 
         groupFrame.Add(_groups);
@@ -179,7 +179,7 @@ internal sealed class SettingsWindow : Window
             Width = Dim.Fill(),
             Height = Dim.Fill(3),
             Title = shown[0],
-            BorderStyle = LineStyle.Rounded,
+            BorderStyle = LauncherTheme.Lines,
         };
 
         foreach (var group in shown)

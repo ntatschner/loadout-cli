@@ -25,6 +25,13 @@ namespace Loadout.Agents;
 /// <param name="Offline">Skip the network entirely (spec section 48).</param>
 /// <param name="NoSync">Skip the workspace sync but stay online for anything else.</param>
 /// <param name="Worktree">Named worktree to launch in instead of the main tree (spec section 71).</param>
+/// <param name="CreateWorktree">
+/// Make the worktree named above when the repository has no such tree,
+/// rather than refusing. For a caller that knows the tree is its own to
+/// create: a team run gives each node one so its commits land on their own
+/// branch. A person naming a worktree means one that exists, so this is off
+/// unless asked for.
+/// </param>
 /// <param name="Profile">Context profile to apply (spec section 34).</param>
 /// <param name="IncludeHandoff">Append the most recent handoff to the context (spec section 69).</param>
 /// <param name="Environment">Environment to work in, such as production (spec section 57).</param>
@@ -51,6 +58,21 @@ namespace Loadout.Agents;
 /// specialists chosen, the warnings — and none of it changes anything. Only
 /// the last step does, so only the last step is skipped.
 /// </param>
+/// <param name="Model">
+/// The model to ask for, overriding whatever the project pinned, or null to
+/// let the project and then the agent decide. Written as the agent spells
+/// it: the launcher translates the flag, never the name.
+/// </param>
+/// <param name="PermissionPolicyPath">
+/// A team node's permission policy, which the launcher's own server answers
+/// the agent's permission questions from. Null for an ordinary session, where
+/// the person at the keyboard answers their own.
+/// </param>
+/// <param name="ReachableDirectories">
+/// Anywhere beyond the project this session may work in. A team's directory is
+/// the first of these: its nodes are briefed with the path and told to keep
+/// what the team learns there, and without it the agent refuses every write.
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -67,7 +89,11 @@ public sealed record LaunchRequest(
     IReadOnlyList<string>? ExcludedSpecialists = null,
     string? Mode = null,
     string? RepositoryPath = null,
-    bool DryRun = false);
+    bool DryRun = false,
+    string? Model = null,
+    bool CreateWorktree = false,
+    string? PermissionPolicyPath = null,
+    IReadOnlyList<string>? ReachableDirectories = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -152,7 +178,21 @@ public sealed record LaunchPlan(
 /// <summary>Runs the launch sequence of spec section 45.</summary>
 public interface IAgentLauncher
 {
+    /// <summary>Launches an agent for a person, in this terminal, and waits for it.</summary>
     Task<OperationResult<LaunchOutcome>> LaunchAsync(LaunchRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Launches an agent as a node, with no terminal, and hands it back
+    /// running. The same preparation as <see cref="LaunchAsync"/>: the
+    /// workspace synchronised, the project resolved, the context compiled,
+    /// preflight run, the ledger written, the session registered. What
+    /// differs is that the caller holds the conversation and closes the
+    /// records through the returned launch when it is done.
+    /// </summary>
+    Task<OperationResult<HeadlessLaunch>> StartHeadlessAsync(
+        LaunchRequest request,
+        HeadlessOptions options,
+        CancellationToken ct = default);
 }
 
 /// <inheritdoc />
@@ -232,10 +272,218 @@ public sealed class AgentLauncher : IAgentLauncher
     {
         var warnings = new List<string>();
 
+        var prepared = await PrepareAsync(request, headless: null, warnings, ct).ConfigureAwait(false);
+
+        if (prepared.Failed)
+        {
+            return OperationResult<LaunchOutcome>.Fail(prepared.Error!, prepared.ExitCode);
+        }
+
+        var launch = prepared.Value!;
+
+        // Held out here so the entry is given up however the launch unwinds,
+        // not only when the agent exits tidily.
+        string? launchId = null;
+
+        try
+        {
+            if (request.DryRun)
+            {
+                warnings.Add("Dry run: nothing was launched.");
+
+                // No session ran, so there is nothing it could have changed.
+                return OperationResult<LaunchOutcome>.Ok(
+                    new LaunchOutcome(
+                        0, launch.SyncOutcome, warnings, launch.Preflight, null,
+                        launch.Project.Entry.Name, launch.Adapter.Name, launch.Agent.Source, launch.Plan));
+            }
+
+            var startedAt = DateTimeOffset.UtcNow;
+
+            launchId = await RecordStartAsync(launch, request, ct).ConfigureAwait(false);
+
+            // The agent inherits this process's terminal, so Ctrl+C, resize and
+            // signals reach it directly and its exit code comes back unaltered
+            // (spec sections 40 and 43).
+            var runResult = await _processes.RunInteractiveAsync(
+                new ProcessRequest(
+                    launch.Invocation.Executable,
+                    launch.Invocation.Arguments,
+                    launch.Context.WorkingDirectory,
+                    WithTelemetry(launch.Invocation.Environment, launch.Config.Telemetry),
+                    RemoveEnvironmentPrefixes: launch.Invocation.RemoveEnvironmentPrefixes),
+                ct).ConfigureAwait(false);
+
+            // Closed either way, and the record says which happened: an ending
+            // with no exit code is an agent that never ran.
+            await _ledger.RecordEndAsync(
+                launchId,
+                runResult.Succeeded ? runResult.Value : (int?)null,
+                ct).ConfigureAwait(false);
+
+            if (runResult.Failed)
+            {
+                return OperationResult<LaunchOutcome>.Fail(runResult.Error!, runResult.ExitCode);
+            }
+
+            // Recorded after the agent exits so a failed launch does not
+            // pollute the recent-projects ordering.
+            await _projects.RecordLaunchAsync(launch.Project.Entry.Slug, launch.Adapter.Name, ct).ConfigureAwait(false);
+
+            await NoteMissingHandoffAsync(launch.Project.Entry.Slug, startedAt, warnings, ct)
+                .ConfigureAwait(false);
+
+            var pending = await HandleExitPolicyAsync(
+                launch.Config, launch.Project.Entry.Name, launch.Adapter.Name, warnings, ct).ConfigureAwait(false);
+
+            return OperationResult<LaunchOutcome>.Ok(new LaunchOutcome(
+                runResult.Value,
+                launch.SyncOutcome,
+                warnings,
+                launch.Preflight,
+                pending,
+                launch.Project.Entry.Name,
+                launch.Adapter.Name,
+                launch.Agent.Source,
+                launch.Plan));
+        }
+        finally
+        {
+            if (launchId is not null)
+            {
+                await _running.ReleaseAsync(launchId).ConfigureAwait(false);
+            }
+
+            CleanRuntimeDirectory(launch.RuntimeDirectory);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<HeadlessLaunch>> StartHeadlessAsync(
+        LaunchRequest request,
+        HeadlessOptions options,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var warnings = new List<string>();
+
+        var prepared = await PrepareAsync(request, options, warnings, ct).ConfigureAwait(false);
+
+        if (prepared.Failed)
+        {
+            return OperationResult<HeadlessLaunch>.Fail(prepared.Error!, prepared.ExitCode);
+        }
+
+        var launch = prepared.Value!;
+
+        if (launch.Adapter.HeadlessProtocol is not { } protocol)
+        {
+            CleanRuntimeDirectory(launch.RuntimeDirectory);
+
+            return OperationResult<HeadlessLaunch>.Fail(
+                $"{launch.Adapter.DisplayName} cannot be driven without a terminal, so it cannot be a node.",
+                ExitCode.AgentUnavailable);
+        }
+
+        if (request.DryRun)
+        {
+            warnings.Add("Dry run: nothing was launched.");
+            CleanRuntimeDirectory(launch.RuntimeDirectory);
+
+            return OperationResult<HeadlessLaunch>.Ok(new HeadlessLaunch(
+                launch.Plan,
+                warnings,
+                launch.Preflight,
+                launch.Project.Entry.Name,
+                launch.Adapter.Name,
+                launchId: null,
+                session: null,
+                complete: (_, _) => Task.CompletedTask));
+        }
+
+        var launchId = await RecordStartAsync(launch, request, ct).ConfigureAwait(false);
+
+        var started = await _processes.StartPipedAsync(
+            new ProcessRequest(
+                launch.Invocation.Executable,
+                launch.Invocation.Arguments,
+                launch.Context.WorkingDirectory,
+                WithTelemetry(launch.Invocation.Environment, launch.Config.Telemetry),
+                RemoveEnvironmentPrefixes: launch.Invocation.RemoveEnvironmentPrefixes),
+            ct).ConfigureAwait(false);
+
+        if (started.Failed)
+        {
+            // Recorded as a launch that never ran, and let go of at once: a
+            // node that did not start holds nothing.
+            await _ledger.RecordEndAsync(launchId, null, ct).ConfigureAwait(false);
+            await _running.ReleaseAsync(launchId).ConfigureAwait(false);
+            CleanRuntimeDirectory(launch.RuntimeDirectory);
+
+            return OperationResult<HeadlessLaunch>.Fail(started.Error!, started.ExitCode);
+        }
+
+        var slug = launch.Project.Entry.Slug;
+        var agentName = launch.Adapter.Name;
+        var runtimeDirectory = launch.RuntimeDirectory;
+
+        return OperationResult<HeadlessLaunch>.Ok(new HeadlessLaunch(
+            launch.Plan,
+            warnings,
+            launch.Preflight,
+            launch.Project.Entry.Name,
+            agentName,
+            launchId,
+            new HeadlessSession(started.Value!, protocol),
+            complete: async (exitCode, token) =>
+            {
+                await _ledger.RecordEndAsync(launchId, exitCode, token).ConfigureAwait(false);
+                await _running.ReleaseAsync(launchId).ConfigureAwait(false);
+                await _projects.RecordLaunchAsync(slug, agentName, token).ConfigureAwait(false);
+                CleanRuntimeDirectory(runtimeDirectory);
+            }));
+    }
+
+    /// <summary>
+    /// Everything a launch resolved to before anything was started: the two
+    /// ways of running an agent share all of it and differ only in what
+    /// happens next.
+    /// </summary>
+    private sealed record Prepared(
+        LauncherConfig Config,
+        WorkspaceSyncOutcome SyncOutcome,
+        ProjectResolution Project,
+        Resolved<string> Agent,
+        IAgentAdapter Adapter,
+        string RuntimeDirectory,
+        CompiledContext? Compiled,
+        PreflightResult Preflight,
+        AgentLaunchContext Context,
+        AgentInvocation Invocation,
+        LaunchPlan Plan);
+
+    /// <summary>
+    /// Steps 1 to 5 of the launch sequence in spec section 45: synchronise,
+    /// resolve, compile, check, build. Nothing here starts an agent.
+    /// </summary>
+    /// <remarks>
+    /// The runtime directory is created part way through. A failure after
+    /// that point removes it here, because the caller never sees a directory
+    /// it was not handed; a success hands it over, and the caller cleans it
+    /// when the session is done.
+    /// </remarks>
+    private async Task<OperationResult<Prepared>> PrepareAsync(
+        LaunchRequest request,
+        HeadlessOptions? headless,
+        List<string> warnings,
+        CancellationToken ct)
+    {
         var configResult = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
         if (configResult.Failed)
         {
-            return OperationResult<LaunchOutcome>.Fail(configResult.Error!, configResult.ExitCode);
+            return OperationResult<Prepared>.Fail(configResult.Error!, configResult.ExitCode);
         }
 
         var config = configResult.Value!;
@@ -247,7 +495,7 @@ public sealed class AgentLauncher : IAgentLauncher
         var projectResult = await _projects.ResolveAsync(request.ProjectHandle, ct).ConfigureAwait(false);
         if (projectResult.Failed)
         {
-            return OperationResult<LaunchOutcome>.Fail(projectResult.Error!, projectResult.ExitCode);
+            return OperationResult<Prepared>.Fail(projectResult.Error!, projectResult.ExitCode);
         }
 
         var project = projectResult.Value!;
@@ -256,17 +504,17 @@ public sealed class AgentLauncher : IAgentLauncher
         {
             // Spec section 28: a project registered centrally but absent here
             // is an invitation to clone, not a dead end.
-            return OperationResult<LaunchOutcome>.Fail(
+            return OperationResult<Prepared>.Fail(
                 $"'{project.Entry.Name}' is registered but not present on this machine. "
                 + $"Clone it with: loadout project clone {project.Entry.Slug}",
                 ExitCode.RepositoryUnavailable);
         }
 
-        var directoryResult = await ResolveWorkingDirectoryAsync(project, request.Worktree, ct)
+        var directoryResult = await ResolveWorkingDirectoryAsync(project, request, warnings, ct)
             .ConfigureAwait(false);
         if (directoryResult.Failed)
         {
-            return OperationResult<LaunchOutcome>.Fail(directoryResult.Error!, directoryResult.ExitCode);
+            return OperationResult<Prepared>.Fail(directoryResult.Error!, directoryResult.ExitCode);
         }
 
         var manifest = await LoadManifestAsync(project.Entry.Slug, warnings, ct).ConfigureAwait(false);
@@ -288,7 +536,7 @@ public sealed class AgentLauncher : IAgentLauncher
         var adapterResult = _agents.Resolve(agentName);
         if (adapterResult.Failed)
         {
-            return OperationResult<LaunchOutcome>.Fail(adapterResult.Error!, adapterResult.ExitCode);
+            return OperationResult<Prepared>.Fail(adapterResult.Error!, adapterResult.ExitCode);
         }
 
         var adapter = adapterResult.Value!;
@@ -312,304 +560,303 @@ public sealed class AgentLauncher : IAgentLauncher
             await ReapAsync(ct).ConfigureAwait(false);
         }
 
-        // Held out here so the entry is given up however the launch unwinds,
-        // not only when the agent exits tidily.
-        string? launchId = null;
-
         try
         {
-            // Detected before the context is compiled, not after. The resolver
-            // leaves out specialists the agent cannot act on, and it can only
-            // do that if it is told which agent this is: for as long as
-            // detection came second, the descriptor did not exist yet, nothing
-            // passed one, and that step returned before doing anything.
-            var descriptor = await adapter.DetectAsync(ct).ConfigureAwait(false);
+            var prepared = await PrepareInRuntimeDirectoryAsync(
+                request, headless, warnings, config, syncOutcome, project, directoryResult.Value!,
+                manifest, agent, adapter, runtimeDirectory, ct).ConfigureAwait(false);
 
-            var compiled = await CompileContextAsync(
-                manifest, runtimeDirectory, adapter.Name, descriptor, request, project.LocalPath,
-                directoryResult.Value!, warnings, ct)
-                .ConfigureAwait(false);
-
-            if (compiled.Failed)
+            if (prepared.Failed)
             {
-                return OperationResult<LaunchOutcome>.Fail(compiled.Error!, compiled.ExitCode);
+                CleanRuntimeDirectory(runtimeDirectory);
             }
 
-            ResolvedEnvironment? environment = null;
-
-            if (manifest is not null)
-            {
-                var environmentResult = await _security
-                    .ResolveAsync(manifest, request.Environment, ct)
-                    .ConfigureAwait(false);
-
-                // Naming an environment that does not exist stops the launch.
-                // Falling back to the default would hand somebody who typed
-                // "prod" instead of "production" the permissive profile.
-                if (environmentResult.Failed)
-                {
-                    return OperationResult<LaunchOutcome>.Fail(
-                        environmentResult.Error!, environmentResult.ExitCode);
-                }
-
-                environment = environmentResult.Value;
-            }
-
-            var preflightResult = await _preflight.RunAsync(
-                new PreflightContext(
-                    project,
-                    manifest,
-                    directoryResult.Value!,
-                    descriptor,
-                    compiled.Value,
-                    syncOutcome,
-                    environment,
-
-                    // Hooks live in .git/hooks, which is per-clone and never
-                    // travels, so a fresh clone or a new worktree is
-                    // unprotected until somebody notices. Doctor has always
-                    // said so; this says it on the way into a session that is
-                    // about to write, which is while it can still be acted on.
-                    _policies.InspectHook(directoryResult.Value!)),
-                ct).ConfigureAwait(false);
-
-            if (preflightResult.Failed)
-            {
-                return OperationResult<LaunchOutcome>.Fail(
-                    preflightResult.Error!, preflightResult.ExitCode);
-            }
-
-            var preflight = preflightResult.Value!;
-
-            warnings.AddRange(preflight.Warnings.Select(w => $"{w.Name}: {w.Detail}"));
-
-            if (!preflight.CanLaunch)
-            {
-                // Preflight blocks rather than letting the agent start in a
-                // state the user did not intend, and names every reason at once
-                // so the problem can be fixed in one pass.
-                var reasons = string.Join("; ", preflight.Blocking.Select(c => $"{c.Name}: {c.Detail}"));
-
-                return OperationResult<LaunchOutcome>.Fail(
-                    $"Preflight failed. {reasons}",
-                    ChooseFailureCode(preflight));
-            }
-
-            var commandPolicy = Core.Policies.CommandPolicy.Resolve(
-                environment?.Profile?.DeniedCommands,
-                config.Commands.PreApproved.TryGetValue(project.Entry.Slug, out var approved)
-                    ? approved
-                    : null);
-
-            foreach (var dropped in commandPolicy.Overruled)
-            {
-                warnings.Add(
-                    $"'{dropped}' is pre-approved on this machine but denied by the project's "
-                    + "security profile, so it was not pre-approved. A profile may only tighten, "
-                    + "and local configuration cannot put back what it takes away.");
-            }
-
-            var context = new AgentLaunchContext(
-                project,
-                directoryResult.Value!,
-                runtimeDirectory,
-                _workspace.IsAvailable() ? _workspace.LocalPath : null,
-                request.PassthroughArguments ?? [],
-                manifest,
-                compiled.Value,
-                preflight.Environment,
-                environment?.Profile,
-                request.ResumeSessionId,
-
-                // Declared in the workspace, so the same servers are there on
-                // every machine that clones it rather than on whichever one
-                // happened to have them configured — plus the launcher's own,
-                // written per launch because it names this machine's executable
-                // and an absolute path is the thing the workspace must not hold.
-                [
-                    .. _mcp.ConfigFiles(project.Entry.Slug),
-                    .. SelfServerConfig.Write(
-                        config.AgentTools.Enabled, project.Entry.Slug, runtimeDirectory, warnings),
-                ],
-
-                // Resolved here rather than in the adapter, because the two
-                // halves come from different places on purpose: the denials
-                // travel with the project and the pre-approvals never leave
-                // this machine. Anything the project denied is already gone,
-                // and a pre-approval that was dropped that way is said out
-                // loud — somebody who set one and never sees it work is owed
-                // the reason.
-                commandPolicy.PreApproved,
-
-                // Carried out, never inferred. This is a choice somebody wrote
-                // in the manifest; working one out from how hard the task looks
-                // would be a guess wearing a metric's clothes.
-                Core.Agents.ModelPolicy.For(manifest, request.Mode),
-
-                // From the same machine-local file as the pre-approvals: a
-                // hook in the project's settings runs after every edit, and
-                // the file that carries it travels.
-                config.Commands.AllowedHooks.TryGetValue(project.Entry.Slug, out var hooks)
-                    ? hooks
-                    : null);
-
-            var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
-            if (invocationResult.Failed)
-            {
-                return OperationResult<LaunchOutcome>.Fail(
-                    invocationResult.Error!, invocationResult.ExitCode);
-            }
-
-            var invocation = invocationResult.Value!;
-
-            if (invocation.Warnings is not null)
-            {
-                warnings.AddRange(invocation.Warnings);
-            }
-
-            // Where you stand, never a refusal, and nothing at all unless a
-            // threshold was set — the scan behind this reads the agents'
-            // transcripts and takes seconds.
-            foreach (var notice in await _spend
-                .WarningsAsync(project.Entry.Slug, ct).ConfigureAwait(false))
-            {
-                warnings.Add(notice);
-            }
-
-            // The agent inherits this process's terminal, so Ctrl+C, resize and
-            // signals reach it directly and its exit code comes back unaltered
-            // (spec sections 40 and 43).
-            // Switching usage reporting on belongs here rather than in an
-            // adapter: it is the same decision for every agent, and the agents
-            // read the same standard variables. Added last so that anything a
-            // project or profile deliberately set for itself wins — this is a
-            // default the launcher supplies, not an override it imposes.
-            if (TelemetryEnvironment.Describe(config.Telemetry) is { Length: > 0 } telemetryWarning)
-            {
-                warnings.Add(telemetryWarning);
-            }
-
-            // Asked what it would do, and told. --dry-run reached this method
-            // and was never read: the launcher went on to start the agent, and
-            // on an interactive terminal that is a session opening in front of
-            // somebody who asked for a description of one.
-            var plan = new LaunchPlan(
-                invocation.Executable,
-                invocation.Arguments,
-                context.WorkingDirectory,
-                invocation.Environment.Keys.OrderBy(name => name, StringComparer.Ordinal).ToList(),
-                context.McpConfigFiles ?? [],
-                compiled.Value?.FilePath,
-                compiled.Value?.TotalBytes ?? 0,
-                compiled.Value?.Sources.Count ?? 0,
-                compiled.Value?.ProfileName,
-                compiled.Value?.Instructions,
-                request.Task,
-                request.Mode);
-
-            if (request.DryRun)
-            {
-                warnings.Add("Dry run: nothing was launched.");
-
-                // No session ran, so there is nothing it could have changed.
-                return OperationResult<LaunchOutcome>.Ok(
-                    new LaunchOutcome(
-                        0, syncOutcome, warnings, preflight, null,
-                        project.Entry.Name, adapter.Name, agent.Source, plan));
-            }
-
-            // Written before the agent starts rather than after it exits. A
-            // session that is killed, or that takes the terminal down with it,
-            // is exactly the one worth having a record of, and after the fact
-            // there is nothing left to write one from. The dry run returned
-            // above, so nothing here records a launch that did not happen.
-            var startedAt = DateTimeOffset.UtcNow;
-
-            launchId = await _ledger.RecordStartAsync(
-                new Core.Sessions.NewLaunch(
-                    project.Entry.Slug,
-                    project.Entry.Name,
-                    adapter.Name,
-                    request.Task,
-                    request.Profile,
-                    request.Worktree,
-                    compiled.Value?.Instructions),
-                ct).ConfigureAwait(false);
-
-            // Written down so the status line can say what was composed
-            // without resolving the library on every prompt — that takes about
-            // half a second, and the line is redrawn as fast as somebody types.
-            if (compiled.Value?.Instructions is { } effective)
-            {
-                await _loaded.WriteAsync(
-                    project.Entry.Slug,
-                    [.. effective.Selected.Select(selection => selection.Specialist.Id)],
-                    request.Mode,
-                    ct).ConfigureAwait(false);
-            }
-
-            // The ledger says what happened; this says what is happening. Filed
-            // under the same identifier so the two can be read together.
-            await _running.RegisterAsync(
-                new Core.Sessions.NewSession(
-                    launchId,
-                    project.Entry.Slug,
-                    project.Entry.Name,
-                    adapter.Name,
-                    request.Worktree,
-                    context.WorkingDirectory),
-                ct).ConfigureAwait(false);
-
-            var runResult = await _processes.RunInteractiveAsync(
-                new ProcessRequest(
-                    invocation.Executable,
-                    invocation.Arguments,
-                    context.WorkingDirectory,
-                    WithTelemetry(invocation.Environment, config.Telemetry)),
-                ct).ConfigureAwait(false);
-
-            // Closed either way, and the record says which happened: an ending
-            // with no exit code is an agent that never ran.
-            await _ledger.RecordEndAsync(
-                launchId,
-                runResult.Succeeded ? runResult.Value : (int?)null,
-                ct).ConfigureAwait(false);
-
-            if (runResult.Failed)
-            {
-                return OperationResult<LaunchOutcome>.Fail(runResult.Error!, runResult.ExitCode);
-            }
-
-            // Recorded after the agent exits so a failed launch does not
-            // pollute the recent-projects ordering.
-            await _projects.RecordLaunchAsync(project.Entry.Slug, adapter.Name, ct).ConfigureAwait(false);
-
-            await NoteMissingHandoffAsync(project.Entry.Slug, startedAt, warnings, ct)
-                .ConfigureAwait(false);
-
-            var pending = await HandleExitPolicyAsync(
-                config, project.Entry.Name, adapter.Name, warnings, ct).ConfigureAwait(false);
-
-            return OperationResult<LaunchOutcome>.Ok(new LaunchOutcome(
-                runResult.Value,
-                syncOutcome,
-                warnings,
-                preflight,
-                pending,
-                project.Entry.Name,
-                adapter.Name,
-                agent.Source,
-                plan));
+            return prepared;
         }
-        finally
+        catch
         {
-            if (launchId is not null)
+            CleanRuntimeDirectory(runtimeDirectory);
+            throw;
+        }
+    }
+
+    private async Task<OperationResult<Prepared>> PrepareInRuntimeDirectoryAsync(
+        LaunchRequest request,
+        HeadlessOptions? headless,
+        List<string> warnings,
+        LauncherConfig config,
+        WorkspaceSyncOutcome syncOutcome,
+        ProjectResolution project,
+        string workingDirectory,
+        ProjectManifest? manifest,
+        Resolved<string> agent,
+        IAgentAdapter adapter,
+        string runtimeDirectory,
+        CancellationToken ct)
+    {
+        // Detected before the context is compiled, not after. The resolver
+        // leaves out specialists the agent cannot act on, and it can only
+        // do that if it is told which agent this is: for as long as
+        // detection came second, the descriptor did not exist yet, nothing
+        // passed one, and that step returned before doing anything.
+        var descriptor = await adapter.DetectAsync(ct).ConfigureAwait(false);
+
+        var compiled = await CompileContextAsync(
+            manifest, runtimeDirectory, adapter.Name, descriptor, request, project.LocalPath,
+            workingDirectory, warnings, ct)
+            .ConfigureAwait(false);
+
+        if (compiled.Failed)
+        {
+            return OperationResult<Prepared>.Fail(compiled.Error!, compiled.ExitCode);
+        }
+
+        ResolvedEnvironment? environment = null;
+
+        if (manifest is not null)
+        {
+            var environmentResult = await _security
+                .ResolveAsync(manifest, request.Environment, ct)
+                .ConfigureAwait(false);
+
+            // Naming an environment that does not exist stops the launch.
+            // Falling back to the default would hand somebody who typed
+            // "prod" instead of "production" the permissive profile.
+            if (environmentResult.Failed)
             {
-                await _running.ReleaseAsync(launchId).ConfigureAwait(false);
+                return OperationResult<Prepared>.Fail(
+                    environmentResult.Error!, environmentResult.ExitCode);
             }
 
-            CleanRuntimeDirectory(runtimeDirectory);
+            environment = environmentResult.Value;
         }
+
+        var preflightResult = await _preflight.RunAsync(
+            new PreflightContext(
+                project,
+                manifest,
+                workingDirectory,
+                descriptor,
+                compiled.Value,
+                syncOutcome,
+                environment,
+
+                // Hooks live in .git/hooks, which is per-clone and never
+                // travels, so a fresh clone or a new worktree is
+                // unprotected until somebody notices. Doctor has always
+                // said so; this says it on the way into a session that is
+                // about to write, which is while it can still be acted on.
+                _policies.InspectHook(workingDirectory)),
+            ct).ConfigureAwait(false);
+
+        if (preflightResult.Failed)
+        {
+            return OperationResult<Prepared>.Fail(
+                preflightResult.Error!, preflightResult.ExitCode);
+        }
+
+        var preflight = preflightResult.Value!;
+
+        warnings.AddRange(preflight.Warnings.Select(w => $"{w.Name}: {w.Detail}"));
+
+        if (!preflight.CanLaunch)
+        {
+            // Preflight blocks rather than letting the agent start in a
+            // state the user did not intend, and names every reason at once
+            // so the problem can be fixed in one pass.
+            var reasons = string.Join("; ", preflight.Blocking.Select(c => $"{c.Name}: {c.Detail}"));
+
+            return OperationResult<Prepared>.Fail(
+                $"Preflight failed. {reasons}",
+                ChooseFailureCode(preflight));
+        }
+
+        var commandPolicy = Core.Policies.CommandPolicy.Resolve(
+            environment?.Profile?.DeniedCommands,
+            config.Commands.PreApproved.TryGetValue(project.Entry.Slug, out var approved)
+                ? approved
+                : null);
+
+        foreach (var dropped in commandPolicy.Overruled)
+        {
+            warnings.Add(
+                $"'{dropped}' is pre-approved on this machine but denied by the project's "
+                + "security profile, so it was not pre-approved. A profile may only tighten, "
+                + "and local configuration cannot put back what it takes away.");
+        }
+
+        var context = new AgentLaunchContext(
+            project,
+            workingDirectory,
+            runtimeDirectory,
+            _workspace.IsAvailable() ? _workspace.LocalPath : null,
+            request.PassthroughArguments ?? [],
+            manifest,
+            compiled.Value,
+            preflight.Environment,
+            environment?.Profile,
+            request.ResumeSessionId,
+
+            // Declared in the workspace, so the same servers are there on
+            // every machine that clones it rather than on whichever one
+            // happened to have them configured — plus the launcher's own,
+            // written per launch because it names this machine's executable
+            // and an absolute path is the thing the workspace must not hold.
+            [
+                .. _mcp.ConfigFiles(project.Entry.Slug),
+                .. SelfServerConfig.Write(
+                    config.AgentTools.Enabled, project.Entry.Slug, runtimeDirectory, warnings,
+                    policyPath: request.PermissionPolicyPath),
+            ],
+
+            // Resolved here rather than in the adapter, because the two
+            // halves come from different places on purpose: the denials
+            // travel with the project and the pre-approvals never leave
+            // this machine. Anything the project denied is already gone,
+            // and a pre-approval that was dropped that way is said out
+            // loud — somebody who set one and never sees it work is owed
+            // the reason.
+            commandPolicy.PreApproved,
+
+            // Carried out, never inferred. This is a choice somebody wrote
+            // in the manifest; working one out from how hard the task looks
+            // would be a guess wearing a metric's clothes.
+            //
+            // What the caller asked for wins over what the project pinned,
+            // which is the ordinary precedence: the nearer decision is the
+            // more specific one. A team names a model per node and a run
+            // names one for everything, and neither would mean anything if
+            // the manifest overruled them.
+            request.Model is { Length: > 0 } asked
+                ? asked
+                : Core.Agents.ModelPolicy.For(manifest, request.Mode),
+
+            // From the same machine-local file as the pre-approvals: a
+            // hook in the project's settings runs after every edit, and
+            // the file that carries it travels.
+            config.Commands.AllowedHooks.TryGetValue(project.Entry.Slug, out var hooks)
+                ? hooks
+                : null,
+
+            headless,
+
+            // The person's own, from config.yaml, with their preset already
+            // applied. Null when they have set nothing, so an adapter has
+            // one question to ask rather than a dozen.
+            Core.Instructions.AccessibilityProfile.IsSet(config.Accessibility)
+                ? Core.Instructions.AccessibilityProfile.Resolve(config.Accessibility)
+                : null,
+
+            // Anywhere beyond the project this session has been told it may
+            // work in. A team's directory is the first of these: its nodes are
+            // briefed with the path and told to keep things there, and until
+            // this was passed on the agent refused every write to it.
+            request.ReachableDirectories);
+
+        var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
+        if (invocationResult.Failed)
+        {
+            return OperationResult<Prepared>.Fail(
+                invocationResult.Error!, invocationResult.ExitCode);
+        }
+
+        var invocation = invocationResult.Value!;
+
+        if (invocation.Warnings is not null)
+        {
+            warnings.AddRange(invocation.Warnings);
+        }
+
+        // Where you stand, never a refusal, and nothing at all unless a
+        // threshold was set — the scan behind this reads the agents'
+        // transcripts and takes seconds.
+        foreach (var notice in await _spend
+            .WarningsAsync(project.Entry.Slug, ct).ConfigureAwait(false))
+        {
+            warnings.Add(notice);
+        }
+
+        // Switching usage reporting on belongs here rather than in an
+        // adapter: it is the same decision for every agent, and the agents
+        // read the same standard variables. Added last so that anything a
+        // project or profile deliberately set for itself wins — this is a
+        // default the launcher supplies, not an override it imposes.
+        if (TelemetryEnvironment.Describe(config.Telemetry) is { Length: > 0 } telemetryWarning)
+        {
+            warnings.Add(telemetryWarning);
+        }
+
+        // Asked what it would do, and told. --dry-run reached this method
+        // and was never read: the launcher went on to start the agent, and
+        // on an interactive terminal that is a session opening in front of
+        // somebody who asked for a description of one.
+        var plan = new LaunchPlan(
+            invocation.Executable,
+            invocation.Arguments,
+            context.WorkingDirectory,
+            invocation.Environment.Keys.OrderBy(name => name, StringComparer.Ordinal).ToList(),
+            context.McpConfigFiles ?? [],
+            compiled.Value?.FilePath,
+            compiled.Value?.TotalBytes ?? 0,
+            compiled.Value?.Sources.Count ?? 0,
+            compiled.Value?.ProfileName,
+            compiled.Value?.Instructions,
+            request.Task,
+            request.Mode);
+
+        return OperationResult<Prepared>.Ok(new Prepared(
+            config, syncOutcome, project, agent, adapter, runtimeDirectory,
+            compiled.Value, preflight, context, invocation, plan));
+    }
+
+    /// <summary>
+    /// Writes the three records a starting session leaves: the ledger line,
+    /// the loaded specialists for the status line, and the running entry.
+    /// </summary>
+    /// <remarks>
+    /// Written before the agent starts rather than after it exits. A session
+    /// that is killed, or that takes the terminal down with it, is exactly
+    /// the one worth having a record of, and after the fact there is nothing
+    /// left to write one from.
+    /// </remarks>
+    private async Task<string> RecordStartAsync(Prepared launch, LaunchRequest request, CancellationToken ct)
+    {
+        var launchId = await _ledger.RecordStartAsync(
+            new Core.Sessions.NewLaunch(
+                launch.Project.Entry.Slug,
+                launch.Project.Entry.Name,
+                launch.Adapter.Name,
+                request.Task,
+                request.Profile,
+                request.Worktree,
+                launch.Compiled?.Instructions),
+            ct).ConfigureAwait(false);
+
+        // Written down so the status line can say what was composed
+        // without resolving the library on every prompt — that takes about
+        // half a second, and the line is redrawn as fast as somebody types.
+        if (launch.Compiled?.Instructions is { } effective)
+        {
+            await _loaded.WriteAsync(
+                launch.Project.Entry.Slug,
+                [.. effective.Selected.Select(selection => selection.Specialist.Id)],
+                request.Mode,
+                ct).ConfigureAwait(false);
+        }
+
+        // The ledger says what happened; this says what is happening. Filed
+        // under the same identifier so the two can be read together.
+        await _running.RegisterAsync(
+            new Core.Sessions.NewSession(
+                launchId,
+                launch.Project.Entry.Slug,
+                launch.Project.Entry.Name,
+                launch.Adapter.Name,
+                request.Worktree,
+                launch.Context.WorkingDirectory),
+            ct).ConfigureAwait(false);
+
+        return launchId;
     }
 
     /// <summary>
@@ -1017,9 +1264,12 @@ public sealed class AgentLauncher : IAgentLauncher
 
     private async Task<OperationResult<string>> ResolveWorkingDirectoryAsync(
         ProjectResolution project,
-        string? worktree,
+        LaunchRequest request,
+        List<string> warnings,
         CancellationToken ct)
     {
+        var worktree = request.Worktree;
+
         if (string.IsNullOrWhiteSpace(worktree))
         {
             return OperationResult<string>.Ok(project.LocalPath!);
@@ -1035,7 +1285,12 @@ public sealed class AgentLauncher : IAgentLauncher
             w => string.Equals(w.Branch, worktree, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(Path.GetFileName(w.Path), worktree, StringComparison.OrdinalIgnoreCase));
 
-        if (match is null)
+        if (match is not null)
+        {
+            return OperationResult<string>.Ok(match.Path);
+        }
+
+        if (!request.CreateWorktree)
         {
             var available = string.Join(", ", worktreesResult.Value!
                 .Select(w => w.Branch ?? Path.GetFileName(w.Path)));
@@ -1045,8 +1300,39 @@ public sealed class AgentLauncher : IAgentLauncher
                 ExitCode.InvalidArguments);
         }
 
-        return OperationResult<string>.Ok(match.Path);
+        // Outside the repository, under this machine's state directory. A
+        // tree inside it would need ignoring, would travel in nobody's
+        // clone, and is exactly the litter the cleanliness rules exist to
+        // prevent; a tree beside it would clutter whatever directory the
+        // repository happens to sit in.
+        var path = Path.Combine(_paths.Paths.State, "worktrees", project.Entry.Slug, SafeDirectory(worktree));
+
+        if (request.DryRun)
+        {
+            // Making one is a change, and a dry run makes none. Said rather
+            // than done, and the launch is described against the repository
+            // it would have branched from.
+            warnings.Add($"A worktree on branch '{worktree}' would be made at {path}.");
+
+            return OperationResult<string>.Ok(project.LocalPath!);
+        }
+
+        var created = await _git.AddWorktreeAsync(
+            project.LocalPath!,
+            path,
+            worktree,
+            baseRef: null,
+            ct).ConfigureAwait(false);
+
+        return created.Failed
+            ? OperationResult<string>.Fail(
+                $"The worktree '{worktree}' could not be made: {created.Error}", ExitCode.RepositoryUnavailable)
+            : OperationResult<string>.Ok(created.Value!.Path);
     }
+
+    /// <summary>A branch name as a directory name: the slashes people put in branch names are not directories here.</summary>
+    private static string SafeDirectory(string branch) =>
+        string.Concat(branch.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' or '.' ? c : '-'));
 
     /// <summary>
     /// Collects abandoned runtime directories, and never fails a launch over

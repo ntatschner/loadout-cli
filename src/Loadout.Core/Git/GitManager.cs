@@ -399,6 +399,135 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<GitFileChange>>> ListCommitFilesAsync(
+        string repositoryPath,
+        string commit,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commit);
+
+        // diff-tree rather than show: it prints the files and nothing else, so
+        // there is no message to skip past and nothing to mistake for a path.
+        // --root makes a first commit answer with its files instead of
+        // nothing, which matters for a run whose whole output is one.
+        var result = await RunAsync(
+            repositoryPath,
+            ["diff-tree", "--no-commit-id", "--name-status", "-r", "--root", commit],
+            LocalOperationTimeout,
+            ct).ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            return OperationResult<IReadOnlyList<GitFileChange>>.Fail(result.Error!);
+        }
+
+        var files = new List<GitFileChange>();
+
+        foreach (var line in result.Value!.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // A status letter, a tab, then the path. A rename or a copy carries
+            // a similarity score on the letter and two paths after it, and the
+            // one worth reporting is where the file ended up.
+            var parts = line.Split('\t', StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length < 2)
+            {
+                continue;
+            }
+
+            var path = parts[^1].Trim();
+
+            if (path.Length == 0)
+            {
+                continue;
+            }
+
+            files.Add(new GitFileChange(path, Change(parts[0].Trim())));
+        }
+
+        return OperationResult<IReadOnlyList<GitFileChange>>.Ok(files);
+    }
+
+    /// <summary>Git's letter for what happened to a file, as a word.</summary>
+    private static string Change(string letter) => letter.Length == 0 ? "changed" : letter[0] switch
+    {
+        'A' => "added",
+        'M' => "changed",
+        'D' => "removed",
+        'R' => "renamed",
+        'C' => "copied",
+        'T' => "retyped",
+        _ => letter,
+    };
+
+    /// <inheritdoc />
+    public async Task<OperationResult<string>> ResolveAsync(
+        string repositoryPath,
+        string reference,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reference);
+
+        // ^{commit} rather than the bare name, so an annotated tag gives the
+        // commit it points at rather than the tag object, and --verify so a
+        // name that matches nothing fails instead of being echoed back.
+        var read = await RunAsync(
+            repositoryPath,
+            ["rev-parse", "--verify", "--quiet", reference + "^{commit}"],
+            LocalOperationTimeout,
+            ct).ConfigureAwait(false);
+
+        if (read.Failed)
+        {
+            return OperationResult<string>.Fail(read.Error!, ExitCode.RepositoryUnavailable);
+        }
+
+        var commit = read.Value!.Trim();
+
+        return commit.Length > 0
+            ? OperationResult<string>.Ok(commit)
+            : OperationResult<string>.Fail(
+                $"Nothing in this repository is called '{reference}'.", ExitCode.RepositoryUnavailable);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<string>> DiffAsync(
+        string repositoryPath,
+        string from,
+        string to,
+        bool summary = false,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(from);
+        ArgumentException.ThrowIfNullOrWhiteSpace(to);
+
+        var arguments = new List<string> { "diff" };
+
+        if (summary)
+        {
+            arguments.Add("--stat");
+        }
+
+        // No colour and no pager, whatever the person's own git config says:
+        // this output is read by a program, and a configured pager would hang
+        // waiting for a keypress nobody is there to give it.
+        arguments.Add("--no-color");
+        arguments.Add(from);
+        arguments.Add(to);
+        arguments.Add("--");
+
+        var read = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return read.Failed
+            ? OperationResult<string>.Fail(read.Error!, ExitCode.RepositoryUnavailable)
+            : OperationResult<string>.Ok(read.Value!);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default)
     {
         var result = await RunAsync(repositoryPath, ["push"], TimeSpan.FromMinutes(5), ct)
@@ -456,6 +585,138 @@ internal sealed class GitManager : IGitManager
             path = null;
             branch = null;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<GitWorktree>> AddWorktreeAsync(
+        string repositoryPath,
+        string path,
+        string branch,
+        string? baseRef = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+
+        var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+
+        if (parent is { Length: > 0 })
+        {
+            try
+            {
+                Directory.CreateDirectory(parent);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return OperationResult<GitWorktree>.Fail(
+                    $"The worktree's directory could not be made at '{parent}': {ex.Message}");
+            }
+        }
+
+        // -b creates the branch, so an existing name fails rather than
+        // checking out somebody else's work into a new tree.
+        var arguments = new List<string> { "worktree", "add", "-b", branch, path };
+
+        if (baseRef is { Length: > 0 })
+        {
+            arguments.Add(baseRef);
+        }
+
+        var result = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        return result.Failed
+            ? OperationResult<GitWorktree>.Fail(result.Error!)
+            : OperationResult<GitWorktree>.Ok(new GitWorktree(Path.GetFullPath(path), branch, IsPrimary: false));
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> RemoveWorktreeAsync(
+        string repositoryPath,
+        string path,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        // No --force. git refuses a tree with uncommitted changes in it, and
+        // that refusal is the whole safety of doing this automatically.
+        var result = await RunAsync(
+            repositoryPath, ["worktree", "remove", path], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error ?? $"The worktree at '{path}' could not be removed.");
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> DeleteMergedBranchAsync(
+        string repositoryPath,
+        string branch,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+
+        // -d rather than -D: an unmerged branch is refused, so this can
+        // never be the reason somebody's commits stop existing.
+        var result = await RunAsync(
+            repositoryPath, ["branch", "-d", branch], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        return result.Succeeded
+            ? OperationResult.Ok()
+            : OperationResult.Fail(result.Error ?? $"The branch '{branch}' could not be deleted.");
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<GitMerge>> MergeAsync(
+        string repositoryPath,
+        string branch,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repositoryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(branch);
+
+        // Tried first, because a fast-forward keeps the history somebody
+        // reviewed: the commits arrive as they were, with nothing added.
+        var fastForward = await RunAsync(
+            repositoryPath, ["merge", "--ff-only", branch], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        if (fastForward.Succeeded)
+        {
+            return OperationResult<GitMerge>.Ok(new GitMerge(Merged: true, FastForward: true, []));
+        }
+
+        var merge = await RunAsync(
+            repositoryPath, ["merge", "--no-ff", "--no-edit", branch], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        if (merge.Succeeded)
+        {
+            return OperationResult<GitMerge>.Ok(new GitMerge(Merged: true, FastForward: false, []));
+        }
+
+        // Whatever went wrong, the tree goes back to how it was. An aborted
+        // merge reports nothing merged; a merge left in progress would be
+        // somebody else's problem to find and undo.
+        var conflicts = await RunAsync(
+            repositoryPath, ["diff", "--name-only", "--diff-filter=U"], LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        await RunAsync(repositoryPath, ["merge", "--abort"], LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        var paths = conflicts.Succeeded
+            ? conflicts.Value!.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : [];
+
+        return paths.Length > 0
+            ? OperationResult<GitMerge>.Ok(new GitMerge(Merged: false, FastForward: false, paths))
+
+            // No conflicting paths and still no merge: the branch does not
+            // exist, the tree is dirty, or git refused for a reason of its
+            // own, and its own words are the most useful thing to pass on.
+            : OperationResult<GitMerge>.Fail(merge.Error ?? "The merge did not happen and git said nothing about why.");
     }
 
     /// <inheritdoc />

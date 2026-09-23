@@ -75,6 +75,23 @@ public interface IProcessLauncher
         CancellationToken ct = default);
 
     /// <summary>
+    /// Starts a process and hands back both ends of its pipes, so the caller
+    /// can write to it and read from it for as long as it runs.
+    /// <para>
+    /// For an agent driven without a terminal: messages go in one at a time,
+    /// events come out as they happen, and the caller decides when the
+    /// conversation is over by closing the input. Neither of the other two
+    /// methods can do this: <see cref="RunAsync"/> closes stdin the moment it
+    /// has written its one string, and <see cref="RunInteractiveAsync"/> gives
+    /// the child the terminal and reads nothing. The <see cref="ProcessRequest.StandardInput"/>
+    /// of the request, if set, is written first and the input is then left open.
+    /// </para>
+    /// </summary>
+    Task<OperationResult<IPipedProcess>> StartPipedAsync(
+        ProcessRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Starts a process and returns without waiting for it, giving it neither
     /// a captured output stream nor a suppressed window. For opening a
     /// graphical application.

@@ -8,7 +8,16 @@ using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Packs;
 
-/// <summary>Named sets of specialists fetched from a Git remote.</summary>
+/// <summary>
+/// Named sets of specialists, roles and teams fetched from a Git remote.
+/// </summary>
+/// <remarks>
+/// A pack's directories are read by whatever loads that kind of content - the
+/// specialist library reads <c>specialists/</c>, the team catalogue reads
+/// <c>teams/</c> - and both go through the same gate, because a team file
+/// deciding which roles run with which permissions is content somebody has to
+/// have read just as much as a specialist is.
+/// </remarks>
 public interface IPackService
 {
     /// <summary>Where every declared pack stands on this machine.</summary>

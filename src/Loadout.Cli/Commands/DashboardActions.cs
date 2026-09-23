@@ -1,0 +1,1013 @@
+using System.Globalization;
+using Loadout.Cli.Infrastructure;
+using Loadout.Core.Instructions;
+using Loadout.Core.Projects;
+using Loadout.Core.Teams;
+using Loadout.Core.Teams.Daemon;
+using Loadout.Core.Workspace;
+using Loadout.Models;
+using Loadout.Models.Instructions;
+using Loadout.Models.Results;
+using Loadout.Tui;
+using Spectre.Console;
+
+namespace Loadout.Cli.Commands;
+
+/// <summary>
+/// What a button on the dashboard does.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Every one of them types the command a person would have typed and lets the
+/// parser decide whether it means anything. Nothing here implements the
+/// behaviour of answering a gate, holding a run or messaging a lead — there is
+/// one implementation of each and it is the command, or there are two and one
+/// of them drifts.
+/// </para>
+/// <para>
+/// In its own class because two commands serve the page. The daemon has always
+/// been able to act; <c>team dashboard</c> could not, so the page it serves
+/// drew "Hold it", "Stop it" and a box for messaging the lead and the server
+/// answered every one of them with "this server only reads". A page that offers
+/// a control it cannot honour is worse than one that does not offer it.
+/// </para>
+/// </remarks>
+internal static class DashboardActions
+{
+    /// <summary>Every setting the page can change.</summary>
+    /// <remarks>
+    /// Named here for the reason the run verbs are: a test walks this set
+    /// against the real parser, so a control the page draws and the mapping
+    /// does not know about fails here rather than on somebody's screen.
+    /// </remarks>
+    internal static readonly string[] Settings =
+    [
+        "notify", "office", "waiting", "listen", "webhook-teams", "webhook", "remedy",
+    ];
+
+    /// <summary>
+    /// The changes that need the second credential rather than the dashboard's
+    /// own token.
+    /// </summary>
+    /// <remarks>
+    /// Trusting a remedy is standing permission for a script to run unattended,
+    /// on a machine nobody is watching, for as long as the agreement lasts. The
+    /// token got somebody to this page; it did not get them that. This is the
+    /// same passphrase typing at a live node needs, and the same reasoning:
+    /// reading a run and changing what this machine will do on its own are not
+    /// the same act.
+    /// </remarks>
+    internal static readonly string[] NeedAGrant = ["remedy"];
+
+    /// <summary>
+    /// The command line one setting change stands for.
+    /// </summary>
+    /// <remarks>
+    /// An empty command for anything this does not know, which the caller
+    /// reports rather than guessing at. Nothing here writes a configuration
+    /// file: <c>config set</c> and the team commands own every one of these
+    /// settings already, and a second writer is a second set of rules about
+    /// what a valid value is.
+    /// </remarks>
+    internal static (string Command, IReadOnlyList<string> Arguments) Setting(SettingsChange change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+
+        return change.What switch
+        {
+            // The one that carries a credential. It goes as an argument to the
+            // command that keeps it, exactly as somebody typing it would, and
+            // no further: it is never echoed, never logged and never read back
+            // out of this process.
+            "notify" when change.Off => ("team notify clear", []),
+            "notify" => ("team notify set", Notify(change)),
+
+            "office" => ("config set", ["team-office-set", change.Value ?? string.Empty]),
+            "waiting" => ("config set", ["team-waiting-set", change.Value ?? string.Empty]),
+            "listen" => ("config set", ["team-webhook-listen", change.Value ?? string.Empty]),
+            "webhook-teams" => ("config set", ["team-webhook-teams", change.Value ?? string.Empty]),
+
+            "webhook" => (change.Off ? "team webhook disable" : "team webhook enable", []),
+
+            "remedy" => ("team remedy trust", change.Off
+                ? [change.Value ?? string.Empty, "--revoke"]
+                : [change.Value ?? string.Empty]),
+
+            _ => (string.Empty, []),
+        };
+    }
+
+    private static List<string> Notify(SettingsChange change)
+    {
+        var arguments = new List<string> { change.Value ?? string.Empty };
+
+        if (change.Url is { Length: > 0 } url)
+        {
+            arguments.Add("--url");
+            arguments.Add(url);
+        }
+
+        if (change.Chat is { Length: > 0 } chat)
+        {
+            arguments.Add("--chat");
+            arguments.Add(chat);
+        }
+
+        return arguments;
+    }
+
+    /// <summary>
+    /// Every verb the page can send.
+    /// </summary>
+    /// <remarks>
+    /// Named here rather than inferred from the switch, because what a test
+    /// needs to walk is the set the page actually uses — a verb in the switch
+    /// that no button sends is dead, and a button sending one the switch does
+    /// not have is a 400 nobody predicted. Both are worth failing on.
+    /// </remarks>
+    internal static readonly string[] Verbs =
+    [
+        "gate", "gates", "message", "stop", "forget", "pause", "resume", "name", "pr", "say", "budget", "pickup",
+    ];
+
+    /// <summary>
+    /// The command line one verb stands for, or an empty path for a verb that
+    /// stands for nothing.
+    /// </summary>
+    /// <remarks>
+    /// Its own function so a test can run every one of these against the real
+    /// parser. It is not enough that the command exists: the options have to be
+    /// ones it declares, and "forget" shipped for exactly as long as it took to
+    /// press the button passing <c>--yes</c> to a command that never asks and
+    /// therefore does not take it. Spectre rejected the line, the command never
+    /// ran, and the page reported a general failure.
+    /// </remarks>
+    internal static (string Command, IReadOnlyList<string> Arguments) Maps(RunAction action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        var (command, arguments) = action.Verb switch
+        {
+            "gates" or "gate" => ("team gate", Gate(action)),
+            "message" => ("team message", new List<string> { action.Run, "--message", action.Message ?? string.Empty }),
+            "stop" => ("team halt", [action.Run]),
+            "budget" => ("team budget", [action.Run, "--usd", action.Budget ?? string.Empty]),
+
+            // Not "resume", which the page already sends for letting a held
+            // run carry on: that one lifts a hold on a live run, and this one
+            // carries on a run that has ended.
+            "pickup" => ("team resume", PickUp(action)),
+
+            // No --yes: naming a run is agreeing to it, so the command does not
+            // ask and does not take the option. The page asks, by name, before
+            // it gets here.
+            //
+            // No --force either, which is the part that matters. A run still
+            // going keeps its directory, because that is where its nodes read
+            // the answers they are waiting on — and the command refuses it
+            // whatever the page thinks it is looking at.
+            "forget" => ("team runs remove", [action.Run]),
+
+            "pause" => ("team halt", [action.Run, "--pause"]),
+            "resume" => ("team halt", [action.Run, "--resume"]),
+
+            // An empty name clears it, which is how the page offers "put it
+            // back": there is one box, and emptying a box is what people do.
+            "name" => ("team name", action.Room is { Length: > 0 } room
+                ? [action.Run, "--room", room]
+                : [action.Run, "--clear"]),
+
+            "pr" => ("team pr", action.Node is { Length: > 0 } whose
+                ? [action.Run, "--node", whose]
+                : [action.Run]),
+
+            "say" => ("team say", [
+                action.Run,
+                "--node", action.Node ?? string.Empty,
+                "--message", action.Message ?? string.Empty,
+            ]),
+            _ => (string.Empty, []),
+        };
+
+        return (command, arguments);
+    }
+
+    /// <summary>
+    /// What this machine is set to, for the page to draw.
+    /// </summary>
+    /// <remarks>
+    /// Read afresh on every request rather than cached, like the teams and the
+    /// projects: a setting changed from a terminal while somebody has the page
+    /// open belongs in the next answer rather than the next restart.
+    /// <para>
+    /// Where notices go is reported as held or not held, never as itself. That
+    /// address is the credential - anybody with it can post into the channel as
+    /// you - and this file is read by a browser that may be on the other side
+    /// of the house.
+    /// </para>
+    /// </remarks>
+    internal static async Task<MachineSettings> SetAsync(
+        Loadout.Core.Configuration.IConfigurationService configuration,
+        Loadout.Platform.Abstractions.IPlatformPaths paths,
+        Loadout.Platform.Abstractions.ISecretProvider secrets,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(secrets);
+
+        var machine = await configuration.LoadMachineAsync(ct).ConfigureAwait(false);
+        var teams = machine.Value?.Teams;
+
+        // Asked of the store directly rather than through Notices, which wants
+        // an HttpClient it would never use for this: whether an address is held
+        // is a question for the credential store and nothing else.
+        var held = await secrets.GetAsync(Notices.Reference, ct).ConfigureAwait(false);
+
+        return new MachineSettings(
+            NotifyKind: teams?.NotifyKind ?? string.Empty,
+            NotifyChat: teams?.NotifyChat ?? string.Empty,
+            NotifyAddressSet: held.Value is { Length: > 0 },
+            OfficeSet: teams?.OfficeSet ?? string.Empty,
+            WaitingSet: teams?.WaitingSet ?? string.Empty,
+            OfficeSets: OfficeArt.Sets(OfficeArt.Chosen(paths, null).Root),
+            WebhookListen: Webhook.Listen(teams),
+            WebhookTeams: teams?.WebhookTeams ?? [],
+            WebhookTokenSet: await Webhook.TokenAsync(secrets, ct).ConfigureAwait(false) is not null,
+            Trusted:
+            [
+                .. (machine.Value?.Teams.TrustedRemedies ?? [])
+                    .Select(one => new TrustedOnThisMachine(
+                        one.Team,
+                        one.Remedy,
+                        one.By,
+
+                        // Nullable on the record, because an agreement written
+                        // before it was dated has none, and an empty string is
+                        // the honest way to draw that.
+                        one.At is { } when
+                            ? when.ToLocalTime().ToString(
+                                "yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+                            : string.Empty)),
+            ]);
+    }
+
+    /// <summary>Changes one of this machine's settings, by typing the command.</summary>
+    /// <remarks>
+    /// <para>
+    /// What is said out loud is the setting and never the value. Every other
+    /// thing the page does prints its whole command line where whoever started
+    /// the server can see it, and that is right for them: a page that can stop
+    /// a run should not stop one silently. It is wrong for exactly one of these.
+    /// Where notices go is a webhook address, and a webhook address is the
+    /// credential - printing the line would write it to a terminal, and from
+    /// there to whatever is capturing that terminal's output.
+    /// </para>
+    /// <para>
+    /// So the line is described rather than quoted, for all of them. Naming the
+    /// setting and not the value is a rule worth having whole rather than one
+    /// with an exception that somebody later has to remember.
+    /// </para>
+    /// </remarks>
+    internal static async Task<OperationResult> SettledAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        SettingsChange change,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(change);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var (command, arguments) = Setting(change);
+
+        if (command.Length == 0)
+        {
+            return OperationResult.Fail(
+                $"There is no setting called '{change.What}' on this machine.",
+                ExitCode.InvalidArguments);
+        }
+
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"{Markup.Escape(change.What)} "
+            + (change.Off ? "turned off" : "changed"));
+
+        var code = await commands
+            .RunAsync(command, [.. arguments, "--non-interactive"], ct)
+            .ConfigureAwait(false);
+
+        if (code == (int)ExitCode.Success)
+        {
+            return OperationResult.Ok();
+        }
+
+        return OperationResult.Fail(
+            (ExitCode)code switch
+            {
+                ExitCode.InvalidArguments =>
+                    $"That is not a value '{change.What}' takes. The terminal serving this page "
+                    + "has what it said.",
+                ExitCode.PolicyViolation =>
+                    "That was refused by a rule. The terminal serving this page has which one.",
+                _ => $"Setting '{change.What}' ended with exit code {code}. The terminal serving "
+                    + "this page has the reason.",
+            },
+            (ExitCode)code);
+    }
+
+    /// <summary>Does what a button asked, by running the command it stands for.</summary>
+    internal static async Task<OperationResult> RanAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        RunAction action,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(action);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var (command, arguments) = Maps(action);
+
+        if (command.Length == 0)
+        {
+            return OperationResult.Fail(
+                $"There is nothing called '{action.Verb}' to do to a run.", ExitCode.InvalidArguments);
+        }
+
+        if (action.Verb == "message" && action.Message is not { Length: > 0 })
+        {
+            return OperationResult.Fail("Say something to say.", ExitCode.InvalidArguments);
+        }
+
+        if (action.Verb == "budget" && action.Budget is not { Length: > 0 })
+        {
+            return OperationResult.Fail("Say what it may spend.", ExitCode.InvalidArguments);
+        }
+
+        // Said where whoever started the server can see it. A page that can
+        // stop a run should not be able to stop one silently.
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"{Markup.Escape(command)} {Markup.Escape(action.Run)}");
+
+        // Picking a run up runs it, for as long as it takes. Watched only long
+        // enough to catch a refusal, like starting one, rather than holding the
+        // page's request open for an hour.
+        var code = action.Verb == "pickup"
+            ? await InBackgroundAsync(commands, time, command, [.. arguments, "--non-interactive"], output, ct)
+                .ConfigureAwait(false)
+            : await commands
+                .RunAsync(command, [.. arguments, "--non-interactive"], ct)
+                .ConfigureAwait(false);
+
+        if (code == (int)ExitCode.Success)
+        {
+            return OperationResult.Ok();
+        }
+
+        // The words went to the terminal serving this page, and an exit code is
+        // all that crosses back. Saying only "exit code 1" sends somebody to
+        // that terminal to find out what happened, which is where they were
+        // before the page could do any of this — so the ones worth naming are
+        // named, and the rest says plainly where the reason is.
+        return OperationResult.Fail(
+            (ExitCode)code switch
+            {
+                ExitCode.ProjectNotFound =>
+                    $"There is no run called '{action.Run}' on this machine any more.",
+                ExitCode.PolicyViolation when action.Verb == "forget" =>
+                    "That run has not finished. Stop it first: its nodes are still reading "
+                    + "its directory for the answers they are waiting on.",
+                ExitCode.PolicyViolation =>
+                    "That was refused by a rule. The terminal serving this page has which one.",
+                ExitCode.InvalidArguments when action.Verb == "pickup" =>
+                    "That run cannot be picked up as it is: it has not ended, or it would stop again "
+                    + "at once. Give it more money in the budget box. The terminal serving this page "
+                    + "says which.",
+                ExitCode.InvalidArguments =>
+                    "That is not something this can be asked of that run.",
+                _ => $"'{command}' ended with exit code {code}. The terminal serving this page "
+                     + "has the reason.",
+            },
+            (ExitCode)code);
+    }
+
+    /// <summary>
+    /// Starts a team, by typing the command somebody would have typed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not awaited to the end, on purpose. A run takes minutes and an HTTP
+    /// request that held open for one would time out long before it finished,
+    /// so the answer is "started" and whatever happens next is written where
+    /// the schedules write theirs.
+    /// </para>
+    /// <para>
+    /// Not "started" immediately, though, which is the part that was wrong.
+    /// Everything that decides whether a run can begin at all — the team
+    /// existing, the project resolving, the tree being a repository — is
+    /// settled in the first second, and reporting success before any of it had
+    /// happened meant the page said "Team Test is starting. It appears in the
+    /// list in a moment" while the terminal behind it said no such team. So it
+    /// waits <see cref="Settles"/> for an early exit and reports that as the
+    /// failure it is. A run still going by then has passed all of it.
+    /// </para>
+    /// </remarks>
+    /// <summary>
+    /// The command line a start from the page stands for.
+    /// </summary>
+    /// <remarks>
+    /// Its own function, like <see cref="Maps" />, so a test can read it rather
+    /// than infer it. Two fields had already been added to the form and never
+    /// reached the command - the model, which meant a run started from the page
+    /// took whatever the team file pinned however carefully somebody chose
+    /// otherwise - and nothing failed, because a box that is read and dropped
+    /// looks exactly like a box that works.
+    /// </remarks>
+    internal static List<string> Starting(StartRequest asking)
+    {
+        ArgumentNullException.ThrowIfNull(asking);
+
+        var arguments = new List<string> { asking.Team, asking.Goal };
+
+        if (asking.Project is { Length: > 0 } project)
+        {
+            arguments.Add("--project");
+            arguments.Add(project);
+        }
+
+        if (asking.Rounds is { } rounds and > 0)
+        {
+            arguments.Add("--rounds");
+            arguments.Add(rounds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (asking.Autonomy is { Length: > 0 } autonomy)
+        {
+            arguments.Add("--autonomy");
+            arguments.Add(autonomy);
+        }
+
+        // The option 'team run' has always had and nothing here passed, so a
+        // run started from the page could not name a model however carefully
+        // somebody chose one.
+        if (asking.Model is { Length: > 0 } model)
+        {
+            arguments.Add("--model");
+            arguments.Add(model);
+        }
+
+        if (asking.Agent is { Length: > 0 } agent)
+        {
+            arguments.Add("--agent");
+            arguments.Add(agent);
+        }
+
+        // One option per criterion, because a criterion is a sentence and
+        // sentences contain commas. Blank ones are dropped rather than passed:
+        // a criterion the lead can never report a verdict on would refuse
+        // every done for ever.
+        foreach (var criterion in asking.Criteria ?? [])
+        {
+            if (criterion.Trim() is { Length: > 0 } said)
+            {
+                arguments.Add("--done-when");
+                arguments.Add(said);
+            }
+        }
+
+        arguments.Add("--non-interactive");
+
+        return arguments;
+    }
+
+    internal static async Task<OperationResult> BeganAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        StartRequest asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(asking);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var arguments = Starting(asking);
+
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"team run {Markup.Escape(asking.Team)}"
+            + (asking.Project is { Length: > 0 } on ? $" on {Markup.Escape(on)}" : string.Empty));
+
+        // Started here and finished wherever it finishes: whatever it ends up
+        // doing is written where the schedules write theirs.
+        var exit = await InBackgroundAsync(commands, time, "team run", arguments, output, ct)
+            .ConfigureAwait(false);
+
+        if (exit == (int)ExitCode.Success)
+        {
+            // A whole run inside four seconds. Unusual and not wrong: a team
+            // whose goal was already met ends this fast.
+            return OperationResult.Ok();
+        }
+
+        // Written here rather than relayed, because what crosses back from the
+        // command is an exit code and the words went to the console. Each one
+        // names what to do next: a page that says only "that failed" sends
+        // somebody to a terminal, which is where they were before.
+        return OperationResult.Fail(
+            (ExitCode)exit switch
+            {
+                ExitCode.ProjectNotFound =>
+                    $"There is no team called '{asking.Team}', or no project called "
+                    + $"'{asking.Project}'. Pick from the lists rather than typing.",
+                ExitCode.RepositoryUnavailable =>
+                    "That project's directory is not a Git repository. Choose a project: without "
+                    + "one, a run works wherever this dashboard was started, which is rarely a repository.",
+                ExitCode.PolicyViolation =>
+                    "That run was refused before it spent anything. The terminal serving this page "
+                    + "has the rule it broke.",
+                ExitCode.InvalidArguments =>
+                    "That is not a run this can start — a template cannot be run, only copied.",
+                _ => $"That run ended immediately, with exit code {exit}. The terminal serving this "
+                     + "page has the reason.",
+            },
+            (ExitCode)exit);
+    }
+
+    /// <summary>
+    /// Runs a command that goes on for as long as a run does, and answers once
+    /// it has either refused or had long enough to have.
+    /// </summary>
+    /// <returns>The command's exit code if it ended that quickly, else success.</returns>
+    private static async Task<int> InBackgroundAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        string command,
+        IReadOnlyList<string> arguments,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        var running = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    var code = await commands.RunAsync(command, arguments, ct).ConfigureAwait(false);
+
+                    if (code != (int)ExitCode.Success)
+                    {
+                        output.WriteLine(
+                            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                            + $"{Markup.Escape(command)} ended with exit code {code}.");
+                    }
+
+                    return code;
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException)
+                {
+                    output.WriteLine(
+                        $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] "
+                        + $"{Markup.Escape(command)} could not be started: {Markup.Escape(ex.Message)}");
+
+                    return (int)ExitCode.GeneralFailure;
+                }
+            },
+            CancellationToken.None);
+
+        var settled = await Task.WhenAny(running, Task.Delay(Settles, ct)).ConfigureAwait(false);
+
+        return settled == (Task)running
+            ? await running.ConfigureAwait(false)
+            : (int)ExitCode.Success;
+    }
+
+    /// <summary>
+    /// How long a start is watched before it is called started.
+    /// </summary>
+    /// <remarks>
+    /// Long enough for a refusal, short enough that nobody thinks the page has
+    /// hung. Everything that refuses a run — an unknown team, an unregistered
+    /// project, a directory that is not a repository, a template — is decided
+    /// before the first agent is launched and well inside this.
+    /// </remarks>
+    private static readonly TimeSpan Settles = TimeSpan.FromSeconds(4);
+
+    /// <summary>
+    /// Writes a team, by typing the command somebody would have typed.
+    /// </summary>
+    /// <remarks>
+    /// Awaited, unlike a run: writing a file takes milliseconds, and the whole
+    /// point of this is that somebody finds out on the page whether it worked.
+    /// The failure a run had — the refusal going to a terminal behind the
+    /// browser — is the one thing this must not repeat.
+    /// </remarks>
+    internal static async Task<OperationResult> MadeAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        MakeRequest asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(asking);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var arguments = new List<string> { asking.Name };
+
+        if (asking.From is { Length: > 0 } from)
+        {
+            arguments.Add("--from");
+            arguments.Add(from);
+        }
+
+        if (asking.Project is { Length: > 0 } project)
+        {
+            arguments.Add("--for-this-project");
+            arguments.Add("--project");
+            arguments.Add(project);
+        }
+
+        arguments.Add("--non-interactive");
+
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"team new {Markup.Escape(asking.Name)}"
+            + (asking.From is { Length: > 0 } copied ? $" from {Markup.Escape(copied)}" : string.Empty));
+
+        var code = await commands.RunAsync("team new", arguments, ct).ConfigureAwait(false);
+
+        // The exit code is what crosses the process boundary, so the sentences
+        // are written here rather than relayed. Each names the next thing to
+        // do, because a page that says only "that failed" sends somebody to a
+        // terminal to find out why — which is where they were before this
+        // existed.
+        return code == (int)ExitCode.Success
+            ? OperationResult.Ok()
+            : OperationResult.Fail(
+                (ExitCode)code switch
+                {
+                    ExitCode.InvalidArguments =>
+                        $"'{asking.Name}' is either taken or not a name a team can have. "
+                        + "Lowercase letters, digits and hyphens, and not one already in the list.",
+                    ExitCode.ProjectNotFound =>
+                        "That project, or the team to copy, is not one this machine knows about.",
+                    ExitCode.WorkspaceSyncFailed =>
+                        "There is no workspace to write a team into. Run 'loadout setup' first.",
+                    _ => $"'team new' ended with exit code {code}. The terminal serving this page "
+                         + "has the reason.",
+                },
+                (ExitCode)code);
+    }
+
+    /// <summary>
+    /// Arranges for a run to happen again, by typing the command somebody would
+    /// have typed.
+    /// </summary>
+    /// <remarks>
+    /// Awaited, like writing a team. Both verbs write a small file and come
+    /// back, and the whole point of doing this from the page is finding out on
+    /// the page whether it took.
+    /// </remarks>
+    internal static async Task<OperationResult> PlannedAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        ScheduleAction asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(asking);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var (command, arguments) = Plans(asking);
+
+        if (command.Length == 0)
+        {
+            return OperationResult.Fail(
+                $"There is nothing called '{asking.Verb}' to do to a schedule.",
+                ExitCode.InvalidArguments);
+        }
+
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"{Markup.Escape(command)} {Markup.Escape(asking.Name)}");
+
+        var code = await commands.RunAsync(command, arguments, ct).ConfigureAwait(false);
+
+        if (code == (int)ExitCode.Success)
+        {
+            return OperationResult.Ok();
+        }
+
+        return OperationResult.Fail(
+            (ExitCode)code switch
+            {
+                ExitCode.InvalidArguments =>
+                    "A schedule needs how often it runs, a time of day, or something to watch "
+                    + "for - and at least five minutes between runs. It also cannot be manual: "
+                    + "nobody is watching when it fires.",
+                ExitCode.ProjectNotFound =>
+                    "That team, project or schedule is not one this machine knows about.",
+                _ => $"'{command}' ended with exit code {code}. The terminal serving this page "
+                     + "has the reason.",
+            },
+            (ExitCode)code);
+    }
+
+    /// <summary>
+    /// The command line a schedule verb stands for.
+    /// </summary>
+    /// <remarks>
+    /// Its own function for the same reason <see cref="Maps"/> is: a test runs
+    /// every one of these against the real parser, because it is not enough
+    /// that the command exists - every option in the line has to be one it
+    /// declares.
+    /// </remarks>
+    internal static (string Command, IReadOnlyList<string> Arguments) Plans(ScheduleAction asking)
+    {
+        ArgumentNullException.ThrowIfNull(asking);
+
+        if (string.Equals(asking.Verb, "remove", StringComparison.Ordinal))
+        {
+            return ("team schedule remove", [asking.Name, "--non-interactive"]);
+        }
+
+        if (!string.Equals(asking.Verb, "add", StringComparison.Ordinal))
+        {
+            return (string.Empty, []);
+        }
+
+        // The three arguments are positional and required, so they go first and
+        // in order. An empty one is still passed: the command says which is
+        // missing far better than a line that silently shifts the next
+        // argument into its place.
+        var arguments = new List<string>
+        {
+            asking.Name,
+            asking.Team ?? string.Empty,
+            asking.Goal ?? string.Empty,
+        };
+
+        foreach (var (option, value) in new[]
+        {
+            ("--project", asking.Project),
+            ("--every", asking.Every),
+            ("--at", asking.At),
+            ("--on", asking.On),
+            ("--autonomy", asking.Autonomy),
+        })
+        {
+            if (value is { Length: > 0 })
+            {
+                arguments.Add(option);
+                arguments.Add(value);
+            }
+        }
+
+        arguments.Add("--non-interactive");
+
+        return ("team schedule add", arguments);
+    }
+
+    /// <summary>
+    /// Clears out runs in a batch, by typing the command somebody would have
+    /// typed.
+    /// </summary>
+    /// <remarks>
+    /// The page asks its own question before it gets here, by name and with a
+    /// count, because a browser is where somebody clicks before reading. The
+    /// <c>--yes</c> below is that question already answered; everything about
+    /// which runs are picked, and the refusal to touch one still going,
+    /// belongs to the command and stays there.
+    /// </remarks>
+    internal static async Task<OperationResult> ClearedAsync(
+        ICommandCatalogue commands,
+        TimeProvider time,
+        PruneAction asking,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(asking);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var (command, arguments) = Clears(asking);
+
+        // Said where whoever started the server can see it, like the rest.
+        // This one deletes more than any other button on the page.
+        output.WriteLine(
+            $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
+            + $"{Markup.Escape(command)} {Markup.Escape(string.Join(' ', arguments))}");
+
+        var code = await commands.RunAsync(command, arguments, ct).ConfigureAwait(false);
+
+        if (code == (int)ExitCode.Success)
+        {
+            return OperationResult.Ok();
+        }
+
+        return OperationResult.Fail(
+            (ExitCode)code switch
+            {
+                ExitCode.InvalidArguments =>
+                    "Say which runs to forget: an ending, an age, a number to keep, or several "
+                    + "of them together.",
+                _ => $"'{command}' ended with exit code {code}. The terminal serving this page "
+                     + "has the reason.",
+            },
+            (ExitCode)code);
+    }
+
+    /// <summary>
+    /// The command line a batch clear-out stands for.
+    /// </summary>
+    /// <remarks>
+    /// Its own function for the same reason <see cref="Maps"/> and
+    /// <see cref="Plans"/> are: a test runs it against the real parser, and
+    /// "forget" is on record as a button that sent an option its command did
+    /// not declare.
+    /// </remarks>
+    internal static (string Command, IReadOnlyList<string> Arguments) Clears(PruneAction asking)
+    {
+        ArgumentNullException.ThrowIfNull(asking);
+
+        var arguments = new List<string>();
+
+        if (asking.Outcome is { Length: > 0 } ending)
+        {
+            arguments.Add("--outcome");
+            arguments.Add(ending);
+        }
+
+        if (asking.OlderThan is { Length: > 0 } age)
+        {
+            arguments.Add("--older-than");
+            arguments.Add(age);
+        }
+
+        if (asking.Keep is { } floor)
+        {
+            arguments.Add("--keep");
+            arguments.Add(floor.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (asking.IncludeUnmerged)
+        {
+            arguments.Add("--include-unmerged");
+        }
+
+        arguments.Add("--yes");
+        arguments.Add("--non-interactive");
+
+        return ("team runs prune", arguments);
+    }
+
+    /// <summary>
+    /// What there is to start, and to copy.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same loader <c>team list</c> uses, with the same layering, so the
+    /// page and the command line cannot disagree about which teams exist. What
+    /// the page does with it is offer them; deciding is still the parser's,
+    /// exactly as before.
+    /// </para>
+    /// <para>
+    /// Loaded without a project, because a dashboard is not standing in any one
+    /// repository. That means a team written under a single project does not
+    /// appear until the page names that project — which is honest: it is not a
+    /// team this machine can run against anything else.
+    /// </para>
+    /// </remarks>
+    internal static async Task<Choosable> OfferedAsync(
+        ITeamCatalogue teams,
+        ISpecialistLibrary library,
+        IWorkspaceManager workspace,
+        IProjectService projects,
+        Loadout.Agents.IAgentRegistry agents,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(teams);
+        ArgumentNullException.ThrowIfNull(library);
+        ArgumentNullException.ThrowIfNull(workspace);
+        ArgumentNullException.ThrowIfNull(projects);
+        ArgumentNullException.ThrowIfNull(agents);
+
+        var root = workspace.IsAvailable() ? workspace.LocalPath : null;
+
+        var registered = await projects.ListAsync(ct).ConfigureAwait(false);
+
+        var slugs = registered.Succeeded
+            ? registered.Value!.Select(one => one.Entry.Slug).OrderBy(one => one, StringComparer.Ordinal).ToList()
+            : [];
+
+        var specialists = await library.LoadAsync(root, null, ct).ConfigureAwait(false);
+        var catalogue = await teams.LoadAsync(root, null, specialists, ct).ConfigureAwait(false);
+
+        var offered = catalogue.Teams.Values
+            .OrderBy(team => team.Name, StringComparer.Ordinal)
+            .Select(team => new ChoosableTeam(
+                team.Name,
+                team.Description,
+                Whose(catalogue.Origin(team.Name)),
+                team.Template,
+
+                // Whatever the catalogue said was wrong with this one, in one
+                // string. A team with a finding against it can still be picked
+                // — 'team run' refuses it and says why — but somebody choosing
+                // between eight of them should not have to find that out by
+                // spending a round on it.
+                catalogue.Findings
+                    .Where(finding => string.Equals(finding.Rule, team.Name, StringComparison.OrdinalIgnoreCase))
+                    .Select(finding => finding.Detail)
+                    .FirstOrDefault(),
+                team.Nodes.Count,
+                team.Rules.Autonomy))
+            .ToList();
+
+        var here = (await projects
+            .ResolveFromDirectoryAsync(Directory.GetCurrentDirectory(), ct)
+            .ConfigureAwait(false)) is { Succeeded: true } found
+            ? found.Value!.Entry.Slug
+            : null;
+
+        // The adapters rather than a detection sweep: this is read on every
+        // request and detecting what is installed spawns a process per agent.
+        // An agent this machine has not got is refused by the launcher, which
+        // says so properly.
+        var startable = agents.Adapters
+            .Select(one => one.Name)
+            .OrderBy(one => one, StringComparer.Ordinal)
+            .ToList();
+
+        return new Choosable(offered, slugs, here, startable);
+    }
+
+    /// <summary>Where a team came from, for the page, in the words the listing uses.</summary>
+    private static string Whose(SpecialistOrigin origin) => origin switch
+    {
+        SpecialistOrigin.Pack => "from a pack",
+        SpecialistOrigin.Workspace => "yours",
+        SpecialistOrigin.Project => "this project's",
+        _ => "ships with Loadout",
+    };
+
+    /// <summary>The command line for carrying an ended run on.</summary>
+    private static List<string> PickUp(RunAction action)
+    {
+        var arguments = new List<string> { action.Run };
+
+        if (action.Budget is { Length: > 0 } budget)
+        {
+            arguments.Add("--usd");
+            arguments.Add(budget);
+        }
+
+        if (action.Message is { Length: > 0 } message)
+        {
+            arguments.Add("--message");
+            arguments.Add(message);
+        }
+
+        return arguments;
+    }
+
+    /// <summary>The command line for answering one gate.</summary>
+    private static List<string> Gate(RunAction action)
+    {
+        var arguments = new List<string> { action.Run };
+
+        if (action.Gate is { Length: > 0 } gate)
+        {
+            arguments.Add("--gate");
+            arguments.Add(gate);
+        }
+
+        arguments.Add("--answer");
+        arguments.Add(action.Answer ?? "no");
+        arguments.Add("--by");
+        arguments.Add("dashboard");
+
+        if (action.Instead is { Length: > 0 } instead)
+        {
+            arguments.Add("--instead");
+            arguments.Add(instead);
+        }
+
+        if (action.Reason is { Length: > 0 } reason)
+        {
+            arguments.Add("--reason");
+            arguments.Add(reason);
+        }
+
+        return arguments;
+    }
+}

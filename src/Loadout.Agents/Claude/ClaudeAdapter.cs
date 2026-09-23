@@ -53,6 +53,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
     protected override string ExecutableName => "claude";
 
     /// <inheritdoc />
+    public override IHeadlessProtocol HeadlessProtocol => ClaudeHeadlessProtocol.Instance;
+
+    /// <inheritdoc />
     protected override IReadOnlyDictionary<string, string[]> CapabilityMarkers =>
         new Dictionary<string, string[]>
         {
@@ -84,7 +87,38 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             [PermissionMode] = ["--permission-mode"],
             [ToolRestrictions] = ["--allowed-tools", "--disallowed-tools"],
             [ModelSelection] = ["--model"],
+
+            // Both streams have to be switchable for a node: messages in as
+            // JSON lines and events out as JSON lines. A build with only one
+            // of the two would take a prompt and answer in prose.
+            [AgentCapabilities.Headless] = ["--input-format", "--output-format"],
+
+            // Documented only inside --permission-prompts' description on
+            // 2.1.270, never as an entry of its own, so the marker is the bare
+            // flag name and matches wherever the help mentions it. Proven to
+            // work on that build by driving a session with it.
+            [PermissionAnswerer] = ["--permission-prompt-tool"],
+            [OutputSchema] = ["--json-schema"],
+
+            // Claude Code's own no-redraw mode. Detected rather than assumed,
+            // because a build that does not have it must say so: a person who
+            // set a screen-reader profile and silently got animations back
+            // would have no way to tell.
+            [ScreenReaderMode] = ["--ax-screen-reader"],
+            [StrictMcp] = ["--strict-mcp-config"],
         };
+
+    /// <summary>Capability key for routing permission prompts to a tool.</summary>
+    private const string PermissionAnswerer = "permission_answerer";
+
+    /// <summary>Capability key for constraining the final answer to a schema.</summary>
+    private const string OutputSchema = "output_schema";
+
+    /// <summary>Capability key for the agent's own mode for a screen reader.</summary>
+    private const string ScreenReaderMode = "screen_reader";
+
+    /// <summary>Capability key for connecting only the MCP servers the launcher names.</summary>
+    private const string StrictMcp = "strict_mcp";
 
     /// <summary>Capability key for the permission-mode option.</summary>
     private const string PermissionMode = "permission_mode";
@@ -116,9 +150,12 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         await AddSettingsAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         await AddCompiledContextAsync(context, descriptor, arguments, warnings, ct).ConfigureAwait(false);
         AddWorkspaceDirectory(context, descriptor, arguments);
+        AddReachable(arguments, context, descriptor);
         AddProjectSkills(context, descriptor, arguments, warnings);
         AddSecurityProfile(context, descriptor, arguments, warnings);
         AddModel(context, descriptor, arguments, warnings);
+        AddHeadless(context, descriptor, arguments, warnings);
+        AddReading(context, descriptor, arguments, warnings);
 
         // Everything after a bare -- belongs to the agent untouched
         // (spec section 36), so it is appended last and never inspected.
@@ -129,8 +166,40 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             : new Dictionary<string, string>(context.ResolvedEnvironment);
 
         return OperationResult<AgentInvocation>.Ok(
-            new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));
+            new AgentInvocation(
+                descriptor.ExecutablePath,
+                arguments,
+                environment,
+                warnings,
+                context.Headless is null ? null : SessionMarkers));
     }
+
+    /// <summary>
+    /// Variables a running Claude Code session sets for its own children,
+    /// which a node must not inherit.
+    /// </summary>
+    /// <remarks>
+    /// Named one by one rather than by the <c>CLAUDE_CODE_</c> prefix, because
+    /// the prefix also covers things a person may rely on: an OAuth token, a
+    /// provider switch, the configuration directory. These are the ones a
+    /// session started from inside another session was seen to inherit, and a
+    /// child carrying them loses its own transcript and answers to the
+    /// wrong session. A prefix matches its own name exactly and any longer
+    /// name, so each entry below is written in full.
+    /// </remarks>
+    private static readonly IReadOnlyList<string> SessionMarkers =
+    [
+        "CLAUDECODE",
+        "CLAUDE_PID",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_EXECPATH",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_BRIDGE_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+    ];
 
     /// <summary>
     /// Hands Claude the MCP servers the workspace declares for this project.
@@ -234,20 +303,27 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         List<string> warnings,
         CancellationToken ct)
     {
-        if (context.WorkspacePath is null || context.Manifest is null)
+        // What the person's own accessibility profile asks of Claude's own
+        // interface. Settled first, because a person who has set one gets a
+        // settings file whether or not their project has one.
+        var reading = Reading(context);
+
+        var settingsPath = context.WorkspacePath is null || context.Manifest is null
+            ? null
+            : Path.Combine(
+                context.WorkspacePath,
+                "projects",
+                context.Manifest.Slug,
+                "agents",
+                "claude",
+                "settings.json");
+
+        if (settingsPath is not null && !File.Exists(settingsPath))
         {
-            return;
+            settingsPath = null;
         }
 
-        var settingsPath = Path.Combine(
-            context.WorkspacePath,
-            "projects",
-            context.Manifest.Slug,
-            "agents",
-            "claude",
-            "settings.json");
-
-        if (!File.Exists(settingsPath))
+        if (settingsPath is null && reading.Count == 0)
         {
             return;
         }
@@ -255,23 +331,32 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         if (!descriptor.Supports(AgentCapabilities.ExternalSettings))
         {
             warnings.Add(
-                "This build of Claude Code does not advertise --settings, so the project's "
-                + "settings.json was not applied.");
+                settingsPath is null
+                    ? "This build of Claude Code does not advertise --settings, so how you asked to "
+                        + "be shown things was not passed to it."
+                    : "This build of Claude Code does not advertise --settings, so the project's "
+                        + "settings.json was not applied.");
 
             return;
         }
 
-        string text;
+        // An empty document when the project has no settings of its own: the
+        // screening below has nothing to screen, and the accessibility keys
+        // have somewhere to go.
+        var text = "{}";
 
-        try
+        if (settingsPath is not null)
         {
-            text = await File.ReadAllTextAsync(settingsPath, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            warnings.Add($"The project's settings.json could not be read, so it was not applied: {ex.Message}");
+            try
+            {
+                text = await File.ReadAllTextAsync(settingsPath, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                warnings.Add($"The project's settings.json could not be read, so it was not applied: {ex.Message}");
 
-            return;
+                return;
+            }
         }
 
         var launcher = Core.Agents.LauncherInvocation.Current() ?? "loadout";
@@ -295,7 +380,7 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             return;
         }
 
-        var slug = context.Manifest.Slug;
+        var slug = context.Manifest?.Slug ?? "this project";
 
         foreach (var dropped in screened.DroppedHooks)
         {
@@ -322,7 +407,26 @@ public sealed class ClaudeAdapter : AgentAdapterBase
 
         var path = settingsPath;
 
-        if (screened.Changed)
+        // A node's hooks are off from every scope, the machine's included,
+        // and the only way to say so is a key in the settings handed over.
+        // It goes into the copy written to the runtime directory, never into
+        // the project's own file, which travels.
+        var disableHooks = context.Headless?.DisableHooks == true;
+
+        if (disableHooks)
+        {
+            screened.Document["disableAllHooks"] = true;
+        }
+
+        foreach (var (key, value) in reading)
+        {
+            // The person's own preference, and the last word: a project that
+            // turned animation on does not get to turn it back on for
+            // somebody who asked for none.
+            screened.Document[key] = value;
+        }
+
+        if (screened.Changed || disableHooks || reading.Count > 0 || path is null)
         {
             path = Path.Combine(context.RuntimeDirectory, "settings.json");
 
@@ -342,7 +446,95 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         }
 
         arguments.Add("--settings");
-        arguments.Add(path);
+        arguments.Add(path!);
+    }
+
+    /// <summary>
+    /// Switches on Claude's own mode for somebody using a screen reader.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only for a session somebody is watching, and only where the profile
+    /// asks for no redraws, which is what that mode is: no spinners, no
+    /// timers, no in-place edits. A terminal screen reader reads every one of
+    /// those aloud again on every frame.
+    /// </para>
+    /// <para>
+    /// A build that does not advertise the flag is said out loud rather than
+    /// quietly left animated. Somebody who set the profile and got a spinner
+    /// anyway would have nothing to go on.
+    /// </para>
+    /// </remarks>
+    private static void AddReading(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Headless is not null
+            || context.Accessibility is not { } profile
+            || !string.Equals(profile.Display.Redraw, "never", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (descriptor.Supports(ScreenReaderMode))
+        {
+            arguments.Add("--ax-screen-reader");
+
+            return;
+        }
+
+        warnings.Add(
+            "This build of Claude Code does not advertise --ax-screen-reader, so it will still "
+            + "redraw its own display while it works. Everything Loadout prints follows your "
+            + "profile either way.");
+    }
+
+    /// <summary>
+    /// What the person's accessibility profile asks of Claude's own interface.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only for a session somebody is watching. A node has no terminal to
+    /// animate, no spinner to re-read and nobody to hear a bell, so none of
+    /// this is set for one.
+    /// </para>
+    /// <para>
+    /// The theme is deliberately left alone. Claude ships colour-blind-safe
+    /// themes in a light and a dark variant, and which of the two somebody
+    /// wants is not knowable from here; choosing one would flip the colours
+    /// of a terminal that was already set up the way they like it. What
+    /// Loadout can do about colour is in its own output.
+    /// </para>
+    /// </remarks>
+    private static Dictionary<string, System.Text.Json.Nodes.JsonNode?> Reading(AgentLaunchContext context)
+    {
+        var keys = new Dictionary<string, System.Text.Json.Nodes.JsonNode?>(StringComparer.Ordinal);
+
+        if (context.Headless is not null || context.Accessibility is not { } profile)
+        {
+            return keys;
+        }
+
+        if (!string.Equals(profile.Display.Motion, "full", StringComparison.OrdinalIgnoreCase))
+        {
+            keys["prefersReducedMotion"] = true;
+        }
+
+        if (string.Equals(profile.Display.Redraw, "never", StringComparison.OrdinalIgnoreCase))
+        {
+            // A tip that appears and disappears inside a spinner is a redraw
+            // in the place a screen reader is most likely to be listening.
+            keys["spinnerTipsEnabled"] = false;
+        }
+
+        if (profile.Display.Bell)
+        {
+            keys["preferredNotifChannel"] = "terminal_bell";
+        }
+
+        return keys;
     }
 
     /// <summary>
@@ -586,6 +778,177 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         arguments.Add(model);
     }
 
+    /// <summary>
+    /// Puts Claude into its message-in, event-out mode and applies everything
+    /// a node must be told explicitly.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The shape came out of driving Claude Code 2.1.270 from a process with
+    /// its pipes held: <c>-p</c> with both stream formats and <c>--verbose</c>,
+    /// which the stream output needs; the caps the agent enforces itself; the
+    /// permission mode and tool lists, so nothing is inherited from this
+    /// machine's interactive settings; the tool that answers when it would
+    /// otherwise prompt, since nobody is at the keyboard; the schema the final
+    /// answer must fit; only the MCP servers the launcher names, because
+    /// without that a node connected every server on the machine, several of
+    /// them waiting on an authentication nobody was there to give.
+    /// </para>
+    /// <para>
+    /// <c>--bare</c> is deliberately not used. It removes the hooks and the
+    /// plugins and it also removes the credentials, and the session answers
+    /// "Not logged in" to everything. Hooks are switched off through the
+    /// settings handed over instead.
+    /// </para>
+    /// </remarks>
+    private static void AddHeadless(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        if (context.Headless is not { } headless)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(AgentCapabilities.Headless))
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise --input-format and --output-format, "
+                + "so it cannot be driven without a terminal. The session was not started headlessly.");
+
+            return;
+        }
+
+        arguments.Add("-p");
+        arguments.Add("--verbose");
+        arguments.Add("--input-format");
+        arguments.Add("stream-json");
+        arguments.Add("--output-format");
+        arguments.Add("stream-json");
+
+        if (headless.MaxTurns is { } turns)
+        {
+            arguments.Add("--max-turns");
+            arguments.Add(turns.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (headless.BudgetUsd is { } budget)
+        {
+            // Invariant, always: a comma here would be read as no cap at all.
+            arguments.Add("--max-budget-usd");
+            arguments.Add(budget.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (descriptor.Supports(PermissionMode))
+        {
+            arguments.Add("--permission-mode");
+            arguments.Add(headless.Permission switch
+            {
+                HeadlessPermission.AcceptEdits => "acceptEdits",
+                HeadlessPermission.DenyUnlessAllowed => "dontAsk",
+                HeadlessPermission.Bypass => "bypassPermissions",
+                _ => "default",
+            });
+        }
+        else
+        {
+            warnings.Add(
+                "This build of Claude Code does not advertise --permission-mode, so the node's "
+                + $"permission setting ({headless.Permission}) was not applied.");
+        }
+
+        var allowed = headless.AllowedTools ?? [];
+        var denied = headless.DeniedTools ?? [];
+
+        if (allowed.Count > 0 || denied.Count > 0)
+        {
+            if (descriptor.Supports(ToolRestrictions))
+            {
+                if (allowed.Count > 0)
+                {
+                    arguments.Add("--allowed-tools");
+                    arguments.Add(string.Join(",", allowed));
+                }
+
+                if (denied.Count > 0)
+                {
+                    arguments.Add("--disallowed-tools");
+                    arguments.Add(string.Join(",", denied));
+                }
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise tool restrictions, so the node's "
+                    + "allow and deny lists were not applied.");
+            }
+        }
+
+        if (headless.PermissionAnswerer is { Length: > 0 } answerer)
+        {
+            if (descriptor.Supports(PermissionAnswerer))
+            {
+                arguments.Add("--permission-prompt-tool");
+                arguments.Add(answerer);
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise --permission-prompt-tool, so "
+                    + "anything the node would have asked about will be denied instead.");
+            }
+        }
+
+        if (headless.OutputSchemaJson is { Length: > 0 } schema)
+        {
+            if (descriptor.Supports(OutputSchema))
+            {
+                arguments.Add("--json-schema");
+                arguments.Add(schema);
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise --json-schema, so the node's "
+                    + "report will arrive as free text rather than the shape asked for.");
+            }
+        }
+
+        if (headless.IsolateMcpServers)
+        {
+            if (descriptor.Supports(StrictMcp))
+            {
+                arguments.Add("--strict-mcp-config");
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise --strict-mcp-config, so the node "
+                    + "will connect this machine's own MCP servers as well as the launcher's.");
+            }
+        }
+
+        // The settings builder folds the key into the project's screened
+        // copy when there is one. With no project settings file there is
+        // nothing to fold it into, so it goes inline.
+        if (headless.DisableHooks && !arguments.Contains("--settings"))
+        {
+            if (descriptor.Supports(AgentCapabilities.ExternalSettings))
+            {
+                arguments.Add("--settings");
+                arguments.Add("{\"disableAllHooks\":true}");
+            }
+            else
+            {
+                warnings.Add(
+                    "This build of Claude Code does not advertise --settings, so this machine's "
+                    + "hooks will run inside the node.");
+            }
+        }
+    }
+
     private static void AddWorkspaceDirectory(
         AgentLaunchContext context,
         AgentDescriptor descriptor,
@@ -605,6 +968,39 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         {
             arguments.Add("--add-dir");
             arguments.Add(projectWorkspace);
+        }
+    }
+
+    /// <summary>
+    /// Anywhere beyond the project this session has been told it may work in.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A team's directory is the first of these. Its nodes are briefed with the
+    /// path and told to keep what the team learns there, and without this the
+    /// agent refused every write to it: the directory existed, the path was
+    /// right, the instruction was clear, and nothing could be written.
+    /// </para>
+    /// <para>
+    /// Only ones that exist. Naming a directory that is not there is how a
+    /// session fails to start over a path nobody meant to depend on.
+    /// </para>
+    /// </remarks>
+    private static void AddReachable(List<string> arguments, AgentLaunchContext context, AgentDescriptor descriptor)
+    {
+        if (context.ReachableDirectories is not { Count: > 0 } directories
+            || !descriptor.Supports(AgentCapabilities.AdditionalDirectories))
+        {
+            return;
+        }
+
+        foreach (var directory in directories)
+        {
+            if (directory is { Length: > 0 } && Directory.Exists(directory))
+            {
+                arguments.Add("--add-dir");
+                arguments.Add(directory);
+            }
         }
     }
 

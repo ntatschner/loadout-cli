@@ -100,6 +100,25 @@ public static class Program
             Catalogue.Record($"{_name} {name}", typeof(TCommand));
             _inner.AddCommand<TCommand>(name);
         }
+
+        /// <summary>
+        /// A branch inside this one, recorded under its full path.
+        /// </summary>
+        /// <remarks>
+        /// Two levels are not new - the catalogue and the documentation check
+        /// have both allowed for three words since they were written - but
+        /// nothing had needed one until a family of commands arrived that
+        /// belongs under a family: 'team schedule add' is a schedule command
+        /// of the team's, not a team command called schedule-add.
+        /// </remarks>
+        internal void AddBranch(string name, Action<Branch> configure)
+        {
+            ArgumentNullException.ThrowIfNull(configure);
+
+            _inner.AddBranch<CommandSettings>(
+                name,
+                branch => configure(new Branch(branch, $"{_name} {name}")));
+        }
     }
 
     /// <summary>
@@ -148,6 +167,50 @@ public static class Program
     internal static IReadOnlySet<string> CommandNames() => Names.Value;
 
     /// <summary>
+    /// What the person asked for, from the nearest place they said it.
+    /// </summary>
+    /// <remarks>
+    /// The configuration is read only when neither the flag nor the
+    /// environment answered, and only when somebody is looking at a terminal.
+    /// Output going into a pipe has no colour and no cursor to control
+    /// already, and this runs on every invocation - including the status line,
+    /// which runs on every prompt of every session.
+    /// </remarks>
+    private static AccessibleMode Accessible(string[] arguments, IServiceProvider provider)
+    {
+        var asked = provider.GetRequiredService<IEnvironmentProvider>()
+            .GetVariable(AccessibleMode.Variable);
+
+        var typed = arguments.Any(a =>
+            string.Equals(a, AccessibleMode.Flag, StringComparison.Ordinal)
+            || a.StartsWith(AccessibleMode.Flag + "=", StringComparison.Ordinal));
+
+        if (!typed && string.IsNullOrEmpty(asked) && Console.IsOutputRedirected)
+        {
+            return AccessibleMode.Off;
+        }
+
+        Models.Configuration.AccessibilitySettings? settings = null;
+
+        if (!typed && string.IsNullOrEmpty(asked))
+        {
+            // Blocking on one small local file, in a short-lived process with
+            // no synchronisation context to deadlock against, for the same
+            // reason the agent registry does it: the container has no
+            // asynchronous resolution and this has to be settled before the
+            // first thing is drawn.
+            var loaded = provider.GetRequiredService<Loadout.Core.Configuration.IConfigurationService>()
+                .LoadConfigAsync()
+                .GetAwaiter()
+                .GetResult();
+
+            settings = loaded.Value?.Accessibility;
+        }
+
+        return AccessibleMode.Resolve(arguments, asked, settings);
+    }
+
+    /// <summary>
     /// How long a command is given to notice it has been interrupted before it
     /// is ended for it.
     /// </summary>
@@ -184,6 +247,7 @@ public static class Program
         // project.
         services.AddSingleton<ILauncherTui, Loadout.Tui.Terminal.TerminalLauncher>();
         services.AddSingleton<ISetupWizard, SetupWizard>();
+        services.AddSingleton<TextLauncher>();
         services.AddSingleton<WorkspaceSavePrompt>();
         services.AddSingleton<StatuslineTargets>();
         services.AddSingleton<SessionScope>();
@@ -196,6 +260,13 @@ public static class Program
         // CommandApp rather than carrying a second implementation of any of it.
         services.AddSingleton<ICommandCatalogue>(_ =>
             new CommandCatalogue(arguments => RunParserAsync(registrar, arguments)));
+
+        // Registered rather than resolved and handed round, because the
+        // interactive launcher builds from these same services and a prompt in
+        // there needs the profile as much as a command does.
+        services.AddSingleton(sp => Accessible(launcherArgs, sp));
+        services.AddSingleton(sp => new ReadingProfile(
+            sp.GetRequiredService<AccessibleMode>() is { IsOn: true } on ? on.Profile : null));
 
         // Directories are created before any command runs so no command has to
         // guess whether its storage exists (spec section 16).
@@ -216,6 +287,27 @@ public static class Program
                 + $"or '{paths.Paths.State}': {ex.Message}");
 
             return (int)ExitCode.ConfigurationInvalid;
+        }
+
+        // How this person asked to be shown things, settled before the first
+        // thing is drawn. One call reaches every table, tree and spinner in
+        // the application, because it changes the console they all share.
+        var accessible = provider.GetRequiredService<AccessibleMode>();
+
+        accessible.Apply(AnsiConsole.Console, Environment.GetEnvironmentVariable("NO_COLOR"));
+
+        if (accessible.IsOn
+            && !launcherArgs.Contains("--json", StringComparer.Ordinal)
+            && !launcherArgs.Contains("--quiet", StringComparer.Ordinal)
+            && !launcherArgs.Contains("-q", StringComparer.Ordinal))
+        {
+            // Said once, first, so somebody can tell the setting took. A
+            // profile that is on and invisible is indistinguishable from one
+            // that was ignored.
+            // Written straight out rather than through the console, which
+            // would wrap it at the terminal width and hand a screen reader
+            // half a sentence at a time.
+            Console.Out.WriteLine(accessible.Line);
         }
 
         // No arguments means the interactive launcher, which is the same
@@ -395,7 +487,16 @@ public static class Program
                 return await wizard.RunAsync(new SetupRequest()).ConfigureAwait(false);
 
             default:
-                return await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
+                // A full-screen launcher cannot be announced by anything: no
+                // terminal toolkit has a screen-reader provider on Windows or
+                // macOS. Somebody whose profile says so gets the same commands
+                // as a numbered menu instead, rather than a screen that is
+                // keyboard-operable and silent.
+                var text = provider.GetRequiredService<TextLauncher>();
+
+                return text.IsWanted
+                    ? await text.RunAsync().ConfigureAwait(false)
+                    : await provider.GetRequiredService<ILauncherTui>().RunAsync().ConfigureAwait(false);
         }
     }
 
@@ -525,6 +626,93 @@ public static class Program
             task.AddCommand<TaskListCommand>("list");
             task.AddCommand<TaskDeclareCommand>("declare");
             task.AddCommand<TaskRemoveCommand>("remove");
+        });
+
+        TopBranch(config, "team", team =>
+        {
+            team.Describe(
+                "Run a team of agents against a project: a lead that briefs workers and reports to you.",
+                CommandCategory.Start,
+                "team teams agents orchestration swarm crew multi-agent autonomous");
+            team.AddCommand<TeamListCommand>("list");
+            team.AddCommand<TeamShowCommand>("show");
+            team.AddCommand<TeamNewCommand>("new");
+            team.AddCommand<TeamEditCommand>("edit");
+            team.AddCommand<TeamRemoveCommand>("remove");
+            team.AddCommand<TeamRunCommand>("run");
+            team.AddCommand<TeamResumeCommand>("resume");
+
+            // A branch whose default is the listing, so 'team runs' means what
+            // it always did and 'team runs remove' is a runs command rather
+            // than a team command called runs-remove.
+            team.AddBranch("runs", runs =>
+            {
+                runs.SetDescription("What has run on this machine, and clearing out what you are done with.");
+                runs.SetDefaultCommand<TeamRunsCommand>();
+                runs.AddCommand<TeamRunsRemoveCommand>("remove");
+                runs.AddCommand<TeamRunsPruneCommand>("prune");
+            });
+
+            team.AddCommand<TeamStatusCommand>("status");
+            team.AddCommand<TeamLogCommand>("log");
+            team.AddCommand<TeamOutboxCommand>("outbox");
+            team.AddCommand<TeamRemediesCommand>("remedies");
+            team.AddCommand<TeamCapabilitiesCommand>("capabilities");
+
+            team.AddBranch("remedy", remedy =>
+            {
+                remedy.SetDescription("What a team has worked out how to fix, and whether it may do it again on its own.");
+                remedy.AddCommand<TeamRemedyShowCommand>("show");
+                remedy.AddCommand<TeamRemedyTrustCommand>("trust");
+                remedy.AddCommand<TeamRemedyRequestsCommand>("requests");
+            });
+            team.AddCommand<TeamDashboardCommand>("dashboard");
+
+            team.AddCommand<TeamDaemonCommand>("daemon");
+
+            team.AddBranch("schedule", schedule =>
+            {
+                schedule.AddCommand<TeamScheduleAddCommand>("add");
+                schedule.AddCommand<TeamScheduleListCommand>("list");
+                schedule.AddCommand<TeamScheduleRemoveCommand>("remove");
+            });
+
+            team.AddCommand<TeamGateCommand>("gate");
+            team.AddCommand<TeamMessageCommand>("message");
+            team.AddCommand<TeamHaltCommand>("halt");
+            team.AddCommand<TeamBudgetCommand>("budget");
+            team.AddCommand<TeamNameCommand>("name");
+            team.AddCommand<TeamPrCommand>("pr");
+            team.AddCommand<TeamSayCommand>("say");
+
+            team.AddBranch("attach", attach =>
+            {
+                attach.AddCommand<TeamAttachSetCommand>("set");
+                attach.AddCommand<TeamAttachClearCommand>("clear");
+                attach.AddCommand<TeamAttachShowCommand>("show");
+            });
+
+            team.AddBranch("autostart", autostart =>
+            {
+                autostart.AddCommand<TeamAutostartEnableCommand>("enable");
+                autostart.AddCommand<TeamAutostartDisableCommand>("disable");
+                autostart.AddCommand<TeamAutostartShowCommand>("show");
+            });
+
+            team.AddBranch("notify", notify =>
+            {
+                notify.AddCommand<TeamNotifySetCommand>("set");
+                notify.AddCommand<TeamNotifyTestCommand>("test");
+                notify.AddCommand<TeamNotifyShowCommand>("show");
+                notify.AddCommand<TeamNotifyClearCommand>("clear");
+            });
+
+            team.AddBranch("webhook", webhook =>
+            {
+                webhook.AddCommand<TeamWebhookEnableCommand>("enable");
+                webhook.AddCommand<TeamWebhookDisableCommand>("disable");
+                webhook.AddCommand<TeamWebhookShowCommand>("show");
+            });
         });
 
         TopBranch(config, "spend", spend =>

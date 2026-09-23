@@ -73,12 +73,14 @@ internal sealed class LauncherWindow : Window
         Func<ProjectResolution, CancellationToken, Task<ProjectOverview?>> overview,
         Action<LauncherWindow> showPalette,
         IReadOnlyList<AgentSession> recent,
-        IApplication application)
+        IApplication application,
+        Action<string>? speak = null)
     {
         ArgumentNullException.ThrowIfNull(projects);
         ArgumentNullException.ThrowIfNull(overview);
         ArgumentNullException.ThrowIfNull(application);
 
+        _speak = speak;
         _projects = projects;
         _here = here;
         _overview = overview;
@@ -174,7 +176,7 @@ internal sealed class LauncherWindow : Window
             Width = columnWidth,
             Height = Dim.Fill(2 + recentHeight),
             Title = "Projects",
-            BorderStyle = LineStyle.Rounded,
+            BorderStyle = LauncherTheme.Lines,
         };
 
         listFrame.Add(_list);
@@ -222,7 +224,7 @@ internal sealed class LauncherWindow : Window
                 Width = columnWidth,
                 Height = recentHeight,
                 Title = $"Recent ({_recent.Count})",
-                BorderStyle = LineStyle.Rounded,
+                BorderStyle = LauncherTheme.Lines,
             };
 
             recentFrame.Add(_recentList);
@@ -442,6 +444,11 @@ internal sealed class LauncherWindow : Window
                 {
                     Title = "Token _usage",
                     Action = () => RunCommand($"{LauncherCommands.Usage} --days 30"),
+                },
+                new MenuItem
+                {
+                    Title = "Team _runs…",
+                    Action = () => Close(new LauncherIntent(LauncherAction.Teams)),
                 },
                 new MenuItem
                 {
@@ -833,7 +840,7 @@ internal sealed class LauncherWindow : Window
         Width = 58,
         Height = 15,
         Title = "Keys",
-        BorderStyle = LineStyle.Rounded,
+        BorderStyle = LauncherTheme.Lines,
         Visible = false,
     };
 
@@ -885,6 +892,26 @@ internal sealed class LauncherWindow : Window
     }
 
     /// <summary>The project under the cursor, if the list is not empty.</summary>
+    /// <summary>
+    /// Says a line out loud, where somebody asked for that, and otherwise
+    /// nothing at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A delegate rather than the speech channel itself, so this window keeps
+    /// no opinion about screen readers, COM objects or which platform it is on
+    /// — and so every test that builds one gets silence without having to say
+    /// so.
+    /// </para>
+    /// <para>
+    /// This is the self-voicing pattern, and it exists because no terminal
+    /// toolkit has an accessibility provider on Windows or macOS: a full-screen
+    /// application cannot be announced the way a window is, so it announces
+    /// itself.
+    /// </para>
+    /// </remarks>
+    private readonly Action<string>? _speak;
+
     internal ProjectResolution? Selected =>
         _list.SelectedItem is int index && index >= 0 && index < _shown.Count
             ? _shown[index]
@@ -1483,6 +1510,27 @@ internal sealed class LauncherWindow : Window
     /// need git and the filesystem off the main loop so a slow repository does
     /// not freeze the list somebody is moving through.
     /// </summary>
+    /// <summary>
+    /// One row as a sentence, for saying out loud.
+    /// </summary>
+    /// <remarks>
+    /// Named, then where it is, then whether anything is running in it —
+    /// most-distinguishing first, because a person moving down a list hears the
+    /// first word of each row and interrupts as soon as it is the wrong one.
+    /// Everything a sighted person gets from the columns and nothing they get
+    /// from the colours, which is the whole of what a self-voicing screen owes.
+    /// </remarks>
+    internal static string Announce(ProjectResolution project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        var where = project.LocalPath is { Length: > 0 }
+            ? "on this machine"
+            : "not on this machine";
+
+        return $"{project.Entry.Name}. {where}.";
+    }
+
     private void ShowSelected()
     {
         // Whatever was said about the last project stops being true the moment
@@ -1499,8 +1547,15 @@ internal sealed class LauncherWindow : Window
         if (project is null)
         {
             _detail.ShowNothing();
+            _speak?.Invoke("No project.");
             return;
         }
+
+        // The row, as a sentence, the moment the cursor lands on it. Not the
+        // detail that follows: reading a repository takes a second or two and
+        // somebody moving down a list would hear each answer arrive after they
+        // had moved on twice.
+        _speak?.Invoke(Announce(project));
 
         _pending?.Cancel();
         _pending?.Dispose();

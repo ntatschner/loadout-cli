@@ -37,12 +37,18 @@ public static class SelfServerConfig
     /// The launcher's own path. Defaults to this process, and is a parameter so
     /// a test can say what it is rather than depend on what is running it.
     /// </param>
+    /// <param name="policyPath">
+    /// A team node's permission policy, which this session's server answers
+    /// the agent's permission questions from. Null for an ordinary session,
+    /// where a person at the keyboard answers their own.
+    /// </param>
     public static IReadOnlyList<string> Write(
         bool enabled,
         string slug,
         string runtimeDirectory,
         List<string> warnings,
-        string? executablePath = null)
+        string? executablePath = null,
+        string? policyPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slug);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeDirectory);
@@ -53,7 +59,36 @@ public static class SelfServerConfig
             return [];
         }
 
-        var executable = executablePath ?? Environment.ProcessPath;
+        /*
+            How this launcher is started, not merely where its process lives.
+
+            Environment.ProcessPath alone is right for the shipped executable
+            and wrong for a development build, where it is dotnet.exe - a real
+            file, so the guard below passed, and the server was declared with
+            the host as its command and "mcp" as its first argument. dotnet has
+            no such command. The agent started, the server did not, and the
+            lead of every team run from a development build died in seconds
+            saying mcp__loadout__loadout_permission was not found, which reads
+            as a broken permission harness rather than as a path.
+
+            executablePath is still honoured ahead of it so a test can say what
+            is running without depending on what is running it.
+        */
+        string? executable;
+        IReadOnlyList<string> prefix;
+
+        if (executablePath is { Length: > 0 })
+        {
+            (executable, prefix) = (executablePath, []);
+        }
+        else if (Loadout.Core.Agents.LauncherInvocation.Parts() is var parts && parts is not null)
+        {
+            (executable, prefix) = (parts.Value.Command, parts.Value.Prefix);
+        }
+        else
+        {
+            (executable, prefix) = (null, []);
+        }
 
         if (executable is not { Length: > 0 } || !File.Exists(executable))
         {
@@ -66,6 +101,13 @@ public static class SelfServerConfig
 
         var path = Path.Combine(runtimeDirectory, FileName);
 
+        // The prefix first: under the development host the executable is
+        // dotnet and the assembly has to be its first argument, before any of
+        // the launcher's own.
+        string[] args = policyPath is { Length: > 0 }
+            ? [.. prefix, "mcp", "serve", "--project", slug, "--policy", policyPath]
+            : [.. prefix, "mcp", "serve", "--project", slug];
+
         var document = new
         {
             mcpServers = new Dictionary<string, object>
@@ -73,7 +115,7 @@ public static class SelfServerConfig
                 ["loadout"] = new
                 {
                     command = executable,
-                    args = new[] { "mcp", "serve", "--project", slug },
+                    args,
                 },
             },
         };

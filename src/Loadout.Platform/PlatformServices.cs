@@ -25,8 +25,9 @@ public static class PlatformServices
     public static IServiceCollection AddPlatformServices(this IServiceCollection services)
     {
         var environment = new SystemEnvironmentProvider();
-        var processes = new ProcessLauncher();
         var host = DetectHost(environment);
+        var lifetime = CreateChildLifetime();
+        var processes = new ProcessLauncher(lifetime);
 
         var permissions = CreateFilePermissions();
         var resolver = new ExecutableResolver(environment, StandardSearchPaths(environment, host));
@@ -39,11 +40,12 @@ public static class PlatformServices
         var secrets = CreateSecretProvider(processes, resolver);
 
         var capabilities = new PlatformCapabilities(
-            () => Probe(host, secrets, clipboard, opener, desktop, terminals));
+            () => Probe(host, secrets, clipboard, opener, desktop, terminals, lifetime));
 
         services.AddSingleton(host);
         services.AddSingleton<IEnvironmentProvider>(environment);
         services.AddSingleton<IProcessLauncher>(processes);
+        services.AddSingleton(lifetime);
         services.AddSingleton<IProcessInspector>(new ProcessInspector());
         services.AddSingleton<IFilePermissions>(permissions);
         services.AddSingleton<IExecutableResolver>(resolver);
@@ -54,6 +56,8 @@ public static class PlatformServices
         services.AddSingleton<IClipboardProvider>(clipboard);
         services.AddSingleton<IApplicationLauncher>(opener);
         services.AddSingleton<IDesktopIntegration>(desktop);
+        services.AddSingleton<IAutostart>(CreateAutostart(processes, resolver));
+        services.AddSingleton<ISpeech>(CreateSpeech(processes, resolver));
         services.AddSingleton(secrets);
         services.AddSingleton<IPlatformCapabilities>(capabilities);
 
@@ -163,6 +167,35 @@ public static class PlatformServices
 
         return new LinuxTerminalProvider(processes, resolver);
     }
+
+    /// <summary>
+    /// What starts this launcher at login, for whichever desktop this is.
+    /// </summary>
+    /// <remarks>
+    /// Only the Windows one has been logged into. The Unix pair writes the
+    /// documented shapes and is covered by tests of what it writes, which is a
+    /// different claim from working.
+    /// </remarks>
+    private static IAutostart CreateAutostart(
+        IProcessLauncher processes,
+        IExecutableResolver resolver) =>
+        OperatingSystem.IsWindows()
+            ? new Windows.WindowsAutostart(processes, resolver)
+            : new Unix.UnixAutostart(OperatingSystem.IsMacOS());
+
+    /// <summary>
+    /// What says something out loud here, if anything can.
+    /// </summary>
+    /// <remarks>
+    /// Only the Windows voice has been heard. The NVDA route and both Unix
+    /// routes are written from documented entry points and have never answered.
+    /// </remarks>
+    private static ISpeech CreateSpeech(
+        IProcessLauncher processes,
+        IExecutableResolver resolver) =>
+        OperatingSystem.IsWindows()
+            ? new Windows.WindowsSpeech()
+            : new Unix.UnixSpeech(processes, resolver, OperatingSystem.IsMacOS());
 
     private static IDesktopIntegration CreateDesktopIntegration(
         IEnvironmentProvider environment,
@@ -275,15 +308,34 @@ public static class PlatformServices
         _ => "xdg-open",
     };
 
+    /// <summary>
+    /// How this platform keeps a driven child from outliving the launcher.
+    /// </summary>
+    /// <remarks>
+    /// Windows has a kernel-enforced answer and the others do not, so the
+    /// others get the portable one and say so. A Unix equivalent exists in
+    /// pieces — a process group the launcher signals, or PR_SET_PDEATHSIG,
+    /// which is Linux-only and has to be set by the child — and neither is
+    /// worth claiming until one has been written and run there.
+    /// </remarks>
+    private static IChildLifetime CreateChildLifetime() =>
+        OperatingSystem.IsWindows() ? new WindowsChildLifetime() : new TrackedChildLifetime();
+
     private static IReadOnlyList<CapabilityStatus> Probe(
         HostPlatform host,
         ISecretProvider secrets,
         CommandLineClipboardProvider clipboard,
         CommandLineApplicationLauncher opener,
         IDesktopIntegration desktop,
-        ITerminalProvider terminals)
+        ITerminalProvider terminals,
+        IChildLifetime lifetime)
     {
-        var statuses = new List<CapabilityStatus>();
+        var statuses = new List<CapabilityStatus>
+        {
+            lifetime.IsEnforced
+                ? CapabilityStatus.Supported(PlatformCapability.ChildProcessLifetime, lifetime.Detail)
+                : CapabilityStatus.Unsupported(PlatformCapability.ChildProcessLifetime, lifetime.Detail),
+        };
 
         var secretAvailability = secrets.IsAvailableAsync().GetAwaiter().GetResult();
         statuses.Add(secretAvailability.Succeeded

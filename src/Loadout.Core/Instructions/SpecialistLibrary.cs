@@ -497,8 +497,22 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
             front.Probe is { Tools.Count: > 0, Summary.Length: > 0 } probe
                 ? new SpecialistProbe(
                     probe.Summary.Trim(), probe.Tools, probe.Argument, probe.Pattern, probe.Absent)
+                : null,
+
+            // Only a role carries these; on anything else they are ignored
+            // the way every unknown frontmatter key is.
+            kind == SpecialistKind.Role
+                ? new RoleDefinition(
+                    Blank(front.Mode),
+                    Blank(front.Deliverable),
+                    Blank(front.Contract),
+                    front.Tools?.Allowed ?? [],
+                    front.Tools?.Denied ?? [])
                 : null));
     }
+
+    private static string? Blank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>The frontmatter as written, before it is checked.</summary>
     /// <remarks>
@@ -532,6 +546,26 @@ internal sealed partial class SpecialistLibrary : ISpecialistLibrary
         public string Command { get; set; } = string.Empty;
 
         public ProbeFront? Probe { get; set; }
+
+        /// <summary>The posture a role's node is launched in. Roles only.</summary>
+        public string? Mode { get; set; }
+
+        /// <summary>What a role's node hands back. Roles only.</summary>
+        public string? Deliverable { get; set; }
+
+        /// <summary>The report contract a role's node writes to. Roles only.</summary>
+        public string? Contract { get; set; }
+
+        /// <summary>The tool policy for a role's node. Roles only.</summary>
+        public ToolsFront? Tools { get; set; }
+    }
+
+    /// <summary>A role's tool policy as written.</summary>
+    internal sealed class ToolsFront
+    {
+        public List<string> Allowed { get; set; } = [];
+
+        public List<string> Denied { get; set; } = [];
     }
 
     /// <summary>A probe as written, before it is checked.</summary>

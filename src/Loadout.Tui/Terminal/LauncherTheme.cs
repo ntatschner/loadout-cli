@@ -70,8 +70,34 @@ internal static class LauncherTheme
                 ?? throw new InvalidOperationException($"Terminal.Gui has no scheme named {scheme}."),
             colours);
 
-    internal static void Apply()
+    /// <summary>
+    /// The lines a frame is drawn with: rounded, or none at all where the
+    /// person asked for no box drawing.
+    /// </summary>
+    /// <remarks>
+    /// One property rather than a literal at each dialog, because a dialog
+    /// added later would otherwise draw its own box whatever anybody asked
+    /// for. None rather than a plainer box: Terminal.Gui draws every line
+    /// style out of the same block of characters, and a console font that has
+    /// none of them draws nothing legible from any of them.
+    /// </remarks>
+    internal static LineStyle Lines { get; private set; } = LineStyle.Rounded;
+
+    /// <summary>
+    /// The lines a frame inside a window is drawn with: plainer than the
+    /// window's own, so the two read as nested, and none at all where the
+    /// person asked for no box drawing.
+    /// </summary>
+    internal static LineStyle Inner { get; private set; } = LineStyle.Single;
+
+    internal static void Apply(Models.Configuration.AccessibilitySettings? profile = null)
     {
+        var plain = profile is not null
+            && string.Equals(profile.Display.Glyphs, "ascii", StringComparison.OrdinalIgnoreCase);
+
+        Lines = plain ? LineStyle.None : LineStyle.Rounded;
+        Inner = plain ? LineStyle.None : LineStyle.Single;
+
         // Flat. A button with a shadow under it is drawn in two colours the
         // font has to have block glyphs for, and in the documentation image
         // the shadows read as a row of debris under every button. Nothing

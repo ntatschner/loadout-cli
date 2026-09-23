@@ -5,8 +5,9 @@ the commands.
 
 ### Instructions picked for the job
 
-There are 77 specialists built into the binary: foundations, modes, languages,
-frameworks, databases, platforms, clouds, functional areas and skills. Instead
+There are 101 specialists built into the binary: foundations, modes, languages,
+frameworks, databases, platforms, clouds, functional areas, skills and the roles
+a team run gives its nodes. Instead
 of one enormous prompt that's mostly irrelevant, Loadout works out which ones
 your task needs from the repo you're in and the words you used, then tells you
 why it picked each one.
@@ -214,6 +215,62 @@ loadout backup list
 loadout backup restore 20260901-204044-fd3512
 ```
 
+### Several agents on one goal
+
+```sh
+loadout team run bug-hunt "the config loader throws on a missing file"
+loadout team status
+```
+
+A lead splits your goal into requests, workers do the work in their own
+sessions, and the lead reads what came back and decides what to ask for next.
+
+Each node is an ordinary Loadout launch — same project, same compiled
+instructions, same screening — so what a team adds is who asks whom and what a
+run may spend before it stops. Workers that may run together do, each in its own
+git worktree, and a branch that conflicts goes back to whoever wrote it.
+
+A run can be started by hand, on a schedule, or when the repository moves. Watch
+one with `team status`, in the launcher, or on a page `team dashboard` serves on
+this machine. The page runs and writes teams as well as watching them, and every
+control on it types the command you would have typed.
+
+Eight teams ship. A team is a YAML file, so you can write your own, and copying
+one that already works is the way to start:
+
+```sh
+loadout team list
+loadout team new docs-crew-mine --from docs-crew
+loadout team edit docs-crew-mine
+```
+
+The copy keeps the original's comments and ordering rather than being
+regenerated from it, and `team show` checks the result — a team naming a role
+that does not exist is a finding there rather than a failure half way through a
+run. `team remove` deletes one you wrote; the ones that ship and the ones from a
+pack are refused, because the next `pack update` would overwrite anything you
+changed in them.
+
+Every run keeps what it wrote down, and you can clear out the ones you are done
+with:
+
+```sh
+loadout team runs prune --keep 20 --older-than 30d
+loadout team runs prune --failed
+```
+
+You can pick by how a run ended as well as by age: `--failed`, or `--outcome`
+with any of `done`, `failed`, `stopped`, `limited`, `blocked`, `needs-decision`
+and `unrecorded`. An ending nothing recognises is never taken by one of those —
+asking for the failed ones means the ones known to have failed, not everything
+that could not be ruled out.
+
+It will not take a run that is still going — a gate is answered by a file
+appearing in the run's directory, so deleting one under a live run leaves
+processes waiting on answers that can no longer arrive — and it will not
+silently take a run that left a branch nothing merged. `--dry-run` lists what it
+would take and why it is keeping the rest.
+
 ### Also in the box
 
 A session that ran for a while and left no handoff is told so on the way out,
@@ -232,3 +289,4 @@ branch and context usage. `loadout doctor` checks the lot.
 - [Recipes](recipes.md) — worked answers to the common jobs
 - [The launcher](launcher.md) — the terminal UI in detail
 - [Specialists and skills](specialists.md) — how an instruction set is composed
+- [Teams](teams.md) — several agents on one goal, and writing your own team

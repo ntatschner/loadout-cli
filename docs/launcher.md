@@ -208,6 +208,40 @@ to skim that list.
 Nothing is said when nothing is running. A line reading "0 sessions" would cost
 attention on every project, every time.
 
+## Watching a team run
+
+*Team runs…* in the Tools menu opens what the runs on this machine are doing,
+while they do it. It's the same account the dashboard serves and `team status`
+prints — each run writes one file and all three read it, so there's one record
+of what happened and three ways to look at it rather than three things that can
+disagree.
+
+The list is every run, newest first, with where each got to written as a word.
+Below it, the selected run's nodes: which role, what state, how many turns, and
+what the node is doing right now. A ceiling on how much longer it might take is
+shown when there's something to base one on, and said as a ceiling — what a lead
+asks for next isn't known to anybody, so anything phrased as a prediction would
+be one.
+
+Nothing is started or stopped from here. **Enter** opens the run's log, **s**
+its status, **d** the dashboard — each by running the command you'd otherwise
+have typed.
+
+**r** forgets the run the cursor is on, and is the one key here that changes
+anything, so it's the one that asks first: it names the run and defaults to
+no. Saying yes runs `team runs remove`, which is also what refuses a run that
+hasn't finished — those aren't offered at all.
+
+It reads again every two seconds. Under a profile that asked for no redraws or
+for less motion it doesn't, because a screen repainting itself every two seconds
+is what that setting exists to refuse: a screen reader is handed the whole list
+again on every pass and never reaches the end of it. **F5** reads once, either
+way.
+
+A run starting while you're watching arrives at the top and pushes the rest
+down. The cursor stays on the run it was on, by identifier rather than by
+position, so the list moving doesn't move you onto something else.
+
 ## Cost, history and standing
 
 These live behind a key rather than on the panel, which stays a page where every

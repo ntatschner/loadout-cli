@@ -6,9 +6,11 @@
 | `loadout setup` | Configure the launcher on this machine |
 | `loadout <project>` | Launch the project's default agent |
 | `loadout here` | Launch the agent for the current repository |
+| `loadout launch <project>` | Launch an agent against a project, which is what naming one on its own does |
 | `loadout doctor` | Platform, Git, workspace, secret and agent diagnostics |
 | `loadout status` | Summary of workspace, projects and agents |
-| `loadout project add\|list\|remove\|discover\|open` | Manage project registration. A directory with no repository yet is registered, and discovered, as one still to be set up |
+| `loadout project add\|list\|show\|remove\|discover\|open` | Manage project registration. A directory with no repository yet is registered, and discovered, as one still to be set up |
+| `loadout project new <name>` | Create a project, optionally from an existing one as a template |
 | `loadout project clone\|relocate <project>` | Get a registered project onto this machine |
 | `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `loadout project link [project]` | Record inside a repository which project it belongs to |
@@ -29,6 +31,8 @@
 | `loadout docs audit [project]` | Report where the documentation has come adrift from the repository |
 | `loadout docs find <name>` | Say where a type or member is declared, from an index kept in step with the repository |
 | `loadout docs refresh <file>` | Bring the symbol index up to date for the files named, after an edit; `--hook` is the form an after-edit hook runs, `--dialect generic` for one that is not Claude's |
+| `loadout docs ci` | Write a CI workflow that regenerates the documents. A starting point, not a fixture |
+| `loadout docs export` | Write a reference, technical guide, user-guide scaffold or machine index |
 | `loadout protect --refresh-hook [project]` | Install that hook in the project's Claude settings, or `--remove` it |
 | `loadout protect` | Install a pre-commit hook, or `--global` Git excludes |
 | `loadout migrate` | Move existing AI tooling files into the workspace |
@@ -52,6 +56,7 @@
 | `loadout instructions explain --against-mode\|--against-task` | Show only what changes between two ways of asking |
 | `loadout instructions audit\|validate` | Check a project against what its specialists ask for, or check the library itself |
 | `loadout instructions new <id>` | Draft a specialist or skill in the workspace, or in one project |
+| `loadout instructions export <specialist>` | Copy a built-in specialist into the workspace so it can be edited |
 | `loadout instructions stats` | Say which specialists launches actually reached, and which none did |
 | `loadout instructions probe [specialist]` | Say how often sessions did what a specialist asks for, week by week |
 | `loadout usage [--days|--by|--project]` | What the agents have spent, by project, day, model or agent |
@@ -64,8 +69,34 @@
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
+| `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
+| `loadout team new\|edit\|remove` | Write a team of your own, open its file, or delete it |
+| `loadout team run <team> "<goal>" --done-when` | Say what the run is judged on, one per use. The lead must report a verdict and evidence for every one |
+| `loadout team capabilities` | The machinery a team's declarations can ask for, and what each one needs |
+| `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |
+| `loadout team runs remove\|prune` | Forget runs you are done with, one by one or by age, count or how they ended |
+| `loadout team outbox` | The files a run delivered, resolved from the commits its nodes reported |
+| `loadout team remedies` | What a team has worked out how to fix, and whether it is trusted here |
+| `loadout team remedy show\|trust\|requests` | One remedy in full, trusting or untrusting it, and the remediations waiting on you |
+| `loadout team dashboard` | Every run at once, live, on a page: the daemon's if one is serving, otherwise a new one here |
+| `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
+| `loadout team daemon` | Stay running: fire the scheduled runs and serve the dashboard |
+| `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
+| `loadout team autostart enable\|disable\|show` | Start the daemon when you log in, per user |
+| `loadout team gate` | Answer something a run stopped to ask |
+| `loadout team message` | Say something to a run's lead, read at its next round |
+| `loadout team halt` | Stop a run after its current round, hold it, or let it carry on |
+| `loadout team budget` | Change what a running team may spend in all, from its next round on |
+| `loadout team resume` | Pick up a team run that has ended, where it stopped: `--usd` for more money, `--rounds` for more rounds, `--message` for the lead |
+| `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
+| `loadout team pr` | Open a pull request for what one node of a run produced |
+| `loadout team say` | Say something to one node while it is still working |
+| `loadout team attach set` | Set the passphrase that lets the dashboard type at a running node |
+| `loadout team attach show` | Say whether one is set, never what it is |
+| `loadout team attach clear` | Forget it, so nothing can type at a running node |
+| `loadout team notify set\|test\|show\|clear` | Send a run's call for help to Slack, Discord, Teams, Telegram or your own endpoint |
 | `loadout checkpoint create\|list\|restore\|remove` | Mark where a project stands, under a name you can return to |
-| `loadout pack list\|add\|approve\|update\|remove` | Specialist packs fetched from a Git remote, approved per machine |
+| `loadout pack list\|add\|approve\|update\|remove` | Sets of specialists, roles and teams fetched from a Git remote, approved per machine |
 | `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |
 | `loadout spend refresh` | See and refresh where spending stands against your thresholds |
 
@@ -369,7 +400,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Nine tools, each making the same call its command makes:
+Eleven tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -382,6 +413,8 @@ Nine tools, each making the same call its command makes:
 | `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
 | `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
+| `loadout_progress` | For a node of a team run: say what you are doing, in your own words |
+| `loadout_teams` | What the team runs on this machine are doing, and which have stopped to ask |
 
 `loadout_recall` exists because only the memory index reaches the context — one
 line per topic — and a session deciding from that alone either opens six files
