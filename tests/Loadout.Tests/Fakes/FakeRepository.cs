@@ -89,6 +89,13 @@ public sealed class FakeGit : IGitManager
     /// <summary>Every worktree removed.</summary>
     public List<string> Removed { get; } = [];
 
+    /// <summary>
+    /// Worktrees besides the primary one, as git lists them: a branch another
+    /// node is working on has one of these, and a node sent to read that work
+    /// is started in it.
+    /// </summary>
+    public List<GitWorktree> Linked { get; } = [];
+
     /// <summary>What the next merge answers. Answers a conflict-free merge once these run out.</summary>
     public void NextMerge(GitMerge merge) => _merges.Enqueue(OperationResult<GitMerge>.Ok(merge));
 
@@ -120,7 +127,7 @@ public sealed class FakeGit : IGitManager
 
     public Task<OperationResult<IReadOnlyList<GitWorktree>>> ListWorktreesAsync(string repositoryPath, CancellationToken ct = default) =>
         Task.FromResult(OperationResult<IReadOnlyList<GitWorktree>>.Ok(
-            [new GitWorktree(State.Root, State.Branch, IsPrimary: true)]));
+            [new GitWorktree(State.Root, State.Branch, IsPrimary: true), .. Linked]));
 
     public Task<OperationResult<string>> GetVersionAsync(CancellationToken ct = default) =>
         Task.FromResult(OperationResult<string>.Ok("git version 2.0.0"));

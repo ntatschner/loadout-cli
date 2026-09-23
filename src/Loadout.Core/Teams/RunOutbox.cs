@@ -50,8 +50,9 @@ public interface IRunOutbox
 /// <para>
 /// Which repository it was in is not recorded directly, and is recoverable:
 /// a node given its own worktree is launched in that worktree, and a node
-/// without one is launched in the repository itself. The first node launched
-/// without a worktree says where the run was working, and that path outlives
+/// without one is launched in the repository itself - unless it was sent to
+/// read another node's branch, when it is launched in that branch's tree. The
+/// first node launched in neither says where the run was working, and that path outlives
 /// the worktrees, which are cleared away after a merge.
 /// </para>
 /// <para>
@@ -239,7 +240,10 @@ public sealed class RunOutbox : IRunOutbox
                 continue;
             }
 
-            if (one.Text("worktree") is { Length: > 0 })
+            // A node reading another's branch is started in that branch's
+            // tree, which is cleared away after a merge: it is no more the
+            // repository than the implementer's own launch is.
+            if (one.Text("worktree") is { Length: > 0 } || one.Text("reviewing") is { Length: > 0 })
             {
                 continue;
             }

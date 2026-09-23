@@ -185,7 +185,10 @@ public sealed class TeamRunnerTests : IDisposable
         leadRequest.Specialists.Should().Equal("role.project-lead");
         leadRequest.Mode.Should().Be("coordinate");
         leadRequest.Task.Should().Be("Add --since to loadout usage.");
-        leadOptions.Permission.Should().Be(HeadlessPermission.DenyUnlessAllowed);
+        // Asks rather than refusing silently, so the launcher's own check
+        // answers - part by part - and not the agent's prefix match. What the
+        // lead may not do it still may not: Edit is on its deny list.
+        leadOptions.Permission.Should().Be(HeadlessPermission.Ask);
         leadOptions.DeniedTools.Should().Contain("Edit");
         leadOptions.OutputSchemaJson.Should().Be(ReportSchema.Version1);
         leadOptions.DisableHooks.Should().BeTrue();
@@ -1436,6 +1439,109 @@ public sealed class TeamRunnerTests : IDisposable
         // The line that gave it away: a run cannot be on round 4 of 3.
         journal.Should().NotContain(l => l.Contains("\"round\":3"));
     }
+
+    /// <remarks>
+    /// The first long team run's reviewer and verifier were started in the
+    /// repository somebody works in, told in words which branch to read, and
+    /// refused every command that went there - three launches, eleven
+    /// refusals, nothing verified and nothing merged.
+    /// </remarks>
+    [Fact]
+    public async Task A_reviewer_asked_about_a_branch_of_this_run_is_started_in_its_worktree()
+    {
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        string? branch = null;
+
+        // The branch's name carries the run's id, which is made as the run
+        // starts; the lead's request is written once it is known.
+        _launcher.BeforeStart = directory =>
+        {
+            if (branch is not null)
+            {
+                return;
+            }
+
+            branch = $"teams-{Path.GetFileName(directory)}-implementer-1";
+            git.Linked.Add(new Loadout.Core.Git.GitWorktree(Path.Combine(_root, "trees", branch), branch, IsPrimary: false));
+
+            _launcher.Script(
+                "role.project-lead",
+                Init("lead-1"),
+                Result(LeadRequests(new ReportRequest(
+                    "reviewer",
+                    $"Review commit a4f21c9 on branch {branch}.",
+                    DeliverableKind.Decision,
+                    ["commit a4f21c9"])), 0.05m),
+                Result(LeadDone(), 0.09m));
+        };
+
+        _launcher.Script("role.reviewer", Init("rev-1"), Result(ReviewerAccepts(), 0.02m));
+
+        (await RunAsync(git: git)).Value!.Ended.Should().Be("done");
+
+        var (reviewer, options) = _launcher.Requests.Single(one => one.Request.Specialists![0] == "role.reviewer");
+
+        reviewer.Worktree.Should().Be(branch, "it runs where the work it reads is");
+        reviewer.CreateWorktree.Should().BeFalse("the tree is the implementer's; a new one would hold nothing to read");
+        options.Permission.Should().Be(HeadlessPermission.Ask);
+
+        _launcher.Written("role.reviewer")[0].Should().Contain("## Where you are").And.Contain(branch);
+    }
+
+    [Fact]
+    public async Task A_reviewer_asked_about_a_branch_with_no_worktree_runs_in_the_repository_and_says_so()
+    {
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        var scripted = false;
+
+        _launcher.BeforeStart = directory =>
+        {
+            if (scripted)
+            {
+                return;
+            }
+
+            scripted = true;
+
+            _launcher.Script(
+                "role.project-lead",
+                Init("lead-1"),
+                Result(LeadRequests(new ReportRequest(
+                    "reviewer",
+                    $"Review commit a4f21c9 on branch teams-{Path.GetFileName(directory)}-implementer-1.",
+                    DeliverableKind.Decision,
+                    ["commit a4f21c9"])), 0.05m),
+                Result(LeadDone(), 0.09m));
+        };
+
+        _launcher.Script("role.reviewer", Init("rev-1"), Result(ReviewerAccepts(), 0.02m));
+
+        var outcome = (await RunAsync(git: git)).Value!;
+
+        _launcher.Requests.Single(one => one.Request.Specialists![0] == "role.reviewer").Request.Worktree.Should().BeNull();
+        outcome.Warnings.Should().Contain(warning => warning.Contains("has no worktree any more"));
+    }
+
+    [Theory]
+    [InlineData("Review commit a on branch teams-RUN-implementer-1.", "teams-RUN-implementer-1")]
+    [InlineData("Verify teams-RUN-implementer-2; its report says it passed.", "teams-RUN-implementer-2")]
+    [InlineData("Compare teams-RUN-implementer-1 with teams-RUN-implementer-2.", null)]
+    [InlineData("Review commit a on branch teams-OTHER-implementer-1.", null)]
+    [InlineData("Review the plan.", null)]
+    public void The_branch_a_brief_names_is_one_of_this_run_s_and_only_one(string task, string? expected)
+    {
+        // Two are not guessed between: a node put in the wrong tree reviews the
+        // wrong work and says it is fine. Another run's branch is not this
+        // run's work.
+        var brief = new Brief("RUN", "reviewer", "lead", "role.reviewer", task, DeliverableKind.Decision, [],
+            new BriefConstraints("review", null, null), []);
+
+        TeamRunner.BranchNamed(brief).Should().Be(expected);
+    }
+
+    private static Report ReviewerAccepts() => new(
+        "reviewer", ReportStatus.Done, "Accepted.",
+        [new ReportDeliverable(DeliverableKind.Decision, "accept")], [Passed], []);
 
     [Fact]
     public async Task A_run_writes_down_which_project_it_worked_on()

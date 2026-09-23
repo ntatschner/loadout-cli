@@ -1915,13 +1915,18 @@ public sealed class TeamRunner : ITeamRunner
         var (node, role, brief) = (briefed.Node, briefed.Role, briefed.Brief);
         var warnings = new List<string>();
 
+        // A node that reads another node's work, run where that work is. See
+        // ReviewedTreeAsync for why this is not left to the node.
+        var reviewing = await ReviewedTreeAsync(request, role, brief, warnings, ct).ConfigureAwait(false);
+
         await starting.WaitAsync(ct).ConfigureAwait(false);
 
         OperationResult<HeadlessLaunch> started;
 
         try
         {
-            started = await StartNodeAsync(request, team, node, role, brief, dryRun: false, ct).ConfigureAwait(false);
+            started = await StartNodeAsync(request, team, node, role, brief, dryRun: false, ct, reviewing: reviewing)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -1969,6 +1974,11 @@ public sealed class TeamRunner : ITeamRunner
                 role = node.Role,
                 directory = launch.Plan.WorkingDirectory,
                 worktree = brief.Constraints.Worktree,
+
+                // The branch whose tree it was started in, to read rather
+                // than to commit to, or null where it is in its own tree or
+                // in the repository.
+                reviewing,
                 @base = branchedAt,
 
                 // Null means whatever the agent would pick by itself, which is
@@ -1989,7 +1999,8 @@ public sealed class TeamRunner : ITeamRunner
                 + "A branch the merge gate takes is cleared away with its tree; one it does not is left for you.");
         }
 
-        var turn = await NodeTurnAsync(launch, brief, Render(brief), journal, _time, ct).ConfigureAwait(false);
+        var turn = await NodeTurnAsync(launch, brief, Render(brief) + Placed(reviewing, launch.Plan.WorkingDirectory), journal, _time, ct)
+            .ConfigureAwait(false);
 
         var (exit, killed) = await launch.Session!.EndAsync(EndGrace, CancellationToken.None).ConfigureAwait(false);
         var stderr = Tail(launch.Session.StandardError);
@@ -2190,7 +2201,8 @@ public sealed class TeamRunner : ITeamRunner
         Brief brief,
         bool dryRun,
         CancellationToken ct,
-        string? resumeSession = null)
+        string? resumeSession = null,
+        string? reviewing = null)
     {
         var definition = role.Role ?? new RoleDefinition(null, null, null, [], []);
 
@@ -2227,7 +2239,7 @@ public sealed class TeamRunner : ITeamRunner
                 ct).ConfigureAwait(false);
 
         var options = new HeadlessOptions(
-            Permission: Tier(definition.Mode),
+            Permission: Tier(definition.Mode, answered: policy is not null),
             AllowedTools: allowed,
             DeniedTools: definition.DeniedTools,
 
@@ -2261,8 +2273,11 @@ public sealed class TeamRunner : ITeamRunner
 
             // The node's own tree, made for it: without one it commits to
             // whatever the repository has checked out, and the reviewer
-            // after it reads a change already on that branch.
-            Worktree: brief.Constraints.Worktree,
+            // after it reads a change already on that branch. Or the tree of
+            // the branch it was asked to read, which already exists and is
+            // never made: a reviewer that asked for one would be given a
+            // fresh empty branch and review nothing.
+            Worktree: brief.Constraints.Worktree ?? reviewing,
             CreateWorktree: brief.Constraints.Worktree is { Length: > 0 },
             PermissionPolicyPath: policy,
             ResumeSessionId: resumeSession,
@@ -2661,6 +2676,102 @@ public sealed class TeamRunner : ITeamRunner
     }
 
     /// <summary>
+    /// The one branch of this run a brief names, or null where it names none
+    /// or more than one.
+    /// </summary>
+    /// <remarks>
+    /// By the branch's own name, which this runner made and which is written
+    /// in full wherever a lead asks for a review: "Review commit 9c5e7b2 on
+    /// branch teams-20260923-1216-be60-implementer-1". Only this run's names
+    /// count, so a brief quoting an older run's branch is not sent there. Two
+    /// is not guessed between: a node put in the wrong tree reviews the wrong
+    /// work and says it is fine.
+    /// </remarks>
+    internal static string? BranchNamed(Brief brief)
+    {
+        var text = brief.Task + "\n" + string.Join("\n", brief.Inputs ?? []);
+        var prefix = "teams-" + brief.Run + "-";
+
+        var found = System.Text.RegularExpressions.Regex
+            .Matches(text, System.Text.RegularExpressions.Regex.Escape(prefix) + "[A-Za-z0-9_.-]+")
+            .Select(match => match.Value.TrimEnd('.', '-', '_'))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        return found.Count == 1 ? found[0] : null;
+    }
+
+    /// <summary>
+    /// Where a node that reads another node's work should run: that work's
+    /// tree, when the brief names one of this run's branches and its tree is
+    /// still there.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only a node with no tree of its own and no job of changing anything. An
+    /// implementer is given a tree to commit in; a reviewer or a verifier was
+    /// started in the repository somebody works in, told in words which branch
+    /// to read, and left to reach it with <c>cd</c> or <c>git -C</c>.
+    /// </para>
+    /// <para>
+    /// Which is what the first long run did, and its verifier was refused
+    /// every command it tried: its session allows <c>dotnet test</c> as the
+    /// first word of a command, and every command it had began with the
+    /// directory it needed. Three launches, eleven refusals, nothing verified
+    /// and nothing merged. Started in the tree, the command it needs is the
+    /// command it is allowed.
+    /// </para>
+    /// </remarks>
+    private async Task<string?> ReviewedTreeAsync(
+        TeamRunRequest request,
+        SpecialistDocument role,
+        Brief brief,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        var mode = role.Role?.Mode;
+
+        if (brief.Constraints.Worktree is { Length: > 0 }
+            || string.Equals(mode, "implement", StringComparison.OrdinalIgnoreCase)
+            || BranchNamed(brief) is not { } branch
+            || _projects is null
+            || _git is null)
+        {
+            return null;
+        }
+
+        var resolution = await _projects.ResolveAsync(request.ProjectHandle, ct).ConfigureAwait(false);
+
+        if (resolution.Failed || resolution.Value?.LocalPath is not { Length: > 0 } repository)
+        {
+            return null;
+        }
+
+        var trees = await _git.ListWorktreesAsync(repository, ct).ConfigureAwait(false);
+
+        if (trees.Value?.Any(tree => !tree.IsPrimary && string.Equals(tree.Branch, branch, StringComparison.Ordinal)) == true)
+        {
+            return branch;
+        }
+
+        warnings.Add($"{brief.Node} was asked about {branch}, which has no worktree any more, so it runs in the repository.");
+
+        return null;
+    }
+
+    /// <summary>
+    /// What a node started in another node's tree is told about where it is,
+    /// or nothing for one that was not.
+    /// </summary>
+    internal static string Placed(string? reviewing, string directory) =>
+        reviewing is { Length: > 0 }
+            ? $"\n\n## Where you are\n\nYou are started in the worktree of `{reviewing}`, at {directory}, "
+              + "which is the work you were asked about. Run what you need to run here, as it is: "
+              + "there is no need to change directory first. "
+              + "Read and run; do not commit, check out or change anything here - it is another node's work."
+            : string.Empty;
+
+    /// <summary>
     /// What a node's own branch is called.
     /// </summary>
     /// <remarks>
@@ -2691,10 +2802,32 @@ public sealed class TeamRunner : ITeamRunner
         $"teams-{runId}-{Safe(nodeName)}";
 
     /// <summary>The permission tier a posture gets: edits accepted only for one that changes the repository.</summary>
-    private static HeadlessPermission Tier(string? mode) =>
+    /// <remarks>
+    /// <para>
+    /// A node that does not change the repository used to be run with nothing
+    /// asked at all: what its allow list named ran, and the agent's own
+    /// matcher refused everything else. That matcher reads a rule as a prefix
+    /// of the whole command, so a reviewer allowed <c>git diff</c> and
+    /// <c>dotnet test</c> was refused <c>cd tree &amp;&amp; dotnet test</c>,
+    /// <c>dotnet test | tail -5</c> and <c>dotnet --version</c> alike, and the
+    /// launcher never saw the question.
+    /// </para>
+    /// <para>
+    /// Where there is a policy to answer from, it asks instead, and the
+    /// launcher's own check answers: every part of a command judged on its
+    /// own, the deny list read against each part. Nothing is allowed that was
+    /// refused before - what matches the allow list still runs without
+    /// asking, and what matches nothing is still refused - but a command made
+    /// only of allowed parts now runs. A dry run writes no policy, so it keeps
+    /// the old tier.
+    /// </para>
+    /// </remarks>
+    private static HeadlessPermission Tier(string? mode, bool answered) =>
         string.Equals(mode, "implement", StringComparison.OrdinalIgnoreCase)
             ? HeadlessPermission.AcceptEdits
-            : HeadlessPermission.DenyUnlessAllowed;
+            : answered
+                ? HeadlessPermission.Ask
+                : HeadlessPermission.DenyUnlessAllowed;
 
     /// <summary>
     /// The brief for one node.
