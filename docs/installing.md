@@ -48,6 +48,38 @@ spend the install fighting Gatekeeper, and that needs a Developer ID and a Mac
 to verify it on. Until both exist, an unsigned installer would be worse than
 none.
 
+## Homebrew
+
+On macOS or Linux, Homebrew is the shortest route:
+
+```bash
+brew install thecodesaiyan/loadout/loadout
+loadout setup
+```
+
+The formula lives in
+[TheCodeSaiyan/homebrew-loadout](https://github.com/TheCodeSaiyan/homebrew-loadout),
+and the release workflow rewrites it on every published release from the
+release's own `SHA256SUMS`. So Homebrew downloads the same archive the release
+page offers, and checks it against the same hash. It installs the whole archive
+rather than just the binary, because the native library shipped beside
+`loadout` has to come with it.
+
+Homebrew only learns about a release when it refreshes its copy of the tap.
+`brew update` does that, and so does `brew upgrade` unless you've turned
+auto-update off. Until then a release that has shipped looks as if it hasn't,
+and that has been mistaken for a broken release workflow before.
+
+Update it with Homebrew too:
+
+```bash
+brew upgrade loadout
+```
+
+Not `loadout update`. That doesn't know Homebrew put it there, so it would swap
+the binary inside Homebrew's own directory while Homebrew went on believing it
+had the older version.
+
 ## Building a release locally
 
 ```bash
@@ -84,6 +116,9 @@ archive.
 loadout update --check
 loadout update
 ```
+
+If you installed with Homebrew, use `brew upgrade loadout` instead;
+[the Homebrew section](#homebrew) says why.
 
 Out of the box that reads this project's own releases. Every release publishes a
 `feed.json` beside the archives, and the setting stays empty until you say

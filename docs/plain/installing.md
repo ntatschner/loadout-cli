@@ -23,7 +23,14 @@ You should see a window with a line of text and a blinking cursor.
 
 ### 2. Download Loadout
 
-Go to the
+If you already use Homebrew on macOS or Linux, you can type this instead, press
+Enter, and go straight to step 5:
+
+```sh
+brew install thecodesaiyan/loadout/loadout
+```
+
+Otherwise, go to the
 [latest Loadout release](https://github.com/ntatschner/loadout-cli/releases/latest)
 in your web browser.
 

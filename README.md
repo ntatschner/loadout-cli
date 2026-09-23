@@ -78,8 +78,9 @@ loadout instructions explain "why is this postgres query so slow" --mode investi
 In the worked example on [what you get](docs/features.md), that set comes to
 2,403 tokens against a 12,000 budget — 20%. Ask how a different task compares
 and it shows only the difference: 2,403 to 1,655, 748 fewer, before you've
-launched either. Four modes — `implement`, `investigate`, `review` and
-`advise` — hold for the whole session and are never guessed from your wording.
+launched either. Five modes — `implement`, `investigate`, `review`, `advise`
+and `coordinate`, which is for the lead of a team run — hold for the whole
+session and are never guessed from your wording.
 The compiled context is deleted when the agent exits.
 
 [How specialists get chosen](docs/specialists.md)
@@ -188,6 +189,12 @@ tar -xzf loadout-0.42.2-linux-x64.tar.gz
 
 ```powershell
 msiexec /i loadout-0.42.2-win-x64.msi
+```
+
+**Homebrew** — on macOS or Linux, the tap is rewritten by every release:
+
+```sh
+brew install thecodesaiyan/loadout/loadout
 ```
 
 [Installing, step by step](docs/guides/installing.md) covers checking it worked,

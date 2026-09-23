@@ -58,6 +58,17 @@ On **Debian, Ubuntu, Fedora or similar**, the packages are an alternative:
 sudo dpkg -i loadout_0.42.2_amd64.deb
 ```
 
+On **macOS or Linux with Homebrew**, skip the download in step 1 and let
+Homebrew fetch it:
+
+```sh
+brew install thecodesaiyan/loadout/loadout
+```
+
+It checks the archive against the release's published hash, as `install.sh`
+does. Update it later with `brew upgrade loadout` rather than `loadout update`,
+which doesn't know Homebrew installed it.
+
 ### 3. Open a new terminal
 
 `PATH` changes reach terminals opened after the install, not the one you
@@ -172,6 +183,8 @@ run it again.
   check `~/.local/bin` is on your `PATH`.
 - **`install.sh` refuses.** The checksum didn't match. Download the archive
   again rather than working round it.
+- **Homebrew offers an older version than the release page.** Run
+  `brew update`. Homebrew hadn't refreshed its copy of the tap yet.
 - **Anything else.** `loadout doctor` names what's wrong, and
   `loadout doctor --fix` mends what it safely can.
 
