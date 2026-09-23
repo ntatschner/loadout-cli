@@ -886,6 +886,10 @@ public sealed class RunJournal : IRunJournal
                     outcome = null;
                     cost = 0m;
                     limit = (int)(entry.Number("rounds") ?? limit);
+
+                    // What it was picked up with, which the runner starts out
+                    // held to and so never writes as a run.budget of its own.
+                    budget = entry.Number("budget") ?? budget;
                     break;
 
                 // Raised (or lowered) while it ran. The latest one is what it

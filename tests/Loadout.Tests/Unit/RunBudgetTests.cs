@@ -74,6 +74,26 @@ public sealed class RunBudgetTests : IDisposable
             .Should().Be("budget set to $40.00 by you");
     }
 
+    /// <summary>
+    /// Picked up with more money, the budget goes into the reopening rather than
+    /// a <c>run.budget</c> of its own, because the runner starts out held to it.
+    /// Folded without it, the page and <c>team status</c> went on measuring the
+    /// run against the team's first figure: 14.46 "of its 12.00" on a run given
+    /// 50, flagged as needing somebody for a limit it no longer had.
+    /// </summary>
+    [Fact]
+    public void A_run_picked_up_with_more_money_is_measured_against_it()
+    {
+        var summary = RunJournal.Fold("r", _directory,
+        [
+            Event("run.started", new { team = "t", goal = "g", autonomy = "supervised", budget = 12 }),
+            Event("run.finished", new { ended = "budget spent: 13.70 of 12.00 USD", outcome = "limited", cost = 13.70 }),
+            Event("run.reopened", new { was = "budget spent: 13.70 of 12.00 USD", autonomy = "supervised", rounds = 0, budget = 50 }),
+        ]);
+
+        summary.BudgetUsd.Should().Be(50m);
+    }
+
     [Theory]
     [InlineData("Raise it to $38", 38)]
     [InlineData("Raise it to $50", 50)]
