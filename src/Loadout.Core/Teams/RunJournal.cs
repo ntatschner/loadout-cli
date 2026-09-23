@@ -141,7 +141,7 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
             covered.Add(new RunCovered(
                 criterion,
 
-                // Runs before 0.41.2 wrote "not attempted" as the enum's name
+                // Runs before 0.42.0 wrote "not attempted" as the enum's name
                 // lower-cased, which nothing that reads a verdict recognised.
                 Said(one, "verdict") is "notattempted" ? "not-attempted" : Said(one, "verdict") ?? "unmet",
                 Said(one, "because"),
