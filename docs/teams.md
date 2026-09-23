@@ -146,6 +146,12 @@ edit it. So it may ask for things and it may never grant them.
   is exact: agreeing to `git push` does not agree to `git push --force`.
 - **Each node's permissions come from its role**, not from the team file. They
   are written out before the run starts, and deny wins.
+- **No node can start a subagent.** Work a node wants done is asked for in its
+  report, so that it gets a node, a branch, a review and a line in the journal.
+  Claude Code starts a subagent without asking, so being left off a role's
+  allow list does not stop one; `Agent` and `Task` are denied to every node
+  whatever its role says. A lead in a trial run started one to write the code
+  itself, and the run was over in a round.
 - **A shell command is judged part by part.** `cd tree && dotnet test | tail -5`
   runs if every part is one the role allows, and is refused, naming the part, if
   any one is not — so an allowed first word no longer carries whatever follows

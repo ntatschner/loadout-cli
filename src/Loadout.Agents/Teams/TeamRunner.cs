@@ -2207,6 +2207,26 @@ public sealed partial class TeamRunner : ITeamRunner
         "mcp__loadout__loadout_task_declare",
     ];
 
+    /// <summary>The agent's own ways of handing work to another agent, which no node is given.</summary>
+    /// <remarks>
+    /// <para>
+    /// A node that wants work done asks for it in its report, and the run
+    /// briefs a node for it: that is how the work gets a branch, a review, a
+    /// place in the journal and a share of the budget. A subagent gets none of
+    /// those. The second sandbox trial's lead started one to write the code
+    /// itself, which ran under the lead's own rules, was refused every write,
+    /// and left the lead reporting blocked on a job still "running in the
+    /// background" - the whole run, over in one round.
+    /// </para>
+    /// <para>
+    /// Denied rather than left off the allow list, because being off the list
+    /// is not enough: Claude Code starts a subagent without asking, so neither
+    /// the list nor the launcher's own check ever sees it. <c>Task</c> is the
+    /// same tool's older name.
+    /// </para>
+    /// </remarks>
+    internal static readonly IReadOnlyList<string> NeverDelegated = ["Agent", "Task"];
+
     private async Task<OperationResult<HeadlessLaunch>> StartNodeAsync(
         TeamRunRequest request,
         TeamDefinition team,
@@ -2224,6 +2244,7 @@ public sealed partial class TeamRunner : ITeamRunner
         // server. The contract belongs to no one job, so no role's list named
         // them and every node was refused both. A role's deny list still wins.
         var allowed = (definition.AllowedTools ?? []).Union(MemberTools, StringComparer.Ordinal).ToList();
+        var denied = (definition.DeniedTools ?? []).Union(NeverDelegated, StringComparer.Ordinal).ToList();
 
         // Written before the node starts, because whatever answers its
         // permission questions is a separate process with nothing else to
@@ -2238,7 +2259,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     brief.Node,
                     role.Id,
                     allowed,
-                    definition.DeniedTools ?? [],
+                    denied,
 
                     // Only where somebody is watching. An autonomous run has
                     // nobody, and a question nobody answers is a node sitting
@@ -2255,7 +2276,7 @@ public sealed partial class TeamRunner : ITeamRunner
         var options = new HeadlessOptions(
             Permission: Tier(definition.Mode, answered: policy is not null),
             AllowedTools: allowed,
-            DeniedTools: definition.DeniedTools,
+            DeniedTools: denied,
 
             // Named as the agent addresses a tool on the launcher's own
             // server. Reached only where the agent asks at all, which its

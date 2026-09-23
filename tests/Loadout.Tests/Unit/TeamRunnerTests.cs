@@ -634,6 +634,32 @@ public sealed class TeamRunnerTests : IDisposable
         request.PermissionPolicyPath.Should().EndWith("policy-lead.json");
     }
 
+    /// <remarks>
+    /// The second sandbox trial's lead started a subagent to write the code
+    /// rather than asking for an implementer, and the run ended blocked in one
+    /// round. Claude Code starts one without asking, so only a deny stops it.
+    /// </remarks>
+    [Theory]
+    [InlineData("Agent")]
+    [InlineData("Task")]
+    public async Task No_node_may_hand_its_work_to_a_subagent(string tool)
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var outcome = (await RunAsync()).Value!;
+
+        foreach (var (node, options) in new[] { ("lead", _launcher.Requests[0].Options), ("implementer", _launcher.Requests[1].Options) })
+        {
+            options.DeniedTools.Should().Contain(tool, $"{node} is given no way to work outside the run");
+
+            var policy = Loadout.Core.Teams.NodePermissions.Read(
+                Path.Combine(outcome.Directory!, Loadout.Core.Teams.NodePermissions.FileName(node)))!;
+
+            Loadout.Core.Teams.NodePermissions.Decide(policy, tool, null).Allowed.Should().BeFalse(node);
+        }
+    }
+
     [Theory]
     [InlineData("mcp__loadout__loadout_progress")]
     [InlineData("mcp__loadout__loadout_task_declare")]
