@@ -90,6 +90,11 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 None of these screens can change anything. Every control lives in the detail
 pane, so answering a gate is built once rather than several times.
 
+Each screen has its own place in the address - `#office`, `#graph`, `#when`,
+`#waiting`, `#terminal` - so you can bookmark one, and Back takes you to the
+screen you were on before. Choosing a screen moves the keyboard focus to its
+heading, which is also what a screen reader reads out.
+
 ### 5. Open a run and answer a gate
 
 Select a run. It opens in the detail pane.
