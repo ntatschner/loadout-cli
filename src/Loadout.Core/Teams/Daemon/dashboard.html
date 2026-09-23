@@ -381,6 +381,10 @@
 
   .sheet-buttons { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 
+  /* The questions are written with line breaks in them - a goal, then its
+     criteria one to a line - and were laid out by the browser's own box. */
+  .sheet .question { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+
   .sheet-buttons button {
     font: inherit;
     color: inherit;
@@ -2747,6 +2751,49 @@
         </div>
       </form>
     </dialog>
+
+    <!--
+      What the page asks before it does something that spends money, pushes,
+      or cannot be undone. It was the browser's own confirm box, which cannot
+      be styled or labelled, and which Chrome offers to stop showing - after
+      which every one of those buttons silently did nothing.
+
+      Labelled by the question itself, so a screen reader says what is being
+      agreed to when it opens rather than "dialog". The button that agrees
+      says what it does; "OK" said nothing about which of fifteen things.
+    -->
+    <dialog id="confirming" aria-labelledby="confirming-question">
+      <form method="dialog" class="sheet">
+        <p class="question" id="confirming-question"></p>
+
+        <div class="sheet-buttons">
+          <button type="submit" value="yes" id="confirming-yes">Do it</button>
+          <button type="submit" value="" id="confirming-no">Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!--
+      The attach passphrase, which the browser's prompt box showed on the
+      screen as it was typed.
+    -->
+    <dialog id="passphrase" aria-labelledby="passphrase-question">
+      <form method="dialog" class="sheet">
+        <p class="question" id="passphrase-question"></p>
+
+        <div class="fields">
+          <div>
+            <label for="passphrase-said">Attach passphrase</label>
+            <input type="password" id="passphrase-said" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="sheet-buttons">
+          <button type="submit" value="yes" id="passphrase-yes">Attach</button>
+          <button type="submit" value="" id="passphrase-no" formnovalidate>Cancel</button>
+        </div>
+      </form>
+    </dialog>
     <!-- A navigation landmark, not a group of buttons that happen to be next
          to each other. These seven are the whole of this page's navigation,
          and without this there was nothing for a screen reader to jump to:
@@ -3565,58 +3612,58 @@
 
       // Named in the question. This one spends money and edits a repository,
       // and the token got somebody to the page rather than to this.
-      if (!window.confirm("Start " + team + (project ? " on " + project : "")
+      agreed("Start " + team + (project ? " on " + project : "")
         + " to \u201c" + goal + "\u201d?"
         + (criteria.length
           ? "\n\nDone when all " + criteria.length + ":\n- " + criteria.join("\n- ")
-          : "\n\nNo criteria, so it is done when the lead says so."))) {
-        return;
-      }
+          : "\n\nNo criteria, so it is done when the lead says so."), "Start it").then(function (yes) {
+        if (!yes) { return; }
 
-      go.disabled = true;
+        go.disabled = true;
 
-      fetch("/api/start?token=" + encodeURIComponent(token), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          team: team,
-          goal: goal,
-          project: project || null,
-          rounds: rounds > 0 ? rounds : null,
-          autonomy: autonomy || null,
-          criteria: criteria.length ? criteria : null,
-          model: model || null,
-          agent: agent || null
+        fetch("/api/start?token=" + encodeURIComponent(token), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            team: team,
+            goal: goal,
+            project: project || null,
+            rounds: rounds > 0 ? rounds : null,
+            autonomy: autonomy || null,
+            criteria: criteria.length ? criteria : null,
+            model: model || null,
+            agent: agent || null
+          })
         })
-      })
-        .then(function (answer) {
-          return answer.text().then(function (body) {
-            var said = null;
+          .then(function (answer) {
+            return answer.text().then(function (body) {
+              var said = null;
 
-            try {
-              said = JSON.parse(body).error;
-            } catch (e) {
-              said = null;
-            }
+              try {
+                said = JSON.parse(body).error;
+              } catch (e) {
+                said = null;
+              }
 
+              go.disabled = false;
+
+              if (!answer.ok) {
+                throw new Error(said || ("The dashboard answered " + answer.status + "."));
+              }
+
+              // Said only now, and only because the server waited to see whether
+              // it survived its first seconds. This line used to be printed the
+              // instant the request was accepted, so it appeared under a run that
+              // had already been refused.
+              announce(team + " is starting. It appears in the list in a moment.");
+              document.getElementById("start-goal").value = "";
+            });
+          })
+          .catch(function (wrong) {
             go.disabled = false;
-
-            if (!answer.ok) {
-              throw new Error(said || ("The dashboard answered " + answer.status + "."));
-            }
-
-            // Said only now, and only because the server waited to see whether
-            // it survived its first seconds. This line used to be printed the
-            // instant the request was accepted, so it appeared under a run that
-            // had already been refused.
-            announce(team + " is starting. It appears in the list in a moment.");
-            document.getElementById("start-goal").value = "";
+            announce(wrong.message);
           });
-        })
-        .catch(function (wrong) {
-          go.disabled = false;
-          announce(wrong.message);
-        });
+      });
     });
   }());
 
@@ -3648,6 +3695,58 @@
       sheet.showModal();
     });
   });
+
+  /*
+    Asking before doing something that spends money, pushes, or cannot be
+    undone. Resolves true only for the button that agrees: Cancel, Escape and
+    a second question while one is open all come back false.
+
+    Cancel has the focus when it opens, so Enter on a question somebody has
+    not read does nothing it cannot take back.
+  */
+  function agreed(question, yes) {
+    var box = document.getElementById("confirming");
+
+    if (box.open) { return Promise.resolve(false); }
+
+    document.getElementById("confirming-question").textContent = question;
+    document.getElementById("confirming-yes").textContent = yes;
+    box.returnValue = "";
+
+    return new Promise(function (settle) {
+      box.addEventListener("close", function () {
+        settle(box.returnValue === "yes");
+      }, { once: true });
+
+      box.showModal();
+      document.getElementById("confirming-no").focus();
+    });
+  }
+
+  // The same for the attach passphrase, which resolves to what was typed, or
+  // null. Cleared as it is read, so it is not still in the field next time.
+  function passphrase(question) {
+    var box = document.getElementById("passphrase");
+    var field = document.getElementById("passphrase-said");
+
+    if (box.open) { return Promise.resolve(null); }
+
+    document.getElementById("passphrase-question").textContent = question;
+    field.value = "";
+    box.returnValue = "";
+
+    return new Promise(function (settle) {
+      box.addEventListener("close", function () {
+        var said = box.returnValue === "yes" ? field.value : "";
+
+        field.value = "";
+        settle(said || null);
+      }, { once: true });
+
+      box.showModal();
+      field.focus();
+    });
+  }
 
   /*
     Writing a team.
@@ -3792,32 +3891,32 @@
       // Named in the question. An autonomous run that fires on a clock spends
       // money and edits a repository with nobody watching, which is a larger
       // thing to agree to than starting one while sitting here.
-      if (!window.confirm("Run " + team + " on " + project + ", "
+      agreed("Run " + team + " on " + project + ", "
         + (choice === "at" ? "daily at " + body.at
           : choice === "every" ? "every " + body.every
           : "on a " + body.on)
-        + ", " + body.autonomy + "?")) {
-        return;
-      }
+        + ", " + body.autonomy + "?", "Schedule it").then(function (yes) {
+        if (!yes) { return; }
 
-      go.disabled = true;
+        go.disabled = true;
 
-      plan(body)
-        .then(function () {
-          go.disabled = false;
-          document.getElementById("plan-name").value = "";
+        plan(body)
+          .then(function () {
+            go.disabled = false;
+            document.getElementById("plan-name").value = "";
 
-          said.hidden = false;
-          said.textContent = name + " is scheduled. It fires only while the daemon is running: "
-            + "loadout team daemon. See what is queued under Waiting.";
+            said.hidden = false;
+            said.textContent = name + " is scheduled. It fires only while the daemon is running: "
+              + "loadout team daemon. See what is queued under Waiting.";
 
-          announce(name + " is scheduled. It appears under Waiting.");
-          queued();
-        })
-        .catch(function (wrong) {
-          go.disabled = false;
-          announce(wrong.message);
-        });
+            announce(name + " is scheduled. It appears under Waiting.");
+            queued();
+          })
+          .catch(function (wrong) {
+            go.disabled = false;
+            announce(wrong.message);
+          });
+      });
     });
   }());
 
@@ -3895,35 +3994,37 @@
         return;
       }
 
-      if (!window.confirm(saying(ending, older, keep))) { return; }
+      agreed(saying(ending, older, keep), "Forget them").then(function (yes) {
+        if (!yes) { return; }
 
-      go.disabled = true;
+        go.disabled = true;
 
-      fetch("/api/prune?token=" + encodeURIComponent(token), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          outcome: ending || null,
-          olderThan: older || null,
-          keep: keep
-        })
-      }).then(function (answer) {
-        return answer.text().then(function (text) {
-          var why = null;
+        fetch("/api/prune?token=" + encodeURIComponent(token), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            outcome: ending || null,
+            olderThan: older || null,
+            keep: keep
+          })
+        }).then(function (answer) {
+          return answer.text().then(function (text) {
+            var why = null;
 
-          try { why = JSON.parse(text).error; } catch (e) { why = null; }
+            try { why = JSON.parse(text).error; } catch (e) { why = null; }
 
-          if (!answer.ok) {
-            throw new Error(why || ("The dashboard answered " + answer.status + "."));
-          }
+            if (!answer.ok) {
+              throw new Error(why || ("The dashboard answered " + answer.status + "."));
+            }
 
+            go.disabled = false;
+            announce("Cleared out. What is left is in the list.");
+            refresh();
+          });
+        }).catch(function (wrong) {
           go.disabled = false;
-          announce("Cleared out. What is left is in the list.");
-          refresh();
+          announce(wrong.message);
         });
-      }).catch(function (wrong) {
-        go.disabled = false;
-        announce(wrong.message);
       });
     });
   }());
@@ -5201,22 +5302,22 @@
         stop.setAttribute("aria-label", "Stop scheduling " + (item.title || item.id));
 
         stop.addEventListener("click", function () {
-          if (!window.confirm("Stop scheduling " + (item.title || item.id)
-            + "? It will not fire again.")) {
-            return;
-          }
+          agreed("Stop scheduling " + (item.title || item.id)
+            + "? It will not fire again.", "Stop scheduling it").then(function (yes) {
+            if (!yes) { return; }
 
-          stop.disabled = true;
+            stop.disabled = true;
 
-          plan({ verb: "remove", name: item.id })
-            .then(function () {
-              announce((item.title || item.id) + " will not fire again.");
-              queued();
-            })
-            .catch(function (wrong) {
-              stop.disabled = false;
-              announce(wrong.message);
-            });
+            plan({ verb: "remove", name: item.id })
+              .then(function () {
+                announce((item.title || item.id) + " will not fire again.");
+                queued();
+              })
+              .catch(function (wrong) {
+                stop.disabled = false;
+                announce(wrong.message);
+              });
+          });
         });
 
         row.appendChild(stop);
@@ -6708,22 +6809,22 @@
       // Named in the question. A run's journal is the only copy of what it
       // did, and this button sits in a list where the next one along is a
       // different run.
-      if (!window.confirm("Forget " + nameOf(run)
-        + "? Everything it wrote down goes, and there is no other copy.")) {
-        return;
-      }
+      agreed("Forget " + nameOf(run)
+        + "? Everything it wrote down goes, and there is no other copy.", "Forget it").then(function (yes) {
+        if (!yes) { return; }
 
-      drop.disabled = true;
+        drop.disabled = true;
 
-      act(run.id, "forget", {})
-        .then(function () {
-          announce(nameOf(run) + " is forgotten.");
-          refresh();
-        })
-        .catch(function (wrong) {
-          drop.disabled = false;
-          announce(wrong.message);
-        });
+        act(run.id, "forget", {})
+          .then(function () {
+            announce(nameOf(run) + " is forgotten.");
+            refresh();
+          })
+          .catch(function (wrong) {
+            drop.disabled = false;
+            announce(wrong.message);
+          });
+      });
     });
 
     into.appendChild(document.createTextNode(" "));
@@ -7268,29 +7369,29 @@
           // The second confirmation, and the reason it exists: the token got
           // somebody to this page, and answering a gate spends money or
           // changes a repository. It names what is being agreed to.
-          if (!window.confirm(asks(gate, option, instead))) {
-            return;
-          }
+          agreed(asks(gate, option, instead), "Answer it").then(function (yes) {
+            if (!yes) { return; }
 
-          button.disabled = true;
+            button.disabled = true;
 
-          var changed = instead && instead.value.trim() !== (gate.recommendation || "").trim()
-            ? instead.value.trim()
-            : null;
+            var changed = instead && instead.value.trim() !== (gate.recommendation || "").trim()
+              ? instead.value.trim()
+              : null;
 
-          var reason = direction && option === "no" && direction.value.trim()
-            ? direction.value.trim()
-            : null;
+            var reason = direction && option === "no" && direction.value.trim()
+              ? direction.value.trim()
+              : null;
 
-          act(run.id, "gates", { gate: gate.id, answer: option, instead: changed, reason: reason })
-            .then(function () {
-              announce("Told " + run.id + ": " + option + ".");
-              card.remove();
-            })
-            .catch(function (e) {
-              button.disabled = false;
-              announce("That did not go through: " + e.message);
-            });
+            act(run.id, "gates", { gate: gate.id, answer: option, instead: changed, reason: reason })
+              .then(function () {
+                announce("Told " + run.id + ": " + option + ".");
+                card.remove();
+              })
+              .catch(function (e) {
+                button.disabled = false;
+                announce("That did not go through: " + e.message);
+              });
+          });
         });
 
         card.appendChild(button);
@@ -7337,22 +7438,22 @@
             return;
           }
 
-          if (!window.confirm("Answer with your own words instead of one of "
-            + "the options the lead offered?\n\n" + said)) {
-            return;
-          }
+          agreed("Answer with your own words instead of one of "
+            + "the options the lead offered?\n\n" + said, "Send it").then(function (yes) {
+            if (!yes) { return; }
 
-          send.disabled = true;
+            send.disabled = true;
 
-          act(run.id, "gates", { gate: gate.id, answer: said })
-            .then(function () {
-              announce("Told " + run.id + ": " + said);
-              card.remove();
-            })
-            .catch(function (e) {
-              send.disabled = false;
-              announce("That did not go through: " + e.message);
-            });
+            act(run.id, "gates", { gate: gate.id, answer: said })
+              .then(function () {
+                announce("Told " + run.id + ": " + said);
+                card.remove();
+              })
+              .catch(function (e) {
+                send.disabled = false;
+                announce("That did not go through: " + e.message);
+              });
+          });
         });
 
         card.appendChild(send);
@@ -7377,11 +7478,13 @@
 
     document.getElementById("stop").onclick = function () {
       // Named in the question, because "stop" is the one nobody can undo.
-      if (!window.confirm("Stop " + run.id + " after the round it is in?")) { return; }
+      agreed("Stop " + run.id + " after the round it is in?", "Stop it").then(function (yes) {
+        if (!yes) { return; }
 
-      act(run.id, "stop", {})
-        .then(function () { announce(run.id + " ends when its current round comes back."); })
-        .catch(function (e) { announce(e.message); });
+        act(run.id, "stop", {})
+          .then(function () { announce(run.id + " ends when its current round comes back."); })
+          .catch(function (e) { announce(e.message); });
+      });
     };
 
     var usd = document.getElementById("budget-usd");
@@ -7404,16 +7507,15 @@
 
       var spent = run.budget ? run.budget.spent || 0 : 0;
 
-      if (!window.confirm("Let " + run.id + " spend $" + wanted.toFixed(2) + " in all? It has spent $"
+      agreed("Let " + run.id + " spend $" + wanted.toFixed(2) + " in all? It has spent $"
         + spent.toFixed(2) + " so far"
-        + (wanted <= spent ? ", so it stops at its next check." : ".")))
-      {
-        return;
-      }
+        + (wanted <= spent ? ", so it stops at its next check." : "."), "Set the budget").then(function (yes) {
+        if (!yes) { return; }
 
-      act(run.id, "budget", { budget: String(wanted) })
-        .then(function () { announce(run.id + " may spend $" + wanted.toFixed(2) + " from its next round."); })
-        .catch(function (e) { announce(e.message); });
+        act(run.id, "budget", { budget: String(wanted) })
+          .then(function () { announce(run.id + " may spend $" + wanted.toFixed(2) + " from its next round."); })
+          .catch(function (e) { announce(e.message); });
+      });
     };
 
     var room = document.getElementById("room");
@@ -7507,20 +7609,20 @@
 
       if (said) { body.message = said; }
 
-      if (!window.confirm("Pick up " + (run.room || run.id) + " where it stopped"
+      agreed("Pick up " + (run.room || run.id) + " where it stopped"
         + (run.ended ? " (" + run.ended + ")" : "") + "?"
         + (body.budget ? " It may spend $" + wanted.toFixed(2) + " in all." : "")
-        + (said ? "\n\nThe lead is told: " + said : ""))) {
-        return;
-      }
+        + (said ? "\n\nThe lead is told: " + said : ""), "Pick it up").then(function (yes) {
+        if (!yes) { return; }
 
-      act(run.id, "pickup", body)
-        .then(function () {
-          if (said) { document.getElementById("say").value = ""; }
+        act(run.id, "pickup", body)
+          .then(function () {
+            if (said) { document.getElementById("say").value = ""; }
 
-          announce(run.id + " is being picked up.");
-        })
-        .catch(function (e) { announce(e.message); });
+            announce(run.id + " is being picked up.");
+          })
+          .catch(function (e) { announce(e.message); });
+      });
     };
 
     var forget = document.getElementById("forget");
@@ -7529,21 +7631,21 @@
 
     forget.onclick = function () {
       // Named in the question. A run's journal is the only copy of what it did.
-      if (!window.confirm("Forget " + (run.room || run.id)
-        + "? Everything it wrote down goes, and there is no other copy.")) {
-        return;
-      }
+      agreed("Forget " + (run.room || run.id)
+        + "? Everything it wrote down goes, and there is no other copy.", "Forget it").then(function (yes) {
+        if (!yes) { return; }
 
-      act(run.id, "forget", {})
-        .then(function () {
-          announce((run.room || run.id) + " is forgotten.");
+        act(run.id, "forget", {})
+          .then(function () {
+            announce((run.room || run.id) + " is forgotten.");
 
-          // Back to the list, because the thing being looked at has gone.
-          watching = null;
-          document.getElementById("detail").hidden = true;
-          refresh();
-        })
-        .catch(function (e) { announce(e.message); });
+            // Back to the list, because the thing being looked at has gone.
+            watching = null;
+            document.getElementById("detail").hidden = true;
+            refresh();
+          })
+          .catch(function (e) { announce(e.message); });
+      });
     };
 
     document.getElementById("send").onclick = function () {
@@ -7617,17 +7719,18 @@
   function attached(why) {
     if (grant) { return Promise.resolve(grant); }
 
-    var said = window.prompt(
+    return passphrase(
       (why || "Typing at a running node")
       + " needs the attach passphrase. "
-      + "The token that got you here is for watching and deciding.");
+      + "The token that got you here is for watching and deciding."
+    ).then(function (said) {
+      if (!said) { throw new Error("Nothing was typed at anything."); }
 
-    if (!said) { return Promise.reject(new Error("Nothing was typed at anything.")); }
-
-    return fetch("/api/attach?token=" + encodeURIComponent(token), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passphrase: said })
+      return fetch("/api/attach?token=" + encodeURIComponent(token), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passphrase: said })
+      });
     }).then(function (answer) {
       return answer.text().then(function (body) {
         var read = null;
@@ -7759,34 +7862,34 @@
       revoke.textContent = "Stop trusting it";
 
       revoke.addEventListener("click", function () {
-        if (!window.confirm("Stop trusting " + one.remedy + "? A remediator asks "
-          + "about it again from now on.")) {
-          return;
-        }
+        agreed("Stop trusting " + one.remedy + "? A remediator asks "
+          + "about it again from now on.", "Stop trusting it").then(function (yes) {
+          if (!yes) { return; }
 
-        revoke.disabled = true;
+          revoke.disabled = true;
 
-        // The second credential. Standing permission for a script to run when
-        // nobody is here was never something the page's own token granted.
-        attached("Changing which remedies run unattended")
-          .then(function (held) {
-            return settle({
-              what: "remedy",
-              value: one.remedy,
-              team: one.team,
-              off: true,
-              grant: held
+          // The second credential. Standing permission for a script to run when
+          // nobody is here was never something the page's own token granted.
+          attached("Changing which remedies run unattended")
+            .then(function (held) {
+              return settle({
+                what: "remedy",
+                value: one.remedy,
+                team: one.team,
+                off: true,
+                grant: held
+              });
+            })
+            .then(function () {
+              announce("No longer trusting " + one.remedy + ".");
+
+              return fillSettings();
+            })
+            .catch(function (e) {
+              revoke.disabled = false;
+              announce(e.message);
             });
-          })
-          .then(function () {
-            announce("No longer trusting " + one.remedy + ".");
-
-            return fillSettings();
-          })
-          .catch(function (e) {
-            revoke.disabled = false;
-            announce(e.message);
-          });
+        });
       });
 
       li.appendChild(revoke);
@@ -7886,18 +7989,18 @@
     });
 
     document.getElementById("set-webhook-on").addEventListener("click", function () {
-      if (!window.confirm("Mint a trigger token? Anything holding it can start the "
-        + "teams named above, from anywhere this dashboard can be reached.")) {
-        return;
-      }
+      agreed("Mint a trigger token? Anything holding it can start the "
+        + "teams named above, from anywhere this dashboard can be reached.", "Mint it").then(function (yes) {
+        if (!yes) { return; }
 
-      settle({ what: "webhook" })
-        .then(function () {
-          announce("A trigger token was minted. The terminal serving this page has it.");
+        settle({ what: "webhook" })
+          .then(function () {
+            announce("A trigger token was minted. The terminal serving this page has it.");
 
-          return fillSettings();
-        })
-        .catch(function (e) { announce(e.message); });
+            return fillSettings();
+          })
+          .catch(function (e) { announce(e.message); });
+      });
     });
 
     document.getElementById("set-webhook-off").addEventListener("click", function () {
@@ -7928,22 +8031,22 @@
       */
       var beyond = address !== "127.0.0.1" && address !== "localhost" && address !== "::1";
 
-      if (!window.confirm(beyond
+      agreed(beyond
         ? "Listen on " + address + "?\n\nThis puts the dashboard on the network "
           + "you are on. Anyone there who has its address can answer your gates, "
           + "stop your runs and start teams - the token in that address is the "
           + "only thing in the way.\n\nIt takes effect when the daemon next starts."
-        : "Listen on " + address + "? It takes effect when the daemon next starts.")) {
-        return;
-      }
+        : "Listen on " + address + "? It takes effect when the daemon next starts.", "Listen there").then(function (yes) {
+        if (!yes) { return; }
 
-      settle({ what: "listen", value: address })
-        .then(function () {
-          announce("It listens on " + address + " when the daemon next starts.");
+        settle({ what: "listen", value: address })
+          .then(function () {
+            announce("It listens on " + address + " when the daemon next starts.");
 
-          return fillSettings();
-        })
-        .catch(function (e) { announce(e.message); });
+            return fillSettings();
+          })
+          .catch(function (e) { announce(e.message); });
+      });
     });
   }
 
@@ -8726,22 +8829,22 @@
       pr.textContent = "Open a pull request";
 
       pr.addEventListener("click", function () {
-        if (!window.confirm("Push " + node.branch
-          + " to origin and open a pull request for what " + node.node + " did?")) {
-          return;
-        }
+        agreed("Push " + node.branch
+          + " to origin and open a pull request for what " + node.node + " did?", "Push it").then(function (yes) {
+          if (!yes) { return; }
 
-        pr.disabled = true;
+          pr.disabled = true;
 
-        act(id, "pr", { node: node.node })
-          .then(function () {
-            pr.disabled = false;
-            announce("Pushed " + node.branch + " and opened a pull request.");
-          })
-          .catch(function (e) {
-            pr.disabled = false;
-            announce(e.message);
-          });
+          act(id, "pr", { node: node.node })
+            .then(function () {
+              pr.disabled = false;
+              announce("Pushed " + node.branch + " and opened a pull request.");
+            })
+            .catch(function (e) {
+              pr.disabled = false;
+              announce(e.message);
+            });
+        });
       });
 
       li.appendChild(pr);

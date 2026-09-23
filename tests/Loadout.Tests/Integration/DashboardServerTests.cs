@@ -1176,6 +1176,26 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Every_question_the_page_asks_is_its_own_dialog()
+    {
+        // The browser's own confirm and prompt boxes were how this page asked
+        // before it started a run, pushed a branch or forgot a journal. They
+        // cannot be styled or labelled, Chrome offers to stop showing them -
+        // after which each of those buttons silently did nothing - and the
+        // prompt showed the attach passphrase in plain text as it was typed.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().NotContain("window.confirm(");
+        text.Should().NotContain("window.prompt(");
+        text.Should().NotContain("window.alert(");
+
+        text.Should().Contain("<dialog id=\"confirming\"");
+        text.Should().Contain("<dialog id=\"passphrase\"");
+        text.Should().Contain("type=\"password\" id=\"passphrase-said\"",
+            "a passphrase is not shown on the screen as it is typed");
+    }
+
+    [Fact]
     public async Task What_you_just_did_is_said_somewhere_the_refresh_does_not_overwrite()
     {
         // Found by clicking the buttons: the confirmation went into the same
