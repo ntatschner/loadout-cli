@@ -411,6 +411,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
         // without saying so, and the author would find out on the first run
         // that sat all night on a question they meant to be answered for them.
         if (team.Rules.TakeRecommendationAfter is { Length: > 0 } after
+            && !TeamDuration.IsNever(after)
             && TeamDuration.Parse(after) is null)
         {
             Error("team-recommendation-wait", $"Team '{team.Name}' sets take_recommendation_after to '{after}', which is not a duration. Write it as 30m, 2h or 1d.");

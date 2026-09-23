@@ -1943,6 +1943,12 @@ loadout team run docs-crew "make the docs true" --take-recommendation-after 30m
 or in the team file, under `rules`, as `take_recommendation_after: 30m`, or in
 the dashboard's form. The run's own setting wins over the team's.
 
+Write the time as `30m`, `2h` or `1d`, or with the unit spelt out - `30 mins`,
+`1 hour`, `2 days`. A bare number is refused rather than guessed at, because ten
+minutes and ten hours are different runs. `never` (or `off`) for a run means no
+limit, even when the team sets one, and the dashboard's box treats it the same
+as leaving it empty.
+
 When it happens, it happens the way you would have answered: the recommendation
 is written as the question's answer, so the question leaves the dashboard, the
 run carries on, and the journal says
