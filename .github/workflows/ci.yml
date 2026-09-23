@@ -3,7 +3,9 @@ name: CI
 # Spec section 92: every release must be built and tested against all Tier-1
 # operating systems. The three test legs below are the minimum the spec names
 # (Windows, Ubuntu, macOS); the publish leg proves the remaining architectures
-# compile.
+# compile. A change to documentation alone is tested on one of them (see the
+# "changes" job), which cannot reach a release: every release commit changes
+# Directory.Build.props, so it always gets all of them.
 
 on:
   push:
@@ -16,10 +18,65 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  # What the change touches, which decides how much of the rest runs. A change
+  # to documentation alone still runs the whole suite - the README and docs are
+  # asserted on by the Contracts and Architecture tests, and docs audit runs
+  # there too - but on one platform rather than five, and builds no binaries.
+  # A docs pull request used to spend twenty minutes and eleven jobs proving
+  # that Markdown compiles on macOS.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs-only: ${{ steps.decide.outputs.docs-only }}
+      matrix: ${{ steps.decide.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Decide
+        id: decide
+        shell: bash
+        env:
+          # The pull request's base, or what main was before this push. A
+          # manual run has neither, and gets everything.
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          docs_only=$(bash build/docs-only.sh "${BASE:-}")
+
+          # arm64 was cross-compiled and never executed for as long as GitHub
+          # offered nowhere to execute it. It has since: these labels went
+          # generally available for public repositories in August 2025 and
+          # reached private ones in January 2026. Running the suite there is
+          # what turns two of the six runtime identifiers from shipped-untested
+          # into shipped-tested, and it costs two matrix entries.
+          if [ "$docs_only" = true ]; then
+            matrix='{"include":[{"name":"Ubuntu x64","os":"ubuntu-latest"}]}'
+          else
+            matrix='{"include":[
+              {"name":"Windows x64","os":"windows-latest"},
+              {"name":"Ubuntu x64","os":"ubuntu-latest"},
+              {"name":"macOS Apple Silicon","os":"macos-latest"},
+              {"name":"Windows arm64","os":"windows-11-arm"},
+              {"name":"Ubuntu arm64","os":"ubuntu-24.04-arm"}]}'
+          fi
+
+          echo "Documentation only: $docs_only"
+          echo "docs-only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(echo "$matrix" | jq -c .)" >> "$GITHUB_OUTPUT"
+
   licences:
     name: Dependency licences
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: changes
+
+    # Nothing a documentation change does can alter a dependency.
+    if: needs.changes.outputs.docs-only != 'true'
 
     steps:
       - uses: actions/checkout@v7
@@ -44,28 +101,14 @@ jobs:
     # the 0.8.0 release and was killed with no log left to read, which is a
     # much worse outcome than a fast failure naming the step.
     timeout-minutes: 30
+    needs: changes
     strategy:
       # Never cancel siblings on the first failure. A macOS-only break is
       # exactly the kind of thing that must not hide the Linux result.
       fail-fast: false
-      matrix:
-        include:
-          - name: Windows x64
-            os: windows-latest
-          - name: Ubuntu x64
-            os: ubuntu-latest
-          - name: macOS Apple Silicon
-            os: macos-latest
-          # arm64 was cross-compiled and never executed for as long as GitHub
-          # offered nowhere to execute it. It has since: these labels went
-          # generally available for public repositories in August 2025 and
-          # reached private ones in January 2026. Running the suite here is what
-          # turns two of the six runtime identifiers from shipped-untested into
-          # shipped-tested, and it costs two matrix entries.
-          - name: Windows arm64
-            os: windows-11-arm
-          - name: Ubuntu arm64
-            os: ubuntu-24.04-arm
+
+      # Every platform, or Ubuntu x64 alone for documentation: see "changes".
+      matrix: ${{ fromJSON(needs.changes.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v7
@@ -154,7 +197,10 @@ jobs:
     name: Publish ${{ matrix.rid }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
-    needs: test
+    needs: [changes, test]
+
+    # Documentation builds no binaries.
+    if: needs.changes.outputs.docs-only != 'true'
     strategy:
       fail-fast: false
       matrix:
