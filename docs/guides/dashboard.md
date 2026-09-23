@@ -70,6 +70,8 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 - **Office** — one room per run, a desk per node. The one to leave on a spare
   screen.
 
+  ![The office screen. One room for a docs-crew run with a desk for each of its three nodes, each desk a square with the node's name and state written under it: done, waiting for you, and left. The next run's room starts below it.](../images/dashboard-office.png)
+
 - **Graph** — who asked whom. Reach for it when something is stuck.
 
   ![The graph screen. The lead at the top, with lines to the two workers it asked for. One is marked "waiting for you".](../images/dashboard-graph.png)
