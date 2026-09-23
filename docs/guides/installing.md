@@ -19,9 +19,9 @@ whether your coding agent was found.
 
 From the release page, take one of:
 
-- Windows: `loadout-0.43.0-win-x64.msi`, or the `.zip` if you'd rather manage
+- Windows: `loadout-0.43.1-win-x64.msi`, or the `.zip` if you'd rather manage
   `PATH` yourself. On an ARM machine, take the `win-arm64` build.
-- Linux: `loadout-0.43.0-linux-x64.tar.gz`, or the `.deb` or `.rpm`. On an ARM
+- Linux: `loadout-0.43.1-linux-x64.tar.gz`, or the `.deb` or `.rpm`. On an ARM
   machine, take the `linux-arm64` build.
 - macOS: the `osx-arm64` archive for Apple silicon, or `osx-x64` for an Intel
   Mac. macOS gets archives only, because a `.pkg` that isn't signed and
@@ -32,7 +32,7 @@ From the release page, take one of:
 On **Linux or macOS**, extract the archive and run the install script:
 
 ```sh
-tar -xzf loadout-0.43.0-linux-x64.tar.gz
+tar -xzf loadout-0.43.1-linux-x64.tar.gz
 ./install.sh
 ```
 
@@ -46,7 +46,7 @@ you to turn Gatekeeper off.
 On **Windows**, run the MSI:
 
 ```powershell
-msiexec /i loadout-0.43.0-win-x64.msi
+msiexec /i loadout-0.43.1-win-x64.msi
 ```
 
 It installs per user, with no elevation, into `%LOCALAPPDATA%\Programs\loadout`,
@@ -55,7 +55,7 @@ adds that to your `PATH` and makes a Start Menu entry.
 On **Debian, Ubuntu, Fedora or similar**, the packages are an alternative:
 
 ```sh
-sudo dpkg -i loadout_0.43.0_amd64.deb
+sudo dpkg -i loadout_0.43.1_amd64.deb
 ```
 
 On **macOS or Linux with Homebrew**, skip the download in step 1 and let
