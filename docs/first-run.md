@@ -1,5 +1,7 @@
 # First run and configuration
 
+*Want the steps in order? [Your first run](guides/first-run.md) walks through setup one step at a time.*
+
 ```bash
 loadout setup
 ```
@@ -272,7 +274,11 @@ commands:
     starstats:
       - prettier
       - npm test
-``` In hook mode the command reads the edited file
+```
+
+The hook that `--refresh-hook` installs runs `loadout docs refresh --hook`
+after every edit Claude makes; `--hook` is what puts the command in hook mode.
+In hook mode the command reads the edited file
 from what Claude sends it and says nothing back unless a directory's line on
 the map changed — a type added, removed or renamed. An edit inside a method,
 which is most of them, passes in silence. That one line is the only way a change

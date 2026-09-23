@@ -1,5 +1,7 @@
 # Accessibility
 
+*Want the steps in order? [Setting up accessibility](guides/accessibility.md) walks through it, and [accessibility in plain words](plain/accessibility.md) says it in shorter sentences.*
+
 Loadout can be told how you want to be written to and asked. You set it once,
 and it changes three things: how the agent you launch talks to you, what that
 agent draws while it works, and what Loadout itself prints.
@@ -298,8 +300,12 @@ from listening to it. If you use one, what you find is worth more than any of
 the above, and an issue saying what you heard is the most useful thing you
 could send.
 
-**Not built yet:** speaking directly to a running screen reader, and a
-self-voicing full-screen launcher.
+**Built, and heard only through the Windows system voice, never through a
+screen reader:** speaking to a running screen reader, from the full-screen
+launcher and from the dashboard. Both are described above, under
+[the launcher speaking](#the-launcher-speaking) and
+[the dashboard speaking](#the-dashboard-speaking), and both are off unless you
+set `show-speech`.
 
 ## The rest
 

@@ -3,7 +3,7 @@
 The [README](../README.md) is the short version. This is each part of it, with
 the commands.
 
-### Instructions picked for the job
+## Instructions picked for the job
 
 There are 101 specialists built into the binary: foundations, modes, languages,
 frameworks, databases, platforms, clouds, functional areas, skills and the roles
@@ -34,8 +34,8 @@ Where guidance overlaps
   C#: follow framework.dotnet over language.csharp (narrower scope composes last)
 ```
 
-You can see the whole set, what it'll cost you in tokens, and where two
-specialists disagree, before anything launches. Add an `--against-`
+You can see the whole set, what it'll cost you in tokens, and where their
+guidance overlaps, before anything launches. Add an `--against-`
 option and it shows only what changes:
 
 ```console
@@ -57,7 +57,7 @@ question, and the costliest change comes first, because anyone comparing
 configurations is usually trying to get under a budget. If it picks something
 daft, rule it out with `--without`.
 
-### Memory that doesn't grow forever
+## Memory that doesn't grow forever
 
 `loadout memory` keeps the durable facts about a project: decisions and why you
 made them, constraints, the traps that keep catching people. The useful bit is
@@ -81,7 +81,7 @@ two stores that keep the same names and disagree get told apart. A copy that
 differs is named and left exactly where it is — which of two accounts is right
 is a judgement, not a merge.
 
-### Where the tokens went
+## Where the tokens went
 
 ```sh
 loadout usage --days 7 --by day
@@ -100,7 +100,7 @@ There's also `loadout telemetry serve`, a local OTLP receiver for agents that
 emit OpenTelemetry. Optional, and local means local: no service, no account,
 nothing sent anywhere, counts only.
 
-### Repos that stay clean
+## Repos that stay clean
 
 `loadout protect` sets up the Git protections. Because hooks live in
 `.git/hooks` and never travel, a fresh clone is unprotected until somebody
@@ -113,7 +113,7 @@ is already scattered around into the workspace, showing you the changes first
 and taking a snapshot you can restore. `loadout drift` tells you when a project
 has wandered from what you configured.
 
-### A launcher, not just a command line
+## A launcher as well as a command line
 
 ![The launcher](images/launcher.svg)
 
@@ -150,7 +150,7 @@ and you get `doctor`. Nobody looking to undo a mistake searches for the words
 The launcher doesn't implement any command itself. Whatever you pick runs
 through the same parser you'd have typed at, and a test checks that.
 
-### The agent can ask back
+## The agent can ask back
 
 The session you launch is told `loadout` is on PATH, and gets the same few
 operations as MCP tools: read a specialist in full, ask what it was given and
@@ -187,7 +187,7 @@ so the answer to "where were we" comes from the record rather than from
 whatever is still in the conversation. They are observations, never verdicts:
 corroboration can say a claim is unsupported and can never say one is wrong.
 
-### Code that isn't a repository yet
+## Code that isn't a repository yet
 
 `loadout project add` takes a directory with no Git repository in it. It
 registers as one still to be set up, with a task saying so, and the launch says
@@ -205,7 +205,7 @@ because somebody asked to register everything they'd cloned. Build output —
 `__pycache__`, `dist`, a screenshots folder — stays out of the offer, though
 it's still walked through in case a repository is buried in one.
 
-### Undo
+## Undo
 
 Every command that changes a file takes `--dry-run` and shows you the change
 first. Anything that did change is in a snapshot you can put back:
@@ -215,7 +215,7 @@ loadout backup list
 loadout backup restore 20260901-204044-fd3512
 ```
 
-### Several agents on one goal
+## Several agents on one goal
 
 ```sh
 loadout team run bug-hunt "the config loader throws on a missing file"
@@ -271,7 +271,55 @@ processes waiting on answers that can no longer arrive — and it will not
 silently take a run that left a branch nothing merged. `--dry-run` lists what it
 would take and why it is keeping the rest.
 
-### Also in the box
+## A dashboard for the runs
+
+```sh
+loadout team dashboard --open
+loadout team dashboard --watch-only
+```
+
+`team dashboard` serves a page on this machine, at a loopback address behind a
+token that changes every start. Runs are grouped by what they want from you —
+*Needs you* first, then *Running*, then *Finished* — because the run waiting on
+you is the one most easily missed further down a list. There are six screens:
+List, Office, Graph, Timeline, Waiting and Terminal. None of them can change
+anything; every control is in the detail pane, and each one runs the command you
+would have typed.
+
+It fetches nothing: no webfont, no stylesheet, no image. A dashboard that pulled
+a typeface from the internet would not work on a machine with no network, which
+is often the one it is most wanted on. `--watch-only` is for a screen in a
+corner: the server refuses anything that would change a run, and the page puts
+its controls away.
+
+Which page you get follows your accessibility profile — plain under
+`screen-reader`, `low-vision` or no colour, rich otherwise — and `--view plain`
+or `--view rich` chooses for one start. The guide is
+[using the dashboard](guides/dashboard.md); the detail is in [Teams](teams.md).
+
+## Told once how you read
+
+```sh
+loadout config set accessibility-preset dyslexia
+```
+
+One setting changes how the agent writes to you, what it draws, and what
+Loadout prints. It is never detected: you turn it on, and the first line of
+output names the profile so you can see it took. There are six presets, named
+for what they reduce rather than for a condition, and every setting in them can
+be changed on its own.
+
+The dashboard was built to WCAG 2.2 AA from its first commit, and axe-core
+4.10.2 finds no violations in any of fifteen states across both pages. No
+screen reader has been used with any of it, and no keyboard-only pass by a
+person has been recorded. Speech is built, and has been heard only through the
+Windows system voice, never through a screen reader, which is why it stays off
+until you set `show-speech`.
+
+The guide is [setting up accessibility](guides/accessibility.md); the full
+statement is [Accessibility](accessibility.md).
+
+## Also in the box
 
 A session that ran for a while and left no handoff is told so on the way out,
 with the command to write one. Said rather than done: a handoff written
@@ -290,3 +338,5 @@ branch and context usage. `loadout doctor` checks the lot.
 - [The launcher](launcher.md) — the terminal UI in detail
 - [Specialists and skills](specialists.md) — how an instruction set is composed
 - [Teams](teams.md) — several agents on one goal, and writing your own team
+- [Accessibility](accessibility.md) — how you are written to and asked, and what was verified
+- [Guides](README.md#guides) — the same ground, one job at a time
