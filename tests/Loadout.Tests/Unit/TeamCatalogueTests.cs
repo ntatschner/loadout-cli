@@ -195,6 +195,7 @@ public sealed class TeamCatalogueTests : IDisposable
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { autonomy: yolo }", "team-autonomy", "manual, supervised or autonomous")]
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { gates: { outward: allow } }", "team-outward", "may only ask")]
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { gates: { merge: [nobody] } }", "team-merge-gate", "'nobody'")]
+    [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { take_recommendation_after: soon }", "team-recommendation-wait", "not a duration")]
     public async Task A_team_that_would_not_make_sense_to_run_is_a_finding_that_says_what_to_change(
         string body, string rule, string detail)
     {
@@ -205,6 +206,37 @@ public sealed class TeamCatalogueTests : IDisposable
         var findings = (await LoadAsync()).Findings.Where(f => f.Rule == "broken").ToList();
 
         findings.Should().ContainSingle(f => f.Kind == rule).Which.Detail.Should().Contain(detail);
+    }
+
+    [Fact]
+    public async Task A_team_says_what_its_runs_are_judged_on_when_nobody_else_does()
+    {
+        WriteTeam(
+            "global",
+            "name: judged\ndone_when:\n  - \"the suite passes: all of it\"\n  - the page reads\n"
+            + "lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { take_recommendation_after: 30m }\n");
+
+        var catalogue = await LoadAsync();
+        var team = catalogue.Find("judged")!;
+
+        team.DoneWhen.Should().Equal("the suite passes: all of it", "the page reads");
+        team.Rules.TakeRecommendationAfter.Should().Be("30m");
+        catalogue.Findings.Should().NotContain(f => f.Rule == "judged");
+    }
+
+    /// <summary>
+    /// The shipped teams whose job settles what done means carry it, and every
+    /// one of those defaults is a thing somebody else could check.
+    /// </summary>
+    [Theory]
+    [InlineData("docs-crew", "docs audit")]
+    [InlineData("bug-hunt", "fails without the fix and passes with it")]
+    [InlineData("dependency-sweep", "full test suite")]
+    public async Task A_shipped_team_whose_job_says_what_done_means_carries_it(string name, string says)
+    {
+        var team = (await LoadAsync()).Find(name)!;
+
+        team.DoneWhen.Should().Contain(one => one.Contains(says, StringComparison.Ordinal));
     }
 
     [Fact]

@@ -1,5 +1,8 @@
 name: docs-crew
 description: Finds where the documentation and the code disagree, fixes it in the voice the docs already have, and follows the changed pages as a new reader would.
+done_when:
+  - "every page this run changed passes loadout docs audit, with no broken reference and no page nothing links to"
+  - "every claim this run changed was checked against the code it describes, and the check is cited"
 lead: lead
 nodes:
   lead:

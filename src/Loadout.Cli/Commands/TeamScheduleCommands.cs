@@ -196,29 +196,7 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
     }
 
     /// <summary>A duration as people write one: 30m, 2h, 1d.</summary>
-    internal static TimeSpan? Duration(string text)
-    {
-        var trimmed = text.Trim().ToLowerInvariant();
-
-        if (trimmed.Length < 2)
-        {
-            return null;
-        }
-
-        if (!double.TryParse(trimmed[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var count)
-            || count <= 0)
-        {
-            return null;
-        }
-
-        return trimmed[^1] switch
-        {
-            'm' => TimeSpan.FromMinutes(count),
-            'h' => TimeSpan.FromHours(count),
-            'd' => TimeSpan.FromDays(count),
-            _ => null,
-        };
-    }
+    internal static TimeSpan? Duration(string text) => Loadout.Models.Teams.TeamDuration.Parse(text);
 
     /// <summary>One schedule in a sentence.</summary>
     internal static string Describe(TeamSchedule schedule, DateTimeOffset now)

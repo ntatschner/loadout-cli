@@ -1506,9 +1506,18 @@ public sealed class DashboardServer : IDisposable
         {
             one.Criterion,
             one.Verdict,
+
+            // Words rather than the stored spelling, which for old runs is
+            // "notattempted" - and a page that printed what it was given in
+            // capitals showed a reader NOTATTEMPTED.
+            verdictInWords = one.InWords,
             one.Because,
+            one.Understood,
             one.Met,
         }),
+
+        // What the lead took the goal to mean, beside the goal itself.
+        run.GoalUnderstood,
         cost = run.CostUsd,
         run.Rounds,
         run.RoundLimit,

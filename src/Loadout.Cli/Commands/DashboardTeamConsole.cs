@@ -173,8 +173,9 @@ public sealed class DashboardTeamConsole : ITeamConsole
                 Kind: "question",
                 Asked: question.Question,
 
-                // The lead's own options, plus the one it cannot offer: stop.
-                Options: [.. question.Options, Stop],
+                // The lead's own options, plus the two it cannot offer: sending
+                // the question back to it, and stopping.
+                Options: [.. question.Options, TeamRunner.ThinkAgain, Stop],
                 Recommendation: question.Recommendation),
             _time,
 

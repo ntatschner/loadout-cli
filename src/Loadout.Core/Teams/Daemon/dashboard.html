@@ -831,6 +831,10 @@
   #coverage .met .verdict { color: var(--done); }
   #coverage .unmet .verdict, #coverage .not-attempted .verdict { color: var(--stopped); }
   #coverage .because { display: block; color: var(--quiet); font-size: 0.9rem; margin-top: 0.2rem; }
+  #coverage .reading { display: block; font-size: 0.9rem; margin-top: 0.2rem; }
+  #coverage .reading b { font-weight: 600; }
+  #coverage .asked { margin: 0 0 0.6rem; }
+  #coverage .asked p { margin: 0 0 0.2rem; }
 
   /* The minimum carried explicitly, like every other control on this page:
      the one thing axe has ever found here by itself was a button relying on
@@ -2590,6 +2594,19 @@
             </select>
           </div>
 
+          <!-- For a run nobody is going to sit and watch. Free text in the
+               form 'team run' takes, 30m or 2h, and checked there: a duration
+               nobody could read is refused, not quietly treated as never. -->
+          <div>
+            <label for="start-take">Take the lead's recommendation after</label>
+            <input type="text" id="start-take" placeholder="never"
+                   aria-describedby="start-take-about">
+            <p class="facts" id="start-take-about">When one of the lead's
+              questions has had no answer for this long, its recommendation is
+              taken and the run carries on. 30m, 2h. Never a merge or anything
+              that leaves this machine.</p>
+          </div>
+
           <!-- Free text rather than a list. Which models exist is the agent's
                business and it changes without this page being rebuilt, so the
                spelling is the agent's own and whatever is typed goes straight
@@ -3487,6 +3504,7 @@
     if (!team) {
       box.hidden = true;
       box.textContent = "";
+      aboutDefaults(null);
 
       return;
     }
@@ -3495,6 +3513,40 @@
     box.textContent = team.description
       + " " + team.nodes + " node" + (team.nodes === 1 ? "" : "s") + ", " + team.autonomy + "."
       + (team.trouble ? " Something is wrong with it: " + team.trouble : "");
+
+    aboutDefaults(team);
+  }
+
+  /*
+    What the chosen team is judged on when the box is left empty, said in the
+    box itself and under it. A placeholder alone vanishes the moment somebody
+    types, which is exactly when they need to know what they are replacing.
+  */
+  function aboutDefaults(team) {
+    var criteria = document.getElementById("start-criteria");
+    var about = document.getElementById("start-criteria-about");
+    var take = document.getElementById("start-take");
+    var defaults = team && team.doneWhen ? team.doneWhen : [];
+
+    if (criteria) {
+      criteria.placeholder = defaults.length
+        ? "empty: the team's own -\n" + defaults.join("\n")
+        : "one per line, each one checkable";
+    }
+
+    if (about) {
+      about.textContent = defaults.length
+        ? "Leave it empty and the run is held to the team's own " + defaults.length
+          + ", shown in the box. Write your own and they replace the team's rather than add to them."
+        : "Optional, and the difference between a run that reports done and one that can show it. "
+          + "The lead must answer for every line.";
+    }
+
+    if (take) {
+      take.placeholder = team && team.takeRecommendationAfter
+        ? team.takeRecommendationAfter + ", the team's own"
+        : "never";
+    }
   }
 
   /*
@@ -3597,6 +3649,10 @@
         .map(function (one) { return one.trim(); })
         .filter(function (one) { return one.length > 0; });
 
+      var take = document.getElementById("start-take").value.trim();
+      var chosen = teamsKnown.filter(function (t) { return t.name === team; })[0];
+      var defaults = chosen && chosen.doneWhen ? chosen.doneWhen : [];
+
       if (!team || !goal) {
         announce("A run needs a team and something to do.");
 
@@ -3621,7 +3677,12 @@
         + " to \u201c" + goal + "\u201d?"
         + (criteria.length
           ? "\n\nDone when all " + criteria.length + ":\n- " + criteria.join("\n- ")
-          : "\n\nNo criteria, so it is done when the lead says so."), "Start it").then(function (yes) {
+          : defaults.length
+            ? "\n\nNone of your own, so it is held to the team's " + defaults.length + ":\n- "
+              + defaults.join("\n- ")
+            : "\n\nNo criteria, so it is done when the lead says so.")
+        + (take ? "\n\nThe lead's recommendation is taken after " + take + " with no answer." : ""),
+        "Start it").then(function (yes) {
         if (!yes) { return; }
 
         go.disabled = true;
@@ -3637,7 +3698,8 @@
             autonomy: autonomy || null,
             criteria: criteria.length ? criteria : null,
             model: model || null,
-            agent: agent || null
+            agent: agent || null,
+            takeRecommendationAfter: take || null
           })
         })
           .then(function (answer) {
@@ -7183,6 +7245,19 @@
     So what is drawn here is either a finished account of a met goal, or a live
     one showing which parts are still out.
   */
+  // "Taken to mean: ...", the lead's reading of a goal or a criterion.
+  function reading(text) {
+    var line = document.createElement("span");
+    var label = document.createElement("b");
+
+    line.className = "reading";
+    label.textContent = "Taken to mean: ";
+    line.appendChild(label);
+    line.appendChild(document.createTextNode(text));
+
+    return line;
+  }
+
   function drawCoverage(run) {
     var box = document.getElementById("coverage");
 
@@ -7190,7 +7265,9 @@
 
     var covered = run.coverage || [];
 
-    if (!covered.length) {
+    // A run that has said what it took its goal to mean has something to show
+    // here before it has a verdict on anything.
+    if (!covered.length && !run.goalUnderstood) {
       box.hidden = true;
       box.textContent = "";
       box.removeAttribute("data-shape");
@@ -7198,8 +7275,8 @@
       return;
     }
 
-    var shape = covered.map(function (one) {
-      return one.criterion + ":" + one.verdict;
+    var shape = (run.goalUnderstood || "") + "#" + covered.map(function (one) {
+      return one.criterion + ":" + one.verdict + ":" + (one.understood || "");
     }).join("|");
 
     if (box.getAttribute("data-shape") === shape) { return; }
@@ -7207,6 +7284,32 @@
     box.setAttribute("data-shape", shape);
     box.textContent = "";
     box.hidden = false;
+
+    /*
+      The goal and what the lead made of it, before the criteria, so the two
+      can be read against each other. A run working hard on a nearby, easier
+      goal looks busy and on track until somebody puts the two side by side.
+    */
+    if (run.goalUnderstood) {
+      var asked = document.createElement("div");
+
+      asked.className = "asked";
+
+      var goalHead = document.createElement("h3");
+
+      goalHead.textContent = "What it was asked";
+      asked.appendChild(goalHead);
+
+      var goalSaid = document.createElement("p");
+
+      goalSaid.textContent = run.goal || "";
+      asked.appendChild(goalSaid);
+
+      asked.appendChild(reading(run.goalUnderstood));
+      box.appendChild(asked);
+    }
+
+    if (!covered.length) { return; }
 
     var met = covered.filter(function (one) { return one.met; }).length;
 
@@ -7220,20 +7323,28 @@
     covered.forEach(function (one) {
       var li = document.createElement("li");
 
-      li.className = one.verdict;
+      // In words, from the server. The stored spelling for an old run is
+      // "notattempted", which this used to print - in capitals.
+      var words = one.verdictInWords || one.verdict;
+
+      li.className = words.replace(/ /g, "-");
 
       var verdict = document.createElement("span");
 
       verdict.className = "verdict";
-      verdict.textContent = one.verdict === "not-attempted"
-        ? "not attempted"
-        : one.verdict;
+      verdict.textContent = words;
       li.appendChild(verdict);
 
       var said = document.createElement("span");
 
       said.textContent = " " + one.criterion;
       li.appendChild(said);
+
+      // How the lead read it, before why it says it got there: a verdict is
+      // only worth the reading it was given.
+      if (one.understood) {
+        li.appendChild(reading(one.understood));
+      }
 
       // What the lead says shows it. A met with nothing behind it never
       // reaches the page - the report is returned - so anything here has

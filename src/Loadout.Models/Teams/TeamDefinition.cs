@@ -47,6 +47,26 @@ public sealed class TeamDefinition
     public string Goal { get; set; } = string.Empty;
 
     /// <summary>
+    /// What a run of this team is judged on when whoever starts it gives no
+    /// done-when of their own.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A run given criteria is held to those and these are ignored: the two
+    /// are never merged, because somebody who wrote their own has said what
+    /// done means for this run, and a list with the team's added on top would
+    /// hold them to things they did not ask for.
+    /// </para>
+    /// <para>
+    /// With these, the lead is not asked to propose criteria. The team's author
+    /// has already said what done means, and a lead proposing its own on top
+    /// would be asking a person to choose between two answers to a question
+    /// that was settled when the team was written.
+    /// </para>
+    /// </remarks>
+    public List<string> DoneWhen { get; set; } = [];
+
+    /// <summary>
     /// Rules every node of this team follows, whatever the run is about.
     /// </summary>
     /// <remarks>
@@ -160,6 +180,20 @@ public sealed class TeamRules
 
     /// <summary>Conditions that end a run: goal_met, budget_spent, no_progress_2_rounds.</summary>
     public List<string> StopWhen { get; set; } = [];
+
+    /// <summary>
+    /// How long a lead's question with a recommendation waits for somebody
+    /// before the recommendation is taken for them, as 30m, 2h or 1d. Empty
+    /// means it waits for a person, which is the default.
+    /// </summary>
+    /// <remarks>
+    /// Only the lead's questions, and only where the answer arrives as a file -
+    /// a run started from the dashboard or the daemon. A terminal prompt blocks
+    /// until it is answered and nothing here can answer it for you. Never a
+    /// gate on an outward action or a merge: those carry no recommendation,
+    /// and are the ones a person has to say yes to.
+    /// </remarks>
+    public string? TakeRecommendationAfter { get; set; }
 }
 
 /// <summary>What a run may spend, in three currencies.</summary>

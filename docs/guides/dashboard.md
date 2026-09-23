@@ -98,6 +98,15 @@ You should see its done-when criteria, each marked met, unmet or not attempted
 in words, and any gate it's waiting on. A gate is a point where the run stops
 and asks you before going on. Press **Approve** or **Refuse**.
 
+Once the lead has reported, the goal is shown with what the lead took it to
+mean, and each criterion with a **Taken to mean** line under it. Read the two
+side by side: a run working hard on a nearby, easier goal looks on track until
+you do.
+
+A question from the lead has one more button than its options: **Think again**.
+Use it when none of the options is right. The lead is told none was chosen, and
+decides the thing itself or asks a better question.
+
 The button runs the same command you could type yourself:
 
 ```sh
@@ -115,6 +124,13 @@ Press the button to start a team.
 Choose a team, type the goal in your own words, and put one done-when criterion
 per line. Criteria are one per line rather than comma-separated because a
 criterion is a sentence, and sentences contain commas.
+
+If the team has criteria of its own, the empty box shows them, and the run is
+held to them unless you write your own — yours replace the team's.
+
+**Take the lead's recommendation after** is for a run you won't be watching.
+Put `30m` or `2h` and any question of the lead's that nobody answers in that
+time takes its recommendation. Leave it empty and questions wait for you.
 
 ### 7. Stop or hold a run
 

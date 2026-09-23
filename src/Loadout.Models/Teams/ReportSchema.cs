@@ -84,12 +84,14 @@ public static class ReportSchema
             "outward_requested": { "type": "array", "items": { "type": "string" } },
             "next": { "type": "string" },
             "proposed_done_when": { "type": "array", "items": { "type": "string" } },
+            "goal_understood": { "type": "string" },
             "coverage": { "type": "array", "items": {
               "type": "object", "additionalProperties": false, "required": ["criterion", "verdict"],
               "properties": {
                 "criterion": { "type": "string" },
                 "verdict": { "enum": ["met", "unmet", "not-attempted"] },
-                "because": { "type": "string" } } } }
+                "because": { "type": "string" },
+                "understood": { "type": "string" } } } }
           }
         }
         """;

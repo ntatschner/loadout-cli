@@ -61,6 +61,11 @@ namespace Loadout.Agents.Teams;
 /// run got to.
 /// </param>
 /// <param name="ResumeMessage">What the person said when picking it up, for the lead.</param>
+/// <param name="TakeRecommendationAfter">
+/// How long a lead's question with a recommendation waits for an answer before
+/// the recommendation is taken, or null to wait for a person. Only where the
+/// console answers in place: a terminal prompt cannot be answered for anybody.
+/// </param>
 /// <param name="Remediation">
 /// What this machine says a remediator may do with each kind of task, by kind.
 /// Passed in rather than read here, for the same reason the outward list is:
@@ -84,7 +89,8 @@ public sealed record TeamRunRequest(
     IReadOnlyList<Loadout.Models.Configuration.TrustedRemedy>? TrustedRemedies = null,
     IReadOnlyList<string>? Criteria = null,
     string? Resuming = null,
-    string? ResumeMessage = null);
+    string? ResumeMessage = null,
+    TimeSpan? TakeRecommendationAfter = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -515,8 +521,19 @@ public sealed class TeamRunner : ITeamRunner
         // plainly enough that a lead reading its own brief knows the report it
         // owes - and ReportCheck then refuses a done that does not give it,
         // which is what makes this more than a sentence.
+        //
+        // The team's own, when whoever started the run gave none. Never both:
+        // somebody who wrote criteria for this run has said what done means,
+        // and the team's added on top would hold them to things they did not
+        // ask for. With the team's, the lead is not asked to propose any -
+        // the team's author already answered that question.
+        var fromTeam = resuming is null
+            && request.Criteria is not { Count: > 0 }
+            && TeamDefaults(team) is { Count: > 0 };
+
         var criteria = resuming?.Criteria
-            ?? (request.Criteria is { Count: > 0 } asked ? asked : null);
+            ?? (request.Criteria is { Count: > 0 } asked ? asked : null)
+            ?? (fromTeam ? TeamDefaults(team) : null);
 
         var leadBrief = MakeBrief(
             runId, team.Lead, parent: null, leadNode, leadRole, request.Goal, inputs: [],
@@ -537,13 +554,13 @@ public sealed class TeamRunner : ITeamRunner
                         + "actually be judged on: each one a thing somebody else could check, "
                         + "each one specific to this goal. Say what would have to be true, not "
                         + "that the goal is met",
+                    GoalReadingOwed,
                 ]
                 :
                 [
                     "every criterion below is met, with the evidence cited from your nodes' reports",
-                    "your final report carries one coverage entry per criterion, each with a verdict "
-                        + "of met, unmet or not-attempted, and every met saying in 'because' which "
-                        + "node, report and evidence shows it",
+                    CoverageOwed,
+                    GoalReadingOwed,
                 ],
             team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory,
             criteria);
@@ -635,8 +652,22 @@ public sealed class TeamRunner : ITeamRunner
                     // What it may spend, so a page watching it can say where the
                     // spend stands rather than only what it has cost.
                     budget = team.Rules.Budget.Usd,
+
+                    // Recorded so the run says, read back, that its questions
+                    // did not all wait for a person.
+                    takeRecommendationAfter = request.TakeRecommendationAfter is { } wait
+                        ? TeamDuration.Spell(wait)
+                        : null,
                 },
                 ct).ConfigureAwait(false);
+
+            // Said once, at the start, so anybody reading the run back knows
+            // these were the team's and not something the person typed.
+            if (fromTeam)
+            {
+                await journal.WriteAsync(
+                    "criteria.agreed", null, new { criteria, by = "team" }, ct).ConfigureAwait(false);
+            }
         }
         else
         {
@@ -932,9 +963,8 @@ public sealed class TeamRunner : ITeamRunner
                             [
                                 "every criterion below is met, with the evidence cited from your "
                                     + "nodes' reports",
-                                "your final report carries one coverage entry per criterion, each "
-                                    + "with a verdict of met, unmet or not-attempted, and every met "
-                                    + "saying in 'because' which node, report and evidence shows it",
+                                CoverageOwed,
+                                GoalReadingOwed,
                             ],
                         };
 
@@ -1025,7 +1055,9 @@ public sealed class TeamRunner : ITeamRunner
 
                 if (report.Status == ReportStatus.NeedsDecision)
                 {
-                    var decided = await DecideAsync(autonomy, console, report.Questions ?? [], journal, ct).ConfigureAwait(false);
+                    var decided = await DecideAsync(
+                            autonomy, console, report.Questions ?? [], journal, directory, request.TakeRecommendationAfter, ct)
+                        .ConfigureAwait(false);
 
                     if (decided is null)
                     {
@@ -1196,9 +1228,7 @@ public sealed class TeamRunner : ITeamRunner
                 {
                     feedback.AppendLine("## What this run is judged on").AppendLine();
                     feedback.AppendLine(
-                        "Agreed from what you proposed. Your final report needs one coverage entry "
-                        + "per criterion, each with a verdict of met, unmet or not-attempted, and "
-                        + "every met saying in 'because' which node, report and evidence shows it.")
+                        "Agreed from what you proposed. " + char.ToUpperInvariant(CoverageOwed[0]) + CoverageOwed[1..] + ".")
                         .AppendLine();
 
                     for (var i = 0; i < settled.Count; i++)
@@ -2103,8 +2133,13 @@ public sealed class TeamRunner : ITeamRunner
                         criterion = one.Criterion,
                         verdict = one.Verdict.ToString().ToLowerInvariant(),
                         because = one.Because,
+                        understood = one.Understood,
                     })
                     : null,
+
+                // What the lead took the goal to mean. Only a lead says, and
+                // only where it was asked, so null is ordinary.
+                goalUnderstood = report.GoalUnderstood,
             }, ct).ConfigureAwait(false);
 
             switch (verdict.Outcome)
@@ -3229,11 +3264,50 @@ public sealed class TeamRunner : ITeamRunner
         return await console.ConfirmAsync(what, ct).ConfigureAwait(false);
     }
 
-    private static async Task<IReadOnlyList<(string Question, string Answer)>?> DecideAsync(
+    /// <summary>
+    /// The option that sends a question back to the lead rather than
+    /// answering it.
+    /// </summary>
+    /// <remarks>
+    /// For when none of the options is right and saying which one would be is
+    /// the lead's job, not the person's: they have seen that the question is
+    /// wrong without knowing what the right one is. The lead is told to look
+    /// again and either decide it itself, with its evidence, or ask a better
+    /// question - and it goes to the lead as words it can act on, because that
+    /// is the only way anything reaches it.
+    /// </remarks>
+    public const string ThinkAgain = "Think again";
+
+    /// <summary>What the lead's final report owes on each criterion.</summary>
+    /// <remarks>
+    /// One sentence in three places, so it is written once. 'understood' was
+    /// added because a verdict is only worth the reading it was given: "the
+    /// tests pass" read as "the new test passes" can be met while the suite is
+    /// red, and a person reading "met" had no way to see which was meant.
+    /// </remarks>
+    internal const string CoverageOwed =
+        "your final report carries one coverage entry per criterion, each saying in 'understood' "
+        + "what you took the criterion to mean, with a verdict of met, unmet or not-attempted, and "
+        + "every met saying in 'because' which node, report and evidence shows it";
+
+    /// <summary>What every report of the lead's says about the goal.</summary>
+    internal const string GoalReadingOwed =
+        "every report you make says in 'goal_understood', in a sentence, what you take the goal to "
+        + "mean, so the person who wrote it can see you are working to what they asked";
+
+    /// <summary>What the lead is told when somebody chose <see cref="ThinkAgain"/>.</summary>
+    internal const string ThinkAgainTold =
+        "Think again. None of the options was chosen: the person asked to decide this did not "
+        + "think any of them was right. Look at the question afresh, then either decide it yourself "
+        + "with the evidence for your choice, or ask a better question with better options.";
+
+    private async Task<IReadOnlyList<(string Question, string Answer)>?> DecideAsync(
         string autonomy,
         ITeamConsole console,
         IReadOnlyList<ReportQuestion> questions,
         Journal journal,
+        string directory,
+        TimeSpan? takeRecommendationAfter,
         CancellationToken ct)
     {
         var decided = new List<(string, string)>();
@@ -3241,6 +3315,7 @@ public sealed class TeamRunner : ITeamRunner
         foreach (var question in questions)
         {
             string? answer;
+            var timed = false;
 
             if (autonomy == "autonomous")
             {
@@ -3250,10 +3325,25 @@ public sealed class TeamRunner : ITeamRunner
                 answer = question.Recommendation;
                 console.Note($"Decided on the lead's recommendation: {question.Question} → {answer}");
             }
+            else if (takeRecommendationAfter is { } wait
+                && console.AnswersInPlace
+                && question.Recommendation is { Length: > 0 })
+            {
+                (answer, timed) = await DecideOrTakeAsync(console, question, directory, wait, ct).ConfigureAwait(false);
+
+                if (timed)
+                {
+                    console.Note(
+                        $"Nobody answered in {TeamDuration.Spell(wait)}, so the lead's recommendation was taken: "
+                        + $"{question.Question} → {answer}");
+                }
+            }
             else
             {
                 answer = await console.DecideAsync(question, ct).ConfigureAwait(false);
             }
+
+            var rethink = string.Equals(answer, ThinkAgain, StringComparison.Ordinal);
 
             // "by" says who settled it, and a null answer means nobody did:
             // the wait ran out. It said "person" either way, so a run that
@@ -3265,10 +3355,15 @@ public sealed class TeamRunner : ITeamRunner
                 new
                 {
                     question = question.Question,
-                    answer,
+                    answer = rethink ? "think again" : answer,
                     by = autonomy == "autonomous" ? "recommendation"
+                        : timed ? "timed default"
                         : answer is null ? "nobody"
                         : "person",
+
+                    // How long it waited, so "taken automatically" can say
+                    // after what.
+                    after = timed ? TeamDuration.Spell(takeRecommendationAfter!.Value) : null,
                 },
                 ct).ConfigureAwait(false);
 
@@ -3277,11 +3372,88 @@ public sealed class TeamRunner : ITeamRunner
                 return null;
             }
 
-            decided.Add((question.Question, answer));
+            decided.Add((question.Question, rethink ? ThinkAgainTold : answer));
         }
 
         return decided;
     }
+
+    /// <summary>
+    /// Asks, and takes the lead's recommendation if nobody has answered in
+    /// time. Says whether it was taken that way.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Answered the way a person would answer it: the recommendation is written
+    /// as the question's answer, so the console waiting on it reads it like
+    /// any other and the page watching it stops showing it. Answering the
+    /// console's wait from here instead would leave the question on the page,
+    /// answerable, for a run that had already moved on.
+    /// </para>
+    /// <para>
+    /// It was taken automatically only if this wrote the answer. Somebody who
+    /// answers in the same instant has answered, and is recorded as having
+    /// done so.
+    /// </para>
+    /// </remarks>
+    private async Task<(string? Answer, bool Timed)> DecideOrTakeAsync(
+        ITeamConsole console,
+        ReportQuestion question,
+        string directory,
+        TimeSpan wait,
+        CancellationToken ct)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        var asking = console.DecideAsync(question, ct);
+        var clock = Task.Delay(wait, _time, stop.Token);
+
+        if (await Task.WhenAny(asking, clock).ConfigureAwait(false) == asking)
+        {
+            await stop.CancelAsync().ConfigureAwait(false);
+
+            return (await asking.ConfigureAwait(false), false);
+        }
+
+        var wrote = false;
+
+        // Until the question is on disk: a wait shorter than the console takes
+        // to write it would otherwise find nothing to answer and leave the run
+        // waiting on a person after all.
+        while (!asking.IsCompleted)
+        {
+            var pending = NodePermissions.Pending(directory).FirstOrDefault(one =>
+                one.Kind == "question" && string.Equals(one.Asked, question.Question, StringComparison.Ordinal));
+
+            if (pending is not null)
+            {
+                if (NodePermissions.Answered(directory, pending.Id) is null)
+                {
+                    await NodePermissions.AnswerAsync(
+                        directory,
+                        pending.Id,
+                        new AskAnswer(
+                            true,
+                            $"Nobody answered in {TeamDuration.Spell(wait)}, so the lead's recommendation was taken.",
+                            Chosen: question.Recommendation,
+                            By: "timed default"),
+                        ct).ConfigureAwait(false);
+
+                    wrote = true;
+                }
+
+                break;
+            }
+
+            await Task.WhenAny(asking, Task.Delay(NodePermissions.Glance, _time, ct)).ConfigureAwait(false);
+        }
+
+        return (await asking.ConfigureAwait(false), wrote);
+    }
+
+    /// <summary>The team's default done-when criteria, tidied, or null for none.</summary>
+    internal static IReadOnlyList<string>? TeamDefaults(TeamDefinition team) =>
+        Tidied(team.DoneWhen) is { Count: > 0 } defaults ? defaults : null;
 
     private static string Spell(ReportStatus status) => status switch
     {

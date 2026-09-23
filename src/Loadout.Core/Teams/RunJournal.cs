@@ -141,7 +141,8 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
             covered.Add(new RunCovered(
                 criterion,
                 Said(one, "verdict") ?? "unmet",
-                Said(one, "because")));
+                Said(one, "because"),
+                Said(one, "understood")));
         }
 
         return covered;
@@ -185,10 +186,27 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 /// <param name="Criterion">The criterion, in the words the run gave it.</param>
 /// <param name="Verdict">met, unmet or not-attempted.</param>
 /// <param name="Because">What the lead says shows it, where it said anything.</param>
-public sealed record RunCovered(string Criterion, string Verdict, string? Because)
+/// <param name="Understood">
+/// What the lead took the criterion to mean, in its words, or null where it
+/// did not say - which is every run written before it was asked.
+/// </param>
+public sealed record RunCovered(string Criterion, string Verdict, string? Because, string? Understood = null)
 {
     /// <summary>Whether this one is settled.</summary>
     public bool Met => string.Equals(Verdict, "met", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The verdict as a person says it.</summary>
+    /// <remarks>
+    /// The journal has always held "notattempted", from the verdict's name
+    /// lowered, and a page that printed what it was given showed a reader
+    /// NOTATTEMPTED. Old runs keep that spelling, so it is put into words here,
+    /// where every view reads it, rather than rewritten where it is stored.
+    /// </remarks>
+    public string InWords => Verdict.ToLowerInvariant() switch
+    {
+        "notattempted" or "not-attempted" or "not attempted" => "not attempted",
+        var said => said,
+    };
 }
 
 /// <summary>Where a node got to.</summary>
@@ -327,7 +345,8 @@ public sealed record RunSummary(
     IReadOnlyList<RunRound>? Timeline = null,
     int Conflicts = 0,
     IReadOnlyList<RunCovered>? Covered = null,
-    string? Outcome = null)
+    string? Outcome = null,
+    string? GoalUnderstood = null)
 {
     /// <summary>Each round, with when it started and when it came back.</summary>
     public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
@@ -845,6 +864,7 @@ public sealed class RunJournal : IRunJournal
         var timeline = new List<RunRound>();
         var conflicts = 0;
         IReadOnlyList<RunCovered> covered = [];
+        string? goalUnderstood = null;
 
         // Insertion order, because that is the order the run briefed them
         // and the order somebody reading it will expect.
@@ -1034,6 +1054,13 @@ public sealed class RunJournal : IRunJournal
                         covered = said;
                     }
 
+                    // The same rule: the lead's latest reading of the goal is
+                    // the one it is working to.
+                    if (entry.Text("goalUnderstood") is { Length: > 0 } reading)
+                    {
+                        goalUnderstood = reading;
+                    }
+
                     break;
 
                 case "node.ended" when entry.Node is { Length: > 0 } finishedNode:
@@ -1122,7 +1149,8 @@ public sealed class RunJournal : IRunJournal
             timeline,
             conflicts,
             covered,
-            outcome);
+            outcome,
+            goalUnderstood);
     }
 
     /// <summary>One event as a line somebody can read.</summary>
@@ -1209,7 +1237,23 @@ public sealed class RunJournal : IRunJournal
             "worktree.tidied" => $"cleared away {entry.Text("branch")}",
             "node.told" => $"was told: {entry.Text("message")}",
             "brief.revised" => $"briefed instead: {entry.Text("now")}",
-            "decision" => $"decided: {entry.Text("question")} -> {entry.Text("answer")}",
+            "decision" => entry.Text("answer") == "think again"
+                    ? $"sent back to the lead to think again: {entry.Text("question")}"
+                : entry.Text("by") == "timed default"
+                    ? $"took the lead's recommendation, nobody having answered in {entry.Text("after") ?? "time"}: "
+                        + $"{entry.Text("question")} -> {entry.Text("answer")}"
+                : $"decided: {entry.Text("question")} -> {entry.Text("answer")}",
+
+            // Where a run's criteria came from, because "held to these" means
+            // something different when the team's author wrote them, when a
+            // person agreed them, and when nobody was there to.
+            "criteria.agreed" => (entry.Text("by") switch
+            {
+                "team" => "held to the team's own done-when",
+                "nobody" => "held to the lead's proposed done-when, with nobody watching to agree them",
+                _ => "done-when agreed",
+            }) + (entry.Words("criteria") is { Count: > 0 } agreed ? $": {string.Join("; ", agreed)}" : string.Empty),
+            "criteria.none" => "held to no done-when",
             _ => entry.Kind,
         };
     }

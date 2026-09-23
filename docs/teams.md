@@ -218,9 +218,10 @@ read it. See [Specialists and skills](specialists.md).
 
 ## Saying when it is done
 
-A run takes a goal. Set nothing more and **the lead proposes what done means,
-and you agree it** — see [If you say nothing](#if-you-say-nothing) below. Or say
-it yourself, up front:
+A run takes a goal. Set nothing more and it is held to **the team's own
+done-when**, if the team file gives one — see [A team's own](#a-teams-own) below.
+If it gives none, **the lead proposes what done means, and you agree it** — see
+[If you say nothing](#if-you-say-nothing). Or say it yourself, up front:
 
 ```sh
 loadout team run docs-crew "make the docs true" \
@@ -240,6 +241,11 @@ What that changes:
 - **The lead's brief says it owes a verdict on each**, and its final report
   carries one entry per criterion: `met`, `unmet` or `not-attempted`, and every
   `met` saying in `because` which node, which report and which evidence shows it.
+- **It says how it read each one**, in `understood`, and how it read the goal, in
+  `goal_understood`. A verdict is only worth the reading it was given: "the tests
+  pass" read as "the new test passes" can be met while the suite is red, and
+  without the reading beside the verdict nobody could see which was meant. Runs
+  from before this have no readings, and show none.
 - **A `done` that leaves one unmet or unanswered is sent back to the lead**, with
   a reason naming the criterion. This is not new machinery: it is the rule that
   already governs a worker's report — `done` needs evidence that passed —
@@ -249,6 +255,35 @@ What that changes:
 tried and needs a different approach; one never attempted means a whole area of
 the goal was missed, and that is the thing a run of several rounds loses
 quietly.
+
+### A team's own
+
+A team file can say what its runs are judged on when whoever starts one says
+nothing:
+
+```yaml
+name: bug-hunt
+done_when:
+  - "a test reproduces the bug: it fails without the fix and passes with it"
+  - "the full test suite passes with the fix in place"
+```
+
+Quote each one. A criterion is a sentence, and a sentence with a colon in it is
+something else to YAML — a team file that fails to read is not listed at all.
+
+Three that ship carry one: `docs-crew` (every changed page passes `docs audit`,
+and every changed claim was checked against the code), `bug-hunt` (the two
+above), and `dependency-sweep` (every updated dependency passes the suite on its
+own branch). Each is what the team's job means by done. `iterating-project` has
+none on purpose: it is the general one, and "the suite passes" is not true of a
+run whose goal was a design.
+
+**Yours replace the team's; the two are never merged.** Somebody who writes
+their own has said what done means for this run, and the team's added on top
+would hold them to things they did not ask for. With the team's, the lead is not
+asked to propose any — the team's author already answered that — and the
+journal records `by: team`, so a run read back says whose criteria they were.
+`team show` lists them, and the dashboard's form shows them in its empty box.
 
 ### If you say nothing
 
@@ -295,10 +330,15 @@ is met" could never do.
 `team status` then shows where each one got to:
 
 ```
+  make the docs true
+    taken to mean: every page under docs/ agrees with the code it describes
+
   Done when 2 of 3 met
   + met           every command in docs/commands.md exists
+      taken to mean: each command listed there is one `loadout --help` knows
       docs-auditor/1 checked all 159
   + met           the suite passes
+      taken to mean: the whole suite, not only the tests this run added
       verifier/1 reported 2843 passing
   ! not attempted the changelog mentions it
 ```
@@ -1889,6 +1929,57 @@ lead writes its own questions after spending ten minutes reading a repository,
 and quoting what it found is how it asks about it. The options you choose
 between are left exactly as written — they are matched against your answer, and
 a changed one would be a question nobody could answer.
+
+### When nobody answers: taking the lead's recommendation
+
+Every question a lead asks comes with its recommendation. For a run nobody is
+going to sit and watch, you can say how long a question waits before that
+recommendation is taken for you:
+
+```sh
+loadout team run docs-crew "make the docs true" --take-recommendation-after 30m
+```
+
+or in the team file, under `rules`, as `take_recommendation_after: 30m`, or in
+the dashboard's form. The run's own setting wins over the team's.
+
+When it happens, it happens the way you would have answered: the recommendation
+is written as the question's answer, so the question leaves the dashboard, the
+run carries on, and the journal says
+`took the lead's recommendation, nobody having answered in 30m`. It is never
+recorded as a person's choice.
+
+What it does not do:
+
+- **Only the lead's own questions.** Never a merge, never anything that leaves
+  this machine: those carry no recommendation, and they are the ones a person
+  has to say yes to. Never a brief in manual mode either, which exists so a
+  person approves each thing the run spends money on.
+- **Only a run answered from the dashboard** — one started from the page, the
+  daemon or a schedule. A question at a terminal is a prompt that waits until you
+  answer, and nothing here can answer it for you.
+- **A resumed run takes the team's rule**, not a wait the run was first started
+  with on the command line. The journal records that wait, but as a note, and
+  quietly reapplying an old flag to a new start would be something you had not
+  asked for this time.
+- An answer and the wait running out in the same instant: whichever is written
+  second wins. If yours arrives first, it is yours and is recorded as yours.
+
+### Think again
+
+A lead's question has one more answer than its options: **Think again.** It is for
+when none of the options is right and saying which would be is the lead's job,
+not yours — you can see the question is wrong without knowing what the right one
+is. The lead is told none of its options was chosen, and to decide the thing
+itself with its evidence or ask a better question. It is a button on the
+dashboard, a choice at the terminal, and:
+
+```sh
+loadout team gate --think-again
+```
+
+Only for a lead's question. A permission or a confirmation is yes or no, and
+"think again" there would read as a yes to something nobody had answered.
 
 ### Runs that ask a browser
 

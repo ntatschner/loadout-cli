@@ -34,7 +34,8 @@ public sealed class StartFormTests
         Autonomy: "supervised",
         Criteria: ["the option exists", "  ", "a test covers it"],
         Model: "opus",
-        Agent: "claude");
+        Agent: "claude",
+        TakeRecommendationAfter: "30m");
 
     [Fact]
     public void Every_box_on_the_form_reaches_the_command_line()
@@ -48,6 +49,7 @@ public sealed class StartFormTests
         typed.Should().ContainInConsecutiveOrder("--autonomy", "supervised");
         typed.Should().ContainInConsecutiveOrder("--model", "opus");
         typed.Should().ContainInConsecutiveOrder("--agent", "claude");
+        typed.Should().ContainInConsecutiveOrder("--take-recommendation-after", "30m");
 
         // One option per criterion, because a criterion is a sentence and
         // sentences contain commas.
@@ -78,6 +80,7 @@ public sealed class StartFormTests
         typed.Should().NotContain("--agent");
         typed.Should().NotContain("--autonomy");
         typed.Should().NotContain("--done-when");
+        typed.Should().NotContain("--take-recommendation-after");
 
         // And no round cap, which is what an empty box means now: the team's
         // budget and two rounds without progress are what stop it.
