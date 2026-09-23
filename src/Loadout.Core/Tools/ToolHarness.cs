@@ -122,6 +122,13 @@ public sealed class ToolHarness
             {
                 return Fail($"'{name}' is an absolute path. Cases may only use {Tmp}.");
             }
+
+            // {tmp}/.. is the directory every case shares, and ../ from the
+            // case's own directory is the same place.
+            if (value.Split('/', '\\').Contains(".."))
+            {
+                return Fail($"'{name}' climbs out of {Tmp} with '..'. Cases may only use {Tmp}.");
+            }
         }
 
         var directory = Path.Combine(Path.GetTempPath(), "loadout-tool-case-" + Guid.NewGuid().ToString("N"));

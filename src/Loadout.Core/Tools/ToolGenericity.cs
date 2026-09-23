@@ -37,18 +37,24 @@ public static partial class ToolGenericity
         }
 
         var found = new List<string>();
+        var secrets = SecretScanner.Match(text);
 
         // Secrets first, and by type only.
-        foreach (var name in SecretScanner.Match(text))
+        foreach (var name in secrets)
         {
             found.Add($"a credential ({name})");
         }
 
-        Look(found, "an absolute path", WindowsPath(), text);
-        Look(found, "an absolute path", UnixPath(), text);
-        Look(found, "a repository URL", RepositoryUrl(), text);
-        Look(found, "an e-mail address", Email(), text);
-        Look(found, "a GUID", Guid(), text);
+        // Once anything in the text is a credential, no value is quoted at
+        // all: a path, URL or address can carry it, and a pattern only has to
+        // miss one shape of token for the refusal to print it.
+        var quote = secrets.Count == 0;
+
+        Look(found, "an absolute path", WindowsPath(), text, quote);
+        Look(found, "an absolute path", UnixPath(), text, quote);
+        Look(found, "a repository URL", RepositoryUrl(), text, quote);
+        Look(found, "an e-mail address", Email(), text, quote);
+        Look(found, "a GUID", Guid(), text, quote);
 
         foreach (var name in (known ?? []).Where(one => one is { Length: >= 3 }).Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -92,13 +98,17 @@ public static partial class ToolGenericity
         return [.. Check(string.Join('\n', parts.Where(one => one is { Length: > 0 })), known).Distinct()];
     }
 
-    private static void Look(List<string> found, string what, Regex pattern, string text)
+    private static void Look(List<string> found, string what, Regex pattern, string text, bool quote)
     {
         try
         {
             foreach (Match match in pattern.Matches(text))
             {
-                found.Add($"{what}: '{match.Value.Trim()}'");
+                // A URL's user-info is a name and a password, and neither is
+                // anybody else's business, whether or not a pattern knew it.
+                var value = UserInfo().Replace(match.Value.Trim(), "://");
+
+                found.Add(quote && SecretScanner.Match(value).Count == 0 ? $"{what}: '{value}'" : $"{what} (not quoted)");
             }
         }
         catch (RegexMatchTimeoutException)
@@ -120,7 +130,11 @@ public static partial class ToolGenericity
         1000)]
     private static partial Regex RepositoryUrl();
 
-    [GeneratedRegex(@"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b", RegexOptions.None, 1000)]
+    [GeneratedRegex(@"://[^\s'""/@]+@", RegexOptions.None, 1000)]
+    private static partial Regex UserInfo();
+
+    // Not after ':' or '/', so a URL's password is never read as the start of an address.
+    [GeneratedRegex(@"(?<![\w.%+:/-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b", RegexOptions.None, 1000)]
     private static partial Regex Email();
 
     [GeneratedRegex(@"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b", RegexOptions.None, 1000)]

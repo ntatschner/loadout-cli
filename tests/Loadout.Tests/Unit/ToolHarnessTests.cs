@@ -34,6 +34,25 @@ public sealed class ToolHarnessTests : IDisposable
         launcher.Requests.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("{tmp}/../escape")]
+    [InlineData("{tmp}\\..\\escape")]
+    [InlineData("../escape")]
+    [InlineData("cache/../../escape")]
+    public async Task An_argument_climbing_out_of_tmp_is_refused_without_running(string value)
+    {
+        var launcher = new StubProcessLauncher(string.Empty);
+        var harness = new ToolHarness(launcher);
+
+        var result = await harness.RunAsync(
+            "tool.ps1",
+            new ToolCase { Name = "a", Class = ToolCaseClass.Success, Args = new() { ["CachePath"] = value } });
+
+        result.Passed.Should().BeFalse();
+        result.Why.Should().Contain("..");
+        launcher.Requests.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Cases_run_in_a_fresh_temp_directory()
     {

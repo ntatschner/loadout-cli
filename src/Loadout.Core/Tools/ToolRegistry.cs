@@ -189,7 +189,20 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// </remarks>
     public string Root() => Path.Combine(_paths.Paths.State, "tools");
 
+    /// <summary>How long a writer waits for <c>registry.lock</c> before giving up.</summary>
+    internal TimeSpan LockWait { get; set; } = TimeSpan.FromSeconds(10);
+
     private string AuditFile => Path.Combine(Root(), "audit.jsonl");
+
+    private string LockFile => Path.Combine(Root(), "registry.lock");
+
+    private string DraftsRoot => Path.Combine(Root(), "drafts");
+
+    private string VerifiedFile(string name, string version) =>
+        Path.Combine(Root(), "verified", RemedyBook.Slug(name), version + ".json");
+
+    private const string Busy =
+        "Something else is writing the tool catalogue and holds registry.lock. Try again when it has finished.";
 
     private string ToolDirectory(string name) => Path.Combine(Root(), RemedyBook.Slug(name));
 
@@ -315,6 +328,13 @@ public sealed partial class ToolRegistry : IToolRegistry
     {
         ArgumentNullException.ThrowIfNull(usage);
 
+        using var held = Lock();
+
+        if (held is null)
+        {
+            return OperationResult.Fail(Busy);
+        }
+
         if (ReadHead(usage.Tool) is not { } head)
         {
             return OperationResult.Fail($"There is no tool called '{usage.Tool}'.", ExitCode.ProjectNotFound);
@@ -386,7 +406,17 @@ public sealed partial class ToolRegistry : IToolRegistry
             return OperationResult<ToolVerification>.Fail(read.Error!, ExitCode.InvalidArguments);
         }
 
-        var (version, script, scriptPath, cases) = read.Value!;
+        var (directory, version, script, scriptPath, cases) = read.Value!;
+
+        // Checked here as well as at promotion, because the version names the
+        // file the verify record is written to.
+        if (!string.Equals(version.Name, RemedyBook.Slug(version.Name), StringComparison.Ordinal)
+            || !VersionShape().IsMatch(version.Version))
+        {
+            return OperationResult<ToolVerification>.Fail(
+                $"'{version.Name}@{version.Version}' is not a tool name and version: lowercase and hyphens, then major.minor.",
+                ExitCode.InvalidArguments);
+        }
 
         if (ToolHarness.MissingClasses(cases) is { Count: > 0 } missing)
         {
@@ -430,10 +460,44 @@ public sealed partial class ToolRegistry : IToolRegistry
             Failed = gate.Own.Count(one => !one.Passed) + gate.Regression.Count(one => !one.Passed),
             RegressionAgainst = active is null ? [] : [active.Version],
             Fingerprint = RemedyCeiling.Fingerprint(script),
-            CasesFingerprint = CasesFingerprint(Path.Combine(draft, "cases")),
+            CasesFingerprint = CasesFingerprint(Path.Combine(directory, "cases")),
         };
 
-        File.WriteAllText(Path.Combine(draft, "manifest.yaml"), Writer.Serialize(version));
+        using (var held = Lock())
+        {
+            if (held is null)
+            {
+                return OperationResult<ToolVerification>.Fail(Busy);
+            }
+
+            // The draft's manifest is for whoever reads the draft. What
+            // promotion believes is the record under verified/, outside the
+            // drafts, because anything that can write a draft can write
+            // "status: verified" into it.
+            var proof = VerifiedFile(version.Name, version.Version);
+
+            try
+            {
+                if (gate.Passed)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(proof)!);
+                    File.WriteAllText(proof, JsonSerializer.Serialize(
+                        new VerifyRecord(version.Tests.Fingerprint, version.Tests.CasesFingerprint, version.Tests.RanAt),
+                        Json));
+                }
+                else if (File.Exists(proof))
+                {
+                    File.Delete(proof);
+                }
+
+                File.WriteAllText(Path.Combine(directory, "manifest.yaml"), Writer.Serialize(version));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return OperationResult<ToolVerification>.Fail($"What verify found could not be written: {ex.Message}");
+            }
+        }
+
         Record(gate.Passed ? "verify" : "reject", version.Name, version.Version, null, null, gate.Because);
 
         return OperationResult<ToolVerification>.Ok(new ToolVerification(RemedyRuling.Run, gate.Because, gate));
@@ -444,6 +508,16 @@ public sealed partial class ToolRegistry : IToolRegistry
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Held from the first read to the last write, so two promotions of one
+        // tool cannot both read the head and each write back only their own
+        // version.
+        using var held = Lock();
+
+        return held is null ? OperationResult<ToolVersion>.Fail(Busy) : PromoteHeld(draft, request);
+    }
+
+    private OperationResult<ToolVersion> PromoteHeld(string draft, ToolPromotionRequest request)
+    {
         var read = ReadDraft(draft);
 
         if (read.Failed)
@@ -451,7 +525,7 @@ public sealed partial class ToolRegistry : IToolRegistry
             return OperationResult<ToolVersion>.Fail(read.Error!, ExitCode.InvalidArguments);
         }
 
-        var (version, script, scriptPath, cases) = read.Value!;
+        var (directory, version, script, scriptPath, cases) = read.Value!;
 
         OperationResult<ToolVersion> Refuse(string why) =>
             OperationResult<ToolVersion>.Fail(why, ExitCode.PolicyViolation);
@@ -478,15 +552,17 @@ public sealed partial class ToolRegistry : IToolRegistry
             return Refuse("The manifest is missing " + string.Join(", ", missing) + ".");
         }
 
-        if (version.Status != ToolVersionStatus.Verified || version.Tests is not { } tests)
+        // The draft's own status is not evidence: the draft is writable by
+        // whoever wrote it. Only the record verify leaves outside it is.
+        if (ReadVerified(version.Name, version.Version) is not { } proof)
         {
             return Refuse($"{version.Name}@{version.Version} has not passed verify.");
         }
 
-        var casesFingerprint = CasesFingerprint(Path.Combine(draft, "cases"));
+        var casesFingerprint = CasesFingerprint(Path.Combine(directory, "cases"));
 
-        if (!string.Equals(tests.Fingerprint, RemedyCeiling.Fingerprint(script), StringComparison.Ordinal)
-            || !string.Equals(tests.CasesFingerprint, casesFingerprint, StringComparison.Ordinal))
+        if (!string.Equals(proof.Script, RemedyCeiling.Fingerprint(script), StringComparison.Ordinal)
+            || !string.Equals(proof.Cases, casesFingerprint, StringComparison.Ordinal))
         {
             return Refuse("The script or its cases have changed since they were verified. Verify again.");
         }
@@ -523,21 +599,26 @@ public sealed partial class ToolRegistry : IToolRegistry
         var target = VersionDirectory(version.Name, version.Version);
         var file = $"{version.Name}.v{version.Version}.ps1";
 
+        // Written beside the target and moved into place, so a copy that fails
+        // partway leaves no half a version where a whole one is expected.
+        var staging = Path.Combine(Path.GetDirectoryName(target)!, "." + version.Version + "-" + Guid.NewGuid().ToString("N")[..8]);
+
         try
         {
-            Directory.CreateDirectory(Path.Combine(target, "cases"));
-            File.Copy(scriptPath, Path.Combine(target, file));
+            Directory.CreateDirectory(Path.Combine(staging, "cases"));
+            File.Copy(scriptPath, Path.Combine(staging, file));
 
-            foreach (var one in Directory.EnumerateFiles(Path.Combine(draft, "cases"), "*.yaml"))
+            foreach (var one in Directory.EnumerateFiles(Path.Combine(directory, "cases"), "*.yaml"))
             {
-                File.Copy(one, Path.Combine(target, "cases", Path.GetFileName(one)));
+                File.Copy(one, Path.Combine(staging, "cases", Path.GetFileName(one)));
             }
 
             version.Status = ToolVersionStatus.KnownGood;
             version.Script = file;
             version.Fingerprint = RemedyCeiling.Fingerprint(script);
             version.CasesFingerprint = casesFingerprint;
-            File.WriteAllText(Path.Combine(target, "manifest.yaml"), Writer.Serialize(version));
+            File.WriteAllText(Path.Combine(staging, "manifest.yaml"), Writer.Serialize(version));
+            Directory.Move(staging, target);
 
             head ??= new ToolRecord { Name = version.Name };
             head.Owner = request.Owner ?? head.Owner;
@@ -563,10 +644,24 @@ public sealed partial class ToolRegistry : IToolRegistry
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            try
+            {
+                if (Directory.Exists(staging))
+                {
+                    Directory.Delete(staging, recursive: true);
+                }
+            }
+            catch (Exception again) when (again is IOException or UnauthorizedAccessException)
+            {
+                // Named with a leading dot and a random suffix, so nothing reads it as a version.
+            }
+
             return OperationResult<ToolVersion>.Fail($"That version could not be written: {ex.Message}");
         }
 
-        Record("promote", version.Name, version.Version, request.Actor, request.Run, version.Fingerprint);
+        // What Standing checks the version's files against, rather than the
+        // version's own manifest, which sits beside the files it vouches for.
+        Record("promote", version.Name, version.Version, request.Actor, request.Run, Promoted(version.Fingerprint, casesFingerprint));
 
         return OperationResult<ToolVersion>.Ok(version);
     }
@@ -574,6 +669,13 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// <inheritdoc />
     public OperationResult SetActive(string name, string version)
     {
+        using var held = Lock();
+
+        if (held is null)
+        {
+            return OperationResult.Fail(Busy);
+        }
+
         if (ReadHead(name) is not { } head)
         {
             return OperationResult.Fail($"There is no tool called '{name}'.", ExitCode.ProjectNotFound);
@@ -602,6 +704,13 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// <inheritdoc />
     public OperationResult Deprecate(string name, string? replacement, string? reason)
     {
+        using var held = Lock();
+
+        if (held is null)
+        {
+            return OperationResult.Fail(Busy);
+        }
+
         if (ReadHead(name) is not { } head)
         {
             return OperationResult.Fail($"There is no tool called '{name}'.", ExitCode.ProjectNotFound);
@@ -639,6 +748,13 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// <inheritdoc />
     public OperationResult Retire(string name)
     {
+        using var held = Lock();
+
+        if (held is null)
+        {
+            return OperationResult.Fail(Busy);
+        }
+
         if (ReadHead(name) is not { } head)
         {
             return OperationResult.Fail($"There is no tool called '{name}'.", ExitCode.ProjectNotFound);
@@ -668,7 +784,9 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// <remarks>
     /// Recomputed on every read, because the files are on a disk a node with
     /// Bash can write to. A version that no longer matches is refused, never
-    /// trusted.
+    /// trusted. What the files are checked against is the fingerprint the
+    /// promotion recorded in the audit log, not the version's own manifest:
+    /// whoever can rewrite the script can rewrite the manifest beside it.
     /// </remarks>
     public string Standing(string name, string version)
     {
@@ -681,10 +799,14 @@ public sealed partial class ToolRegistry : IToolRegistry
         }
 
         var script = Path.Combine(directory, manifest.Script);
+        var promoted = Audit(name).LastOrDefault(one =>
+            one.Action == "promote" && string.Equals(one.Version, version, StringComparison.Ordinal));
+        var (scriptPrint, casesPrint) = ReadPromoted(promoted?.Note);
 
-        if (!File.Exists(script)
-            || !string.Equals(RemedyCeiling.Fingerprint(File.ReadAllText(script)), manifest.Fingerprint, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(CasesFingerprint(Path.Combine(directory, "cases")), manifest.CasesFingerprint, StringComparison.OrdinalIgnoreCase))
+        if (scriptPrint is null
+            || !File.Exists(script)
+            || !string.Equals(RemedyCeiling.Fingerprint(File.ReadAllText(script)), scriptPrint, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(CasesFingerprint(Path.Combine(directory, "cases")), casesPrint, StringComparison.OrdinalIgnoreCase))
         {
             return ToolVersionStatus.Tampered;
         }
@@ -821,26 +943,97 @@ public sealed partial class ToolRegistry : IToolRegistry
     private void Record(string action, string tool, string? version, string? actor, string? run, string? note) =>
         ToolAudit.Append(AuditFile, new ToolAuditEntry(_clock.GetUtcNow(), action, tool, version, actor, run, note));
 
-    private static OperationResult<(ToolVersion Version, string Script, string ScriptPath, IReadOnlyList<ToolCase> Cases)> ReadDraft(string draft)
+    private OperationResult<(string Directory, ToolVersion Version, string Script, string ScriptPath, IReadOnlyList<ToolCase> Cases)> ReadDraft(string draft)
     {
-        if (ReadYaml<ToolVersion>(Path.Combine(draft, "manifest.yaml")) is not { } version)
+        // Only under drafts/, after the path is resolved, because verify
+        // writes into a draft and nothing asked it to write anywhere else.
+        var full = Path.GetFullPath(draft);
+
+        if (!full.StartsWith(Path.GetFullPath(DraftsRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
-            return OperationResult<(ToolVersion, string, string, IReadOnlyList<ToolCase>)>.Fail(
+            return OperationResult<(string, ToolVersion, string, string, IReadOnlyList<ToolCase>)>.Fail(
+                $"A draft is read only from {DraftsRoot}, and {draft} is not in it.");
+        }
+
+        if (ReadYaml<ToolVersion>(Path.Combine(full, "manifest.yaml")) is not { } version)
+        {
+            return OperationResult<(string, ToolVersion, string, string, IReadOnlyList<ToolCase>)>.Fail(
                 $"There is no readable manifest.yaml in {draft}.");
         }
 
-        var scriptPath = Path.GetFullPath(Path.Combine(draft, version.Script));
+        var scriptPath = Path.GetFullPath(Path.Combine(full, version.Script ?? string.Empty));
 
         if (version.Script is not { Length: > 0 }
-            || !scriptPath.StartsWith(Path.GetFullPath(draft) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || !scriptPath.StartsWith(full + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
             || !File.Exists(scriptPath))
         {
-            return OperationResult<(ToolVersion, string, string, IReadOnlyList<ToolCase>)>.Fail(
+            return OperationResult<(string, ToolVersion, string, string, IReadOnlyList<ToolCase>)>.Fail(
                 $"The manifest names no script beside it in {draft}.");
         }
 
-        return OperationResult<(ToolVersion, string, string, IReadOnlyList<ToolCase>)>.Ok(
-            (version, File.ReadAllText(scriptPath), scriptPath, ReadCases(Path.Combine(draft, "cases"))));
+        return OperationResult<(string, ToolVersion, string, string, IReadOnlyList<ToolCase>)>.Ok(
+            (full, version, File.ReadAllText(scriptPath), scriptPath, ReadCases(Path.Combine(full, "cases"))));
+    }
+
+    /// <summary>What a passing verify leaves outside the drafts, for promotion to check.</summary>
+    private sealed record VerifyRecord(string Script, string Cases, DateTimeOffset? At);
+
+    private VerifyRecord? ReadVerified(string name, string version)
+    {
+        try
+        {
+            var file = VerifiedFile(name, version);
+
+            return File.Exists(file) ? JsonSerializer.Deserialize<VerifyRecord>(File.ReadAllText(file), Json) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string Promoted(string script, string cases) => $"script {script} cases {cases}";
+
+    private static (string? Script, string? Cases) ReadPromoted(string? note)
+    {
+        var parts = (note ?? string.Empty).Split(' ');
+
+        return parts is ["script", var script, "cases", var cases] ? (script, cases) : (null, null);
+    }
+
+    /// <summary>
+    /// Takes <c>registry.lock</c>, waiting up to <see cref="LockWait" />, or
+    /// returns null when something else holds it for longer.
+    /// </summary>
+    /// <remarks>
+    /// Every read-modify-write of a head, and every promotion, holds it. Without
+    /// it two writers each read the head, add their own change and write it
+    /// back, and the first one's change is gone: twelve promotions at once lost
+    /// versions from known_good before this was here.
+    /// </remarks>
+    private FileStream? Lock()
+    {
+        Directory.CreateDirectory(Root());
+        var deadline = DateTime.UtcNow + LockWait;
+        var wait = TimeSpan.FromMilliseconds(10);
+
+        while (true)
+        {
+            try
+            {
+                return new FileStream(LockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (DateTime.UtcNow >= deadline)
+                {
+                    return null;
+                }
+
+                Thread.Sleep(wait);
+                wait = TimeSpan.FromMilliseconds(Math.Min(wait.TotalMilliseconds * 2, 250));
+            }
+        }
     }
 
     private static List<ToolCase> ReadCases(string directory)

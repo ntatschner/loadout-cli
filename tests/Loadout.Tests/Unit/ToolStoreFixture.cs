@@ -94,8 +94,17 @@ internal sealed class ToolStoreFixture : IDisposable
     /// <summary>Writes a draft directory and returns where it is.</summary>
     public string Draft(ToolVersion manifest, string script, IEnumerable<ToolCase> cases)
     {
-        var directory = Path.Combine(_root, "drafts", manifest.Name, manifest.Version + "-" + Guid.NewGuid().ToString("N")[..6]);
+        var directory = Path.Combine(Drafts, manifest.Name, manifest.Version + "-" + Guid.NewGuid().ToString("N")[..6]);
 
+        return Write(directory, manifest, script, cases);
+    }
+
+    /// <summary>Where the registry keeps drafts, and the only place it reads them from.</summary>
+    public string Drafts => Path.Combine(Paths.Paths.State, "tools", "drafts");
+
+    /// <summary>Writes a draft into <paramref name="directory" />, wherever that is.</summary>
+    public static string Write(string directory, ToolVersion manifest, string script, IEnumerable<ToolCase> cases)
+    {
         Directory.CreateDirectory(Path.Combine(directory, "cases"));
         File.WriteAllText(Path.Combine(directory, "manifest.yaml"), Writer.Serialize(manifest));
         File.WriteAllText(Path.Combine(directory, manifest.Script), script);
