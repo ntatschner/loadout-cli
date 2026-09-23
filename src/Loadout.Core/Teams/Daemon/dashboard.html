@@ -1471,7 +1471,6 @@
   [aria-labelledby="runs"] > h2 { margin: 0; }
 
   /* The rail's lines: which run, then what it wants, then what clears it. */
-  .lk-rail li p .which { color: var(--ink); font-weight: 700; }
   .lk-rail .lk-count { color: var(--ink-muted); font-weight: 500; }
 
   /*
@@ -1516,65 +1515,13 @@
   .lk-runs .lk-card:not(.is-new) { animation: none; }
 
   /*
-    The title's button covers the whole card, so the card is one target. The
-    card still carries three things of its own - whose desk each chip opens,
-    the reference somebody is about to copy, and Forget - and they sit above
-    that cover, or a click on any of them would open the run instead.
+    The title's button covers the whole card, so the card is one target. A
+    finished card still carries two things of its own - the reference
+    somebody is about to copy, and Forget - and they sit above that cover, or
+    a click on either would open the run instead.
   */
-  .lk-card .roster, .lk-card .ident, .lk-card .forget-one { position: relative; z-index: 1; }
-
-  .lk-card-meta .team { color: var(--ink); font-weight: 600; }
-
-  .lk-card .shapes {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--space-3);
-    margin: 0;
-  }
-
-  /* ---- name plates ---- */
-
-  .roster {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
-    list-style: none;
-    margin: 0;
-    padding: var(--space-2) 0 0;
-    border-top: var(--lk-border) solid var(--line);
-  }
-
-  /*
-    A desk plate rather than a badge: a rectangle with a rule round it and the
-    initials on it, because this is an office and that is what the thing on a
-    desk is.
-
-    Forty pixels wide and tall. Its edge is line-strong and not line, and that
-    is deliberate: the plate's fill differs from the card behind it by very
-    little, so the edge is the only thing saying the plate is there, and a
-    boundary that identifies a control has to reach 3 to 1. This has been got
-    wrong twice.
-  */
-  .roster .chip {
-    font-family: var(--font-mono);
-    font-size: var(--type-label-size);
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: var(--ink);
-    min-width: 2.5rem;
-    height: 2.5rem;
-    display: grid;
-    place-items: center;
-    padding: 0 0.3rem;
-    border: var(--lk-border) solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    background: var(--surface-2);
-    cursor: pointer;
-  }
-
-  .roster .chip:hover { border-color: var(--accent-text); color: var(--accent-text); }
-
-  .lk-card .ident-line { margin: 0; font-size: var(--type-small-size); color: var(--ink-muted); }
+  .lk-card .ident-line { position: relative; z-index: 1; margin: 0; font-size: var(--type-small-size); color: var(--ink-muted); }
+  .lk-card-meta .lk-dot { margin-right: 2px; }
 
   /*
     The plain page's rows. The same card, and the same words; what the plain
@@ -1592,47 +1539,6 @@
   /* How many times in a row the same line came back, rather than the same
      line forty times. */
   .again { color: var(--ink-muted); font-weight: 700; }
-
-  /* ---- the drawings ----
-     Every one is aria-hidden, and every number in them is written out in
-     words on the same card. They carry nothing on their own, which is exactly
-     why they are allowed to be pictures - and why the plain page, which is
-     the words, leaves them out. */
-
-  [data-presentation="plain"] .viz { display: none; }
-
-  .viz.strip {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 1.6rem;
-    padding-bottom: 2px;
-    border-bottom: var(--lk-border) solid var(--line);
-    flex: 0 0 auto;
-  }
-
-  .viz.strip .round {
-    display: block;
-    width: 0.375rem;
-    border-radius: 2px 2px 0 0;
-    background: color-mix(in srgb, var(--s, var(--status-done)) 55%, transparent);
-  }
-
-  .viz.strip .round.live { background: var(--s, var(--status-run)); }
-
-  .viz.budget { flex: 1 1 6rem; max-width: 16rem; align-self: center; }
-  .viz.budget .lk-meter-track { position: relative; }
-
-  .viz.budget .mark {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: var(--ink);
-    opacity: 0.55;
-  }
-
-  .viz.share { height: 0.35rem; }
 
   /* ---- the office ----
      Shape first and no art at all: every desk is a real element carrying its
@@ -1716,7 +1622,11 @@
      on a machine with no office pack, which is the default. */
   .room .floor.bare { padding: 0.75rem; container-type: normal; }
 
-  .desks { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-3); margin: 0; padding: 0; }
+  .desks:not(.lk-desks) { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-3); margin: 0; padding: 0; }
+
+  /* Without a scene the kit's room is the floor, so the floor draws no box
+     of its own inside it. */
+  .room .floor.bare { border: 0; }
 
   /* The desks of a room that knows where its desks are. */
   .desks.placed { display: block; position: absolute; inset: 0; }
@@ -1810,7 +1720,7 @@
     pasted over a photograph. So the button itself carries nothing: the
     sprite stands on the floor and the words sit on a plate of their own.
   */
-  .desk {
+  .desk:not(.lk-desk) {
     position: relative;
     display: grid;
     justify-items: center;
@@ -1827,7 +1737,12 @@
     cursor: pointer;
   }
 
-  .desk:hover { border-color: var(--line-strong); }
+  .desk:not(.lk-desk):hover { border-color: var(--line-strong); }
+
+  /* The kit's desk is a button here, because pressing it opens the run. */
+  .lk-desk { position: relative; font: inherit; color: inherit; cursor: pointer; width: 100%; }
+  .lk-desk:hover { border-color: var(--line-strong); }
+  .lk-desk.desk .plate { display: grid; gap: 2px; justify-items: center; background: none; border: 0; padding: 0; }
 
   /*
     The plate. Opaque, and deliberately so: this is what the desk's words are
@@ -1844,12 +1759,12 @@
   }
 
   /* The word first and the colour second, here as everywhere else. */
-  .desk .who { display: block; font-weight: 700; font-size: var(--type-small-size); }
+  .desk .who { display: block; font-weight: 700; font-size: var(--type-small-size); color: var(--ink); }
   .desk .state { display: block; font-size: var(--type-label-size); font-weight: 650; color: var(--s, var(--ink-muted)); }
   /* Somebody who has left keeps their words at full strength - dimming the
      whole desk took the word under it below 4.5 to 1 in the light themes -
      and is marked by the dashed plate and the quieter art instead. */
-  .desk.gone .plate { border-style: dashed; }
+  .desk:not(.lk-desk).gone .plate { border-style: dashed; }
 
   /*
     Where a sprite goes when there is one: a background on the desk, with the
@@ -1861,32 +1776,7 @@
     something failed. The state is written under it on the plate regardless;
     the bay is a picture of it, not a replacement for it.
   */
-  .desk .sprite {
-    position: relative;
-    display: block;
-    width: 40px;
-    height: 40px;
-    box-sizing: border-box;
-    border: 2px solid var(--brand-steel);
-    border-radius: 10px;
-  }
-
-  .desk[data-state="run"] .sprite:not(.drawn) { background: var(--s); border-color: var(--s); }
-  .desk[data-state="wait"] .sprite:not(.drawn) { border-color: var(--s); }
-  .desk[data-state="done"] .sprite:not(.drawn) { border-color: var(--s); }
-  .desk[data-state="fail"] .sprite:not(.drawn) { border-color: var(--s); border-style: dashed; }
-
-  .desk[data-state="wait"] .sprite:not(.drawn)::after {
-    content: "";
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
-    background: var(--s);
-    box-shadow: 0 0 0 2px var(--surface-1);
-  }
+  .desk .sprite { position: relative; }
 
   /*
     With art in it. The border goes, because a square drawn round a character
@@ -1905,6 +1795,7 @@
        than the room says a person is, and stood a pixel below the coordinate
        it was anchored to. Small, and in every room, and enough to put everyone
        slightly out of register with the furniture drawn in front of them. */
+    display: block;
     border: 0;
     border-radius: 0;
     background-repeat: no-repeat;
@@ -2010,32 +1901,27 @@
      then next - and a wrapped grid has no order to read. */
 
   .queue > li + li { border-top: var(--lk-border) solid var(--line); }
-  .queue .lk-queue-item { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+
+  /* A line that wraps rather than the kit's fixed columns, because a row
+     here may carry art, a Stop button and a reason as well: when, what, the
+     state as a word, then the reason on a line of its own. */
+  .queue .lk-queue-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+  .queue .lk-what { flex: 1 1 14rem; min-width: 0; }
+  .queue .lk-why { flex-basis: 100%; margin: 0; padding-left: calc(9.5rem + var(--space-4)); }
 
   /* Held is not a colour. A paused schedule and a blocked task say so in
      words on the row; the dashes are the second encoding, not the first. */
   .queue .item.held { outline: var(--lk-border) dashed var(--line-strong); outline-offset: -4px; }
 
-  .queue .who { display: block; font-weight: 700; font-size: var(--type-body-size); }
+  .queue .who { display: block; font-size: var(--type-body-size); }
   .queue .why { display: block; font-size: var(--type-small-size); color: var(--ink-muted); }
-  .queue .when { font-family: var(--font-mono); font-size: var(--type-small-size); font-weight: 600; white-space: nowrap; }
-  .queue .body { min-width: 0; }
-  .queue .kind { font-size: var(--type-small-size); color: var(--ink-muted); }
+  .queue .when { flex: none; width: 9.5rem; font-family: var(--font-mono); font-size: var(--type-small-size); font-weight: 600; }
   .queue .empty { padding: var(--space-3) var(--lk-pad); color: var(--ink-muted); }
 
-  .queue .sprite {
-    display: block;
-    width: 1.5rem;
-    height: 1.5rem;
-    border: 2px solid var(--brand-steel);
-    border-radius: 6px;
-  }
-
   .queue .sprite.drawn {
+    display: block;
     width: 2rem;
     height: 3rem;
-    border: 0;
-    border-radius: 0;
     background-repeat: no-repeat;
     background-position: center bottom;
     background-size: contain;
@@ -2043,8 +1929,8 @@
   }
 
   @media (max-width: 40rem) {
-    .queue .lk-queue-item { grid-template-columns: auto minmax(0, 1fr); }
-    .queue .lk-queue-item .when, .queue .lk-queue-item .queue-stop { grid-column: 2; justify-self: start; }
+    .queue .when { width: auto; flex-basis: 100%; }
+    .queue .lk-why { padding-left: 0; }
   }
 
   /* ---- the terminal ----
@@ -2052,9 +1938,8 @@
      pane shows for a node you picked, except this picks the one worth
      watching on its own - the newest running node on the machine. */
 
-  .lk-terminal .who { margin: 0; font-weight: 700; }
+  .lk-terminal .who { margin: 0; }
   .lk-terminal-body { min-height: 12rem; }
-  .lk-terminal-body p { margin: 0; }
 
   /* ---- the board ----
      Several screens at once, which is what a machine with four teams on it
@@ -2094,9 +1979,19 @@
     .board { grid-template-columns: minmax(0, 1fr); }
   }
 
-  #choices { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
-  #choices label { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 2.5rem; cursor: pointer; }
-  #choices input[type="checkbox"] { width: 1.25rem; height: 1.25rem; margin: 0; cursor: pointer; accent-color: var(--accent-text); }
+  /* A checkbox drawn by the kit's choice card is square, and ticked rather
+     than dotted, so it is never taken for a radio button: several of these
+     can be on at once. */
+  .lk-choice input[type="checkbox"] { border-radius: 4px; }
+  .lk-choice input[type="checkbox"]::after {
+    width: 10px;
+    height: 10px;
+    border-radius: 0;
+    background: var(--accent-text);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 6.5 4.5 9.5 10.5 2.5' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 6.5 4.5 9.5 10.5 2.5' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  #choices .lk-choices + .lk-choices { margin-top: var(--space-4); }
 
   /*
     One screen on its own, for a window dragged onto a second monitor. The
@@ -2112,20 +2007,12 @@
      took, so a machine's afternoon reads at a glance: what overlapped, what
      sat there, and what the day cost. */
 
-  #when > h3 { margin-top: var(--space-5); }
-  #when > h3:first-child { margin-top: 0; }
-
-  .when { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-1); }
-
-  .when li {
-    display: grid;
-    grid-template-columns: 11rem minmax(0, 1fr) 5rem;
-    gap: var(--space-3);
-    align-items: center;
-  }
-
-  .when .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--type-small-size); font-weight: 650; }
-  .when .spent { text-align: right; font-size: var(--type-small-size); color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  /* The day's name and its totals in columns wide enough to be read without
+     breaking every word, either side of the track. */
+  .lk-timeline .lk-day { grid-template-columns: 9rem minmax(0, 1fr) 9rem; align-items: start; }
+  .lk-timeline .lk-day > h3 { padding-top: 6px; }
+  .lk-timeline .lk-day > p { padding-top: 6px; }
+  .when-track { min-width: 0; }
 
   /*
     Tall enough to hit. These were sixteen pixels high and as little as three
@@ -2133,16 +2020,16 @@
     and there are twelve of them on a day with twelve runs.
 
     The height is free to change, because it says nothing: only the width
-    means anything here, and it means how long the run took. So the track is
-    made tall enough for a bar of twenty-six pixels, above the kit's own, and
-    the width is left alone, because widening a short run to make it easier to
+    means anything here, and it means how long the run took. So each lane is
+    tall enough for a bar of twenty-six pixels, above the kit's own, and the
+    width is left alone, because widening a short run to make it easier to
     click would be the bar telling a lie about the thing it exists to show. A
     run too brief to have a wide bar is reachable by its own button in the
     list, which is the same action by another route.
   */
-  .when .lk-track { height: 2.25rem; }
-
-  .when .lk-span {
+  .when-track .lk-span {
+    bottom: auto;
+    height: 26px;
     border: 0;
     padding: 0;
     font: inherit;
@@ -2155,40 +2042,19 @@
   .ruler {
     display: flex;
     justify-content: space-between;
-    margin: var(--space-1) 5rem var(--space-2) calc(11rem + var(--space-3));
-    padding-right: var(--space-3);
+    margin: var(--space-1) 0 0;
     color: var(--ink-muted);
     font-size: var(--type-label-size);
     font-variant-numeric: tabular-nums;
   }
 
-  @media (max-width: 40rem) {
-    .when li { grid-template-columns: minmax(0, 1fr) auto; }
-    .when .track { grid-column: 1 / -1; grid-row: 2; }
-    .ruler { margin-left: 0; margin-right: 0; padding-right: 0; }
-  }
-
-  /* ---- the graph ----
-     The delegation tree, hand-drawn in SVG. Every node is a link, focusable
-     in tree order, with the whole of what it says in its accessible name. */
-  .graph { display: block; width: 100%; height: auto; }
-  .graph .edge { stroke: var(--line-strong); stroke-width: 1.5; fill: none; }
-  .graph .edge.live { stroke: var(--status-run); stroke-width: 2; }
-  .graph text { fill: var(--ink); font-family: var(--font-sans); font-size: 11px; }
-  .graph .box { fill: var(--surface-2); stroke: var(--line-strong); stroke-width: 1; }
-  .graph .box.going { stroke: var(--status-run); stroke-width: 2; }
-
-  /* A node stopped on a question: amber, dashed and heavier, so it is told
-     apart from a working one by its line as well as by its colour. */
-  .graph .box.stuck { stroke: var(--status-wait); stroke-width: 3; stroke-dasharray: 5 3; }
-  .graph a:focus-visible { outline: none; }
-  .graph a:focus-visible .box { stroke: var(--focus); stroke-width: 3; stroke-dasharray: none; }
+  /* ---- the graph ---- */
   #graph > h3 { margin-top: var(--space-5); }
   #graph > h3:first-child { margin-top: 0; }
 
   /* ---- the detail pane ---- */
 
-  #detail > h2 { margin: 0; }
+  #detail-facts .lk-badge { margin-right: var(--space-1); vertical-align: middle; }
 
   /* Each criterion on its own row, its verdict written as a word beside a
      colour rather than only as one - the page's standing rule, and the
@@ -2229,7 +2095,7 @@
   #set-trusted { flex-direction: column; align-items: stretch; }
   #set-trusted li { justify-content: space-between; font-size: var(--type-small-size); }
 
-  .lk-log p { margin: 0; padding: var(--space-1) var(--space-2); font-size: var(--type-small-size); line-height: 1.5; overflow-wrap: anywhere; }
+  .lk-msg p { overflow-wrap: anywhere; }
 
   /*
     The numbers that change a decision. Big enough to read from across a room,
@@ -2352,9 +2218,9 @@
   /* And one using a forced-colours mode keeps their own, with the borders
      still drawn. */
   @media (forced-colors: active) {
-    .run, .desk, .roster .chip, .lk-log, .paper, .lk-meter-track { border: 1px solid CanvasText; }
+    .run, .desk, .lk-log, .paper, .lk-meter-track, .lk-node { border: 1px solid CanvasText; }
     .add, .drop, .hunk { color: CanvasText; }
-    .bars .bar, .viz.strip .round { background: CanvasText; forced-color-adjust: none; }
+    .bars .bar { background: CanvasText; forced-color-adjust: none; }
 
     /* Held keeps its dashes here too: in a mode that throws every colour
        away, the shape of the border is the only thing left carrying it, and
@@ -2362,10 +2228,8 @@
     .queue .item.held { outline: 1px dashed CanvasText; }
     .lk-tab[aria-pressed="true"] { border: 3px solid Highlight; }
     .lk-segment [role="tab"][aria-selected="true"], .papers .lk-btn[aria-pressed="true"] { border-bottom: 3px solid Highlight; }
-    .graph .box { stroke: CanvasText; fill: Canvas; }
-    .graph .edge { stroke: CanvasText; }
-    .graph text { fill: CanvasText; }
-    .desk .sprite:not(.drawn) { border-color: CanvasText; }
+    .lk-edge { stroke: CanvasText; }
+    .lk-desk-bay { border-color: CanvasText; }
   }
 </style>
 </head>
@@ -2424,12 +2288,63 @@
   <dl id="totals" class="totals lk-metrics"></dl>
 
   <section id="rail" class="pane lk-rail" hidden aria-labelledby="rail-heading">
-    <h2 id="rail-heading"><span class="lk-glyph" data-state="wait" aria-hidden="true"></span>Needs you</h2>
+    <h2 id="rail-heading"><span class="lk-glyph" data-state="wait" aria-hidden="true"></span>Needs you <span class="lk-count" id="rail-count"></span></h2>
     <ul id="rail-list"></ul>
   </section>
 
   <section class="pane" aria-labelledby="runs">
-    <h2 id="runs">Runs on this machine</h2>
+    <!--
+      The heading every screen is named by, said to a screen reader and moved
+      to when a screen is chosen. Out of sight, as the kit draws it: the tab
+      that is lit already says which screen this is, and a second title above
+      it pushed the screen itself down a line for nobody who can see the tabs.
+    -->
+    <h2 id="runs" class="lk-sr">Runs on this machine</h2>
+
+    <!-- Straight under Needs you, as the kit lays the page out: the screens
+         first, then what the chosen screen holds, so choosing one is never
+         more than the next thing down. -->
+    <!-- A navigation landmark, not a group of buttons that happen to be next
+         to each other. These eight are the whole of this page's navigation,
+         and without this there was nothing for a screen reader to jump to:
+         one banner, one main, and no way to reach the view switcher except by
+         tabbing past everything above it.
+
+         Buttons that say which is pressed, rather than the kit's links: each
+         screen already has an address, which Back and a bookmark use, and
+         the buttons already switch to it and move the focus to its heading. -->
+    <nav class="views" aria-label="Where to go">
+      <div class="lk-tabs">
+        <button type="button" id="view-list" class="lk-tab" aria-pressed="true">List</button>
+        <button type="button" id="view-office" class="lk-tab" aria-pressed="false">Office</button>
+        <button type="button" id="view-graph" class="lk-tab" aria-pressed="false">Graph</button>
+        <button type="button" id="view-when" class="lk-tab" aria-pressed="false">Timeline</button>
+        <!-- The count rides on this tab only, and inside its name, so it is
+             read aloud with it: "Waiting 2". -->
+        <button type="button" id="view-waiting" class="lk-tab" aria-pressed="false">Waiting <span class="lk-count" id="waiting-count" hidden></span></button>
+        <button type="button" id="view-terminal" class="lk-tab" aria-pressed="false">Terminal</button>
+        <button type="button" id="view-board" class="lk-tab" aria-pressed="false">Board</button>
+
+        <!--
+          A destination rather than a dialog. It is a page of its own with
+          headings and groups, which is a thing somebody can link to, read in
+          order and leave without losing where they were.
+        -->
+        <button type="button" id="view-settings" class="lk-tab" aria-pressed="false">Settings</button>
+      </div>
+    </nav>
+
+
+
+    <section id="settings" hidden aria-labelledby="settings-heading"></section>
+
+    <details class="adding lk-disclosure" id="adding" hidden>
+      <summary>Which screens are on the board</summary>
+      <div class="lk-disclosure-body" id="choices"></div>
+    </details>
+
+    <div class="board" id="board" hidden></div>
+
 
     <!--
       Two forms, not one.
@@ -2785,43 +2700,10 @@
         </div>
       </form>
     </dialog>
-    <!-- A navigation landmark, not a group of buttons that happen to be next
-         to each other. These eight are the whole of this page's navigation,
-         and without this there was nothing for a screen reader to jump to:
-         one banner, one main, and no way to reach the view switcher except by
-         tabbing past everything above it.
+    <ul class="runs lk-runs" id="list" aria-describedby="status"></ul>
 
-         Buttons that say which is pressed, rather than the kit's links: each
-         screen already has an address, which Back and a bookmark use, and
-         the buttons already switch to it and move the focus to its heading. -->
-    <nav class="views" aria-label="Where to go">
-      <div class="lk-tabs">
-        <button type="button" id="view-list" class="lk-tab" aria-pressed="true">List</button>
-        <button type="button" id="view-office" class="lk-tab" aria-pressed="false">Office</button>
-        <button type="button" id="view-graph" class="lk-tab" aria-pressed="false">Graph</button>
-        <button type="button" id="view-when" class="lk-tab" aria-pressed="false">Timeline</button>
-        <button type="button" id="view-waiting" class="lk-tab" aria-pressed="false">Waiting</button>
-        <button type="button" id="view-terminal" class="lk-tab" aria-pressed="false">Terminal</button>
-        <button type="button" id="view-board" class="lk-tab" aria-pressed="false">Board</button>
-
-        <!--
-          A destination rather than a dialog. It is a page of its own with
-          headings and groups, which is a thing somebody can link to, read in
-          order and leave without losing where they were.
-        -->
-        <button type="button" id="view-settings" class="lk-tab" aria-pressed="false">Settings</button>
-      </div>
-    </nav>
-
-    <section id="settings" hidden aria-labelledby="settings-heading"></section>
-
-    <details class="adding lk-disclosure" id="adding" hidden>
-      <summary>Which screens are on the board</summary>
-      <div class="lk-disclosure-body" id="choices"></div>
-    </details>
-
-    <div class="board" id="board" hidden></div>
-
+    <!-- After the runs rather than above them. It deletes more than anything
+         else on this page, and the list is what somebody came to read. -->
     <!--
       Clearing out in a batch.
 
@@ -2882,8 +2764,6 @@
         </div>
       </div>
     </details>
-
-    <ul class="runs lk-runs" id="list" aria-describedby="status"></ul>
 
     <ul class="rooms lk-rooms" id="office" hidden></ul>
 
@@ -3017,7 +2897,17 @@
   </section>
 
   <section id="detail" class="pane lk-pane" hidden aria-labelledby="detail-heading">
-    <h2 id="detail-heading">Run</h2>
+    <!-- Which run, its state as a word, and a line of facts about it. The
+         identifier is on the card that opened this and in every command;
+         a heading is read, not copied. -->
+    <div class="lk-pane-head">
+      <h2 id="detail-heading">Run</h2>
+      <p id="detail-facts"></p>
+    </div>
+
+    <!-- The question first, when there is one: it is the only thing on the
+         pane that is waiting on the person reading it. -->
+    <div id="gates"></div>
 
     <!-- What the goal was broken into and where each part got to. Hidden
          entirely for a run given no criteria, which is every run written
@@ -3025,7 +2915,15 @@
          met" rather than "this run does not work that way". -->
     <div id="coverage" hidden></div>
 
-    <div id="gates"></div>
+    <!-- What it has spent against what it may, in words and as a bar. Hidden
+         for a run with no cap, because a bar with no end says nothing the
+         figure beside it does not. The bar is hidden from a screen reader:
+         "$3.10 of $10.00" already says everything it draws. -->
+    <div class="lk-meter" id="detail-budget" role="group" aria-label="Budget" hidden>
+      <div class="lk-meter-head"><span>Spent</span><b id="detail-budget-said"></b></div>
+      <div class="lk-meter-track" aria-hidden="true"><div class="lk-meter-fill" id="detail-budget-fill"></div></div>
+      <p class="lk-meter-note" id="detail-budget-note" hidden></p>
+    </div>
 
     <div id="controls" class="controls lk-controls">
       <div class="lk-btn-row">
@@ -4111,21 +4009,28 @@
     list.textContent = "";
     rail.hidden = wanted.length === 0;
 
+    // How many, in the heading, so moving by heading says it: "Needs you 2".
+    var count = document.getElementById("rail-count");
+
+    if (count) { count.textContent = wanted.length; }
+
     wanted.forEach(function (item) {
       var li = document.createElement("li");
       var line = document.createElement("p");
 
+      // What it wants first, because that is what decides whether to open
+      // it; then which run, and what would clear it.
+      var what = document.createElement("b");
+      what.textContent = item.reason.detail;
+      line.appendChild(what);
+
+      line.appendChild(document.createTextNode(" "));
+
       var which = document.createElement("span");
       which.className = "which";
-      which.textContent = nameOf(item.run) + " · " + properly(item.run.team) + " — ";
+      which.textContent = properly(item.run.team) + " · " + nameOf(item.run)
+        + " · clears when " + item.reason.clears;
       line.appendChild(which);
-
-      line.appendChild(document.createTextNode(item.reason.detail + " "));
-
-      var clears = document.createElement("span");
-      clears.className = "clears";
-      clears.textContent = "(clears when " + item.reason.clears + ")";
-      line.appendChild(clears);
       li.appendChild(line);
 
       // Straight to the run it is about. A line that tells you something is
@@ -4276,109 +4181,6 @@
     }
 
     return span;
-  }
-
-  /*
-    A bar, as a fraction of something.
-
-    Hidden from a screen reader on purpose: the number it draws is written out
-    in words on the same line. Announcing it again would be reading the row
-    twice, and a bar has no wording of its own that is not already there.
-  */
-  function drawn(className, fraction) {
-    var bar = document.createElement("span");
-    bar.className = "viz lk-meter-track " + className;
-    bar.setAttribute("aria-hidden", "true");
-
-    var fill = document.createElement("span");
-    fill.className = "lk-meter-fill";
-    fill.style.setProperty("--v", Math.max(0, Math.min(1, fraction || 0)) * 100 + "%");
-    bar.appendChild(fill);
-
-    return bar;
-  }
-
-  /*
-    The shape of the run: one column per round, as tall as that round was
-    long, with the round still going marked.
-
-    This is the thing a list cannot say and a number cannot either - that
-    round three took four times round two - and every figure in it is already
-    on the page as text.
-  */
-  function rounds(run) {
-    var all = (run.numbers && run.numbers.rounds) || [];
-
-    if (all.length === 0) { return null; }
-
-    var longest = 1;
-
-    all.forEach(function (one) {
-      if (one.seconds > longest) { longest = one.seconds; }
-    });
-
-    var strip = document.createElement("span");
-    strip.className = "viz strip";
-    strip.setAttribute("aria-hidden", "true");
-
-    all.forEach(function (one) {
-      var column = document.createElement("span");
-      column.className = "round" + (one.running ? " live" : "");
-
-      // A floor, so a round that took two seconds is still a mark on the
-      // page rather than a gap somebody reads as a missing round.
-      column.style.height = Math.max(12, Math.round((one.seconds / longest) * 100)) + "%";
-      column.title = "Round " + one.round + ": " + minutes(one.seconds);
-      strip.appendChild(column);
-    });
-
-    return strip;
-  }
-
-  /*
-    Where the money stands. Drawn only when the team set a cap, because a bar
-    with no end is a bar that says nothing: without a budget the figure in the
-    text is the whole of what is known.
-
-    The kit's budget meter without its words, because the card already says
-    what was spent: amber from three quarters, red once it is over, or once
-    it is on course to be. The mark is where it ends up if it uses every
-    round.
-  */
-  function spend(run) {
-    var money = run.numbers && run.numbers.money;
-
-    if (!money || !money.budget) { return null; }
-
-    var share = money.spent / money.budget;
-    var box = document.createElement("span");
-
-    box.className = "viz budget lk-meter";
-    box.setAttribute("aria-hidden", "true");
-
-    if (money.overrunning || share >= 1) {
-      box.setAttribute("data-level", "over");
-    } else if (share >= 0.75) {
-      box.setAttribute("data-level", "high");
-    }
-
-    var track = document.createElement("span");
-    track.className = "lk-meter-track";
-    box.appendChild(track);
-
-    var spent = document.createElement("span");
-    spent.className = "lk-meter-fill";
-    spent.style.setProperty("--v", Math.min(1, share) * 100 + "%");
-    track.appendChild(spent);
-
-    if (money.projected) {
-      var mark = document.createElement("span");
-      mark.className = "mark";
-      mark.style.left = Math.min(1, money.projected / money.budget) * 100 + "%";
-      track.appendChild(mark);
-    }
-
-    return box;
   }
 
   /*
@@ -4645,7 +4447,8 @@
     graph: "Who asked whom",
     when: "Timeline",
     waiting: "Waiting",
-    terminal: "Terminal"
+    terminal: "Terminal",
+    settings: "Settings"
   };
 
   var view = 0;
@@ -4854,10 +4657,24 @@
     holder.style.setProperty("--across", across(boardScreens().length));
 
     if (!boardScreens().length) {
-      var none = document.createElement("p");
+      var none = document.createElement("div");
+      var art = document.createElement("div");
+      var said = document.createElement("h3");
+      var next = document.createElement("p");
 
-      none.className = "lk-help";
-      none.textContent = "No screens on the board. Add one above.";
+      none.className = "lk-empty";
+      art.className = "lk-empty-art";
+      art.setAttribute("aria-hidden", "true");
+
+      for (var bay = 0; bay < 4; bay += 1) { art.appendChild(document.createElement("i")); }
+
+      said.textContent = "No screens on the board";
+      next.textContent = "Choose them above, under Which screens are on the board. "
+        + "Four make a two by two; each keeps its own shape.";
+
+      none.appendChild(art);
+      none.appendChild(said);
+      none.appendChild(next);
       holder.appendChild(none);
     }
   }
@@ -4884,9 +4701,28 @@
 
     where.textContent = "";
 
+    // The kit's choice cards, as real checkboxes in a fieldset that says what
+    // they choose between: the screens, then the offices.
+    function kind(legend) {
+      var set = document.createElement("fieldset");
+      var name = document.createElement("legend");
+
+      set.className = "lk-choices";
+      name.textContent = legend;
+      set.appendChild(name);
+      where.appendChild(set);
+
+      return set;
+    }
+
+    var screens = kind("Screens");
+    var into = screens;
+
     function offer(name, text) {
       var label = document.createElement("label");
       var tick = document.createElement("input");
+
+      label.className = "lk-choice";
 
       tick.type = "checkbox";
       tick.checked = board.open.indexOf(name) >= 0;
@@ -4904,8 +4740,8 @@
       });
 
       label.appendChild(tick);
-      label.appendChild(document.createTextNode(" " + text));
-      where.appendChild(label);
+      label.appendChild(document.createTextNode(text));
+      into.appendChild(label);
     }
 
     views.forEach(function (one) { offer(one.box, titles[one.box] || one.box); });
@@ -4925,11 +4761,7 @@
     teams.sort();
 
     if (teams.length) {
-      var rule = document.createElement("span");
-
-      rule.className = "kind";
-      rule.textContent = "Offices:";
-      where.appendChild(rule);
+      into = kind("Offices");
 
       teams.forEach(function (team) { offer("office:" + team, team); });
     }
@@ -5206,7 +5038,7 @@
     var doingNow = gone ? "left" : (node.activity || node.state);
     var key = doingNow === "waiting for you" ? "wait"
       : node.state === "failed" ? "fail"
-      : gone ? "done"
+      : gone || doingNow === "done" ? "done"
       : node.state === "working" ? "run"
       : null;
 
@@ -5227,6 +5059,21 @@
       sprite.className = "sprite drawn";
       sprite.style.backgroundImage = "url(\"/office/" + encodeURIComponent(set)
         + "/" + encodeURIComponent(drawn) + "?token=" + encodeURIComponent(token) + "\")";
+    } else {
+      // No art: the kit's desk, a card with one of the app icon's bays on it
+      // - a steel outline while idle, filled while working, outlined in amber
+      // with the icon's corner dot while waiting for you, dashed once failed -
+      // and the state's glyph in it. The words under it are the state; the
+      // bay is a picture of it.
+      button.classList.add("lk-desk");
+      sprite.className = "sprite lk-desk-bay";
+
+      if (key) {
+        var glyph = document.createElement("span");
+
+        glyph.className = "lk-glyph";
+        sprite.appendChild(glyph);
+      }
     }
 
     button.appendChild(sprite);
@@ -5247,7 +5094,8 @@
     // implementer/1 in it and none of them can be told apart in conversation;
     // this one is Priya and nobody else is.
     who.className = "who";
-    who.textContent = node.person || node.node;
+    who.textContent = (node.person || node.node)
+      + (node.role === "role.project-lead" ? " \u00b7 lead" : "");
     plate.appendChild(who);
 
     var state = document.createElement("span");
@@ -5323,6 +5171,14 @@
     return api("/api/waiting")
       .then(function (answer) {
         queue = answer.waiting || [];
+
+        // How many are waiting, on the tab that shows them.
+        var count = document.getElementById("waiting-count");
+
+        if (count) {
+          count.textContent = queue.length;
+          count.hidden = queue.length === 0;
+        }
 
         if (views[view].box === "waiting") { drawWaiting(); }
       })
@@ -5406,55 +5262,79 @@
 
       row.className = "item lk-queue-item" + (item.held ? " held" : "");
 
-      var sprite = document.createElement("span");
+      // When first, because the question this screen answers is what happens
+      // next. A task has no time; it is open until somebody does it.
+      var when = document.createElement("span");
+
+      when.className = "when";
+      when.textContent = item.due ? nextTime(item.due) : "open";
+      row.appendChild(when);
+
+      // The waiting area's art, where a set is installed: somebody sitting in
+      // reception. Decorative, and only drawn when there is art to draw.
       var drawn = queuePieceFor(item);
 
-      sprite.className = "sprite";
-      sprite.setAttribute("aria-hidden", "true");
-
       if (drawn) {
+        var sprite = document.createElement("span");
+
         sprite.className = "sprite drawn";
+        sprite.setAttribute("aria-hidden", "true");
         sprite.style.backgroundImage =
           "url(\"/waiting/" + encodeURIComponent(drawn) + "?token=" + encodeURIComponent(token) + "\")";
+        row.appendChild(sprite);
       }
-
-      row.appendChild(sprite);
 
       var body = document.createElement("div");
 
-      body.className = "body";
+      body.className = "body lk-what";
 
-      var who = document.createElement("span");
+      var who = document.createElement("b");
 
       who.className = "who";
       who.textContent = item.title || item.id;
       body.appendChild(who);
 
-      var why = document.createElement("span");
-
       // The kind first, because "schedule" and "task" are the difference
       // between something that will happen on its own and something that
-      // will not happen until somebody does it.
+      // will not happen until somebody does it. What holds it goes on a line
+      // of its own below, in full: "blocked" alone says nothing about why.
+      var why = document.createElement("span");
+
       why.className = "why";
       why.textContent = (item.kind === "schedule"
         ? (item.team ? item.team : "a team") + (item.project ? " on " + item.project : "")
         : "task " + item.id + (item.project ? " in " + item.project : ""))
-        + " - " + item.because;
+        + (item.held ? "" : " \u00b7 " + item.because);
       body.appendChild(why);
 
       row.appendChild(body);
 
-      var when = document.createElement("span");
+      // Its state as a word: a schedule is scheduled until somebody pauses
+      // it, and a task is open until something blocks it.
+      row.appendChild(badge(item.kind === "schedule"
+        ? (item.held ? { word: "paused", key: "stopped" } : { word: "scheduled", key: "held" })
+        : (item.held ? { word: "blocked", key: "fail" } : { word: "open", key: "stopped" })));
 
-      when.className = "when";
-      when.textContent = item.due ? nextTime(item.due) : "";
-      row.appendChild(when);
+      if (item.held) {
+        var held = document.createElement("p");
+        var glyph = document.createElement("span");
+
+        held.className = "lk-why";
+        glyph.className = "lk-glyph";
+        glyph.setAttribute("data-state", "fail");
+        glyph.setAttribute("aria-hidden", "true");
+        held.appendChild(glyph);
+        held.appendChild(document.createTextNode(
+          String(item.because || "").replace(/^(blocked|paused)\s*[:-]\s*/i, "")));
+        row.appendChild(held);
+      }
 
       // Said as one sentence rather than left to whatever a reader makes of
       // three stacked spans.
       row.setAttribute("aria-label",
         (item.title || item.id) + ", " + why.textContent
-        + (when.textContent ? ", " + when.textContent : ""));
+        + (item.held ? ", " + item.because : "")
+        + (item.due ? ", " + when.textContent : ""));
 
       /*
         Stopping one, where this server can.
@@ -5494,7 +5374,9 @@
           });
         });
 
-        row.appendChild(stop);
+        var reason = row.querySelector(".lk-why");
+
+        row.insertBefore(stop, reason);
       }
 
       li.appendChild(row);
@@ -5550,12 +5432,26 @@
       tapeHas = 0;
       box.textContent = "";
 
-      var who = document.createElement("p");
+      // Whose output this is: their state as a word, their name, and where
+      // they are working, which is the room of the run they are in.
+      var who = document.createElement("div");
 
       who.className = "who lk-terminal-bar";
-      who.textContent = node
-        ? node.node + " (" + node.role.replace(/^role\./, "") + ") in " + (run.room || run.id)
-        : "Nothing is running.";
+
+      if (node) {
+        var name = document.createElement("b");
+        var where = document.createElement("span");
+
+        who.appendChild(badge(nodeState(node, run)));
+        name.textContent = node.node;
+        who.appendChild(name);
+        where.className = "lk-where";
+        where.textContent = node.role.replace(/^role\./, "") + " in " + (run.room || run.id);
+        who.appendChild(where);
+      } else {
+        who.textContent = "Nothing is running.";
+      }
+
       box.appendChild(who);
 
       var tape = document.createElement("div");
@@ -5607,9 +5503,15 @@
         var bottom = tape.scrollTop + tape.clientHeight >= tape.scrollHeight - 8;
 
         got.steps.forEach(function (step) {
-          var line = document.createElement("p");
+          var line = document.createElement("span");
 
+          // A tool call is drawn as a command, with the kit's prompt in front
+          // of it, so it is recognisable without its colour; what came back
+          // is quieter; what the node said is plain.
           line.className = "lk-term-line";
+          line.setAttribute("data-kind", step.kind === "tool" ? "cmd"
+            : step.kind === "said" ? "said"
+            : "dim");
           line.textContent = clock(step.at) + "  " + step.kind
             + (step.sub ? " (subagent)" : "")
             + "  " + [step.tool, step.target, step.text].filter(Boolean).join(" ");
@@ -5642,18 +5544,24 @@
 
     li.className = "room lk-room" + (run.running ? "" : " empty");
 
+    // Which room, then whose it is and how it is doing, on one line. What the
+    // run is for is on its card and in the detail pane; a floor plan with a
+    // paragraph over it is a page of words with a room at the bottom.
+    var head = document.createElement("div");
     var name = document.createElement("h3");
 
+    head.className = "lk-room-head";
     name.textContent = run.room || run.id;
-    li.appendChild(name);
+    head.appendChild(name);
 
     var where = document.createElement("p");
 
     where.className = "where";
     where.textContent = run.team + (run.project ? " on " + run.project : "")
-      + " - " + how.word + ". " + (run.goal || "");
+      + " \u00b7 " + how.word;
 
-    li.appendChild(where);
+    head.appendChild(where);
+    li.appendChild(head);
 
     var desks = document.createElement("ul");
     var spare = document.createElement("ul");
@@ -5662,8 +5570,8 @@
     // first in the list, which is why the lead is first in the queue below.
     var places = (plan && plan.desks) || [];
 
-    desks.className = "desks" + (places.length ? " placed" : "");
-    spare.className = "desks";
+    desks.className = "desks" + (places.length ? " placed" : " lk-desks");
+    spare.className = "desks lk-desks";
 
     // The lead first and then its workers, so tabbing through a room follows
     // the shape of the team rather than the order a journal happened to
@@ -5872,15 +5780,12 @@
 
       name.textContent = (run.room || run.id) + " - " + run.team;
       box.appendChild(name);
-
-      // In a bay of its own, which scrolls sideways inside itself when a run
-      // has more workers than the pane is wide, rather than the page doing so.
-      var bay = document.createElement("div");
-
-      bay.className = "lk-graph";
-      bay.appendChild(treeOf(run));
-      box.appendChild(bay);
+      box.appendChild(treeOf(run));
     });
+
+    // The lines are drawn once the nodes are on the page, because where they
+    // go is measured from where the nodes landed.
+    joinAll();
   }
 
   /*
@@ -5998,6 +5903,7 @@
     var box = document.getElementById("when");
 
     box.textContent = "";
+    box.className = "lk-timeline";
 
     var placed = runs.map(function (run) {
       var began = Date.parse(run.started);
@@ -6051,33 +5957,46 @@
       // worth drawing.
       var across = Math.max(60 * 60 * 1000, last - first);
 
+      // The kit's day: its name, one track holding every run that day, and
+      // what the day cost beside it.
+      var row = document.createElement("div");
+      row.className = "lk-day";
+
       var heading = document.createElement("h3");
 
       heading.textContent = new Date(first).toLocaleDateString(undefined,
         { weekday: "long", day: "numeric", month: "long" });
 
-      box.appendChild(heading);
+      row.appendChild(heading);
 
-      var spent = mine.reduce(function (sum, one) { return sum + one.run.cost; }, 0);
+      var holds = document.createElement("div");
+      holds.className = "when-track";
 
-      var sums = document.createElement("p");
+      /*
+        One track, with runs that overlapped given a lane each. Overlap is the
+        thing this screen exists to show - two teams running at once - so a
+        second run on top of the first would hide exactly that. A run takes
+        the first lane that is free when it starts.
+      */
+      var lanes = [];
+      var track = document.createElement("div");
 
-      sums.className = "lk-help";
-      sums.textContent = many(mine.length, "run", "runs") + ", "
-        + spell(Math.round(mine.reduce(function (sum, one) {
-          return sum + (one.ended - one.began);
-        }, 0) / 1000)) + " of running, $" + spent.toFixed(2) + " in all.";
+      track.className = "track lk-track";
 
-      box.appendChild(sums);
+      mine.forEach(function (one) {
+        var lane = 0;
 
-      var list = document.createElement("ul");
+        while (lane < lanes.length && lanes[lane] > one.began) { lane += 1; }
 
-      list.className = "when";
+        lanes[lane] = one.ended;
+        track.appendChild(span(one, first, across, lane));
+      });
 
-      mine.forEach(function (one) { list.appendChild(row(one, first, across)); });
+      track.style.height = "calc(" + lanes.length + " * 2.25rem + 2px)";
+      holds.appendChild(track);
 
-      box.appendChild(list);
-
+      // Three marks across the day's own window, so the bars have something
+      // to be read against rather than being widths with no scale.
       var ruler = document.createElement("p");
 
       ruler.className = "ruler";
@@ -6091,59 +6010,59 @@
         ruler.appendChild(mark);
       });
 
-      box.appendChild(ruler);
+      holds.appendChild(ruler);
+      row.appendChild(holds);
+
+      var spent = mine.reduce(function (sum, one) { return sum + one.run.cost; }, 0);
+
+      var sums = document.createElement("p");
+
+      sums.textContent = many(mine.length, "run", "runs") + " \u00b7 "
+        + spell(Math.round(mine.reduce(function (sum, one) {
+          return sum + (one.ended - one.began);
+        }, 0) / 1000)) + " \u00b7 $" + spent.toFixed(2);
+
+      row.appendChild(sums);
+      box.appendChild(row);
     });
   }
 
-  function row(one, first, across) {
-    var li = document.createElement("li");
+  /*
+    One run on its day's track: placed by when it started and stretched by how
+    long it took, on the lane it was given. A button whose accessible name is
+    the whole sentence, because the bar says nothing at all to anybody who
+    cannot see where it starts - and the run's name is only in that sentence
+    and on the bar's tooltip, as the kit draws it.
+
+    Told apart by texture as well as colour: running is striped, failed
+    hatched, done solid and quieter.
+  */
+  function span(one, first, across, lane) {
     var how = state(one.run);
-
-    var name = document.createElement("span");
-
-    name.className = "name";
-    name.textContent = one.run.room || one.run.id;
-    li.appendChild(name);
-
-    var track = document.createElement("span");
-
-    track.className = "track lk-track";
-
-    var span = document.createElement("button");
+    var bar = document.createElement("button");
     var took = Math.max(0, one.ended - one.began);
+    var name = one.run.room || one.run.id;
 
-    // Told apart by texture as well as colour: running is striped, failed
-    // hatched, done solid and quieter. The accessible name below says it in
-    // words either way.
-    span.type = "button";
-    span.className = "span lk-span";
-    span.setAttribute("data-state", how.key);
-    span.style.left = ((one.began - first) / across * 100) + "%";
+    bar.type = "button";
+    bar.className = "span lk-span";
+    bar.setAttribute("data-state", how.key);
+    bar.style.left = ((one.began - first) / across * 100) + "%";
+    bar.style.top = "calc(" + lane + " * 2.25rem + 5px)";
 
     // Never narrower than something that can be clicked, and never so wide
     // that it runs off the end of the day it is in.
-    span.style.width = Math.min(
+    bar.style.width = Math.min(
       100 - ((one.began - first) / across * 100),
       Math.max(1.5, took / across * 100)) + "%";
 
-    // The whole sentence, because the bar says nothing at all to anybody who
-    // cannot see where it starts.
-    span.setAttribute("aria-label", (one.run.room || one.run.id) + ", " + one.run.team
+    bar.title = name + " - " + properly(one.run.team);
+    bar.setAttribute("aria-label", name + ", " + one.run.team
       + ", " + how.word + ", started " + new Date(one.began).toLocaleTimeString()
       + ", " + spell(Math.round(took / 1000)) + ", $" + one.run.cost.toFixed(2));
 
-    span.addEventListener("click", function () { watch(one.run); });
+    bar.addEventListener("click", function () { watch(one.run); });
 
-    track.appendChild(span);
-    li.appendChild(track);
-
-    var money = document.createElement("span");
-
-    money.className = "spent";
-    money.textContent = "$" + one.run.cost.toFixed(2);
-    li.appendChild(money);
-
-    return li;
+    return bar;
   }
 
   function svg(name, into) {
@@ -6154,95 +6073,142 @@
     return made;
   }
 
+  /*
+    How a node is doing, as the kit's state key: waiting for you if a gate is
+    on it, running while it works, done or failed once it has finished, and
+    quiet otherwise.
+  */
+  function nodeState(node, run) {
+    var stuck = (run.gates || []).some(function (gate) { return gate.node === node.node; });
+
+    if (stuck) { return { word: "waiting for you", key: "wait" }; }
+    if (node.state === "working") { return { word: node.activity || "working", key: "run" }; }
+    if (node.state === "failed") { return { word: "failed", key: "fail" }; }
+    if (node.state === "done" || node.state === "reported" || node.activity === "done") {
+      return { word: node.activity || node.state, key: "done" };
+    }
+
+    return { word: node.activity || node.state, key: "stopped" };
+  }
+
+  /*
+    One run's delegation tree, as the kit draws it: the lead on a tier of its
+    own and its workers on the tier under it, each a card carrying who it is,
+    its role and what it has cost, and its state as a word. Every card is a
+    button that opens the run.
+
+    The lines between them are drawn in an SVG behind the cards and hidden
+    from a screen reader, which is given the same relationships as a list
+    instead: a line on a screen is not something anybody can listen to.
+  */
   function treeOf(run) {
     var nodes = (run.nodes || []).slice();
     var lead = nodes.filter(function (n) { return n.role === "role.project-lead"; })[0];
     var workers = nodes.filter(function (n) { return n !== lead; });
 
-    var wide = Math.max(1, workers.length);
-    var width = Math.max(320, wide * 150);
-    var height = 190;
+    var graph = document.createElement("div");
+    graph.className = "lk-graph";
+    graph.setAttribute("role", "group");
+    graph.setAttribute("aria-label", "Who asked whom in " + (run.room || run.id));
 
-    var picture = svg("svg");
+    var lines = svg("svg", graph);
+    lines.setAttribute("class", "lk-edges");
+    lines.setAttribute("aria-hidden", "true");
 
-    picture.setAttribute("class", "graph");
-    picture.setAttribute("viewBox", "0 0 " + width + " " + height);
+    function card(node) {
+      var how = nodeState(node, run);
+      var button = document.createElement("button");
+      var name = document.createElement("b");
+      var role = document.createElement("span");
 
-    /*
-      Drawn at its own size rather than stretched to the pane. The viewBox is
-      as wide as the tree needs, and width: 100% alone scales that to whatever
-      space there is - so a run with one node was blown up four and a half
-      times and one with four workers only twice, and two rooms on the same
-      screen drew their boxes at visibly different sizes. Capping the width at
-      the viewBox keeps every box the same size in every room, and the 100% in
-      the stylesheet still shrinks it when the pane is narrower than the tree.
-    */
-    picture.style.maxWidth = width + "px";
-    picture.setAttribute("role", "group");
-    picture.setAttribute("aria-label", "Who asked whom in " + (run.room || run.id));
+      button.type = "button";
+      button.className = "lk-node";
+      button.setAttribute("data-node", node.node);
 
-    // The edges first so the boxes sit on top of them.
-    workers.forEach(function (worker, i) {
-      var line = svg("path", picture);
-      var x = (i + 0.5) * (width / wide);
+      if (how.key === "wait") { button.setAttribute("data-state", "wait"); }
 
-      line.setAttribute("class", "edge" + (worker.state === "working" ? " live" : ""));
-      line.setAttribute("d", "M " + (width / 2) + " 62 C " + (width / 2) + " 100, " + x + " 90, " + x + " 118");
-    });
+      name.textContent = who(node);
+      button.appendChild(name);
 
-    if (lead) { box(picture, lead, width / 2, 20, run); }
+      role.className = "lk-role";
+      role.textContent = properly(node.role) + " \u00b7 " + node.node + " \u00b7 $" + (node.cost || 0).toFixed(2);
+      button.appendChild(role);
 
-    workers.forEach(function (worker, i) {
-      box(picture, worker, (i + 0.5) * (width / wide), 118, run);
-    });
+      button.appendChild(badge(how));
+      button.addEventListener("click", function () { watch(run); });
 
-    return picture;
-  }
+      return button;
+    }
 
-  function box(picture, node, x, y, run) {
-    var link = svg("a", picture);
-    var rect = svg("rect", link);
-    var stuck = (run.gates || []).some(function (gate) { return gate.node === node.node; });
+    var top = document.createElement("div");
+    top.className = "lk-tier";
+    if (lead) { top.appendChild(card(lead)); }
+    graph.appendChild(top);
 
-    link.setAttribute("tabindex", "0");
-    link.setAttribute("role", "button");
-    link.setAttribute("aria-label", node.node + ", " + node.role.replace(/^role\./, "")
-      + ", " + (node.activity || node.state) + ", $" + (node.cost || 0).toFixed(2)
-      + (stuck ? ", waiting for you" : ""));
+    if (workers.length) {
+      var under = document.createElement("div");
+      under.className = "lk-tier";
+      workers.forEach(function (worker) { under.appendChild(card(worker)); });
+      graph.appendChild(under);
+    }
 
-    rect.setAttribute("class", "box"
-      + (stuck ? " stuck" : node.state === "working" ? " going" : ""));
-    rect.setAttribute("x", x - 62);
-    rect.setAttribute("y", y);
-    rect.setAttribute("width", 124);
-    rect.setAttribute("height", 46);
-    rect.setAttribute("rx", 4);
+    // The same relationships in words, for somebody who cannot see a line.
+    var said = document.createElement("ul");
+    said.className = "lk-sr";
 
-    // The box is 124 wide. "waiting on strategist, scheduler" is not, and the
-    // full list is in the label a screen reader reads and on the card.
-    var now = node.activity || node.state;
+    workers.forEach(function (worker) {
+      var how = nodeState(worker, run);
+      var li = document.createElement("li");
 
-    if (now.indexOf("waiting on ") === 0 && now.length > 20) { now = "waiting on others"; }
+      li.textContent = (lead ? who(lead) : "The lead") + " asked " + who(worker) + ": " + how.word + ".";
+      said.appendChild(li);
 
-    [node.node, now + ", $" + (node.cost || 0).toFixed(2)].forEach(function (line, i) {
-      var text = svg("text", link);
+      if (lead) {
+        var edge = svg("path", lines);
 
-      text.setAttribute("x", x);
-      text.setAttribute("y", y + 19 + (i * 15));
-      text.setAttribute("text-anchor", "middle");
-      text.textContent = line;
-    });
+        edge.setAttribute("class", "lk-edge");
+        edge.setAttribute("data-from", lead.node);
+        edge.setAttribute("data-to", worker.node);
 
-    function open() { watch(run); }
-
-    link.addEventListener("click", open);
-    link.addEventListener("keydown", function (event) {
-      if (event.key === "Enter" || event.key === " ") {
-        open();
-        event.preventDefault();
+        if (how.key === "wait" || how.key === "run") { edge.setAttribute("data-state", how.key); }
       }
     });
+
+    graph.appendChild(said);
+
+    return graph;
   }
+
+  /*
+    Draws the lines of every graph on the page, from the bottom of the lead's
+    card to the top of each worker's, measured after layout - which is why it
+    runs after the cards are placed and again when the window changes size.
+  */
+  function joinAll() {
+    document.querySelectorAll(".lk-graph").forEach(function (graph) {
+      var box = graph.getBoundingClientRect();
+
+      graph.querySelectorAll(".lk-edge").forEach(function (edge) {
+        var from = graph.querySelector("[data-node=\"" + edge.getAttribute("data-from") + "\"]");
+        var to = graph.querySelector("[data-node=\"" + edge.getAttribute("data-to") + "\"]");
+
+        if (!from || !to) { return; }
+
+        var a = from.getBoundingClientRect();
+        var b = to.getBoundingClientRect();
+        var x1 = a.left + a.width / 2 - box.left + graph.scrollLeft;
+        var y1 = a.bottom - box.top + graph.scrollTop;
+        var x2 = b.left + b.width / 2 - box.left + graph.scrollLeft;
+        var y2 = b.top - box.top + graph.scrollTop;
+        var middle = (y1 + y2) / 2;
+
+        edge.setAttribute("d", "M" + x1 + " " + y1 + " C" + x1 + " " + middle + " "
+          + x2 + " " + middle + " " + x2 + " " + y2);
+      });
+    });
+  }
+
+  window.addEventListener("resize", joinAll);
 
   function draw(runs) {
     shown = runs;
@@ -6307,12 +6273,12 @@
 
     band.textContent = "";
 
-    total(band, "going", going === 1 ? "run going" : "runs going", going, going > 0 ? "run" : "");
-    total(band, "wants", wants === 1 ? "run needs you" : "runs need you", wants, wants > 0 ? "wait" : "");
-    total(band, "spent", "spent across them", "$" + spent.toFixed(2), "");
+    total(band, "going", "Running", going, going > 0 ? "run" : "");
+    total(band, "wants", "Waiting for you", wants, wants > 0 ? "wait" : "");
+    total(band, "spent", "Spent", "$" + spent.toFixed(2), "");
 
     if (rate > 0) {
-      total(band, "rate", "a minute, right now", "$" + rate.toFixed(2), "run");
+      total(band, "rate", "Spending a minute", "$" + rate.toFixed(2), "run");
     }
   }
 
@@ -6906,6 +6872,20 @@
     elsewhere.appendChild(how);
   }
 
+  /*
+    The live line in the top bar: that the page is live, then how many runs
+    are going and how many are waiting for you. The two numbers somebody
+    glancing at the bar wants, in words, in a region that exists from the
+    first paint.
+  */
+  function live(runs) {
+    var going = runs.filter(function (one) { return one.running; }).length;
+    var waiting = runs.filter(function (one) { return (one.attention || []).length > 0; }).length;
+
+    return "Live \u00b7 " + going + " running, " + waiting + " waiting for you, "
+      + many(runs.length, "run", "runs") + " in all";
+  }
+
   function drawRuns(runs) {
     var list = document.getElementById("list");
 
@@ -6962,7 +6942,7 @@
 
     grouped(list, "Finished", runs.filter(function (run) { return !run.running; }));
 
-    say(many(runs.length, "run", "runs") + ", updated just now.");
+    say(live(runs));
   }
 
   /*
@@ -7011,6 +6991,55 @@
   // this page arrives - see the rule for .lk-card.is-new.
   var cardsDrawn = {};
 
+  /*
+    One fact on a card: plain words, with the figure in it strong so a column
+    of cards can be scanned by number. Given as pieces, alternately words and
+    figures, rather than as markup, so nothing a run says is ever read as HTML.
+  */
+  function fact(into, pieces, className) {
+    var li = document.createElement("li");
+
+    pieces.forEach(function (piece, i) {
+      if (piece === null || piece === undefined || piece === "") { return; }
+
+      if (i % 2 === 1) {
+        var figure = document.createElement("strong");
+        figure.textContent = piece;
+        li.appendChild(figure);
+      } else {
+        li.appendChild(document.createTextNode(piece));
+      }
+    });
+
+    if (className) { li.className = className; }
+
+    into.appendChild(li);
+
+    return li;
+  }
+
+  /*
+    The node worth naming on a card: whoever is working, most recently seen
+    first. Null once nobody is.
+    */
+  function busiest(run) {
+    var found = null;
+
+    (run.nodes || []).forEach(function (node) {
+      if (node.state === "done" || node.state === "reported" || node.state === "failed") { return; }
+      if (!found || (node.lastSeen || "") > (found.lastSeen || "")) { found = node; }
+    });
+
+    return found;
+  }
+
+  /*
+    One run as the kit's card: what it is called and its state as a word,
+    then what it is for - or, while it waits for you, what it is asking - then
+    one line of facts. The title's button covers the whole card, so the card
+    is one target and one tab stop; everything that changes a run is in the
+    detail pane it opens.
+  */
   function card(list, run) {
     (function (run) {
       var how = state(run);
@@ -7032,18 +7061,18 @@
       var top = document.createElement("div");
       top.className = "lk-card-head";
 
-      // The whole card opens the run. A heading inside it, because the page
-      // is a document before it is a dashboard and a card with no heading is
-      // a list of twelve unnamed things to anybody reading it in order.
-      // Under the group's heading, so the document outline reads
-      // "Runs on this machine" then "Needs you" then the run - which is the
-      // order it is laid out in, said the same way to somebody reading it.
+      // A heading inside it, because the page is a document before it is a
+      // dashboard and a card with no heading is a list of twelve unnamed
+      // things to anybody reading it in order. Under the group's heading, so
+      // the outline reads "Needs you" then the run - the order it is laid
+      // out in. The team first and then the room, which is what somebody
+      // says: "the docs crew in the Reception".
       var name = document.createElement("h4");
       var open = document.createElement("button");
       name.className = "lk-card-title";
       open.type = "button";
       open.className = "as-link";
-      open.textContent = nameOf(run);
+      open.textContent = properly(run.team) + " · " + nameOf(run);
       open.addEventListener("click", function () { watch(run); });
       name.appendChild(open);
       top.appendChild(name);
@@ -7053,73 +7082,82 @@
       top.appendChild(badge(how));
       box.appendChild(top);
 
-      var goal = document.createElement("p");
-      goal.className = "lk-card-goal";
-      goal.textContent = run.goal || "";
-      box.appendChild(goal);
+      // What it is asking, in place of what it is for, while it waits: that
+      // is the thing the next move depends on.
+      var gate = run.waitingForYou ? (run.gates || [])[0] : null;
 
-      // The shape of it: one column per round, and where the money is.
-      var shapes = document.createElement("div");
-      shapes.className = "shapes";
+      if (gate) {
+        var ask = document.createElement("p");
+        var label = document.createElement("b");
 
-      var strip = rounds(run);
-      var budget = spend(run);
-
-      if (strip) { shapes.appendChild(strip); }
-      if (budget) { shapes.appendChild(budget); }
-      if (strip || budget) { box.appendChild(shapes); }
+        ask.className = "lk-card-ask";
+        label.textContent = "Gate: ";
+        ask.appendChild(label);
+        ask.appendChild(document.createTextNode(asking(gate.question)));
+        box.appendChild(ask);
+      } else {
+        var goal = document.createElement("p");
+        goal.className = "lk-card-goal";
+        goal.textContent = run.goal || "";
+        box.appendChild(goal);
+      }
 
       var facts = document.createElement("ul");
       facts.className = "lk-card-meta";
 
-      figures(facts, properly(run.team), "team");
+      var working = run.running ? busiest(run) : null;
 
-      if (run.project) { figures(facts, run.project); }
+      if (working) {
+        var now = fact(facts, [who(working) + " is " + (working.activity || working.state)]);
+        var dot = document.createElement("span");
 
-      figures(facts, "round " + run.rounds + (run.roundLimit ? " of " + run.roundLimit : ""));
-      figures(facts, minutes(run.elapsedSeconds));
-      figures(facts, "$" + run.cost.toFixed(2));
+        dot.className = "lk-dot";
+        dot.setAttribute("data-state", working.activity === "waiting for you" ? "wait" : "run");
+        dot.setAttribute("aria-hidden", "true");
+        now.insertBefore(dot, now.firstChild);
+      }
+
+      if (run.project) { fact(facts, [run.project]); }
+
+      var covered = run.coverage || [];
+
+      if (covered.length) {
+        fact(facts, ["", String(covered.filter(function (one) { return one.met; }).length),
+          " of " + covered.length + " criteria met"]);
+      }
+
+      fact(facts, ["round ", String(run.rounds), run.roundLimit ? " of " + run.roundLimit : ""]);
+
+      var cap = run.budget && run.budget.cap;
+
+      fact(facts, ["", "$" + run.cost.toFixed(2), cap ? " of $" + Number(cap).toFixed(2) : ""]);
+
+      if (gate && gate.at) {
+        var waited = Math.max(0, Math.round((Date.now() - Date.parse(gate.at)) / 1000));
+
+        if (!isNaN(waited)) { fact(facts, ["asked " + minutes(waited) + " ago"]); }
+      } else if (!run.running && run.finished) {
+        fact(facts, ["finished " + clock(run.finished).slice(0, 5)]);
+      } else {
+        fact(facts, [minutes(run.elapsedSeconds)]);
+      }
+
       box.appendChild(facts);
 
-      // Who is in the room. Who, and nothing about how they are getting on:
-      // a ring around an initial would be a claim carried by colour alone,
-      // and every word for how a node is doing is in the detail, one press
-      // away, where there is room to say it.
-      var room = document.createElement("ul");
-      room.className = "roster";
-
-      run.nodes.forEach(function (node) {
-        var seat = document.createElement("li");
-        var reach = document.createElement("button");
-
-        reach.type = "button";
-        reach.className = "chip";
-        reach.textContent = initials(who(node));
-
-        // What the chip is, said properly, because two letters is not a name.
-        reach.setAttribute("aria-label",
-          who(node) + ", " + properly(node.role) + ", " + node.node
-          + ": " + node.state + ". Show what they did.");
-        reach.title = who(node) + " - " + properly(node.role) + " - " + node.node;
-
-        reach.addEventListener("click", function () {
-          wanted = node.node;
-          watch(run);
-        });
-
-        seat.appendChild(reach);
-        room.appendChild(seat);
-      });
-
-      box.appendChild(room);
-
-      // The reference, last and quiet. It is what every command takes and
-      // what somebody is about to type, and it is not what the card is about.
-      var ident = document.createElement("p");
-      ident.className = "ident-line";
-      reference(run.id, ident);
-      forgetOne(ident, run);
-      box.appendChild(ident);
+      /*
+        A finished run can be forgotten from its card as well as from the
+        detail pane. That is the one control the kit's card does not have, and
+        it stays: being rid of six old runs by opening each one was the reason
+        it was added. It sits on a line of its own under the facts, above the
+        card's cover, with the reference it takes beside it.
+      */
+      if (acts && !run.running) {
+        var ident = document.createElement("p");
+        ident.className = "ident-line";
+        reference(run.id, ident);
+        forgetOne(ident, run);
+        box.appendChild(ident);
+      }
 
       list.appendChild(box);
     }(run));
@@ -7182,26 +7220,6 @@
 
     into.appendChild(document.createTextNode(" "));
     into.appendChild(drop);
-  }
-
-  function figures(into, text, className) {
-    var one = document.createElement("li");
-    one.textContent = text;
-    if (className) { one.className = className; }
-    into.appendChild(one);
-  }
-
-  /*
-    Two letters off a name. Enough to tell five people apart at a glance,
-    which is all a seat in a room has to do; the name itself is the chip's
-    accessible name and its tooltip.
-  */
-  function initials(name) {
-    var words = String(name || "?").trim().split(/\s+/);
-
-    return words.length > 1
-      ? (words[0].charAt(0) + words[words.length - 1].charAt(0)).toUpperCase()
-      : words[0].slice(0, 2).toUpperCase();
   }
 
   function drawList(runs) {
@@ -7269,22 +7287,6 @@
       forgetOne(line, run);
       item.appendChild(line);
 
-      if (rich()) {
-        var shapes = document.createElement("div");
-        shapes.className = "shapes";
-
-        var strip = rounds(run);
-        var budget = spend(run);
-
-        if (strip) { shapes.appendChild(strip); }
-        if (budget) { shapes.appendChild(budget); }
-
-        // Beside the name rather than under the facts: the shape of a run and
-        // what it is called are the two things somebody reads first, and a
-        // drawing on a line of its own reads as a stray mark.
-        if (strip || budget) { top.appendChild(shapes); }
-      }
-
       if (run.atMostRemainingSeconds) {
         var ceiling = document.createElement("p");
         ceiling.className = "lk-help";
@@ -7295,12 +7297,6 @@
 
       var nodes = document.createElement("ul");
       nodes.className = "nodes";
-
-      var dearest = 0;
-
-      run.nodes.forEach(function (node) {
-        if (node.cost > dearest) { dearest = node.cost; }
-      });
 
       run.nodes.forEach(function (node) {
         var row = document.createElement("li");
@@ -7345,15 +7341,6 @@
           part(row, "took", minutes(node.tookSeconds), "");
         }
 
-        // What this node's share of the run cost, drawn. Against the most
-        // expensive node rather than the total, because a run with one node
-        // that spent everything and five that spent nothing is a thing worth
-        // seeing at a glance, and against the total it is one full bar and
-        // five empty ones.
-        if (rich() && dearest > 0) {
-          row.appendChild(drawn("share", node.cost / dearest));
-        }
-
         if (node.said) {
           var says = document.createElement("span");
           says.className = "doing";
@@ -7385,7 +7372,7 @@
       list.appendChild(item);
     });
 
-    say(many(runs.length, "run", "runs") + ", updated just now.");
+    say(live(runs));
   }
 
   // What a run has stopped to ask, with the buttons to answer it. Rebuilt
@@ -7407,6 +7394,68 @@
     has just tabbed to one takes their focus away, every four seconds, for as
     long as the question is open.
   */
+  /*
+    The pane's head: the team and the room, which is what somebody calls the
+    run, then its state as a word and the facts that frame it - where, how
+    much it may decide for itself, which round, when it started, who leads.
+    And where the money stands, under it.
+  */
+  function headOf(run) {
+    heading.textContent = properly(run.team) + " \u00b7 " + nameOf(run);
+
+    var facts = document.getElementById("detail-facts");
+
+    if (facts) {
+      var lead = (run.nodes || []).filter(function (node) { return node.role === "role.project-lead"; })[0];
+      var said = [
+        run.project || null,
+        run.autonomy || null,
+        "round " + run.rounds + (run.roundLimit ? " of " + run.roundLimit : ""),
+        run.started ? "started " + clock(run.started).slice(0, 5) : null,
+        lead ? "lead is " + who(lead) : null
+      ].filter(Boolean).join(" \u00b7 ");
+
+      facts.textContent = "";
+      facts.appendChild(badge(state(run)));
+      facts.appendChild(document.createTextNode(" " + said));
+    }
+
+    var box = document.getElementById("detail-budget");
+    var cap = run.budget && run.budget.cap;
+
+    if (!box) { return; }
+
+    box.hidden = !cap;
+
+    if (!cap) { return; }
+
+    var spent = run.budget.spent || 0;
+    var share = spent / cap;
+
+    document.getElementById("detail-budget-said").textContent =
+      "$" + spent.toFixed(2) + " of $" + Number(cap).toFixed(2);
+    document.getElementById("detail-budget-fill").style.setProperty("--v", Math.min(1, share) * 100 + "%");
+
+    // Amber from three quarters, red once it is over or on course to be.
+    var money = run.numbers && run.numbers.money;
+    var over = share >= 1 || (money && money.overrunning);
+
+    if (over) {
+      box.setAttribute("data-level", "over");
+    } else if (share >= 0.75) {
+      box.setAttribute("data-level", "high");
+    } else {
+      box.removeAttribute("data-level");
+    }
+
+    var note = document.getElementById("detail-budget-note");
+
+    note.hidden = !(money && money.overrunning);
+    note.textContent = money && money.overrunning
+      ? "At this rate it goes past what it may spend."
+      : "";
+  }
+
   function keepUp(run) {
     opened = run;
 
@@ -7418,13 +7467,11 @@
     document.getElementById("forget").hidden = run.running;
 
     // A rename lands as a file the next read picks up, and it can be done from
-    // a terminal as easily as from here, so the heading follows it rather than
-    // holding whatever it said when the run was opened.
+    // a terminal as easily as from here, so the box follows it rather than
+    // holding whatever it said when the run was opened. The heading follows
+    // it too, below, with everything else in the pane's head.
     if ((run.room || "") !== roomShown) {
       roomShown = run.room || "";
-      // What it is called, then what it is. The identifier is on the card that
-      // opened this and in the address bar; a heading is read, not copied.
-      heading.textContent = (run.room || run.id) + ": what it is doing";
 
       var box = document.getElementById("room");
 
@@ -7435,6 +7482,7 @@
       }
     }
 
+    headOf(run);
     drawCoverage(run);
 
     var gates = (run.gates || []).map(function (gate) { return gate.id; }).join("|");
@@ -9204,13 +9252,10 @@
         }
 
         got.steps.forEach(function (step) {
-          var line = document.createElement("p");
+          var line = logLine(step.at, step.kind + (step.sub ? " (subagent)" : ""),
+            [step.tool, step.target, step.text].filter(Boolean).join(" "));
 
-          line.textContent = clock(step.at) + "  " + step.kind
-            + (step.sub ? " (subagent)" : "")
-            + "  " + [step.tool, step.target, step.text].filter(Boolean).join(" ");
-
-          log.appendChild(line);
+          log.appendChild(line.row);
         });
 
         log.scrollTop = log.scrollHeight;
@@ -9218,6 +9263,32 @@
       .catch(function (wrong) {
         log.textContent = wrong.message;
       });
+  }
+
+  /*
+    One line of what a run said, as the kit's message: the time in a column
+    of its own, so the words line up down the log; who said it; then what.
+    Appended and never redrawn, so a screen reader following the log hears
+    each line once.
+  */
+  function logLine(at, speaker, said) {
+    var row = document.createElement("div");
+    var time = document.createElement("time");
+    var line = document.createElement("p");
+    var whose = document.createElement("span");
+
+    row.className = "lk-msg";
+    time.textContent = clock(at);
+    if (at) { time.setAttribute("datetime", at); }
+    row.appendChild(time);
+
+    whose.className = "lk-who";
+    whose.textContent = speaker;
+    line.appendChild(whose);
+    line.appendChild(document.createTextNode(said || ""));
+    row.appendChild(line);
+
+    return { row: row, said: line };
   }
 
   function clock(at) {
@@ -9436,7 +9507,7 @@
     showDepth(depth, false);
     // What it is called, then what it is. The identifier is on the card that
       // opened this and in the address bar; a heading is read, not copied.
-      heading.textContent = (run.room || run.id) + ": what it is doing";
+      headOf(run);
     detail.hidden = false;
 
     gatesShown = null;
@@ -9511,12 +9582,11 @@
         return;
       }
 
-      var line = document.createElement("p");
+      var line = logLine(entry.at, entry.node || "run", entry.what || entry.said);
 
-      line.textContent = entry.said;
-      log.appendChild(line);
+      log.appendChild(line.row);
 
-      lastLine = line;
+      lastLine = line.said;
       lastSaid = same;
       lastSame = 1;
 

@@ -38,7 +38,7 @@ Copy the whole address, token included, into your browser. Or start it with
 loadout team dashboard --open
 ```
 
-![The dashboard's run list. A band of totals across the top, then one run under "Needs you" waiting for an answer, one under "Running", and the start of "Finished". Each card states its run's state as a word, with a glyph beside it.](../images/dashboard-list-rich.png)
+![The dashboard's run list. A band of totals across the top, the Needs you rail, and the screens as a row of tabs. Then one run under "Needs you", whose card shows the question it is asking, one under "Running", and two under "Finished". Each card names its team and room and states its state as a word, with a glyph beside it.](../images/dashboard-list-rich.png)
 
 You should see a band of totals across the top, then your runs grouped under
 *Needs you*, *Running* and *Finished*. *Needs you* comes first because a run
@@ -70,15 +70,15 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 - **Office** — one room per run, a desk per node. The one to leave on a spare
   screen.
 
-  ![The office screen. One room per run, two across. The docs-crew run's room has a desk for each of its three nodes, each desk a rounded square with the node's name and state written under it: done, waiting for you, and left. The one waiting for you is outlined in amber with a dot on its corner.](../images/dashboard-office.png)
+  ![The office screen. One room per run, two across, each with its team and state beside its name. The docs-crew run's room has a desk for each of its three nodes, each desk a card with a rounded square on it and the node's name and state written under it: done, waiting for you, and left. The one waiting for you is outlined in amber with a dot on its corner.](../images/dashboard-office.png)
 
 - **Graph** — who asked whom. Reach for it when something is stuck.
 
-  ![The graph screen. The lead at the top, with lines to the two workers it asked for. One is marked "waiting for you".](../images/dashboard-graph.png)
+  ![The graph screen. The lead's card at the top, with lines to the cards of the two workers it asked for. Each card gives the node's name, role and cost, and its state as a word; one is marked "waiting for you" and joined by a dashed amber line.](../images/dashboard-graph.png)
 
 - **Timeline** — where the time and money went, a strip per day.
 
-  ![The timeline screen. Two days, each with a strip per run showing when it started and ended, and that day's time and cost written above it. A running run's strip is striped and a finished one is solid.](../images/dashboard-timeline.png)
+  ![The timeline screen. Two days, each a single track with a bar for every run, runs that overlapped on lanes of their own, and the day's runs, time and cost beside it. A running run's bar is striped and a finished one is solid.](../images/dashboard-timeline.png)
 
 - **Waiting** — schedules that haven't fired and tasks nobody has finished.
   Anything held says what's holding it, in words.
@@ -99,7 +99,7 @@ heading, which is also what a screen reader reads out.
 
 Select a run. It opens in the detail pane.
 
-![A run open in the detail pane. Its three done-when criteria, two marked met and one not attempted, and a gate asking whether to open a pull request, with Approve and Refuse buttons.](../images/dashboard-run-detail.png)
+![A run open in the detail pane, beside the list. Its heading with its state and facts, a gate asking whether to open a pull request with Approve and Refuse buttons, its three done-when criteria, two marked met and one not attempted, and what it has spent against its budget.](../images/dashboard-run-detail.png)
 
 You should see its done-when criteria, each marked met, unmet or not attempted
 in words, and any gate it's waiting on. A gate is a point where the run stops
