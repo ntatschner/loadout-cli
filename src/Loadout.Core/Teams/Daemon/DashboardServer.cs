@@ -2545,11 +2545,16 @@ public sealed class DashboardServer : IDisposable
         // and the endpoints separately, and a browser is what joins them.
         response.Headers["Content-Security-Policy"] =
             // img-src is what the office needs to draw a sprite at all, and
-            // 'self' is the whole of it: the art is served by this daemon from
-            // a directory on this machine. Nothing is fetched from anywhere,
-            // which was true when the page had no images and stays true now.
+            // 'self' is the art: it is served by this daemon from a directory on
+            // this machine. data: is the page's own drawings - the state glyphs,
+            // the select chevron and the mark in the top bar are written into
+            // the stylesheet and the markup as data: images - and font-src data:
+            // is its type, three woff2 files inlined into the page. Both are
+            // bytes the page already carries, so nothing is fetched from
+            // anywhere, which was true when the page had no images and stays
+            // true now.
             "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
-            + "connect-src 'self'; img-src 'self'";
+            + "connect-src 'self'; img-src 'self' data:; font-src data:";
 
         await response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
 
