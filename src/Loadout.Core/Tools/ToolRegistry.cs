@@ -134,6 +134,12 @@ public interface IToolRegistry
 /// Nothing here decides whether anything runs. That is this machine's
 /// configuration and a person's, as for remedies.
 /// </para>
+/// <para>
+/// Precondition: a node may write only <c>Root()/drafts</c> and
+/// <c>Root()/inbox</c>. The verify records, the audit log, the heads and the
+/// version directories are safe only while that holds; a node given the whole
+/// root could forge any of them.
+/// </para>
 /// </remarks>
 public sealed partial class ToolRegistry : IToolRegistry
 {
@@ -163,7 +169,7 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// where agents can write.
     /// </summary>
     public static readonly IReadOnlySet<string> Reserved =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "drafts", "inbox", "verified" };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "drafts", "inbox", "verified", "versions" };
 
     private readonly IPlatformPaths _paths;
     private readonly ToolHarness _harness;
@@ -813,7 +819,10 @@ public sealed partial class ToolRegistry : IToolRegistry
         }
 
         var script = Path.Combine(directory, manifest.Script);
-        var promoted = Audit(name).LastOrDefault(one =>
+        // The first promotion, because a version is written once: the log is
+        // only ever appended to, so a later "promote" line for the same
+        // version is somebody vouching for files the gate never saw.
+        var promoted = Audit(name).FirstOrDefault(one =>
             one.Action == "promote" && string.Equals(one.Version, version, StringComparison.Ordinal));
         var (scriptPrint, casesPrint) = ReadPromoted(promoted?.Note);
 

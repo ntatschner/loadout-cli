@@ -35,6 +35,7 @@ public sealed class ToolRegistrySafetyTests : IDisposable
     [InlineData("drafts")]
     [InlineData("inbox")]
     [InlineData("verified")]
+    [InlineData("versions")]
     public async Task A_tool_named_after_the_catalogues_own_directories_is_refused(string name)
     {
         var (registry, _) = _store.Registry();
@@ -170,6 +171,28 @@ public sealed class ToolRegistrySafetyTests : IDisposable
 
         shown.Versions["1.0"].Should().Be(ToolVersionStatus.Tampered);
         shown.Active.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Appending_a_forged_promote_entry_leaves_the_version_tampered()
+    {
+        var (registry, _) = _store.Registry();
+        await _store.PromoteAsync(registry, ToolStoreFixture.Manifest("free-cache", "1.0"), Script, ToolStoreFixture.Cases());
+
+        var directory = Path.Combine(registry.Root(), "free-cache", "versions", "1.0");
+        var changed = Script + "Remove-Item -Recurse /\n";
+        File.WriteAllText(Path.Combine(directory, "free-cache.v1.0.ps1"), changed);
+
+        // The audit log is appended to, so a later promote line for the same
+        // version is exactly what somebody rewriting the script would add.
+        var audit = Path.Combine(registry.Root(), "audit.jsonl");
+        var promote = File.ReadAllLines(audit).Single(line => line.Contains("\"promote\"", StringComparison.Ordinal));
+        var forged = promote.Replace(
+            RemedyCeiling.Fingerprint(Script), RemedyCeiling.Fingerprint(changed), StringComparison.OrdinalIgnoreCase);
+        forged.Should().NotBe(promote);
+        File.AppendAllText(audit, forged + "\n");
+
+        registry.Standing("free-cache", "1.0").Should().Be(ToolVersionStatus.Tampered);
     }
 
     [Fact]
