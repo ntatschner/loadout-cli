@@ -190,6 +190,12 @@ tar -xzf loadout-0.42.2-linux-x64.tar.gz
 msiexec /i loadout-0.42.2-win-x64.msi
 ```
 
+**Homebrew** — on macOS or Linux, the tap is rewritten by every release:
+
+```sh
+brew install thecodesaiyan/loadout/loadout
+```
+
 [Installing, step by step](docs/guides/installing.md) covers checking it worked,
 `.deb` and `.rpm` packages, and macOS Gatekeeper.
 
