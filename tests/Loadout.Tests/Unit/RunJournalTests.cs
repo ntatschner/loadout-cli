@@ -596,6 +596,32 @@ public sealed class RunJournalTests
         summary.Outstanding.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// The runner wrote a verdict by lower-casing the enum's name, so "not
+    /// attempted" reached the journal as "notattempted" - and every reader,
+    /// which expects the report schema's "not-attempted", fell through to the
+    /// raw word: NOTATTEMPTED on the dashboard, "? notattempted" in team
+    /// status, and no colour. Runs already on disk were written that way.
+    /// </summary>
+    [Fact]
+    public void A_verdict_written_the_old_way_reads_as_the_schema_spells_it()
+    {
+        var summary = Fold(
+            """{"at":"2026-09-15T22:56:00+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"blocked","outcome":"accepted","coverage":[{"criterion":"screenshots are current","verdict":"notattempted"}]}}""");
+
+        summary.Coverage.Should().ContainSingle().Which.Verdict.Should().Be("not-attempted");
+    }
+
+    [Theory]
+    [InlineData(Loadout.Models.Teams.CoverageVerdict.Met, "met")]
+    [InlineData(Loadout.Models.Teams.CoverageVerdict.Unmet, "unmet")]
+    [InlineData(Loadout.Models.Teams.CoverageVerdict.NotAttempted, "not-attempted")]
+    public void A_verdict_is_written_as_the_schema_spells_it(
+        Loadout.Models.Teams.CoverageVerdict verdict, string word)
+    {
+        RunJournal.VerdictWord(verdict).Should().Be(word);
+    }
+
     [Fact]
     public void A_run_without_criteria_has_no_coverage_and_nothing_outstanding()
     {
