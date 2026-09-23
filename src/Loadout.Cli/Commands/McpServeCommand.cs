@@ -153,6 +153,7 @@ public sealed class LoadoutTools
     private readonly IRunJournal _runs;
     private readonly TimeProvider _time;
     private readonly LoadoutToolScope _scope;
+    private readonly Core.Tools.IToolRegistry _catalogue;
 
     public LoadoutTools(
         IInstructionService instructions,
@@ -164,8 +165,10 @@ public sealed class LoadoutTools
         ISymbolIndexService symbols,
         IRunJournal runs,
         TimeProvider time,
-        LoadoutToolScope scope)
+        LoadoutToolScope scope,
+        Core.Tools.IToolRegistry catalogue)
     {
+        _catalogue = catalogue;
         _instructions = instructions;
         _memory = memory;
         _workspace = workspace;
@@ -348,6 +351,79 @@ public sealed class LoadoutTools
         return written.Succeeded
             ? $"Recorded under '{topic}'."
             : written.Error ?? "It could not be recorded.";
+    }
+
+    // The catalogue's four agent-facing calls, the same ones 'loadout tools'
+    // makes. Promote, trust, deprecate and audit are deliberately not here:
+    // promotion is the gate's, trust is a person's, and the log is for people.
+    [McpServerTool(Name = "loadout_tools_search")]
+    [Description(
+        "Search the tools this machine shares between every team, BEFORE building something that "
+        + "might already exist. Matches words rather than meanings. Answers in JSON.")]
+    public string ToolsSearch(
+        [Description("What you are looking for, in a few words.")] string words,
+        [Description("Include deprecated and retired tools, each with its replacement.")] bool all = false) =>
+        JsonSerializer.Serialize(new
+        {
+            query = words,
+            tools = _catalogue.Search(words ?? string.Empty, all).Select(ToolShapes.Found),
+        });
+
+    [McpServerTool(Name = "loadout_tools_show")]
+    [Description(
+        "One shared tool in full: what it is for, its inputs and outputs, its versions, how it has "
+        + "gone for others, and why it exists. Answers in JSON.")]
+    public string ToolsShow([Description("The tool's name.")] string name)
+    {
+        var shown = _catalogue.Show(ToolShapes.Split(name).Name);
+
+        return shown.Failed
+            ? shown.Error ?? "It could not be read."
+            : JsonSerializer.Serialize(ToolShapes.Shown(shown.Value!, shown.Value!.Record.Active, trusted: false));
+    }
+
+    [McpServerTool(Name = "loadout_tools_submit")]
+    [Description(
+        "Send the shared catalogue a candidate tool, an idea, a bug in a tool, or a lesson worth "
+        + "turning into one. Not for anything secret: the text is screened and a credential is refused.")]
+    public string ToolsSubmit(
+        [Description("candidate, idea, bug or lesson.")] string kind,
+        [Description("What it is, in a sentence or a paragraph.")] string text,
+        [Description("The tool it is about, where it is about one.")] string? tool = null,
+        [Description("A candidate's script, where there is one.")] string? script = null,
+        [Description("A candidate's one-line summary.")] string? summary = null)
+    {
+        // The same call 'loadout tools submit' makes, screening included.
+        var submitted = _catalogue.Submit(new Core.Tools.ToolSubmission(
+            kind, text, tool, "agent", null, script, null, summary));
+
+        return submitted.Failed
+            ? submitted.Error ?? "It could not be submitted."
+            : $"Submitted as {submitted.Value!.Id}."
+              + (submitted.Value!.Overlapping.Count > 0
+                  ? $" It overlaps {string.Join(", ", submitted.Value!.Overlapping)}; extending that is usually better."
+                  : string.Empty);
+    }
+
+    [McpServerTool(Name = "loadout_tools_used")]
+    [Description(
+        "Say how a use of a shared tool went, so whoever looks after it knows: ok, failed, or "
+        + "workaround when you had to work round it.")]
+    public string ToolsUsed(
+        [Description("The tool and the version used, as name@version.")] string tool,
+        [Description("ok, failed or workaround.")] string outcome,
+        [Description("What happened, where it did not simply work.")] string? note = null)
+    {
+        var (name, version) = ToolShapes.Split(tool);
+        var recorded = _catalogue.RecordUsage(new Models.Tools.ToolUsage
+        {
+            Tool = name,
+            Version = version ?? string.Empty,
+            Outcome = outcome,
+            Note = note ?? string.Empty,
+        });
+
+        return recorded.Failed ? recorded.Error ?? "It could not be recorded." : "Recorded.";
     }
 
     [McpServerTool(Name = "loadout_locate")]

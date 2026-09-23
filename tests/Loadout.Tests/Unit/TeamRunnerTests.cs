@@ -1079,6 +1079,40 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_node_can_reach_no_part_of_the_tool_catalogue_but_drafts_and_inbox()
+    {
+        // The catalogue's safety rests on this: verify records, the audit log,
+        // the heads and the version directories are all files, and a node that
+        // could write them could forge any of them.
+        var team = await IteratingProjectAsync();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        (await RunAsync(team)).Succeeded.Should().BeTrue();
+
+        var catalogue = Path.GetFullPath(Path.Combine(_paths.Paths.State, "tools"));
+        var allowed = new[] { Path.Combine(catalogue, "drafts"), Path.Combine(catalogue, "inbox") };
+
+        foreach (var reached in _launcher.Requests.SelectMany(one => one.Request.ReachableDirectories ?? []))
+        {
+            var full = Path.GetFullPath(reached);
+            var inside = (full + Path.DirectorySeparatorChar).StartsWith(
+                catalogue + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            var covers = (catalogue + Path.DirectorySeparatorChar).StartsWith(
+                full + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+            covers.Should().BeFalse($"{reached} holds the whole catalogue");
+
+            if (inside)
+            {
+                allowed.Should().Contain(one => (full + Path.DirectorySeparatorChar).StartsWith(
+                    one + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase),
+                    $"{reached} is in the catalogue outside drafts and inbox");
+            }
+        }
+    }
+
+    [Fact]
     public async Task A_dry_run_names_the_team_directory_and_makes_nothing()
     {
         // --dry-run means change nothing, and that includes not making a

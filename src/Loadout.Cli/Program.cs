@@ -628,6 +628,24 @@ public static class Program
             task.AddCommand<TaskRemoveCommand>("remove");
         });
 
+        TopBranch(config, "tools", tools =>
+        {
+            tools.Describe(
+                "The machine's catalogue of tools shared by every team: search it, submit to it, and decide what may run.",
+                CommandCategory.Start,
+                "tools catalogue registry shared reusable global tool creator refiner");
+            tools.AddCommand<ToolSearchCommand>("search");
+            tools.AddCommand<ToolShowCommand>("show");
+            tools.AddCommand<ToolSubmitCommand>("submit");
+            tools.AddCommand<ToolUsedCommand>("used");
+            tools.AddCommand<ToolAuditCommand>("audit");
+            tools.AddCommand<ToolVerifyCommand>("verify");
+            tools.AddCommand<ToolPromoteCommand>("promote");
+            tools.AddCommand<ToolDeprecateCommand>("deprecate");
+            tools.AddCommand<ToolRetireCommand>("retire");
+            tools.AddCommand<ToolTrustCommand>("trust");
+        });
+
         TopBranch(config, "team", team =>
         {
             team.Describe(

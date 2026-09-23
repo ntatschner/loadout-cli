@@ -117,7 +117,28 @@ public interface IToolRegistry
 
     /// <summary>Whether a tool is worth another look.</summary>
     bool NeedsRefining(string name);
+
+    /// <summary>
+    /// Every active tool whose active version is known-good and still matches
+    /// what was promoted, with its script as it is now.
+    /// </summary>
+    IReadOnlyList<ToolOffered> Offerable();
+
+    /// <summary>
+    /// A promoted version's script, or null where it is missing or no longer
+    /// matches what was promoted.
+    /// </summary>
+    string? ScriptOf(string name, string version);
+
+    /// <summary>Records in the audit log that a person trusted a version, or took it back.</summary>
+    void RecordTrust(string name, string version, bool revoked, string by);
 }
+
+/// <summary>An active tool a remediator could be offered.</summary>
+/// <param name="Record">Its head.</param>
+/// <param name="Version">The active version's manifest.</param>
+/// <param name="Script">The script's text, as it is on disk now.</param>
+public sealed record ToolOffered(ToolRecord Record, ToolVersion Version, string Script);
 
 /// <summary>
 /// The machine's shared catalogue of tools, in files under <see cref="Root" />.
@@ -880,6 +901,61 @@ public sealed partial class ToolRegistry : IToolRegistry
 
         return standDowns < 2;
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<ToolOffered> Offerable()
+    {
+        var offered = new List<ToolOffered>();
+
+        foreach (var head in Heads().Where(one => one.Lifecycle == ToolLifecycle.Active))
+        {
+            if (ActiveVersion(head) is not { } version)
+            {
+                continue;
+            }
+
+            try
+            {
+                offered.Add(new ToolOffered(
+                    head,
+                    version,
+                    File.ReadAllText(Path.Combine(VersionDirectory(head.Name, version.Version), version.Script))));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A script that cannot be read is not offered: nobody could
+                // tell whether it is the one that was agreed to.
+            }
+        }
+
+        return offered;
+    }
+
+    /// <inheritdoc />
+    public string? ScriptOf(string name, string version)
+    {
+        if (Standing(name, version) != ToolVersionStatus.KnownGood)
+        {
+            return null;
+        }
+
+        var directory = VersionDirectory(name, version);
+
+        try
+        {
+            return ReadYaml<ToolVersion>(Path.Combine(directory, "manifest.yaml")) is { Script: { Length: > 0 } script }
+                ? File.ReadAllText(Path.Combine(directory, script))
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public void RecordTrust(string name, string version, bool revoked, string by) =>
+        Record(revoked ? "untrust" : "trust", name, version, by, null, null);
 
     private static bool IsSignal(ToolAuditEntry entry) =>
         entry.Action is "promote" or "submit"
