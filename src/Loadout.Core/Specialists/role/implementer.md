@@ -18,6 +18,8 @@ tools:
     - 'MultiEdit'
     - 'Bash(git add:*)'
     - 'Bash(git commit:*)'
+    - 'Bash(dotnet build:*)'
+    - 'Bash(dotnet test:*)'
   denied:
     - 'Bash(git push:*)'
     - 'Bash(git rebase:*)'

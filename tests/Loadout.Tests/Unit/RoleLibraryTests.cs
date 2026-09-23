@@ -87,6 +87,27 @@ public sealed class RoleLibraryTests
         }
     }
 
+    [Theory]
+    [InlineData("role.implementer", "dotnet build src/Loadout.Core/Loadout.Core.csproj -nologo -v q")]
+    [InlineData("role.implementer", "dotnet build Loadout.slnx")]
+    [InlineData("role.implementer", "dotnet test --filter \"FullyQualifiedName~Tool\"")]
+    [InlineData("role.verifier", "dotnet build")]
+    [InlineData("role.verifier", "dotnet test")]
+    public async Task The_roles_that_prove_a_change_may_build_and_test_it(string id, string command)
+    {
+        // Run 20260923-1216-be60 stopped here: the implementer's own probe
+        // looks for dotnet test, and its role refused every dotnet build it
+        // tried, so no team could deliver verified C# at all. The commands
+        // are the ones that run was refused, put through the same gate.
+        var role = (await LibraryAsync()).Find(id)!.Role!;
+        var policy = new Loadout.Core.Teams.NodePolicy(
+            "run", "node", id, role.AllowedTools, role.DeniedTools);
+
+        Loadout.Core.Teams.NodePermissions
+            .Decide(policy, "Bash", $$"""{"command":{{System.Text.Json.JsonSerializer.Serialize(command)}}}""")
+            .Allowed.Should().BeTrue($"{id} has to be able to run '{command}'");
+    }
+
     [Fact]
     public async Task No_role_is_reachable_by_evidence()
     {

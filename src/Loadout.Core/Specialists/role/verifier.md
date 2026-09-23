@@ -13,6 +13,8 @@ tools:
     - 'Bash(git log:*)'
     - 'Bash(git status:*)'
     - 'Bash(git show:*)'
+    - 'Bash(dotnet build:*)'
+    - 'Bash(dotnet test:*)'
   denied:
     - 'Edit'
     - 'Write'
