@@ -1214,6 +1214,18 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_row_of_choices_wraps_rather_than_widening_the_pane()
+    {
+        // The six accents sat in a grid that added a column per option and
+        // never wrapped, so at an ordinary 1280 wide the settings pane grew a
+        // horizontal scrollbar and the last two accents were off to the side.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("[data-presentation=\"rich\"] .choices.row { display: flex; flex-wrap: wrap; }");
+        text.Should().NotContain("grid-auto-flow: column");
+    }
+
+    [Fact]
     public async Task What_you_just_did_is_said_somewhere_the_refresh_does_not_overwrite()
     {
         // Found by clicking the buttons: the confirmation went into the same

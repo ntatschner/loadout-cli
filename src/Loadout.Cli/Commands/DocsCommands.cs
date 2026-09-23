@@ -76,9 +76,15 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
             : await _projects.ResolveFromDirectoryAsync(
                 settings.Repo ?? Directory.GetCurrentDirectory(), cancellationToken).ConfigureAwait(false);
 
+        // The checkout you are in, or the one --repo names, even when it
+        // resolves to a project registered somewhere else: a second clone or
+        // worktree is found by its remote, and auditing the registered path
+        // reported on the other checkout. The project is still what supplies
+        // the policy below. Only a project named outright means its own path.
+        var here = settings.Repo ?? Directory.GetCurrentDirectory();
         var repository = resolution.Succeeded
-            ? resolution.Value!.LocalPath
-            : settings.Repo ?? Directory.GetCurrentDirectory();
+            ? SymbolTree.Of(resolution.Value!, settings.Project is { Length: > 0 } ? null : here)
+            : here;
 
         if (repository is null || !Directory.Exists(repository))
         {
@@ -290,7 +296,13 @@ public sealed class DocsExportCommand : AsyncCommand<DocsExportCommand.Settings>
 
         var project = resolution.Value!;
 
-        if (project.LocalPath is not { Length: > 0 } path || !Directory.Exists(path))
+        // The checkout you are in, as docs audit and the index read it, rather
+        // than the path the project was registered at: a second clone or
+        // worktree resolves to the same project by its remote.
+        if (SymbolTree.Of(
+                project,
+                settings.Project is { Length: > 0 } ? null : settings.Repo ?? Directory.GetCurrentDirectory())
+            is not { } path)
         {
             return output.Fail(
                 $"'{project.Entry.Slug}' is not on this machine, so there is nothing to read.",
