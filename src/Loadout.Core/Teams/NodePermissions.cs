@@ -418,19 +418,25 @@ public static partial class NodePermissions
         ArgumentNullException.ThrowIfNull(ask);
         ArgumentNullException.ThrowIfNull(time);
 
-        var waiting = patience ?? Patience;
-
         // Written into the question rather than kept here, because the thing
         // that has to know is a page in a browser somewhere else. A question
         // that does not say when it stops being answerable is one somebody
         // answers too late and is told it worked.
-        if (!await PutAsync(directory, ask with { Until = time.GetUtcNow() + waiting }, ct)
-            .ConfigureAwait(false))
+        //
+        // Read once, and the same instant is the one waited for. Waiting used
+        // to read the clock again after the question was written, so the
+        // deadline it kept was later than the one the question showed - by
+        // however long the write took, or by an hour when a test moved the
+        // clock in between, which hung the suite until the hang detector
+        // killed it.
+        var until = time.GetUtcNow() + (patience ?? Patience);
+
+        if (!await PutAsync(directory, ask with { Until = until }, ct).ConfigureAwait(false))
         {
             return null;
         }
 
-        return await WaitAsync(directory, ask.Id, time, waiting, ct).ConfigureAwait(false);
+        return await WaitUntilAsync(directory, ask.Id, time, until, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -452,8 +458,18 @@ public static partial class NodePermissions
     {
         ArgumentNullException.ThrowIfNull(time);
 
-        var until = time.GetUtcNow() + (patience ?? Patience);
+        return await WaitUntilAsync(directory, id, time, time.GetUtcNow() + (patience ?? Patience), ct)
+            .ConfigureAwait(false);
+    }
 
+    /// <summary>Waits for an answer until a given moment.</summary>
+    private static async Task<AskAnswer?> WaitUntilAsync(
+        string directory,
+        string id,
+        TimeProvider time,
+        DateTimeOffset until,
+        CancellationToken ct)
+    {
         while (time.GetUtcNow() < until)
         {
             ct.ThrowIfCancellationRequested();
