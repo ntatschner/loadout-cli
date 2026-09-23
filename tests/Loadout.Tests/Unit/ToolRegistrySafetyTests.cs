@@ -48,6 +48,9 @@ public sealed class ToolRegistrySafetyTests : IDisposable
 
         verified.Failed.Should().BeTrue();
         promoted.Failed.Should().BeTrue();
+        // Verify refused too, so promote would also fail for want of a verify
+        // record. The message is what shows promote's own check refused it.
+        promoted.Error.Should().Contain("catalogue keeps its own files");
         File.Exists(Path.Combine(registry.Root(), name, "tool.yaml")).Should().BeFalse();
     }
 
