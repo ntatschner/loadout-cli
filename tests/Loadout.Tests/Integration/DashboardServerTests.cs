@@ -1196,6 +1196,24 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_office_with_no_art_still_holds_its_desks()
+    {
+        // With no office pack installed - the default - every room's floor is
+        // bare, and a bare floor has no picture to take its height from. It
+        // was still a size container, which sizes itself without its
+        // contents, so it came out 26 pixels tall and its desks hung below
+        // it over the next room.
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain(".room .floor.bare { padding: 0.75rem; container-type: normal; }");
+
+        // And the desk's hover card had the same class as a run's card, so
+        // the rich view's rule for run cards showed every desk's card at once.
+        text.Should().Contain("card.className = \"desk-card\";");
+        text.Should().NotContain(".desk .card");
+    }
+
+    [Fact]
     public async Task What_you_just_did_is_said_somewhere_the_refresh_does_not_overwrite()
     {
         // Found by clicking the buttons: the confirmation went into the same
