@@ -1,5 +1,7 @@
 # Installing
 
+*Want the steps in order? [Installing, step by step](guides/installing.md) walks through it, and [installing in plain words](plain/installing.md) starts from opening a terminal.*
+
 Download the archive for your platform, verify it, and install:
 
 ```bash
@@ -17,7 +19,7 @@ it.
 
 On Windows, extract the zip and put `loadout.exe` somewhere on `PATH`.
 
-### Native installers
+## Native installers
 
 A release also carries an `.msi`, a `.deb` and an `.rpm`, if you'd rather not
 manage a `PATH` entry by hand:
@@ -46,7 +48,7 @@ spend the install fighting Gatekeeper, and that needs a Developer ID and a Mac
 to verify it on. Until both exist, an unsigned installer would be worse than
 none.
 
-### Building a release locally
+## Building a release locally
 
 ```bash
 pwsh ./build/package.ps1 -Runtime linux-x64 -Version 0.41.0     # archive

@@ -1,5 +1,7 @@
 # Working with a coding agent
 
+*New to AI and not a programmer? [Loadout in plain words](plain/README.md) covers the basics in everyday language.*
+
 Most of what goes wrong with a coding agent isn't the model. It's that it was
 never told something it needed, or it was told so much that the part that
 mattered was buried, or it wrote down nothing and the next session started from

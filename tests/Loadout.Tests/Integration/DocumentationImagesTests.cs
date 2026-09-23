@@ -2,13 +2,16 @@ using System.Drawing;
 using System.Text;
 using Loadout.Core.Sessions;
 using FluentAssertions;
+using Loadout.Core.Teams;
 using Loadout.Models.Diagnostics;
+using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
 using Loadout.Core.Projects;
 using Loadout.Tui;
 using Loadout.Tui.Terminal;
 using Terminal.Gui.App;
 using Terminal.Gui.Drivers;
+using Terminal.Gui.Views;
 using Xunit;
 
 namespace Loadout.Tests.Integration;
@@ -98,6 +101,140 @@ public sealed class DocumentationImagesTests
             showPalette: _ => { },
             recent: [],
             application: app)));
+    }
+
+    /// <summary>
+    /// The launch sheet with a task typed and a mode chosen, so the preview
+    /// below it says what that session would be given.
+    /// </summary>
+    /// <remarks>
+    /// Through a session rather than <see cref="Draw"/>, because the preview
+    /// arrives after the task is typed and a single draw shows the sheet
+    /// before it has anything to say.
+    /// </remarks>
+    [DocumentationImageFact]
+    public void The_launch_sheet_is_drawn_for_the_documentation()
+    {
+        static SpecialistSelection Chosen(string id, SpecialistKind kind, string title, string reason, int bytes) =>
+            new(
+                new SpecialistDocument(id, kind, title, "summary", SpecialistActivation.None, "body", bytes),
+                SpecialistTrigger.RepositoryEvidence,
+                reason,
+                60);
+
+        SpecialistSelection[] selected =
+        [
+            Chosen("foundation.change-safety", SpecialistKind.Foundation, "Change safety", "always applies", 1400),
+            Chosen("foundation.verification", SpecialistKind.Foundation, "Verification", "always applies", 900),
+            Chosen("mode.investigate", SpecialistKind.Mode, "Investigate", "investigate mode", 800),
+            Chosen("language.csharp", SpecialistKind.Language, "C#", "212 .cs files", 1500),
+            Chosen("framework.dotnet", SpecialistKind.Framework, ".NET", "Microsoft.Extensions. dependency declared", 1100),
+            Chosen("function.debugging", SpecialistKind.Function, "Debugging", "task mentions \"gives up\"", 900),
+        ];
+
+        var preview = new EffectiveInstructions(
+            "investigate",
+            selected,
+            [],
+            [],
+            new InstructionContextBudget(
+                selected.Sum(s => s.Specialist.Bytes),
+                selected.Sum(s => s.Specialist.EstimatedTokens),
+                12_000,
+                80));
+
+        LaunchOptionsDialog? sheet = null;
+
+        using var session = TuiSession.Start(
+            app => sheet = new LaunchOptionsDialog(
+                Project("starstats", "StarStats", available: true),
+                ["claude", "codex"],
+                app,
+                new LaunchSheetSources(
+                    (_, _, _) => Task.FromResult(LaunchChoices.None),
+                    (_, _) => Task.FromResult<EffectiveInstructions?>(preview)),
+                previewDelay: TimeSpan.Zero),
+            Width,
+            Height);
+
+        session.Type("the upload retries twice then gives up");
+
+        // The mode picker, found by a mode the preview never names. Index
+        // zero is "let the task decide", so three is investigate.
+        Views(sheet!).OfType<ListView>()
+            .Single(list => list.Source?.ToList() is { } items && items.Cast<object?>()
+                .Any(item => item?.ToString()?.Contains("advise", StringComparison.Ordinal) == true))
+            .SelectedItem = 3;
+
+        Write("launch-sheet", session.ScreenShowing("Debugging"));
+    }
+
+    /// <summary>The launcher's Tools, Team runs screen with one run going.</summary>
+    [DocumentationImageFact]
+    public void The_team_runs_screen_is_drawn_for_the_documentation()
+    {
+        var noon = new DateTimeOffset(2026, 9, 23, 12, 0, 0, TimeSpan.Zero);
+
+        IReadOnlyList<RunSummary> runs =
+        [
+            new RunSummary(
+                "20260923-1110-3f1a",
+                Directory: Path.Combine("state", "teams", "runs", "20260923-1110-3f1a"),
+                Team: "docs-crew",
+                Goal: "Bring the storefront README up to date with the new checkout flow",
+                Autonomy: "supervised",
+                Started: noon.AddMinutes(-50),
+                Finished: null,
+                Ended: null,
+                CostUsd: 2.45m,
+                Rounds: 2,
+                Nodes:
+                [
+                    new RunNode("lead", "role.project-lead", "done", 10, 0.70m, noon.AddMinutes(-18),
+                        Started: noon.AddMinutes(-50)),
+                    new RunNode("writer", "role.docs-writer", "working", 14, 1.12m, noon.AddMinutes(-2),
+                        Started: noon.AddMinutes(-48), Doing: "Rewriting the checkout section"),
+                    new RunNode("checker", "role.docs-checker", "done", 9, 0.63m, noon.AddMinutes(-22),
+                        Started: noon.AddMinutes(-30)),
+                ],
+                Merged: [],
+                Branches: [],
+                Project: "storefront",
+                BudgetUsd: 10m),
+        ];
+
+        TeamsWindow? screen = null;
+
+        using var session = TuiSession.Start(
+            app => screen = new TeamsWindow(runs, _ => Task.FromResult(runs), live: false, app),
+            Width,
+            Height);
+
+        // The nodes pane fills when the cursor moves onto a run, and a screen
+        // that opens on the first row has not moved it yet.
+        var list = Views(screen!).OfType<ListView>().Single(view => view.Id == "teams-runs");
+
+        list.SelectedItem = null;
+        list.SelectedItem = 0;
+
+        var drawn = session.ScreenShowing("writer");
+
+        drawn.Should().Contain("writer", "a picture of the team runs screen should show a run's nodes");
+
+        Write("team-runs", drawn);
+    }
+
+    private static IEnumerable<Terminal.Gui.ViewBase.View> Views(Terminal.Gui.ViewBase.View root)
+    {
+        foreach (var child in root.SubViews)
+        {
+            yield return child;
+
+            foreach (var inner in Views(child))
+            {
+                yield return inner;
+            }
+        }
     }
 
     private static ProjectResolution Project(string slug, string name, bool available) =>
@@ -194,6 +331,13 @@ public sealed class DocumentationImagesTests
         svg.AppendLine("""<circle cx="42" cy="16" r="5" fill="#febc2e"/>""");
         svg.AppendLine("""<circle cx="60" cy="16" r="5" fill="#28c840"/>""");
 
+        // white-space as well as xml:space. SVG 2 deprecated xml:space and
+        // Chrome ignores it, so every run of spaces collapsed to one: columns
+        // slid left, box borders landed mid-line, and the launcher's detail
+        // panel was drawn underneath its project list. A rule on the text
+        // itself rather than on the group, because the browser's own
+        // stylesheet sets white-space on text and that beats inheriting it.
+        svg.AppendLine("""<style>text { white-space: pre; }</style>""");
         svg.AppendLine(
             $"""<g font-family="Cascadia Mono,DejaVu Sans Mono,Consolas,Menlo,monospace" font-size="13" fill="#d7dae0" xml:space="preserve">""");
 

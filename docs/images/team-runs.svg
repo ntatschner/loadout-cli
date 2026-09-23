@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="896" height="570" viewBox="0 0 896 570" role="img" aria-label="team-runs screen">
+<rect width="896" height="570" rx="8" fill="#12151b"/>
+<circle cx="24" cy="16" r="5" fill="#ff5f57"/>
+<circle cx="42" cy="16" r="5" fill="#febc2e"/>
+<circle cx="60" cy="16" r="5" fill="#28c840"/>
+<style>text { white-space: pre; }</style>
+<g font-family="Cascadia Mono,DejaVu Sans Mono,Consolas,Menlo,monospace" font-size="13" fill="#d7dae0" xml:space="preserve">
+<text x="16" y="44">╭┤Team runs├───────────────────────────────────────────────────────────────────────────────────────────────╮</text>
+<text x="16" y="61">│┌┤Runs├──────────────────────────────────────────────────────────────────────────────────────────────────┐│</text>
+<text x="16" y="78">││20260923-1110-3f1a     docs-crew        storefront     running      48m                                 ││</text>
+<text x="16" y="95">││                                                                                                        ││</text>
+<text x="16" y="112">││                                                                                                        ││</text>
+<text x="16" y="129">││                                                                                                        ││</text>
+<text x="16" y="146">││                                                                                                        ││</text>
+<text x="16" y="163">││                                                                                                        ││</text>
+<text x="16" y="180">││                                                                                                        ││</text>
+<text x="16" y="197">││                                                                                                        ││</text>
+<text x="16" y="214">││                                                                                                        ││</text>
+<text x="16" y="231">││                                                                                                        ││</text>
+<text x="16" y="248">│└────────────────────────────────────────────────────────────────────────────────────────────────────────┘│</text>
+<text x="16" y="265">│┌┤Nodes├─────────────────────────────────────────────────────────────────────────────────────────────────┐│</text>
+<text x="16" y="282">││Bring the storefront README up to date with the new checkout flow                                       ││</text>
+<text x="16" y="299">││                                                                                                        ││</text>
+<text x="16" y="316">││lead             role.project-lead    done            10 turn(s)                                        ││</text>
+<text x="16" y="333">││writer           role.docs-writer     working         14 turn(s)  Rewriting the checkout section        ││</text>
+<text x="16" y="350">││checker          role.docs-checker    done            9 turn(s)                                         ││</text>
+<text x="16" y="367">││                                                                                                        ││</text>
+<text x="16" y="384">││                                                                                                        ││</text>
+<text x="16" y="401">││                                                                                                        ││</text>
+<text x="16" y="418">││                                                                                                        ││</text>
+<text x="16" y="435">││                                                                                                        ││</text>
+<text x="16" y="452">││                                                                                                        ││</text>
+<text x="16" y="469">││                                                                                                        ││</text>
+<text x="16" y="486">││                                                                                                        ││</text>
+<text x="16" y="503">│└────────────────────────────────────────────────────────────────────────────────────────────────────────┘│</text>
+<text x="16" y="520">│ Enter log   s status   d dashboard   r forget   F5 refresh   Esc close                                   │</text>
+<text x="16" y="537">╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯</text>
+</g>
+</svg>

@@ -1,5 +1,7 @@
 # Getting started
 
+*Want the steps in order? [Your first run](guides/first-run.md) and [launching a session](guides/launching.md) walk through the same ground one step at a time.*
+
 [Recipes](recipes.md) is the lookup table — you know the job, you want the
 command. This is the other thing: the first hour with Loadout, in order, and
 what's worth doing a week later once the first hour has stopped being

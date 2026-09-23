@@ -1,5 +1,7 @@
 # The launcher
 
+*Want the steps in order? [Launching a session](guides/launching.md) walks through the launch sheet one step at a time.*
+
 Running `loadout` with no arguments opens a full-screen launcher: the project
 list on the left, everything known about the selected project on the right, a
 filter you can type into, and a menu naming what the launcher can do.
