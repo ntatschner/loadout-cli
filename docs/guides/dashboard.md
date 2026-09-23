@@ -38,7 +38,7 @@ Copy the whole address, token included, into your browser. Or start it with
 loadout team dashboard --open
 ```
 
-![The dashboard's run list. A ledger of totals across the top, then one run under "Needs you" waiting for an answer, one under "Running", and the first of two under "Finished". Each card states its run's state as a word.](../images/dashboard-list-rich.png)
+![The dashboard's run list. A band of totals across the top, then one run under "Needs you" waiting for an answer, one under "Running", and the start of "Finished". Each card states its run's state as a word, with a glyph beside it.](../images/dashboard-list-rich.png)
 
 You should see a band of totals across the top, then your runs grouped under
 *Needs you*, *Running* and *Finished*. *Needs you* comes first because a run
@@ -56,7 +56,7 @@ loadout team dashboard --view plain
 
 ![The plain dashboard: the same four runs as a single list, each row giving the run's name, its state in words, and what it has cost.](../images/dashboard-list-plain.png)
 
-You can also press **Plain view** in the letterhead of either page. It's early
+You can also press **Plain view** in the top bar of either page. It's early
 in the tab order on purpose. `--view` doesn't override your motion setting:
 asking for the rich page isn't asking for more movement.
 
@@ -70,7 +70,7 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 - **Office** — one room per run, a desk per node. The one to leave on a spare
   screen.
 
-  ![The office screen. One room for a docs-crew run with a desk for each of its three nodes, each desk a square with the node's name and state written under it: done, waiting for you, and left. The next run's room starts below it.](../images/dashboard-office.png)
+  ![The office screen. One room per run, two across. The docs-crew run's room has a desk for each of its three nodes, each desk a rounded square with the node's name and state written under it: done, waiting for you, and left. The one waiting for you is outlined in amber with a dot on its corner.](../images/dashboard-office.png)
 
 - **Graph** — who asked whom. Reach for it when something is stuck.
 
@@ -78,12 +78,12 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 
 - **Timeline** — where the time and money went, a strip per day.
 
-  ![The timeline screen. Three days, each a strip showing when runs started and ended, with that day's time and cost written beside it.](../images/dashboard-timeline.png)
+  ![The timeline screen. Two days, each with a strip per run showing when it started and ended, and that day's time and cost written above it. A running run's strip is striped and a finished one is solid.](../images/dashboard-timeline.png)
 
 - **Waiting** — schedules that haven't fired and tasks nobody has finished.
   Anything held says what's holding it, in words.
 
-  ![The waiting screen. One scheduled team run, due today at 07:00, then two open tasks. The last one says "blocked" in words, and why.](../images/dashboard-waiting.png)
+  ![The waiting screen. One scheduled team run, due at 07:00, then two open tasks. The last one says "blocked" in words, and why.](../images/dashboard-waiting.png)
 
 - **Terminal** — a node's output, line by line, as it happens.
 
@@ -153,11 +153,35 @@ loadout team halt            # stop it after the round it is in
 
 Open the settings page.
 
-![The dashboard settings. The High contrast theme is selected, and the page is shown in black and white with every rule drawn.](../images/dashboard-themes.png)
+![The dashboard settings in the light High contrast theme: black on white with every rule drawn, High contrast and Light chosen, and the five accents each with a swatch beside its name.](../images/dashboard-themes.png)
 
-There are four themes, each with a light and a dark version, and a set of
-accents that were each measured against their theme. These settings stay in
-this browser and nowhere else.
+These change how this browser draws the page, and stay in this browser and
+nowhere else.
+
+- **Theme.** Graphite, the default, is dark; Daylight is its light
+  equal; Carbon is true black, for an OLED screen or a spare monitor at night,
+  and is dark only; High contrast has a dark and a light, with every word at
+  7:1 or better and every rule drawn.
+- **Light or dark.** Follow your system, which is the default, or pick one.
+  It chooses between Graphite and Daylight, and between the two high-contrast
+  themes.
+- **Accent.** Bay, Signal, Orchid, Sand or Frost: the colour of what you can
+  act on and where you are. A set rather than a colour picker, because each
+  was measured in every theme.
+- **Density.** Compact, Comfortable or Spacious.
+- **Text size.** 100%, 112%, 125% or 150%. Everything grows with it, controls
+  included, and your browser's zoom still works on top.
+- **Reading.** Roomy spaces lines, letters and words further apart, and stops
+  a run's goal being cut short on its card.
+- **Focus ring.** Bold draws the ring round whatever the keyboard is on at 3
+  pixels rather than 2. The high-contrast themes always draw it bold.
+- **Movement.** As your profile and system say, or none at all. Your machine
+  is asked as well and the quieter answer wins, so nothing here can bring back
+  movement you turned down elsewhere.
+
+A look chosen before this version, in the old Paper, Slate or Oxblood themes,
+comes back as Graphite; High contrast stays High contrast; and every old accent
+becomes Bay.
 
 ## Only watching
 
@@ -180,9 +204,10 @@ its controls away rather than showing buttons that do nothing.
 
 ## What this doesn't do
 
-- It fetches nothing from the internet, so there's no webfont and no image.
-  Office desks are squares with names written in them, because Loadout ships no
-  art.
+- It fetches nothing from the internet. Its typeface, Atkinson Hyperlegible,
+  and the Loadout icon are carried inside the page. Office desks are drawn as
+  rounded squares with names written under them, because Loadout ships no
+  office art.
 - Only the dashboard's own machine can reach it by default.
 - No screen reader has been used with it, and no keyboard-only pass by a person
   has been recorded. [Setting up accessibility](accessibility.md) has what was

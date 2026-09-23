@@ -179,9 +179,10 @@ can't check it.
 | Each preset produces the guidance, flags and settings it promises | Tested |
 | Accessible output carries no escape sequences | Tested |
 | Menus are numbered, and refuse a number outside the list | Tested |
-| Dashboard: axe-core 4.10.2, fifteen states across both pages | No violations |
-| Dashboard text contrast | 6.8:1 at worst in light, 9:1 in dark, against 4.5:1 required |
-| All 48 dashboard theme, scheme and accent combinations | Pass, worst 5.2:1 |
+| Dashboard: axe-core 4.10.2, nine states on both pages in all five themes | No violations |
+| Dashboard text contrast, every text colour on every surface | 4.7:1 at worst in Daylight, 5.6:1 in the dark themes, 7.3:1 in High contrast, against 4.5:1 required |
+| Dashboard accents, each on every surface of every theme | Pass, worst 4.8:1 |
+| Dashboard at 320 pixels wide and at 200% zoom, every screen, both pages | No sideways scrolling |
 | Dashboard speaking: the order in which it refuses | Tested against a stub, four mutations each failing its own test |
 | Speech through the Windows system voice | The route answers |
 | Speech through NVDA, or through `say` on macOS or speech-dispatcher on Linux | **Never heard** |

@@ -77,6 +77,10 @@ loadout team dashboard --open
 With the **screen-reader** or **low-vision** preset, you get a plainer page.
 Every page has a **Plain view** button near the top.
 
+The page's **Settings** can make the text bigger, space it out more, and make
+the ring round what the keyboard is on thicker. There are high-contrast
+themes, dark and light.
+
 ### 6. Speech, only if you want it
 
 Speech is off, even with the **screen-reader** preset. To turn it on, type this
