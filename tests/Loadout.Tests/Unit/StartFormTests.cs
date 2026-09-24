@@ -89,6 +89,25 @@ public sealed class StartFormTests
         typed.Should().NotContain("--rounds");
     }
 
+    [Theory]
+    [InlineData("none", "none")]
+    [InlineData(" 25 ", "25")]
+    public void A_budget_from_the_form_is_passed_as_typed(string budget, string passed)
+    {
+        DashboardActions.Starting(new StartRequest("docs-crew", "goal", Budget: budget))
+            .Should().ContainInOrder("--usd", passed);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void An_empty_budget_box_leaves_the_teams_own(string? budget)
+    {
+        DashboardActions.Starting(new StartRequest("docs-crew", "goal", Budget: budget))
+            .Should().NotContain("--usd");
+    }
+
     [Fact]
     public void A_round_cap_of_zero_is_no_cap_rather_than_a_cap_of_none()
     {

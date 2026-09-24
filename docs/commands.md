@@ -77,6 +77,7 @@
 | `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
 | `loadout team new\|edit\|remove` | Write a team of your own, open its file, or delete it |
 | `loadout team run <team> "<goal>" --done-when` | Say what the run is judged on, one per use. The lead must report a verdict and evidence for every one |
+| `loadout team run <team> "<goal>" --usd` | What this run may spend in all, over the team's own budget: a figure, or `none` for no cap |
 | `loadout team capabilities` | The machinery a team's declarations can ask for, and what each one needs |
 | `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |
 | `loadout team runs remove\|prune` | Forget runs you are done with, one by one or by age, count or how they ended |
@@ -92,8 +93,8 @@
 | `loadout team gate` | Answer something a run stopped to ask |
 | `loadout team message` | Say something to a run's lead, read at its next round |
 | `loadout team halt` | Stop a run after its current round, hold it, or let it carry on |
-| `loadout team budget` | Change what a running team may spend in all, from its next round on |
-| `loadout team resume` | Pick up a team run that has ended, where it stopped: `--usd` for more money, `--rounds` for more rounds, `--message` for the lead |
+| `loadout team budget` | Change what a running team may spend in all, from its next round on: a figure, or `none` for no cap |
+| `loadout team resume` | Pick up a team run that has ended, where it stopped: `--usd` for more money or `none` for no cap, `--rounds` for more rounds, `--message` for the lead. Says what the lead's next turn is likely to cost first |
 | `loadout team name` | Name a run's room, or clear the name to get the worked-out one back |
 | `loadout team pr` | Open a pull request for what one node of a run produced |
 | `loadout team say` | Say something to one node while it is still working |

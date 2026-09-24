@@ -85,6 +85,10 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
         [CommandOption("--autonomy <MODE>")]
         [Description("supervised or autonomous. Never manual: nobody is watching when it fires.")]
         public string? Autonomy { get; init; }
+
+        [CommandOption("--usd <AMOUNT>")]
+        [Description("What each run it fires may spend, in US dollars, or none for no cap. The team's own when left out.")]
+        public string? Usd { get; init; }
     }
 
     /// <inheritdoc />
@@ -96,6 +100,13 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        // Checked now, while somebody is here to be told, rather than at
+        // three in the morning when the run it fires is refused.
+        if (!UsdCap.TryParse(settings.Usd, out var budget))
+        {
+            return output.Fail(UsdCap.Refusal(settings.Usd!), ExitCode.InvalidArguments);
+        }
 
         var resolution = await ProjectHandle
             .ResolveAsync(_projects, settings.Project, settings.Repo, cancellationToken)
@@ -165,6 +176,7 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
             Every = every,
             At = at,
             On = settings.On ?? string.Empty,
+            Budget = budget.ToString(),
         };
 
         if (settings.DryRun)

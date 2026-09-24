@@ -249,7 +249,7 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
                 rules = new
                 {
                     team.Rules.Autonomy,
-                    budget = new { team.Rules.Budget.Usd, team.Rules.Budget.TurnsPerNode, team.Rules.Budget.WallClock },
+                    budget = new { team.Rules.Budget.Usd, team.Rules.Budget.Uncapped, team.Rules.Budget.TurnsPerNode, team.Rules.Budget.WallClock },
                     gates = new { team.Rules.Gates.Outward, team.Rules.Gates.Merge, team.Rules.Gates.OutwardAllowedWhenAutonomous },
                     team.Rules.StopWhen,
                     team.Rules.TakeRecommendationAfter,
@@ -322,7 +322,10 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
         output.WriteBlankLine();
         output.WriteLine($"  autonomy   {Markup.Escape(team.Rules.Autonomy)}");
         output.WriteLine(
-            $"  budget     {(team.Rules.Budget.Usd is { } usd ? $"${usd:0.##}" : "no cap")}, "
+            // "No cap" only where the file says so. A team that says nothing
+            // cannot run without a budget given or a round limit, and showing
+            // it as uncapped told the opposite.
+            $"  budget     {(team.Rules.Budget.Usd is { } usd ? $"${usd:0.##}" : team.Rules.Budget.Uncapped ? "no cap" : "none set (give --usd or --rounds)")}, "
             + $"{(team.Rules.Budget.TurnsPerNode is { } turns ? $"{turns} turns per node" : "the agent's default turns")}"
             + (team.Rules.Budget.WallClock is { Length: > 0 } clock ? $", {Markup.Escape(clock)}" : string.Empty));
         output.WriteLine($"  merge      {(team.Rules.Gates.Merge.Count > 0 ? Markup.Escape(string.Join(" and ", team.Rules.Gates.Merge)) : "no merge gate")}");
@@ -1313,6 +1316,12 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             + "None by default: the team's budget and two rounds without progress stop it.")]
         public int Rounds { get; init; }
 
+        [CommandOption("--usd <AMOUNT>")]
+        [Description(
+            "What this run may spend in all, in US dollars, overriding the team's budget; or none for no cap. "
+            + "Change it while it runs with 'team budget'.")]
+        public string? Usd { get; init; }
+
         [CommandOption("--model <MODEL>")]
         [Description("A model for every node, overriding the team's and the project's. Written as the agent spells it.")]
         public string? Model { get; init; }
@@ -1422,8 +1431,21 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             TakeRecommendationAfter: TeamDuration.IsNever(settings.TakeRecommendationAfter)
                 ? null
                 : TeamDuration.Parse(settings.TakeRecommendationAfter)
-                    ?? TeamDuration.Parse(team.Rules.TakeRecommendationAfter));
+                    ?? TeamDuration.Parse(team.Rules.TakeRecommendationAfter),
+
+            // Checked before this is reached, so a figure that does not read
+            // has already been refused rather than quietly becoming not set.
+            Budget: UsdCap.TryParse(settings.Usd, out var budget) ? budget : UsdCap.Unset,
+            MachineBudget: MachineBudget(machine));
     }
+
+    /// <summary>
+    /// This machine's default team budget, or not set. Read leniently: it was
+    /// checked when it was set, and a file edited by hand into nonsense means
+    /// no default rather than no cap.
+    /// </summary>
+    internal static UsdCap MachineBudget(Loadout.Models.Configuration.MachineConfig? machine) =>
+        UsdCap.TryParse(machine?.Teams.Budget, out var cap) ? cap : UsdCap.Unset;
 
     /// <inheritdoc />
     protected override async Task<int> ExecuteAsync(
@@ -1434,6 +1456,13 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        // Before anything is looked up: a figure that does not read must not
+        // become "not set", and never "no cap".
+        if (!UsdCap.TryParse(settings.Usd, out _))
+        {
+            return output.Fail(UsdCap.Refusal(settings.Usd!), ExitCode.InvalidArguments);
+        }
 
         var resolution = await ProjectHandle
             .ResolveAsync(_projects, settings.Project, settings.Repo, cancellationToken)

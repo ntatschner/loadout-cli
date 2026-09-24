@@ -375,6 +375,36 @@ public sealed class AnsweringContractTests
     }
 
     [BuiltCliFact]
+    public async Task A_running_run_can_have_its_cap_taken_off()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false);
+
+        var run = await loadout.RunAsync("team", "budget", Run, "--usd", "none");
+
+        run.ExitCode.Should().Be(0, run.StandardOutput + run.StandardError);
+
+        (await File.ReadAllTextAsync(Path.Combine(directory, "control-budget"))).Should().Be("none");
+    }
+
+    [BuiltCliTheory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("plenty")]
+    public async Task A_budget_that_is_neither_a_figure_nor_none_is_refused_rather_than_read_as_no_cap(string usd)
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false);
+
+        var run = await loadout.RunAsync("team", "budget", Run, "--usd", usd);
+
+        run.ExitCode.Should().NotBe(0);
+        File.Exists(Path.Combine(directory, "control-budget")).Should().BeFalse();
+    }
+
+    [BuiltCliFact]
     public async Task A_budget_for_a_run_that_has_finished_is_refused_rather_than_written()
     {
         using var loadout = new LoadoutProcess();

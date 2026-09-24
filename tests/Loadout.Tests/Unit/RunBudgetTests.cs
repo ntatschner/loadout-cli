@@ -104,20 +104,69 @@ public sealed class RunBudgetTests : IDisposable
         var console = new Answering(answer);
 
         (await TeamRunner.RaiseAsync(console, 25.10m, 25m, CancellationToken.None))
-            .Should().Be(raised);
+            .Usd.Should().Be(raised);
 
-        console.Asked!.Options.Should().Equal("Raise it to $38", "Raise it to $50");
+        console.Asked!.Options.Should().Equal("Raise it to $38", "Raise it to $50", TeamRunner.TakeTheCapOff);
         console.Asked.Question.Should().Contain("$25.10").And.Contain("$25.00");
+    }
+
+    [Theory]
+    [InlineData(TeamRunner.TakeTheCapOff)]
+    [InlineData("none")]
+    public async Task A_run_at_its_budget_may_be_told_to_carry_on_with_no_cap(string answer)
+    {
+        (await TeamRunner.RaiseAsync(new Answering(answer), 25.10m, 25m, CancellationToken.None))
+            .Should().Be(UsdCap.NoCap);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("20")]
+    [InlineData("0")]
     [InlineData("keep going")]
     public async Task Stopping_or_an_answer_that_is_not_more_money_ends_the_run(string? answer)
     {
         (await TeamRunner.RaiseAsync(new Answering(answer), 25.10m, 25m, CancellationToken.None))
-            .Should().BeNull();
+            .IsSet.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_run_told_no_cap_while_it_runs_is_read_back_as_no_cap()
+    {
+        await RunControl.SetCapAsync(_directory, UsdCap.NoCap);
+
+        RunControl.Cap(_directory).Should().Be(UsdCap.NoCap);
+        RunControl.Budget(_directory).Should().BeNull("there is no figure");
+    }
+
+    [Fact]
+    public void A_cap_taken_off_clears_the_figure_the_run_was_measured_against()
+    {
+        // A null figure used to keep the earlier one, and the page went on
+        // measuring the run against a limit it no longer had.
+        var summary = RunJournal.Fold("r", _directory,
+        [
+            Event("run.started", new { team = "t", goal = "g", autonomy = "supervised", budget = 25 }),
+            Event("run.budget", new { budget = (decimal?)null, uncapped = true, by = "you" }),
+        ]);
+
+        summary.BudgetUsd.Should().BeNull();
+        summary.Uncapped.Should().BeTrue();
+        RunJournal.Wording(Event("run.budget", new { budget = (decimal?)null, uncapped = true, by = "you" }))
+            .Should().Be("budget cap taken off by you");
+    }
+
+    [Fact]
+    public void A_figure_after_no_cap_puts_a_cap_back()
+    {
+        var summary = RunJournal.Fold("r", _directory,
+        [
+            Event("run.started", new { team = "t", goal = "g", autonomy = "supervised", budget = (decimal?)null, uncapped = true }),
+            Event("run.budget", new { budget = 40, uncapped = false, by = "you" }),
+        ]);
+
+        summary.BudgetUsd.Should().Be(40m);
+        summary.Uncapped.Should().BeFalse();
     }
 
     private static RunEvent Event(string kind, object data) =>

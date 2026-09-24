@@ -45,6 +45,10 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// is taken, as 30m or 2h, or null for the team's own rule and then waiting on
 /// a person.
 /// </param>
+/// <param name="Budget">
+/// What the run may spend in all, as <c>team run --usd</c> takes it: a figure,
+/// <c>none</c> for no cap, or null for the team's own.
+/// </param>
 /// <remarks>
 /// <para>
 /// Nothing here is checked against anything. Whether that team exists, whether
@@ -69,7 +73,8 @@ public sealed record StartRequest(
     IReadOnlyList<string>? Criteria = null,
     string? Model = null,
     string? Agent = null,
-    string? TakeRecommendationAfter = null);
+    string? TakeRecommendationAfter = null,
+    string? Budget = null);
 
 /// <summary>A team the page asked be written.</summary>
 /// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>

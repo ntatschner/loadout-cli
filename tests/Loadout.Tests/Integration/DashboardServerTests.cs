@@ -1727,7 +1727,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         };
 
         var answer = await StartAsync(
-            """{"team":"docs-crew","goal":"check the docs","project":"loadout-cli","rounds":3,"autonomy":"supervised"}""");
+            """{"team":"docs-crew","goal":"check the docs","project":"loadout-cli","rounds":3,"autonomy":"supervised","budget":"none"}""");
 
         // Accepted rather than done: a team run takes twenty minutes, and a
         // browser holding a request open that long has already given up.
@@ -1738,6 +1738,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         asked.Project.Should().Be("loadout-cli");
         asked.Rounds.Should().Be(3);
         asked.Autonomy.Should().Be("supervised");
+        asked.Budget.Should().Be("none");
     }
 
     [Fact]
@@ -1841,7 +1842,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         foreach (var field in new[]
         {
             "start-team", "start-goal", "start-project", "start-rounds", "start-autonomy",
-            "start-criteria", "start-model", "start-agent",
+            "start-criteria", "start-model", "start-agent", "start-budget",
         })
         {
             text.Should().Contain($"id=\"{field}\"");

@@ -98,6 +98,7 @@ public sealed class TeamCatalogue : ITeamCatalogue
 
     private static readonly IDeserializer Yaml = new DeserializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance)
+        .WithTypeConverter(new TeamBudgetConverter())
         .IgnoreUnmatchedProperties()
         .Build();
 
@@ -415,6 +416,14 @@ public sealed class TeamCatalogue : ITeamCatalogue
             && TeamDuration.Parse(after) is null)
         {
             Error("team-recommendation-wait", $"Team '{team.Name}' sets take_recommendation_after to '{after}', which is not a duration. Write it as 30m, 2h or 1d.");
+        }
+
+        // Zero read as no cap once, in the run's own override, and "no cap"
+        // has to be something a person says. Named here rather than taken as
+        // either reading.
+        if (team.Rules.Budget.Usd is { } usd && usd <= 0m)
+        {
+            Error("team-budget", $"Team '{team.Name}' sets budget.usd to {usd}. Give it a figure above zero, or '{UsdCap.NoneWord}' for no cap.");
         }
 
         foreach (var gate in team.Rules.Gates.Merge)

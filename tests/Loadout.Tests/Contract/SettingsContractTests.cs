@@ -58,6 +58,7 @@ public sealed class SettingsContractTests
             "listen" => "127.0.0.1",
             "webhook-teams" => "docs-crew, bug-hunt",
             "remedy" => "restart-the-daemon",
+            "team-budget" => "none",
             _ => string.Empty,
         },
         Url: "https://example.invalid/hooks/not-a-real-one",

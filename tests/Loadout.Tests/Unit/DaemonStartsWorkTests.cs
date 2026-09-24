@@ -2,6 +2,7 @@ using FluentAssertions;
 using Loadout.Cli.Commands;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams.Daemon;
+using Loadout.Models.Teams;
 using Loadout.Tui;
 using Spectre.Console;
 using Xunit;
@@ -115,10 +116,60 @@ public sealed class DaemonStartsWorkTests
     }
 
     /// <summary>
+    /// A schedule's budget goes on the command line it fires, the same way the
+    /// page's does: a run started at three in the morning with the team's own
+    /// budget, when somebody scheduled it with none, is the field that was
+    /// dropped between where it was set and where it was needed.
+    /// </summary>
+    [Theory]
+    [InlineData("none")]
+    [InlineData("25")]
+    public async Task A_schedule_fires_its_run_with_the_budget_it_was_given(string budget)
+    {
+        var held = new Held();
+        var daemon = Daemon(held, new NothingNominated());
+
+        var firing = daemon.StartAsync(
+            new TeamSchedule { Id = "nightly", Project = "loadout-cli", Team = "docs-crew", Goal = "check the docs", Budget = budget },
+            DateTimeOffset.UtcNow,
+            Output(),
+            CancellationToken.None);
+
+        await held.Asked();
+
+        held.Arguments.Should().ContainInOrder("--usd", budget);
+
+        held.Release();
+        await firing;
+    }
+
+    [Fact]
+    public async Task A_schedule_with_no_budget_leaves_the_teams_own()
+    {
+        var held = new Held();
+        var daemon = Daemon(held, new NothingNominated());
+
+        var firing = daemon.StartAsync(
+            new TeamSchedule { Id = "nightly", Project = "loadout-cli", Team = "docs-crew", Goal = "check the docs" },
+            DateTimeOffset.UtcNow,
+            Output(),
+            CancellationToken.None);
+
+        await held.Asked();
+
+        held.Arguments.Should().NotContain("--usd");
+
+        held.Release();
+        await firing;
+    }
+
+    /// <summary>
     /// Only the two things this path touches are real. The rest are not reached
     /// and standing them up would hide what the test is about.
     /// </summary>
-    private static TeamDaemonCommand Daemon(ICommandCatalogue commands) =>
+    private static TeamDaemonCommand Daemon(
+        ICommandCatalogue commands,
+        Loadout.Core.Tools.IToolNominationPass? nominations = null) =>
         new(
             secrets: null!,
             client: null!,
@@ -140,7 +191,17 @@ public sealed class DaemonStartsWorkTests
             workspace: null!,
             agents: null!,
             launcher: null!,
-            nominations: null!);
+            nominations: nominations!);
+
+    /// <summary>A nomination pass with nothing to file.</summary>
+    private sealed class NothingNominated : Loadout.Core.Tools.IToolNominationPass
+    {
+        public Task<IReadOnlyList<(Loadout.Core.Tools.ToolNomination Nomination, Loadout.Models.Results.OperationResult<Loadout.Core.Tools.ToolSubmitted>? Filed)>> BeforeAsync(
+            TeamSchedule schedule,
+            Action<string>? log = null,
+            CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<(Loadout.Core.Tools.ToolNomination, Loadout.Models.Results.OperationResult<Loadout.Core.Tools.ToolSubmitted>?)>>([]);
+    }
 
     private static CommandOutput Output() => new(Quiet(), new GlobalSettings());
 

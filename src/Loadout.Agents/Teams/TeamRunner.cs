@@ -65,6 +65,15 @@ namespace Loadout.Agents.Teams;
 /// run got to.
 /// </param>
 /// <param name="ResumeMessage">What the person said when picking it up, for the lead.</param>
+/// <param name="Budget">
+/// What this run may spend, said for this run: a figure, no cap, or not set
+/// for the team's own. Written to the run's override file at the start, where
+/// a later <c>team budget</c> changes it.
+/// </param>
+/// <param name="MachineBudget">
+/// This machine's default, from its own configuration, for a team whose file
+/// sets no budget. Below the run's and the team's, so a figure in either wins.
+/// </param>
 /// <param name="TakeRecommendationAfter">
 /// How long a lead's question with a recommendation waits for an answer before
 /// the recommendation is taken, or null to wait for a person. Only where the
@@ -95,7 +104,9 @@ public sealed record TeamRunRequest(
     string? Resuming = null,
     string? ResumeMessage = null,
     TimeSpan? TakeRecommendationAfter = null,
-    IReadOnlyList<Loadout.Models.Configuration.TrustedTool>? TrustedTools = null);
+    IReadOnlyList<Loadout.Models.Configuration.TrustedTool>? TrustedTools = null,
+    UsdCap Budget = default,
+    UsdCap MachineBudget = default);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -464,11 +475,19 @@ public sealed partial class TeamRunner : ITeamRunner
           schedules, the webhook and the dashboard all start runs without going
           near it.
         */
-        if (request.MaxRounds <= 0 && team.Rules.Budget.Usd is null)
+        //
+        // No cap is allowed, but only said: 'none' in the run, the team file or
+        // this machine's team-budget is somebody choosing it, where a missing
+        // figure is somebody forgetting one.
+        var said = (request.Resuming is { Length: > 0 } resumed ? RunControl.Cap(RunDirectory(resumed)) : UsdCap.Unset)
+            .Or(StartingCap(request, team));
+
+        if (request.MaxRounds <= 0 && !said.IsSet)
         {
             return OperationResult<TeamRunOutcome>.Fail(
                 $"Nothing would stop this run: '{team.Name}' sets no budget and no round limit "
-                + "was given. Set one - either 'budget: usd:' in the team, or --rounds.",
+                + "was given. Set one - 'budget: usd:' in the team, --usd, or --rounds - "
+                + $"or say '{UsdCap.NoneWord}' for no cap.",
                 ExitCode.InvalidArguments);
         }
 
@@ -646,6 +665,13 @@ public sealed partial class TeamRunner : ITeamRunner
 
         if (resuming is null)
         {
+            // Where a later 'team budget' or a raise will find and change it,
+            // so a budget given for this run outlives the process that took it.
+            if (request.Budget.IsSet)
+            {
+                await RunControl.SetCapAsync(directory, request.Budget, ct).ConfigureAwait(false);
+            }
+
             await journal.WriteAsync(
                 "run.started",
                 null,
@@ -659,8 +685,10 @@ public sealed partial class TeamRunner : ITeamRunner
                     path = where,
 
                     // What it may spend, so a page watching it can say where the
-                    // spend stands rather than only what it has cost.
-                    budget = team.Rules.Budget.Usd,
+                    // spend stands rather than only what it has cost. No cap is
+                    // said as such, so a reader can tell it from none given.
+                    budget = StartingCap(request, team).Usd,
+                    uncapped = StartingCap(request, team).None,
 
                     // Recorded so the run says, read back, that its questions
                     // did not all wait for a person.
@@ -695,7 +723,8 @@ public sealed partial class TeamRunner : ITeamRunner
                     autonomy,
                     rounds = request.MaxRounds,
                     message = request.ResumeMessage,
-                    budget = RunControl.Budget(directory) ?? team.Rules.Budget.Usd,
+                    budget = RunControl.Cap(directory).Or(StartingCap(request, team)).Usd,
+                    uncapped = RunControl.Cap(directory).Or(StartingCap(request, team)).None,
                 },
                 ct).ConfigureAwait(false);
         }
@@ -764,8 +793,8 @@ public sealed partial class TeamRunner : ITeamRunner
         // The budget the run was last held to, so a change is written down
         // once rather than every round.
         var heldTo = resuming is null
-            ? team.Rules.Budget.Usd
-            : RunControl.Budget(directory) ?? team.Rules.Budget.Usd;
+            ? StartingCap(request, team)
+            : RunControl.Cap(directory).Or(StartingCap(request, team));
         Report? final = null;
 
         // What the run put on branches of its own, and what the team's merge
@@ -792,7 +821,7 @@ public sealed partial class TeamRunner : ITeamRunner
         {
             var prompt = resuming is null
                 ? Render(leadBrief)
-                : Picking(resuming, request, lead.Plan, leadBrief, RunControl.Budget(directory) ?? team.Rules.Budget.Usd);
+                : Picking(resuming, request, lead.Plan, leadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd);
 
             while (true)
             {
@@ -827,28 +856,30 @@ public sealed partial class TeamRunner : ITeamRunner
                 // The team's figure unless somebody changed it while the run
                 // was going, which is read here each round so a raise from the
                 // dashboard or `team budget` lands before the next lead turn.
-                var ceiling = RunControl.Budget(directory) ?? team.Rules.Budget.Usd;
+                var ceiling = RunControl.Cap(directory).Or(StartingCap(request, team));
 
                 if (ceiling != heldTo)
                 {
                     heldTo = ceiling;
 
-                    await journal.WriteAsync("run.budget", null, new { budget = ceiling, by = "you" }, ct)
+                    await journal.WriteAsync(
+                        "run.budget", null, new { budget = ceiling.Usd, uncapped = ceiling.None, by = "you" }, ct)
                         .ConfigureAwait(false);
                 }
 
-                if (ceiling is { } spendable && cost >= spendable)
+                if (ceiling.Usd is { } spendable && cost >= spendable)
                 {
                     // Somebody is watching, so the run asks rather than ends:
                     // a run stopped on its budget with the goal half done was
                     // otherwise a run that could not be picked up again.
-                    if (_asking && await RaiseAsync(console, cost, spendable, ct).ConfigureAwait(false) is { } raised)
+                    if (_asking && await RaiseAsync(console, cost, spendable, ct).ConfigureAwait(false) is { IsSet: true } raised)
                     {
-                        await RunControl.SetBudgetAsync(directory, raised, ct).ConfigureAwait(false);
+                        await RunControl.SetCapAsync(directory, raised, ct).ConfigureAwait(false);
 
                         heldTo = raised;
 
-                        await journal.WriteAsync("run.budget", null, new { budget = raised, by = "you" }, ct)
+                        await journal.WriteAsync(
+                            "run.budget", null, new { budget = raised.Usd, uncapped = raised.None, by = "you" }, ct)
                             .ConfigureAwait(false);
                     }
                     else
@@ -3551,16 +3582,17 @@ public sealed partial class TeamRunner : ITeamRunner
 
     /// <summary>
     /// Asks the person watching whether a run that has spent its budget may
-    /// have more, and how much. Null ends the run.
+    /// have more, and how much. Not set ends the run.
     /// </summary>
     /// <remarks>
     /// Two raises offered, half as much again and double, rounded up to a
-    /// whole dollar. An answer in the person's own words is read as the new
-    /// budget when it is a figure above what has been spent - "40" or "$40" -
-    /// and as stopping when it is anything else, since money is the one thing
-    /// here not worth guessing about.
+    /// whole dollar, and taking the cap off. An answer in the person's own
+    /// words is read as the new budget when it is a figure above what has been
+    /// spent - "40" or "$40" - or as no cap when it is
+    /// <see cref="UsdCap.NoneWord" />, and as stopping when it is anything
+    /// else, since money is the one thing here not worth guessing about.
     /// </remarks>
-    internal static async Task<decimal?> RaiseAsync(
+    internal static async Task<UsdCap> RaiseAsync(
         ITeamConsole console,
         decimal spent,
         decimal budget,
@@ -3574,34 +3606,44 @@ public sealed partial class TeamRunner : ITeamRunner
         var chosen = await console.DecideAsync(
             new ReportQuestion(
                 $"The run has spent ${spent:0.00} of its ${budget:0.00} budget. Give it more",
-                [Offer(half), Offer(twice)],
+                [Offer(half), Offer(twice), TakeTheCapOff],
                 Offer(half)),
             ct).ConfigureAwait(false);
 
         if (chosen is null)
         {
-            return null;
+            return UsdCap.Unset;
         }
 
         if (chosen == Offer(half))
         {
-            return half;
+            return UsdCap.Of(half);
         }
 
         if (chosen == Offer(twice))
         {
-            return twice;
+            return UsdCap.Of(twice);
         }
 
-        return decimal.TryParse(
-                chosen.Trim().TrimStart('$'),
-                System.Globalization.NumberStyles.Number,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var typed)
-            && typed > spent
-                ? typed
-                : null;
+        if (chosen == TakeTheCapOff)
+        {
+            return UsdCap.NoCap;
+        }
+
+        return UsdCap.TryParse(chosen, out var typed) && (typed.None || typed.Usd > spent)
+            ? typed
+            : UsdCap.Unset;
     }
+
+    /// <summary>The answer to <see cref="RaiseAsync" /> that lets the run carry on with no cap.</summary>
+    internal const string TakeTheCapOff = "Take the cap off";
+
+    /// <summary>
+    /// What a run is held to before anything changes it: the run's own, else
+    /// the team file's, else this machine's default.
+    /// </summary>
+    private static UsdCap StartingCap(TeamRunRequest request, TeamDefinition team) =>
+        request.Budget.Or(team.Rules.Budget.Cap).Or(request.MachineBudget);
 
     private static async Task<bool> GateAsync(string autonomy, ITeamConsole console, string what, CancellationToken ct)
     {

@@ -3,6 +3,7 @@ using Loadout.Agents.Teams;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams;
 using Loadout.Models;
+using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
 using Loadout.Tui;
 using Spectre.Console;
@@ -571,8 +572,8 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
     public sealed class Settings : RunSettings
     {
         [CommandOption("--usd <AMOUNT>")]
-        [Description("What it may spend in total, in USD. Not an addition: 40 means 40 altogether.")]
-        public decimal? Usd { get; init; }
+        [Description("What it may spend in total, in USD, or none for no cap. Not an addition: 40 means 40 altogether.")]
+        public string? Usd { get; init; }
     }
 
     /// <inheritdoc />
@@ -585,9 +586,11 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
 
         var output = new CommandOutput(_console, settings);
 
-        if (settings.Usd is not { } usd || usd <= 0)
+        if (!UsdCap.TryParse(settings.Usd, out var cap) || !cap.IsSet)
         {
-            return output.Fail("Say what it may spend with --usd, as a figure above zero.", ExitCode.InvalidArguments);
+            return output.Fail(
+                $"Say what it may spend with --usd, as a figure above zero, or '{UsdCap.NoneWord}' for no cap.",
+                ExitCode.InvalidArguments);
         }
 
         var (run, error) = RunControlling.Resolve(_journal, settings.Run);
@@ -610,21 +613,28 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
 
         var spent = summary.Value?.CostUsd ?? 0m;
 
+        var allowed = cap.Usd is { } usd ? $"spend ${usd:0.00} in all" : "spend with no cap";
+
         if (settings.DryRun)
         {
             output.WriteLine(
-                $"Would let run {Markup.Escape(run)} spend ${usd:0.00} in all "
+                $"Would let run {Markup.Escape(run)} {allowed} "
                 + $"(${spent:0.00} so far). Nothing was written.");
 
             return CommandOutput.Success();
         }
 
-        await RunControl.SetBudgetAsync(_journal.DirectoryOf(run), usd, cancellationToken).ConfigureAwait(false);
+        await RunControl.SetCapAsync(_journal.DirectoryOf(run), cap, cancellationToken).ConfigureAwait(false);
 
         output.WriteLine(
-            $"[green]+[/] {Markup.Escape(run)} may spend ${usd:0.00} in all, from its next round "
+            $"[green]+[/] {Markup.Escape(run)} may {allowed}, from its next round "
             + $"(${spent:0.00} so far)."
-            + (usd <= spent ? " [yellow]That is below what it has spent, so it stops at its next check.[/]" : string.Empty));
+            + (cap.Usd is { } figure && figure <= spent
+                ? " [yellow]That is below what it has spent, so it stops at its next check.[/]"
+                : string.Empty)
+            + (cap.None
+                ? " [yellow]Nothing but its round limit, its wall clock and two quiet rounds will stop it now.[/]"
+                : string.Empty));
 
         return CommandOutput.Success();
     }

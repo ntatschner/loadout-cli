@@ -93,7 +93,9 @@ public sealed class TeamRunnerTests : IDisposable
         int rounds = 5,
         IReadOnlyList<string>? criteria = null,
         TimeSpan? takeRecommendationAfter = null,
-        ITeamConsole? console = null)
+        ITeamConsole? console = null,
+        UsdCap budget = default,
+        UsdCap machineBudget = default)
     {
         return await new TeamRunner(
             _launcher,
@@ -105,7 +107,8 @@ public sealed class TeamRunnerTests : IDisposable
             tasks).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
-                Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter),
+                Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
+                Budget: budget, MachineBudget: machineBudget),
             console ?? _console);
     }
 
@@ -1359,6 +1362,50 @@ public sealed class TeamRunnerTests : IDisposable
         refused.Error.Should().Contain("--rounds");
 
         _launcher.Requests.Should().BeEmpty("it is refused before anything is briefed");
+    }
+
+    /// <summary>
+    /// No cap is allowed when somebody says so - in the team file, for this
+    /// run, or as this machine's default - and never because nobody said
+    /// anything.
+    /// </summary>
+    [Theory]
+    [InlineData("team")]
+    [InlineData("run")]
+    [InlineData("machine")]
+    public async Task A_run_told_there_is_no_cap_needs_no_round_limit(string where)
+    {
+        var team = await IteratingProjectAsync();
+        team.Rules.Budget.Usd = null;
+        team.Rules.Budget.Uncapped = where == "team";
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var run = await RunAsync(
+            team,
+            rounds: 0,
+            budget: where == "run" ? UsdCap.NoCap : default,
+            machineBudget: where == "machine" ? UsdCap.NoCap : default);
+
+        run.Succeeded.Should().BeTrue(run.Error);
+
+        var journal = await File.ReadAllTextAsync(Path.Combine(_paths.Paths.State, "teams", "runs", run.Value!.RunId, "journal.jsonl"));
+        journal.Should().Contain("\"uncapped\":true", "the journal says no cap rather than no figure");
+    }
+
+    [Fact]
+    public async Task A_figure_in_the_team_file_wins_over_the_machines_no_cap()
+    {
+        var team = await IteratingProjectAsync();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var run = await RunAsync(team, rounds: 0, machineBudget: UsdCap.NoCap);
+
+        run.Succeeded.Should().BeTrue(run.Error);
+
+        var journal = await File.ReadAllTextAsync(Path.Combine(_paths.Paths.State, "teams", "runs", run.Value!.RunId, "journal.jsonl"));
+        journal.Should().Contain($"\"budget\":{team.Rules.Budget.Usd}").And.Contain("\"uncapped\":false");
     }
 
     [Fact]

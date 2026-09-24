@@ -1,3 +1,5 @@
+using Loadout.Models.Teams;
+
 namespace Loadout.Core.Teams;
 
 /// <summary>
@@ -45,35 +47,40 @@ public static class RunControl
     /// lands before the next lead turn and a run that already stopped on its
     /// budget is not reached by one.
     /// </remarks>
-    public static decimal? Budget(string directory)
+    public static decimal? Budget(string directory) => Cap(directory).Usd;
+
+    /// <summary>
+    /// What somebody set the run's budget to while it was going: a figure,
+    /// no cap, or not set, meaning the team's own.
+    /// </summary>
+    /// <remarks>
+    /// Anything unreadable - an empty file, zero, a word other than
+    /// <see cref="UsdCap.NoneWord" /> - is not set, never no cap: taking the cap
+    /// off is something a person says.
+    /// </remarks>
+    public static UsdCap Cap(string directory)
     {
         try
         {
             var path = Path.Combine(directory, BudgetFile);
 
-            return File.Exists(path)
-                && decimal.TryParse(
-                    File.ReadAllText(path).Trim(),
-                    System.Globalization.NumberStyles.Number,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out var usd)
-                && usd > 0
-                    ? usd
-                    : null;
+            return File.Exists(path) && UsdCap.TryParse(File.ReadAllText(path), out var cap)
+                ? cap
+                : UsdCap.Unset;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return null;
+            return UsdCap.Unset;
         }
     }
 
     /// <summary>Sets what the run may spend from its next round on.</summary>
     public static Task SetBudgetAsync(string directory, decimal usd, CancellationToken ct = default) =>
-        WriteAsync(
-            directory,
-            BudgetFile,
-            usd.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
-            ct);
+        SetCapAsync(directory, UsdCap.Of(usd), ct);
+
+    /// <summary>Sets what the run may spend from its next round on: a figure, or no cap.</summary>
+    public static Task SetCapAsync(string directory, UsdCap cap, CancellationToken ct = default) =>
+        WriteAsync(directory, BudgetFile, cap.ToString(), ct);
 
     /// <summary>Whether somebody has asked this run to stop.</summary>
     public static bool Stopped(string directory) => There(directory, StopFile);

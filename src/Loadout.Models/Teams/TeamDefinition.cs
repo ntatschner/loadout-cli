@@ -202,6 +202,15 @@ public sealed class TeamBudget
     /// <summary>Across the whole run.</summary>
     public decimal? Usd { get; set; }
 
+    /// <summary>
+    /// Whether the team file said <c>usd: none</c>: no money cap, on purpose,
+    /// which is not the same as saying nothing.
+    /// </summary>
+    public bool Uncapped { get; set; }
+
+    /// <summary>What the team file says about money, as one value.</summary>
+    public UsdCap Cap => Uncapped ? UsdCap.NoCap : Usd is { } usd && usd > 0m ? UsdCap.Of(usd) : UsdCap.Unset;
+
     /// <summary>Per node session.</summary>
     public int? TurnsPerNode { get; set; }
 
