@@ -75,6 +75,27 @@ public sealed class ToolCommandsContractTests
     }
 
     [BuiltCliFact]
+    public async Task Health_json_measures_each_active_tool_on_four_dimensions()
+    {
+        var (loadout, _) = await CatalogueAsync();
+        using var _ = loadout;
+
+        var run = await loadout.RunAsync("tools", "health", "free-cache", "--json");
+
+        run.ExitCode.Should().Be(0, run.StandardError);
+        var tool = run.Json().GetProperty("tools").EnumerateArray().Should().ContainSingle().Subject;
+        tool.GetProperty("name").GetString().Should().Be("free-cache");
+        tool.GetProperty("version").GetString().Should().Be("1.0");
+        tool.GetProperty("performance").GetProperty("cases").GetInt32().Should().Be(4);
+        tool.GetProperty("usability").GetProperty("uses").GetInt32().Should().Be(0);
+        tool.GetProperty("maintainability").GetProperty("scriptLines").GetInt32().Should().Be(2);
+        tool.GetProperty("relevance").GetProperty("daysIdle").GetInt32().Should().Be(0, "it was promoted just now and never used");
+        tool.GetProperty("crossed").GetArrayLength().Should().Be(0);
+
+        (await loadout.RunAsync("tools", "health", "no-such-tool", "--json")).ExitCode.Should().NotBe(0);
+    }
+
+    [BuiltCliFact]
     public async Task Show_json_carries_versions_and_trust()
     {
         var (loadout, _) = await CatalogueAsync();

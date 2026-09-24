@@ -137,6 +137,13 @@ public interface IToolRegistry
     bool NeedsRefining(string name);
 
     /// <summary>
+    /// Every active tool measured for performance, usability, maintainability
+    /// and relevance, or just the one named. A tool with no active version is
+    /// left out, having nothing to measure.
+    /// </summary>
+    IReadOnlyList<ToolHealth> Health(string? name = null);
+
+    /// <summary>
     /// Every active tool whose active version is known-good and still matches
     /// what was promoted, with its script as it is now.
     /// </summary>
@@ -525,13 +532,31 @@ public sealed partial class ToolRegistry : IToolRegistry
             activeCases = ReadCases(Path.Combine(VersionDirectory(head.Name, known.Version), "cases"));
         }
 
+        // Timed here rather than in the harness, so the time is the one the
+        // gate saw and lands in the record the gate writes.
+        var seconds = new Dictionary<string, double>(StringComparer.Ordinal);
+
+        async Task<ToolCaseResult> Timed(string path, ToolCase one, CancellationToken token)
+        {
+            var started = _clock.GetTimestamp();
+            var result = await _harness.RunAsync(path, one, token).ConfigureAwait(false);
+            var took = Math.Round(_clock.GetElapsedTime(started).TotalSeconds, 3);
+
+            lock (seconds)
+            {
+                seconds[one.Name] = seconds.TryGetValue(one.Name, out var was) ? Math.Max(was, took) : took;
+            }
+
+            return result;
+        }
+
         var gate = await ToolPromotion.GateAsync(
             version,
             scriptPath,
             cases,
             active,
             activeCases,
-            (path, one, token) => _harness.RunAsync(path, one, token),
+            Timed,
             ct).ConfigureAwait(false);
 
         version.Status = gate.Passed ? ToolVersionStatus.Verified : ToolVersionStatus.Rejected;
@@ -543,6 +568,7 @@ public sealed partial class ToolRegistry : IToolRegistry
             RegressionAgainst = active is null ? [] : [active.Version],
             Fingerprint = RemedyCeiling.Fingerprint(script),
             CasesFingerprint = CasesFingerprint(Path.Combine(directory, "cases")),
+            Seconds = seconds,
         };
 
         using (var held = Lock())
@@ -923,12 +949,23 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// looks found nothing worth changing, and a third would find the same.
     /// Something new - a promotion, a submission about the tool, a use that
     /// failed or was worked around - starts the count again.
+    /// <para>
+    /// A crossed health threshold overrides the stand-downs: they record that
+    /// nothing was worth changing, and a tool now failing one use in four, or
+    /// taking half a minute a case, or unused for two months, is a different
+    /// tool from the one looked at then.
+    /// </para>
     /// </remarks>
     public bool NeedsRefining(string name)
     {
         if (ReadHead(name) is not { } head || head.Lifecycle == ToolLifecycle.Retired)
         {
             return false;
+        }
+
+        if (Health(head.Name) is [{ Crossed.Count: > 0 }])
+        {
+            return true;
         }
 
         var standDowns = 0;
@@ -946,6 +983,58 @@ public sealed partial class ToolRegistry : IToolRegistry
         }
 
         return standDowns < 2;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<ToolHealth> Health(string? name = null)
+    {
+        var shapes = new List<(ToolRecord Record, ToolVersion Version, ToolShape Shape, DateTimeOffset? Promoted)>();
+
+        foreach (var head in Heads().Where(one => one.Lifecycle == ToolLifecycle.Active))
+        {
+            if (ActiveVersion(head) is not { } version)
+            {
+                continue;
+            }
+
+            string script;
+
+            try
+            {
+                script = File.ReadAllText(Path.Combine(VersionDirectory(head.Name, version.Version), version.Script));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            var promoted = Audit(head.Name).Where(one => one.Action == "promote").Select(one => (DateTimeOffset?)one.At).LastOrDefault();
+            shapes.Add((head, version, new ToolShape(head.Capabilities, head.Summary, script), promoted));
+        }
+
+        var measured = new List<ToolHealth>();
+
+        foreach (var (head, version, shape, promoted) in shapes)
+        {
+            if (name is not null && !string.Equals(head.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // Newer by its last promotion, so a tool refined since does not
+            // count as superseded by one it predates.
+            var newer = shapes
+                .Where(other => other.Record.Name != head.Name
+                    && other.Promoted > promoted
+                    && ToolOverlap.Score(shape, other.Shape).Overlaps)
+                .Select(other => other.Record.Name)
+                .FirstOrDefault();
+
+            measured.Add(ToolHealth.Measure(
+                head, version, shape.Script, Usage(head.Name), Audit(head.Name), newer, _clock.GetUtcNow()));
+        }
+
+        return measured;
     }
 
     /// <inheritdoc />

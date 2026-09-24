@@ -678,6 +678,7 @@ public static class Program
             tools.AddCommand<ToolSubmitCommand>("submit");
             tools.AddCommand<ToolUsedCommand>("used");
             tools.AddCommand<ToolAuditCommand>("audit");
+            tools.AddCommand<ToolHealthCommand>("health");
             tools.AddCommand<ToolVerifyCommand>("verify");
             tools.AddCommand<ToolPromoteCommand>("promote");
             tools.AddCommand<ToolDeprecateCommand>("deprecate");

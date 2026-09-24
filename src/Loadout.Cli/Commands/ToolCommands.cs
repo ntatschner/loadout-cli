@@ -503,6 +503,82 @@ public sealed class ToolAuditCommand : Command<ToolAuditCommand.Settings>
     }
 }
 
+/// <summary>How each active tool is doing, beyond whether its cases pass.</summary>
+[Description("Measure active tools: case times, recent failures and workarounds, size and churn, and whether anyone still uses them.")]
+[CommandMeta(CommandCategory.Start,
+    Intent = "tools health measure performance usability maintainability relevance refine",
+    Example = "loadout tools health free-cache --json")]
+public sealed class ToolHealthCommand : Command<ToolHealthCommand.Settings>
+{
+    private readonly IToolRegistry _registry;
+    private readonly IAnsiConsole _console;
+
+    public ToolHealthCommand(IToolRegistry registry, IAnsiConsole console)
+    {
+        _registry = registry;
+        _console = console;
+    }
+
+    public sealed class Settings : ToolSettings
+    {
+        [CommandArgument(0, "[name]")]
+        [Description("One tool. Every active tool when left out.")]
+        public string Name { get; init; } = string.Empty;
+    }
+
+    /// <inheritdoc />
+    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var named = settings.Name is { Length: > 0 } name ? name : null;
+        var tools = _registry.Health(named);
+
+        if (named is not null && tools.Count == 0)
+        {
+            return output.Fail($"There is no active tool called '{named}' to measure.", ExitCode.ProjectNotFound);
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { tools });
+
+            return CommandOutput.Success();
+        }
+
+        if (tools.Count == 0)
+        {
+            output.WriteLine("[dim]No tool is active, so there is nothing to measure.[/]");
+        }
+
+        foreach (var one in tools)
+        {
+            var p = one.Performance;
+            var u = one.Usability;
+            var m = one.Maintainability;
+            var r = one.Relevance;
+
+            output.WriteLine($"[bold]{Markup.Escape(one.Name)}[/]@{Markup.Escape(one.Version)}");
+            output.WriteLine(p.Cases == 0
+                ? "  performance     [dim]no case times recorded; verify again to take them[/]"
+                : $"  performance     median {p.MedianSeconds:0.###}s, worst {p.WorstSeconds:0.###}s ({Markup.Escape(p.WorstCase ?? string.Empty)}) over {p.Cases} cases");
+            output.WriteLine($"  usability       {u.Uses} recent uses, {u.FailedRate:P0} failed, {u.WorkaroundRate:P0} worked around, {u.Teams} teams");
+            output.WriteLine($"  maintainability {m.ScriptLines} lines, {m.Inputs} inputs, {m.Dependencies} dependencies, {m.Versions} versions, {m.RecentPromotions} promoted lately");
+            output.WriteLine("  relevance       "
+                + (r.DaysIdle is { } idle ? $"idle {idle} days" : "never used")
+                + (r.SupersededBy is { } newer ? $", overlapped by newer {Markup.Escape(newer)}" : string.Empty));
+
+            foreach (var crossed in one.Crossed)
+            {
+                output.WriteLine($"  [yellow]{Markup.Escape(crossed)}[/]");
+            }
+        }
+
+        return CommandOutput.Success();
+    }
+}
+
 /// <summary>Running a draft's harness and the regression gate.</summary>
 [Description("Verify a draft: run its harness and the known-good cases, where this machine allows it.")]
 [CommandMeta(CommandCategory.Start,
