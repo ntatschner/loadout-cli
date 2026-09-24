@@ -161,6 +161,12 @@ public static class ServiceRegistration
         services.AddSingleton<Teams.IRunJournal, Teams.RunJournal>();
         services.AddSingleton<Teams.IRunOutbox, Teams.RunOutbox>();
         services.AddSingleton<Teams.IRemedyBook, Teams.RemedyBook>();
+        services.AddSingleton<Tools.ToolHarness>();
+        services.AddSingleton<Tools.IToolRegistry>(provider => new Tools.ToolRegistry(
+            provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>(),
+            provider.GetRequiredService<Tools.ToolHarness>(),
+            provider.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<Tools.IToolNominationPass, Tools.ToolNominationPass>();
         services.AddSingleton<Teams.IScheduleService, Teams.ScheduleService>();
         services.AddSingleton<Diagnostics.IDiagnosticContributor, Teams.Daemon.DaemonDiagnosticContributor>();
 

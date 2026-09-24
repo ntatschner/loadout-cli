@@ -65,6 +65,30 @@ public sealed class TrustedRemedy
     public DateTimeOffset? At { get; set; }
 }
 
+/// <summary>One version of a catalogue tool somebody at this machine agreed may run.</summary>
+/// <remarks>
+/// A version rather than a tool, and a fingerprint as well, for the reason a
+/// remedy carries one: trust is granted to a script, and a tool whose next
+/// version is better is still a script nobody has read yet.
+/// </remarks>
+public sealed class TrustedTool
+{
+    /// <summary>The tool, by name.</summary>
+    public string Tool { get; set; } = string.Empty;
+
+    /// <summary>The version agreed to, major.minor.</summary>
+    public string Version { get; set; } = string.Empty;
+
+    /// <summary>The script as it was when it was agreed to.</summary>
+    public string Fingerprint { get; set; } = string.Empty;
+
+    /// <summary>Who said so.</summary>
+    public string By { get; set; } = string.Empty;
+
+    /// <summary>When.</summary>
+    public DateTimeOffset? At { get; set; }
+}
+
 public sealed class MachineTeams
 {
     /// <summary>
@@ -133,6 +157,17 @@ public sealed class MachineTeams
     /// </para>
     /// </remarks>
     public List<TrustedRemedy> TrustedRemedies { get; set; } = [];
+
+    /// <summary>
+    /// Catalogue tools somebody at this machine has said may run, each naming
+    /// the exact version and script they agreed to.
+    /// </summary>
+    /// <remarks>
+    /// Written only by <c>loadout tools trust</c>, and here for the reason
+    /// <see cref="TrustedRemedies" /> is: the catalogue's files are written by
+    /// agents, so nothing in them can say what may run.
+    /// </remarks>
+    public List<TrustedTool> TrustedTools { get; set; } = [];
 
     /// <summary>
     /// The address the dashboard and its webhook listen on.

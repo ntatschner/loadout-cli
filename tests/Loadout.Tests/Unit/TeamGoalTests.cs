@@ -158,6 +158,33 @@ public sealed class TeamGoalTests
     }
 
     [Fact]
+    public void Brief_carries_the_tools_pointer_and_no_tool_names()
+    {
+        var read = TeamRunner.Render(Briefed());
+
+        read.Should().Contain("## Shared tools");
+        read.Should().Contain(TeamRunner.ToolsPointer);
+        read.Should().Contain("loadout_tools_search");
+
+        // A tool is offered to a remediator's permissions as tool:<name>@<version>,
+        // never listed to a node in its brief.
+        read.Should().NotContain("tool:");
+    }
+
+    [Fact]
+    public void Brief_length_does_not_grow_with_the_registry()
+    {
+        // The section is the pointer and nothing else: whatever the catalogue
+        // holds is fetched when a node asks, so no listing of tools can grow
+        // here and be paid for in every brief.
+        var read = TeamRunner.Render(Briefed());
+        var start = read.IndexOf("## Shared tools", StringComparison.Ordinal);
+        var end = read.IndexOf("## Task", start, StringComparison.Ordinal);
+
+        read[start..end].Trim().Should().Be("## Shared tools" + Environment.NewLine + Environment.NewLine + TeamRunner.ToolsPointer);
+    }
+
+    [Fact]
     public void A_team_with_nothing_standing_to_say_says_nothing()
     {
         // Most teams have a description and need no second one. An empty

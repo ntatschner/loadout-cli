@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Loadout.Core.Instructions;
 using Loadout.Core.Teams;
+using Loadout.Core.Tools;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -210,6 +211,66 @@ public sealed class RemedyGateTests
         // agent can ignore is a rule the tools should have enforced: an edited
         // remedy is one nobody has agreed to.
         Allowed("role.remediator").Should().NotContain("Write").And.NotContain("Edit");
+    }
+
+    private const string ToolScript = "param([string]$CachePath)\nGet-ChildItem $CachePath | Remove-Item\n";
+
+    private static readonly Dictionary<string, string> TrustedKind = new() { ["unclassified"] = "trusted" };
+
+    private static async Task<ToolRegistry> CatalogueAsync(ToolStoreFixture store)
+    {
+        var (registry, _) = store.Registry();
+        await store.PromoteAsync(registry, ToolStoreFixture.Manifest("free-cache", "1.0"), ToolScript, ToolStoreFixture.Cases());
+
+        return registry;
+    }
+
+    private static IReadOnlyList<Loadout.Models.Configuration.TrustedTool> AgreedTo(string version) =>
+    [
+        new() { Tool = "free-cache", Version = version, Fingerprint = RemedyCeiling.Fingerprint(ToolScript) },
+    ];
+
+    [Fact]
+    public async Task An_active_global_tool_is_matched_by_its_versioned_file_name()
+    {
+        using var store = new ToolStoreFixture();
+        var registry = await CatalogueAsync(store);
+        var policy = new NodePolicy(
+            "r", "remediator/1", ToolOffer.Remediator, ["Bash"], [], Ask: true,
+            Remedies: ToolOffer.For(registry, ToolOffer.Remediator, TrustedKind, AgreedTo("1.0")));
+
+        var one = NodePermissions.Decide(policy, "Bash", Calling("pwsh ./free-cache.v1.0.ps1"));
+        var next = NodePermissions.Decide(policy, "Bash", Calling("pwsh ./free-cache.v1.1.ps1"));
+
+        one.Allowed.Should().BeTrue();
+        one.Reason.Should().Contain("tool:free-cache@1.0");
+        next.Reason.Should().NotContain("tool:free-cache@1.0", "a trust given to one version names that version's file");
+    }
+
+    [Fact]
+    public async Task A_candidate_tool_is_never_offered()
+    {
+        using var store = new ToolStoreFixture();
+        var registry = await CatalogueAsync(store);
+        var head = Path.Combine(registry.Root(), "free-cache", "tool.yaml");
+        File.WriteAllText(head, File.ReadAllText(head).Replace("lifecycle: active", "lifecycle: candidate", StringComparison.Ordinal));
+
+        registry.Show("free-cache").Value!.Record.Lifecycle.Should().Be("candidate");
+        ToolOffer.For(registry, ToolOffer.Remediator, TrustedKind, AgreedTo("1.0")).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_global_tool_is_offered_only_to_the_remediator()
+    {
+        using var store = new ToolStoreFixture();
+        var registry = await CatalogueAsync(store);
+
+        ToolOffer.For(registry, ToolOffer.Remediator, TrustedKind, AgreedTo("1.0")).Should().ContainSingle();
+
+        foreach (var other in new[] { "role.fixer", "role.investigator", "role.implementer", "role.project-lead" })
+        {
+            ToolOffer.For(registry, other, TrustedKind, AgreedTo("1.0")).Should().BeEmpty(other + " does not run scripts");
+        }
     }
 
     [Fact]

@@ -207,6 +207,7 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
             OutwardAllowed: ceiling.Allowed,
             Remediation: machine.Value?.Teams.Remediation,
             TrustedRemedies: machine.Value?.Teams.TrustedRemedies,
+            TrustedTools: machine.Value?.Teams.TrustedTools,
             Resuming: run,
             ResumeMessage: settings.Message is { Length: > 0 } said ? said.Trim() : null,
 

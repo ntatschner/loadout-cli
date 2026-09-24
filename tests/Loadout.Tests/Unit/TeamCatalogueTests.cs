@@ -52,7 +52,7 @@ public sealed class TeamCatalogueTests : IDisposable
 
         catalogue.Teams.Keys.Should().BeEquivalentTo(
             ["iterating-project", "bug-hunt", "release-crew", "docs-crew", "dependency-sweep",
-             "marketing-studio", "product-company", "system-watch"]);
+             "marketing-studio", "product-company", "system-watch", "tool-works"]);
 
         catalogue.Findings.Should().BeEmpty(
             "a shipped team naming a role that does not ship is a shipped defect");
@@ -75,6 +75,28 @@ public sealed class TeamCatalogueTests : IDisposable
         team.Rules.Gates.Merge.Should().Equal("reviewer", "verifier");
         team.Rules.StopWhen.Should().Equal("goal_met", "budget_spent", "no_progress_2_rounds");
         team.Template.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task tool_works_team_validates()
+    {
+        // The standing team behind the global tool catalogue, with the rules
+        // the person accepted: cheap, unattended, and asking before anything
+        // leaves the machine.
+        var catalogue = await LoadAsync();
+        var team = catalogue.Find("tool-works")!;
+
+        catalogue.Findings.Should().NotContain(f => f.Rule == "tool-works");
+
+        team.Nodes["lead"].Role.Should().Be("role.project-lead");
+        team.Nodes["lead"].Delegates.Should().Equal("creator", "refiner");
+        team.Nodes["creator"].Role.Should().Be("role.tool-creator");
+        team.Nodes["refiner"].Role.Should().Be("role.tool-refiner");
+        team.Rules.Autonomy.Should().Be("autonomous");
+        team.Rules.Budget.Usd.Should().Be(3m);
+        team.Rules.Budget.TurnsPerNode.Should().Be(30);
+        team.Rules.Gates.Outward.Should().Be("ask");
+        team.Rules.StopWhen.Should().Equal("goal_met", "budget_spent", "no_progress_2_rounds");
     }
 
     [Fact]
