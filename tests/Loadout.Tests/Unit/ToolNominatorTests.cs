@@ -207,11 +207,121 @@ public sealed class ToolNominatorTests : IDisposable
         }
     }
 
+    /// <summary>An instruction paragraph of well over thirty words, as a lead might hand every reviewer.</summary>
+    private const string Checklist =
+        "Before you report, read every changed file from top to bottom, run the tests that cover it, "
+        + "and write down each command you ran with the exact result it printed. Name anything you could "
+        + "not verify and say what would verify it, rather than leaving it out of the report altogether.";
+
+    [Fact]
+    public void Rule_5_a_repeated_workflow_across_teams_is_nominated()
+    {
+        Run("20260901-1000-a001", "alpha",
+            Command("git fetch origin"), Command("dotnet build Alpha.slnx"), Command("dotnet test Alpha.slnx --no-build"));
+        Run("20260902-1000-b001", "beta",
+            Command("git fetch origin"), Command("dotnet build Beta.slnx"), Command("dotnet test Beta.slnx --no-build"));
+
+        Nominator().Find([]).Should().ContainSingle(one => one.Rule == 5
+            && one.Key == "5 git fetch origin | dotnet build <arg> | dotnet test <arg> --no-build");
+    }
+
+    [Fact]
+    public void Rule_6_a_repeated_prompt_across_teams_is_nominated()
+    {
+        Run("20260901-1000-a001", "alpha", Brief("Review the parser change.\n\n" + Checklist));
+        Run("20260902-1000-b001", "beta", Brief("Check the new export screen.\n\n  " + Checklist.ToUpperInvariant().Replace(" ", "  \n ", StringComparison.Ordinal)));
+
+        var scanned = Nominator().Scan([]);
+
+        scanned.Should().ContainSingle(one => one.Nomination.Rule == 6);
+
+        var filed = File.ReadAllText(Directory.EnumerateFiles(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Single());
+        filed.Should().Contain("kind: candidate").And.Contain("- prompt");
+        filed.Should().NotContain("parser").And.NotContain("export screen", "only the shared paragraph is carried, not either project's");
+    }
+
+    [Fact]
+    public void Rule_7_a_shared_integration_is_nominated()
+    {
+        // Every node talks to Loadout's own server, so that says nothing.
+        Run("20260901-1000-a001", "alpha", Stream(
+            new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__github__create_issue", "alpha/repo"),
+            new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__loadout__loadout_progress")));
+        Run("20260902-1000-b001", "beta",
+            new ReportEvidence(EvidenceKind.Command, "mcp__github__list_pulls beta/repo", EvidenceResult.Pass, "3 open"),
+            new ReportEvidence(EvidenceKind.Command, "mcp__loadout__loadout_recall build", EvidenceResult.Pass, "2 topics"));
+        Run("20260903-1000-a002", "alpha", Stream(new NodeStep(DateTimeOffset.UnixEpoch, "tool", "WebFetch", "https://status.example.com/api/v2")));
+        Run("20260904-1000-b002", "beta", Command("curl -s https://status.example.com/api/v2/summary.json"));
+
+        var found = Nominator().Find([]);
+
+        found.Should().Contain(one => one.Rule == 7 && one.Key == "7 mcp github");
+        found.Should().Contain(one => one.Rule == 7 && one.Key == "7 http status.example.com");
+        found.Should().NotContain(one => one.Rule == 7 && one.Key.Contains("loadout", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void One_team_repeating_itself_is_not_nominated_for_5_6_7()
+    {
+        foreach (var run in new[] { "20260901-1000-a001", "20260902-1000-a002", "20260903-1000-a003" })
+        {
+            Run(run, "alpha",
+                Command("git fetch origin"), Command("dotnet build Alpha.slnx"), Command("dotnet test Alpha.slnx --no-build"),
+                Command("curl -s https://status.example.com/api/v2/summary.json"),
+                new ReportEvidence(EvidenceKind.Command, "mcp__github__list_pulls alpha/repo", EvidenceResult.Pass, "3 open"));
+            File.WriteAllText(Path.Combine(new RunJournal(_store.Paths).DirectoryOf(run), "brief-reviewer-1.json"), Brief(Checklist).Json);
+        }
+
+        Nominator().Find([]).Should().NotContain(one => one.Rule >= 5);
+    }
+
+    [Fact]
+    public void A_prompt_nomination_carries_no_secret_value()
+    {
+        const string Key = "AKIAABCDEFGHIJKLMNOP";
+        var paragraph = Checklist + " Sign in with the access key " + Key + " when the tests need the bucket.";
+
+        Run("20260901-1000-a001", "alpha", Brief(paragraph));
+        Run("20260902-1000-b001", "beta", Brief(paragraph));
+
+        var scanned = Nominator().Scan([]);
+
+        scanned.Should().ContainSingle(one => one.Nomination.Rule == 6 && one.Filed != null && one.Filed.Failed);
+
+        var catalogue = Path.Combine(_store.Paths.Paths.State, "tools");
+        var written = Directory.Exists(catalogue)
+            ? Directory.EnumerateFiles(catalogue, "*", SearchOption.AllDirectories)
+            : [];
+
+        foreach (var file in written)
+        {
+            File.ReadAllText(file).Should().NotContainEquivalentOf(Key, $"{file} was written by the nominator");
+        }
+    }
+
     private ToolNominator Nominator() =>
         new(_store.Registry().Registry, new RunJournal(_store.Paths), new RemedyBook(_store.Paths), _store.Paths);
 
     private static ReportEvidence Command(string command) =>
         new(EvidenceKind.Command, command, EvidenceResult.Pass, "exit 0");
+
+    /// <summary>A brief for a reviewer, to put beside a run's report.</summary>
+    private static Extra Brief(string task) =>
+        new("brief-reviewer-1.json", ReportReader.Write(new Brief(
+            "run", "reviewer/1", "lead", "role.reviewer", task, DeliverableKind.Answer, [], new BriefConstraints("review"), [])));
+
+    /// <summary>A node's stream, as the runner records one.</summary>
+    private static Extra Stream(params NodeStep[] steps) =>
+        new(NodeStream.FileFor("worker/1"), string.Join('\n', steps.Select(NodeStream.Line)) + "\n");
+
+    private sealed record Extra(string Name, string Json);
+
+    /// <summary>A finished run with no evidence of its own, only this file beside it.</summary>
+    private void Run(string runId, string team, Extra extra)
+    {
+        Run(runId, team);
+        File.WriteAllText(Path.Combine(new RunJournal(_store.Paths).DirectoryOf(runId), extra.Name), extra.Json);
+    }
 
     /// <summary>A remedy on a team's shelf, as a node registers one.</summary>
     private void Shelve(string team, string name, string script, int revision = 0)
