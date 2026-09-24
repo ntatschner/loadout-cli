@@ -69,6 +69,9 @@
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
+| `loadout tools search\|show\|submit\|used` | The tools this machine shares between every team: find one before building it, send in a candidate, idea, bug or lesson, and say how a use went |
+| `loadout tools audit\|verify\|promote\|deprecate\|retire` | Look after the catalogue: what happened to it, whether its files still match, and a tool's way in and out |
+| `loadout tools trust <name@version> [--revoke]` | Agree that one version's script may run on this machine, as it is now |
 | `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
 | `loadout team new\|edit\|remove` | Write a team of your own, open its file, or delete it |
 | `loadout team run <team> "<goal>" --done-when` | Say what the run is judged on, one per use. The lead must report a verdict and evidence for every one |
@@ -401,7 +404,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Eleven tools, each making the same call its command makes:
+Fifteen tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -416,6 +419,10 @@ Eleven tools, each making the same call its command makes:
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
 | `loadout_progress` | For a node of a team run: say what you are doing, in your own words |
 | `loadout_teams` | What the team runs on this machine are doing, and which have stopped to ask |
+| `loadout_tools_search` | The machine's shared tools matching some words, as `tools search` finds them |
+| `loadout_tools_show` | One shared tool in full: its purpose, inputs, outputs, versions and why it exists |
+| `loadout_tools_submit` | Send the catalogue a candidate, idea, bug or lesson, screened for credentials, as `tools submit` does |
+| `loadout_tools_used` | Say how a use of a shared tool went, as `tools used` does |
 
 `loadout_recall` exists because only the memory index reaches the context — one
 line per topic — and a session deciding from that alone either opens six files

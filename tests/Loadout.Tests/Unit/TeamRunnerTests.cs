@@ -1147,6 +1147,76 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_node_can_reach_no_part_of_the_tool_catalogue_but_drafts_and_inbox()
+    {
+        // The catalogue's safety rests on this: verify records, the audit log,
+        // the heads and the version directories are all files, and a node that
+        // could write them could forge any of them.
+        var team = await IteratingProjectAsync();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        (await RunAsync(team)).Succeeded.Should().BeTrue();
+
+        CatalogueReachIsOnlyDraftsAndInbox();
+    }
+
+    [Fact]
+    public async Task A_tool_works_node_reaches_drafts_and_inbox_and_nothing_else_of_the_catalogue()
+    {
+        // The guard above on the team that has catalogue writers, so the
+        // drafts-and-inbox branch actually runs rather than passing vacuously.
+        var team = (await new TeamCatalogue().LoadAsync(null, null, await SpecialistsAsync())).Find("tool-works")!;
+        var creator = new Report(
+            "creator", ReportStatus.Done, "Drafted nothing; searched first.",
+            [new ReportDeliverable(DeliverableKind.File, "drafts/none")], [Passed], []);
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(new ReportRequest("creator", "Look at the inbox.", DeliverableKind.File, [])), 0.05m),
+            Result(LeadDone(), 0.09m),
+            Result(LeadDone(), 0.09m));
+        _launcher.Script("role.tool-creator", Init("creator-1"), Result(creator, 0.02m));
+
+        (await RunAsync(team)).Succeeded.Should().BeTrue();
+
+        var catalogue = Path.GetFullPath(Path.Combine(_paths.Paths.State, "tools"));
+        var reached = _launcher.Requests
+            .Where(one => one.Request.Specialists?.Contains("role.tool-creator") == true)
+            .SelectMany(one => one.Request.ReachableDirectories ?? [])
+            .Select(Path.GetFullPath)
+            .ToList();
+
+        reached.Should().Contain(Path.Combine(catalogue, "drafts")).And.Contain(Path.Combine(catalogue, "inbox"));
+        CatalogueReachIsOnlyDraftsAndInbox();
+    }
+
+    private void CatalogueReachIsOnlyDraftsAndInbox()
+    {
+        var catalogue = Path.GetFullPath(Path.Combine(_paths.Paths.State, "tools"));
+        var allowed = new[] { Path.Combine(catalogue, "drafts"), Path.Combine(catalogue, "inbox") };
+
+        foreach (var reached in _launcher.Requests.SelectMany(one => one.Request.ReachableDirectories ?? []))
+        {
+            var full = Path.GetFullPath(reached);
+            var inside = (full + Path.DirectorySeparatorChar).StartsWith(
+                catalogue + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            var covers = (catalogue + Path.DirectorySeparatorChar).StartsWith(
+                full + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+            covers.Should().BeFalse($"{reached} holds the whole catalogue");
+
+            if (inside)
+            {
+                allowed.Should().Contain(one => (full + Path.DirectorySeparatorChar).StartsWith(
+                    one + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase),
+                    $"{reached} is in the catalogue outside drafts and inbox");
+            }
+        }
+    }
+
+    [Fact]
     public async Task A_dry_run_names_the_team_directory_and_makes_nothing()
     {
         // --dry-run means change nothing, and that includes not making a

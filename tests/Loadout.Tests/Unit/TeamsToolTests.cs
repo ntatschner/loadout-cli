@@ -43,7 +43,8 @@ public sealed class TeamsToolTests
             symbols: null!,
             runs,
             new Clock(Noon.AddMinutes(10)),
-            new LoadoutToolScope(null));
+            new LoadoutToolScope(null),
+            catalogue: null!);
 
     [Fact]
     public void A_run_that_wants_somebody_says_so_in_its_first_line()

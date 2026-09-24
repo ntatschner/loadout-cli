@@ -47,6 +47,25 @@ public sealed class UnixFactAttribute : FactAttribute
 }
 
 /// <summary>
+/// A test that takes a permission away from itself, which root on Unix cannot
+/// lose: mode bits do not apply to uid 0, so the fixture would not hold.
+/// </summary>
+/// <remarks>
+/// Not skipped for an elevated Windows process, because a deny entry naming
+/// the user's own SID applies to administrators too.
+/// </remarks>
+public sealed class DeniableFactAttribute : FactAttribute
+{
+    public DeniableFactAttribute()
+    {
+        if (!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess)
+        {
+            Skip = "Running as root: file mode bits cannot deny uid 0 anything.";
+        }
+    }
+}
+
+/// <summary>
 /// A Unix test that additionally cannot pass on macOS, where setting a pty
 /// window size does not work.
 /// </summary>

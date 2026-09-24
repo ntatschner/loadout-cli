@@ -1408,6 +1408,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             // Never read from the team's directory, which its own nodes write
             // in. Trust lives on this machine or it is not trust.
             TrustedRemedies: machine?.Teams.TrustedRemedies,
+            TrustedTools: machine?.Teams.TrustedTools,
 
             // Blank ones dropped rather than passed through: an empty criterion
             // is one the lead can never report a verdict on, so it would refuse

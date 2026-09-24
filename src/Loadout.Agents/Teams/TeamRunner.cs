@@ -36,6 +36,10 @@ namespace Loadout.Agents.Teams;
 /// The remedies this machine has agreed may run, from its own configuration.
 /// Never read from a team's directory, which its own nodes write in.
 /// </param>
+/// <param name="TrustedTools">
+/// The catalogue tool versions this machine has agreed may run, from its own
+/// configuration. Never read from the catalogue, which agents write in.
+/// </param>
 /// <param name="Criteria">
 /// What this run is judged on, each one checkable, or null for a run with
 /// nothing but its goal.
@@ -90,7 +94,8 @@ public sealed record TeamRunRequest(
     IReadOnlyList<string>? Criteria = null,
     string? Resuming = null,
     string? ResumeMessage = null,
-    TimeSpan? TakeRecommendationAfter = null);
+    TimeSpan? TakeRecommendationAfter = null,
+    IReadOnlyList<Loadout.Models.Configuration.TrustedTool>? TrustedTools = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -389,7 +394,8 @@ public sealed partial class TeamRunner : ITeamRunner
         Core.Projects.IProjectService? projects = null,
         Core.Git.IGitManager? git = null,
         IChildLifetime? lifetime = null,
-        Core.Tasks.ITaskService? tasks = null)
+        Core.Tasks.ITaskService? tasks = null,
+        Core.Tools.IToolRegistry? tools = null)
     {
         _launcher = launcher;
         _paths = paths;
@@ -398,7 +404,10 @@ public sealed partial class TeamRunner : ITeamRunner
         _git = git;
         _lifetime = lifetime;
         _tasks = tasks;
+        _tools = tools;
     }
+
+    private readonly Core.Tools.IToolRegistry? _tools;
 
     /// <inheritdoc />
     public async Task<OperationResult<TeamRunOutcome>> RunAsync(
@@ -2270,7 +2279,14 @@ public sealed partial class TeamRunner : ITeamRunner
                     // What this team has registered and what was decided about
                     // each, worked out here so that whatever answers the node's
                     // questions reads no files and holds no opinion.
-                    Remedies: Standing(team, request.Remediation, request.TrustedRemedies)),
+                    //
+                    // The catalogue's tools join them for a remediator only,
+                    // the one role that runs scripts, ruled the same way.
+                    Remedies:
+                    [
+                        .. Standing(team, request.Remediation, request.TrustedRemedies),
+                        .. Core.Tools.ToolOffer.For(_tools, role.Id, request.Remediation, request.TrustedTools),
+                    ]),
                 ct).ConfigureAwait(false);
 
         var options = new HeadlessOptions(
@@ -2326,9 +2342,49 @@ public sealed partial class TeamRunner : ITeamRunner
             // in. Without it the agent refuses every write there, which is
             // what it did: the directory existed, the path in the brief was
             // right, the declaration was clear, and nothing could be written.
-            ReachableDirectories: brief.TeamDirectory is { Length: > 0 } kept ? [kept] : null);
+            ReachableDirectories: Reachable(brief, role.Id, dryRun));
 
         return await _launcher.StartHeadlessAsync(launch, options, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The roles that write drafts and read the inbox of the tool catalogue.</summary>
+    private static readonly HashSet<string> CatalogueWriters =
+        new(StringComparer.Ordinal) { "role.tool-creator", "role.tool-refiner" };
+
+    /// <summary>
+    /// The directories a node may write outside its tree: the team's own, and
+    /// for the catalogue's creator and refiner its drafts and inbox.
+    /// </summary>
+    /// <remarks>
+    /// Those two and never the catalogue's root. The verify records, the audit
+    /// log, the heads and the versions sit beside them, and a node that could
+    /// write those could forge any of them.
+    /// </remarks>
+    private List<string>? Reachable(Brief brief, string role, bool dryRun)
+    {
+        var reach = new List<string>();
+
+        if (brief.TeamDirectory is { Length: > 0 } kept)
+        {
+            reach.Add(kept);
+        }
+
+        if (CatalogueWriters.Contains(role))
+        {
+            foreach (var one in new[] { "drafts", "inbox" })
+            {
+                var directory = Path.Combine(_paths.Paths.State, "tools", one);
+
+                if (!dryRun)
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                reach.Add(directory);
+            }
+        }
+
+        return reach.Count > 0 ? reach : null;
     }
 
     /// <summary>Where a run keeps everything it writes.</summary>
@@ -3051,6 +3107,13 @@ public sealed partial class TeamRunner : ITeamRunner
         return slash > 0 ? name[..slash] : name;
     }
 
+    /// <summary>What every brief says about the machine's shared tools, and all it says.</summary>
+    internal const string ToolsPointer =
+        "This machine keeps a catalogue of tools shared by every team. Before building something "
+        + "that might already exist, search it: `loadout tools search <words>` or "
+        + "`loadout_tools_search`. Use `show` for the detail. Submit a tool, idea, bug or lesson "
+        + "with `loadout_tools_submit`, and say what you used with `loadout_tools_used`.";
+
     /// <summary>The brief as the node reads it: the prose first, the JSON beside it, the contract last.</summary>
     internal static string Render(Brief brief)
     {
@@ -3117,6 +3180,10 @@ public sealed partial class TeamRunner : ITeamRunner
                 + "a remedy once, against that exact script, and until they have a remediator asks "
                 + "before running it. A record claiming to be trusted decides nothing.").AppendLine();
         }
+
+        // Fixed text, the same length whatever the catalogue holds. What is in
+        // it is fetched when somebody asks, not paid for in every brief.
+        text.AppendLine("## Shared tools").AppendLine().AppendLine(ToolsPointer).AppendLine();
 
         text.AppendLine("## Task").AppendLine().AppendLine(brief.Task).AppendLine();
         text.AppendLine("## Deliverable").AppendLine().AppendLine(brief.Deliverable.ToString().ToLowerInvariant()).AppendLine();

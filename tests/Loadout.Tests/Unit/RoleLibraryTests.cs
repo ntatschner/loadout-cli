@@ -126,6 +126,35 @@ public sealed class RoleLibraryTests
     }
 
     [Theory]
+    [InlineData("role.tool-creator")]
+    [InlineData("role.tool-refiner")]
+    public async Task Creator_and_refiner_roles_cannot_promote_or_trust(string id)
+    {
+        // They propose; promotion is the gate's and trust is a person's. A
+        // blanket 'loadout tools' allow would have let both through, so this
+        // goes through the same gate a node's call would.
+        var role = (await LibraryAsync()).Find(id)!.Role!;
+        var policy = new Loadout.Core.Teams.NodePolicy("run", "node", id, role.AllowedTools, role.DeniedTools);
+
+        bool Allowed(string command) => Loadout.Core.Teams.NodePermissions
+            .Decide(policy, "Bash", $$"""{"command":{{System.Text.Json.JsonSerializer.Serialize(command)}}}""")
+            .Allowed;
+
+        Allowed("loadout tools promote free-disk-by-cache@1.0").Should().BeFalse();
+        Allowed("loadout tools trust free-disk-by-cache@1.0").Should().BeFalse();
+        Allowed("loadout tools search disk cache").Should().BeTrue();
+        Allowed("loadout tools submit --kind candidate --text x").Should().BeTrue();
+
+        // A draft runs only through 'loadout tools verify', which goes through
+        // the same gate as every other script; running it directly would not.
+        Allowed("pwsh -NoProfile -File x.ps1").Should().BeFalse();
+
+        // Lifecycle is the Refiner's alone, and changes nothing that runs.
+        Allowed("loadout tools deprecate free-disk-by-cache --reason unused")
+            .Should().Be(id == "role.tool-refiner");
+    }
+
+    [Theory]
     [InlineData("role.reviewer")]
     [InlineData("role.verifier")]
     public async Task Echo_is_not_a_way_for_a_reading_role_to_write_a_file(string id)
