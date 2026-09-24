@@ -95,6 +95,8 @@ or anything that leaves your machine.
 A run with no budget in its team file and no `--rounds` is refused before it
 starts, naming both — without either, a lead that keeps asking for one more
 thing would spend until somebody noticed. Every team that ships sets a budget.
+To run with no money cap, say so: `--usd none` for the run, `usd: none` in the
+team file, or `loadout config set team-budget none` for teams that set none.
 
 ### 4. Choose how much it asks you
 
@@ -203,8 +205,8 @@ committed, such as a plan.
 ## If it went wrong
 
 - **The run was refused.** Read the reason: usually no budget and no
-  `--rounds`, or an autonomous run asking for an outward action this machine
-  hasn't agreed to.
+  `--rounds` (give `--usd`, a figure or `none`, or `--rounds`), or an
+  autonomous run asking for an outward action this machine hasn't agreed to.
 - **A `done` was sent back.** A criterion was unmet or unanswered. The reason
   names it.
 - **You want the detail.** `loadout team log --events` prints what happened —

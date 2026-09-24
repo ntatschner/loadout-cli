@@ -320,6 +320,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "every remediation is held for you, whatever the team trusts"),
 
+        new("team-budget",
+            "What a team run may spend when its team file sets no budget: a figure in US dollars, or none for no cap",
+            (_, m) => m.Teams.Budget,
+            (_, m, v) => m.Teams.Budget = TeamBudget(v),
+            true,
+            Sample: "none",
+            Group: Groups.Machine,
+            WhenUnset: "a team with no budget of its own needs one given, or a round limit, to run"),
+
         new("show-speech",
             "Whether the full-screen launcher speaks what it shows: off, screen-reader",
             (c, _) => c.Accessibility.Display.Speech,
@@ -681,6 +690,13 @@ public static class ConfigKeys
             out var parsed) && parsed >= 0
             ? parsed
             : throw new FormatException($"'{value}' is not a whole number of zero or more.");
+
+    /// <summary>A default team budget: a figure above zero, none, or empty to clear it.</summary>
+    /// <remarks>Refused rather than guessed, for the reason <see cref="Count" /> gives.</remarks>
+    private static string? TeamBudget(string value) =>
+        Models.Teams.UsdCap.TryParse(value, out var cap)
+            ? cap.IsSet ? cap.ToString() : null
+            : throw new FormatException($"'{value}' is not a budget. Give a figure above zero, or '{Models.Teams.UsdCap.NoneWord}' for no cap.");
 
     /// <summary>
     /// Reads a flag generously. Somebody turning a segment off will type

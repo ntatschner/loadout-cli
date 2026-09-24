@@ -63,6 +63,10 @@ somebody noticed. So a team with no `budget: usd:` and a run with no `--rounds`
 is refused before it briefs anything, naming both. Every team that ships sets a
 budget, so this is about one you wrote or edited.
 
+You can run with no money cap, but you have to say so: `none` wherever a budget
+goes (see below). A missing figure is somebody forgetting one; `none` is
+somebody choosing it, and only the second gets past the refusal.
+
 **Nodes that may run together do.** A node says how many instances may run at
 once, and whether each gets its own git worktree. Briefing stays sequential,
 because you cannot answer two gates at once, and so does starting, because two
@@ -121,7 +125,34 @@ rules:
 
 Money is per run; turns are per node session. A cap stops the run *after* the
 turn that crosses it — the agent reports a turn's cost when the turn is over, so
-there is no earlier moment to stop at.
+there is no earlier moment to stop at. A lead picking up a long session can
+spend a lot in one turn, so `team resume` tells you what its last turn cost
+before it starts.
+
+**No cap.** `usd: none` means the run has no money cap, on purpose. It is
+different from leaving `usd` out, which means the team says nothing and the run
+needs a budget or `--rounds` from somewhere else. A run with no cap still stops
+on its wall clock, its turns per node, two rounds without progress, a lead that
+says done, or you.
+
+What a run is held to comes from the first of these that says anything:
+
+1. the run itself — `team run --usd`, `team resume --usd`, `team budget`, the
+   dashboard's budget box or its start form, or `team schedule add --usd` for
+   the runs a schedule fires;
+2. the team file's `budget: usd:`;
+3. this machine's default, `loadout config set team-budget <figure or none>`,
+   also in the dashboard's settings.
+
+Each takes a figure in US dollars or `none`. Zero or a negative figure is
+refused rather than read as no cap. Because the team file comes before the
+machine's default and every team that ships sets a figure, `team-budget none`
+reaches the teams you wrote without one — to take the cap off a shipped team,
+say `none` for the run.
+
+When a watched run reaches its budget it asks whether to raise it, and one of
+the answers is to take the cap off. You can do the same while it runs with
+`team budget <run> --usd none`.
 
 ## What a team may not do
 

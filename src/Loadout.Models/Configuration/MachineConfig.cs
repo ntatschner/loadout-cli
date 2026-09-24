@@ -137,6 +137,17 @@ public sealed class MachineTeams
     public Dictionary<string, string> Remediation { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// What a team run may spend when its team file sets no budget and the
+    /// run gives none: a figure in US dollars, <c>none</c> for no cap, or
+    /// empty for no default.
+    /// </summary>
+    /// <remarks>
+    /// Below the run's own and the team file's, so a team that sets a figure
+    /// keeps it. Kept as the text it was set with, checked when it is set.
+    /// </remarks>
+    public string? Budget { get; set; }
+
+    /// <summary>
     /// Remedies somebody at this machine has said may run, each naming the
     /// exact script they agreed to.
     /// </summary>

@@ -37,6 +37,7 @@ public sealed record TrustedOnThisMachine(string Team, string Remedy, string By,
 /// <param name="WebhookTeams">What something outside this machine may start, by name.</param>
 /// <param name="WebhookTokenSet">Whether a trigger token is held. Never the token.</param>
 /// <param name="Trusted">Remedies agreed to run unattended.</param>
+/// <param name="TeamBudget">This machine's default for a team that sets no budget: a figure, none, or empty.</param>
 public sealed record MachineSettings(
     string NotifyKind,
     string NotifyChat,
@@ -47,7 +48,8 @@ public sealed record MachineSettings(
     string WebhookListen,
     IReadOnlyList<string> WebhookTeams,
     bool WebhookTokenSet,
-    IReadOnlyList<TrustedOnThisMachine> Trusted);
+    IReadOnlyList<TrustedOnThisMachine> Trusted,
+    string TeamBudget = "");
 
 /// <summary>
 /// Something the page asked this machine be set to.

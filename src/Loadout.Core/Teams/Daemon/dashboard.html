@@ -2459,6 +2459,17 @@
             </div>
 
             <div class="lk-field">
+              <label for="start-budget" class="lk-label">Budget (USD) <span class="lk-optional">optional</span></label>
+              <!-- Text rather than a number box, because "none" is an answer:
+                   no cap, said on purpose. The command reads it and refuses
+                   anything that is not a figure above zero or none. -->
+              <input type="text" id="start-budget" inputmode="decimal" class="lk-input"
+                     placeholder="the team's budget" aria-describedby="start-budget-about">
+              <p class="lk-help" id="start-budget-about">What this run may spend in all.
+                Leave it empty for the team's own budget, or type none for no cap.</p>
+            </div>
+
+            <div class="lk-field">
               <label for="start-autonomy" class="lk-label">Autonomy</label>
               <select id="start-autonomy" class="lk-select">
                 <option value="">the team's own</option>
@@ -2862,6 +2873,24 @@
 
         <div class="lk-fields">
           <div class="lk-field lk-field--wide">
+            <label for="set-team-budget" class="lk-label">Budget for a team that sets none (USD)</label>
+            <!-- This machine's default, below a team's own figure and a run's.
+                 Every team that ships sets one, so this reaches teams you wrote
+                 without a budget: a figure, none for no cap, or empty for none. -->
+            <input type="text" id="set-team-budget" inputmode="decimal" class="lk-input"
+                   placeholder="no default" aria-describedby="set-team-budget-about">
+            <p class="lk-help" id="set-team-budget-about">Used only where a team's file and
+              the run say nothing. Type a figure, none for no cap, or leave it empty for
+              no default - then such a team needs a budget or a round limit to run.</p>
+          </div>
+
+          <div class="lk-btn-row lk-field--wide">
+            <button type="button" id="set-team-budget-go" class="lk-btn">Set the default budget</button>
+          </div>
+        </div>
+
+        <div class="lk-fields">
+          <div class="lk-field lk-field--wide">
             <label for="set-listen" class="lk-label">Listen on</label>
             <input type="text" id="set-listen" aria-describedby="set-listen-about" class="lk-input">
             <!-- The one setting on this page that changes who can reach your
@@ -2945,8 +2974,9 @@
            between rounds, the same as hold and stop. -->
       <div class="lk-inline">
         <div class="lk-field">
-          <label for="budget-usd" class="lk-label">What it may spend in all (USD)</label>
-          <input type="number" id="budget-usd" min="1" step="1" inputmode="decimal" class="lk-input">
+          <label for="budget-usd" class="lk-label">What it may spend in all (USD, or none)</label>
+          <input type="text" id="budget-usd" inputmode="decimal" class="lk-input"
+                 placeholder="a figure, or none for no cap">
         </div>
         <button type="button" id="set-budget" class="lk-btn">Set budget</button>
       </div>
@@ -3096,6 +3126,21 @@
   // by the poll - an answer to something somebody clicked lasted less than
   // half a second there, and a screen reader could miss it entirely.
   var saidTimer = null;
+
+  /*
+    What somebody typed as a budget: { usd: n } for a figure above zero,
+    { none: true } for no cap, or null for anything else. The commands check
+    it again; this only decides what the page offers to send.
+  */
+  function budgetTyped(text) {
+    var said = String(text || "").trim().replace(/^\$/, "");
+
+    if (/^none$/i.test(said)) { return { none: true }; }
+
+    var usd = Number(said);
+
+    return said && usd > 0 ? { usd: usd } : null;
+  }
 
   function announce(said) {
     var box = document.getElementById("said");
@@ -3537,6 +3582,7 @@
       var goal = document.getElementById("start-goal").value.trim();
       var project = document.getElementById("start-project").value.trim();
       var rounds = parseInt(document.getElementById("start-rounds").value, 10);
+      var budget = document.getElementById("start-budget").value.trim();
       var autonomy = document.getElementById("start-autonomy").value;
       var model = document.getElementById("start-model").value.trim();
       var agent = document.getElementById("start-agent").value.trim();
@@ -3594,6 +3640,7 @@
             goal: goal,
             project: project || null,
             rounds: rounds > 0 ? rounds : null,
+            budget: budget || null,
             autonomy: autonomy || null,
             criteria: criteria.length ? criteria : null,
             model: model || null,
@@ -7130,7 +7177,8 @@
 
       var cap = run.budget && run.budget.cap;
 
-      fact(facts, ["", "$" + run.cost.toFixed(2), cap ? " of $" + Number(cap).toFixed(2) : ""]);
+      fact(facts, ["", "$" + run.cost.toFixed(2),
+        cap ? " of $" + Number(cap).toFixed(2) : run.budget && run.budget.uncapped ? ", no cap" : ""]);
 
       if (gate && gate.at) {
         var waited = Math.max(0, Math.round((Date.now() - Date.parse(gate.at)) / 1000));
@@ -7422,12 +7470,25 @@
 
     var box = document.getElementById("detail-budget");
     var cap = run.budget && run.budget.cap;
+    var uncapped = run.budget && run.budget.uncapped;
 
     if (!box) { return; }
 
-    box.hidden = !cap;
+    box.hidden = !cap && !uncapped;
 
-    if (!cap) { return; }
+    // No cap is said rather than hidden: an empty space reads as "unknown",
+    // and this is somebody's decision that the run may spend without limit.
+    if (!cap) {
+      if (uncapped) {
+        document.getElementById("detail-budget-said").textContent =
+          "$" + (run.budget.spent || 0).toFixed(2) + ", no cap";
+        document.getElementById("detail-budget-fill").style.setProperty("--v", "0%");
+        box.removeAttribute("data-level");
+        document.getElementById("detail-budget-note").hidden = true;
+      }
+
+      return;
+    }
 
     var spent = run.budget.spent || 0;
     var share = spent / cap;
@@ -8012,27 +8073,37 @@
     // typing in it: this is called on every refresh, and a box that reset
     // itself every few seconds could never be changed.
     if (document.activeElement !== usd) {
-      usd.value = run.budget && run.budget.cap ? run.budget.cap : "";
+      usd.value = run.budget && run.budget.cap ? run.budget.cap
+        : run.budget && run.budget.uncapped ? "none" : "";
     }
 
     document.getElementById("set-budget").onclick = function () {
-      var wanted = Number(usd.value);
+      var wanted = budgetTyped(usd.value);
 
-      if (!(wanted > 0)) {
-        announce("Type what it may spend, as a figure above zero.");
+      if (!wanted) {
+        announce("Type what it may spend, as a figure above zero, or none for no cap.");
 
         return;
       }
 
       var spent = run.budget ? run.budget.spent || 0 : 0;
 
-      agreed("Let " + run.id + " spend $" + wanted.toFixed(2) + " in all? It has spent $"
-        + spent.toFixed(2) + " so far"
-        + (wanted <= spent ? ", so it stops at its next check." : "."), "Set the budget").then(function (yes) {
+      var asked = wanted.none
+        ? "Take the cap off " + run.id + "? It has spent $" + spent.toFixed(2)
+          + " so far, and only its round limit, its wall clock and two quiet rounds will stop it."
+        : "Let " + run.id + " spend $" + wanted.usd.toFixed(2) + " in all? It has spent $"
+          + spent.toFixed(2) + " so far"
+          + (wanted.usd <= spent ? ", so it stops at its next check." : ".");
+
+      agreed(asked, wanted.none ? "Take the cap off" : "Set the budget").then(function (yes) {
         if (!yes) { return; }
 
-        act(run.id, "budget", { budget: String(wanted) })
-          .then(function () { announce(run.id + " may spend $" + wanted.toFixed(2) + " from its next round."); })
+        act(run.id, "budget", { budget: wanted.none ? "none" : String(wanted.usd) })
+          .then(function () {
+            announce(wanted.none
+              ? run.id + " has no cap from its next round."
+              : run.id + " may spend $" + wanted.usd.toFixed(2) + " from its next round.");
+          })
           .catch(function (e) { announce(e.message); });
       });
     };
@@ -8117,20 +8188,23 @@
 
     pickup.onclick = function () {
       var spent = run.budget ? run.budget.spent || 0 : 0;
-      var wanted = Number(document.getElementById("budget-usd").value);
+      var wanted = budgetTyped(document.getElementById("budget-usd").value);
       var said = document.getElementById("say").value.trim();
 
       var body = {};
 
-      if (wanted > spent && (!run.budget || wanted !== run.budget.cap)) {
-        body.budget = String(wanted);
+      if (wanted && wanted.none && !(run.budget && run.budget.uncapped)) {
+        body.budget = "none";
+      } else if (wanted && !wanted.none && wanted.usd > spent && (!run.budget || wanted.usd !== run.budget.cap)) {
+        body.budget = String(wanted.usd);
       }
 
       if (said) { body.message = said; }
 
       agreed("Pick up " + (run.room || run.id) + " where it stopped"
         + (run.ended ? " (" + run.ended + ")" : "") + "?"
-        + (body.budget ? " It may spend $" + wanted.toFixed(2) + " in all." : "")
+        + (body.budget === "none" ? " It has no cap."
+          : body.budget ? " It may spend $" + wanted.usd.toFixed(2) + " in all." : "")
         + (said ? "\n\nThe lead is told: " + said : ""), "Pick it up").then(function (yes) {
         if (!yes) { return; }
 
@@ -8318,6 +8392,7 @@
         "a list of words");
 
       document.getElementById("set-listen").value = set.webhookListen || "";
+      document.getElementById("set-team-budget").value = set.teamBudget || "";
       document.getElementById("set-webhook-teams").value =
         (set.webhookTeams || []).join(", ");
 
@@ -8536,6 +8611,37 @@
           return fillSettings();
         })
         .catch(function (e) { announce(e.message); });
+    });
+
+    document.getElementById("set-team-budget-go").addEventListener("click", function () {
+      var typed = document.getElementById("set-team-budget").value.trim();
+      var wanted = typed ? budgetTyped(typed) : null;
+
+      if (typed && !wanted) {
+        announce("Type a figure above zero, none for no cap, or leave it empty for no default.");
+
+        return;
+      }
+
+      var value = !wanted ? "" : wanted.none ? "none" : String(wanted.usd);
+
+      agreed(!wanted
+        ? "Clear the default? A team that sets no budget will need one given, or a round limit, to run."
+        : wanted.none
+          ? "Let every team that sets no budget run with no cap? Scheduled and unattended runs of those teams included."
+          : "Give every team that sets no budget $" + wanted.usd.toFixed(2) + " per run?",
+        "Set the default").then(function (yes) {
+        if (!yes) { return; }
+
+        settle({ what: "team-budget", value: value })
+          .then(function () {
+            announce(!wanted ? "No default budget." : wanted.none ? "Teams with no budget of their own run with no cap."
+              : "Teams with no budget of their own may spend $" + wanted.usd.toFixed(2) + " a run.");
+
+            return fillSettings();
+          })
+          .catch(function (e) { announce(e.message); });
+      });
     });
 
     document.getElementById("set-listen-go").addEventListener("click", function () {

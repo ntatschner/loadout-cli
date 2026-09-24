@@ -1549,6 +1549,10 @@ public sealed class DashboardServer : IDisposable
         {
             spent = run.CostUsd,
             cap = run.BudgetUsd,
+
+            // Said, so the page can tell a run with no cap on purpose from one
+            // whose budget it simply does not know.
+            uncapped = run.Uncapped,
         },
 
         // What it has cost is on the page already and nobody acts on it. What

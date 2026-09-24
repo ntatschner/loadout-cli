@@ -43,6 +43,12 @@ public sealed class TeamSchedule
     /// <summary>How often, when it runs on an interval.</summary>
     public TimeSpan? Every { get; set; }
 
+    /// <summary>
+    /// What each run it fires may spend, as <c>team run --usd</c> takes it: a
+    /// figure, <c>none</c> for no cap, or empty for the team's own.
+    /// </summary>
+    public string Budget { get; set; } = string.Empty;
+
     /// <summary>The local time of day it runs at, when it runs daily.</summary>
     public TimeOnly? At { get; set; }
 

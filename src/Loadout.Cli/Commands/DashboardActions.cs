@@ -42,7 +42,7 @@ internal static partial class DashboardActions
     /// </remarks>
     internal static readonly string[] Settings =
     [
-        "notify", "office", "waiting", "listen", "webhook-teams", "webhook", "remedy",
+        "notify", "office", "waiting", "listen", "webhook-teams", "webhook", "remedy", "team-budget",
     ];
 
     /// <summary>
@@ -85,6 +85,7 @@ internal static partial class DashboardActions
             "office" => ("config set", ["team-office-set", change.Value ?? string.Empty]),
             "waiting" => ("config set", ["team-waiting-set", change.Value ?? string.Empty]),
             "listen" => ("config set", ["team-webhook-listen", change.Value ?? string.Empty]),
+            "team-budget" => ("config set", ["team-budget", change.Value ?? string.Empty]),
             "webhook-teams" => ("config set", ["team-webhook-teams", change.Value ?? string.Empty]),
 
             "webhook" => (change.Off ? "team webhook disable" : "team webhook enable", []),
@@ -232,6 +233,7 @@ internal static partial class DashboardActions
             WaitingSet: teams?.WaitingSet ?? string.Empty,
             OfficeSets: OfficeArt.Sets(OfficeArt.Chosen(paths, null).Root),
             WebhookListen: Webhook.Listen(teams),
+            TeamBudget: teams?.Budget ?? string.Empty,
             WebhookTeams: teams?.WebhookTeams ?? [],
             WebhookTokenSet: await Webhook.TokenAsync(secrets, ct).ConfigureAwait(false) is not null,
             Trusted:
@@ -445,6 +447,14 @@ internal static partial class DashboardActions
         {
             arguments.Add("--rounds");
             arguments.Add(rounds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        // Passed as typed. The command reads it and refuses one that is not a
+        // budget, which is where the page hears why.
+        if (asking.Budget is { Length: > 0 } budget && budget.Trim().Length > 0)
+        {
+            arguments.Add("--usd");
+            arguments.Add(budget.Trim());
         }
 
         if (asking.Autonomy is { Length: > 0 } autonomy)

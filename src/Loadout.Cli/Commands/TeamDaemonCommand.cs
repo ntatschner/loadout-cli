@@ -1230,6 +1230,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 "--project", schedule.Project,
                 "--autonomy", schedule.Autonomy,
                 "--non-interactive",
+                .. schedule.Budget is { Length: > 0 } budget ? (string[])["--usd", budget] : [],
             ],
             ct).ConfigureAwait(false);
     }

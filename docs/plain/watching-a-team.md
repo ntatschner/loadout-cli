@@ -97,7 +97,8 @@ one.
 ## If something went wrong
 
 - **The team refused to start.** It has no budget and no limit on rounds. Read
-  the message. It says what to add.
+  the message. It says what to add. To let it run with no money limit, type
+  `none` as its budget.
 - **The dashboard page says the link is wrong.** The dashboard restarted. Copy
   the new address from the terminal.
 

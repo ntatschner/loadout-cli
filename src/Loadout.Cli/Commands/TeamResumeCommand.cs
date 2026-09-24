@@ -6,6 +6,7 @@ using Loadout.Core.Projects;
 using Loadout.Core.Teams;
 using Loadout.Core.Workspace;
 using Loadout.Models;
+using Loadout.Models.Teams;
 using Loadout.Platform.Abstractions;
 using Loadout.Tui;
 using Spectre.Console;
@@ -85,8 +86,8 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
         public string? Message { get; init; }
 
         [CommandOption("--usd <AMOUNT>")]
-        [Description("What it may spend in all from now on, in USD. Needed when it stopped on its budget.")]
-        public decimal? Usd { get; init; }
+        [Description("What it may spend in all from now on, in USD, or none for no cap. Needed when it stopped on its budget.")]
+        public string? Usd { get; init; }
 
         [CommandOption("--rounds <N>")]
         [Description("How many more rounds it may take. Needed when it stopped on its round limit.")]
@@ -169,8 +170,18 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
 
         var directory = _journal.DirectoryOf(run);
 
+        var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
+
+        if (!UsdCap.TryParse(settings.Usd, out var asked))
+        {
+            return output.Fail(UsdCap.Refusal(settings.Usd!), ExitCode.InvalidArguments);
+        }
+
         var (cap, rounds, refused) = Settle(
-            summary, RunControl.Budget(directory) ?? team.Rules.Budget.Usd, settings.Usd, settings.Rounds);
+            summary,
+            RunControl.Cap(directory).Or(team.Rules.Budget.Cap).Or(TeamRunCommand.MachineBudget(machine.Value)),
+            asked,
+            settings.Rounds);
 
         if (refused is not null)
         {
@@ -178,8 +189,6 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
         }
 
         var spent = summary.CostUsd;
-
-        var machine = await _configuration.LoadMachineAsync(cancellationToken).ConfigureAwait(false);
 
         var ceiling = autonomy == "autonomous"
             ? TeamCeiling.Decide(
@@ -215,11 +224,12 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
             // line is not carried over: the journal records it for reading, not
             // as a setting, and a resume that quietly reapplied an old flag
             // would be one somebody had not asked for this time.
-            TakeRecommendationAfter: Loadout.Models.Teams.TeamDuration.Parse(team.Rules.TakeRecommendationAfter));
+            TakeRecommendationAfter: Loadout.Models.Teams.TeamDuration.Parse(team.Rules.TakeRecommendationAfter),
+            MachineBudget: TeamRunCommand.MachineBudget(machine.Value));
 
-        if (!settings.DryRun && settings.Usd is { } raised)
+        if (!settings.DryRun && asked.IsSet)
         {
-            await RunControl.SetBudgetAsync(directory, raised, cancellationToken).ConfigureAwait(false);
+            await RunControl.SetCapAsync(directory, asked, cancellationToken).ConfigureAwait(false);
         }
 
         if (!output.IsJson)
@@ -235,14 +245,14 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
 
             output.WriteLine(
                 $"[dim]Spent so far ${spent:0.00}"
-                + (cap is { } shown ? $" of ${shown:0.00}" : string.Empty)
+                + (cap.Usd is { } shown ? $" of ${shown:0.00}" : cap.None ? ", with no cap" : string.Empty)
                 + $", {summary.Rounds} round(s)"
                 + (rounds > 0 ? $" of {rounds}" : string.Empty)
                 + ".[/]");
 
             // Before anything is spent, because the budget is only checked
             // between rounds and a long lead's one turn can pass it on its own.
-            if (resuming.LikelyCost(spent, cap) is { } likely)
+            if (resuming.LikelyCost(spent, cap.Usd) is { } likely)
             {
                 output.WriteLine($"[yellow]{Markup.Escape(likely)}[/]");
             }
@@ -262,32 +272,32 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
     /// would stop on it again before its lead said a word. Rounds are counted
     /// from where it got to, so "--rounds 3" means three more.
     /// </remarks>
-    internal static (decimal? Budget, int Rounds, string? Refused) Settle(
+    internal static (UsdCap Budget, int Rounds, string? Refused) Settle(
         RunSummary summary,
-        decimal? budget,
-        decimal? usd,
+        UsdCap budget,
+        UsdCap usd,
         int moreRounds)
     {
         ArgumentNullException.ThrowIfNull(summary);
 
         var spent = summary.CostUsd;
 
-        if (usd is { } asked)
+        if (usd.IsSet)
         {
-            if (asked <= spent)
+            if (usd.Usd is { } asked && asked <= spent)
             {
-                return (null, 0,
+                return (UsdCap.Unset, 0,
                     $"It has already spent ${spent:0.00}, so a budget of ${asked:0.00} would stop it at once. "
-                    + "Give it more than it has spent.");
+                    + $"Give it more than it has spent, or '{UsdCap.NoneWord}' for no cap.");
             }
 
-            budget = asked;
+            budget = usd;
         }
-        else if (budget is { } limit && spent >= limit)
+        else if (budget.Usd is { } limit && spent >= limit)
         {
-            return (null, 0,
+            return (UsdCap.Unset, 0,
                 $"It has spent ${spent:0.00} of its ${limit:0.00} budget, so it would stop again at once. "
-                + "Give it more with --usd.");
+                + $"Give it more with --usd, or --usd {UsdCap.NoneWord} for no cap.");
         }
 
         if (moreRounds > 0)
@@ -297,7 +307,7 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
 
         if (summary.RoundLimit > 0 && summary.Rounds >= summary.RoundLimit)
         {
-            return (null, 0,
+            return (UsdCap.Unset, 0,
                 $"It has taken all {summary.RoundLimit} of its rounds, so it would stop again at once. "
                 + "Give it more with --rounds.");
         }

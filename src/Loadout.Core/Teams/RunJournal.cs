@@ -349,7 +349,8 @@ public sealed record RunSummary(
     int Conflicts = 0,
     IReadOnlyList<RunCovered>? Covered = null,
     string? Outcome = null,
-    string? GoalUnderstood = null)
+    string? GoalUnderstood = null,
+    bool Uncapped = false)
 {
     /// <summary>Each round, with when it started and when it came back.</summary>
     public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
@@ -870,6 +871,7 @@ public sealed class RunJournal : IRunJournal
         string? project = null;
         string? path = null;
         decimal? budget = null;
+        var uncapped = false;
         var quiet = 0;
         var started = events.Count > 0 ? events[0].At : DateTimeOffset.MinValue;
         DateTimeOffset? finished = null;
@@ -912,6 +914,7 @@ public sealed class RunJournal : IRunJournal
                     project = entry.Text("project");
                     path = entry.Text("path");
                     budget = entry.Number("budget");
+                    uncapped = Uncapped(entry);
                     started = entry.At;
                     break;
 
@@ -928,13 +931,13 @@ public sealed class RunJournal : IRunJournal
 
                     // What it was picked up with, which the runner starts out
                     // held to and so never writes as a run.budget of its own.
-                    budget = entry.Number("budget") ?? budget;
+                    (budget, uncapped) = Budgeted(entry, budget, uncapped);
                     break;
 
                 // Raised (or lowered) while it ran. The latest one is what it
                 // is held to now, and what the page measures the spend against.
                 case "run.budget":
-                    budget = entry.Number("budget") ?? budget;
+                    (budget, uncapped) = Budgeted(entry, budget, uncapped);
                     break;
 
                 // How many rounds in a row have asked for nothing. Two ends
@@ -1169,8 +1172,29 @@ public sealed class RunJournal : IRunJournal
             conflicts,
             covered,
             outcome,
-            goalUnderstood);
+            goalUnderstood,
+            uncapped);
     }
+
+    /// <summary>Whether a budget event said the cap was taken off.</summary>
+    private static bool Uncapped(RunEvent entry) =>
+        entry.Data.ValueKind == JsonValueKind.Object
+        && entry.Data.TryGetProperty("uncapped", out var said)
+        && said.ValueKind == JsonValueKind.True;
+
+    /// <summary>
+    /// The budget after a reopening or a change: its figure, or no cap, or -
+    /// for one written before either was said - what it was before.
+    /// </summary>
+    /// <remarks>
+    /// A null figure used to keep the previous one, which is right for an
+    /// event that says nothing and wrong for one that took the cap off: the
+    /// page went on measuring a run against a limit it no longer had.
+    /// </remarks>
+    private static (decimal? Budget, bool Uncapped) Budgeted(RunEvent entry, decimal? budget, bool uncapped) =>
+        Uncapped(entry) ? (null, true)
+        : entry.Number("budget") is { } figure ? (figure, false)
+        : (budget, uncapped);
 
     /// <summary>One event as a line somebody can read.</summary>
     public static string Describe(RunEvent entry)
@@ -1209,7 +1233,7 @@ public sealed class RunJournal : IRunJournal
             "run.reopened" => "picked up again"
                 + (entry.Text("was") is { Length: > 0 } was ? $" (it had ended: {was})" : string.Empty)
                 + (entry.Text("session") is { Length: > 0 } ? ", the lead resuming its own session" : ", with a fresh lead told where it got to"),
-            "run.budget" => $"budget set to ${entry.Number("budget"):0.00}"
+            "run.budget" => (Uncapped(entry) ? "budget cap taken off" : $"budget set to ${entry.Number("budget"):0.00}")
                 + (entry.Text("by") is { Length: > 0 } by ? $" by {by}" : string.Empty),
             "node.doing" => entry.Text("doing") ?? "working",
             "node.said" => entry.Text("line") ?? "working",
