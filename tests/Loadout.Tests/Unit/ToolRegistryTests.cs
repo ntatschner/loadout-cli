@@ -118,6 +118,51 @@ public sealed class ToolRegistryTests : IDisposable
         registry.Show("free-cache").Value!.Record.Lifecycle.Should().Be(ToolLifecycle.Deprecated);
     }
 
+    [Fact]
+    public async Task The_times_a_tool_records_survive_being_written_and_read_back()
+    {
+        // Every date the catalogue writes went out as the struct's own
+        // properties and came back as 0001-01-01: git-tree-clean@1.0 was
+        // promoted saying its cases last ran at the start of the calendar.
+        var now = new DateTimeOffset(2026, 9, 24, 18, 44, 0, TimeSpan.Zero);
+        var (registry, _) = _store.Registry(clock: new At(now));
+        await _store.PromoteAsync(registry, ToolStoreFixture.Manifest("free-cache", "1.0"), Script, ToolStoreFixture.Cases());
+
+        registry.Deprecate("free-cache", null, "Nothing uses a cache like this any more.").Succeeded.Should().BeTrue();
+        var shown = registry.Show("free-cache").Value!;
+
+        shown.Active!.Tests!.RanAt.Should().Be(now, "that is when verify ran the cases");
+        shown.Record.Deprecated!.At.Should().Be(now, "that is when it was deprecated");
+
+        // And written as one readable time, not the struct's properties, which
+        // the reader copes with but nobody reading the file should have to.
+        File.ReadAllText(Path.Combine(registry.Root(), "free-cache", "versions", "1.0", "manifest.yaml"))
+            .Should().Contain("ran_at: 2026-09-24T18:44:00.0000000+00:00").And.NotContain("utc_date_time");
+    }
+
+    [Fact]
+    public async Task A_manifest_written_with_the_old_form_of_a_time_still_reads()
+    {
+        var now = new DateTimeOffset(2026, 9, 24, 18, 44, 0, TimeSpan.Zero);
+        var (registry, _) = _store.Registry(clock: new At(now));
+        await _store.PromoteAsync(registry, ToolStoreFixture.Manifest("free-cache", "1.0"), Script, ToolStoreFixture.Cases());
+
+        // What versions promoted before the fix hold: the struct's properties,
+        // of which only utc_date_time says which instant it means.
+        var manifest = Path.Combine(registry.Root(), "free-cache", "versions", "1.0", "manifest.yaml");
+        File.WriteAllText(manifest, File.ReadAllText(manifest).Replace(
+            "ran_at: 2026-09-24T18:44:00.0000000+00:00",
+            "ran_at:\n    date_time: 2026-09-24T19:44:00.0000000\n    utc_date_time: 2026-09-24T18:44:00.0000000Z\n    offset: 01:00:00",
+            StringComparison.Ordinal));
+
+        registry.Show("free-cache").Value!.Active!.Tests!.RanAt.Should().Be(now);
+    }
+
+    private sealed class At(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
     private static void Copy(string from, string to)
     {
         foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
