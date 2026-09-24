@@ -181,14 +181,14 @@ No VM and no container. Grab your platform's archive from the
 anything, and installs to `~/.local/bin` without root:
 
 ```sh
-tar -xzf loadout-0.44.0-linux-x64.tar.gz
+tar -xzf loadout-0.45.0-linux-x64.tar.gz
 ./install.sh
 ```
 
 **Windows** — the MSI installs per user, with no elevation:
 
 ```powershell
-msiexec /i loadout-0.44.0-win-x64.msi
+msiexec /i loadout-0.45.0-win-x64.msi
 ```
 
 **Homebrew** — on macOS or Linux, the tap is rewritten by every release:
