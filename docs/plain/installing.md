@@ -63,7 +63,7 @@ cd ~/Downloads
 Unpack the file. Change the name to match the file you downloaded:
 
 ```sh
-tar -xzf loadout-0.48.0-linux-x64.tar.gz
+tar -xzf loadout-0.48.1-linux-x64.tar.gz
 ```
 
 Run the installer:
