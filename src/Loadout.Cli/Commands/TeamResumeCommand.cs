@@ -239,6 +239,13 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
                 + $", {summary.Rounds} round(s)"
                 + (rounds > 0 ? $" of {rounds}" : string.Empty)
                 + ".[/]");
+
+            // Before anything is spent, because the budget is only checked
+            // between rounds and a long lead's one turn can pass it on its own.
+            if (resuming.LikelyCost(spent, cap) is { } likely)
+            {
+                output.WriteLine($"[yellow]{Markup.Escape(likely)}[/]");
+            }
         }
 
         return await TeamRunCommand.DriveAsync(
