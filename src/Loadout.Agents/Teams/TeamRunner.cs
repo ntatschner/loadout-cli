@@ -2216,6 +2216,48 @@ public sealed partial class TeamRunner : ITeamRunner
         "mcp__loadout__loadout_task_declare",
     ];
 
+    /// <summary>What a node in this role is allowed: its own list and what every node needs.</summary>
+    /// <remarks>
+    /// What role.member says every node MUST call, on the launcher's own
+    /// server. The contract belongs to no one job, so no role's list named
+    /// them and every node was refused both. A role's deny list still wins.
+    /// The brief every node is given tells it to search the shared tool
+    /// catalogue before building, which run 20260923-1216-be60's lead was
+    /// then refused for the same reason.
+    /// </remarks>
+    internal static List<string> AllowedFor(string roleId, RoleDefinition definition) =>
+        (definition.AllowedTools ?? [])
+            .Union(MemberTools, StringComparer.Ordinal)
+            .Union(CatalogueReading, StringComparer.Ordinal)
+            .Union(JudgesOnly.Contains(roleId) ? [] : CatalogueWriting, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>The catalogue's reading tools, which every node may call.</summary>
+    internal static readonly IReadOnlyList<string> CatalogueReading =
+    [
+        "mcp__loadout__loadout_tools_search",
+        "mcp__loadout__loadout_tools_show",
+    ];
+
+    /// <summary>The catalogue's recording tools: a submission to its inbox, and a usage record.</summary>
+    internal static readonly IReadOnlyList<string> CatalogueWriting =
+    [
+        "mcp__loadout__loadout_tools_submit",
+        "mcp__loadout__loadout_tools_used",
+    ];
+
+    /// <summary>Roles that judge one piece of work and write nothing, the catalogue included.</summary>
+    /// <remarks>
+    /// What a reviewer or verifier finds belongs in its report, where the lead
+    /// decides whether it is a lesson worth submitting; and neither ran a tool
+    /// whose use there would be to record.
+    /// </remarks>
+    private static readonly HashSet<string> JudgesOnly = new(StringComparer.Ordinal)
+    {
+        "role.reviewer",
+        "role.verifier",
+    };
+
     /// <summary>The agent's own ways of handing work to another agent, which no node is given.</summary>
     /// <remarks>
     /// <para>
@@ -2249,10 +2291,7 @@ public sealed partial class TeamRunner : ITeamRunner
     {
         var definition = role.Role ?? new RoleDefinition(null, null, null, [], []);
 
-        // What role.member says every node MUST call, on the launcher's own
-        // server. The contract belongs to no one job, so no role's list named
-        // them and every node was refused both. A role's deny list still wins.
-        var allowed = (definition.AllowedTools ?? []).Union(MemberTools, StringComparer.Ordinal).ToList();
+        var allowed = AllowedFor(role.Id, definition);
         var denied = (definition.DeniedTools ?? []).Union(NeverDelegated, StringComparer.Ordinal).ToList();
 
         // Written before the node starts, because whatever answers its
