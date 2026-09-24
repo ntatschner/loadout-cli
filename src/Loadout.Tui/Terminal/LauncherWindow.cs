@@ -74,13 +74,15 @@ internal sealed class LauncherWindow : Window
         Action<LauncherWindow> showPalette,
         IReadOnlyList<AgentSession> recent,
         IApplication application,
-        Action<string>? speak = null)
+        Action<string>? speak = null,
+        Func<ProjectResolution, bool>? removing = null)
     {
         ArgumentNullException.ThrowIfNull(projects);
         ArgumentNullException.ThrowIfNull(overview);
         ArgumentNullException.ThrowIfNull(application);
 
         _speak = speak;
+        _removing = removing ?? AsksToRemove;
         _projects = projects;
         _here = here;
         _overview = overview;
@@ -431,6 +433,11 @@ internal sealed class LauncherWindow : Window
                     Title = "_Add a project…",
                     Action = () => Close(new LauncherIntent(LauncherAction.AddProject)),
                 },
+                new MenuItem
+                {
+                    Title = "_Remove the selected project…",
+                    Action = RemoveSelected,
+                },
             ]),
             new MenuBarItem("_Tools", [
                 new MenuItem { Title = "All _commands…", Action = () => _showPalette(this) },
@@ -590,6 +597,11 @@ internal sealed class LauncherWindow : Window
 
             list.OnKey(new Key('?'), Command.Context, () => { ShowKeys(); return true; });
         }
+
+        // On the project list alone, so Delete in the filter still deletes a
+        // character. The slot is one a list has no use for, so nothing the
+        // list already does is replaced.
+        _list.OnKey(Key.Delete, Command.DeleteCharRight, () => { RemoveSelected(); return true; });
 
         // An arrow next to a filtered list means "go down the list" in every
         // tool that has one. Here it meant nothing, and reaching the list took
@@ -863,6 +875,7 @@ internal sealed class LauncherWindow : Window
         "?          show or hide this list",
         "Ctrl+P     all commands",
         "Ctrl+N     add a project",
+        "Delete     remove the selected project, after asking",
         "F2         settings and paths",
         "Ctrl+Q     quit",
         MenuBar.DefaultKey + "        menu",
@@ -1034,6 +1047,56 @@ internal sealed class LauncherWindow : Window
     /// </summary>
     internal void RunCommand(string path) =>
         Close(new LauncherIntent(LauncherAction.Command, Selected, CommandPath: path));
+
+    /// <summary>
+    /// How somebody agrees to removing a project. The dialog by default; a test
+    /// passes its own answer, because a dialog waiting for a keypress cannot be
+    /// driven headlessly.
+    /// </summary>
+    private readonly Func<ProjectResolution, bool> _removing;
+
+    /// <summary>
+    /// Takes the selected project off the list, once somebody has said yes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// From the shared registry, not only from this machine. The list is read
+    /// from the registry, so removing only this machine's record left the
+    /// project on it, marked as not on this machine — which is not what anyone
+    /// pressing remove on a list means. The question says so, because it
+    /// reaches every machine sharing the workspace.
+    /// </para>
+    /// <para>
+    /// The screen removes nothing itself. It hands back the command somebody
+    /// would have typed, non-interactive because the asking has already been
+    /// done here and asking twice teaches people to stop reading.
+    /// </para>
+    /// </remarks>
+    private void RemoveSelected() =>
+        WithSelected(project =>
+        {
+            if (_removing(project))
+            {
+                RunCommand(
+                    $"{LauncherCommands.Remove} {project.Entry.Slug} --from-workspace --non-interactive");
+            }
+        });
+
+    /// <summary>Puts the question on the screen.</summary>
+    private bool AsksToRemove(ProjectResolution project)
+    {
+        using var confirm = new ChoiceDialog(
+            $"Remove {project.Entry.Name} from the list on every machine that shares your workspace? "
+            + "The repository is not touched, and its instructions and memory stay in the workspace.",
+            ["No, keep it", $"Yes, remove {project.Entry.Slug}"],
+            _application);
+
+        _application.Run(confirm);
+
+        // Index 1 is the only yes, as on the teams screen: dismissing it, or
+        // Enter on the default first row, both mean no.
+        return confirm.ChosenIndex == 1;
+    }
 
     private static string Describe(int count, string workspace, IReadOnlyList<string> agents)
     {

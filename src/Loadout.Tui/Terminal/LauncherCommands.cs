@@ -65,7 +65,10 @@ internal static class LauncherCommands
     /// </remarks>
     internal const string ProjectContext = "project context";
 
+    /// <summary>Takes a project off the registry. Never touches its source.</summary>
+    internal const string Remove = "project remove";
+
     /// <summary>Every one of them, for the test that checks they are real.</summary>
     internal static IReadOnlyList<string> All =>
-        [Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches, ProjectContext];
+        [Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches, ProjectContext, Remove];
 }
