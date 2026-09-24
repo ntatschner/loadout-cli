@@ -42,6 +42,10 @@ public sealed record ToolRelevance(DateTimeOffset? LastUsed, int? DaysIdle, stri
 /// <param name="Maintainability">Size and churn.</param>
 /// <param name="Relevance">Idleness and whether something newer covers it.</param>
 /// <param name="Crossed">Each threshold crossed, in a sentence. Any at all is a reason to look again.</param>
+/// <param name="Thresholds">
+/// The same crossings by name - failed, workaround, slow, idle - for comparing
+/// one measurement with another, where the sentences carry numbers that move.
+/// </param>
 public sealed record ToolHealth(
     string Name,
     string Version,
@@ -49,7 +53,8 @@ public sealed record ToolHealth(
     ToolUsability Usability,
     ToolMaintainability Maintainability,
     ToolRelevance Relevance,
-    IReadOnlyList<string> Crossed)
+    IReadOnlyList<string> Crossed,
+    IReadOnlyList<string> Thresholds)
 {
     /// <summary>How many recent uses the rates are taken over.</summary>
     /// <remarks>Recent enough that a fixed tool recovers, long enough that one bad day does not dominate.</remarks>
@@ -79,6 +84,11 @@ public sealed record ToolHealth(
     public const int IdleDays = 60;
 
     /// <summary>The window, in days, version churn is counted over.</summary>
+    /// <remarks>
+    /// A quarter: long enough to hold the several promotions of a tool that
+    /// keeps being reworked, short enough that the burst of fixes after it was
+    /// first made has dropped out of the count once it has settled.
+    /// </remarks>
     public const int ChurnWindowDays = 90;
 
     /// <summary>Measures one active version.</summary>
@@ -138,28 +148,33 @@ public sealed record ToolHealth(
             supersededBy);
 
         var crossed = new List<string>();
+        var thresholds = new List<string>();
 
         if (usability.Uses >= MinimumUses && usability.FailedRate >= TroubleRate)
         {
+            thresholds.Add("failed");
             crossed.Add($"{usability.FailedRate:P0} of the last {usability.Uses} uses failed.");
         }
 
         if (usability.Uses >= MinimumUses && usability.WorkaroundRate >= TroubleRate)
         {
+            thresholds.Add("workaround");
             crossed.Add($"{usability.WorkaroundRate:P0} of the last {usability.Uses} uses needed a workaround.");
         }
 
         if (performance.WorstSeconds > SlowCaseSeconds)
         {
+            thresholds.Add("slow");
             crossed.Add($"Case '{performance.WorstCase}' took {performance.WorstSeconds:0.#}s at verify.");
         }
 
         if (head.Lifecycle == ToolLifecycle.Active && relevance.DaysIdle >= IdleDays)
         {
+            thresholds.Add("idle");
             crossed.Add($"Nobody has used it in {relevance.DaysIdle} days.");
         }
 
-        return new ToolHealth(head.Name, active.Version, performance, usability, maintainability, relevance, crossed);
+        return new ToolHealth(head.Name, active.Version, performance, usability, maintainability, relevance, crossed, thresholds);
     }
 
     private static double Median(List<double> sorted) =>

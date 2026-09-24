@@ -11,6 +11,10 @@ namespace Loadout.Core.Tools;
 /// <param name="Actor">Who: a node, a person, the gate.</param>
 /// <param name="Run">The run, where there is one.</param>
 /// <param name="Note">What happened, never a secret.</param>
+/// <param name="Crossed">
+/// On a stand-down, the health thresholds the tool had crossed when it was
+/// looked at, by name; null on every other action and on older lines.
+/// </param>
 public sealed record ToolAuditEntry(
     DateTimeOffset At,
     string Action,
@@ -18,7 +22,8 @@ public sealed record ToolAuditEntry(
     string? Version = null,
     string? Actor = null,
     string? Run = null,
-    string? Note = null);
+    string? Note = null,
+    IReadOnlyList<string>? Crossed = null);
 
 /// <summary>
 /// The registry's append-only log: everything that changed it, and who did.

@@ -116,7 +116,7 @@ public sealed class ToolHealthTests : IDisposable
     }
 
     [Fact]
-    public async Task NeedsRefining_turns_true_on_a_crossed_threshold_even_after_stand_downs()
+    public async Task A_crossing_the_stand_downs_already_saw_does_not_override_them()
     {
         var (registry, _) = _store.Registry();
         await _store.PromoteAsync(registry, ToolStoreFixture.Manifest("free-cache", "1.0"), Script, ToolStoreFixture.Cases());
@@ -131,6 +131,49 @@ public sealed class ToolHealthTests : IDisposable
         registry.StandDown("free-cache", "nothing worth changing").Succeeded.Should().BeTrue();
         registry.StandDown("free-cache", "still nothing").Succeeded.Should().BeTrue();
 
+        registry.NeedsRefining("free-cache").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task An_unchanged_crossing_after_two_stand_downs_is_not_refined_again()
+    {
+        var clock = new Clock(Now);
+        var (registry, _) = _store.Registry(clock: clock);
+        await _store.PromoteAsync(registry, ToolStoreFixture.Manifest("free-cache", "1.0"), Script, ToolStoreFixture.Cases());
+
+        clock.Advance(TimeSpan.FromDays(ToolHealth.IdleDays + 1));
         registry.NeedsRefining("free-cache").Should().BeTrue();
+        registry.StandDown("free-cache", "idle, but nothing to change").Succeeded.Should().BeTrue();
+        registry.StandDown("free-cache", "still idle, still nothing").Succeeded.Should().BeTrue();
+
+        // A day more idle is the same crossing, not a worse one.
+        clock.Advance(TimeSpan.FromDays(1));
+
+        registry.NeedsRefining("free-cache").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_new_crossing_after_stand_downs_is_refined()
+    {
+        var clock = new Clock(Now);
+        var (registry, _) = _store.Registry(clock: clock);
+        await _store.PromoteAsync(registry, ToolStoreFixture.Manifest("free-cache", "1.0"), Script, ToolStoreFixture.Cases());
+
+        registry.StandDown("free-cache", "nothing worth changing").Succeeded.Should().BeTrue();
+        registry.StandDown("free-cache", "still nothing").Succeeded.Should().BeTrue();
+        registry.NeedsRefining("free-cache").Should().BeFalse();
+
+        clock.Advance(TimeSpan.FromDays(ToolHealth.IdleDays + 1));
+
+        registry.NeedsRefining("free-cache").Should().BeTrue();
+    }
+
+    private sealed class Clock(DateTimeOffset now) : TimeProvider
+    {
+        private DateTimeOffset _now = now;
+
+        public void Advance(TimeSpan by) => _now += by;
+
+        public override DateTimeOffset GetUtcNow() => _now;
     }
 }

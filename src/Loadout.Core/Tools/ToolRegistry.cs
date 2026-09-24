@@ -938,7 +938,10 @@ public sealed partial class ToolRegistry : IToolRegistry
             return OperationResult.Fail($"There is no tool called '{name}'.", ExitCode.ProjectNotFound);
         }
 
-        Record("stand-down", name, null, actor, run, reason);
+        // What was crossed when the Refiner looked, so a later crossing can be
+        // told apart from the one this stand-down already judged.
+        ToolAudit.Append(AuditFile, new ToolAuditEntry(
+            _clock.GetUtcNow(), "stand-down", name, null, actor, run, reason, CrossedNow(name)));
 
         return OperationResult.Ok();
     }
@@ -950,10 +953,13 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// Something new - a promotion, a submission about the tool, a use that
     /// failed or was worked around - starts the count again.
     /// <para>
-    /// A crossed health threshold overrides the stand-downs: they record that
-    /// nothing was worth changing, and a tool now failing one use in four, or
-    /// taking half a minute a case, or unused for two months, is a different
-    /// tool from the one looked at then.
+    /// A health threshold crossed since the last stand-down counts as something
+    /// new: a tool now unused for two months is a different tool from the one
+    /// looked at then. One the last stand-down already saw does not, or an idle
+    /// tool would be looked at on every pass for ever. Only a new name counts,
+    /// not a bigger number: the rates and case times move only on uses and
+    /// promotions, which start the count again themselves, and idleness grows
+    /// every day whether or not anything has changed.
     /// </para>
     /// </remarks>
     public bool NeedsRefining(string name)
@@ -963,17 +969,14 @@ public sealed partial class ToolRegistry : IToolRegistry
             return false;
         }
 
-        if (Health(head.Name) is [{ Crossed.Count: > 0 }])
-        {
-            return true;
-        }
-
         var standDowns = 0;
+        IReadOnlyList<string>? judged = null;
 
         foreach (var entry in Audit(head.Name).Reverse())
         {
             if (entry.Action == "stand-down")
             {
+                judged ??= entry.Crossed ?? [];
                 standDowns++;
             }
             else if (IsSignal(entry))
@@ -982,8 +985,16 @@ public sealed partial class ToolRegistry : IToolRegistry
             }
         }
 
-        return standDowns < 2;
+        if (standDowns < 2)
+        {
+            return true;
+        }
+
+        return CrossedNow(head.Name).Except(judged ?? [], StringComparer.Ordinal).Any();
     }
+
+    private IReadOnlyList<string> CrossedNow(string name) =>
+        Health(name) is [{ } health] ? health.Thresholds : [];
 
     /// <inheritdoc />
     public IReadOnlyList<ToolHealth> Health(string? name = null)
