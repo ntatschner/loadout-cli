@@ -70,6 +70,7 @@ reopens that conversation rather than asking again which you meant.
 | `Enter` | Open the launch sheet for the selected project |
 | `Ctrl+P` | Every command the CLI has, filtered as you type |
 | `Ctrl+N` | Add a project |
+| `Delete` | Take the selected project off the list, on every machine that shares your workspace. It asks first, and never touches the repository |
 | `F2` | Settings and paths |
 | `F3` | Launch history and posture for the selected project |
 | `F4` | Packs, MCP servers, skills and plugins |

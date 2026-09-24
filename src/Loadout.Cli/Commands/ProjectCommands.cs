@@ -337,6 +337,23 @@ public sealed class ProjectRemoveCommand : AsyncCommand<ProjectRemoveCommand.Set
 
         var removal = result.Value!;
 
+        if (!settings.FromWorkspace)
+        {
+            // Not "Removed". The list is read from the shared registry, so a
+            // project removed only here stays on it, marked as not on this
+            // machine — and saying "Removed" over a list that still shows it
+            // is what made it look as though a project could not be removed.
+            output.WriteLine(
+                $"[green]Forgot[/] where {Markup.Escape(settings.Project)} is on this machine "
+                + "[dim](the repository itself was not touched)[/]");
+            output.WriteLine(
+                "[dim]It is still in the shared registry, so it stays on the list as not on this "
+                + "machine. To take it off the list everywhere: "
+                + $"loadout project remove {Markup.Escape(settings.Project)} --from-workspace[/]");
+
+            return CommandOutput.Success();
+        }
+
         output.WriteLine(
             $"[green]Removed[/] {Markup.Escape(settings.Project)} "
             + "[dim](the repository itself was not touched)[/]");
