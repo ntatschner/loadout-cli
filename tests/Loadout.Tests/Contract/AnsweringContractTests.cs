@@ -98,6 +98,25 @@ public sealed class AnsweringContractTests
     /// never evidence that anything was waiting for one.
     /// </remarks>
     [BuiltCliFact]
+    public async Task A_node_of_a_team_run_cannot_answer_what_a_run_asked()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var directory = await RunAsync(loadout, finished: false);
+
+        // A node answering its own run's questions, its own permission asks
+        // among them, would be the run agreeing with itself.
+        loadout.Environment[Loadout.Core.Teams.NodeMarker.Variable] = Path.Combine(directory, "policy-lead.json");
+
+        var run = await loadout.RunAsync(
+            "team", "gate", Run, "--gate", "gate-b4302e02", "--answer", "Full revert");
+
+        run.ExitCode.Should().NotBe(0);
+        (run.StandardOutput + run.StandardError).Should().Contain("node of a team run");
+        File.Exists(Path.Combine(directory, "answer-gate-b4302e02.json")).Should().BeFalse("nothing was answered");
+    }
+
+    [BuiltCliFact]
     public async Task An_answer_to_a_run_that_has_already_finished_is_refused()
     {
         using var loadout = new LoadoutProcess();

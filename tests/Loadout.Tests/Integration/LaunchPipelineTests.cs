@@ -587,6 +587,29 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Only_a_launch_with_a_nodes_permission_policy_is_marked_as_a_team_node()
+    {
+        // The marker is what the trust and answering commands refuse on, so a
+        // person's launch must never carry it and a node's must always.
+        var node = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, DryRun: true,
+                PermissionPolicyPath: Path.Combine(_repository, "policy-implementer-1.json")),
+            new HeadlessOptions());
+        var person = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, DryRun: true),
+            new HeadlessOptions());
+
+        node.Succeeded.Should().BeTrue(node.Error);
+        person.Succeeded.Should().BeTrue(person.Error);
+
+        await using var marked = node.Value!;
+        await using var unmarked = person.Value!;
+
+        marked.Plan.EnvironmentVariables.Should().Contain(Loadout.Core.Teams.NodeMarker.Variable);
+        unmarked.Plan.EnvironmentVariables.Should().NotContain(Loadout.Core.Teams.NodeMarker.Variable);
+    }
+
+    [Fact]
     public async Task A_dry_run_says_where_a_worktree_would_go_and_makes_none()
     {
         var before = await _processes.RunAsync(

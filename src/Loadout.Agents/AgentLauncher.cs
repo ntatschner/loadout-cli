@@ -767,6 +767,22 @@ public sealed class AgentLauncher : IAgentLauncher
 
         var invocation = invocationResult.Value!;
 
+        // A node says what it is to everything it starts, so the commands
+        // only a person may run can refuse it: a pattern granted from the
+        // dashboard for one search once covered trust as well. Here rather
+        // than in an adapter, because it is the same for every agent, and set
+        // last, because a project's own environment must not be able to clear it.
+        if (request.PermissionPolicyPath is { Length: > 0 } policyPath)
+        {
+            invocation = invocation with
+            {
+                Environment = new Dictionary<string, string>(invocation.Environment)
+                {
+                    [Core.Teams.NodeMarker.Variable] = policyPath,
+                },
+            };
+        }
+
         if (invocation.Warnings is not null)
         {
             warnings.AddRange(invocation.Warnings);

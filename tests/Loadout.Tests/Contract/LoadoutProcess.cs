@@ -67,6 +67,9 @@ public sealed class LoadoutProcess : IDisposable
     /// <summary>Where this run's throwaway home lives.</summary>
     public string Home => _home;
 
+    /// <summary>Variables to set for every command this runs, on top of the isolation.</summary>
+    public Dictionary<string, string> Environment { get; } = new(StringComparer.Ordinal);
+
     public LoadoutProcess()
     {
         _home = Path.Combine(
@@ -310,6 +313,11 @@ public sealed class LoadoutProcess : IDisposable
 
         Isolate(start);
 
+        foreach (var (name, value) in Environment)
+        {
+            start.Environment[name] = value;
+        }
+
         using var process = StartWithRetry(start);
 
         // Nothing is ever written to it, so it is closed at once. A command
@@ -442,6 +450,11 @@ public sealed class LoadoutProcess : IDisposable
         // Colour would put escape sequences through the middle of the JSON on a
         // console that reports as capable.
         start.Environment["NO_COLOR"] = "1";
+
+        // A team's implementer runs this suite from inside a node, and every
+        // command that only a person may run would refuse what it inherited.
+        // A test that wants a node sets it through Environment.
+        start.Environment.Remove(Loadout.Core.Teams.NodeMarker.Variable);
     }
 
     public void Dispose()

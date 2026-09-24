@@ -608,6 +608,17 @@ the one nobody read.
 A remedy trusted without a recorded fingerprint is asked about too. The safe
 reading of *I cannot tell whether this is what you agreed to* is to ask.
 
+**A node cannot turn this key.** Every node of a team run is started with
+`LOADOUT_TEAM_NODE` set, and `team remedy trust`, `tools trust`,
+`tools verify --agree`, answering with `team remedy requests` and `team gate`
+all refuse when they see it. The roles' deny lists already covered some of
+these, but a deny list matches the words of a command, and a permission you
+grant from the dashboard can match more than you meant: a lead once granted
+`loadout tools:*` to run a search had `loadout tools trust` with it. Listing
+what is waiting still works from a node. It keeps an honest node honest; a role
+that can run arbitrary script could clear the variable first, which is one more
+reason the remediator is the only role with an interpreter.
+
 ### Who can run one
 
 Exactly one role: **`role.remediator`**. Every other role in the library may run
