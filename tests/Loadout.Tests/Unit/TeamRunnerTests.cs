@@ -495,7 +495,8 @@ public sealed class TeamRunnerTests : IDisposable
         var outcome = (await RunAsync(takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console)).Value!;
 
         outcome.Ended.Should().Be("done");
-        _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **yes**");
+        _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **yes**")
+            .And.Contain("nobody approved it", "the lead must not be told a person agreed to what nobody saw");
 
         (await JournalAsync(outcome)).Should().Contain(line =>
             line.Contains("\"kind\":\"decision\"") && line.Contains("\"by\":\"timed default\""));
@@ -520,7 +521,7 @@ public sealed class TeamRunnerTests : IDisposable
 
         var outcome = (await RunAsync(takeRecommendationAfter: TimeSpan.FromMilliseconds(1))).Value!;
 
-        _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **no**");
+        _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **no** (the person decided this)");
 
         (await JournalAsync(outcome)).Should().Contain(line =>
             line.Contains("\"kind\":\"decision\"") && line.Contains("\"by\":\"person\""));
@@ -530,6 +531,24 @@ public sealed class TeamRunnerTests : IDisposable
     /// "Think again" is not a decision: the lead is told none of its options
     /// was chosen and to decide it itself or ask a better question.
     /// </summary>
+    /// <remarks>
+    /// Run 20260923-1216-be60's lead told the person "the merge you approved
+    /// can go ahead" about an answer that was its own recommendation, taken
+    /// because the run was autonomous: it had only ever been shown the answer.
+    /// </remarks>
+    [Fact]
+    public async Task An_autonomous_run_tells_the_lead_its_answer_was_its_own_recommendation()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m), Result(LeadDone(), 0.09m));
+
+        await RunAsync(autonomy: "autonomous");
+
+        _launcher.Written("role.project-lead")[1].Should()
+            .Contain("Proceed with one implementer?: **yes** (your own recommendation")
+            .And.Contain("nobody approved it")
+            .And.NotContain("the person decided this");
+    }
+
     [Fact]
     public async Task Think_again_sends_the_question_back_to_the_lead_as_something_it_can_act_on()
     {
