@@ -42,6 +42,54 @@ public sealed record RunResumption(
     public string? Lead => Summary.Nodes.Count > 0 ? Summary.Nodes[0].Node : null;
 
     /// <summary>
+    /// What the lead's next turn is likely to cost, said before it starts, or
+    /// null where there is nothing to go on.
+    /// </summary>
+    /// <param name="spent">What the run has spent so far.</param>
+    /// <param name="cap">What it may spend in all, or null for no budget.</param>
+    /// <remarks>
+    /// <para>
+    /// Only for a lead resuming its own session, which carries the whole
+    /// conversation into every exchange, so its last turn is the best guess at
+    /// its next. A fresh lead starts small and this would overstate it.
+    /// </para>
+    /// <para>
+    /// Said rather than enforced. The budget is checked between rounds, and a
+    /// turn that crosses it finishes, because stopping a node mid-turn loses the
+    /// work already paid for. One lead turn of a long run cost 15.08 over 14
+    /// exchanges against 10.53 left, and nothing said so until it had been spent.
+    /// </para>
+    /// </remarks>
+    public string? LikelyCost(decimal spent, decimal? cap)
+    {
+        if (LeadSession is not { Length: > 0 } || Lead is not { } lead)
+        {
+            return null;
+        }
+
+        var last = Summary.Turns.LastOrDefault(one =>
+            string.Equals(one.Node, lead, StringComparison.Ordinal) && one.CostUsd > 0m);
+
+        if (last is null)
+        {
+            return null;
+        }
+
+        var said =
+            $"The lead's last turn cost ${last.CostUsd:0.00} over {last.Exchanges} exchange(s), "
+            + "and it carries that whole conversation into the next, so expect about as much.";
+
+        if (cap is { } limit && last.CostUsd > limit - spent)
+        {
+            said += limit > spent
+                ? $" That is more than the ${limit - spent:0.00} the budget has left, so one turn could take the run past it."
+                : " The budget is already spent, so any turn takes the run past it.";
+        }
+
+        return said;
+    }
+
+    /// <summary>
     /// Reads an ended run back, or says why it cannot be picked up.
     /// </summary>
     /// <remarks>
