@@ -383,15 +383,23 @@ public sealed class ScheduleService : IScheduleService
     private static string Watermark(DateTimeOffset finished) =>
         finished.ToString("o", CultureInfo.InvariantCulture);
 
+    /// <summary>What is wrong with a schedule's name, or null when nothing is.</summary>
+    /// <remarks>
+    /// The same shape a task or a checkpoint has, and for the same reason:
+    /// these are quoted on a command line far more often than they are read
+    /// from a list. Public because the dashboard asks it too - only an exit
+    /// code crosses back from the command, and that one code is shared by
+    /// every refusal here.
+    /// </remarks>
+    public static string? NameRejection(string? name) =>
+        Tasks.TaskIds.Rejection(name)?.Replace("task id", "schedule name", StringComparison.Ordinal);
+
     /// <summary>What is wrong with a schedule, or null when nothing is.</summary>
     private static string? Check(TeamSchedule schedule)
     {
-        if (Tasks.TaskIds.Rejection(schedule.Id) is { } rejected)
+        if (NameRejection(schedule.Id) is { } rejected)
         {
-            // The same shape a task or a checkpoint has, and for the same
-            // reason: these are quoted on a command line far more often than
-            // they are read from a list.
-            return rejected.Replace("task id", "schedule name", StringComparison.Ordinal);
+            return rejected;
         }
 
         if (string.IsNullOrWhiteSpace(schedule.Project))

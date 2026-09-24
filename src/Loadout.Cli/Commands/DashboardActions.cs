@@ -740,6 +740,16 @@ internal static partial class DashboardActions
                 ExitCode.InvalidArguments);
         }
 
+        // Asked here, before the command, because the command's answer comes
+        // back as an exit code it shares with every other refusal. "SS
+        // Socials" was refused five times for its space while the page blamed
+        // the interval, which had been right all along.
+        if (string.Equals(asking.Verb, "add", StringComparison.Ordinal)
+            && Loadout.Core.Teams.ScheduleService.NameRejection(asking.Name) is { } badName)
+        {
+            return OperationResult.Fail(badName, ExitCode.InvalidArguments);
+        }
+
         output.WriteLine(
             $"[dim]{time.GetUtcNow().ToLocalTime():HH:mm}[/] from the dashboard: "
             + $"{Markup.Escape(command)} {Markup.Escape(asking.Name)}");
