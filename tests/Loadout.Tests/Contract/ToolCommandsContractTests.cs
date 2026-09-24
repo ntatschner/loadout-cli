@@ -194,6 +194,40 @@ public sealed class ToolCommandsContractTests
     }
 
     [BuiltCliFact]
+    public async Task A_node_of_a_team_run_cannot_trust_a_tool_or_agree_to_a_draft()
+    {
+        var (loadout, root) = await CatalogueAsync();
+        using var _ = loadout;
+        ToolStoreFixture.Write(
+            Path.Combine(root, "drafts", "free-cache-2"), ToolStoreFixture.Manifest("free-cache", "2.0"), Script, ToolStoreFixture.Cases());
+
+        // What a node's shell carries. A pattern granted from the dashboard for
+        // a search, Bash(loadout tools:*), also covers these two.
+        loadout.Environment[NodeMarker.Variable] = Path.Combine(root, "policy-creator.json");
+
+        string[][] asked =
+        [
+            ["tools", "trust", "free-cache@1.0", "--by", "a-node"],
+            ["tools", "verify", "free-cache-2", "--agree", "--by", "a-node"],
+        ];
+
+        foreach (var one in asked)
+        {
+            var run = await loadout.RunAsync(one);
+
+            run.ExitCode.Should().NotBe(0, string.Join(' ', one));
+            (run.StandardOutput + run.StandardError).Should().Contain("node of a team run", string.Join(' ', one));
+        }
+
+        loadout.Environment.Remove(NodeMarker.Variable);
+
+        (await loadout.RunAsync("tools", "show", "free-cache", "--json")).Json()
+            .GetProperty("trusted").GetBoolean().Should().BeFalse("the node's trust wrote no agreement");
+        (await loadout.RunAsync("tools", "verify", "free-cache-2", "--json")).Json()
+            .GetProperty("ruling").GetString().Should().Be("ask", "the node's agreement wrote nothing");
+    }
+
+    [BuiltCliFact]
     public async Task Agreeing_without_a_terminal_to_ask_at_is_refused_and_agrees_to_nothing()
     {
         var (loadout, root) = await CatalogueAsync();

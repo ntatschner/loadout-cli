@@ -5,6 +5,7 @@ using Loadout.Core.Teams;
 using Loadout.Models.Configuration;
 using Loadout.Models;
 using Loadout.Models.Teams;
+using Loadout.Platform.Abstractions;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -36,15 +37,18 @@ public sealed class TeamRemedyTrustCommand : AsyncCommand<TeamRemedyTrustCommand
     private readonly IRemedyBook _book;
     private readonly IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
+    private readonly IEnvironmentProvider _environment;
 
     public TeamRemedyTrustCommand(
         IRemedyBook book,
         IConfigurationService configuration,
-        IAnsiConsole console)
+        IAnsiConsole console,
+        IEnvironmentProvider environment)
     {
         _book = book;
         _configuration = configuration;
         _console = console;
+        _environment = environment;
     }
 
     public sealed class Settings : RemedySettings
@@ -71,6 +75,13 @@ public sealed class TeamRemedyTrustCommand : AsyncCommand<TeamRemedyTrustCommand
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        // Taking trust back as well as giving it: either way it is a decision
+        // about what may run on this machine, and it is not a node's.
+        if (NodeMarker.Refusal(_environment, "Trusting a remedy") is { } refused)
+        {
+            return output.Fail(refused, ExitCode.PolicyViolation);
+        }
 
         if (settings.Team is not { Length: > 0 })
         {
@@ -218,11 +229,13 @@ public sealed class TeamRemedyRequestsCommand : AsyncCommand<TeamRemedyRequestsC
 {
     private readonly IRemedyBook _book;
     private readonly IAnsiConsole _console;
+    private readonly IEnvironmentProvider _environment;
 
-    public TeamRemedyRequestsCommand(IRemedyBook book, IAnsiConsole console)
+    public TeamRemedyRequestsCommand(IRemedyBook book, IAnsiConsole console, IEnvironmentProvider environment)
     {
         _book = book;
         _console = console;
+        _environment = environment;
     }
 
     public sealed class Settings : RemedySettings
@@ -249,6 +262,14 @@ public sealed class TeamRemedyRequestsCommand : AsyncCommand<TeamRemedyRequestsC
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        // Answering only. Listing what is waiting stays open to a node, which
+        // may need to say what it is waiting for.
+        if ((settings.Approve is { Length: > 0 } || settings.Refuse is { Length: > 0 })
+            && NodeMarker.Refusal(_environment, "Answering a remediation request") is { } refused)
+        {
+            return Task.FromResult(output.Fail(refused, ExitCode.PolicyViolation));
+        }
 
         if (settings.Team is not { Length: > 0 })
         {

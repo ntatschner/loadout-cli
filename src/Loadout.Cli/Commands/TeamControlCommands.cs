@@ -3,6 +3,7 @@ using Loadout.Agents.Teams;
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Teams;
 using Loadout.Models;
+using Loadout.Platform.Abstractions;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -60,12 +61,14 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
     private readonly IRunJournal _journal;
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
+    private readonly IEnvironmentProvider _environment;
 
-    public TeamGateCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time)
+    public TeamGateCommand(IRunJournal journal, IAnsiConsole console, TimeProvider time, IEnvironmentProvider environment)
     {
         _journal = journal;
         _console = console;
         _time = time;
+        _environment = environment;
     }
 
     public sealed class Settings : RunSettings
@@ -104,6 +107,15 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        // Before anything is looked up. A node answering its own run's
+        // questions, its own permission asks among them, is the run agreeing
+        // with itself.
+        if (NodeMarker.Refusal(_environment, "Answering what a run asked") is { } refused)
+        {
+            return output.Fail(refused, ExitCode.PolicyViolation);
+        }
+
         var (run, error) = RunControlling.Resolve(_journal, settings.Run);
 
         if (run is null)

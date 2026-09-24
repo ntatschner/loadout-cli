@@ -8,6 +8,7 @@ using Loadout.Models;
 using Loadout.Models.Configuration;
 using Loadout.Models.Teams;
 using Loadout.Models.Tools;
+using Loadout.Platform.Abstractions;
 using Loadout.Tui;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -590,12 +591,15 @@ public sealed class ToolVerifyCommand : AsyncCommand<ToolVerifyCommand.Settings>
     private readonly IToolRegistry _registry;
     private readonly IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
+    private readonly IEnvironmentProvider _environment;
 
-    public ToolVerifyCommand(IToolRegistry registry, IConfigurationService configuration, IAnsiConsole console)
+    public ToolVerifyCommand(
+        IToolRegistry registry, IConfigurationService configuration, IAnsiConsole console, IEnvironmentProvider environment)
     {
         _registry = registry;
         _configuration = configuration;
         _console = console;
+        _environment = environment;
     }
 
     public sealed class Settings : ToolSettings
@@ -619,6 +623,13 @@ public sealed class ToolVerifyCommand : AsyncCommand<ToolVerifyCommand.Settings>
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        // Verifying is a node's to ask for; agreeing is not. First, so that a
+        // node is told why in those words rather than the terminal's.
+        if (settings.Agree && NodeMarker.Refusal(_environment, "Agreeing to a harness run") is { } refused)
+        {
+            return output.Fail(refused, ExitCode.PolicyViolation);
+        }
 
         if (settings.DryRun)
         {
@@ -1011,12 +1022,15 @@ public sealed class ToolTrustCommand : AsyncCommand<ToolTrustCommand.Settings>
     private readonly IToolRegistry _registry;
     private readonly IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
+    private readonly IEnvironmentProvider _environment;
 
-    public ToolTrustCommand(IToolRegistry registry, IConfigurationService configuration, IAnsiConsole console)
+    public ToolTrustCommand(
+        IToolRegistry registry, IConfigurationService configuration, IAnsiConsole console, IEnvironmentProvider environment)
     {
         _registry = registry;
         _configuration = configuration;
         _console = console;
+        _environment = environment;
     }
 
     public sealed class Settings : ToolSettings
@@ -1040,6 +1054,14 @@ public sealed class ToolTrustCommand : AsyncCommand<ToolTrustCommand.Settings>
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        // The key an agent can never turn, said in code as well as in the
+        // roles' deny lists: a pattern granted for one search once covered it.
+        if (NodeMarker.Refusal(_environment, "Trusting a tool") is { } refused)
+        {
+            return output.Fail(refused, ExitCode.PolicyViolation);
+        }
+
         var (name, version) = ToolShapes.Split(settings.Tool);
 
         if (version is not { Length: > 0 })
