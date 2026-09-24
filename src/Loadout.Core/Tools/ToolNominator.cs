@@ -67,6 +67,9 @@ public sealed partial class ToolNominator
     /// <summary>How many runs back it reads.</summary>
     public int Depth { get; init; } = 200;
 
+    /// <summary>How many finished runs it holds what it read of.</summary>
+    internal int Cached => _read.Count;
+
     /// <summary>
     /// Files every nomination not already filed: a candidate for the Creator,
     /// or, where an active tool already covers it, an idea about that tool for
@@ -322,9 +325,12 @@ public sealed partial class ToolNominator
         var seen = new List<Seen>();
         var paragraphs = new List<Paragraph>();
         var uses = new List<Use>();
+        var listed = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var id in _journal.List(Depth))
         {
+            listed.Add(id);
+
             RunSummary run;
 
             // A run folder that cannot be listed is passed over, and only it:
@@ -367,6 +373,13 @@ public sealed partial class ToolNominator
             seen.AddRange(cached.Read.Evidence);
             paragraphs.AddRange(cached.Read.Paragraphs);
             uses.AddRange(cached.Read.Uses);
+        }
+
+        // A run forgotten, or pushed past Depth, is never read again, so what
+        // was kept of it would only grow for as long as the daemon lives.
+        foreach (var key in _read.Keys.Where(key => !listed.Contains(key)))
+        {
+            _read.TryRemove(key, out _);
         }
 
         return new Read(seen, paragraphs, uses);

@@ -344,6 +344,22 @@ public sealed class ToolNominatorTests : IDisposable
     }
 
     [Fact]
+    public void A_run_that_leaves_the_listing_is_evicted_from_the_cache()
+    {
+        Run("20260901-1000-a001", "alpha", Command("git fetch origin"));
+        Run("20260902-1000-b001", "beta", Command("git fetch origin"));
+
+        var nominator = Nominator();
+        nominator.Find([]);
+        nominator.Cached.Should().Be(2, "both finished runs were read");
+
+        Directory.Delete(new RunJournal(_store.Paths).DirectoryOf("20260901-1000-a001"), recursive: true);
+        nominator.Find([]);
+
+        nominator.Cached.Should().Be(1, "a run no longer listed is not held on to");
+    }
+
+    [Fact]
     public async Task An_unrelated_script_mentioning_github_does_not_cover_an_mcp_github_nomination()
     {
         var (registry, _) = _store.Registry();
