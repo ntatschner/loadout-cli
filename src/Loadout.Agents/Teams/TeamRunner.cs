@@ -1076,9 +1076,9 @@ public sealed partial class TeamRunner : ITeamRunner
 
                     feedback.AppendLine("## Decisions").AppendLine();
 
-                    foreach (var (question, answer) in decided)
+                    foreach (var (question, answer, by) in decided)
                     {
-                        feedback.AppendLine($"- {question}: **{answer}**");
+                        feedback.AppendLine(Decided(question, answer, by));
                     }
 
                     feedback.AppendLine();
@@ -3613,7 +3613,22 @@ public sealed partial class TeamRunner : ITeamRunner
         + "think any of them was right. Look at the question afresh, then either decide it yourself "
         + "with the evidence for your choice, or ask a better question with better options.";
 
-    private async Task<IReadOnlyList<(string Question, string Answer)>?> DecideAsync(
+    /// <summary>One answer as the lead reads it, saying who gave it.</summary>
+    /// <remarks>
+    /// The answer alone reads as the person's. Run 20260923-1216-be60 was
+    /// autonomous, so its lead's own recommendation to merge was taken with
+    /// nobody asked, and the lead's final report then told the person "the
+    /// merge you approved can go ahead". The journal had it right; the lead
+    /// had only ever been shown the answer.
+    /// </remarks>
+    internal static string Decided(string question, string answer, string by) => by switch
+    {
+        "person" => $"- {question}: **{answer}** (the person decided this)",
+        _ => $"- {question}: **{answer}** (your own recommendation, taken because nobody answered: "
+             + "nobody approved it, so do not say anybody did)",
+    };
+
+    private async Task<IReadOnlyList<(string Question, string Answer, string By)>?> DecideAsync(
         string autonomy,
         ITeamConsole console,
         IReadOnlyList<ReportQuestion> questions,
@@ -3622,7 +3637,7 @@ public sealed partial class TeamRunner : ITeamRunner
         TimeSpan? takeRecommendationAfter,
         CancellationToken ct)
     {
-        var decided = new List<(string, string)>();
+        var decided = new List<(string, string, string)>();
 
         foreach (var question in questions)
         {
@@ -3657,6 +3672,11 @@ public sealed partial class TeamRunner : ITeamRunner
 
             var rethink = string.Equals(answer, ThinkAgain, StringComparison.Ordinal);
 
+            var by = autonomy == "autonomous" ? "recommendation"
+                : timed ? "timed default"
+                : answer is null ? "nobody"
+                : "person";
+
             // "by" says who settled it, and a null answer means nobody did:
             // the wait ran out. It said "person" either way, so a run that
             // stopped because somebody was still reading the question was
@@ -3668,10 +3688,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 {
                     question = question.Question,
                     answer = rethink ? "think again" : answer,
-                    by = autonomy == "autonomous" ? "recommendation"
-                        : timed ? "timed default"
-                        : answer is null ? "nobody"
-                        : "person",
+                    by,
 
                     // How long it waited, so "taken automatically" can say
                     // after what.
@@ -3684,7 +3701,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 return null;
             }
 
-            decided.Add((question.Question, rethink ? ThinkAgainTold : answer));
+            decided.Add((question.Question, rethink ? ThinkAgainTold : answer, by));
         }
 
         return decided;

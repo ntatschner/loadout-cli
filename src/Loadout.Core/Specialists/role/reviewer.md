@@ -25,6 +25,8 @@ tools:
     - 'Bash(tail :*)'
     - 'Bash(wc :*)'
     - 'Bash(grep :*)'
+    - 'Bash(echo)'
+    - 'Bash(echo :*)'
     - 'Bash(dotnet build:*)'
     - 'Bash(dotnet test:*)'
   denied:
