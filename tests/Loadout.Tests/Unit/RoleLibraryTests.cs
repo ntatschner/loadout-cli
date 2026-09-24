@@ -104,6 +104,12 @@ public sealed class RoleLibraryTests
     // tells it to, and committing the way Claude Code commits.
     [InlineData("role.implementer", "cp src/Greeter/Greetings.cs /tmp/Greetings.cs.bak")]
     [InlineData("role.implementer", "git add src tests && git commit -m \"$(cat <<'EOF'\nAdd Hello\n\nWith tests.\nEOF\n)\"")]
+
+    // Run 20260923-1216-be60 after the fixes above: half of what its
+    // reviewer and verifier were still refused was printing an exit code.
+    [InlineData("role.verifier", "cd \"C:/trees/one\" && dotnet test Loadout.slnx --no-build 2>&1 | tail -15; echo \"EXIT ${PIPESTATUS[0]}\"")]
+    [InlineData("role.reviewer", "dotnet test tests/Loadout.Tests --filter \"FullyQualifiedName~Tool\" 2>&1 | tail -15; echo \"exit ${PIPESTATUS[0]}\"")]
+    [InlineData("role.implementer", "git status --short; echo \"status-exit=$?\"")]
     public async Task The_roles_that_prove_a_change_may_build_and_test_it(string id, string command)
     {
         // Run 20260923-1216-be60 stopped here: the implementer's own probe
@@ -117,6 +123,21 @@ public sealed class RoleLibraryTests
         Loadout.Core.Teams.NodePermissions
             .Decide(policy, "Bash", $$"""{"command":{{System.Text.Json.JsonSerializer.Serialize(command)}}}""")
             .Allowed.Should().BeTrue($"{id} has to be able to run '{command}'");
+    }
+
+    [Theory]
+    [InlineData("role.reviewer")]
+    [InlineData("role.verifier")]
+    public async Task Echo_is_not_a_way_for_a_reading_role_to_write_a_file(string id)
+    {
+        // Allowing echo so a node can print an exit code must not let it
+        // write one: the redirection is judged as a write, whatever precedes it.
+        var role = (await LibraryAsync()).Find(id)!.Role!;
+        var policy = new Loadout.Core.Teams.NodePolicy("run", "node", id, role.AllowedTools, role.DeniedTools);
+
+        Loadout.Core.Teams.NodePermissions
+            .Decide(policy, "Bash", """{"command":"echo done > notes.txt"}""")
+            .Allowed.Should().BeFalse();
     }
 
     [Fact]
