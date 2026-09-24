@@ -199,13 +199,19 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// <summary>How long a deprecated tool has to go unused before it can be retired.</summary>
     public static readonly TimeSpan RetireAfter = TimeSpan.FromDays(30);
 
+    // With the configuration's converter for times, both ways. Without it a
+    // DateTimeOffset went out as a mapping of its own properties and came
+    // back as 0001-01-01; the converter also reads that old mapping, so
+    // manifests already written that way still load.
     private static readonly IDeserializer Yaml = new DeserializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance)
+        .WithTypeConverter(new Configuration.DateTimeOffsetConverter())
         .IgnoreUnmatchedProperties()
         .Build();
 
     private static readonly ISerializer Writer = new SerializerBuilder()
         .WithNamingConvention(UnderscoredNamingConvention.Instance)
+        .WithTypeConverter(new Configuration.DateTimeOffsetConverter())
         .ConfigureDefaultValuesHandling(DefaultValuesHandling.OmitNull)
         .Build();
 
