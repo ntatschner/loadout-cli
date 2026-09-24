@@ -71,7 +71,9 @@
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
 | `loadout tools search\|show\|submit\|used` | The tools this machine shares between every team: find one before building it, send in a candidate, idea, bug or lesson, and say how a use went |
 | `loadout tools audit\|verify\|promote\|deprecate\|retire` | Look after the catalogue: what happened to it, whether its files still match, and a tool's way in and out |
+| `loadout tools health [name]` | How each active tool is doing beyond passing its cases: how long they took, how often recent uses failed or were worked around, how big it has grown, and whether anyone still uses it |
 | `loadout tools trust <name@version> [--revoke]` | Agree that one version's script may run on this machine, as it is now |
+| `loadout tools verify <draft> --agree` | Answer a held verify yourself: it shows the script and the cases it would run, asks, and runs them if you say yes. Only at a terminal, so an agent cannot say yes for you |
 | `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
 | `loadout team new\|edit\|remove` | Write a team of your own, open its file, or delete it |
 | `loadout team run <team> "<goal>" --done-when` | Say what the run is judged on, one per use. The lead must report a verdict and evidence for every one |

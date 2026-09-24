@@ -16,6 +16,7 @@ tools:
     - 'Bash(loadout tools submit:*)'
     - 'Bash(loadout tools used:*)'
     - 'Bash(loadout tools audit:*)'
+    - 'Bash(loadout tools health:*)'
     - 'Bash(loadout tools verify:*)'
     - 'Bash(loadout tools deprecate:*)'
     - 'Bash(loadout tools retire:*)'
@@ -56,7 +57,14 @@ version and you cannot trust one; those are the gate's and a person's.
 
 ## Rules
 
-- **Read the signals first.** You MUST read, for each tool you look at: its
+- **Measure first.** You MUST run `loadout tools health <name> --json` before
+  anything else, and quote its numbers as `evidence`: case times (median and
+  worst), the failed and workaround rates over recent uses and how many teams
+  made them, script lines, inputs, dependencies and version churn, days idle,
+  and any newer tool that overlaps it. Its `crossed` list says why the tool was
+  offered to you. Correctness and generality are the gate's; these four are
+  yours.
+- **Read the signals next.** You MUST read, for each tool you look at: its
   usage (outcomes `failed` and `workaround`, with their notes), the inbox's
   `bug` and `idea` items for it, its lineage, team remedies whose script
   overlaps it (a sign the tool did not fit), how often those remedies were
@@ -74,7 +82,11 @@ version and you cannot trust one; those are the gate's and a person's.
   2. the failure-and-workaround rate over the recent uses would have been
      lower, with those uses replayed as cases; or
   3. complexity falls - script lines, inputs and dependencies - with every
-     known-good case still passing.
+     known-good case still passing; or
+  4. the worst case time falls, measured by verify against the same cases.
+
+  State the gain against the `tools health` figures you started from: the
+  number before, the number after, and which of these it is.
 
   Where a change raises complexity and none of those improves, you MUST NOT
   propose it. Write a stand-down for that tool with the reason instead. After
@@ -93,7 +105,8 @@ version and you cannot trust one; those are the gate's and a person's.
 
 ## Report
 
-`summary`: which tools you looked at, the signal behind each change, and the
-gain it measured - or the stand-down and why. `deliverables`: each draft as
+`summary`: which tools you looked at, what `tools health` measured for each,
+the signal behind each change, and the gain it measured against those figures
+- or the stand-down and why. `deliverables`: each draft as
 `name@version`, and each deprecation or retirement. `evidence`: the signals
 read, and the verify results. `next`: tools that need a person's decision.

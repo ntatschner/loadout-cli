@@ -56,11 +56,11 @@ internal sealed class ToolStoreFixture : IDisposable
     public IReadOnlyList<string> Known { get; }
 
     /// <summary>A registry whose every run exits with <paramref name="exit" />.</summary>
-    public (ToolRegistry Registry, StubProcessLauncher Launcher) Registry(int exit = 0)
+    public (ToolRegistry Registry, StubProcessLauncher Launcher) Registry(int exit = 0, TimeProvider? clock = null)
     {
         var launcher = new StubProcessLauncher(string.Empty, exit);
 
-        return (new ToolRegistry(Paths, new ToolHarness(launcher), TimeProvider.System, () => Known), launcher);
+        return (new ToolRegistry(Paths, new ToolHarness(launcher), clock ?? TimeProvider.System, () => Known), launcher);
     }
 
     /// <summary>A manifest with every field filled.</summary>

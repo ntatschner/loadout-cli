@@ -75,6 +75,27 @@ public sealed class ToolCommandsContractTests
     }
 
     [BuiltCliFact]
+    public async Task Health_json_measures_each_active_tool_on_four_dimensions()
+    {
+        var (loadout, _) = await CatalogueAsync();
+        using var _ = loadout;
+
+        var run = await loadout.RunAsync("tools", "health", "free-cache", "--json");
+
+        run.ExitCode.Should().Be(0, run.StandardError);
+        var tool = run.Json().GetProperty("tools").EnumerateArray().Should().ContainSingle().Subject;
+        tool.GetProperty("name").GetString().Should().Be("free-cache");
+        tool.GetProperty("version").GetString().Should().Be("1.0");
+        tool.GetProperty("performance").GetProperty("cases").GetInt32().Should().Be(4);
+        tool.GetProperty("usability").GetProperty("uses").GetInt32().Should().Be(0);
+        tool.GetProperty("maintainability").GetProperty("scriptLines").GetInt32().Should().Be(2);
+        tool.GetProperty("relevance").GetProperty("daysIdle").GetInt32().Should().Be(0, "it was promoted just now and never used");
+        tool.GetProperty("crossed").GetArrayLength().Should().Be(0);
+
+        (await loadout.RunAsync("tools", "health", "no-such-tool", "--json")).ExitCode.Should().NotBe(0);
+    }
+
+    [BuiltCliFact]
     public async Task Show_json_carries_versions_and_trust()
     {
         var (loadout, _) = await CatalogueAsync();
@@ -170,6 +191,29 @@ public sealed class ToolCommandsContractTests
             (run.StandardOutput + run.StandardError).Should().Contain("no readable manifest.yaml", string.Join(' ', one));
             (run.StandardOutput + run.StandardError).Should().NotContain("would be", string.Join(' ', one));
         }
+    }
+
+    [BuiltCliFact]
+    public async Task Agreeing_without_a_terminal_to_ask_at_is_refused_and_agrees_to_nothing()
+    {
+        var (loadout, root) = await CatalogueAsync();
+        using var _ = loadout;
+        ToolStoreFixture.Write(
+            Path.Combine(root, "drafts", "free-cache-2"), ToolStoreFixture.Manifest("free-cache", "2.0"), Script, ToolStoreFixture.Cases());
+
+        // A team node's shell is exactly this: input and output are pipes. The
+        // creator's role may run verify, so this is the one door it has.
+        var refused = await loadout.RunAsync("tools", "verify", "free-cache-2", "--agree", "--by", "a-node");
+
+        refused.ExitCode.Should().NotBe(0, refused.StandardOutput);
+        (refused.StandardOutput + refused.StandardError).Should().Contain("person's answer");
+
+        // Named by where it sits under drafts, and still held, because nothing
+        // was written for it.
+        var after = await loadout.RunAsync("tools", "verify", "free-cache-2", "--json");
+
+        after.ExitCode.Should().Be(0, after.StandardError);
+        after.Json().GetProperty("ruling").GetString().Should().Be("ask", "nothing was agreed to");
     }
 
     [BuiltCliFact]

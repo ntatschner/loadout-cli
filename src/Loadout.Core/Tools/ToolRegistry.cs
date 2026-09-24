@@ -109,6 +109,13 @@ public interface IToolRegistry
     /// </summary>
     OperationResult CheckDraft(string draft);
 
+    /// <summary>
+    /// What a person agreeing to a draft's harness run would be agreeing to:
+    /// the name it is agreed under, the script and cases it would run, and the
+    /// fingerprint the agreement is recorded against.
+    /// </summary>
+    OperationResult<ToolTestAgreement> Agreement(string draft);
+
     /// <summary>Runs a draft's harness and the regression gate, where this machine allows it.</summary>
     Task<OperationResult<ToolVerification>> VerifyAsync(
         string draft,
@@ -135,6 +142,13 @@ public interface IToolRegistry
 
     /// <summary>Whether a tool is worth another look.</summary>
     bool NeedsRefining(string name);
+
+    /// <summary>
+    /// Every active tool measured for performance, usability, maintainability
+    /// and relevance, or just the one named. A tool with no active version is
+    /// left out, having nothing to measure.
+    /// </summary>
+    IReadOnlyList<ToolHealth> Health(string? name = null);
 
     /// <summary>
     /// Every active tool whose active version is known-good and still matches
@@ -473,6 +487,27 @@ public sealed partial class ToolRegistry : IToolRegistry
             : OperationResult.Ok();
 
     /// <inheritdoc />
+    public OperationResult<ToolTestAgreement> Agreement(string draft)
+    {
+        var read = ReadDraft(draft);
+
+        if (read.Failed)
+        {
+            return OperationResult<ToolTestAgreement>.Fail(read.Error!, ExitCode.InvalidArguments);
+        }
+
+        var (_, version, script, scriptPath, cases) = read.Value!;
+
+        // The same name and fingerprint VerifyAsync decides against, from the
+        // same read of the draft, so what a person is shown is what is checked.
+        return OperationResult<ToolTestAgreement>.Ok(new ToolTestAgreement(
+            ToolHarness.Named(version),
+            ToolHarness.Fingerprint(script, cases),
+            scriptPath,
+            [.. cases.Select(one => one.Name).Order(StringComparer.Ordinal)]));
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<ToolVerification>> VerifyAsync(
         string draft,
         ToolTestConsent consent,
@@ -525,13 +560,31 @@ public sealed partial class ToolRegistry : IToolRegistry
             activeCases = ReadCases(Path.Combine(VersionDirectory(head.Name, known.Version), "cases"));
         }
 
+        // Timed here rather than in the harness, so the time is the one the
+        // gate saw and lands in the record the gate writes.
+        var seconds = new Dictionary<string, double>(StringComparer.Ordinal);
+
+        async Task<ToolCaseResult> Timed(string path, ToolCase one, CancellationToken token)
+        {
+            var started = _clock.GetTimestamp();
+            var result = await _harness.RunAsync(path, one, token).ConfigureAwait(false);
+            var took = Math.Round(_clock.GetElapsedTime(started).TotalSeconds, 3);
+
+            lock (seconds)
+            {
+                seconds[one.Name] = seconds.TryGetValue(one.Name, out var was) ? Math.Max(was, took) : took;
+            }
+
+            return result;
+        }
+
         var gate = await ToolPromotion.GateAsync(
             version,
             scriptPath,
             cases,
             active,
             activeCases,
-            (path, one, token) => _harness.RunAsync(path, one, token),
+            Timed,
             ct).ConfigureAwait(false);
 
         version.Status = gate.Passed ? ToolVersionStatus.Verified : ToolVersionStatus.Rejected;
@@ -543,6 +596,7 @@ public sealed partial class ToolRegistry : IToolRegistry
             RegressionAgainst = active is null ? [] : [active.Version],
             Fingerprint = RemedyCeiling.Fingerprint(script),
             CasesFingerprint = CasesFingerprint(Path.Combine(directory, "cases")),
+            Seconds = seconds,
         };
 
         using (var held = Lock())
@@ -912,7 +966,10 @@ public sealed partial class ToolRegistry : IToolRegistry
             return OperationResult.Fail($"There is no tool called '{name}'.", ExitCode.ProjectNotFound);
         }
 
-        Record("stand-down", name, null, actor, run, reason);
+        // What was crossed when the Refiner looked, so a later crossing can be
+        // told apart from the one this stand-down already judged.
+        ToolAudit.Append(AuditFile, new ToolAuditEntry(
+            _clock.GetUtcNow(), "stand-down", name, null, actor, run, reason, CrossedNow(name)));
 
         return OperationResult.Ok();
     }
@@ -923,6 +980,15 @@ public sealed partial class ToolRegistry : IToolRegistry
     /// looks found nothing worth changing, and a third would find the same.
     /// Something new - a promotion, a submission about the tool, a use that
     /// failed or was worked around - starts the count again.
+    /// <para>
+    /// A health threshold crossed since the last stand-down counts as something
+    /// new: a tool now unused for two months is a different tool from the one
+    /// looked at then. One the last stand-down already saw does not, or an idle
+    /// tool would be looked at on every pass for ever. Only a new name counts,
+    /// not a bigger number: the rates and case times move only on uses and
+    /// promotions, which start the count again themselves, and idleness grows
+    /// every day whether or not anything has changed.
+    /// </para>
     /// </remarks>
     public bool NeedsRefining(string name)
     {
@@ -932,11 +998,13 @@ public sealed partial class ToolRegistry : IToolRegistry
         }
 
         var standDowns = 0;
+        IReadOnlyList<string>? judged = null;
 
         foreach (var entry in Audit(head.Name).Reverse())
         {
             if (entry.Action == "stand-down")
             {
+                judged ??= entry.Crossed ?? [];
                 standDowns++;
             }
             else if (IsSignal(entry))
@@ -945,7 +1013,67 @@ public sealed partial class ToolRegistry : IToolRegistry
             }
         }
 
-        return standDowns < 2;
+        if (standDowns < 2)
+        {
+            return true;
+        }
+
+        return CrossedNow(head.Name).Except(judged ?? [], StringComparer.Ordinal).Any();
+    }
+
+    private IReadOnlyList<string> CrossedNow(string name) =>
+        Health(name) is [{ } health] ? health.Thresholds : [];
+
+    /// <inheritdoc />
+    public IReadOnlyList<ToolHealth> Health(string? name = null)
+    {
+        var shapes = new List<(ToolRecord Record, ToolVersion Version, ToolShape Shape, DateTimeOffset? Promoted)>();
+
+        foreach (var head in Heads().Where(one => one.Lifecycle == ToolLifecycle.Active))
+        {
+            if (ActiveVersion(head) is not { } version)
+            {
+                continue;
+            }
+
+            string script;
+
+            try
+            {
+                script = File.ReadAllText(Path.Combine(VersionDirectory(head.Name, version.Version), version.Script));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            var promoted = Audit(head.Name).Where(one => one.Action == "promote").Select(one => (DateTimeOffset?)one.At).LastOrDefault();
+            shapes.Add((head, version, new ToolShape(head.Capabilities, head.Summary, script), promoted));
+        }
+
+        var measured = new List<ToolHealth>();
+
+        foreach (var (head, version, shape, promoted) in shapes)
+        {
+            if (name is not null && !string.Equals(head.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // Newer by its last promotion, so a tool refined since does not
+            // count as superseded by one it predates.
+            var newer = shapes
+                .Where(other => other.Record.Name != head.Name
+                    && other.Promoted > promoted
+                    && ToolOverlap.Score(shape, other.Shape).Overlaps)
+                .Select(other => other.Record.Name)
+                .FirstOrDefault();
+
+            measured.Add(ToolHealth.Measure(
+                head, version, shape.Script, Usage(head.Name), Audit(head.Name), newer, _clock.GetUtcNow()));
+        }
+
+        return measured;
     }
 
     /// <inheritdoc />
@@ -1090,9 +1218,14 @@ public sealed partial class ToolRegistry : IToolRegistry
 
     private OperationResult<(string Directory, ToolVersion Version, string Script, string ScriptPath, IReadOnlyList<ToolCase> Cases)> ReadDraft(string draft)
     {
-        // Only under drafts/, after the path is resolved, because verify
-        // writes into a draft and nothing asked it to write anywhere else.
-        var full = Path.GetFullPath(draft);
+        // A relative name is where the draft sits under drafts/, which is how
+        // the help and the creator's report both give it; a path from the
+        // current directory is still taken when nothing under drafts/ has that
+        // name. Either way only under drafts/, after the path is resolved,
+        // because verify writes into a draft and nothing asked it to write
+        // anywhere else.
+        var underDrafts = Path.GetFullPath(Path.Combine(DraftsRoot, draft));
+        var full = !Path.IsPathRooted(draft) && Directory.Exists(underDrafts) ? underDrafts : Path.GetFullPath(draft);
 
         if (!full.StartsWith(Path.GetFullPath(DraftsRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {

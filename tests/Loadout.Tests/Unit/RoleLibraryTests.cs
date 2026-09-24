@@ -154,6 +154,42 @@ public sealed class RoleLibraryTests
             .Should().Be(id == "role.tool-refiner");
     }
 
+    [Fact]
+    public async Task Every_member_role_may_search_the_tool_catalogue()
+    {
+        // Run 20260923-1216-be60's lead was refused loadout_tools_search with
+        // "Nothing in the role.project-lead role allows" it, although the
+        // brief every node is given tells it to search before building. The
+        // list is the one a node is actually started with, through the gate
+        // its questions go to.
+        var members = (await LibraryAsync()).OfKind(SpecialistKind.Role)
+            .Where(role => role.Activation.RequiresList.Contains("role.member"))
+            .ToList();
+
+        members.Should().HaveCountGreaterThan(20);
+
+        foreach (var role in members)
+        {
+            var definition = role.Role!;
+            var policy = new Loadout.Core.Teams.NodePolicy(
+                "run", "node", role.Id,
+                Loadout.Agents.Teams.TeamRunner.AllowedFor(role.Id, definition),
+                definition.DeniedTools);
+
+            bool Allowed(string tool) => Loadout.Core.Teams.NodePermissions.Decide(policy, tool, "{}").Allowed;
+
+            Allowed("mcp__loadout__loadout_tools_search").Should().BeTrue(role.Id);
+            Allowed("mcp__loadout__loadout_tools_show").Should().BeTrue(role.Id);
+
+            // A reviewer and a verifier judge one piece of work and change
+            // nothing; what they find goes in their report, where the lead
+            // can decide whether it is a lesson worth submitting.
+            var writes = role.Id is not ("role.reviewer" or "role.verifier");
+            Allowed("mcp__loadout__loadout_tools_submit").Should().Be(writes, role.Id);
+            Allowed("mcp__loadout__loadout_tools_used").Should().Be(writes, role.Id);
+        }
+    }
+
     [Theory]
     [InlineData("role.reviewer")]
     [InlineData("role.verifier")]

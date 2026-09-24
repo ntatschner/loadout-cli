@@ -49,6 +49,10 @@ public sealed class ToolNominationPass : IToolNominationPass
     private readonly IProjectService _projects;
     private readonly IWorkspaceManager _workspace;
 
+    // One for the life of the pass, so what it has read of a finished run is
+    // not read again on every schedule.
+    private readonly ToolNominator _nominator;
+
     public ToolNominationPass(
         IToolRegistry registry,
         IRunJournal journal,
@@ -65,6 +69,7 @@ public sealed class ToolNominationPass : IToolNominationPass
         _memory = memory;
         _projects = projects;
         _workspace = workspace;
+        _nominator = new ToolNominator(registry, journal, remedies, paths);
     }
 
     /// <summary>Whether starting this schedule should be preceded by a pass.</summary>
@@ -90,7 +95,7 @@ public sealed class ToolNominationPass : IToolNominationPass
 
         var lessons = await LessonsAsync(log, ct).ConfigureAwait(false);
 
-        return new ToolNominator(_registry, _journal, _remedies, _paths).Scan(lessons);
+        return _nominator.Scan(lessons);
     }
 
     /// <summary>The text of every lesson topic of every registered project.</summary>

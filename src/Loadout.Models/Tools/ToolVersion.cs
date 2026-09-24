@@ -160,4 +160,7 @@ public sealed class ToolTestRecord
 
     /// <summary>The cases' fingerprint the run was made against.</summary>
     public string CasesFingerprint { get; set; } = string.Empty;
+
+    /// <summary>How long each case took, in seconds, by case name; the slower run where a name repeats.</summary>
+    public Dictionary<string, double> Seconds { get; set; } = [];
 }

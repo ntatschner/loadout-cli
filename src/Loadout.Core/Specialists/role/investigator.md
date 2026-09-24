@@ -67,6 +67,10 @@ the condition, and the evidence that it is the cause and not a bystander. Your
   already know, and say in `summary` that you did.
 - You SHOULD name siblings: other places the same cause applies. The fixer
   will fix the one the brief names and needs to know about the rest.
+- You MUST record each run of a tool from the shared catalogue with
+  `loadout_tools_used` as soon as you have its result: whether it worked,
+  failed or needed working around. A use nobody records reads as no use, and
+  the catalogue retires what nobody uses.
 
 ## Report
 

@@ -54,6 +54,26 @@ public sealed class ToolNominationPassTests : IDisposable
     }
 
     [Fact]
+    public async Task A_second_pass_does_not_read_a_finished_runs_streams_again()
+    {
+        FinishedRun("20260923-1000-a001", "alpha", "docker system prune --force");
+        var schedule = Schedule("tools-on-finish", "tidy-up", ScheduleService.RunFinishedEvent);
+        var pass = Pass();
+
+        (await pass.BeforeAsync(schedule)).Should().ContainSingle(one => one.Nomination.Rule == 4);
+
+        // The run's report no longer names the command. A pass that read it
+        // again would lose the nomination; a fresh pass does, which shows the
+        // change is real.
+        FinishedRun("20260923-1000-a001", "alpha", "git gc --aggressive");
+
+        (await Pass().BeforeAsync(schedule)).Should().NotContain(one => one.Nomination.Rule == 4,
+            "a fresh pass reads the rewritten report");
+        (await pass.BeforeAsync(schedule)).Should().ContainSingle(one => one.Nomination.Rule == 4 && one.Filed == null,
+            "the same pass keeps its nominator, which read the finished run once already");
+    }
+
+    [Fact]
     public async Task Any_other_schedule_nominates_nothing()
     {
         FinishedRun("20260923-1000-a001", "alpha", "docker system prune --force");

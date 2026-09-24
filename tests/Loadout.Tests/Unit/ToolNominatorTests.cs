@@ -207,11 +207,244 @@ public sealed class ToolNominatorTests : IDisposable
         }
     }
 
+    /// <summary>An instruction paragraph of well over thirty words, as a lead might hand every reviewer.</summary>
+    private const string Checklist =
+        "Before you report, read every changed file from top to bottom, run the tests that cover it, "
+        + "and write down each command you ran with the exact result it printed. Name anything you could "
+        + "not verify and say what would verify it, rather than leaving it out of the report altogether.";
+
+    [Fact]
+    public void Rule_5_a_repeated_workflow_across_teams_is_nominated()
+    {
+        Run("20260901-1000-a001", "alpha",
+            Command("git fetch origin"), Command("dotnet build Alpha.slnx"), Command("dotnet test Alpha.slnx --no-build"));
+        Run("20260902-1000-b001", "beta",
+            Command("git fetch origin"), Command("dotnet build Beta.slnx"), Command("dotnet test Beta.slnx --no-build"));
+
+        Nominator().Find([]).Should().ContainSingle(one => one.Rule == 5
+            && one.Key == "5 git fetch origin | dotnet build <arg> | dotnet test <arg> --no-build");
+    }
+
+    [Fact]
+    public void Rule_6_a_repeated_prompt_across_teams_is_nominated()
+    {
+        Run("20260901-1000-a001", "alpha", Brief("Review the parser change.\n\n" + Checklist));
+        Run("20260902-1000-b001", "beta", Brief("Check the new export screen.\n\n  " + Checklist.ToUpperInvariant().Replace(" ", "  \n ", StringComparison.Ordinal)));
+
+        var scanned = Nominator().Scan([]);
+
+        scanned.Should().ContainSingle(one => one.Nomination.Rule == 6);
+
+        var filed = File.ReadAllText(Directory.EnumerateFiles(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Single());
+        filed.Should().Contain("kind: candidate").And.Contain("- prompt");
+        filed.Should().NotContain("parser").And.NotContain("export screen", "only the shared paragraph is carried, not either project's");
+    }
+
+    [Fact]
+    public void Rule_7_a_shared_integration_is_nominated()
+    {
+        // Every node talks to Loadout's own server, so that says nothing.
+        Run("20260901-1000-a001", "alpha", Stream(
+            new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__github__create_issue", "alpha/repo"),
+            new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__loadout__loadout_progress")));
+        Run("20260902-1000-b001", "beta",
+            new ReportEvidence(EvidenceKind.Command, "mcp__github__list_pulls beta/repo", EvidenceResult.Pass, "3 open"),
+            new ReportEvidence(EvidenceKind.Command, "mcp__loadout__loadout_recall build", EvidenceResult.Pass, "2 topics"));
+        Run("20260903-1000-a002", "alpha", Stream(new NodeStep(DateTimeOffset.UnixEpoch, "tool", "WebFetch", "https://status.example.com/api/v2")));
+        Run("20260904-1000-b002", "beta", Command("curl -s https://status.example.com/api/v2/summary.json"));
+
+        var found = Nominator().Find([]);
+
+        found.Should().Contain(one => one.Rule == 7 && one.Key == "7 mcp github");
+        found.Should().Contain(one => one.Rule == 7 && one.Key == "7 http status.example.com");
+        found.Should().NotContain(one => one.Rule == 7 && one.Key.Contains("loadout", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Back_to_back_repeated_steps_collapse_into_one()
+    {
+        // Alpha built twice and ran the tests twice; it is still the same
+        // three steps beta ran once each.
+        Run("20260901-1000-a001", "alpha",
+            Command("git fetch origin"), Command("dotnet build Alpha.slnx"), Command("dotnet build Alpha.slnx"),
+            Command("dotnet test Alpha.slnx --no-build"), Command("dotnet test Alpha.slnx --no-build"));
+        Run("20260902-1000-b001", "beta",
+            Command("git fetch origin"), Command("dotnet build Beta.slnx"), Command("dotnet test Beta.slnx --no-build"));
+
+        Nominator().Find([]).Should().ContainSingle(one => one.Rule == 5
+            && one.Key == "5 git fetch origin | dotnet build <arg> | dotnet test <arg> --no-build");
+    }
+
+    /// <summary>
+    /// What the runner writes into every lead brief that has criteria, as it
+    /// stood in runs 20260922-2154-699c and 20260923-1216-be60. Copied rather
+    /// than referenced, because what is tested is that text the runner writes
+    /// is never read, whatever it says.
+    /// </summary>
+    private static readonly string[] LeadDoneWhen =
+    [
+        "every criterion below is met, with the evidence cited from your nodes' reports",
+        "your final report carries one coverage entry per criterion, each saying in 'understood' "
+            + "what you took the criterion to mean, with a verdict of met, unmet or not-attempted, and "
+            + "every met saying in 'because' which node, report and evidence shows it",
+        "every report you make says in 'goal_understood', in a sentence, what you take the goal to "
+            + "mean, so the person who wrote it can see you are working to what they asked",
+    ];
+
+    [Fact]
+    public void Runner_boilerplate_in_two_teams_lead_briefs_is_not_a_prompt()
+    {
+        LeadBrief("20260922-2154-699c", "marketing-studio",
+            "Your goal is to reimagine the main readme and all its documents.",
+            ["the user needs to see what Loadout will do for them"]);
+        LeadBrief("20260923-1216-be60", "iterating-project",
+            "global tool creator, for all teams, that sits in the background building reusable tools",
+            ["Tools are versioned and changes can be traced back to the lesson that caused them."]);
+
+        Nominator().Find([]).Should().NotContain(one => one.Rule == 6, "nobody wrote the done_when of a lead brief but the runner");
+    }
+
+    [Fact]
+    public void A_shared_paragraph_naming_a_project_path_does_not_reach_the_inbox()
+    {
+        const string Where = @"C:\git\alpha-app\docs\review-notes.md";
+        var paragraph = Checklist + " Keep your notes in " + Where + " as you go.";
+
+        Run("20260901-1000-a001", "alpha", Brief(paragraph));
+        Run("20260902-1000-b001", "beta", Brief(paragraph));
+
+        Nominator().Scan([]);
+
+        var inbox = Path.Combine(_store.Paths.Paths.State, "tools", "inbox");
+        var filed = Directory.Exists(inbox) ? Directory.EnumerateFiles(inbox).Select(File.ReadAllText).ToList() : [];
+
+        filed.Should().NotContain(one => one.Contains(Where, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void A_second_pass_does_not_read_a_finished_runs_streams_again()
+    {
+        Run("20260901-1000-a001", "alpha", Stream(new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__github__create_issue", "alpha/repo")));
+        Run("20260902-1000-b001", "beta", Stream(new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__github__list_pulls", "beta/repo")));
+
+        var nominator = Nominator();
+        nominator.Find([]).Should().Contain(one => one.Key == "7 mcp github");
+
+        // Both streams now name another server. A pass that read them again
+        // would find it; a fresh nominator does, which shows the change is real.
+        foreach (var run in new[] { "20260901-1000-a001", "20260902-1000-b001" })
+        {
+            File.WriteAllText(
+                Path.Combine(new RunJournal(_store.Paths).DirectoryOf(run), NodeStream.FileFor("worker/1")),
+                NodeStream.Line(new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__jira__search", "x")) + "\n");
+        }
+
+        Nominator().Find([]).Should().Contain(one => one.Key == "7 mcp jira", "a fresh nominator reads the rewritten streams");
+        nominator.Find([]).Should().NotContain(one => one.Key == "7 mcp jira", "a finished run's streams were read once already");
+    }
+
+    [Fact]
+    public void A_run_that_leaves_the_listing_is_evicted_from_the_cache()
+    {
+        Run("20260901-1000-a001", "alpha", Command("git fetch origin"));
+        Run("20260902-1000-b001", "beta", Command("git fetch origin"));
+
+        var nominator = Nominator();
+        nominator.Find([]);
+        nominator.Cached.Should().Be(2, "both finished runs were read");
+
+        Directory.Delete(new RunJournal(_store.Paths).DirectoryOf("20260901-1000-a001"), recursive: true);
+        nominator.Find([]);
+
+        nominator.Cached.Should().Be(1, "a run no longer listed is not held on to");
+    }
+
+    [Fact]
+    public async Task An_unrelated_script_mentioning_github_does_not_cover_an_mcp_github_nomination()
+    {
+        var (registry, _) = _store.Registry();
+        await _store.PromoteAsync(
+            registry,
+            ToolStoreFixture.Manifest("free-cache", "1.0"),
+            "# Clears the cache a github runner leaves behind.\n" + Cache,
+            ToolStoreFixture.Cases());
+
+        Run("20260901-1000-a001", "alpha", Stream(new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__github__create_issue", "alpha/repo")));
+        Run("20260902-1000-b001", "beta", Stream(new NodeStep(DateTimeOffset.UnixEpoch, "tool", "mcp__github__list_pulls", "beta/repo")));
+
+        Nominator().Find([]).Should().Contain(one => one.Key == "7 mcp github", "clearing a cache is not talking to the github server");
+    }
+
+    [Fact]
+    public void One_team_repeating_itself_is_not_nominated_for_5_6_7()
+    {
+        foreach (var run in new[] { "20260901-1000-a001", "20260902-1000-a002", "20260903-1000-a003" })
+        {
+            Run(run, "alpha",
+                Command("git fetch origin"), Command("dotnet build Alpha.slnx"), Command("dotnet test Alpha.slnx --no-build"),
+                Command("curl -s https://status.example.com/api/v2/summary.json"),
+                new ReportEvidence(EvidenceKind.Command, "mcp__github__list_pulls alpha/repo", EvidenceResult.Pass, "3 open"));
+            File.WriteAllText(Path.Combine(new RunJournal(_store.Paths).DirectoryOf(run), "brief-reviewer-1.json"), Brief(Checklist).Json);
+        }
+
+        Nominator().Find([]).Should().NotContain(one => one.Rule >= 5);
+    }
+
+    [Fact]
+    public void A_prompt_nomination_carries_no_secret_value()
+    {
+        const string Key = "AKIAABCDEFGHIJKLMNOP";
+        var paragraph = Checklist + " Sign in with the access key " + Key + " when the tests need the bucket.";
+
+        Run("20260901-1000-a001", "alpha", Brief(paragraph));
+        Run("20260902-1000-b001", "beta", Brief(paragraph));
+
+        var scanned = Nominator().Scan([]);
+
+        scanned.Should().ContainSingle(one => one.Nomination.Rule == 6 && one.Filed != null && one.Filed.Failed);
+
+        var catalogue = Path.Combine(_store.Paths.Paths.State, "tools");
+        var written = Directory.Exists(catalogue)
+            ? Directory.EnumerateFiles(catalogue, "*", SearchOption.AllDirectories)
+            : [];
+
+        foreach (var file in written)
+        {
+            File.ReadAllText(file).Should().NotContainEquivalentOf(Key, $"{file} was written by the nominator");
+        }
+    }
+
     private ToolNominator Nominator() =>
         new(_store.Registry().Registry, new RunJournal(_store.Paths), new RemedyBook(_store.Paths), _store.Paths);
 
     private static ReportEvidence Command(string command) =>
         new(EvidenceKind.Command, command, EvidenceResult.Pass, "exit 0");
+
+    /// <summary>A brief for a reviewer, to put beside a run's report.</summary>
+    private static Extra Brief(string task) =>
+        new("brief-reviewer-1.json", ReportReader.Write(new Brief(
+            "run", "reviewer/1", "lead", "role.reviewer", task, DeliverableKind.Answer, [], new BriefConstraints("review"), [])));
+
+    /// <summary>A finished run of a team whose lead brief carries the runner's done_when and these criteria.</summary>
+    private void LeadBrief(string runId, string team, string goal, string[] criteria) =>
+        Run(runId, team, new Extra("brief-lead.json", ReportReader.Write(new Brief(
+            runId, "lead", null, "role.project-lead", goal, DeliverableKind.Answer, [],
+            new BriefConstraints("coordinate", MaxTurns: 30), LeadDoneWhen,
+            TeamDirectory: @"C:\Users\someone\AppData\Local\Loadout\teams\work\" + team,
+            Criteria: criteria))));
+
+    /// <summary>A node's stream, as the runner records one.</summary>
+    private static Extra Stream(params NodeStep[] steps) =>
+        new(NodeStream.FileFor("worker/1"), string.Join('\n', steps.Select(NodeStream.Line)) + "\n");
+
+    private sealed record Extra(string Name, string Json);
+
+    /// <summary>A finished run with no evidence of its own, only this file beside it.</summary>
+    private void Run(string runId, string team, Extra extra)
+    {
+        Run(runId, team);
+        File.WriteAllText(Path.Combine(new RunJournal(_store.Paths).DirectoryOf(runId), extra.Name), extra.Json);
+    }
 
     /// <summary>A remedy on a team's shelf, as a node registers one.</summary>
     private void Shelve(string team, string name, string script, int revision = 0)

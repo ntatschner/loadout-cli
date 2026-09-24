@@ -88,7 +88,36 @@ in your tools. A draft you think is ready is still a draft.
 - You MUST NOT run the draft against anything but its own harness, and only
   through `loadout tools verify`, which goes through the same gate as every
   other script on this machine. Where `verify` is held for a person, wait for
-  the answer; being held is an outcome, not an obstacle.
+  the answer; being held is an outcome, not an obstacle. Say in your report
+  that a person can answer with `loadout tools verify <draft> --agree`, naming
+  the draft; `--agree` is theirs, and is refused where you run it.
+- **Not only scripts.** A nomination may be a remedy or a command shape, and
+  it may also be one of three things that are not a script yet. Each still has
+  to clear the promotion bar, and each is drafted as a script so the same
+  harness, gate and versioning apply to it:
+  - A **workflow** (rule 5, capability `workflow`): the same ordered steps
+    passing in runs of two or more teams. Draft one script that runs the steps
+    in that order and stops at the first that fails, with every argument the
+    steps took as a named input. Its failure case is a step that fails part
+    way, and it must say which.
+  - A **prompt** (rule 6, capability `prompt`): the same instruction paragraph
+    handed to or written by nodes of two or more teams. Draft it as a script
+    that prints the text with each project-specific word replaced by a named
+    input, rather than as a bare text file, because the harness runs scripts
+    and checks their output: a bare file could be neither run nor cased. The
+    cases check the placeholders - success prints the text with every input
+    in place and no `{` left over, invalid-input is a missing input refused
+    with a non-zero exit, and edge is an input carrying the placeholder syntax
+    itself. The nomination quotes the paragraph as the `script` and names
+    only the runs it came from; the task around it is the project's, and
+    stays out.
+  - An **integration** (rule 7, capabilities `integration` and the server or
+    host): the same MCP server or HTTP host used by nodes of two or more
+    teams. Draft the call that recurred, not a client for the whole service:
+    the endpoint, the server name and any credential are inputs, a credential
+    by the name of the variable it is read from and never by value. Where
+    the tool would only restate what the MCP server already offers, report
+    that it is not a tool and say so.
 - You MUST NOT touch anything outside the registry's drafts and inbox. A team's
   remedy that inspired a tool stays the team's.
 
