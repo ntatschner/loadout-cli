@@ -168,7 +168,36 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         /// </remarks>
         [CommandOption("--after <PID>", IsHidden = true)]
         public int? After { get; init; }
+
+        [CommandOption("--foreground")]
+        [Description(
+            "Run in this terminal and end with it, rather than in the background. For a "
+            + "service manager, a container, or a window you mean to keep open.")]
+        public bool Foreground { get; init; }
+
+        /// <summary>
+        /// The log a background daemon writes to, which is also how it knows
+        /// it is one.
+        /// </summary>
+        /// <remarks>
+        /// Hidden because it is how <c>team daemon</c> starts the daemon it
+        /// then shows, not something anybody types. Read by <c>Program</c>
+        /// before parsing as well, because by the time this is parsed the
+        /// console has already been made.
+        /// </remarks>
+        [CommandOption("--log <PATH>", IsHidden = true)]
+        public string? Log { get; init; }
     }
+
+    /// <summary>What a daemon writes as it hands over to the one replacing it.</summary>
+    /// <remarks>
+    /// A terminal showing the log reads this to know the daemon it was showing
+    /// is being replaced rather than stopped, and to wait for the new one.
+    /// </remarks>
+    internal const string Restarting = "Restarting: a new daemon is starting with the same settings.";
+
+    /// <summary>How often a terminal showing the daemon looks for more.</summary>
+    internal static readonly TimeSpan Follow = TimeSpan.FromMilliseconds(250);
 
     /// <inheritdoc />
     protected override async Task<int> ExecuteAsync(
@@ -197,6 +226,16 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             }
 
             return CommandOutput.Success();
+        }
+
+        // Started in the background and shown here, unless asked to stay in
+        // this terminal or this already is the one in the background. A daemon
+        // run in a terminal ended when the terminal was closed, which is the
+        // one thing a resident process is not supposed to do.
+        if (!settings.Foreground && settings.Log is null)
+        {
+            return await BackgroundAsync(settings, output, !Console.IsOutputRedirected, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         /*
@@ -364,9 +403,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         await WriteStatusAsync(server?.Address, cancellationToken).ConfigureAwait(false);
 
-        output.WriteLine("[dim]Watching the schedules. " + (Console.IsInputRedirected
-            ? "It stops when whatever started it closes its input, or on 'loadout team daemon stop'.[/]"
-            : "Press Ctrl+C or run 'loadout team daemon stop' to stop.[/]"));
+        output.WriteLine("[dim]Watching the schedules. " + (settings.Log is not null
+            ? "Running in the background: 'loadout team daemon stop' stops it.[/]"
+            : Console.IsInputRedirected
+                ? "It stops when whatever started it closes its input, or on 'loadout team daemon stop'.[/]"
+                : "Press Ctrl+C or run 'loadout team daemon stop' to stop.[/]"));
 
         if (DaemonControl.Paused(_paths))
         {
@@ -379,7 +420,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             ? Task.CompletedTask
             : server.ListenAsync(stopping.Token);
 
-        var ending = TeamDashboardCommand.Ends(stopping);
+        // Not in the background, where there is nothing on the other end of the
+        // input and nothing that closing it would mean.
+        var ending = settings.Log is null ? TeamDashboardCommand.Ends(stopping) : Task.CompletedTask;
         var watching = WatchAsync(stopping, output);
 
         try
@@ -443,9 +486,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// <para>
     /// The same port as before when this one was serving, even if it had
     /// been left to the machine to choose: a bookmarked page should still be
-    /// there after a restart. Started detached, the way the status line
-    /// starts the launcher, so it outlives this process; on Windows that
-    /// means a console window of its own.
+    /// there after a restart. Started in the background, writing to the same
+    /// log, so a terminal showing this one goes on to show its successor.
     /// </para>
     /// </remarks>
     internal void Succeed(CommandOutput output, string? address, Settings was)
@@ -461,18 +503,38 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             return;
         }
 
-        var arguments = new List<string>(prefix)
-        {
-            "team", "daemon",
-            "--after", _processes.CurrentProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-
         var port = was.Port;
 
         if (port == 0 && address is { Length: > 0 } && Uri.TryCreate(address, UriKind.Absolute, out var served))
         {
             port = served.Port;
         }
+
+        var arguments = Arguments(prefix, was, port);
+
+        arguments.Add("--after");
+        arguments.Add(_processes.CurrentProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        // In the background whichever way this one was started. A daemon in a
+        // terminal cannot start its successor in that terminal, and a new
+        // window of its own is one more window that ends it when it is closed.
+        var started = _launcher.StartBackground(new ProcessRequest(
+            command,
+            arguments,
+            WorkingDirectory: CurrentDirectory()));
+
+        output.WriteLine(started.Succeeded
+            ? Restarting
+            : $"[red]Could not restart:[/] {Shown.Safely(started.Error ?? "the new daemon did not start")}. "
+              + "Start it again with: loadout team daemon");
+    }
+
+    /// <summary>
+    /// The command line for a daemon in the background with these settings.
+    /// </summary>
+    private List<string> Arguments(IReadOnlyList<string> prefix, Settings was, int port)
+    {
+        var arguments = new List<string>(prefix) { "team", "daemon" };
 
         if (was.NoDashboard)
         {
@@ -490,15 +552,272 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             arguments.Add(listen);
         }
 
-        var started = _launcher.StartDetached(new ProcessRequest(
+        arguments.Add(DaemonLog.Flag);
+        arguments.Add(DaemonLog.PathFor(_paths));
+
+        return arguments;
+    }
+
+    /// <summary>
+    /// Starts the daemon in the background and, where somebody is watching,
+    /// shows what it says until they stop watching.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is what <c>team daemon</c> does now. It used to be the daemon, in
+    /// the terminal, and ended when the terminal was closed: a console program
+    /// goes with the window it is attached to, and there is no refusing that.
+    /// Now the daemon has no window to go with, and this terminal only shows
+    /// its log. Closing it, or Ctrl+C, stops the showing.
+    /// </para>
+    /// <para>
+    /// Where nobody is watching - output going to a file, a pipe, a login item
+    /// with no terminal - it waits only until the daemon says where it is, and
+    /// returns. Following a log into a pipe for ever helps nobody.
+    /// </para>
+    /// <para>
+    /// A daemon already running is shown rather than refused when somebody is
+    /// watching: that is what somebody who closed the terminal and wants to see
+    /// it again types. Where nobody is, it is refused as it always was, since a
+    /// script asking to start one needs to know that it did not.
+    /// </para>
+    /// </remarks>
+    internal async Task<int> BackgroundAsync(Settings settings, CommandOutput output, bool watched, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var log = DaemonLog.PathFor(_paths);
+
+        if (DaemonNote.Live(_paths, _processes) is { } running)
+        {
+            var described = $"A daemon is already running (process {running.Pid}, since "
+                + $"{running.Since.ToLocalTime():yyyy-MM-dd HH:mm})"
+                + (running.Address is { Length: > 0 } address ? $", serving {address}" : string.Empty);
+
+            if (!watched)
+            {
+                return output.Fail(
+                    described + $". Stop that one first, or use it. What it says is in {log}.",
+                    ExitCode.InvalidArguments);
+            }
+
+            output.WriteLine(Markup.Escape(described) + ".");
+            output.WriteLine(
+                "[dim]Showing what it says from here on. It keeps the settings it was started with; "
+                + "stop it first to change them. Ctrl+C stops showing it, not the daemon.[/]");
+
+            return await FollowAsync(
+                log,
+                DaemonLog.Length(log),
+                new BackgroundProcess(running.Pid, running.StartedAt),
+                output,
+                ct).ConfigureAwait(false);
+        }
+
+        if (Loadout.Core.Agents.LauncherInvocation.Parts() is not ({ Length: > 0 } command, var prefix))
+        {
+            return output.Fail(
+                "This launcher cannot say how it was started, so it cannot start itself in the background. "
+                + "Run it in this terminal instead with: loadout team daemon --foreground",
+                ExitCode.GeneralFailure);
+        }
+
+        // Where the log is now, so what is shown is this daemon's and not the
+        // last one's.
+        var from = DaemonLog.Length(log);
+
+        var started = _launcher.StartBackground(new ProcessRequest(
             command,
-            arguments,
+            Arguments(prefix, settings, settings.Port),
             WorkingDirectory: CurrentDirectory()));
 
-        output.WriteLine(started.Succeeded
-            ? "Restarting: a new daemon is starting with the same settings."
-            : $"[red]Could not restart:[/] {Shown.Safely(started.Error ?? "the new daemon did not start")}. "
-              + "Start it again with: loadout team daemon");
+        if (started.Failed)
+        {
+            return output.Fail(started);
+        }
+
+        var daemon = started.Value!;
+
+        if (!watched)
+        {
+            return await SettledAsync(log, from, daemon, output, ct).ConfigureAwait(false);
+        }
+
+        output.WriteLine(
+            $"[dim]Started in the background as process {daemon.Pid}. What it says is shown here, "
+            + $"and kept in {Markup.Escape(log)}.[/]");
+        output.WriteLine(
+            "[dim]Closing this terminal or pressing Ctrl+C stops showing it; the daemon keeps running. "
+            + "'loadout team daemon stop' stops it.[/]");
+
+        return await FollowAsync(log, from, daemon, output, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Shows the daemon's log as it grows, for as long as the daemon runs or
+    /// until whoever is watching stops.
+    /// </summary>
+    /// <remarks>
+    /// Follows a restart onto the daemon that replaces this one, because the
+    /// person watching asked to see the daemon, not one process of it.
+    /// </remarks>
+    internal async Task<int> FollowAsync(
+        string log,
+        long from,
+        BackgroundProcess daemon,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(daemon);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var position = from;
+        var current = daemon;
+
+        // Whether it got as far as writing its note. One that ends before then
+        // never started, and that is a failure rather than a stop.
+        var settled = false;
+        var restarting = false;
+
+        try
+        {
+            while (true)
+            {
+                restarting |= Show(DaemonLog.Since(log, ref position));
+
+                if (DaemonNote.Read(_paths) is { } note && note.Pid == current.Pid)
+                {
+                    settled = true;
+                }
+
+                if (!_processes.IsRunning(current.Pid, current.StartedAt))
+                {
+                    restarting |= Show(DaemonLog.Since(log, ref position));
+
+                    if (restarting && await SuccessorAsync(current.Pid, ct).ConfigureAwait(false) is { } next)
+                    {
+                        current = new BackgroundProcess(next.Pid, next.StartedAt);
+                        restarting = false;
+
+                        continue;
+                    }
+
+                    if (!settled)
+                    {
+                        return output.Fail(
+                            $"The daemon stopped before it had started. What it said is above, and in {log}.",
+                            ExitCode.GeneralFailure);
+                    }
+
+                    output.WriteLine("[dim]The daemon has stopped.[/]");
+
+                    return CommandOutput.Success();
+                }
+
+                await Task.Delay(Follow, _time, ct).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Show(DaemonLog.Since(log, ref position));
+
+            output.WriteLine(
+                $"Stopped showing it. The daemon is still running as process {current.Pid}: "
+                + "'loadout team daemon' shows it again, 'loadout team daemon stop' stops it.");
+
+            return CommandOutput.Success();
+        }
+    }
+
+    /// <summary>
+    /// Waits for a daemon nobody is watching to say where it is, and says it.
+    /// </summary>
+    internal async Task<int> SettledAsync(
+        string log,
+        long from,
+        BackgroundProcess daemon,
+        CommandOutput output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(daemon);
+        ArgumentNullException.ThrowIfNull(output);
+
+        var until = _time.GetUtcNow() + Handover;
+
+        while (_time.GetUtcNow() < until)
+        {
+            if (DaemonNote.Read(_paths) is { } note && note.Pid == daemon.Pid)
+            {
+                output.WriteLine($"Started the daemon in the background (process {daemon.Pid}).");
+
+                if (note.Address is { Length: > 0 } address)
+                {
+                    output.WriteLine($"[bold]{Markup.Escape(address)}[/]");
+                }
+
+                output.WriteLine($"[dim]What it says is in {Markup.Escape(log)}. "
+                    + "'loadout team daemon stop' stops it.[/]");
+
+                return CommandOutput.Success();
+            }
+
+            if (!_processes.IsRunning(daemon.Pid, daemon.StartedAt))
+            {
+                var position = from;
+                var said = DaemonLog.Since(log, ref position).Trim();
+
+                return output.Fail(
+                    "The daemon stopped before it had started"
+                    + (said.Length > 0 ? $": {said}" : $". Nothing was written to {log}."),
+                    ExitCode.GeneralFailure);
+            }
+
+            await Task.Delay(Follow, _time, ct).ConfigureAwait(false);
+        }
+
+        return output.Fail(
+            $"The daemon (process {daemon.Pid}) was started but has not said where it is after "
+            + $"{Handover.TotalSeconds:0} seconds. What it has said is in {log}.",
+            ExitCode.GeneralFailure);
+    }
+
+    /// <summary>The daemon that has replaced this one, once it is there.</summary>
+    private async Task<DaemonState?> SuccessorAsync(int was, CancellationToken ct)
+    {
+        var until = _time.GetUtcNow() + Handover;
+
+        while (_time.GetUtcNow() < until)
+        {
+            if (DaemonNote.Live(_paths, _processes) is { } now && now.Pid != was)
+            {
+                return now;
+            }
+
+            await Task.Delay(Follow, _time, ct).ConfigureAwait(false);
+        }
+
+        return null;
+    }
+
+    /// <summary>Writes what the daemon said, as it said it.</summary>
+    /// <returns>Whether it said it was handing over to a successor.</returns>
+    /// <remarks>
+    /// Straight to the terminal rather than as markup: the daemon has already
+    /// decided what its lines say, and a square bracket in a goal or a path
+    /// would otherwise be read as a style.
+    /// </remarks>
+    private bool Show(string text)
+    {
+        if (text.Length == 0)
+        {
+            return false;
+        }
+
+        _console.Profile.Out.Writer.Write(text);
+        _console.Profile.Out.Writer.Flush();
+
+        return text.Contains(Restarting, StringComparison.Ordinal);
     }
 
     private static string? CurrentDirectory()

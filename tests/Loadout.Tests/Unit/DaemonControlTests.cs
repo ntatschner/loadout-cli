@@ -210,16 +210,18 @@ public sealed class DaemonControlTests : IDisposable
             "http://127.0.0.1:51999/?token=abc",
             new TeamDaemonCommand.Settings { Listen = "0.0.0.0" });
 
-        var started = launcher.Detached;
+        var started = launcher.Background;
 
-        started.Should().NotBeNull("a restart has to start something");
+        started.Should().NotBeNull("a restart has to start something, and in the background");
+        launcher.Detached.Should().BeNull("a window of its own is one more window that ends it when closed");
 
         var arguments = string.Join(' ', started!.Arguments);
 
         arguments.Should().Contain("team daemon")
             .And.Contain("--after 4242", "the successor has to know which daemon to wait for")
             .And.Contain("--port 51999")
-            .And.Contain("--listen 0.0.0.0");
+            .And.Contain("--listen 0.0.0.0")
+            .And.Contain($"--log {DaemonLog.PathFor(_paths)}", "a terminal showing the log goes on to show the successor");
     }
 
     [Fact]
@@ -230,8 +232,203 @@ public sealed class DaemonControlTests : IDisposable
 
         daemon.Succeed(Output(), null, new TeamDaemonCommand.Settings { NoDashboard = true });
 
-        string.Join(' ', launcher.Detached!.Arguments)
+        string.Join(' ', launcher.Background!.Arguments)
             .Should().Contain("--no-dashboard").And.NotContain("--port");
+    }
+
+    /// <summary>The daemon the stub launcher says it started.</summary>
+    private static readonly BackgroundProcess Child = new(5151, new DateTimeOffset(2026, 1, 1, 9, 0, 0, TimeSpan.Zero));
+
+    private void Note(int pid, DateTimeOffset startedAt, string? address)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(DaemonNote.PathFor(_paths))!);
+        File.WriteAllText(
+            DaemonNote.PathFor(_paths),
+            System.Text.Json.JsonSerializer.Serialize(new DaemonState(pid, startedAt, address, DateTimeOffset.UtcNow)));
+    }
+
+    private void Said(string line)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(DaemonLog.PathFor(_paths))!);
+        File.AppendAllText(DaemonLog.PathFor(_paths), line + "\n");
+    }
+
+    /// <summary>
+    /// The whole of the fix: the daemon is started as a process of its own
+    /// with no window, rather than being this command, in this terminal, where
+    /// closing the terminal ended it.
+    /// </summary>
+    [Fact]
+    public async Task Starting_it_starts_a_daemon_in_the_background_writing_to_its_log()
+    {
+        var launcher = new StubProcessLauncher(string.Empty) { Started = Child };
+        var processes = new FakeProcessInspector().MarkLive(Child.Pid, Child.StartedAt);
+        var daemon = Daemon(new Held(), launcher, processes: processes);
+
+        var starting = daemon.BackgroundAsync(
+            new TeamDaemonCommand.Settings { Port = 8080 }, Output(), watched: false, CancellationToken.None);
+
+        // What the daemon writes once it is listening.
+        Note(Child.Pid, Child.StartedAt, "http://127.0.0.1:8080/?token=abc");
+
+        (await starting).Should().Be(0);
+
+        launcher.Detached.Should().BeNull();
+        string.Join(' ', launcher.Background!.Arguments)
+            .Should().Contain("team daemon")
+            .And.Contain("--port 8080")
+            .And.Contain($"--log {DaemonLog.PathFor(_paths)}")
+            .And.NotContain("--foreground");
+
+        _said.ToString().Should().Contain("http://127.0.0.1:8080/?token=abc", "where the page is, said once it is there");
+    }
+
+    [Fact]
+    public async Task One_that_dies_before_it_has_started_is_a_failure_where_nobody_is_watching()
+    {
+        var launcher = new SaysOnStart(DaemonLog.PathFor(_paths), "The port 8080 is in use.");
+        var daemon = Daemon(new Held(), launcher, processes: new FakeProcessInspector());
+
+        var code = await daemon.BackgroundAsync(
+            new TeamDaemonCommand.Settings { Port = 8080 }, Output(), watched: false, CancellationToken.None);
+
+        code.Should().NotBe(0, "nothing is running");
+    }
+
+    [Fact]
+    public async Task A_terminal_shows_what_it_says_until_it_stops()
+    {
+        var processes = new FakeProcessInspector().MarkLive(Child.Pid, Child.StartedAt);
+        var daemon = Daemon(new Held(), processes: processes, console: Shown());
+
+        Said("before it started, and not its business");
+
+        var from = DaemonLog.Length(DaemonLog.PathFor(_paths));
+
+        Note(Child.Pid, Child.StartedAt, null);
+        Said("09:00 starting nightly");
+
+        var following = daemon.FollowAsync(DaemonLog.PathFor(_paths), from, Child, Output(), CancellationToken.None);
+
+        await Task.Delay(TeamDaemonCommand.Follow * 3);
+
+        Said("09:20 nightly finished");
+        processes.KillEverything();
+
+        (await following.WaitAsync(TimeSpan.FromSeconds(10))).Should().Be(0, "it had started, and then stopped");
+
+        var shown = _said.ToString();
+
+        shown.Should().Contain("09:00 starting nightly").And.Contain("09:20 nightly finished");
+        shown.Should().NotContain("not its business", "only this daemon's lines are shown");
+        shown.Should().Contain("has stopped");
+    }
+
+    /// <summary>
+    /// Ctrl+C, or the terminal closing, ends the showing. What it must not do
+    /// is end the daemon, which is the thing that went wrong.
+    /// </summary>
+    [Fact]
+    public async Task Stopping_the_showing_leaves_the_daemon_running_and_says_so()
+    {
+        var processes = new FakeProcessInspector().MarkLive(Child.Pid, Child.StartedAt);
+        var daemon = Daemon(new Held(), processes: processes);
+        using var watching = new CancellationTokenSource();
+
+        Note(Child.Pid, Child.StartedAt, null);
+
+        var following = daemon.FollowAsync(DaemonLog.PathFor(_paths), 0, Child, Output(), watching.Token);
+
+        await watching.CancelAsync();
+
+        (await following.WaitAsync(TimeSpan.FromSeconds(10))).Should().Be(0);
+
+        _said.ToString().Should().Contain($"still running as process {Child.Pid}");
+        DaemonControl.Stopping(_paths).Should().BeNull("nothing asked the daemon itself to stop");
+    }
+
+    [Fact]
+    public async Task One_that_ends_before_it_has_written_its_note_never_started()
+    {
+        var daemon = Daemon(new Held(), processes: new FakeProcessInspector());
+
+        Said("Could not listen on 8080.");
+
+        var code = await daemon
+            .FollowAsync(DaemonLog.PathFor(_paths), 0, Child, Output(), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        code.Should().NotBe(0, "a daemon that never got going has not stopped, it has failed");
+    }
+
+    /// <summary>
+    /// Somebody who closed the terminal and types the command again wants to
+    /// see the daemon they left, not to be told off for having one.
+    /// </summary>
+    [Fact]
+    public async Task Asking_again_in_a_terminal_shows_the_running_daemon_and_starts_nothing()
+    {
+        var launcher = new StubProcessLauncher(string.Empty);
+        var processes = new FakeProcessInspector().MarkLive(Child.Pid, Child.StartedAt);
+        var daemon = Daemon(new Held(), launcher, processes: processes);
+        using var watching = new CancellationTokenSource();
+
+        Note(Child.Pid, Child.StartedAt, "http://127.0.0.1:8080/?token=abc");
+
+        var showing = daemon.BackgroundAsync(new TeamDaemonCommand.Settings(), Output(), watched: true, watching.Token);
+
+        await Task.Delay(TeamDaemonCommand.Follow * 2);
+        await watching.CancelAsync();
+
+        (await showing.WaitAsync(TimeSpan.FromSeconds(10))).Should().Be(0);
+
+        launcher.Background.Should().BeNull("one is already running");
+        _said.ToString().Should().Contain("already running");
+    }
+
+    [Fact]
+    public async Task Asking_again_where_nobody_is_watching_is_refused()
+    {
+        var launcher = new StubProcessLauncher(string.Empty);
+        var processes = new FakeProcessInspector().MarkLive(Child.Pid, Child.StartedAt);
+        var daemon = Daemon(new Held(), launcher, processes: processes);
+
+        Note(Child.Pid, Child.StartedAt, null);
+
+        var code = await daemon.BackgroundAsync(
+            new TeamDaemonCommand.Settings(), Output(), watched: false, CancellationToken.None);
+
+        code.Should().NotBe(0, "a script asking to start one needs to know it did not");
+        launcher.Background.Should().BeNull();
+    }
+
+    /// <summary>A launcher whose daemon writes one line and is gone.</summary>
+    private sealed class SaysOnStart(string log, string line) : IProcessLauncher
+    {
+        private readonly StubProcessLauncher _rest = new(string.Empty) { Started = Child };
+
+        public Task<Loadout.Models.Results.OperationResult<ProcessOutcome>> RunAsync(
+            ProcessRequest request, TimeSpan? timeout = null, CancellationToken ct = default) =>
+            _rest.RunAsync(request, timeout, ct);
+
+        public Task<Loadout.Models.Results.OperationResult<int>> RunInteractiveAsync(
+            ProcessRequest request, CancellationToken ct = default) =>
+            _rest.RunInteractiveAsync(request, ct);
+
+        public Task<Loadout.Models.Results.OperationResult<IPipedProcess>> StartPipedAsync(
+            ProcessRequest request, CancellationToken ct = default) =>
+            _rest.StartPipedAsync(request, ct);
+
+        public Loadout.Models.Results.OperationResult StartDetached(ProcessRequest request) =>
+            _rest.StartDetached(request);
+
+        public Loadout.Models.Results.OperationResult<BackgroundProcess> StartBackground(ProcessRequest request)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(log)!);
+            File.AppendAllText(log, line + "\n");
+
+            return _rest.StartBackground(request);
+        }
     }
 
     [Fact]
@@ -263,7 +460,9 @@ public sealed class DaemonControlTests : IDisposable
     private TeamDaemonCommand Daemon(
         ICommandCatalogue commands,
         IProcessLauncher? launcher = null,
-        Loadout.Core.Tools.IToolNominationPass? nominations = null) =>
+        Loadout.Core.Tools.IToolNominationPass? nominations = null,
+        FakeProcessInspector? processes = null,
+        IAnsiConsole? console = null) =>
         new(
             secrets: null!,
             client: null!,
@@ -275,8 +474,8 @@ public sealed class DaemonControlTests : IDisposable
             projects: null!,
             tasks: null!,
             git: null!,
-            new FakeProcessInspector(),
-            Quiet(),
+            processes ?? new FakeProcessInspector(),
+            console ?? Quiet(),
             TimeProvider.System,
             AccessibleMode.Off,
             speech: null!,
@@ -319,6 +518,15 @@ public sealed class DaemonControlTests : IDisposable
                 ColorSystem = ColorSystemSupport.NoColors,
             }),
             new GlobalSettings());
+
+    /// <summary>A console that writes where the test reads, for what the daemon's log shows.</summary>
+    private IAnsiConsole Shown() =>
+        AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(_said),
+            Interactive = InteractionSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+        });
 
     private static IAnsiConsole Quiet() =>
         AnsiConsole.Create(new AnsiConsoleSettings

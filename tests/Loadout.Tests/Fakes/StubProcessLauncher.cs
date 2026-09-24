@@ -178,6 +178,22 @@ public sealed class StubProcessLauncher : IProcessLauncher
 
         return OperationResult.Ok();
     }
+
+    /// <summary>What was last started in the background, for a test to inspect.</summary>
+    public ProcessRequest? Background { get; private set; }
+
+    /// <summary>Who the next process started in the background is said to be.</summary>
+    public BackgroundProcess Started { get; set; } =
+        new(5151, new DateTimeOffset(2026, 1, 1, 9, 0, 0, TimeSpan.Zero));
+
+    /// <inheritdoc />
+    public OperationResult<BackgroundProcess> StartBackground(ProcessRequest request)
+    {
+        Background = request;
+        Requests.Add(request);
+
+        return OperationResult<BackgroundProcess>.Ok(Started);
+    }
 }
 
 /// <summary>An executable resolver that answers with one fixed path, or with nothing.</summary>

@@ -173,6 +173,11 @@ public sealed class ThrottledProcessLauncher : IProcessLauncher
         // are rare and are stubbed in every test that reaches one.
         _inner.StartDetached(request);
 
+    /// <inheritdoc />
+    public OperationResult<BackgroundProcess> StartBackground(ProcessRequest request) =>
+        // Ungated for the same reason as a detached start.
+        _inner.StartBackground(request);
+
     /// <summary>
     /// Windows' status code for a process that could not finish initialising.
     /// </summary>

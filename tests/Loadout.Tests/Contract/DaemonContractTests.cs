@@ -284,6 +284,101 @@ public sealed class DaemonContractTests
         (said.StandardOutput + said.StandardError).Should().Contain("already running");
     }
 
+    /// <remarks>
+    /// <para>
+    /// The daemon used to be the command, in the terminal it was typed into,
+    /// and closing the terminal ended it. Now the command starts it as a
+    /// process of its own and, with nobody watching, returns. What is asserted
+    /// is the part that can be seen from here: the command has exited and the
+    /// daemon is still there, writing to its log, and still answers a stop.
+    /// </para>
+    /// <para>
+    /// Closing a real terminal window is not done here and cannot be: driving
+    /// another console from a test is what once ended every session on the
+    /// development machine.
+    /// </para>
+    /// </remarks>
+    [BuiltCliFact]
+    public async Task It_outlives_the_command_that_started_it_and_still_stops_when_asked()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var note = Path.Combine(await StateAsync(loadout), "teams", "daemon.json");
+        int? pid = null;
+
+        try
+        {
+            using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+
+            var start = loadout.RunAsync("team", "daemon", "--no-dashboard");
+
+            var finished = await Task.WhenAny(start, Task.Delay(Timeout.Infinite, patience.Token));
+
+            finished.Should().Be((Task)start, "with nobody watching it returns once the daemon is going");
+
+            var started = await start;
+
+            started.ExitCode.Should().Be(0, started.StandardError);
+            started.StandardOutput.Should().Contain("Started the daemon in the background");
+
+            pid = JsonDocument.Parse(await File.ReadAllTextAsync(note)).RootElement.GetProperty("Pid").GetInt32();
+
+            pid.Should().NotBe(Environment.ProcessId);
+            Running(pid.Value).Should().BeTrue("the daemon is meant to outlive the command that started it");
+
+            // Shared for writing, as the terminal showing it opens it: the
+            // daemon has it open, and a plain read refuses a file in use.
+            await using (var log = new FileStream(
+                Path.Combine(Path.GetDirectoryName(note)!, "daemon.log"),
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete))
+            using (var reader = new StreamReader(log))
+            {
+                (await reader.ReadToEndAsync())
+                    .Should().Contain("Watching the schedules", "what it says goes to its log, having no window");
+            }
+
+            var stopped = await loadout.RunAsync("team", "daemon", "stop");
+
+            stopped.ExitCode.Should().Be(0, stopped.StandardError);
+            stopped.StandardOutput.Should().Contain("Stopped");
+
+            // The note goes a moment before the process does.
+            for (var i = 0; i < 40 && Running(pid.Value); i++)
+            {
+                await Task.Delay(250);
+            }
+
+            Running(pid.Value).Should().BeFalse();
+        }
+        finally
+        {
+            // A daemon left behind by a failing assertion would outlive the
+            // suite, which is exactly what it is built to do.
+            if (pid is { } left && Running(left))
+            {
+                using var process = System.Diagnostics.Process.GetProcessById(left);
+
+                process.Kill();
+            }
+        }
+    }
+
+    private static bool Running(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
     [BuiltCliTheory]
     [InlineData("stop")]
     [InlineData("restart")]

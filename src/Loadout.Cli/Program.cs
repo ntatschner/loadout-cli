@@ -222,6 +222,45 @@ public static class Program
         // launcher from parsing or altering arguments after a bare separator.
         var (launcherArgs, passthrough) = PassthroughArguments.Split(args);
 
+        // A daemon started in the background has no window to print into, so
+        // everything this process says goes to its log instead. Settled before
+        // the console everything writes through is made, or the dashboard's
+        // address would be written into a console nobody can see.
+        if (Loadout.Core.Teams.Daemon.DaemonLog.Asked(launcherArgs) is { } log)
+        {
+            // First, so the moment in which the terminal it came from can
+            // still end it is as short as it can be made.
+            Loadout.Platform.Unix.UnixSession.Leave();
+
+            try
+            {
+                var writer = Loadout.Core.Teams.Daemon.DaemonLog.Open(log);
+
+                Console.SetOut(writer);
+                Console.SetError(writer);
+
+                // Plain, and wide. A file is read in an editor as often as it
+                // is followed, and colour codes are noise there; and the
+                // dashboard's address, token and all, broken across two lines
+                // by a width nobody chose is an address nobody can click.
+                AnsiConsole.Console = AnsiConsole.Create(new AnsiConsoleSettings
+                {
+                    Out = new AnsiConsoleOutput(writer),
+                    Ansi = AnsiSupport.No,
+                    ColorSystem = ColorSystemSupport.NoColors,
+                    Interactive = InteractionSupport.No,
+                });
+
+                AnsiConsole.Console.Profile.Width = 1000;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Nothing to say it with: the terminal that started this is
+                // watching for a daemon that never wrote a note, and says so.
+                return (int)ExitCode.ConfigurationInvalid;
+            }
+        }
+
         var services = new ServiceCollection();
 
         try
