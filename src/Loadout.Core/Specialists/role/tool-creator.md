@@ -88,7 +88,9 @@ in your tools. A draft you think is ready is still a draft.
 - You MUST NOT run the draft against anything but its own harness, and only
   through `loadout tools verify`, which goes through the same gate as every
   other script on this machine. Where `verify` is held for a person, wait for
-  the answer; being held is an outcome, not an obstacle.
+  the answer; being held is an outcome, not an obstacle. Say in your report
+  that a person can answer with `loadout tools verify <draft> --agree`, naming
+  the draft; `--agree` is theirs, and is refused where you run it.
 - **Not only scripts.** A nomination may be a remedy or a command shape, and
   it may also be one of three things that are not a script yet. Each still has
   to clear the promotion bar, and each is drafted as a script so the same

@@ -21,6 +21,13 @@ public sealed record ToolCaseResult(string Case, string Class, bool Passed, stri
 /// <param name="Trusted">What a person at this machine has agreed to.</param>
 public sealed record ToolTestConsent(string? Rule, IReadOnlyList<TrustedRemedy>? Trusted);
 
+/// <summary>What agreeing to one draft's harness run comes to.</summary>
+/// <param name="Remedy">The name the agreement is recorded under, as <see cref="ToolHarness.Named" /> gives it.</param>
+/// <param name="Fingerprint">The script and its cases, as <see cref="ToolHarness.Fingerprint" /> gives it.</param>
+/// <param name="ScriptPath">The script that would run.</param>
+/// <param name="Cases">The cases it would run against, by name.</param>
+public sealed record ToolTestAgreement(string Remedy, string Fingerprint, string ScriptPath, IReadOnlyList<string> Cases);
+
 /// <summary>
 /// Runs a version's cases, each in a directory of its own.
 /// </summary>
@@ -74,6 +81,29 @@ public sealed class ToolHarness
 
     /// <summary>The name a harness run is agreed to under.</summary>
     public static string Named(ToolVersion draft) => $"{Kind}:{draft.Name}@{draft.Version}";
+
+    /// <summary>This machine's consent, once a person at it has answered for one draft.</summary>
+    /// <remarks>
+    /// A rule of ask holds a run for a person, and this is that person
+    /// answering, so for this run it reads as trusted. Never is never, whoever
+    /// answers. The agreement still has to match the draft's fingerprint, so
+    /// an answer given to one script and set of cases runs no other.
+    /// </remarks>
+    public static ToolTestConsent Answered(ToolTestConsent machine, TrustedRemedy agreed)
+    {
+        ArgumentNullException.ThrowIfNull(machine);
+        ArgumentNullException.ThrowIfNull(agreed);
+
+        var said = (machine.Rule ?? RemedyRules.Default).Trim();
+
+        return new ToolTestConsent(
+            string.Equals(said, RemedyRules.Never, StringComparison.OrdinalIgnoreCase) ? RemedyRules.Never : RemedyRules.Trusted,
+            [
+                .. (machine.Trusted ?? []).Where(one =>
+                    !string.Equals(one.Remedy, agreed.Remedy, StringComparison.OrdinalIgnoreCase)),
+                agreed,
+            ]);
+    }
 
     /// <summary>Whether this machine lets the harness run these cases against this script.</summary>
     public static RemedyCeiling.Decision May(

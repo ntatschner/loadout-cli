@@ -194,6 +194,29 @@ public sealed class ToolCommandsContractTests
     }
 
     [BuiltCliFact]
+    public async Task Agreeing_without_a_terminal_to_ask_at_is_refused_and_agrees_to_nothing()
+    {
+        var (loadout, root) = await CatalogueAsync();
+        using var _ = loadout;
+        ToolStoreFixture.Write(
+            Path.Combine(root, "drafts", "free-cache-2"), ToolStoreFixture.Manifest("free-cache", "2.0"), Script, ToolStoreFixture.Cases());
+
+        // A team node's shell is exactly this: input and output are pipes. The
+        // creator's role may run verify, so this is the one door it has.
+        var refused = await loadout.RunAsync("tools", "verify", "free-cache-2", "--agree", "--by", "a-node");
+
+        refused.ExitCode.Should().NotBe(0, refused.StandardOutput);
+        (refused.StandardOutput + refused.StandardError).Should().Contain("person's answer");
+
+        // Named by where it sits under drafts, and still held, because nothing
+        // was written for it.
+        var after = await loadout.RunAsync("tools", "verify", "free-cache-2", "--json");
+
+        after.ExitCode.Should().Be(0, after.StandardError);
+        after.Json().GetProperty("ruling").GetString().Should().Be("ask", "nothing was agreed to");
+    }
+
+    [BuiltCliFact]
     public async Task Trust_fingerprints_the_script_on_disk_not_the_manifest_field()
     {
         var (loadout, root) = await CatalogueAsync();

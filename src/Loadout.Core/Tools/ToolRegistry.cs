@@ -109,6 +109,13 @@ public interface IToolRegistry
     /// </summary>
     OperationResult CheckDraft(string draft);
 
+    /// <summary>
+    /// What a person agreeing to a draft's harness run would be agreeing to:
+    /// the name it is agreed under, the script and cases it would run, and the
+    /// fingerprint the agreement is recorded against.
+    /// </summary>
+    OperationResult<ToolTestAgreement> Agreement(string draft);
+
     /// <summary>Runs a draft's harness and the regression gate, where this machine allows it.</summary>
     Task<OperationResult<ToolVerification>> VerifyAsync(
         string draft,
@@ -478,6 +485,27 @@ public sealed partial class ToolRegistry : IToolRegistry
         ReadDraft(draft) is { Failed: true } read
             ? OperationResult.Fail(read.Error!, ExitCode.InvalidArguments)
             : OperationResult.Ok();
+
+    /// <inheritdoc />
+    public OperationResult<ToolTestAgreement> Agreement(string draft)
+    {
+        var read = ReadDraft(draft);
+
+        if (read.Failed)
+        {
+            return OperationResult<ToolTestAgreement>.Fail(read.Error!, ExitCode.InvalidArguments);
+        }
+
+        var (_, version, script, scriptPath, cases) = read.Value!;
+
+        // The same name and fingerprint VerifyAsync decides against, from the
+        // same read of the draft, so what a person is shown is what is checked.
+        return OperationResult<ToolTestAgreement>.Ok(new ToolTestAgreement(
+            ToolHarness.Named(version),
+            ToolHarness.Fingerprint(script, cases),
+            scriptPath,
+            [.. cases.Select(one => one.Name).Order(StringComparer.Ordinal)]));
+    }
 
     /// <inheritdoc />
     public async Task<OperationResult<ToolVerification>> VerifyAsync(
@@ -1190,9 +1218,14 @@ public sealed partial class ToolRegistry : IToolRegistry
 
     private OperationResult<(string Directory, ToolVersion Version, string Script, string ScriptPath, IReadOnlyList<ToolCase> Cases)> ReadDraft(string draft)
     {
-        // Only under drafts/, after the path is resolved, because verify
-        // writes into a draft and nothing asked it to write anywhere else.
-        var full = Path.GetFullPath(draft);
+        // A relative name is where the draft sits under drafts/, which is how
+        // the help and the creator's report both give it; a path from the
+        // current directory is still taken when nothing under drafts/ has that
+        // name. Either way only under drafts/, after the path is resolved,
+        // because verify writes into a draft and nothing asked it to write
+        // anywhere else.
+        var underDrafts = Path.GetFullPath(Path.Combine(DraftsRoot, draft));
+        var full = !Path.IsPathRooted(draft) && Directory.Exists(underDrafts) ? underDrafts : Path.GetFullPath(draft);
 
         if (!full.StartsWith(Path.GetFullPath(DraftsRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {

@@ -156,6 +156,27 @@ public sealed class ToolRegistrySafetyTests : IDisposable
     }
 
     [Fact]
+    public void A_draft_named_by_its_place_under_drafts_is_found_from_any_directory()
+    {
+        var (registry, _) = _store.Registry();
+        var cases = ToolStoreFixture.Cases();
+        var manifest = ToolStoreFixture.Manifest("free-cache", "1.0");
+        var draft = _store.Draft(manifest, Script, cases);
+        ToolStoreFixture.Write(Path.Combine(_store.Paths.Paths.State, "elsewhere", "free-cache"), manifest, Script, cases);
+
+        // What the help promises and what a person types: the name, as the
+        // creator's report gives it, not a path from wherever they stand.
+        var named = Path.GetRelativePath(_store.Drafts, draft);
+        Path.GetFullPath(named).Should().NotBe(draft, "the test directory is not the drafts directory");
+
+        registry.CheckDraft(named).Succeeded.Should().BeTrue(registry.CheckDraft(named).Error);
+
+        // Named from drafts, climbing out is still refused.
+        var climbing = Path.Combine("..", "elsewhere", "free-cache");
+        registry.CheckDraft(climbing).Error.Should().Contain("drafts");
+    }
+
+    [Fact]
     public async Task Rewriting_script_and_manifest_fingerprint_together_reads_as_tampered()
     {
         var (registry, _) = _store.Registry();

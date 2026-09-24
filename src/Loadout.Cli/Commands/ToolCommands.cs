@@ -6,6 +6,7 @@ using Loadout.Core.Teams;
 using Loadout.Core.Tools;
 using Loadout.Models;
 using Loadout.Models.Configuration;
+using Loadout.Models.Teams;
 using Loadout.Models.Tools;
 using Loadout.Tui;
 using Spectre.Console;
@@ -602,6 +603,14 @@ public sealed class ToolVerifyCommand : AsyncCommand<ToolVerifyCommand.Settings>
         [CommandArgument(0, "<DRAFT>")]
         [Description("The draft's directory, under the catalogue's drafts.")]
         public string Draft { get; init; } = string.Empty;
+
+        [CommandOption("--agree")]
+        [Description("Agree to this draft's harness run yourself, once you have seen the script and the cases it would run. Asks at a terminal, and is refused anywhere it cannot ask.")]
+        public bool Agree { get; init; }
+
+        [CommandOption("--by <WHO>")]
+        [Description("Who is agreeing, for the record. Your user name when omitted.")]
+        public string By { get; init; } = string.Empty;
     }
 
     /// <inheritdoc />
@@ -622,14 +631,28 @@ public sealed class ToolVerifyCommand : AsyncCommand<ToolVerifyCommand.Settings>
 
             if (output.IsJson)
             {
-                output.WriteJson(new { dry_run = true, draft = settings.Draft });
+                output.WriteJson(new { dry_run = true, draft = settings.Draft, agree = settings.Agree });
             }
             else
             {
-                output.WriteLine($"[dim]Dry run: nothing was run or changed.[/] {Markup.Escape(settings.Draft)} would be verified.");
+                output.WriteLine(
+                    $"[dim]Dry run: nothing was run or changed.[/] {Markup.Escape(settings.Draft)} would be "
+                    + (settings.Agree ? "shown to you to agree to, and verified if you did." : "verified."));
             }
 
             return CommandOutput.Success();
+        }
+
+        // The answer a held run waits for has to come from a person, and the
+        // only proof of one this command has is a terminal that can ask. A
+        // team node's shell has none, and the roles that may run verify must
+        // not be able to agree to their own scripts through it.
+        if (settings.Agree && !settings.AllowsPrompting)
+        {
+            return output.Fail(
+                "Agreeing to a harness run is a person's answer, given at a terminal where this can ask. "
+                + "Nothing was agreed to or run.",
+                ExitCode.PolicyViolation);
         }
 
         // What this machine says about running harnesses, and what a person
@@ -645,6 +668,62 @@ public sealed class ToolVerifyCommand : AsyncCommand<ToolVerifyCommand.Settings>
         var consent = new ToolTestConsent(
             teams.Remediation.TryGetValue(ToolHarness.Kind, out var rule) ? rule : null,
             teams.TrustedRemedies);
+
+        if (settings.Agree)
+        {
+            var agreement = _registry.Agreement(settings.Draft);
+
+            if (agreement.Failed)
+            {
+                return output.Fail(agreement);
+            }
+
+            var shown = agreement.Value!;
+
+            // Straight to the console rather than through output, which --quiet
+            // silences: nobody should be asked to agree to what they were not shown.
+            _console.MarkupLine(
+                $"Agreeing lets [bold]{Markup.Escape(shown.Remedy)}[/] run {Markup.Escape(shown.ScriptPath)} "
+                + $"against {shown.Cases.Count} case(s), each in a temporary directory of its own:");
+
+            foreach (var one in shown.Cases)
+            {
+                _console.MarkupLine($"  - {Markup.Escape(one)}");
+            }
+
+            _console.MarkupLine(
+                $"[dim]Recorded against fingerprint {Markup.Escape(shown.Fingerprint)}. "
+                + "Changing the script or a case takes it back.[/]");
+
+            if (!_console.Confirm("Agree to this run?", defaultValue: false))
+            {
+                output.WriteLine("[dim]Not agreed. Nothing was run.[/]");
+
+                return CommandOutput.Success();
+            }
+
+            var agreed = new TrustedRemedy
+            {
+                Team = ScheduleService.ToolWorksTeam,
+                Remedy = shown.Remedy,
+                Fingerprint = shown.Fingerprint,
+                By = settings.By is { Length: > 0 } who ? who : Environment.UserName,
+                At = DateTimeOffset.UtcNow,
+            };
+
+            teams.TrustedRemedies.RemoveAll(one =>
+                string.Equals(one.Remedy, agreed.Remedy, StringComparison.OrdinalIgnoreCase));
+            teams.TrustedRemedies.Add(agreed);
+
+            var saved = await _configuration.SaveMachineAsync(machine.Value, cancellationToken).ConfigureAwait(false);
+
+            if (saved.Failed)
+            {
+                return output.Fail(saved);
+            }
+
+            consent = ToolHarness.Answered(consent, agreed);
+        }
 
         var verified = await _registry.VerifyAsync(settings.Draft, consent, cancellationToken).ConfigureAwait(false);
 
@@ -670,6 +749,12 @@ public sealed class ToolVerifyCommand : AsyncCommand<ToolVerifyCommand.Settings>
         output.WriteLine(result.Gate is { Passed: true }
             ? $"[green]Verified.[/] {Shown.Safely(result.Because)}"
             : $"[yellow]Not verified.[/] {Shown.Safely(result.Because)}");
+
+        if (result.Ruling == RemedyRuling.Ask && !settings.Agree)
+        {
+            output.WriteLine(
+                $"[dim]A person at this machine can agree with: loadout tools verify {Markup.Escape(settings.Draft)} --agree[/]");
+        }
 
         return CommandOutput.Success();
     }
