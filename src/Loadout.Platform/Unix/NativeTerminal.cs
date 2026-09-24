@@ -135,6 +135,10 @@ internal static partial class NativeTerminal
     }
 
     /// <summary>Opens an unused pty master.</summary>
+    /// <summary>Makes the calling process the leader of a new session, with no terminal.</summary>
+    [LibraryImport(Libc, EntryPoint = "setsid", SetLastError = true)]
+    internal static partial int LeaveSession();
+
     [LibraryImport(Libc, EntryPoint = "posix_openpt", SetLastError = true)]
     internal static partial int OpenPseudoTerminal(int flags);
 

@@ -107,4 +107,34 @@ public interface IProcessLauncher
     /// it, and there is no exit code worth having.
     /// </remarks>
     OperationResult StartDetached(ProcessRequest request);
+
+    /// <summary>
+    /// Starts a process that runs on its own: no window, no terminal it can be
+    /// ended through, and not waited for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For something resident, which <see cref="StartDetached"/> is not.
+    /// That gives a console program the console it was started from, and a
+    /// console program attached to somebody's terminal ends when they close
+    /// it: Windows ends everything attached to a console when its window goes.
+    /// The daemon was started from a terminal and went with it.
+    /// </para>
+    /// <para>
+    /// On Windows the child gets a console of its own that is never shown, so
+    /// the window it was started from is not one it is attached to. Elsewhere
+    /// the child has to leave the terminal's session itself, early, which is
+    /// what <c>UnixSession.Leave</c> is for; nothing here can do that for it.
+    /// </para>
+    /// <para>
+    /// Not tied to this process either: the whole point is that it outlives it.
+    /// </para>
+    /// </remarks>
+    /// <returns>Who it is, so the caller can ask later whether it is still there.</returns>
+    OperationResult<BackgroundProcess> StartBackground(ProcessRequest request);
 }
+
+/// <summary>A process started to run on its own.</summary>
+/// <param name="Pid">Its identifier.</param>
+/// <param name="StartedAt">When it started, because identifiers are reused.</param>
+public sealed record BackgroundProcess(int Pid, DateTimeOffset StartedAt);

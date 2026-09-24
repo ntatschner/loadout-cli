@@ -361,6 +361,58 @@ public sealed class ProcessLauncher : IProcessLauncher
         }
     }
 
+    /// <inheritdoc />
+    public OperationResult<BackgroundProcess> StartBackground(ProcessRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // Windows is started by hand: Process.Start there hands the child every
+        // inheritable handle this process holds, and there is no asking it not
+        // to. See WindowsBackgroundStart.
+        if (OperatingSystem.IsWindows())
+        {
+            return Windows.WindowsBackgroundStart.Start(request);
+        }
+
+        var startInfo = BuildStartInfo(request);
+
+        // Pipes of its own, closed here at once. Left alone, the child is
+        // handed this process's output, and when that is a pipe - a script
+        // reading 'loadout team daemon', or the test suite - whatever reads it
+        // waits for the end of a stream the daemon holds open for as long as
+        // it runs. The runtime opens everything else it owns close-on-exec,
+        // so these three are all that could be passed on. Whatever the child
+        // has to say it writes somewhere of its own choosing.
+        startInfo.UseShellExecute = false;
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+        startInfo.RedirectStandardInput = true;
+        startInfo.CreateNoWindow = true;
+
+        try
+        {
+            using var process = Process.Start(startInfo);
+
+            if (process is null)
+            {
+                return OperationResult<BackgroundProcess>.Fail(
+                    $"'{request.Executable}' did not start.", ExitCode.GeneralFailure);
+            }
+
+            process.StandardInput.Close();
+            process.StandardOutput.Close();
+            process.StandardError.Close();
+
+            return OperationResult<BackgroundProcess>.Ok(
+                new BackgroundProcess(process.Id, process.StartTime.ToUniversalTime()));
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return OperationResult<BackgroundProcess>.Fail(
+                $"Could not start '{request.Executable}': {ex.Message}", ExitCode.GeneralFailure);
+        }
+    }
+
     private static ProcessStartInfo BuildStartInfo(ProcessRequest request)
     {
         var startInfo = new ProcessStartInfo

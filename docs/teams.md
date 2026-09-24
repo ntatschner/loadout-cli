@@ -2045,6 +2045,25 @@ loadout team schedule add bug-hunt "look at what the suite is failing" --on comm
 loadout team daemon
 ```
 
+`loadout team daemon` starts the daemon in the background and then shows you
+what it says. Close the terminal, or press Ctrl+C, and you stop watching; the
+daemon carries on. It used to be the daemon itself, running in that terminal, and
+closing the window ended it. A console program ends with its window, and there is
+no refusing that, so now it has no window to end with. What it says is kept in
+`daemon.log` beside its note in Loadout's state folder, and typing
+`loadout team daemon` again shows you the one that is running rather than
+starting a second. Where nothing is watching — output going to a file or a
+script — it waits only until the daemon says where its dashboard is, prints
+that, and returns.
+
+`--foreground` keeps the old way: the daemon runs in the terminal and ends with
+it. That is what a service manager or a container wants, since each expects to
+own the process it started.
+
+**Tried by hand on Windows only.** On macOS and Linux the daemon leaves the
+terminal's session as it starts, so that closing the terminal and Ctrl+C in it do
+not reach it. That is covered by nothing but reading the code.
+
 Nothing fires unless the daemon is running, and `doctor` tells you when you have
 schedules and nothing firing them — the case a restarted machine looks exactly
 like. To stop that happening:
@@ -2057,8 +2076,9 @@ loadout team autostart disable
 
 Per user, never for the machine, so it needs no administrator rights and can
 always be undone by whoever set it. On Windows it is a shortcut in your Startup
-folder, started minimised — the daemon is a console process you stop with
-Ctrl+C, so it needs a window, but not one that takes focus at every login. On
+folder, started minimised, and that window shows the daemon's log rather than
+being the daemon: close it and the daemon carries on. Minimised, so it does not
+take focus at every login. On
 macOS it is a launch agent, on other Unixes a desktop entry under
 `~/.config/autostart`; **neither of those has been logged into**, only the files
 they write are covered.
@@ -2074,7 +2094,7 @@ loadout team daemon pause      # no schedule fires; the page stays up
 loadout team daemon resume     # 'continue' works too
 loadout team daemon stop       # once the runs it started have finished
 loadout team daemon restart    # the same, then starts again with the same settings
-loadout team daemon stop --now # ends its runs at once, as Ctrl+C in its window would
+loadout team daemon stop --now # ends its runs at once, as Ctrl+C does with --foreground
 ```
 
 A stop waits for the runs the daemon started — from a schedule, the page or a
@@ -2095,14 +2115,14 @@ is working.
 A restart is done by the daemon itself, when its runs have finished: it is the
 only thing that knows how it was started. The new one keeps the port the old
 one was serving, even when that was left to the machine to choose, so a
-bookmarked page is still there. On Windows it opens in a console window of its
-own. **Restart has been tried by hand on Windows only**, not on macOS or Linux,
-and not on a daemon started at login; the new one is started the way the status
-line starts the launcher in the background.
+bookmarked page is still there. The new one runs in the background whichever way
+the old one was started, and writes to the same log, so a terminal showing the
+old one goes on to show the new one. **Restart has been tried by hand on Windows
+only**, not on macOS or Linux, and not on a daemon started at login.
 
 **Finding the dashboard it serves.** The port and the token are both new at
-every start, and the daemon prints the address once — into its own output, which
-at login is a minimised window nobody is looking at. `loadout team dashboard`
+every start, and the daemon prints the address once — into its log, which at
+login is shown in a minimised window nobody is looking at. `loadout team dashboard`
 gets it back: with a daemon serving, that command prints its address rather than
 starting a page of its own. Before that it started a second one, so enabling
 autostart and then logging in left you with a dashboard running, no way to reach

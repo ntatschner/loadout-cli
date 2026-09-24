@@ -106,8 +106,8 @@ public sealed class DaemonStopSettings : GlobalSettings
 {
     [CommandOption("--now")]
     [Description(
-        "End the runs it started at once, as Ctrl+C in its window would, rather than "
-        + "waiting for them to finish.")]
+        "End the runs it started at once, as Ctrl+C does to one run with --foreground, "
+        + "rather than waiting for them to finish.")]
     public bool Now { get; init; }
 }
 

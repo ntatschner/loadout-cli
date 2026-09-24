@@ -15,10 +15,11 @@ namespace Loadout.Platform.Windows;
 /// registry value is invisible to anybody who does not already know to look.
 /// </para>
 /// <para>
-/// Minimised, not hidden. The daemon is a console process that prints where
-/// its dashboard is and stops on Ctrl+C, so a window is how somebody stops it
-/// — but a window taking focus at every login is not what anybody agreed to.
-/// Minimised is the one that is both stoppable and out of the way.
+/// Minimised, not hidden. The window shows the daemon's log - where its
+/// dashboard is, what it started - and the daemon itself runs in the
+/// background, so closing the window leaves it running. A window taking focus
+/// at every login is not what anybody agreed to; minimised is there when
+/// wanted and out of the way when not.
 /// </para>
 /// <para>
 /// Built through the Windows Script Host shell object driven from PowerShell,

@@ -188,5 +188,9 @@ public sealed class EditorServiceTests
         public Loadout.Models.Results.OperationResult StartDetached(
             Loadout.Platform.Abstractions.ProcessRequest request) =>
             throw new NotSupportedException("These tests never start anything.");
+
+        public Loadout.Models.Results.OperationResult<Loadout.Platform.Abstractions.BackgroundProcess> StartBackground(
+            Loadout.Platform.Abstractions.ProcessRequest request) =>
+            throw new NotSupportedException("These tests never start anything.");
     }
 }

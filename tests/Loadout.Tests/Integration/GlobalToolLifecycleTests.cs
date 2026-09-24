@@ -394,6 +394,9 @@ public sealed class GlobalToolLifecycleTests : IDisposable
             _rest.StartPipedAsync(request, ct);
 
         public OperationResult StartDetached(ProcessRequest request) => _rest.StartDetached(request);
+
+        public OperationResult<BackgroundProcess> StartBackground(ProcessRequest request) =>
+            _rest.StartBackground(request);
     }
 
     /// <summary>Memory with no lessons in it, so only runs and shelves are read.</summary>
