@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Loadout.Core.Teams;
@@ -37,7 +38,8 @@ public sealed record ToolNomination(
 /// against the promotion bar. That is why a nomination skips the genericity
 /// check a submission gets - it quotes the project it came from, on purpose,
 /// so the Creator can find it - and why it still goes through the secret
-/// screen, which no reason overrides.
+/// screen, which no reason overrides. The exception is a prompt, whose script
+/// is prose a project wrote; see <see cref="Prompts" />.
 /// </para>
 /// <para>
 /// Reads only runs that have finished and never a tool-works run, so it
@@ -50,6 +52,9 @@ public sealed partial class ToolNominator
     private readonly IRunJournal _journal;
     private readonly IRemedyBook _remedies;
     private readonly IPlatformPaths _paths;
+
+    /// <summary>What each finished run left, by run id, with when it finished; a finished run is read once.</summary>
+    private readonly ConcurrentDictionary<string, (DateTimeOffset Finished, Read Read)> _read = new(StringComparer.Ordinal);
 
     public ToolNominator(IToolRegistry registry, IRunJournal journal, IRemedyBook remedies, IPlatformPaths paths)
     {
@@ -159,11 +164,19 @@ public sealed partial class ToolNominator
                 return tool.Record.Capabilities.Contains("prompt", StringComparer.OrdinalIgnoreCase)
                     && Fold(tool.Script).Contains(Fold(nomination.Script ?? string.Empty), StringComparison.Ordinal);
 
-            // An integration by a tool that names the server or host.
+            // An integration by a tool whose capabilities name it, or whose
+            // script calls the server or names the host whole. Not the bare
+            // word anywhere: a script clearing a github runner's cache does
+            // not talk to the github server.
             case 7:
+                var sort = rest[..rest.IndexOf(' ', StringComparison.Ordinal)];
                 var name = rest[(rest.IndexOf(' ', StringComparison.Ordinal) + 1)..];
+                var calls = sort == "mcp"
+                    ? @"\bmcp__" + Regex.Escape(name) + "__"
+                    : @"(?<![\w.-])" + Regex.Escape(name) + @"(?![\w-]|\.\w)";
+
                 return tool.Record.Capabilities.Any(one => string.Equals(one, name, StringComparison.OrdinalIgnoreCase))
-                    || tool.Script.Contains(name, StringComparison.OrdinalIgnoreCase);
+                    || Regex.IsMatch(tool.Script, calls, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
         }
 
         if (nomination.Script is { } script)
@@ -313,11 +326,9 @@ public sealed partial class ToolNominator
         foreach (var id in _journal.List(Depth))
         {
             RunSummary run;
-            IReadOnlyList<RunDocument> documents;
 
             // A run folder that cannot be listed is passed over, and only it:
-            // the other runs are still worth reading. Summarising lists the
-            // folder too, so both are inside the guard.
+            // the other runs are still worth reading.
             try
             {
                 if (_journal.Summarise(id) is not { Succeeded: true } summarised
@@ -328,54 +339,103 @@ public sealed partial class ToolNominator
                 }
 
                 run = finished;
-                documents = RunDocuments.In(run.Directory);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 continue;
             }
 
-            // In the order they were written, so the evidence of one run reads
-            // as the sequence it happened in.
-            foreach (var document in documents
-                .Where(one => one.Kind is "report" or "brief")
-                .OrderBy(one => one.Written)
-                .ThenBy(one => one.Name, StringComparer.Ordinal))
+            // Keyed by when it finished as well as by its id, because an ended
+            // run can be picked up again, and then it finishes a second time
+            // with more in it.
+            if (!_read.TryGetValue(run.RunId, out var cached) || cached.Finished != run.Finished)
             {
-                string text;
-
-                try
-                {
-                    text = File.ReadAllText(Path.Combine(run.Directory, document.Name));
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                if (ReadRun(run) is not { } read)
                 {
                     continue;
                 }
 
-                paragraphs.AddRange(ParagraphsOf(text).Select(one => new Paragraph(run.RunId, run.Team, one, Fold(one))));
+                cached = (run.Finished!.Value, read.Read);
 
-                if (document.Kind == "report" && ReportReader.Read(text) is { Succeeded: true } report)
+                // What could not all be read is read again next time.
+                if (read.Whole)
                 {
-                    var passed = report.Value!.Evidence.Where(one => one.Result == EvidenceResult.Pass).ToList();
-
-                    seen.AddRange(passed.Select(one => new Seen(run.RunId, run.Team, one)));
-                    uses.AddRange(passed
-                        .SelectMany(one => IntegrationsIn(one.Ref + " " + one.Note))
-                        .Select(one => new Use(run.RunId, run.Team, one)));
+                    _read[run.RunId] = cached;
                 }
             }
 
-            uses.AddRange(Called(run.Directory).Select(one => new Use(run.RunId, run.Team, one)));
+            seen.AddRange(cached.Read.Evidence);
+            paragraphs.AddRange(cached.Read.Paragraphs);
+            uses.AddRange(cached.Read.Uses);
         }
 
         return new Read(seen, paragraphs, uses);
     }
 
-    /// <summary>What the nodes of a run called, from their streams.</summary>
-    private static IEnumerable<string> Called(string directory)
+    /// <summary>What one finished run left, and whether all of it could be read; null where its folder could not be listed.</summary>
+    private static (Read Read, bool Whole)? ReadRun(RunSummary run)
     {
-        var found = new List<string>();
+        var seen = new List<Seen>();
+        var paragraphs = new List<Paragraph>();
+        var uses = new List<Use>();
+        var whole = true;
+        IReadOnlyList<RunDocument> documents;
+
+        try
+        {
+            documents = RunDocuments.In(run.Directory);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        // In the order they were written, so the evidence of one run reads
+        // as the sequence it happened in.
+        foreach (var document in documents
+            .Where(one => one.Kind is "report" or "brief")
+            .OrderBy(one => one.Written)
+            .ThenBy(one => one.Name, StringComparer.Ordinal))
+        {
+            string text;
+
+            try
+            {
+                text = File.ReadAllText(Path.Combine(run.Directory, document.Name));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                whole = false;
+                continue;
+            }
+
+            if (document.Kind == "brief")
+            {
+                paragraphs.AddRange(ParagraphsOf(TaskOf(text)).Select(one => new Paragraph(run.RunId, run.Team, one, Fold(one))));
+            }
+            else if (ReportReader.Read(text) is { Succeeded: true } report)
+            {
+                paragraphs.AddRange(ParagraphsOf(report.Value!.Summary).Select(one => new Paragraph(run.RunId, run.Team, one, Fold(one))));
+
+                var passed = report.Value!.Evidence.Where(one => one.Result == EvidenceResult.Pass).ToList();
+
+                seen.AddRange(passed.Select(one => new Seen(run.RunId, run.Team, one)));
+                uses.AddRange(passed
+                    .SelectMany(one => IntegrationsIn(one.Ref + " " + one.Note))
+                    .Select(one => new Use(run.RunId, run.Team, one)));
+            }
+        }
+
+        whole &= Called(run.Directory, out var called);
+        uses.AddRange(called.Select(one => new Use(run.RunId, run.Team, one)));
+
+        return (new Read(seen, paragraphs, uses), whole);
+    }
+
+    /// <summary>What the nodes of a run called, from their streams; false where a stream could not all be read.</summary>
+    private static bool Called(string directory, out List<string> found)
+    {
+        found = [];
 
         try
         {
@@ -383,6 +443,15 @@ public sealed partial class ToolNominator
             {
                 foreach (var line in File.ReadLines(stream))
                 {
+                    // Most of a stream is text and reads, and a line naming
+                    // neither a server nor a URL cannot name an integration,
+                    // so it is not worth parsing.
+                    if (!line.Contains("mcp__", StringComparison.Ordinal)
+                        && !line.Contains("http", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
                     if (NodeStream.Parse(line) is { Kind: "tool", Tool: { } tool } step)
                     {
                         found.AddRange(IntegrationsIn(tool + " " + step.Target));
@@ -392,9 +461,29 @@ public sealed partial class ToolNominator
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            return false;
         }
 
-        return found;
+        return true;
+    }
+
+    /// <summary>The task of a brief: the one part of it a person or a lead wrote rather than the runner.</summary>
+    private static string? TaskOf(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("task", out var task)
+                && task.ValueKind == JsonValueKind.String
+                    ? task.GetString()
+                    : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The MCP servers and HTTP hosts a line names, as "mcp server" and "http host".</summary>
@@ -423,50 +512,17 @@ public sealed partial class ToolNominator
         }
     }
 
-    /// <summary>Every paragraph of every string in a JSON paper, with its whitespace made single spaces.</summary>
-    private static IEnumerable<string> ParagraphsOf(string json)
-    {
-        var strings = new List<string>();
-
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            Strings(document.RootElement, strings);
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
-
-        return strings
-            .SelectMany(one => BlankLine().Split(one))
+    /// <summary>Every paragraph of a text, with its whitespace made single spaces.</summary>
+    /// <remarks>
+    /// Given only what a person or a node wrote - a brief's task, a report's
+    /// summary - and never the whole paper. The runner writes the same
+    /// sentences into every lead's done_when, and read as prose they were a
+    /// prompt every team shared.
+    /// </remarks>
+    private static IEnumerable<string> ParagraphsOf(string? text) =>
+        BlankLine().Split(text ?? string.Empty)
             .Select(one => string.Join(' ', one.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)))
             .Where(one => one.Length > 0);
-    }
-
-    private static void Strings(JsonElement element, List<string> into)
-    {
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.String:
-                into.Add(element.GetString() ?? string.Empty);
-                break;
-            case JsonValueKind.Array:
-                foreach (var one in element.EnumerateArray())
-                {
-                    Strings(one, into);
-                }
-
-                break;
-            case JsonValueKind.Object:
-                foreach (var one in element.EnumerateObject())
-                {
-                    Strings(one.Value, into);
-                }
-
-                break;
-        }
-    }
 
     /// <summary>A paragraph with its case and whitespace folded, so two copies of it compare equal.</summary>
     private static string Fold(string text) =>
@@ -703,10 +759,19 @@ public sealed partial class ToolNominator
     /// briefs or reports of runs of two or more teams.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The paragraph is carried as it was first written rather than folded, so
     /// the secret screen sees it with its case intact, and the rest of the
     /// paper it came from is not carried at all: where it came from is the
     /// runs, never the task around it.
+    /// </para>
+    /// <para>
+    /// Unlike the other rules' nominations, this one carries text somebody
+    /// wrote for a project, so it is not filed where that text names a path,
+    /// a repository, an address or a team. Stripping the match would file a
+    /// sentence nobody wrote. A credential is left to the secret screen, which
+    /// refuses it without quoting it.
+    /// </para>
     /// </remarks>
     private static IEnumerable<ToolNomination> Prompts(List<Paragraph> paragraphs)
     {
@@ -714,6 +779,8 @@ public sealed partial class ToolNominator
             .Where(one => one.Folded.Split(' ').Length >= FewestWords)
             .GroupBy(one => one.Folded, StringComparer.Ordinal)
             .OrderBy(one => one.Key, StringComparer.Ordinal);
+
+        var known = paragraphs.Select(one => one.Team).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         foreach (var paragraph in repeated)
         {
@@ -726,6 +793,11 @@ public sealed partial class ToolNominator
 
             var runs = paragraph.Select(one => one.Run).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
             var first = paragraph.First().Text;
+
+            if (ToolGenericity.Check(first, known).Any(one => !one.StartsWith("a credential", StringComparison.Ordinal)))
+            {
+                continue;
+            }
             var words = first.Split(' ');
 
             yield return new ToolNomination(
