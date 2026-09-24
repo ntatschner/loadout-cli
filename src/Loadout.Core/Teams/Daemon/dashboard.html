@@ -2597,7 +2597,8 @@
         <div class="lk-fields">
           <div class="lk-field">
             <label for="plan-name" class="lk-label">Call this schedule</label>
-            <input type="text" id="plan-name" placeholder="nightly-docs" maxlength="64" class="lk-input">
+            <input type="text" id="plan-name" placeholder="nightly-docs" maxlength="48" class="lk-input"
+              pattern="[A-Za-z0-9][A-Za-z0-9._-]*" title="Letters, digits, dots, dashes and underscores - no spaces">
           </div>
 
           <div class="lk-field">
