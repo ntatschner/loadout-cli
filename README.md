@@ -235,7 +235,7 @@ dotnet build Loadout.slnx
 dotnet test tests/Loadout.Tests/Loadout.Tests.csproj
 ```
 
-You need .NET SDK 10.0.303 exactly, which `global.json` pins. Package versions
+You need .NET SDK 10.0.401 exactly, which `global.json` pins. Package versions
 are pinned and locked too, so the same commit builds the same binaries.
 [Architecture](docs/architecture.md) has the layout, and
 [CONTRIBUTING.md](CONTRIBUTING.md) has the rules that will get a change sent
