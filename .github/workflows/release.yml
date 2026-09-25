@@ -504,26 +504,24 @@ jobs:
           **Linux and macOS**
 
           \`\`\`bash
-          tar -xzf loadout-${version}-linux-x64.tar.gz
-          ./install.sh
+          curl -fsSL https://github.com/${{ github.repository }}/releases/latest/download/install.sh | sh
           loadout setup
           \`\`\`
-
-          \`install.sh\` verifies the SHA-256 before extracting anything, installs
-          to \`~/.local/bin\`, and needs no root. On macOS it also clears the
-          download quarantine from the files it installs.
 
           **Windows**
 
           \`\`\`powershell
-          msiexec /i loadout-${version}-win-x64.msi
+          irm https://github.com/${{ github.repository }}/releases/latest/download/install.ps1 | iex
           loadout setup
           \`\`\`
 
-          Per-user, no elevation, and puts \`loadout\` on your \`PATH\`. Or take the
-          zip and place \`loadout.exe\` wherever you like.
+          Each picks the build for your machine, checks it against \`SHA256SUMS\`
+          before installing anything, and needs no root or elevation. The Windows
+          one checks the MSI's signature too. To install this version rather than
+          the latest, add \`-s -- --version ${version}\` after \`sh\`.
 
-          There is a \`.deb\` and an \`.rpm\` below too.
+          Or take the files below yourself: an MSI and a zip for Windows,
+          archives for Linux and macOS, and a \`.deb\` and an \`.rpm\`.
 
           ## The small print
 
@@ -551,6 +549,8 @@ jobs:
             downloaded/*.rpm
             downloaded/SHA256SUMS
             downloaded/feed.json
+            build/install.sh
+            build/install.ps1
           # What changed, then the standing paragraph. arm64 Windows and
           # Linux are cross-compiled and never executed in CI, because GitHub
           # offers no hosted runner for either, and that is said there rather

@@ -2,24 +2,64 @@
 
 *Want the steps in order? [Installing, step by step](guides/installing.md) walks through it, and [installing in plain words](plain/installing.md) starts from opening a terminal.*
 
-Download the archive for your platform, verify it, and install:
+One command, which works out your platform and fetches the matching build:
 
 ```bash
-tar -xzf loadout-0.49.1-linux-x64.tar.gz
-./install.sh                       # installs to ~/.local/bin, no root needed
+curl -fsSL https://github.com/ntatschner/loadout-cli/releases/latest/download/install.sh | sh
 loadout setup
 ```
 
-`install.sh` checks the SHA-256 before it extracts anything, and refuses on a
-mismatch. It installs the binary and the native library that ships beside it
-into the same directory, because that's where the binary looks for it. On macOS
-it also clears the download quarantine attribute from the files it installed.
-The binary isn't signed or notarised yet, so Gatekeeper would block it
-otherwise, and clearing the attribute on those files alone is the honest fix.
-Nothing here will ever tell you to turn Gatekeeper off; spec section 85 forbids
-it.
+```powershell
+irm https://github.com/ntatschner/loadout-cli/releases/latest/download/install.ps1 | iex
+loadout setup
+```
 
-On Windows, extract the zip and put `loadout.exe` somewhere on `PATH`.
+`install.sh` picks the archive for your operating system and processor,
+including the Apple silicon build from a shell running under Rosetta. It checks
+the archive against the release's `SHA256SUMS` and refuses if the hash doesn't
+match or the manifest doesn't list it. It installs the binary and the native
+library that ships beside it into `~/.local/bin`, because that's where the
+binary looks for the library, and needs no root. It refuses on a musl system
+such as Alpine rather than installing a binary that can't start there, because
+the Linux builds need glibc.
+
+`install.ps1` does the same with the MSI, and checks its Authenticode signature
+too. The checksum comes from the same place as the file, so it proves the
+download arrived intact, not who built it; the signature is what says that. It
+installs per user with no elevation, and adds the install directory to the
+`PATH` of the terminal it ran in, so `loadout` works straight away. It runs in
+Windows PowerShell 5.1 as well as PowerShell 7.
+
+The macOS builds aren't signed or notarised yet. That doesn't matter here:
+macOS quarantines files downloaded through a browser, and `curl` doesn't set
+that flag, so Gatekeeper never looks at them. If you install an archive you
+downloaded through a browser, `install.sh` clears the quarantine attribute from
+the files it installed and nothing else. Nothing here will ever tell you to
+turn Gatekeeper off; spec section 85 forbids it.
+
+## Options
+
+Pass options to `install.sh` after `sh -s --`, and to `install.ps1` by running
+the downloaded file:
+
+```bash
+curl -fsSL .../install.sh | sh -s -- --version 0.49.1     # a particular release
+curl -fsSL .../install.sh | sh -s -- --prefix /usr/local  # somewhere other than ~/.local
+curl -fsSL .../install.sh | sh -s -- --dry-run            # download and verify, install nothing
+sh install.sh --archive loadout-0.49.1-linux-x64.tar.gz   # an archive you already have
+```
+
+```powershell
+./install.ps1 -Version 0.49.1
+./install.ps1 -WhatIf          # download and verify, install nothing
+```
+
+Both take `--base-url` (`-BaseUrl`), a URL or a directory holding a copy of a
+release's assets, for installing from a mirror or a file share. The mirror has
+to carry `SHA256SUMS`, and `feed.json` too unless you name a version.
+
+On Windows you can also extract the zip and put `loadout.exe` somewhere on
+`PATH`.
 
 ## Native installers
 

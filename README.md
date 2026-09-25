@@ -174,22 +174,24 @@ honour a profile.
 ## Install
 
 It runs natively on Windows, Linux and macOS, across six runtime identifiers.
-No VM and no container. Grab your platform's archive from the
-[latest release](https://github.com/ntatschner/loadout-cli/releases/latest).
+No VM and no container. One command picks the right build for your machine:
 
-**Linux and macOS** — `install.sh` checks the SHA-256 before it extracts
-anything, and installs to `~/.local/bin` without root:
+**Linux and macOS** — installs to `~/.local/bin`, without root:
 
 ```sh
-tar -xzf loadout-0.49.1-linux-x64.tar.gz
-./install.sh
+curl -fsSL https://github.com/ntatschner/loadout-cli/releases/latest/download/install.sh | sh
 ```
 
-**Windows** — the MSI installs per user, with no elevation:
+**Windows** — installs the MSI per user, with no elevation:
 
 ```powershell
-msiexec /i loadout-0.49.1-win-x64.msi
+irm https://github.com/ntatschner/loadout-cli/releases/latest/download/install.ps1 | iex
 ```
+
+Both check the download against the release's `SHA256SUMS` before installing
+anything, and the Windows one checks the MSI's signature as well. If you'd
+rather fetch the files yourself, every archive and installer is on the
+[latest release](https://github.com/ntatschner/loadout-cli/releases/latest).
 
 **Homebrew** — on macOS or Linux, the tap is rewritten by every release:
 

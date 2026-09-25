@@ -8,59 +8,45 @@ whether your coding agent was found.
 - A coding agent: Claude Code or Codex. Loadout starts one; it doesn't install
   one. If neither is on your `PATH`, step 5 says so, which is the point of it.
 - Git.
-- The archive or installer for your platform, from the
-  [latest release](https://github.com/ntatschner/loadout-cli/releases/latest).
+- `curl` or `wget` on Linux and macOS, which nearly every machine has.
   Loadout runs natively on Windows, Linux and macOS, so there's no VM or
   container to set up.
 
 ## Steps
 
-### 1. Download the file for your platform
+### 1. Run the installer
 
-From the release page, take one of:
-
-- Windows: `loadout-0.49.1-win-x64.msi`, or the `.zip` if you'd rather manage
-  `PATH` yourself. On an ARM machine, take the `win-arm64` build.
-- Linux: `loadout-0.49.1-linux-x64.tar.gz`, or the `.deb` or `.rpm`. On an ARM
-  machine, take the `linux-arm64` build.
-- macOS: the `osx-arm64` archive for Apple silicon, or `osx-x64` for an Intel
-  Mac. macOS gets archives only, because a `.pkg` that isn't signed and
-  notarised would spend the install fighting Gatekeeper.
-
-### 2. Install it
-
-On **Linux or macOS**, extract the archive and run the install script:
+On **Linux or macOS**:
 
 ```sh
-tar -xzf loadout-0.49.1-linux-x64.tar.gz
-./install.sh
+curl -fsSL https://github.com/ntatschner/loadout-cli/releases/latest/download/install.sh | sh
 ```
 
-`install.sh` checks the SHA-256 before it extracts anything and refuses on a
-mismatch, so a damaged or altered download never gets installed. It puts
-`loadout` in `~/.local/bin`, with the native library the archive carries beside
-it, and needs no root. On macOS it also clears the download quarantine
-attribute from those files, because they aren't signed yet and Gatekeeper
-would otherwise block them. Nothing here will ever ask
-you to turn Gatekeeper off.
+It works out your operating system and processor, downloads that build from
+the latest release, and checks it against the release's `SHA256SUMS` before
+installing anything, so a damaged or altered download never gets installed. It
+puts `loadout` in `~/.local/bin`, with the native library the archive carries
+beside it, and needs no root. The macOS builds aren't signed yet, but a file
+fetched with `curl` isn't quarantined, so Gatekeeper doesn't block it. Nothing
+here will ever ask you to turn Gatekeeper off.
 
-On **Windows**, run the MSI:
+On **Windows**:
 
 ```powershell
-msiexec /i loadout-0.49.1-win-x64.msi
+irm https://github.com/ntatschner/loadout-cli/releases/latest/download/install.ps1 | iex
 ```
 
-It installs per user, with no elevation, into `%LOCALAPPDATA%\Programs\loadout`,
-adds that to your `PATH` and makes a Start Menu entry.
+It downloads the MSI for your processor, checks it against `SHA256SUMS` and
+checks its signature, then installs it per user, with no elevation, into
+`%LOCALAPPDATA%\Programs\loadout`. The MSI adds that to your `PATH` and makes
+a Start Menu entry, and the script adds it to the terminal you ran it in too.
 
-On **Debian, Ubuntu, Fedora or similar**, the packages are an alternative:
+[Installing](../installing.md) lists the options: a particular version, another
+prefix, a dry run, or a mirror.
 
-```sh
-sudo dpkg -i loadout_0.49.1_amd64.deb
-```
+### 2. Or install from a package
 
-On **macOS or Linux with Homebrew**, skip the download in step 1 and let
-Homebrew fetch it:
+On **macOS or Linux with Homebrew**:
 
 ```sh
 brew install thecodesaiyan/loadout/loadout
@@ -69,6 +55,22 @@ brew install thecodesaiyan/loadout/loadout
 It checks the archive against the release's published hash, as `install.sh`
 does. Update it later with `brew upgrade loadout` rather than `loadout update`,
 which doesn't know Homebrew installed it.
+
+On **Debian, Ubuntu, Fedora or similar**, download the package from the
+[latest release](https://github.com/ntatschner/loadout-cli/releases/latest):
+
+```sh
+sudo dpkg -i loadout_0.49.1_amd64.deb
+```
+
+On **Windows**, the MSI from the release page installs the same way the script
+does:
+
+```powershell
+msiexec /i loadout-0.49.1-win-x64.msi
+```
+
+On an ARM machine, take the `arm64` build of any of these.
 
 ### 3. Open a new terminal
 
@@ -182,8 +184,12 @@ run it again.
 
 - **`loadout` isn't found.** Open a new terminal (step 3). On Linux and macOS,
   check `~/.local/bin` is on your `PATH`.
-- **`install.sh` refuses.** The checksum didn't match. Download the archive
-  again rather than working round it.
+- **The installer refuses with a checksum mismatch.** The download was damaged
+  or altered on the way. Run it again rather than working round it.
+- **`install.ps1` says the MSI isn't validly signed.** Don't install it. That
+  file isn't the one the release published.
+- **`install.sh` refuses on a musl system.** The Linux builds need glibc, so
+  Alpine and similar can't run them.
 - **Homebrew offers an older version than the release page.** Run
   `brew update`. Homebrew hadn't refreshed its copy of the tap yet.
 - **Anything else.** `loadout doctor` names what's wrong, and
