@@ -98,14 +98,30 @@ echo "Installed ${BIN_DIR}/loadout"
 
 # macOS quarantines anything downloaded through a browser. Until the binary is
 # signed and notarised, Gatekeeper blocks it, and the honest fix is to remove
-# the attribute from this one file rather than to tell people to disable
-# Gatekeeper, which spec section 85 forbids.
-if [ "$(uname -s)" = "Darwin" ] && command -v xattr >/dev/null 2>&1; then
-    if xattr -p com.apple.quarantine "${BIN_DIR}/loadout" >/dev/null 2>&1; then
-        xattr -d com.apple.quarantine "${BIN_DIR}/loadout" 2>/dev/null || true
-        echo "Removed the download quarantine attribute."
+# the attribute from the files this installed rather than to tell people to
+# disable Gatekeeper, which spec section 85 forbids.
+clear_quarantine() {
+    if [ "$(uname -s)" = "Darwin" ] && command -v xattr >/dev/null 2>&1; then
+        if xattr -p com.apple.quarantine "$1" >/dev/null 2>&1; then
+            xattr -d com.apple.quarantine "$1" 2>/dev/null || true
+            echo "Removed the download quarantine attribute from $(basename -- "$1")."
+        fi
     fi
-fi
+}
+
+clear_quarantine "${BIN_DIR}/loadout"
+
+# The archive carries native libraries beside the binary — libonigwrap.dylib
+# on macOS, libonigwrap.so on Linux — which the single-file bundle does not
+# contain. The runtime looks for them in the executable's own directory, so
+# they go into the same one. Installing the binary alone left them behind, the
+# mistake the Homebrew formula's install block was written to avoid.
+for library in "${temporary}"/lib*.dylib "${temporary}"/lib*.so; do
+    [ -f "$library" ] || continue
+    install -m 0755 "$library" "${BIN_DIR}/$(basename -- "$library")"
+    echo "Installed ${BIN_DIR}/$(basename -- "$library")"
+    clear_quarantine "${BIN_DIR}/$(basename -- "$library")"
+done
 
 case ":${PATH}:" in
     *":${BIN_DIR}:"*)

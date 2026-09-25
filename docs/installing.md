@@ -11,9 +11,11 @@ loadout setup
 ```
 
 `install.sh` checks the SHA-256 before it extracts anything, and refuses on a
-mismatch. On macOS it also clears the download quarantine attribute from the
-installed binary. The binary isn't signed or notarised yet, so Gatekeeper would
-block it otherwise, and clearing the attribute on one file is the honest fix.
+mismatch. It installs the binary and the native library that ships beside it
+into the same directory, because that's where the binary looks for it. On macOS
+it also clears the download quarantine attribute from the files it installed.
+The binary isn't signed or notarised yet, so Gatekeeper would block it
+otherwise, and clearing the attribute on those files alone is the honest fix.
 Nothing here will ever tell you to turn Gatekeeper off; spec section 85 forbids
 it.
 
