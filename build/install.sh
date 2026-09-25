@@ -9,7 +9,7 @@
 # directory is only touched if asked for.
 #
 # Options, passed after `sh -s --` when piping:
-#   --version 0.49.1          install that release rather than the latest
+#   --version 0.50.0          install that release rather than the latest
 #   --prefix /usr/local       install under that prefix (needs write access)
 #   --base-url URL|DIRECTORY  fetch from a mirror of a release's assets
 #   --archive path.tar.gz     install an archive already downloaded
@@ -129,7 +129,7 @@ main() {
             -h|--help)
                 say "Installs loadout on Linux or macOS."
                 say ""
-                say "  --version 0.49.1          install that release rather than the latest"
+                say "  --version 0.50.0          install that release rather than the latest"
                 say "  --prefix /usr/local       install under that prefix (default ~/.local)"
                 say "  --base-url URL|DIRECTORY  fetch from a mirror of a release's assets"
                 say "  --archive path.tar.gz     install an archive already downloaded"

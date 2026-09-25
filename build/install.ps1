@@ -22,7 +22,7 @@
     file share.
 
 .EXAMPLE
-    & ([scriptblock]::Create((irm https://github.com/ntatschner/loadout-cli/releases/latest/download/install.ps1))) -Version 0.49.1
+    & ([scriptblock]::Create((irm https://github.com/ntatschner/loadout-cli/releases/latest/download/install.ps1))) -Version 0.50.0
 
 .EXAMPLE
     ./install.ps1 -WhatIf
