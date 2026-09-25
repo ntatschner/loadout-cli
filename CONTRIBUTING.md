@@ -5,7 +5,7 @@ which exist because something went wrong once.
 
 ## Getting a build
 
-You need the .NET SDK **10.0.303 exactly**. `global.json` pins it and
+You need the .NET SDK **10.0.401 exactly**. `global.json` pins it and
 `rollForward` is off, so a different 10.x will refuse rather than quietly build
 you something else.
 

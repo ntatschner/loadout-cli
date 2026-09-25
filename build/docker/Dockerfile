@@ -10,7 +10,11 @@
 # only so a developer on Windows or macOS can run the Linux tests before pushing,
 # and CI still runs them natively on its Ubuntu leg.
 
-ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
+# The exact SDK global.json pins, because rollForward is off and a floating
+# 10.0 tag stops building the day a newer SDK lands in it. Only versions that
+# Microsoft publishes an image for can go here: pick the global.json pin with
+# that in mind. SdkPinTests fails when the two disagree.
+ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.401
 FROM ${SDK_IMAGE}
 
 # dpkg-deb ships with the base image; rpm does not. Both are needed to build the
@@ -40,7 +44,9 @@ COPY . .
 RUN find . -type d \( -name obj -o -name bin \) -prune -exec rm -rf {} + \
     && rm -rf artifacts
 
-RUN dotnet restore --nologo
+# Locked, as CI restores, so a verify run cannot rewrite the lock files it was
+# given and a lock file out of step with the SDK fails here rather than later.
+RUN dotnet restore --nologo --locked-mode
 
 ENV DOTNET_NOLOGO=true
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=true
