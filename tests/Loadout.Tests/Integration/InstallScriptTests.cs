@@ -216,6 +216,30 @@ public sealed class InstallScriptTests : IDisposable
         run.Output.Should().NotContain("What if");
     }
 
+    [InstallerFact]
+    public async Task The_Windows_installer_fails_when_it_cannot_check_the_signature()
+    {
+        // Found on CI: 5.1 given PowerShell 7's module path could not load the
+        // module Get-AuthenticodeSignature lives in. The script stopped, but
+        // exited 0, so anything scripting the install read success. A module
+        // whose manifest names an assembly that is not there fails the same
+        // way on any machine.
+        var mirror = Mirror($"loadout-{Version}-{WindowsRid()}.msi", corruptAfterHashing: false);
+
+        var modules = Path.Combine(_root, "modules");
+        var security = Directory.CreateDirectory(Path.Combine(modules, "Microsoft.PowerShell.Security"));
+
+        File.WriteAllText(
+            Path.Combine(security.FullName, "Microsoft.PowerShell.Security.psd1"),
+            "@{ ModuleVersion = '99.0'; RootModule = 'missing.dll'; CmdletsToExport = @('Get-AuthenticodeSignature') }");
+
+        var run = await PowerShellAsync(mirror, modules);
+
+        run.ExitCode.Should().NotBe(0, run.Output);
+        run.Output.Should().Contain("Couldn't check the signature");
+        run.Output.Should().NotContain("What if");
+    }
+
     /// <summary>
     /// A directory laid out as a release is: feed.json, the named asset, and a
     /// SHA256SUMS listing it. The asset is a release-shaped tar.gz, or opaque
@@ -295,14 +319,26 @@ public sealed class InstallScriptTests : IDisposable
     /// Windows PowerShell 5.1, because that is what a fresh machine opens and
     /// what `irm | iex` runs in. It is also where the traps are.
     /// </summary>
-    private static Task<(int ExitCode, string Output)> PowerShellAsync(string mirror) =>
-        RunAsync("powershell.exe",
-        [
-            "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-            "-File", Script("install.ps1"),
-            "-BaseUrl", mirror,
-            "-WhatIf",
-        ]);
+    /// <remarks>
+    /// PSModulePath is set rather than inherited. A test host started from a
+    /// PowerShell 7 step, as on CI, passes on 7's module directories, and 5.1
+    /// then finds 7's Microsoft.PowerShell.Security first and cannot load it.
+    /// A fresh Windows session has only its own.
+    /// </remarks>
+    private static Task<(int ExitCode, string Output)> PowerShellAsync(string mirror, string? modules = null)
+    {
+        var system = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "Modules");
+
+        return RunAsync(
+            "powershell.exe",
+            [
+                "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                "-File", Script("install.ps1"),
+                "-BaseUrl", mirror,
+                "-WhatIf",
+            ],
+            start => start.Environment["PSModulePath"] = modules is null ? system : modules + Path.PathSeparator + system);
+    }
 
     private static string Script(string name)
     {
@@ -313,13 +349,18 @@ public sealed class InstallScriptTests : IDisposable
         return script;
     }
 
-    private static async Task<(int ExitCode, string Output)> RunAsync(string executable, IEnumerable<string> arguments)
+    private static async Task<(int ExitCode, string Output)> RunAsync(
+        string executable,
+        IEnumerable<string> arguments,
+        Action<ProcessStartInfo>? prepare = null)
     {
         var start = new ProcessStartInfo(executable)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
+
+        prepare?.Invoke(start);
 
         foreach (var argument in arguments)
         {

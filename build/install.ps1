@@ -138,7 +138,17 @@ function Install-Loadout {
 
         # The checksum comes from the same place as the file, so it proves the
         # download is intact, not who made it. The signature is what says that.
-        $signature = Get-AuthenticodeSignature -LiteralPath $msi
+        #
+        # Caught and rethrown as a plain refusal: when the Security module
+        # cannot load, which happens to a 5.1 started with PowerShell 7's
+        # module path, the error ended the function but the script exited 0,
+        # reporting success for an install that had not happened.
+        try {
+            $signature = Get-AuthenticodeSignature -LiteralPath $msi
+        }
+        catch {
+            throw "Couldn't check the signature of $name, so it isn't being installed. $($_.Exception.Message)"
+        }
         if ($signature.Status -ne 'Valid') {
             throw "$name isn't validly signed ($($signature.Status)). Not installing."
         }
@@ -178,4 +188,13 @@ function Install-Loadout {
     }
 }
 
-Install-Loadout @PSBoundParameters
+# Rethrown so a failure anywhere ends a -File run with a non-zero exit code.
+# Without it, a command that could not be loaded ended the function with an
+# error and the script still exited 0. Under iex a throw reports the error and
+# leaves the terminal open, which exit would not.
+try {
+    Install-Loadout @PSBoundParameters
+}
+catch {
+    throw
+}
