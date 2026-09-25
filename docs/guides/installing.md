@@ -38,9 +38,10 @@ tar -xzf loadout-0.49.1-linux-x64.tar.gz
 
 `install.sh` checks the SHA-256 before it extracts anything and refuses on a
 mismatch, so a damaged or altered download never gets installed. It puts
-`loadout` in `~/.local/bin` and needs no root. On macOS it also clears the
-download quarantine attribute from that one binary, because the binary isn't
-signed yet and Gatekeeper would otherwise block it. Nothing here will ever ask
+`loadout` in `~/.local/bin`, with the native library the archive carries beside
+it, and needs no root. On macOS it also clears the download quarantine
+attribute from those files, because they aren't signed yet and Gatekeeper
+would otherwise block them. Nothing here will ever ask
 you to turn Gatekeeper off.
 
 On **Windows**, run the MSI:

@@ -511,7 +511,7 @@ jobs:
 
           \`install.sh\` verifies the SHA-256 before extracting anything, installs
           to \`~/.local/bin\`, and needs no root. On macOS it also clears the
-          download quarantine from the installed binary.
+          download quarantine from the files it installs.
 
           **Windows**
 
