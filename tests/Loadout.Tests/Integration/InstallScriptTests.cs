@@ -151,7 +151,7 @@ public sealed class InstallScriptTests : IDisposable
 
         var run = await ShellAsync("--base-url", mirror, "--prefix", prefix);
 
-        run.ExitCode.Should().NotBe(0);
+        run.ExitCode.Should().NotBe(0, run.Output);
         run.Output.Should().Contain("checksum mismatch");
         Directory.Exists(Path.Combine(prefix, "bin")).Should().BeFalse("nothing is installed from a download that failed its check");
     }
@@ -170,7 +170,7 @@ public sealed class InstallScriptTests : IDisposable
 
         var run = await ShellAsync("--base-url", mirror, "--prefix", prefix);
 
-        run.ExitCode.Should().NotBe(0);
+        run.ExitCode.Should().NotBe(0, run.Output);
         run.Output.Should().Contain("doesn't list");
         Directory.Exists(Path.Combine(prefix, "bin")).Should().BeFalse();
     }
@@ -196,7 +196,7 @@ public sealed class InstallScriptTests : IDisposable
 
         var run = await PowerShellAsync(mirror);
 
-        run.ExitCode.Should().NotBe(0);
+        run.ExitCode.Should().NotBe(0, run.Output);
         run.Output.Should().Contain("Checksum mismatch");
         run.Output.Should().NotContain("What if", "it refused before getting anywhere near msiexec");
     }
@@ -210,7 +210,7 @@ public sealed class InstallScriptTests : IDisposable
 
         var run = await PowerShellAsync(mirror);
 
-        run.ExitCode.Should().NotBe(0);
+        run.ExitCode.Should().NotBe(0, run.Output);
         run.Output.Should().Contain("Checksum verified.");
         run.Output.Should().Contain("isn't validly signed");
         run.Output.Should().NotContain("What if");
