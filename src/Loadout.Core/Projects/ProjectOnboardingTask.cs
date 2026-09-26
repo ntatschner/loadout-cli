@@ -58,6 +58,32 @@ public static class ProjectOnboardingTask
         + "started without a task of its own onboards it. Skip it with "
         + "'loadout project onboard --skip'.";
 
+    /// <summary>
+    /// The task, mode and named specialists of a session that onboards the
+    /// project, from what it was started with.
+    /// </summary>
+    /// <remarks>
+    /// One place for both the launch and the launch sheet's preview. Two copies
+    /// of this would be two answers to "what will this session load", and the
+    /// sheet exists to give the one the launch will act on.
+    /// <para>
+    /// The skill is named rather than left to be found, because a skill
+    /// otherwise loads only in the modes and on the words it lists, and
+    /// onboarding must not depend on how somebody phrased the launch.
+    /// </para>
+    /// </remarks>
+    public static (string Task, string Mode, IReadOnlyList<string> Specialists) Onboarding(
+        string? mode,
+        IReadOnlyList<string>? specialists)
+    {
+        var named = specialists ?? [];
+
+        return (
+            Title,
+            mode is { Length: > 0 } asked ? asked : Mode,
+            named.Contains(Skill, StringComparer.OrdinalIgnoreCase) ? named : [.. named, Skill]);
+    }
+
     /// <summary>Whether the project is waiting to be onboarded.</summary>
     public static bool Pending(IEnumerable<TaskItem> tasks) =>
         tasks.Any(task => string.Equals(task.Id, Id, StringComparison.OrdinalIgnoreCase)

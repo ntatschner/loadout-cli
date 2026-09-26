@@ -39,4 +39,19 @@ public sealed class ProjectOnboardingTaskTests
     public void Onboarding_is_pending_until_it_is_done_or_skipped(TaskState state, bool pending) =>
         ProjectOnboardingTask.Pending([new TaskItem { Id = ProjectOnboardingTask.Id, State = state }])
             .Should().Be(pending);
+
+    [Fact]
+    public void An_onboarding_session_keeps_a_mode_somebody_asked_for_and_names_the_skill_once()
+    {
+        var (task, mode, named) = ProjectOnboardingTask.Onboarding(
+            "review", [ProjectOnboardingTask.Skill, "language.csharp"]);
+
+        task.Should().Be(ProjectOnboardingTask.Title);
+        mode.Should().Be("review");
+        named.Should().BeEquivalentTo([ProjectOnboardingTask.Skill, "language.csharp"]);
+    }
+
+    [Fact]
+    public void An_onboarding_session_with_no_mode_asked_for_investigates() =>
+        ProjectOnboardingTask.Onboarding(null, null).Mode.Should().Be("investigate");
 }

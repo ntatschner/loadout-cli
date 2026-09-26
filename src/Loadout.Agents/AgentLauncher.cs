@@ -1027,16 +1027,10 @@ public sealed class AgentLauncher : IAgentLauncher
                     + "proposes settings for you to apply. Skip it instead with "
                     + $"'loadout project onboard {slug} --skip'.");
 
-                var named = request.Specialists ?? [];
+                var (task, mode, specialists) = Core.Projects.ProjectOnboardingTask.Onboarding(
+                    request.Mode, request.Specialists);
 
-                return request with
-                {
-                    Task = Core.Projects.ProjectOnboardingTask.Title,
-                    Mode = request.Mode ?? Core.Projects.ProjectOnboardingTask.Mode,
-                    Specialists = named.Contains(Core.Projects.ProjectOnboardingTask.Skill, StringComparer.OrdinalIgnoreCase)
-                        ? named
-                        : [.. named, Core.Projects.ProjectOnboardingTask.Skill],
-                };
+                return request with { Task = task, Mode = mode, Specialists = specialists };
 
             case Core.Projects.OnboardingTurn.Remind:
                 warnings.Add(

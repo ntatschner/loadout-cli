@@ -1261,6 +1261,11 @@ public sealed class TerminalLauncher : ILauncherTui
             .ReadProjectAsync(request.Project.Entry.Slug, ct)
             .ConfigureAwait(false);
 
+        var tasks = await _tasks.ListAsync(request.Project.Entry.Slug, ct).ConfigureAwait(false);
+
+        var (task, mode, named) = PreviewedSession(
+            request, tasks.Succeeded && ProjectOnboardingTask.Pending(tasks.Value!));
+
         var resolved = await _instructions.ResolveAsync(
             new InstructionRequest(
                 manifest.Succeeded ? manifest.Value : null,
@@ -1268,8 +1273,9 @@ public sealed class TerminalLauncher : ILauncherTui
                 WorkspacePath: _workspace.LocalPath,
                 AgentName: request.Agent,
                 ProfileName: request.Profile,
-                Task: request.Task,
-                Mode: request.Mode),
+                Task: task,
+                Explicit: named,
+                Mode: mode),
             ct).ConfigureAwait(false);
 
         if (resolved.Failed)
@@ -1278,6 +1284,32 @@ public sealed class TerminalLauncher : ILauncherTui
         }
 
         return resolved.Value;
+    }
+
+    /// <summary>
+    /// The task, mode and named specialists the preview resolves for, which
+    /// are the ones the launch will use.
+    /// </summary>
+    /// <remarks>
+    /// The launch turns a session with no task of its own into the project's
+    /// onboarding when one is pending, so the preview has to as well, or the
+    /// sheet would describe a session that is not the one about to start.
+    /// </remarks>
+    internal static (string? Task, string? Mode, IReadOnlyList<string>? Named) PreviewedSession(
+        LaunchPreviewRequest request,
+        bool onboardingPending)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (ProjectOnboardingTask.TurnFor(onboardingPending, request.Task, attended: true)
+            != OnboardingTurn.Onboard)
+        {
+            return (request.Task, request.Mode, null);
+        }
+
+        var (task, mode, named) = ProjectOnboardingTask.Onboarding(request.Mode, null);
+
+        return (task, mode, named);
     }
 
     private async Task<int?> OpenShellAsync(string workingDirectory, CancellationToken ct)
