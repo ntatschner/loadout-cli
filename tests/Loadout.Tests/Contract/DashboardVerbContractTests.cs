@@ -60,11 +60,15 @@ public sealed class DashboardVerbContractTests
         verb,
         Gate: "gate-1",
         Answer: "no",
-        Reason: "not this time",
-        Message: "something to say",
-        Room: "The Back Office",
+        // Every piece of prose starting with a dash, because that is what a
+        // pasted bullet looks like and the parser refuses one anywhere but
+        // joined to its option: "Option does not have a name". A message box
+        // that works until somebody pastes a list is the fault to catch here.
+        Reason: "- not this time",
+        Message: "- something to say",
+        Room: "- The Back Office",
         Node: "implementer/1",
-        Instead: "do the other thing",
+        Instead: "- do the other thing",
         Budget: "40");
 
     [BuiltCliTheory]
@@ -92,6 +96,7 @@ public sealed class DashboardVerbContractTests
 
         everything.Should().NotContain("Unexpected option", $"'{verb}' types a line the parser refused");
         everything.Should().NotContain("Unknown command", $"'{verb}' names a command that does not exist");
+        everything.Should().NotContain("Option does not have a name", "a value starting with a dash was read as an option");
     }
 
     /// <summary>
@@ -115,7 +120,7 @@ public sealed class DashboardVerbContractTests
             verb,
             "nightly",
             Team: "docs-crew",
-            Goal: "check the docs against the code",
+            Goal: "- check the docs against the code",
             Project: "loadout-cli",
             Every: "2h",
             At: "23:00",
@@ -137,6 +142,7 @@ public sealed class DashboardVerbContractTests
 
         everything.Should().NotContain("Unexpected option", $"'{verb}' types a line the parser refused");
         everything.Should().NotContain("Unknown command", $"'{verb}' names a command that does not exist");
+        everything.Should().NotContain("Option does not have a name", "a value starting with a dash was read as an option");
     }
 
     /// <summary>
@@ -181,6 +187,7 @@ public sealed class DashboardVerbContractTests
 
         everything.Should().NotContain("Unexpected option", "the pane types a line the parser refused");
         everything.Should().NotContain("Unknown command", "the pane names a command that does not exist");
+        everything.Should().NotContain("Option does not have a name", "a value starting with a dash was read as an option");
 
         // The one thing a clear-out must never do is be read as "everything":
         // an ask that names a condition has to get past the command's own
