@@ -134,6 +134,15 @@ public interface IWorkspaceManager
         CancellationToken ct = default);
 
     /// <summary>
+    /// How many pending files lie outside one project's workspace directory,
+    /// counted file by file, so an untracked folder holding several files
+    /// counts as several.
+    /// </summary>
+    Task<OperationResult<int>> CountPendingOutsideAsync(
+        string projectSlug,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Commits the workspace, and optionally pushes it (spec sections 45, 46).
     /// <para>
     /// The commit message follows the format in section 46 so a workspace

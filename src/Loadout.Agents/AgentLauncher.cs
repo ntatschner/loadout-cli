@@ -1202,27 +1202,27 @@ public sealed class AgentLauncher : IAgentLauncher
             return (null, 0);
         }
 
-        var allResult = await _workspace.GetPendingChangesAsync(ct).ConfigureAwait(false);
+        var otherResult = await _workspace.CountPendingOutsideAsync(projectSlug, ct).ConfigureAwait(false);
         var pendingResult = await _workspace.GetPendingChangesAsync(projectSlug, ct).ConfigureAwait(false);
 
-        // The full list reports an untracked directory as itself, so an entry
-        // that is the project's directory or one of its parents may hold only
-        // this project's files; it is not counted as somebody else's.
-        var own = $"projects/{projectSlug}/";
-
-        var other = allResult.Succeeded
-            ? allResult.Value!.Count(path => !own.StartsWith(path, StringComparison.Ordinal)
-                && !path.StartsWith(own, StringComparison.Ordinal))
-            : 0;
+        var other = otherResult.Succeeded ? otherResult.Value : 0;
+        var always = string.Equals(config.Sync.Exit, "always", StringComparison.OrdinalIgnoreCase);
 
         if (pendingResult.Failed || pendingResult.Value!.Count == 0)
         {
             // A session that only read changes nothing, which is the common
             // case and must not produce an empty commit (spec section 46).
+            // Under "always" nobody is asked, so this is the only place the
+            // files left elsewhere get mentioned.
+            if (always && other > 0)
+            {
+                warnings.Add(OtherPendingNote(other));
+            }
+
             return (null, other);
         }
 
-        if (!string.Equals(config.Sync.Exit, "always", StringComparison.OrdinalIgnoreCase))
+        if (!always)
         {
             return (pendingResult.Value, other);
         }

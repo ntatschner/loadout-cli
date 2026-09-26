@@ -383,6 +383,32 @@ public sealed class WorkspaceManager : IWorkspaceManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<int>> CountPendingOutsideAsync(
+        string projectSlug,
+        CancellationToken ct = default)
+    {
+        if (!IsCloned())
+        {
+            return OperationResult<int>.Ok(0);
+        }
+
+        // Every file, not the plain listing: that reports a new folder as the
+        // folder alone, so another project's five new files counted as one,
+        // and a new "projects/" folder, which holds this project too, as none.
+        var all = await _git.ListChangedFilesAsync(LocalPath, ["."], ct).ConfigureAwait(false);
+
+        if (all.Failed)
+        {
+            return OperationResult<int>.Fail(all.Error!);
+        }
+
+        var own = ProjectPathspec(projectSlug) + "/";
+
+        return OperationResult<int>.Ok(
+            all.Value!.Count(path => !path.StartsWith(own, StringComparison.Ordinal)));
+    }
+
+    /// <inheritdoc />
     public Task<OperationResult<bool>> SaveAsync(
         string projectName,
         string agentName,

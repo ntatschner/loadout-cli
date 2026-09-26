@@ -434,6 +434,14 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
         Directory.CreateDirectory(mine);
         Directory.CreateDirectory(theirs);
 
+        // Beta already has something committed, so its new file is listed on
+        // its own line. Left untracked, the whole folder is one entry that the
+        // credential screen never opens, and the test would pass whether or
+        // not the save's screen were scoped.
+        await File.WriteAllTextAsync(Path.Combine(theirs, "notes.md"), "Beta's notes.");
+        await RunGitAsync(_workspace.LocalPath, "add", "projects/beta/notes.md");
+        await RunGitAsync(_workspace.LocalPath, "commit", "--message", "beta");
+
         await File.WriteAllTextAsync(Path.Combine(mine, "handoff.md"), "What alpha learned.");
 
         // Another session's unfinished work, with a credential in it. It must
@@ -454,7 +462,7 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
             .Trim().Should().Be("projects/alpha/handoff.md");
 
         (await RunGitAsync(_workspace.LocalPath, "status", "--porcelain"))
-            .Should().Contain("projects/beta/");
+            .Should().Contain("projects/beta/handoff.md");
     }
 
     [Fact]

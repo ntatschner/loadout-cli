@@ -360,17 +360,20 @@ nowhere. The fourth option is deliberately "leave them uncommitted" and not
 The prompt lives in the CLI, not in core. Core decides whether somebody needs to
 be asked; it never asks, because spec section 37 forbids a menu turning up in a
 pipe or a CI job. With nobody there, the changes are left in place and it
-suggests `loadout workspace save`.
+suggests `loadout workspace save --project <slug>`, for the session's own
+project.
 
 A session saves its own project and nothing else. The workspace is shared by
 every session on the machine, and saving everything pending used to commit, and
 under `always` push, whatever another session had half-written in another
 project. Only the files under that project's directory are listed and
-committed; if others are pending, you are told how many in one line and they
-stay where they are.
+committed; if others are pending, you are told in one line how many files
+that is, counting each file inside a new folder rather than the folder once,
+and they stay where they are. Under `always` you are told even when the
+session changed nothing of its own, because nobody is asked.
 
 `loadout workspace save` on its own still saves everything, because that is
-what you asked for. `--project <slug>` narrows it to one project, and
+what the command is for. `--project <slug>` narrows it to one project, and
 `--dry-run --json` then reports that project's count, not the whole workspace's.
 
 ## MCP servers
