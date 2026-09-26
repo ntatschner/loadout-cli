@@ -70,6 +70,11 @@ public sealed class SpecialistPreferences
     public string Mode { get; set; } = string.Empty;
 
     /// <summary>Whether anything has been said at all.</summary>
-    public bool IsEmpty =>
+    /// <remarks>
+    /// A method rather than a property so the YAML writer leaves it out: as a
+    /// property it was written into every project.yaml as is_empty, although
+    /// it is worked out from the other three and nothing reads it back.
+    /// </remarks>
+    public bool IsEmpty() =>
         Preferred.Count == 0 && Excluded.Count == 0 && string.IsNullOrWhiteSpace(Mode);
 }

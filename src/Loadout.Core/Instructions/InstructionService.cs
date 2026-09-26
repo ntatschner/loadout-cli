@@ -283,7 +283,7 @@ internal sealed class InstructionService : IInstructionService
 
         if (request.ProfileName is { Length: > 0 } name
             && manifest.Profiles.TryGetValue(name, out var profile)
-            && !profile.Specialists.IsEmpty)
+            && !profile.Specialists.IsEmpty())
         {
             return profile.Specialists;
         }

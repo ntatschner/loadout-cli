@@ -366,8 +366,8 @@ profiles](../first-run.md#environments-and-security-profiles).
 | `excluded` | Specialists that must never load here. Honoured; only naming one on the command line overrides it. |
 | `mode` | The mode a session starts in when none is given, such as `review`. |
 
-You may find `is_empty: true` written under `specialists`. It's worked out from
-the other three, not read, so editing it does nothing. See [Specialists and
+A manifest written by an older Loadout may carry `is_empty` under `specialists`.
+Nothing reads it, and it can be deleted. See [Specialists and
 skills](../specialists.md).
 
 ### symbols
