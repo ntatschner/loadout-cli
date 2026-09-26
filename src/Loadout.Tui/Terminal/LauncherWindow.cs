@@ -442,6 +442,11 @@ internal sealed class LauncherWindow : Window
             new MenuBarItem("_Ideas", [
                 new MenuItem
                 {
+                    Title = "_Work on ideas...",
+                    Action = () => Close(new LauncherIntent(LauncherAction.Ideas, Selected)),
+                },
+                new MenuItem
+                {
                     Title = "_Dump notes to split into ideas and tasks...",
                     Action = () => Close(new LauncherIntent(LauncherAction.DumpNotes, Selected)),
                 },

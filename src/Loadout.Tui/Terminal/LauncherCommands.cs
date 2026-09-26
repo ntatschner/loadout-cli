@@ -80,10 +80,30 @@ internal static class LauncherCommands
     /// <summary>Every dump, and how much of it has been recorded.</summary>
     internal const string DumpList = "idea dump list";
 
+    /// <summary>The steps of fleshing an idea out, each run from the ideas screen.</summary>
+    internal const string IdeaAdd = "idea add";
+
+    internal const string IdeaRefine = "idea refine";
+
+    internal const string IdeaAnswer = "idea answer";
+
+    internal const string IdeaChoose = "idea choose";
+
+    internal const string IdeaKeep = "idea keep";
+
+    internal const string IdeaDrop = "idea drop";
+
+    internal const string IdeaImprove = "idea improve";
+
+    internal const string IdeaAccept = "idea accept";
+
+    internal const string IdeaRemove = "idea remove";
+
     /// <summary>Every one of them, for the test that checks they are real.</summary>
     internal static IReadOnlyList<string> All =>
     [
         Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches, ProjectContext, Remove,
         DumpAdd, DumpApply, IdeaList, DumpList,
+        IdeaAdd, IdeaRefine, IdeaAnswer, IdeaChoose, IdeaKeep, IdeaDrop, IdeaImprove, IdeaAccept, IdeaRemove,
     ];
 }

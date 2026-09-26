@@ -129,7 +129,7 @@ public interface IIdeaService
 internal sealed partial class IdeaService : IIdeaService
 {
     /// <summary>The piece that names the whole plan rather than one part of it.</summary>
-    public const string WholePlan = "plan";
+    public const string WholePlan = IdeaWork.WholePlan;
 
     private const int TitleLength = 80;
 

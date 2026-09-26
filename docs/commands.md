@@ -73,7 +73,7 @@
 | `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
 | `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
 | `loadout idea refine <id>` | Have an agent take an idea one round further: ask its questions, propose a plan with options for each layer, or revise it |
-| `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked |
+| `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked. An answer or request that starts with a dash goes as `--answer=` or `--request=` |
 | `loadout idea accept <id>` | Write the plan out and turn the idea into a task on its project, or on a new one with `--new-project` |
 | `loadout idea dump add <file\|->` | Drop in notes kept elsewhere, from a file, standard input or `--text`, and have an agent split them into separate ideas and tasks, each carrying its own words from the notes |
 | `loadout idea dump list\|show\|split\|apply` | See the notes dropped in, split one again, and record the pieces you want, all or `--only 1,3` |
