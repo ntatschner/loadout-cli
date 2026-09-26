@@ -2170,17 +2170,18 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("<div class=\"board\" id=\"board\" hidden></div>");
         text.Should().Contain("<div class=\"terminal lk-terminal\" id=\"terminal\" hidden></div>");
 
-        // A destination, not a way of looking at runs, and last in the drawer
-        // for the same reason.
+        // Destinations, not ways of looking at runs, and last in the drawer
+        // for the same reason: the ideas, and the settings.
+        text.Should().Contain("id=\"view-ideas\"");
         text.Should().Contain("id=\"view-settings\"");
 
         // One of them is on and the rest are not. A group where every button
-        // claims to be pressed announces as eight pressed buttons.
+        // claims to be pressed announces as nine pressed buttons.
         //
-        // Eight rather than seven: the button that switches between the two
+        // Nine rather than eight: the button that switches between the two
         // presentations carries aria-pressed too, and starts off.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
-            .Should().HaveCount(8);
+            .Should().HaveCount(9);
     }
 
     [Fact]

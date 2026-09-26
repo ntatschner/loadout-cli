@@ -79,9 +79,18 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
 
     public sealed class Settings : GlobalSettings
     {
-        [CommandArgument(0, "<text>")]
+        [CommandArgument(0, "[text]")]
         [Description("The idea, in your own words. Kept verbatim.")]
-        public string Text { get; init; } = string.Empty;
+        public string? Text { get; init; }
+
+        /// <remarks>
+        /// The same thing as an option, for text that starts with a dash: a
+        /// bullet copied from a list reads to the parser as an option, and the
+        /// launcher's screens always pass the idea this way for that reason.
+        /// </remarks>
+        [CommandOption("--text <TEXT>")]
+        [Description("The idea, as an option. For text that starts with a dash.")]
+        public string? TextOption { get; init; }
 
         [CommandOption("--project <SLUG>")]
         [Description("Put it on this project's list. Defaults to the repository you are in.")]
@@ -113,6 +122,18 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
         if (settings.Global && settings.Project is { Length: > 0 })
         {
             return output.Fail("--global and --project name different lists. Give one.", ExitCode.InvalidArguments);
+        }
+
+        if (settings.Text is { Length: > 0 } && settings.TextOption is { Length: > 0 })
+        {
+            return output.Fail("Give the idea once: as text, or with --text.", ExitCode.InvalidArguments);
+        }
+
+        var text = settings.TextOption is { Length: > 0 } given ? given : settings.Text;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return output.Fail("Say what the idea is: loadout idea add \"...\"", ExitCode.InvalidArguments);
         }
 
         // Outside a repository an idea goes on the workspace-wide list rather
@@ -147,7 +168,7 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
 
         var captured = await _ideas.CaptureAsync(
             project,
-            settings.Text,
+            text,
             settings.By is { Length: > 0 } who ? who : Environment.UserName,
             settings.IdeaId,
             cancellationToken).ConfigureAwait(false);
@@ -456,24 +477,34 @@ public sealed class IdeaAnswerCommand : AsyncCommand<IdeaAnswerCommand.Settings>
         [Description("Which question: Q1, Q2 and so on.")]
         public string Question { get; init; } = string.Empty;
 
-        [CommandArgument(2, "<answer>")]
+        [CommandArgument(2, "[answer]")]
         [Description("Your answer, in your own words.")]
-        public string Answer { get; init; } = string.Empty;
+        public string? Answer { get; init; }
+
+        [CommandOption("--answer <ANSWER>")]
+        [Description("The answer, as an option. One that starts with a dash goes as --answer=\"- ...\".")]
+        public string? AnswerOption { get; init; }
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        return IdeaChange.RunAsync(
+        if (IdeaChange.Once(settings.Answer, settings.AnswerOption) is not { } answer)
+        {
+            return new CommandOutput(_console, settings).Fail(
+                "Give the answer once: after the question, or with --answer.", ExitCode.InvalidArguments);
+        }
+
+        return await IdeaChange.RunAsync(
             _console, settings, settings.DryRun, _ideas, _projects,
             $"answer {settings.Question}",
-            place => _ideas.AnswerAsync(place, settings.Question, settings.Answer, cancellationToken),
-            cancellationToken);
+            place => _ideas.AnswerAsync(place, settings.Question, answer, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -608,24 +639,34 @@ public sealed class IdeaImproveCommand : AsyncCommand<IdeaImproveCommand.Setting
         [Description("A layer or addition (L2, A1), or 'plan' for the whole of it.")]
         public string Piece { get; init; } = string.Empty;
 
-        [CommandArgument(2, "<request>")]
+        [CommandArgument(2, "[request]")]
         [Description("What you want changed.")]
-        public string Request { get; init; } = string.Empty;
+        public string? Request { get; init; }
+
+        [CommandOption("--request <REQUEST>")]
+        [Description("The request, as an option. One that starts with a dash goes as --request=\"- ...\".")]
+        public string? RequestOption { get; init; }
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        return IdeaChange.RunAsync(
+        if (IdeaChange.Once(settings.Request, settings.RequestOption) is not { } request)
+        {
+            return new CommandOutput(_console, settings).Fail(
+                "Say what to change once: after the piece, or with --request.", ExitCode.InvalidArguments);
+        }
+
+        return await IdeaChange.RunAsync(
             _console, settings, settings.DryRun, _ideas, _projects,
             $"ask for {settings.Piece} to be improved",
-            place => _ideas.JudgeAsync(place, settings.Piece, IdeaVerdict.Improve, settings.Request, cancellationToken),
-            cancellationToken);
+            place => _ideas.JudgeAsync(place, settings.Piece, IdeaVerdict.Improve, request, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -845,6 +886,22 @@ public sealed class IdeaRemoveCommand : AsyncCommand<IdeaSettings>
 /// <summary>The shared run of a command that changes one idea and shows it after.</summary>
 internal static class IdeaChange
 {
+    /// <summary>
+    /// A value given once, positionally or as its option, or null when it was
+    /// given twice or not at all.
+    /// </summary>
+    /// <remarks>
+    /// Both, because the parser refuses a positional value that starts with a
+    /// dash, and prose often does: the option written as <c>--name=value</c> is
+    /// the one form it always takes. The launcher's screens use that.
+    /// </remarks>
+    public static string? Once(string? positional, string? option)
+    {
+        var given = new[] { positional, option }.Where(v => !string.IsNullOrWhiteSpace(v)).ToList();
+
+        return given.Count == 1 ? given[0] : null;
+    }
+
     public static async Task<int> RunAsync(
         IAnsiConsole console,
         IdeaSettings settings,

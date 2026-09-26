@@ -28,6 +28,9 @@ public sealed record IdeaDestination(string? Project, string? NewProject, string
 /// </remarks>
 public static class IdeaWork
 {
+    /// <summary>The piece that names the whole plan rather than one part of it.</summary>
+    public const string WholePlan = "plan";
+
     /// <summary>Where an idea stands.</summary>
     public static IdeaStage StageOf(IdeaRecord record)
     {

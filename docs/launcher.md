@@ -245,6 +245,60 @@ A run starting while you're watching arrives at the top and pushes the rest
 down. The cursor stays on the run it was on, by identifier rather than by
 position, so the list moving doesn't move you onto something else.
 
+## Working on ideas
+
+The Ideas menu has two ways in:
+
+- *Dump notes…* takes notes you kept somewhere else. Paste them in and an agent
+  splits them into separate ideas and tasks, each quoting its own words from
+  the notes. You get the pieces as a list, all ticked, and untick what you
+  don't want before anything is recorded.
+- *Work on ideas…* opens every idea, on every project and the workspace-wide
+  list. The selected one is shown in full underneath: its questions and your
+  answers, then the plan, a layer at a time, with the options, the one chosen
+  and what you've said about each piece. **Tab** moves into that pane to
+  scroll a long plan, and the keys work from there too.
+
+The keys follow the order you'd work through an idea:
+
+| Key | Does |
+|---|---|
+| **n** | Drop a new idea in, on the project selected in the launcher |
+| **r** | Have the agent take it a round further: ask its questions, propose a plan, or revise one |
+| **a** | Answer a question: pick one of the agent's likely answers, or type your own |
+| **c** | Choose an option for a layer |
+| **k**, **d** | Keep or drop pieces of the plan. An addition is only in the plan once kept |
+| **i** | Ask for a piece, or the whole plan, to be reworked in the next round |
+| **y** | Accept the plan and choose where the work goes |
+| **Del** | Forget the idea, after asking |
+
+Each key runs the command you'd otherwise have typed (`idea answer`,
+`idea choose` and the rest) and then opens the screen again on the same idea,
+read afresh. The screen never has its own copy of what the commands do.
+
+A key that the command would only refuse does nothing. **r** does nothing while
+questions are waiting, because a round run then would be asked the same
+questions again. **y** does nothing until the plan has taken in everything you
+asked of it. That's quieter than closing the screen just to be told no.
+
+A round takes a minute or two and prints what it asked or proposed, so the
+screen waits for a key before coming back. Answering or marking a piece prints
+a single line saying it worked, so the screen comes straight back: stopping for
+each of those would make working through a plan a chore.
+
+Accepting offers the project the idea was dropped on first, then every other
+registered project, then a new project named after the plan. Making a project
+is always your choice. The agent's opinion of where the work belongs is shown,
+but never acted on by itself.
+
+Answers and requests are passed to the command as `--answer=…` and
+`--request=…`, not as bare arguments. The parser refuses any value that
+starts with a dash, and a bulleted list pasted into an answer would otherwise
+fail with "Option does not have a name".
+
+Not here yet: the text launcher that screen readers use has no ideas screen,
+so there the commands are the way in.
+
 ## Cost, history and standing
 
 These live behind a key rather than on the panel, which stays a page where every

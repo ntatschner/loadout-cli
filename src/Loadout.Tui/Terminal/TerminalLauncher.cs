@@ -79,6 +79,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private Task<string?>? _updateNotice;
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
     private readonly Loadout.Core.Ideas.IIdeaDumps _dumps;
+    private readonly Loadout.Core.Ideas.IIdeaService _ideas;
 
     /// <summary>Agents detected on this machine, once the first screen has asked.</summary>
     private IReadOnlyList<string> _installed = [];
@@ -112,9 +113,11 @@ public sealed class TerminalLauncher : ILauncherTui
         Loadout.Core.Tasks.ITaskService tasks,
         IUpdateNotice updates,
         ReadingProfile reading,
-        Loadout.Core.Ideas.IIdeaDumps dumps)
+        Loadout.Core.Ideas.IIdeaDumps dumps,
+        Loadout.Core.Ideas.IIdeaService ideas)
     {
         _dumps = dumps;
+        _ideas = ideas;
         _reading = reading;
         _instructions = instructions;
         _runs = runs;
@@ -559,6 +562,80 @@ public sealed class TerminalLauncher : ILauncherTui
         Pause();
     }
 
+    /// <summary>
+    /// The ideas screen, over and over: each time it hands back a step, the
+    /// step runs as its command and the screen opens again on the same idea,
+    /// read afresh, until it is closed with nothing asked for.
+    /// </summary>
+    /// <remarks>
+    /// Read here, before each opening, rather than by the screen: reading is
+    /// the launcher's to do and changing is the command's, so the screen only
+    /// ever shows what the last command left.
+    /// </remarks>
+    private async Task ShowIdeasAsync(ProjectResolution? project, CancellationToken ct)
+    {
+        string? select = null;
+
+        while (!ct.IsCancellationRequested)
+        {
+            var entries = new List<IdeaEntry>();
+            var listed = await _ideas.ListAsync(ct).ConfigureAwait(false);
+
+            if (listed.Failed)
+            {
+                _console.MarkupLine($"[red]{Shown.Safely(listed.Error!)}[/]");
+                Pause();
+
+                return;
+            }
+
+            foreach (var summary in listed.Value!)
+            {
+                var read = await _ideas.ReadAsync(summary.Place, ct).ConfigureAwait(false);
+
+                entries.Add(new IdeaEntry(summary, read.Succeeded ? read.Value : null));
+            }
+
+            var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
+
+            IdeaStep? step;
+
+            using (IApplication application = Application.Create())
+            {
+                application.InitLegibly(_reading.Profile);
+
+                using var window = new IdeasWindow(
+                    entries,
+                    projects.Succeeded ? [.. projects.Value!.Select(p => p.Entry.Slug)] : [],
+                    project?.Entry.Slug,
+                    select,
+                    new DialogIdeaPrompts(application),
+                    application);
+
+                await application.RunAsync(window, ct).ConfigureAwait(false);
+
+                step = window.Chosen;
+                select = window.Selected?.Summary.Place.Id;
+            }
+
+            if (step is null)
+            {
+                return;
+            }
+
+            var code = await _catalogue.RunAsync(step.Command, step.Arguments, ct).ConfigureAwait(false);
+
+            // Stopped for when there is something to read: a round's questions
+            // or plan, where an accepted idea went, or anything that failed.
+            if (step.Pause || code != 0)
+            {
+                Pause();
+            }
+
+            select = step.Select ?? select;
+        }
+    }
+
     private async Task<IReadOnlyList<(Loadout.Core.Ideas.DumpPlace Place, Loadout.Models.Ideas.IdeaDump Dump)>> DumpsAsync(
         CancellationToken ct)
     {
@@ -661,6 +738,10 @@ public sealed class TerminalLauncher : ILauncherTui
 
             case LauncherAction.RecordDump:
                 await RecordDumpAsync(null, ct).ConfigureAwait(false);
+                return null;
+
+            case LauncherAction.Ideas:
+                await ShowIdeasAsync(intent.Project, ct).ConfigureAwait(false);
                 return null;
 
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:

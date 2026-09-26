@@ -1203,6 +1203,10 @@ are two teams running at once on an afternoon, never across a week.
 answering a gate is implemented once rather than three times. Clicking anybody
 anywhere takes you there.
 
+**Ideas**, beside the settings, is not a view of the runs either: it's where
+ideas are dropped in and worked through into plans, a button for each command.
+[Using the dashboard](guides/dashboard.md#9-work-on-your-ideas) walks through it.
+
 #### Several at once, or one on its own
 
 **Board** shows several screens together, and **a team's office is one of the

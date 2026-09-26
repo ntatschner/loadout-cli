@@ -87,6 +87,12 @@ internal enum LauncherAction
 
     /// <summary>Record the pieces of a dump split earlier and not yet recorded.</summary>
     RecordDump,
+
+    /// <summary>
+    /// Work through the ideas: answer, choose, keep, drop, improve, refine and
+    /// accept, each step run as its command and the screen opened again after.
+    /// </summary>
+    Ideas,
 }
 
 /// <summary>
