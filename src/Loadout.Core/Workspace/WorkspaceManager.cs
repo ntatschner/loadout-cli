@@ -356,7 +356,13 @@ public sealed class WorkspaceManager : IWorkspaceManager
     }
 
     /// <inheritdoc />
+    public Task<OperationResult<IReadOnlyList<string>>> GetPendingChangesAsync(
+        CancellationToken ct = default) =>
+        GetPendingChangesAsync(null, ct);
+
+    /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<string>>> GetPendingChangesAsync(
+        string? projectSlug,
         CancellationToken ct = default)
     {
         if (!IsCloned())
@@ -366,14 +372,56 @@ public sealed class WorkspaceManager : IWorkspaceManager
             return OperationResult<IReadOnlyList<string>>.Ok([]);
         }
 
-        return await _git.ListChangedFilesAsync(LocalPath, ct).ConfigureAwait(false);
+        // Scoped by Git rather than by filtering the full list: an untracked
+        // directory is reported as the directory alone, so with a new
+        // "projects" folder the full list says "projects/" and no prefix
+        // test can tell whose files are inside it.
+        return projectSlug is null
+            ? await _git.ListChangedFilesAsync(LocalPath, ct).ConfigureAwait(false)
+            : await _git.ListChangedFilesAsync(LocalPath, [ProjectPathspec(projectSlug)], ct)
+                .ConfigureAwait(false);
     }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<int>> CountPendingOutsideAsync(
+        string projectSlug,
+        CancellationToken ct = default)
+    {
+        if (!IsCloned())
+        {
+            return OperationResult<int>.Ok(0);
+        }
+
+        // Every file, not the plain listing: that reports a new folder as the
+        // folder alone, so another project's five new files counted as one,
+        // and a new "projects/" folder, which holds this project too, as none.
+        var all = await _git.ListChangedFilesAsync(LocalPath, ["."], ct).ConfigureAwait(false);
+
+        if (all.Failed)
+        {
+            return OperationResult<int>.Fail(all.Error!);
+        }
+
+        var own = ProjectPathspec(projectSlug) + "/";
+
+        return OperationResult<int>.Ok(
+            all.Value!.Count(path => !path.StartsWith(own, StringComparison.Ordinal)));
+    }
+
+    /// <inheritdoc />
+    public Task<OperationResult<bool>> SaveAsync(
+        string projectName,
+        string agentName,
+        bool push,
+        CancellationToken ct = default) =>
+        SaveAsync(projectName, agentName, push, null, ct);
 
     /// <inheritdoc />
     public async Task<OperationResult<bool>> SaveAsync(
         string projectName,
         string agentName,
         bool push,
+        string? projectSlug,
         CancellationToken ct = default)
     {
         if (!IsCloned())
@@ -388,7 +436,7 @@ public sealed class WorkspaceManager : IWorkspaceManager
         // handoffs, instructions, notes, profiles and MCP definitions were not,
         // and neither was anything an agent wrote into the workspace directly.
         // Refused rather than redacted, which is the same answer memory gives.
-        var pending = await GetPendingChangesAsync(ct).ConfigureAwait(false);
+        var pending = await GetPendingChangesAsync(projectSlug, ct).ConfigureAwait(false);
 
         if (pending.Succeeded && pending.Value is { Count: > 0 } changed)
         {
@@ -413,7 +461,10 @@ public sealed class WorkspaceManager : IWorkspaceManager
             Machine: {_paths.Host.MachineName}
             """;
 
-        var commitResult = await _git.CommitAllAsync(LocalPath, message, ct).ConfigureAwait(false);
+        var commitResult = projectSlug is null
+            ? await _git.CommitAllAsync(LocalPath, message, ct).ConfigureAwait(false)
+            : await _git.CommitPathsAsync(LocalPath, message, [ProjectPathspec(projectSlug)], ct)
+                .ConfigureAwait(false);
 
         if (commitResult.Failed)
         {
@@ -455,6 +506,14 @@ public sealed class WorkspaceManager : IWorkspaceManager
     private string RegistryPath => Path.Combine(LocalPath, "registry", "projects.yaml");
 
     private string ProjectDirectory(string slug) => Path.Combine(LocalPath, "projects", slug);
+
+    /// <summary>
+    /// A project's workspace directory as Git names it: relative to the
+    /// repository, with forward slashes whatever the platform uses.
+    /// </summary>
+    private string ProjectPathspec(string slug) =>
+        Path.GetRelativePath(LocalPath, ProjectDirectory(slug))
+            .Replace(Path.DirectorySeparatorChar, '/');
 
     /// <summary>
     /// When the clone last received data, used to tell the user how stale the

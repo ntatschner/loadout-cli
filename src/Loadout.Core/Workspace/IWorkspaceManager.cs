@@ -126,6 +126,23 @@ public interface IWorkspaceManager
     Task<OperationResult<IReadOnlyList<string>>> GetPendingChangesAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Paths changed under one project's workspace directory, or everywhere
+    /// when <paramref name="projectSlug"/> is null.
+    /// </summary>
+    Task<OperationResult<IReadOnlyList<string>>> GetPendingChangesAsync(
+        string? projectSlug,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// How many pending files lie outside one project's workspace directory,
+    /// counted file by file, so an untracked folder holding several files
+    /// counts as several.
+    /// </summary>
+    Task<OperationResult<int>> CountPendingOutsideAsync(
+        string projectSlug,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Commits the workspace, and optionally pushes it (spec sections 45, 46).
     /// <para>
     /// The commit message follows the format in section 46 so a workspace
@@ -142,5 +159,27 @@ public interface IWorkspaceManager
         string projectName,
         string agentName,
         bool push,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Commits one project's workspace directory, and optionally pushes it.
+    /// <para>
+    /// Everything else pending is left uncommitted, because it may be another
+    /// session's unfinished work. The credential screen covers only what this
+    /// commits, so a secret in another project neither blocks this save nor
+    /// gets committed by it. A null <paramref name="projectSlug"/> saves
+    /// everything, as the other overload does.
+    /// </para>
+    /// </summary>
+    /// <param name="projectName">Project the session was about.</param>
+    /// <param name="agentName">Agent that ran.</param>
+    /// <param name="push">Whether to push after committing.</param>
+    /// <param name="projectSlug">The project whose directory to commit, or null for everything.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<bool>> SaveAsync(
+        string projectName,
+        string agentName,
+        bool push,
+        string? projectSlug,
         CancellationToken ct = default);
 }

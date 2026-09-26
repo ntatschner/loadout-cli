@@ -44,6 +44,15 @@ public sealed class WorkspaceSavePrompt
             return;
         }
 
+        // A session saves its own project and nothing else: the rest may be
+        // another session's unfinished work. Said once, so the files left
+        // behind are not a surprise later.
+        if (outcome.ProjectSlug is not null && outcome.OtherPendingWorkspaceChanges > 0)
+        {
+            _console.MarkupLine(
+                $"[dim]{Markup.Escape(AgentLauncher.OtherPendingNote(outcome.OtherPendingWorkspaceChanges))}[/]");
+        }
+
         if (!settings.AllowsPrompting)
         {
             // Nobody can answer, so the changes are left exactly as they are and
@@ -52,7 +61,7 @@ public sealed class WorkspaceSavePrompt
             _console.MarkupLine(
                 $"[yellow]{pending.Count} workspace file(s) changed and were left uncommitted.[/]");
 
-            _console.MarkupLine("[dim]Save them with:[/] loadout workspace save");
+            _console.MarkupLine($"[dim]Save them with:[/] {Markup.Escape(SaveCommand(outcome.ProjectSlug))}");
 
             return;
         }
@@ -101,7 +110,7 @@ public sealed class WorkspaceSavePrompt
             // loss applies here too: the launcher has no business deleting work
             // somebody just did, so the changes stay on disk.
             _console.MarkupLine(
-                "[dim]Left uncommitted. Save later with:[/] loadout workspace save");
+                $"[dim]Left uncommitted. Save later with:[/] {Markup.Escape(SaveCommand(outcome.ProjectSlug))}");
 
             return;
         }
@@ -110,6 +119,7 @@ public sealed class WorkspaceSavePrompt
             outcome.ProjectName ?? "workspace",
             outcome.AgentName ?? "agent",
             push: choice == SaveAndSync,
+            outcome.ProjectSlug,
             ct).ConfigureAwait(false);
 
         if (result.Failed)
@@ -122,4 +132,14 @@ public sealed class WorkspaceSavePrompt
             ? "[green]Saved and pushed.[/]"
             : "[green]Saved locally.[/]");
     }
+
+    /// <summary>
+    /// The command that saves what this prompt was about. Unscoped, "workspace
+    /// save" commits and pushes every project, which would take another
+    /// session's unfinished work along with this one's.
+    /// </summary>
+    private static string SaveCommand(string? projectSlug) =>
+        projectSlug is null
+            ? "loadout workspace save"
+            : $"loadout workspace save --project {projectSlug}";
 }

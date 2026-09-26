@@ -48,6 +48,9 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     private string _repository = null!;
     private LaunchLedger _ledger = null!;
     private SessionRegistry _running = null!;
+    private ConfigurationService _configuration = null!;
+    private LauncherConfig _config = null!;
+    private IWorkspaceManager _workspace = null!;
 
     public LaunchPipelineTests() =>
         _root = Path.Combine(Path.GetTempPath(), "loadout-launch-" + Guid.NewGuid().ToString("N"));
@@ -122,6 +125,10 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         };
 
         await configuration.SaveConfigAsync(config);
+
+        _configuration = configuration;
+        _config = config;
+        _workspace = workspace;
 
         var agents = new AgentRegistry(resolver, _processes, config);
         _ledger = new LaunchLedger(_paths, permissions, TimeProvider.System);
@@ -383,6 +390,158 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
 
         result.Failed.Should().BeTrue();
         result.ExitCode.Should().Be(Models.ExitCode.AgentUnavailable);
+    }
+
+    [Fact]
+    public async Task A_session_saves_its_own_project_and_leaves_another_projects_work_alone()
+    {
+        // The workspace is shared by every session on the machine. A session
+        // for starstats that committed, and under "always" pushed, whatever
+        // another session had half-written in another project is the defect.
+        var local = _workspace.LocalPath;
+
+        await RunGitAsync(local, "init", "--initial-branch", "main");
+        await RunGitAsync(local, "config", "user.email", "tests@example.invalid");
+        await RunGitAsync(local, "config", "user.name", "Agent Workspace Tests");
+        await RunGitAsync(local, "add", "--all");
+        await RunGitAsync(local, "commit", "--message", "initial");
+
+        await File.WriteAllTextAsync(
+            Path.Combine(local, "projects", ProjectSlug, "context", "learned.md"), "Mine.");
+
+        Directory.CreateDirectory(Path.Combine(local, "projects", "other"));
+        await File.WriteAllTextAsync(
+            Path.Combine(local, "projects", "other", "unfinished.md"), "Another session's.");
+
+        _config.Sync.Exit = "always";
+        await _configuration.SaveConfigAsync(_config);
+
+        var result = await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        var status = await GitOutputAsync(local, "status", "--porcelain");
+
+        status.Should().NotContain($"projects/{ProjectSlug}/", "the session's own project was saved");
+        status.Should().Contain("projects/other/", "another project's work is not this session's to commit");
+
+        result.Value!.Warnings.Should().Contain(w => w.Contains("loadout workspace save"),
+            "what was left behind is said once, with the way to save it");
+    }
+
+    [Fact]
+    public async Task A_session_asks_only_about_its_own_projects_files()
+    {
+        var local = _workspace.LocalPath;
+
+        await RunGitAsync(local, "init", "--initial-branch", "main");
+        await RunGitAsync(local, "config", "user.email", "tests@example.invalid");
+        await RunGitAsync(local, "config", "user.name", "Agent Workspace Tests");
+        await RunGitAsync(local, "add", "--all");
+        await RunGitAsync(local, "commit", "--message", "initial");
+
+        await File.WriteAllTextAsync(
+            Path.Combine(local, "projects", ProjectSlug, "context", "learned.md"), "Mine.");
+
+        Directory.CreateDirectory(Path.Combine(local, "projects", "other"));
+        await File.WriteAllTextAsync(
+            Path.Combine(local, "projects", "other", "unfinished.md"), "Another session's.");
+
+        var result = await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        // The prompt must not ask about files its save would leave alone.
+        result.Value!.PendingWorkspaceChanges.Should().ContainSingle()
+            .Which.Should().StartWith($"projects/{ProjectSlug}/");
+        result.Value.ProjectSlug.Should().Be(ProjectSlug);
+        result.Value.OtherPendingWorkspaceChanges.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Another_projects_new_folder_counts_every_file_in_it()
+    {
+        var local = _workspace.LocalPath;
+
+        await InitialiseWorkspaceRepositoryAsync(local, "--all");
+
+        await File.WriteAllTextAsync(
+            Path.Combine(local, "projects", ProjectSlug, "context", "learned.md"), "Mine.");
+
+        // Untracked, so the plain listing names the folder once.
+        WriteOtherProjectFiles(local, 3);
+
+        var result = await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.OtherPendingWorkspaceChanges.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task A_new_workspace_counts_other_projects_files_inside_an_untracked_projects_folder()
+    {
+        var local = _workspace.LocalPath;
+
+        // Nothing under projects/ is committed, so the plain listing reports
+        // "projects/" alone, which holds this project too.
+        await InitialiseWorkspaceRepositoryAsync(local, "--all", "--", ".", ":!projects");
+
+        WriteOtherProjectFiles(local, 2);
+
+        var result = await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.OtherPendingWorkspaceChanges.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Always_says_what_was_left_elsewhere_even_when_this_project_changed_nothing()
+    {
+        var local = _workspace.LocalPath;
+
+        await InitialiseWorkspaceRepositoryAsync(local, "--all");
+
+        WriteOtherProjectFiles(local, 2);
+
+        _config.Sync.Exit = "always";
+        await _configuration.SaveConfigAsync(_config);
+
+        var result = await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.Warnings.Should().Contain(AgentLauncher.OtherPendingNote(2));
+    }
+
+    private async Task InitialiseWorkspaceRepositoryAsync(string local, params string[] addArguments)
+    {
+        await RunGitAsync(local, "init", "--initial-branch", "main");
+        await RunGitAsync(local, "config", "user.email", "tests@example.invalid");
+        await RunGitAsync(local, "config", "user.name", "Agent Workspace Tests");
+        await RunGitAsync(local, ["add", .. addArguments]);
+        await RunGitAsync(local, "commit", "--message", "initial");
+    }
+
+    private static void WriteOtherProjectFiles(string local, int count)
+    {
+        var other = Path.Combine(local, "projects", "other");
+
+        Directory.CreateDirectory(other);
+
+        for (var i = 0; i < count; i++)
+        {
+            File.WriteAllText(Path.Combine(other, $"unfinished-{i}.md"), "Another session's.");
+        }
+    }
+
+    private async Task<string> GitOutputAsync(string workingDirectory, params string[] arguments)
+    {
+        var result = await _processes.RunAsync(
+            new ProcessRequest("git", arguments, workingDirectory),
+            TimeSpan.FromSeconds(60));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        return result.Value!.StandardOutput;
     }
 
     /// <summary>Reads the source count out of the preflight report.</summary>

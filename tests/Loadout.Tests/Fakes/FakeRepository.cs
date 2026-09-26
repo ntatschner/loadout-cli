@@ -156,10 +156,16 @@ public sealed class FakeGit : IGitManager
     public Task<OperationResult<bool>> CommitAllAsync(string repositoryPath, string message, CancellationToken ct = default) =>
         throw new NotSupportedException("the nodes commit their own work");
 
+    public Task<OperationResult<bool>> CommitPathsAsync(string repositoryPath, string message, IReadOnlyList<string> paths, CancellationToken ct = default) =>
+        throw new NotSupportedException("the nodes commit their own work");
+
     public Task<OperationResult> CreateBranchAsync(string repositoryPath, string branchName, CancellationToken ct = default) =>
         throw new NotSupportedException("a worktree brings its own branch");
 
     public Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(string repositoryPath, CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<IReadOnlyList<string>>.Ok([]));
+
+    public Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(string repositoryPath, IReadOnlyList<string> paths, CancellationToken ct = default) =>
         Task.FromResult(OperationResult<IReadOnlyList<string>>.Ok([]));
 
     /// <summary>What each commit touched here, when a test has said.</summary>

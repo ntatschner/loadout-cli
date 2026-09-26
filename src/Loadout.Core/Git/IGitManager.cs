@@ -127,6 +127,25 @@ public interface IGitManager
         CancellationToken ct = default);
 
     /// <summary>
+    /// Stages and commits only what changed under <paramref name="paths"/>.
+    /// Returns false when nothing under them changed.
+    /// <para>
+    /// Anything outside the paths is left exactly as it was, including a file
+    /// somebody had already staged: another session's work in the same
+    /// repository is not this commit's to take.
+    /// </para>
+    /// </summary>
+    /// <param name="repositoryPath">The repository.</param>
+    /// <param name="message">The commit message.</param>
+    /// <param name="paths">Pathspecs relative to the repository root, with forward slashes.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<bool>> CommitPathsAsync(
+        string repositoryPath,
+        string message,
+        IReadOnlyList<string> paths,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Creates a branch at the current HEAD without switching to it.
     /// <para>
     /// Used to preserve local work before a divergence is resolved
@@ -137,6 +156,15 @@ public interface IGitManager
     Task<OperationResult> CreateBranchAsync(
         string repositoryPath,
         string branchName,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Paths with uncommitted changes under <paramref name="paths"/>, one per
+    /// file, including every untracked file inside an untracked directory.
+    /// </summary>
+    Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(
+        string repositoryPath,
+        IReadOnlyList<string> paths,
         CancellationToken ct = default);
 
     /// <summary>
