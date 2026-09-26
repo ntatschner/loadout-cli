@@ -198,8 +198,10 @@ public sealed class ProjectAddCommand : AsyncCommand<ProjectAddCommand.Settings>
                 output.WriteLine(
                     "  [yellow]There is no Git repository here yet.[/] Recorded as a task, "
                     + "so the next session is told to set one up before other work.");
+                // The list takes the project as an option. Given as a word, it
+                // was read as a command name and refused.
                 output.WriteLine(
-                    $"  [dim]loadout task list {Markup.Escape(project.Entry.Slug)}[/]");
+                    $"  [dim]loadout task list --project {Markup.Escape(project.Entry.Slug)}[/]");
             }
 
             foreach (var choice in applied)
