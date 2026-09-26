@@ -150,7 +150,7 @@ internal static partial class DashboardActions
         var (command, arguments) = action.Verb switch
         {
             "gates" or "gate" => ("team gate", Gate(action)),
-            "message" => ("team message", new List<string> { action.Run, "--message", action.Message ?? string.Empty }),
+            "message" => ("team message", new List<string> { action.Run, Joined("--message", action.Message) }),
             "stop" => ("team halt", [action.Run]),
             "budget" => ("team budget", [action.Run, "--usd", action.Budget ?? string.Empty]),
 
@@ -175,7 +175,7 @@ internal static partial class DashboardActions
             // An empty name clears it, which is how the page offers "put it
             // back": there is one box, and emptying a box is what people do.
             "name" => ("team name", action.Room is { Length: > 0 } room
-                ? [action.Run, "--room", room]
+                ? [action.Run, Joined("--room", room)]
                 : [action.Run, "--clear"]),
 
             "pr" => ("team pr", action.Node is { Length: > 0 } whose
@@ -185,7 +185,7 @@ internal static partial class DashboardActions
             "say" => ("team say", [
                 action.Run,
                 "--node", action.Node ?? string.Empty,
-                "--message", action.Message ?? string.Empty,
+                Joined("--message", action.Message),
             ]),
             _ => (string.Empty, []),
         };
@@ -510,6 +510,20 @@ internal static partial class DashboardActions
         return arguments;
     }
 
+    /// <summary>
+    /// An option and what somebody typed for it, as one argument:
+    /// <c>--message=- look again</c>.
+    /// </summary>
+    /// <remarks>
+    /// The parser refuses a value that starts with a dash when it follows its
+    /// option as an argument of its own - "Option does not have a name" - and
+    /// the page reported that as a command that ended with exit code 1. A
+    /// message, a reason or a room is prose from a box, and a pasted bullet
+    /// starts with a dash. Joined to the option, the value is never looked at
+    /// as one.
+    /// </remarks>
+    internal static string Joined(string option, string? value) => $"{option}={value ?? string.Empty}";
+
     /// <summary>A line with any list marker it was typed with taken off.</summary>
     internal static string Unlisted(string? line) =>
         ListMarker().Replace(line ?? string.Empty, string.Empty).Trim();
@@ -803,11 +817,15 @@ internal static partial class DashboardActions
         // in order. An empty one is still passed: the command says which is
         // missing far better than a line that silently shifts the next
         // argument into its place.
+        // The goal with any list marker taken off, as the start form does: it
+        // is positional, and a positional value that starts with a dash is
+        // refused before the command sees it. A bullet pasted from a list of
+        // goals is how that happens.
         var arguments = new List<string>
         {
             asking.Name,
             asking.Team ?? string.Empty,
-            asking.Goal ?? string.Empty,
+            Unlisted(asking.Goal),
         };
 
         foreach (var (option, value) in new[]
@@ -1030,8 +1048,7 @@ internal static partial class DashboardActions
 
         if (action.Message is { Length: > 0 } message)
         {
-            arguments.Add("--message");
-            arguments.Add(message);
+            arguments.Add(Joined("--message", message));
         }
 
         return arguments;
@@ -1055,14 +1072,12 @@ internal static partial class DashboardActions
 
         if (action.Instead is { Length: > 0 } instead)
         {
-            arguments.Add("--instead");
-            arguments.Add(instead);
+            arguments.Add(Joined("--instead", instead));
         }
 
         if (action.Reason is { Length: > 0 } reason)
         {
-            arguments.Add("--reason");
-            arguments.Add(reason);
+            arguments.Add(Joined("--reason", reason));
         }
 
         return arguments;
