@@ -426,7 +426,20 @@ internal sealed partial class MemoryService : IMemoryService
         var indexPath = IndexFor(workspaceRoot, slug);
         var hasIndex = File.Exists(indexPath);
 
-        AuditIndex(findings, topics, indexPath, hasIndex);
+        // Each scope's topics against that scope's own MEMORY.md, which is
+        // where they are written and where a session finds them. All of them
+        // were checked against the project's, so every user and machine topic
+        // was reported as indexed nowhere, on every audit, and the real
+        // findings were lost among them.
+        foreach (var scoped in topics.GroupBy(topic => topic.Scope))
+        {
+            if (IndexFor(workspaceRoot, slug, scoped.Key) is not { } index)
+            {
+                continue;
+            }
+
+            AuditIndex(findings, [.. scoped], index, File.Exists(index));
+        }
         AuditTopics(findings, topics, staleMonths);
         AuditDuplicates(findings, topics);
         AuditLinks(findings, topics);

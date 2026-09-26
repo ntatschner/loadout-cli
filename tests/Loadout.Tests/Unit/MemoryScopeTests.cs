@@ -178,6 +178,38 @@ public sealed class MemoryScopeTests : IDisposable
         Directory.Exists(Path.Combine(_workspace, "memory")).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Each_scopes_topics_are_checked_against_that_scopes_own_index()
+    {
+        await WriteAsync("build-quirks", "how this project builds", MemoryScope.Project);
+        await WriteAsync("review-habits", "how this person wants reviews done", MemoryScope.User);
+        await WriteAsync("restart-manager", "why installers fail here", MemoryScope.Machine);
+
+        var audit = await _memory.AuditAsync(_workspace, Slug);
+
+        audit.Succeeded.Should().BeTrue(audit.Error);
+
+        // Each is in its own scope's MEMORY.md, which is where it was written
+        // and where a session finds it. Checked against the project's alone,
+        // the other two were reported as indexed nowhere, on every audit.
+        audit.Value!.Findings.Where(f => f.Kind == "index-missing-entry")
+            .Should().BeEmpty("every topic is in the index of the scope it belongs to");
+    }
+
+    [Fact]
+    public async Task A_topic_missing_from_its_own_scopes_index_is_still_reported()
+    {
+        await WriteAsync("review-habits", "how this person wants reviews done", MemoryScope.User);
+
+        // Taken out of the user index by hand, as a stale index would be.
+        var index = Path.Combine(_workspace, "memory", "MEMORY.md");
+        await File.WriteAllTextAsync(index, "# What is true of this person's work\n");
+
+        var audit = await _memory.AuditAsync(_workspace, Slug);
+
+        audit.Value!.Findings.Should().ContainSingle(f => f.Kind == "index-missing-entry" && f.Topic == "review-habits");
+    }
+
     private Task<Loadout.Models.Results.OperationResult<MemoryTopic>> WriteAsync(
         string name,
         string description,
