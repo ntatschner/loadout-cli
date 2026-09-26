@@ -209,7 +209,103 @@ public sealed partial class ToolNominator
         var pattern = @"(?:^|[|;&({])[ \t]*(?:[^\s|;&(){}'""#]*[/\\])?" + string.Join(@"[ \t]+", words) + @"(?![\w.-])";
 
         return Regex.IsMatch(
-            script, pattern, RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+            Code(script), pattern, RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+    }
+
+    /// <summary>
+    /// A script with what is not code blanked out: comments, and what is
+    /// inside quotes, bar a command substitution in double quotes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Where a command starts is after an opening bracket or a separator, and
+    /// inside a comment or a quoted sentence those are prose. "# Clear the
+    /// cache (make sure it exists)" was counted as running make. Blanked with
+    /// spaces rather than removed, so lines keep their length and their breaks.
+    /// </para>
+    /// <para>
+    /// Rules shared by the shells the catalogue's scripts are written in: a
+    /// comment starts at a # at the start of a word and runs to the end of the
+    /// line; single quotes are literal; double quotes still run $( ... ), in
+    /// bash and in PowerShell alike, so what is inside one is kept. Backtick
+    /// substitution and here-strings are not read, and are no worse off than
+    /// before.
+    /// </para>
+    /// </remarks>
+    internal static string Code(string script)
+    {
+        var code = new System.Text.StringBuilder(script.Length);
+        var quote = '\0';
+        var depth = 0;
+
+        for (var i = 0; i < script.Length; i++)
+        {
+            var c = script[i];
+
+            if (c == '\n')
+            {
+                code.Append(c);
+                continue;
+            }
+
+            // Inside a substitution in double quotes: code, until its bracket closes.
+            if (depth > 0)
+            {
+                code.Append(c);
+                depth += c == '(' ? 1 : c == ')' ? -1 : 0;
+                continue;
+            }
+
+            if (quote == '\'')
+            {
+                quote = c == '\'' ? '\0' : quote;
+                code.Append(' ');
+                continue;
+            }
+
+            if (quote == '"')
+            {
+                if (c == '\\' && i + 1 < script.Length && script[i + 1] != '\n')
+                {
+                    code.Append("  ");
+                    i++;
+                }
+                else if (c == '$' && i + 1 < script.Length && script[i + 1] == '(')
+                {
+                    code.Append("$(");
+                    depth = 1;
+                    i++;
+                }
+                else
+                {
+                    quote = c == '"' ? '\0' : quote;
+                    code.Append(' ');
+                }
+
+                continue;
+            }
+
+            if (c is '\'' or '"')
+            {
+                quote = c;
+                code.Append(' ');
+                continue;
+            }
+
+            if (c == '#' && (i == 0 || char.IsWhiteSpace(script[i - 1])))
+            {
+                while (i + 1 < script.Length && script[i + 1] != '\n')
+                {
+                    i++;
+                }
+
+                continue;
+            }
+
+            code.Append(c);
+        }
+
+        return code.ToString();
     }
 
     /// <summary>A command with its arguments replaced, so two runs of it compare equal.</summary>
