@@ -437,7 +437,10 @@ internal sealed class ContextCompiler : IContextCompiler
             return;
         }
 
+        // Ideas are left out. One still being shaped is not work a session
+        // should pick up, and being told about it is how one would.
         var open = listed.Value!
+            .Where(t => t.Kind == TaskKind.Task)
             .Where(t => t.State is TaskState.Open or TaskState.Doing or TaskState.Blocked)
             .OrderBy(t => t.State)
             .ToList();

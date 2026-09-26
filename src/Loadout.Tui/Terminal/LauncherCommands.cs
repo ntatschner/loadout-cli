@@ -68,7 +68,42 @@ internal static class LauncherCommands
     /// <summary>Takes a project off the registry. Never touches its source.</summary>
     internal const string Remove = "project remove";
 
+    /// <summary>Keeps notes dropped in from elsewhere, and has an agent split them.</summary>
+    internal const string DumpAdd = "idea dump add";
+
+    /// <summary>Records the pieces of a dump as ideas and tasks.</summary>
+    internal const string DumpApply = "idea dump apply";
+
+    /// <summary>Every idea, and where it stands.</summary>
+    internal const string IdeaList = "idea list";
+
+    /// <summary>Every dump, and how much of it has been recorded.</summary>
+    internal const string DumpList = "idea dump list";
+
+    /// <summary>The steps of fleshing an idea out, each run from the ideas screen.</summary>
+    internal const string IdeaAdd = "idea add";
+
+    internal const string IdeaRefine = "idea refine";
+
+    internal const string IdeaAnswer = "idea answer";
+
+    internal const string IdeaChoose = "idea choose";
+
+    internal const string IdeaKeep = "idea keep";
+
+    internal const string IdeaDrop = "idea drop";
+
+    internal const string IdeaImprove = "idea improve";
+
+    internal const string IdeaAccept = "idea accept";
+
+    internal const string IdeaRemove = "idea remove";
+
     /// <summary>Every one of them, for the test that checks they are real.</summary>
     internal static IReadOnlyList<string> All =>
-        [Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches, ProjectContext, Remove];
+    [
+        Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches, ProjectContext, Remove,
+        DumpAdd, DumpApply, IdeaList, DumpList,
+        IdeaAdd, IdeaRefine, IdeaAnswer, IdeaChoose, IdeaKeep, IdeaDrop, IdeaImprove, IdeaAccept, IdeaRemove,
+    ];
 }

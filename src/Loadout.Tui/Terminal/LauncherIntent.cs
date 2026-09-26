@@ -78,6 +78,21 @@ internal enum LauncherAction
     /// which is fast and is still file access.
     /// </remarks>
     Teams,
+
+    /// <summary>
+    /// Paste notes kept elsewhere, have an agent split them, and record the
+    /// pieces wanted: a box, the command that keeps and splits, then a list.
+    /// </summary>
+    DumpNotes,
+
+    /// <summary>Record the pieces of a dump split earlier and not yet recorded.</summary>
+    RecordDump,
+
+    /// <summary>
+    /// Work through the ideas: answer, choose, keep, drop, improve, refine and
+    /// accept, each step run as its command and the screen opened again after.
+    /// </summary>
+    Ideas,
 }
 
 /// <summary>

@@ -45,7 +45,8 @@ public sealed class TeamsToolTests
             new Clock(Noon.AddMinutes(10)),
             new LoadoutToolScope(null),
             catalogue: null!,
-            proposals: null!);
+            proposals: null!,
+            ideas: null!);
 
     [Fact]
     public void A_run_that_wants_somebody_says_so_in_its_first_line()

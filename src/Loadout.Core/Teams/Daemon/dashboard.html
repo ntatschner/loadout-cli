@@ -1301,6 +1301,22 @@
   /* ==================================================================
      EMPTY + TOAST
      ================================================================== */
+  /* Ideas: one disclosure per idea, and room between the pieces of a plan. */
+  #ideas .idea { margin-block: var(--space-3); }
+  #ideas .idea > summary { cursor: pointer; font-weight: 600; }
+  #ideas .idea-ask { white-space: pre-wrap; }
+  #ideas fieldset.idea-question, #ideas fieldset.idea-layer, #ideas fieldset.idea-addition { border: var(--lk-border) solid var(--line); border-radius: var(--radius-md); margin-block: var(--space-3); padding: var(--space-3); }
+  #ideas .idea-piece { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); align-items: start; margin-block: var(--space-2); }
+  #ideas .idea-piece .idea-quote { grid-column: 2; white-space: pre-wrap; color: var(--ink-muted); }
+  #ideas .idea-verdict { font-weight: 600; }
+  #ideas details.idea-change { margin-block: var(--space-2); }
+  #ideas details.idea-change > summary { cursor: pointer; color: var(--ink-muted); }
+  /* One choice to a row, full width. The kit's grid of cards suits a word or
+     two; an agent's option is often a paragraph, and in a card 150 pixels wide
+     it became a column taller than the screen. */
+  #ideas .lk-choices { grid-template-columns: 1fr; }
+  #ideas .lk-choice { align-items: start; }
+  #ideas .lk-choice input { margin-top: 2px; }
   .lk-empty { display: grid; justify-items: center; gap: var(--space-3); text-align: center; padding: var(--space-12) var(--space-6); border: var(--lk-border) dashed var(--line-strong); border-radius: var(--radius-lg); }
   .lk-empty-art { display: grid; grid-template-columns: repeat(2, 20px); gap: 5px; }
   .lk-empty-art i { width: 20px; height: 20px; border-radius: 5px; border: 2px solid var(--brand-steel); }
@@ -2325,6 +2341,11 @@
         <button type="button" id="view-terminal" class="lk-tab" aria-pressed="false">Terminal</button>
         <button type="button" id="view-board" class="lk-tab" aria-pressed="false">Board</button>
 
+        <!-- Ideas are not a way of looking at the runs, so like Settings this
+             is a page of its own. The count is of ideas waiting on answers,
+             inside the name so it is read aloud with it: "Ideas 2". -->
+        <button type="button" id="view-ideas" class="lk-tab" aria-pressed="false">Ideas <span class="lk-count" id="ideas-count" hidden></span></button>
+
         <!--
           A destination rather than a dialog. It is a page of its own with
           headings and groups, which is a thing somebody can link to, read in
@@ -2337,6 +2358,7 @@
 
 
     <section id="settings" hidden aria-labelledby="settings-heading"></section>
+    <section id="ideas" hidden aria-labelledby="ideas-heading"></section>
 
     <details class="adding lk-disclosure" id="adding" hidden>
       <summary>Which screens are on the board</summary>
@@ -4433,6 +4455,7 @@
 
     // The board is not here: it is its own thing, shown by showBoard, and it
     // takes the screens off the page rather than swapping one for another.
+    { button: "view-ideas", box: "ideas", draw: drawIdeasView },
     { button: "view-settings", box: "settings", draw: drawSettings }
   ];
 
@@ -4897,7 +4920,7 @@
     // the pane carries around its box - the heading, the form for starting a
     // team, the band of totals, a run somebody had open - is about runs, and
     // none of it belongs above a page of preferences.
-    onlySettings(views[which].box === "settings");
+    onlySettings(views[which].box === "settings" || views[which].box === "ideas" ? views[which].box : null);
 
     var heading = document.getElementById("runs");
 
@@ -4944,7 +4967,10 @@
     Everything the runs pane carries around its box, put away while the
     settings page is up.
   */
-  function onlySettings(only) {
+  // Given the page that is not about runs - settings or ideas - or null for a
+  // view of the runs.
+  function onlySettings(page) {
+    var only = !!page;
     var heading = document.getElementById("runs");
     var start = document.querySelector(".start");
     var totals = document.getElementById("totals");
@@ -4962,8 +4988,8 @@
     var skip = document.querySelector("a.skip");
 
     if (skip) {
-      skip.setAttribute("href", only ? "#settings-heading" : "#runs");
-      skip.textContent = only ? "Skip to the settings" : "Skip to the runs";
+      skip.setAttribute("href", only ? "#" + page + "-heading" : "#runs");
+      skip.textContent = only ? "Skip to the " + page : "Skip to the runs";
     }
 
     if (!detail) { return; }
@@ -6674,6 +6700,664 @@
       // rejection. Saying nothing is known is worse than saying nothing.
       said.textContent = "Whether a passphrase is set could not be read.";
     });
+  }
+
+  /*
+    Ideas.
+
+    A destination of its own, like Settings: ideas are not a way of looking at
+    the runs, so the heading, the start form and the totals that sit around
+    every run view are put away while it is showing.
+
+    Every button types the command somebody would have typed - 'idea answer',
+    'idea refine' - through the server, and the page decides nothing. A round
+    with an agent takes a minute or two, so the server starts it and answers
+    at once; the page reads again every few seconds while anything is going,
+    and not otherwise.
+
+    It never redraws under somebody. A read that arrives while a box on this
+    page has something typed in it waits for the next one, because drawing
+    the page again would throw away what they were writing.
+  */
+  var ideasSeen = null;
+  var ideasDrawn = null;
+  var ideasOpen = {};
+  var ideasTimer = null;
+  var ideasActs = false;
+  var ideasForgetting = null;
+
+  function ideate(body) {
+    return fetch("/api/ideas?token=" + encodeURIComponent(token), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.text().then(function (text) {
+        var said = null;
+
+        try { said = JSON.parse(text).error; } catch (e) { said = null; }
+
+        if (!r.ok) { throw new Error(said || ("HTTP " + r.status)); }
+      });
+    });
+  }
+
+  // Asks, says what happened, and reads again either way: after a refusal the
+  // page may be showing something that has since changed, which is often why
+  // it was refused.
+  function ideaDo(body, done) {
+    return ideate(body).then(function () {
+      say(done);
+      announce(done);
+    }, function (failed) {
+      say(failed.message);
+      announce(failed.message);
+    }).then(function () { readIdeas(true); });
+  }
+
+  // Called when the page is chosen and again on every poll of the runs, so it
+  // draws only when the ideas have changed. Drawing on every poll threw away
+  // a picked answer, an unticked piece and the place somebody had scrolled to,
+  // every few seconds, while they were in the middle of choosing.
+  //
+  // And read only now and then from there: the poll comes every few seconds
+  // and the ideas change when somebody changes them, which is here - where
+  // every button reads again after it - or at a terminal, which a read every
+  // quarter of a minute catches soon enough.
+  var ideasReadAt = 0;
+
+  function drawIdeasView() {
+    if (ideasDrawn === null || Date.now() - ideasReadAt > 15000
+      || (ideasSeen && JSON.stringify(ideasSeen) !== ideasDrawn)) {
+      readIdeas(false);
+    }
+  }
+
+  function typingInIdeas() {
+    var at = document.activeElement;
+    var page = document.getElementById("ideas");
+
+    return !!(at && page && page.contains(at)
+      && (at.tagName === "TEXTAREA" || (at.tagName === "INPUT" && at.type === "text"))
+      && at.value);
+  }
+
+  function readIdeas(force) {
+    ideasReadAt = Date.now();
+
+    return Promise.all([api("/api/ideas"), api("/api/choices")]).then(function (both) {
+      var answer = both[0];
+
+      ideasActs = !!(both[1] && both[1].ideas);
+
+      if (!answer) { return; }
+
+      var waiting = (answer.ideas || []).filter(function (one) {
+        return one.detail.stage === "answering";
+      }).length;
+
+      var count = document.getElementById("ideas-count");
+
+      if (count) {
+        count.textContent = String(waiting);
+        count.hidden = waiting === 0;
+      }
+
+      // Said when a round ends, whether or not the page is showing: the
+      // person who started it has usually gone to do something else, and the
+      // only other sign is the list quietly changing.
+      if (ideasSeen) {
+        (ideasSeen.busy || []).forEach(function (id) {
+          if ((answer.busy || []).indexOf(id) < 0) {
+            var one = (answer.ideas || []).filter(function (i) { return i.detail.id === id; })[0];
+            var done = (one ? one.title : id) + ": the round is done, "
+              + (one ? stageWords(one.detail, false) : "and the idea has moved on") + ".";
+
+            say(done);
+            announce(done);
+          }
+        });
+
+        if (ideasSeen.dumping && !answer.dumping) {
+          say("The notes are split. The pieces are on the ideas page.");
+          announce("The notes are split. The pieces are on the ideas page.");
+        }
+      }
+
+      // Against what was last drawn, which is not always what was last read:
+      // a read from another view is remembered for the announcements above
+      // and drawn only once somebody opens the page.
+      var changed = JSON.stringify(answer) !== ideasDrawn;
+
+      if ((changed || force) && !typingInIdeas() && viewIsIdeas()) {
+        ideasDrawn = JSON.stringify(answer);
+        drawIdeas(answer);
+      }
+
+      // What was read is remembered whether or not it was drawn, so the next
+      // read compares against it and a round is said to end once.
+      ideasSeen = answer;
+
+      // Read again while something is going, and only then: a page that
+      // asks every few seconds for a list nobody is changing is traffic for
+      // nothing, and for a screen reader a list that keeps arriving.
+      if (ideasTimer) { clearTimeout(ideasTimer); ideasTimer = null; }
+
+      // From any view, so a round that ends while somebody is watching the
+      // office is still said. Only the drawing waits for the ideas page.
+      if ((answer.busy || []).length || answer.dumping) {
+        ideasTimer = setTimeout(function () { readIdeas(false); }, 4000);
+      }
+    });
+  }
+
+  function viewIsIdeas() {
+    return view >= 0 && views[view].box === "ideas";
+  }
+
+  function ideaEl(tag, className, text) {
+    var made = document.createElement(tag);
+
+    if (className) { made.className = className; }
+    if (text !== undefined && text !== null) { made.textContent = text; }
+
+    return made;
+  }
+
+  function ideaButton(text, quiet, onClick) {
+    var b = ideaEl("button", "lk-btn lk-btn--sm" + (quiet ? " lk-btn--quiet" : ""), text);
+    b.type = "button";
+    b.addEventListener("click", onClick);
+
+    return b;
+  }
+
+  var ideaFields = 0;
+
+  // A labelled box, joined to its label by id, because a box a screen reader
+  // cannot name is a box nobody using one can fill in.
+  function ideaField(into, label, multi, value) {
+    var id = "idea-field-" + (++ideaFields);
+    var field = ideaEl("div", "lk-field");
+    var name = ideaEl("label", "lk-label", label);
+    name.setAttribute("for", id);
+
+    var box = ideaEl(multi ? "textarea" : "input", multi ? "lk-textarea" : "lk-input");
+    box.id = id;
+
+    if (!multi) { box.type = "text"; }
+    if (value) { box.value = value; }
+    if (multi) { box.rows = 4; }
+
+    field.appendChild(name);
+    field.appendChild(box);
+    into.appendChild(field);
+
+    return box;
+  }
+
+  // Where to put something: a project, or the workspace-wide list.
+  function ideaList(into, label, projects, first) {
+    var id = "idea-field-" + (++ideaFields);
+    var field = ideaEl("div", "lk-field");
+    var name = ideaEl("label", "lk-label", label);
+    name.setAttribute("for", id);
+
+    var select = ideaEl("select", "lk-select");
+    select.id = id;
+
+    (first || []).concat([{ value: "", text: "The workspace-wide list" }])
+      .concat(projects.map(function (slug) { return { value: slug, text: slug }; }))
+      .forEach(function (one) {
+        var option = ideaEl("option", null, one.text);
+        option.value = one.value;
+        select.appendChild(option);
+      });
+
+    field.appendChild(name);
+    field.appendChild(select);
+    into.appendChild(field);
+
+    return select;
+  }
+
+  function stageWords(detail, busy) {
+    if (busy) { return "a round is going"; }
+
+    var waiting = (detail.questions || []).filter(function (q) { return !q.answer; }).length;
+
+    return {
+      captured: "not refined yet",
+      answering: waiting + " to answer",
+      ready: "ready to refine",
+      proposed: "plan proposed",
+      accepted: "accepted"
+    }[detail.stage] || detail.stage;
+  }
+
+  function drawIdeas(answer) {
+    var page = document.getElementById("ideas");
+    page.textContent = "";
+    ideaFields = 0;
+
+    var head = ideaEl("h2", null, "Ideas");
+    head.id = "ideas-heading";
+    page.appendChild(head);
+
+    page.appendChild(ideaEl("p", "lk-help",
+      "Drop ideas in, have an agent ask its questions and propose a plan, and keep, drop or ask "
+      + "for changes to each piece until it is ready to become work. Each button runs the "
+      + "command you would otherwise type."));
+
+    var projects = answer.projects || [];
+
+    if (!ideasActs) {
+      var only = ideaEl("p", "lk-notice",
+        "This dashboard is watching only, so it shows the ideas and cannot change them. "
+        + "Start it without --watch-only, run the daemon, or use the command line.");
+      page.appendChild(only);
+    } else {
+      drawIdeaForms(page, projects, answer.dumping);
+    }
+
+    (answer.dumps || []).forEach(function (dump) { drawDump(page, dump, projects); });
+
+    var ideas = answer.ideas || [];
+
+    if (!ideas.length) {
+      page.appendChild(ideaEl("p", "lk-empty", "No ideas yet."));
+      return;
+    }
+
+    var list = group(page, "Every idea", null);
+
+    ideas.forEach(function (one) {
+      drawIdea(list, one, (answer.busy || []).indexOf(one.detail.id) >= 0, projects);
+    });
+  }
+
+  function drawIdeaForms(page, projects, dumping) {
+    var adding = group(page, "Drop an idea in",
+      "Kept as you write it. Nothing happens to it until you refine it.");
+    var text = ideaField(adding, "The idea", true);
+    var where = ideaList(adding, "Put it on", projects);
+
+    var row = ideaEl("div", "lk-btn-row");
+    row.appendChild(ideaButton("Drop it in", false, function () {
+      if (!text.value.trim()) { text.focus(); return; }
+
+      var said = text.value;
+      text.value = "";
+
+      ideaDo({ verb: "add", text: said, project: where.value || null }, "The idea is in.");
+    }));
+    adding.appendChild(row);
+
+    var notesBox = group(page, "Dump notes kept elsewhere",
+      "Paste notes from anywhere. They are kept word for word, and an agent splits them into "
+      + "separate ideas and tasks for you to pick from below. That takes a minute or so.");
+
+    if (dumping) {
+      notesBox.appendChild(ideaEl("p", "lk-notice", "Some notes are being split now."));
+    }
+
+    var notes = ideaField(notesBox, "The notes", true);
+    var on = ideaList(notesBox, "Keep them on", projects);
+
+    var dumpRow = ideaEl("div", "lk-btn-row");
+    dumpRow.appendChild(ideaButton("Split them", false, function () {
+      if (!notes.value.trim()) { notes.focus(); return; }
+
+      var said = notes.value;
+      notes.value = "";
+
+      ideaDo({ verb: "dump", text: said, project: on.value || null },
+        "The notes are kept and being split. The pieces appear here when it is done.");
+    }));
+    notesBox.appendChild(dumpRow);
+  }
+
+  function drawDump(page, dump, projects) {
+    var waiting = (dump.items || []).filter(function (item) { return !item.recorded; });
+
+    var box = group(page, "Notes from " + dump.source + ", " + (dump.project || "workspace-wide"),
+      dump.error ? "The split went wrong: " + dump.error
+        : !dump.items.length ? "Not split yet."
+        : "Untick what you do not want, then record the rest. An idea is kept to be fleshed "
+          + "out; a task is ready to work on.");
+
+    var ticks = [];
+
+    waiting.forEach(function (item) {
+      var label = ideaEl("label", "idea-piece");
+      var tick = ideaEl("input");
+      tick.type = "checkbox";
+      tick.checked = true;
+      tick.value = String(item.number);
+      ticks.push(tick);
+
+      label.appendChild(tick);
+      label.appendChild(ideaEl("span", null,
+        item.number + ". " + item.kind + ": " + item.title
+        + (item.project ? " (for " + item.project + ")" : "")));
+      label.appendChild(ideaEl("small", "idea-quote", "“" + item.excerpt + "”"));
+      box.appendChild(label);
+    });
+
+    if (!waiting.length || !ideasActs) { return; }
+
+    var put = ideaList(box, "Put them", projects,
+      [{ value: "\u0000agent", text: "Where the agent placed each, or on this list" }]);
+
+    var row = ideaEl("div", "lk-btn-row");
+    row.appendChild(ideaButton("Record the ticked pieces", false, function () {
+      var only = ticks.filter(function (t) { return t.checked; }).map(function (t) { return Number(t.value); });
+
+      if (!only.length) { say("Nothing is ticked, so there is nothing to record."); return; }
+
+      ideaDo({
+        verb: "apply",
+        id: dump.id,
+        project: dump.project,
+        only: only.length === ticks.length ? null : only,
+        to: put.value === "\u0000agent" ? null : (put.value || null)
+      }, only.length + " recorded.");
+    }));
+    box.appendChild(row);
+  }
+
+  function drawIdea(into, one, busy, projects) {
+    var detail = one.detail;
+    var where = { verb: null, id: detail.id, project: detail.project };
+
+    function send(extra, done) {
+      var body = { verb: null, id: where.id, project: where.project };
+
+      Object.keys(extra).forEach(function (key) { body[key] = extra[key]; });
+
+      return ideaDo(body, done);
+    }
+
+    var card = ideaEl("details", "idea lk-bay");
+    card.open = !!ideasOpen[detail.id];
+    card.addEventListener("toggle", function () { ideasOpen[detail.id] = card.open; });
+
+    var summary = ideaEl("summary", null,
+      one.title + " — " + stageWords(detail, busy) + " (" + (detail.project || "workspace-wide") + ")");
+    card.appendChild(summary);
+
+    card.appendChild(ideaEl("p", "idea-ask", detail.ask));
+
+    if (detail.error) {
+      card.appendChild(ideaEl("p", "lk-notice", "The last round went wrong: " + detail.error));
+    }
+
+    var acts = ideasActs && detail.stage !== "accepted";
+
+    if (acts && !busy && (detail.stage === "captured" || detail.stage === "ready")) {
+      var refine = ideaEl("div", "lk-btn-row");
+      refine.appendChild(ideaButton(
+        detail.stage === "captured" ? "Ask the agent's questions" : "Take it a round further",
+        false,
+        function () {
+          send({ verb: "refine" }, "A round has started. It usually takes a minute or two.");
+        }));
+      card.appendChild(refine);
+    }
+
+    if (busy) {
+      card.appendChild(ideaEl("p", "lk-help", "A round with the agent is going. This reads again by itself."));
+    }
+
+    drawQuestions(card, detail, acts && !busy, send);
+
+    if (detail.plan) {
+      drawPlan(card, detail, acts && !busy, send, projects);
+    }
+
+    if (detail.accepted) {
+      card.appendChild(ideaEl("p", null,
+        "Accepted onto " + detail.accepted.project + ". The plan is at " + detail.accepted.plan + "."));
+    }
+
+    if (ideasActs && !busy) {
+      var forget = ideaEl("div", "lk-btn-row");
+      var asking = ideasForgetting === detail.id;
+
+      // Two presses rather than a dialog: the second is the agreement, and
+      // it says so in the button's own words.
+      var b = ideaButton(asking ? "Press again to forget " + detail.id : "Forget this idea", true, function () {
+        if (ideasForgetting === detail.id) {
+          ideasForgetting = null;
+          send({ verb: "remove" }, detail.id + " is forgotten.");
+        } else {
+          ideasForgetting = detail.id;
+          readIdeas(true);
+        }
+      });
+
+      b.classList.add("lk-btn--danger");
+      forget.appendChild(b);
+      card.appendChild(forget);
+    }
+
+    into.appendChild(card);
+  }
+
+  function drawQuestions(card, detail, acts, send) {
+    var questions = detail.questions || [];
+
+    if (!questions.length) { return; }
+
+    card.appendChild(ideaEl("h3", null, "Questions"));
+
+    questions.forEach(function (q) {
+      var box = ideaEl("fieldset", "idea-question");
+      box.appendChild(ideaEl("legend", null, q.id + ". " + q.question));
+
+      if (q.why) { box.appendChild(ideaEl("p", "lk-help", "Why it matters: " + q.why)); }
+
+      if (q.answer) {
+        box.appendChild(ideaEl("p", null, "Your answer: " + q.answer));
+      }
+
+      if (!acts) { card.appendChild(box); return; }
+
+      // Once answered, the choices go behind a disclosure. Changing an answer
+      // is the rarer thing, and every question drawn in full made a page of
+      // nine answered questions longer than the plan it led to.
+      var into = box;
+
+      if (q.answer) {
+        into = ideaEl("details", "idea-change");
+        into.appendChild(ideaEl("summary", null, "Change the answer"));
+        box.appendChild(into);
+      }
+
+      // The agent's likely answers as choices, the recommended one first, and
+      // a box for one's own words, which wins when anything is typed in it.
+      var name = "idea-" + detail.id + "-" + q.id;
+      var offered = (q.options || []).slice();
+
+      if (q.recommendation) {
+        offered = [q.recommendation].concat(offered.filter(function (o) { return o !== q.recommendation; }));
+      }
+
+      var picked = q.recommendation || offered[0] || null;
+
+      if (offered.length) {
+        choose(into, name, offered.map(function (o) {
+          return { id: o, name: o, said: o === q.recommendation ? "Recommended" : null };
+        }), picked, function (id) { picked = id; });
+      }
+
+      var own = ideaField(into, "Or in your own words", false);
+
+      var row = ideaEl("div", "lk-btn-row");
+      row.appendChild(ideaButton(q.answer ? "Change the answer" : "Answer", false, function () {
+        var said = own.value.trim() || picked;
+
+        if (!said) { own.focus(); return; }
+
+        send({ verb: "answer", question: q.id, answer: said }, q.id + " answered.");
+      }));
+      into.appendChild(row);
+
+      card.appendChild(box);
+    });
+  }
+
+  function drawPlan(card, detail, acts, send, projects) {
+    var plan = detail.plan;
+
+    card.appendChild(ideaEl("h3", null, plan.title + " (revision " + plan.revision + ")"));
+    card.appendChild(ideaEl("p", null, plan.understanding));
+
+    function verdictWords(verdict, request) {
+      return {
+        keep: "You kept this.",
+        drop: "You dropped this.",
+        improve: "To be reworked in the next round: " + request
+      }[verdict] || "";
+    }
+
+    function judging(into, piece, verdict, request) {
+      if (verdict && verdict !== "undecided") {
+        into.appendChild(ideaEl("p", "idea-verdict", verdictWords(verdict, request)));
+      }
+
+      if (!acts) { return; }
+
+      var row = ideaEl("div", "lk-btn-row");
+      row.appendChild(ideaButton("Keep", true, function () {
+        send({ verb: "keep", pieces: [piece] }, piece + " kept.");
+      }));
+      row.appendChild(ideaButton("Drop", true, function () {
+        send({ verb: "drop", pieces: [piece] }, piece + " dropped.");
+      }));
+      into.appendChild(row);
+
+      // The box for a change folded away until asked for. Open on every piece
+      // at once, a plan of a dozen pieces was a dozen empty boxes between the
+      // things somebody came to read.
+      var asking = ideaEl("details", "idea-change");
+      asking.appendChild(ideaEl("summary", null, "Ask for a change to " + piece));
+
+      var better = ideaField(asking, "What should change about " + piece + "?", false);
+      var askRow = ideaEl("div", "lk-btn-row");
+
+      askRow.appendChild(ideaButton("Ask for it", false, function () {
+        if (!better.value.trim()) { better.focus(); return; }
+
+        send({ verb: "improve", piece: piece, request: better.value.trim() },
+          piece + " will be reworked in the next round.");
+      }));
+
+      asking.appendChild(askRow);
+      into.appendChild(asking);
+    }
+
+    (plan.layers || []).forEach(function (layer) {
+      var box = ideaEl("fieldset", "idea-layer");
+      box.appendChild(ideaEl("legend", null, layer.id + ". " + layer.name));
+
+      if (layer.purpose) { box.appendChild(ideaEl("p", "lk-help", layer.purpose)); }
+
+      var options = layer.options.map(function (o) {
+        return {
+          id: o.id,
+          name: o.title + (o.recommended ? " (recommended)" : ""),
+          said: [o.detail]
+            .concat((o.pros || []).map(function (p) { return "For: " + p; }))
+            .concat((o.cons || []).map(function (c) { return "Against: " + c; }))
+            .filter(Boolean).join(" \u00B7 ")
+        };
+      });
+
+      var radios = choose(box, "idea-" + detail.id + "-" + layer.id, options, layer.chosen, function (id) {
+        send({ verb: "choose", layer: layer.id, option: id }, id + " chosen for " + layer.id + ".");
+      });
+
+      if (!acts) {
+        radios.querySelectorAll("input").forEach(function (input) { input.disabled = true; });
+      }
+
+      judging(box, layer.id, layer.verdict, layer.request);
+      card.appendChild(box);
+    });
+
+    if ((plan.additions || []).length) {
+      card.appendChild(ideaEl("h4", null, "Suggested additions, in the plan only once kept"));
+
+      plan.additions.forEach(function (addition) {
+        var box = ideaEl("fieldset", "idea-addition");
+        box.appendChild(ideaEl("legend", null, addition.id + ". " + addition.title));
+
+        if (addition.why) { box.appendChild(ideaEl("p", "lk-help", addition.why)); }
+
+        judging(box, addition.id, addition.verdict, addition.request);
+        card.appendChild(box);
+      });
+    }
+
+    var placed = plan.placement || {};
+
+    card.appendChild(ideaEl("p", "lk-help",
+      placed.isNew ? "The agent thinks this is a project of its own" + (placed.name ? ", " + placed.name : "") + ". " + (placed.reason || "")
+        : placed.slug ? "The agent places it on " + placed.slug + ". " + (placed.reason || "")
+        : "The agent could not say which project it belongs to. " + (placed.reason || "")));
+
+    if (detail.request) {
+      card.appendChild(ideaEl("p", null, "Asked of the whole plan: " + detail.request));
+    }
+
+    if (!acts) { return; }
+
+    var whole = ideaEl("div", "idea-whole");
+    var asked = ideaField(whole, "Anything to change about the whole plan?", false);
+    var wholeRow = ideaEl("div", "lk-btn-row");
+    wholeRow.appendChild(ideaButton("Ask for it", true, function () {
+      if (!asked.value.trim()) { asked.focus(); return; }
+
+      send({ verb: "improve", piece: "plan", request: asked.value.trim() },
+        "The whole plan will be reworked in the next round.");
+    }));
+    whole.appendChild(wholeRow);
+    card.appendChild(whole);
+
+    // Only a plan that has taken in everything asked of it can be accepted;
+    // the command refuses the rest, and a button that is always refused is
+    // worse than none.
+    if (detail.stage !== "proposed") { return; }
+
+    var accepting = ideaEl("div", "idea-accept");
+    accepting.appendChild(ideaEl("h4", null, "Make it work"));
+
+    var suggested = detail.project || (placed.slug && projects.indexOf(placed.slug) >= 0 ? placed.slug : null);
+    var first = suggested ? [{ value: suggested, text: suggested + " (suggested)" }] : [];
+
+    var to = ideaList(accepting, "Onto", projects.filter(function (p) { return p !== suggested; }),
+      first.concat([{ value: "\u0000new", text: "A new project" }]));
+
+    // The workspace-wide list is not somewhere an accepted idea can go, so
+    // the choice the list helper adds for it is taken away again.
+    Array.prototype.slice.call(to.options).forEach(function (option) {
+      if (option.value === "") { option.remove(); }
+    });
+
+    var named = ideaField(accepting, "Name for a new project", false, placed.name || plan.title);
+
+    var row = ideaEl("div", "lk-btn-row");
+    row.appendChild(ideaButton("Accept the plan", false, function () {
+      var making = to.value === "\u0000new";
+
+      if (making && !named.value.trim()) { named.focus(); return; }
+
+      send(making ? { verb: "accept", newProject: named.value.trim() } : { verb: "accept", to: to.value },
+        "Accepted. It is a task now, with its plan written out.");
+    }));
+    accepting.appendChild(row);
+    card.appendChild(accepting);
   }
 
   function drawSettings() {

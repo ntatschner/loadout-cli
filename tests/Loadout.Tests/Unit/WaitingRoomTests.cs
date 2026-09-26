@@ -222,16 +222,20 @@ public sealed class WaitingRoomTests
         public Tasks(IEnumerable<TaskItem> items) => _items = [.. items];
 
         public Task<OperationResult<IReadOnlyList<TaskItem>>> ListAsync(
-            string projectSlug, CancellationToken ct = default) =>
+            string? projectSlug, CancellationToken ct = default) =>
             Task.FromResult(OperationResult<IReadOnlyList<TaskItem>>.Ok(_items));
 
         public Task<OperationResult<TaskItem>> DeclareAsync(
-            string projectSlug, string id, TaskState state, string declaredBy,
-            string? title = null, string? note = null, CancellationToken ct = default) =>
+            string? projectSlug, string id, TaskState state, string declaredBy,
+            string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null) =>
             throw new NotSupportedException("Nothing here writes.");
 
         public Task<OperationResult> RemoveAsync(
-            string projectSlug, string id, CancellationToken ct = default) =>
+            string? projectSlug, string id, CancellationToken ct = default) =>
+            throw new NotSupportedException("Nothing here writes.");
+
+        public Task<OperationResult<TaskItem>> MoveAsync(
+            string? fromSlug, string? toSlug, string id, CancellationToken ct = default) =>
             throw new NotSupportedException("Nothing here writes.");
     }
 

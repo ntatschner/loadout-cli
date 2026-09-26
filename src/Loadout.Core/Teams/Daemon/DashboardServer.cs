@@ -286,6 +286,27 @@ public sealed class DashboardServer : IDisposable
     public Func<ScheduleAction, CancellationToken, Task<OperationResult>>? Plan { get; set; }
 
     /// <summary>
+    /// Doing something to an idea or a dump, or null where nothing can.
+    /// </summary>
+    /// <remarks>
+    /// A round with an agent takes a minute or two, so whatever answers this
+    /// starts it and comes back; the page learns it has finished from
+    /// <see cref="IdeasFor"/>, which says which ideas have a round going.
+    /// </remarks>
+    public Func<IdeaAction, CancellationToken, Task<OperationResult>>? Ideate { get; set; }
+
+    /// <summary>
+    /// Every idea and dump, as the page draws them, or null where nothing can
+    /// read them.
+    /// </summary>
+    /// <remarks>
+    /// Shaped by whoever supplies it, as the command line's JSON is, so the
+    /// page reads what <c>idea show --json</c> writes rather than a second
+    /// description of the same record.
+    /// </remarks>
+    public Func<CancellationToken, Task<object>>? IdeasFor { get; set; }
+
+    /// <summary>
     /// Clearing out runs in a batch, or null where nothing can.
     /// </summary>
     /// <remarks>
@@ -1068,6 +1089,26 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // Doing something to an idea. Matched on the method as well as the
+        // path, because reading them is a GET on the same path and belongs
+        // below with the other reads. Above the guard that answers every other
+        // POST with 405, which a route placed beneath it never gets past.
+        if (path == "/api/ideas"
+            && string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await IdeateAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         // Writing a team, which belongs to no run either. Behind the token
         // like everything else that changes anything.
         if (path == "/api/teams")
@@ -1289,6 +1330,21 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // The ideas, as whoever supplies them shapes them. An empty answer
+        // where nothing can read them, which the page draws as "nothing yet"
+        // with the forms put away.
+        if (path == "/api/ideas")
+        {
+            var ideas = IdeasFor is null
+                ? new { ideas = Array.Empty<object>(), dumps = Array.Empty<object>(), busy = Array.Empty<string>() }
+                : await IdeasFor(ct).ConfigureAwait(false);
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(ideas, Json))
+                .ConfigureAwait(false);
+
+            return;
+        }
+
         if (path == "/api/roles")
         {
             await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
@@ -1332,6 +1388,7 @@ public sealed class DashboardServer : IDisposable
                     // set out to fix.
                     makes = Make is not null,
                     plans = Plan is not null,
+                    ideas = Ideate is not null,
                     teams = choosable.Teams,
                     projects = choosable.Projects,
                     here = choosable.Here,
@@ -2106,6 +2163,63 @@ public sealed class DashboardServer : IDisposable
                 done.Succeeded
                     ? new { planned = true, error = (string?)null }
                     : new { planned = false, error = done.Error },
+                Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Something to do to an idea or a dump, through whatever runs the command.
+    /// </summary>
+    /// <remarks>
+    /// Awaited, and answered with what came back. A round with an agent is
+    /// started and answered at once by whatever supplies <see cref="Ideate"/>;
+    /// everything else writes a small file and says whether it took.
+    /// </remarks>
+    private async Task IdeateAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        if (Ideate is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "This dashboard is watching only and cannot run commands. "
+                        + "Start it without --watch-only, run the daemon, or use the command line.",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        IdeaAction? asking;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+
+            asking = JsonSerializer.Deserialize<IdeaAction>(
+                await reader.ReadToEndAsync(ct).ConfigureAwait(false), Json);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            asking = null;
+        }
+
+        if (asking is null || string.IsNullOrWhiteSpace(asking.Verb))
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Say what to do to the idea." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var done = await Ideate(asking, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 202 : 400,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                done.Succeeded
+                    ? new { done = true, error = (string?)null }
+                    : new { done = false, error = done.Error },
                 Json)).ConfigureAwait(false);
     }
 

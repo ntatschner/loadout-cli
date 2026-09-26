@@ -74,7 +74,7 @@ public sealed class AccessibilityContextTests : IDisposable
     private sealed class OneTask : Loadout.Core.Tasks.ITaskService
     {
         public Task<OperationResult<IReadOnlyList<Loadout.Models.Tasks.TaskItem>>> ListAsync(
-            string projectSlug, CancellationToken ct = default) =>
+            string? projectSlug, CancellationToken ct = default) =>
             Task.FromResult(OperationResult<IReadOnlyList<Loadout.Models.Tasks.TaskItem>>.Ok(
                 [new Loadout.Models.Tasks.TaskItem
                 {
@@ -86,17 +86,22 @@ public sealed class AccessibilityContextTests : IDisposable
                 }]));
 
         public Task<OperationResult<Loadout.Models.Tasks.TaskItem>> DeclareAsync(
-            string projectSlug,
+            string? projectSlug,
             string id,
             Loadout.Models.Tasks.TaskState state,
             string declaredBy,
             string? title = null,
             string? note = null,
-            CancellationToken ct = default) =>
+            CancellationToken ct = default,
+            Loadout.Models.Tasks.TaskKind? kind = null) =>
             throw new NotSupportedException("compiling a context declares nothing");
 
-        public Task<OperationResult> RemoveAsync(string projectSlug, string id, CancellationToken ct = default) =>
+        public Task<OperationResult> RemoveAsync(string? projectSlug, string id, CancellationToken ct = default) =>
             throw new NotSupportedException("compiling a context removes nothing");
+
+        public Task<OperationResult<Loadout.Models.Tasks.TaskItem>> MoveAsync(
+            string? fromSlug, string? toSlug, string id, CancellationToken ct = default) =>
+            throw new NotSupportedException("compiling a context moves nothing");
     }
 
     [Fact]

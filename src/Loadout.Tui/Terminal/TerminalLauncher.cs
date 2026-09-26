@@ -78,6 +78,8 @@ public sealed class TerminalLauncher : ILauncherTui
     /// </summary>
     private Task<string?>? _updateNotice;
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
+    private readonly Loadout.Core.Ideas.IIdeaDumps _dumps;
+    private readonly Loadout.Core.Ideas.IIdeaService _ideas;
 
     /// <summary>Agents detected on this machine, once the first screen has asked.</summary>
     private IReadOnlyList<string> _installed = [];
@@ -110,8 +112,12 @@ public sealed class TerminalLauncher : ILauncherTui
         IGitManager git,
         Loadout.Core.Tasks.ITaskService tasks,
         IUpdateNotice updates,
-        ReadingProfile reading)
+        ReadingProfile reading,
+        Loadout.Core.Ideas.IIdeaDumps dumps,
+        Loadout.Core.Ideas.IIdeaService ideas)
     {
+        _dumps = dumps;
+        _ideas = ideas;
         _reading = reading;
         _instructions = instructions;
         _runs = runs;
@@ -407,8 +413,239 @@ public sealed class TerminalLauncher : ILauncherTui
             return;
         }
 
+        // The dump reads its notes from a file, standard input or --text, and
+        // the palette can give it none of those. Chosen here, it opens the box
+        // the Ideas menu opens, rather than running to be told it had nothing.
+        if (string.Equals(chosen, LauncherCommands.DumpAdd, StringComparison.Ordinal))
+        {
+            window.Close(new LauncherIntent(LauncherAction.DumpNotes, window.Selected));
+
+            return;
+        }
+
         window.RunCommand(chosen);
     }
+
+    /// <summary>
+    /// Takes notes pasted into a box, keeps and splits them through the
+    /// command, then offers the pieces to record.
+    /// </summary>
+    /// <remarks>
+    /// Three steps and one command each, all through the catalogue. The screen
+    /// reads the dump back to list its pieces, which is a read of a file the
+    /// command wrote; recording them is the command's.
+    /// </remarks>
+    private async Task DumpNotesAsync(ProjectResolution? project, CancellationToken ct)
+    {
+        DumpNotes? notes;
+
+        using (IApplication application = Application.Create())
+        {
+            application.InitLegibly(_reading.Profile);
+
+            using var dialog = new DumpNotesDialog(project?.Entry.Slug, application);
+
+            await application.RunAsync(dialog, ct).ConfigureAwait(false);
+
+            notes = dialog.Chosen;
+        }
+
+        if (notes is null)
+        {
+            return;
+        }
+
+        var before = await DumpIdsAsync(ct).ConfigureAwait(false);
+
+        var code = await _catalogue.RunAsync(LauncherCommands.DumpAdd, notes.Arguments(project?.Entry.Slug), ct)
+            .ConfigureAwait(false);
+
+        if (code != 0 || !notes.Split)
+        {
+            Pause();
+
+            return;
+        }
+
+        // The dump the command just made: the one that was not there before.
+        var made = (await DumpsAsync(ct).ConfigureAwait(false))
+            .FirstOrDefault(d => !before.Contains(d.Place) && d.Dump.Items.Count > 0);
+
+        Pause();
+
+        if (made.Dump is not null)
+        {
+            await RecordDumpAsync(made, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Offers the pieces of a dump to record: the one given, or one chosen from
+    /// those with pieces still unrecorded.
+    /// </summary>
+    private async Task RecordDumpAsync(
+        (Loadout.Core.Ideas.DumpPlace Place, Loadout.Models.Ideas.IdeaDump Dump)? given,
+        CancellationToken ct)
+    {
+        var dump = given;
+
+        if (dump is null)
+        {
+            var waiting = (await DumpsAsync(ct).ConfigureAwait(false))
+                .Where(d => d.Dump.Items.Any(item => item.Recorded.Length == 0))
+                .ToList();
+
+            if (waiting.Count == 0)
+            {
+                _console.MarkupLine("[dim]No dump has pieces waiting to be recorded.[/]");
+                Pause();
+
+                return;
+            }
+
+            if (waiting.Count == 1)
+            {
+                dump = waiting[0];
+            }
+            else
+            {
+                using IApplication application = Application.Create();
+                application.InitLegibly(_reading.Profile);
+
+                using var choose = new ChoiceDialog(
+                    "Which dump? These have pieces not yet recorded.",
+                    [.. waiting.Select(d => $"{d.Place.Id} on {d.Place.Where}, from {d.Dump.Source}"), "Cancel"],
+                    application);
+
+                await application.RunAsync(choose, ct).ConfigureAwait(false);
+
+                if (choose.ChosenIndex is not { } index || index >= waiting.Count)
+                {
+                    return;
+                }
+
+                dump = waiting[index];
+            }
+        }
+
+        var (place, record) = dump.Value;
+        var offered = record.Items.Where(item => item.Recorded.Length == 0).ToList();
+
+        if (offered.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<int>? ticked;
+
+        using (IApplication application = Application.Create())
+        {
+            application.InitLegibly(_reading.Profile);
+
+            using var dialog = new DumpPiecesDialog(place.Id, offered, application);
+
+            await application.RunAsync(dialog, ct).ConfigureAwait(false);
+
+            ticked = dialog.Chosen;
+        }
+
+        if (ticked is null)
+        {
+            return;
+        }
+
+        await _catalogue.RunAsync(
+            LauncherCommands.DumpApply,
+            DumpPiecesDialog.Arguments(place.Id, place.Project, ticked, offered.Count),
+            ct).ConfigureAwait(false);
+
+        Pause();
+    }
+
+    /// <summary>
+    /// The ideas screen, over and over: each time it hands back a step, the
+    /// step runs as its command and the screen opens again on the same idea,
+    /// read afresh, until it is closed with nothing asked for.
+    /// </summary>
+    /// <remarks>
+    /// Read here, before each opening, rather than by the screen: reading is
+    /// the launcher's to do and changing is the command's, so the screen only
+    /// ever shows what the last command left.
+    /// </remarks>
+    private async Task ShowIdeasAsync(ProjectResolution? project, CancellationToken ct)
+    {
+        string? select = null;
+
+        while (!ct.IsCancellationRequested)
+        {
+            var entries = new List<IdeaEntry>();
+            var listed = await _ideas.ListAsync(ct).ConfigureAwait(false);
+
+            if (listed.Failed)
+            {
+                _console.MarkupLine($"[red]{Shown.Safely(listed.Error!)}[/]");
+                Pause();
+
+                return;
+            }
+
+            foreach (var summary in listed.Value!)
+            {
+                var read = await _ideas.ReadAsync(summary.Place, ct).ConfigureAwait(false);
+
+                entries.Add(new IdeaEntry(summary, read.Succeeded ? read.Value : null));
+            }
+
+            var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
+
+            IdeaStep? step;
+
+            using (IApplication application = Application.Create())
+            {
+                application.InitLegibly(_reading.Profile);
+
+                using var window = new IdeasWindow(
+                    entries,
+                    projects.Succeeded ? [.. projects.Value!.Select(p => p.Entry.Slug)] : [],
+                    project?.Entry.Slug,
+                    select,
+                    new DialogIdeaPrompts(application),
+                    application);
+
+                await application.RunAsync(window, ct).ConfigureAwait(false);
+
+                step = window.Chosen;
+                select = window.Selected?.Summary.Place.Id;
+            }
+
+            if (step is null)
+            {
+                return;
+            }
+
+            var code = await _catalogue.RunAsync(step.Command, step.Arguments, ct).ConfigureAwait(false);
+
+            // Stopped for when there is something to read: a round's questions
+            // or plan, where an accepted idea went, or anything that failed.
+            if (step.Pause || code != 0)
+            {
+                Pause();
+            }
+
+            select = step.Select ?? select;
+        }
+    }
+
+    private async Task<IReadOnlyList<(Loadout.Core.Ideas.DumpPlace Place, Loadout.Models.Ideas.IdeaDump Dump)>> DumpsAsync(
+        CancellationToken ct)
+    {
+        var listed = await _dumps.ListAsync(ct).ConfigureAwait(false);
+
+        return listed.Succeeded ? listed.Value! : [];
+    }
+
+    private async Task<HashSet<Loadout.Core.Ideas.DumpPlace>> DumpIdsAsync(CancellationToken ct) =>
+        [.. (await DumpsAsync(ct).ConfigureAwait(false)).Select(d => d.Place)];
 
     private async Task<ProjectOverview?> OverviewAsync(
         ProjectResolution project,
@@ -493,6 +730,18 @@ public sealed class TerminalLauncher : ILauncherTui
 
             case LauncherAction.Teams:
                 await ShowTeamsAsync(ct).ConfigureAwait(false);
+                return null;
+
+            case LauncherAction.DumpNotes:
+                await DumpNotesAsync(intent.Project, ct).ConfigureAwait(false);
+                return null;
+
+            case LauncherAction.RecordDump:
+                await RecordDumpAsync(null, ct).ConfigureAwait(false);
+                return null;
+
+            case LauncherAction.Ideas:
+                await ShowIdeasAsync(intent.Project, ct).ConfigureAwait(false);
                 return null;
 
             case LauncherAction.Command when intent.CommandPath is { Length: > 0 } path:
@@ -1232,6 +1481,7 @@ public sealed class TerminalLauncher : ILauncherTui
         if (tasks.Succeeded)
         {
             declared = tasks.Value!
+                .Where(item => item.Kind == TaskKind.Task)
                 .Where(item => item.State is TaskState.Doing or TaskState.Open or TaskState.Blocked)
                 .OrderBy(item => item.State switch
                 {

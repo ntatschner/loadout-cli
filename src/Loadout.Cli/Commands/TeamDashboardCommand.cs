@@ -57,6 +57,8 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     private readonly AccessibleMode _accessible;
     private readonly Loadout.Platform.Abstractions.ISpeech _speech;
     private readonly ICommandCatalogue _commands;
+    private readonly Loadout.Core.Ideas.IIdeaService _ideas;
+    private readonly Loadout.Core.Ideas.IIdeaDumps _dumps;
     private readonly ISecretProvider _secrets;
     private readonly IProcessInspector _processes;
     private readonly TimeProvider _time;
@@ -85,8 +87,12 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         Loadout.Core.Teams.ITeamCatalogue teams,
         Loadout.Core.Instructions.ISpecialistLibrary library,
         Loadout.Core.Workspace.IWorkspaceManager workspace,
-        Loadout.Agents.IAgentRegistry agents)
+        Loadout.Agents.IAgentRegistry agents,
+        Loadout.Core.Ideas.IIdeaService ideas,
+        Loadout.Core.Ideas.IIdeaDumps dumps)
     {
+        _ideas = ideas;
+        _dumps = dumps;
         _teams = teams;
         _library = library;
         _workspace = workspace;
@@ -431,8 +437,17 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         server.Choices = token => DashboardActions.OfferedAsync(
             _teams, _library, _workspace, _projects, _agents, token);
 
+        // The ideas, read for every page and changed only where the page may
+        // act, like everything else here.
+        var ideas = new DashboardIdeas(_commands, _ideas, _dumps, _projects, _time, output);
+        server.IdeasFor = ideas.ReadAsync;
+
         if (!settings.WatchOnly)
         {
+            // Working an idea through from the page: the page asks, this types
+            // 'idea answer' or 'idea refine', and the parser decides.
+            server.Ideate = ideas.DoAsync;
+
             // What every button on the page does, which until now only the
             // daemon could honour. The page drew "Hold it", "Stop it" and a box
             // for messaging the lead, and this server answered all of them with

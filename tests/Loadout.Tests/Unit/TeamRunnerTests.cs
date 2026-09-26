@@ -2882,22 +2882,26 @@ public sealed class TeamRunnerTests : IDisposable
     /// <summary>The project's task list, as the run writes to it.</summary>
     private sealed class FakeTasks : Loadout.Core.Tasks.ITaskService
     {
-        public List<(string Slug, string Id, TaskState State, string By, string? Title, string? Note)> Declared { get; } = [];
+        public List<(string? Slug, string Id, TaskState State, string By, string? Title, string? Note)> Declared { get; } = [];
 
         public Task<OperationResult<TaskItem>> DeclareAsync(
-            string projectSlug, string id, TaskState state, string declaredBy,
-            string? title = null, string? note = null, CancellationToken ct = default)
+            string? projectSlug, string id, TaskState state, string declaredBy,
+            string? title = null, string? note = null, CancellationToken ct = default, TaskKind? kind = null)
         {
             Declared.Add((projectSlug, id, state, declaredBy, title, note));
 
             return Task.FromResult(OperationResult<TaskItem>.Ok(new TaskItem { Id = id, State = state }));
         }
 
-        public Task<OperationResult<IReadOnlyList<TaskItem>>> ListAsync(string projectSlug, CancellationToken ct = default) =>
+        public Task<OperationResult<IReadOnlyList<TaskItem>>> ListAsync(string? projectSlug, CancellationToken ct = default) =>
             Task.FromResult(OperationResult<IReadOnlyList<TaskItem>>.Ok([]));
 
-        public Task<OperationResult> RemoveAsync(string projectSlug, string id, CancellationToken ct = default) =>
+        public Task<OperationResult> RemoveAsync(string? projectSlug, string id, CancellationToken ct = default) =>
             Task.FromResult(OperationResult.Ok());
+
+        public Task<OperationResult<TaskItem>> MoveAsync(
+            string? fromSlug, string? toSlug, string id, CancellationToken ct = default) =>
+            throw new NotSupportedException("a team run moves no task");
     }
 
     private sealed class FakeConsole : ITeamConsole

@@ -533,6 +533,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             if (open.Succeeded)
             {
                 tasks = open.Value!
+                    .Where(t => t.Kind == Models.Tasks.TaskKind.Task)
                     .Where(t => t.State is Models.Tasks.TaskState.Open
                         or Models.Tasks.TaskState.Doing
                         or Models.Tasks.TaskState.Blocked)

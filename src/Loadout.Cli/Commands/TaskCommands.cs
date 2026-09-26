@@ -4,6 +4,7 @@ using Loadout.Core.Git;
 using Loadout.Core.Projects;
 using Loadout.Core.Tasks;
 using Loadout.Models;
+using Loadout.Models.Results;
 using Loadout.Models.Tasks;
 using Loadout.Tui;
 using Spectre.Console;
@@ -17,6 +18,38 @@ public class TaskSettings : GlobalSettings
     [CommandOption("--project <SLUG>")]
     [Description("Project the tasks belong to. Defaults to the repository you are in.")]
     public string? Project { get; init; }
+
+    [CommandOption("--global")]
+    [Description("The workspace-wide list, for what belongs to no project yet.")]
+    public bool Global { get; init; }
+
+    /// <summary>
+    /// The list these settings name: a project, or null for the workspace-wide one.
+    /// </summary>
+    /// <remarks>
+    /// Asked for, never fallen back to. A command run outside any repository
+    /// fails as it always did rather than quietly writing to the workspace-wide
+    /// list, because a task recorded somewhere nobody looks is worse than one
+    /// refused with the reason.
+    /// </remarks>
+    internal async Task<OperationResult<Models.Projects.ProjectResolution?>> ListAsync(
+        IProjectService projects,
+        CancellationToken ct)
+    {
+        if (Global)
+        {
+            return Project is { Length: > 0 }
+                ? OperationResult<Models.Projects.ProjectResolution?>.Fail(
+                    "--global and --project name different lists. Give one.", ExitCode.InvalidArguments)
+                : OperationResult<Models.Projects.ProjectResolution?>.Ok(null);
+        }
+
+        var resolution = await ProjectHandle.ResolveAsync(projects, Project, Repo, ct).ConfigureAwait(false);
+
+        return resolution.Succeeded
+            ? OperationResult<Models.Projects.ProjectResolution?>.Ok(resolution.Value)
+            : OperationResult<Models.Projects.ProjectResolution?>.Fail(resolution.Error!, resolution.ExitCode);
+    }
 }
 
 /// <summary>
@@ -69,19 +102,18 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
 
         var output = new CommandOutput(_console, settings);
 
-        var resolution = await ProjectHandle
-            .ResolveAsync(_projects, settings.Project, settings.Repo, cancellationToken)
-            .ConfigureAwait(false);
+        var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
 
         if (resolution.Failed)
         {
             return output.Fail(resolution);
         }
 
-        var project = resolution.Value!;
+        var project = resolution.Value;
+        var slug = project?.Entry.Slug;
 
         var listed = await _tasks
-            .ListAsync(project.Entry.Slug, cancellationToken).ConfigureAwait(false);
+            .ListAsync(slug, cancellationToken).ConfigureAwait(false);
 
         if (listed.Failed)
         {
@@ -89,8 +121,13 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         }
 
         var now = _time.GetUtcNow();
-        var disagreements = await CheckAsync(project, listed.Value!, now, cancellationToken)
-            .ConfigureAwait(false);
+
+        // Only work is checked against the repository and turned into
+        // suggestions. An idea has no commits to show for itself and is not
+        // something to start, so both would be noise about it.
+        var disagreements = project is null
+            ? []
+            : await CheckAsync(project, Work(listed.Value!), now, cancellationToken).ConfigureAwait(false);
 
         var shown = settings.All
             ? listed.Value!
@@ -106,12 +143,13 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                     item.Id,
                     item.Title,
                     state = item.State.ToString().ToLowerInvariant(),
+                    kind = item.Kind.ToString().ToLowerInvariant(),
                     item.DeclaredBy,
                     declared = item.DeclaredUtc,
                     item.Note,
                 }),
                 unsupported = disagreements.Select(d => new { task = d.TaskId, d.Detail }),
-                suggested = Suggestions.Compose(shown, disagreements)
+                suggested = Suggestions.Compose(Work(shown), disagreements)
                     .Select(s => new { s.Text, source = s.Source.ToString().ToLowerInvariant() }),
             });
 
@@ -121,7 +159,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
         if (shown.Count == 0)
         {
             output.WriteLine(listed.Value!.Count == 0
-                ? $"[dim]{Markup.Escape(project.Entry.Slug)} has no tasks recorded.[/]"
+                ? $"[dim]{Markup.Escape(TaskPaths.Describe(slug))} has no tasks recorded.[/]"
                 : $"[dim]Nothing open. {listed.Value!.Count} recorded in total; --all shows them.[/]");
 
             return CommandOutput.Success();
@@ -132,6 +170,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
             output.WriteLine(
                 $"{Markup.Escape(item.Id),-22} "
                 + $"{State(item.State),-9} "
+                + (item.Kind == TaskKind.Idea ? "[blue]idea[/] " : string.Empty)
                 + $"{Markup.Escape(item.Title)}");
 
             output.WriteLine(
@@ -159,7 +198,7 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
                 + "unsupported; it can never say one is wrong.[/]");
         }
 
-        var suggested = Suggestions.Compose(shown, disagreements);
+        var suggested = Suggestions.Compose(Work(shown), disagreements);
 
         if (suggested.Count > 0)
         {
@@ -174,6 +213,9 @@ public sealed class TaskListCommand : AsyncCommand<TaskListCommand.Settings>
 
         return CommandOutput.Success();
     }
+
+    private static List<TaskItem> Work(IEnumerable<TaskItem> items) =>
+        [.. items.Where(item => item.Kind == TaskKind.Task)];
 
     private static string State(TaskState state) => state switch
     {
@@ -281,22 +323,20 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
                 ExitCode.InvalidArguments);
         }
 
-        var resolution = await ProjectHandle
-            .ResolveAsync(_projects, settings.Project, settings.Repo, cancellationToken)
-            .ConfigureAwait(false);
+        var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
 
         if (resolution.Failed)
         {
             return output.Fail(resolution);
         }
 
-        var slug = resolution.Value!.Entry.Slug;
+        var slug = resolution.Value?.Entry.Slug;
 
         if (settings.DryRun)
         {
             output.WriteLine(
                 $"Would record [bold]{Markup.Escape(settings.Id)}[/] as "
-                + $"{state.ToString().ToLowerInvariant()} for {Markup.Escape(slug)}. "
+                + $"{state.ToString().ToLowerInvariant()} for {Markup.Escape(TaskPaths.Describe(slug))}. "
                 + "Nothing was written.");
 
             return CommandOutput.Success();
@@ -320,7 +360,10 @@ public sealed class TaskDeclareCommand : AsyncCommand<TaskDeclareCommand.Setting
             $"[green]+[/] {Markup.Escape(declared.Value!.Id)} is "
             + $"{declared.Value.State.ToString().ToLowerInvariant()}.");
 
-        await SayIfNobodyWillSeeItAsync(output, slug, cancellationToken).ConfigureAwait(false);
+        if (slug is not null)
+        {
+            await SayIfNobodyWillSeeItAsync(output, slug, cancellationToken).ConfigureAwait(false);
+        }
 
         return CommandOutput.Success();
     }
@@ -396,16 +439,14 @@ public sealed class TaskRemoveCommand : AsyncCommand<TaskRemoveCommand.Settings>
 
         var output = new CommandOutput(_console, settings);
 
-        var resolution = await ProjectHandle
-            .ResolveAsync(_projects, settings.Project, settings.Repo, cancellationToken)
-            .ConfigureAwait(false);
+        var resolution = await settings.ListAsync(_projects, cancellationToken).ConfigureAwait(false);
 
         if (resolution.Failed)
         {
             return output.Fail(resolution);
         }
 
-        var slug = resolution.Value!.Entry.Slug;
+        var slug = resolution.Value?.Entry.Slug;
 
         if (settings.DryRun)
         {

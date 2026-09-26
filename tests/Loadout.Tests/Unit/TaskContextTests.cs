@@ -121,6 +121,20 @@ public sealed class TaskContextTests : IDisposable
     }
 
     [Fact]
+    public async Task An_idea_still_being_shaped_is_not_put_in_front_of_a_session()
+    {
+        var idea = Task("status-page", TaskState.Open, "A status page for the home lab");
+        idea.Kind = TaskKind.Idea;
+
+        var service = new StubTasks([Task("ship-it", TaskState.Open, "Ship the thing"), idea]);
+
+        var text = await CompileAsync(tasks: true, service);
+
+        text.Should().Contain("ship-it");
+        text.Should().NotContain("status-page", "an idea is not work a session should pick up");
+    }
+
+    [Fact]
     public async Task A_finished_task_is_not_put_in_front_of_a_later_session()
     {
         var service = new StubTasks([
@@ -173,10 +187,10 @@ public sealed class TaskContextTests : IDisposable
     /// <summary>A task record that answers at once and records being asked.</summary>
     private sealed class StubTasks(IReadOnlyList<TaskItem> tasks) : ITaskService
     {
-        public List<string> Asked { get; } = [];
+        public List<string?> Asked { get; } = [];
 
         public Task<OperationResult<IReadOnlyList<TaskItem>>> ListAsync(
-            string projectSlug, CancellationToken ct = default)
+            string? projectSlug, CancellationToken ct = default)
         {
             Asked.Add(projectSlug);
 
@@ -185,17 +199,22 @@ public sealed class TaskContextTests : IDisposable
         }
 
         public Task<OperationResult<TaskItem>> DeclareAsync(
-            string projectSlug,
+            string? projectSlug,
             string id,
             TaskState state,
             string declaredBy,
             string? title = null,
             string? note = null,
-            CancellationToken ct = default) =>
+            CancellationToken ct = default,
+            TaskKind? kind = null) =>
             throw new NotSupportedException();
 
         public Task<OperationResult> RemoveAsync(
-            string projectSlug, string id, CancellationToken ct = default) =>
+            string? projectSlug, string id, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<OperationResult<TaskItem>> MoveAsync(
+            string? fromSlug, string? toSlug, string id, CancellationToken ct = default) =>
             throw new NotSupportedException();
     }
 }
