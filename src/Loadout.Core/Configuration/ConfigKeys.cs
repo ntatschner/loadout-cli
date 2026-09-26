@@ -339,7 +339,7 @@ public static class ConfigKeys
         new("show-speech",
             "Whether the full-screen launcher speaks what it shows: off, screen-reader",
             (c, _) => c.Accessibility.Display.Speech,
-            (c, _, v) => c.Accessibility.Display.Speech = OneOf(v, "show-speech", "off", "screen-reader"),
+            (c, _, v) => c.Accessibility.Display.Speech = OneOf(v, "off", "screen-reader"),
             false,
             Sample: "off",
             Group: Groups.Display,
@@ -349,7 +349,7 @@ public static class ConfigKeys
             "Where a run's call for help is sent: slack, discord, teams, telegram, generic",
             (_, m) => m.Teams.NotifyKind,
             (_, m, v) => m.Teams.NotifyKind =
-                OneOf(v, "team-notify", "", "slack", "discord", "teams", "telegram", "generic"),
+                OneOf(v, "", "slack", "discord", "teams", "telegram", "generic"),
             true,
             Sample: "slack",
             Group: Groups.Machine,
@@ -632,19 +632,31 @@ public static class ConfigKeys
         {
             var split = pair.Split('=', 2, StringSplitOptions.TrimEntries);
 
+            // A FormatException, as every other setting throws for a value it
+            // cannot read: that is the one 'config set' catches and names the
+            // setting for.
             if (split.Length != 2 || split[0].Length == 0)
             {
-                throw new ArgumentException(
+                throw new FormatException(
                     $"'{pair}' is not a kind and a rule. Write them as kind=rule, "
                     + "such as disk=trusted.");
             }
 
-            rules[split[0]] = OneOf(
-                split[1],
-                $"team-remediation ({split[0]})",
-                Loadout.Models.Teams.RemedyRules.Never,
-                Loadout.Models.Teams.RemedyRules.Ask,
-                Loadout.Models.Teams.RemedyRules.Trusted);
+            // The kind named in the refusal, which is what the setting's own
+            // name was passed for here - as the first of the words it would
+            // accept, so 'disk=team-remediation (disk)' was taken as a rule.
+            try
+            {
+                rules[split[0]] = OneOf(
+                    split[1],
+                    Loadout.Models.Teams.RemedyRules.Never,
+                    Loadout.Models.Teams.RemedyRules.Ask,
+                    Loadout.Models.Teams.RemedyRules.Trusted);
+            }
+            catch (FormatException ex)
+            {
+                throw new FormatException($"For {split[0]}: {ex.Message}", ex);
+            }
         }
 
         return rules;

@@ -42,6 +42,54 @@ public sealed class ConfigKeyTests
         entry.Read(config, machine).Should().Be(value);
     }
 
+    [Theory]
+    [MemberData(nameof(EveryKey))]
+    public void A_setting_that_takes_one_of_a_few_values_does_not_take_its_own_name(string key)
+    {
+        var entry = ConfigKeys.Find(key)!;
+
+        // Only the settings with a fixed set of answers. One that takes any
+        // name or path takes this one too, rightly.
+        var takesAnything = Takes(entry, "nothing-could-mean-this-value");
+
+        if (takesAnything)
+        {
+            return;
+        }
+
+        // Two of these listed their own name among the answers they take,
+        // because OneOf's first argument after the value is an answer and not
+        // the setting's name, so 'config set show-speech show-speech' was
+        // accepted and the refusal offered the name as a choice.
+        Takes(entry, key).Should().BeFalse($"'{key}' is the setting's name, not one of its values");
+    }
+
+    [Fact]
+    public void A_remediation_rule_is_not_the_settings_own_name_and_a_refusal_names_the_kind()
+    {
+        var entry = ConfigKeys.Find("team-remediation")!;
+
+        Takes(entry, "disk=team-remediation (disk)").Should().BeFalse();
+
+        var act = () => entry.Write(new LauncherConfig(), new MachineConfig(), "disk=sometimes");
+
+        act.Should().Throw<FormatException>().WithMessage("For disk:*");
+    }
+
+    private static bool Takes(ConfigKeys.Entry entry, string value)
+    {
+        try
+        {
+            entry.Write(new LauncherConfig(), new MachineConfig(), value);
+
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
     [Fact]
     public void A_setting_that_parses_its_value_rejects_a_bad_one()
     {

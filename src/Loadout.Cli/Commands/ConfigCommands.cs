@@ -265,6 +265,19 @@ public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
         // print it back.
         if (settings.DryRun)
         {
+            // Tried on a copy nothing reads, so the preview refuses what the
+            // real run would refuse. It said "Would set" for any value at all,
+            // including ones the real run then turned down - a preview that
+            // approves a change that fails is not a preview.
+            try
+            {
+                entry.Write(new LauncherConfig(), new MachineConfig(), settings.Value);
+            }
+            catch (FormatException ex)
+            {
+                return output.Fail(Refused(entry, ex), ExitCode.InvalidArguments);
+            }
+
             output.WriteLine(
                 $"[bold]Would set[/] {Markup.Escape(entry.Key)}"
                 + (entry.IsMachineLocal ? " for this machine" : string.Empty)
@@ -321,9 +334,7 @@ public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
 
         if (invalid is not null)
         {
-            return output.Fail(
-                $"'{settings.Value}' is not valid for {entry.Key}. {entry.Description}.",
-                ExitCode.InvalidArguments);
+            return output.Fail(Refused(entry, invalid), ExitCode.InvalidArguments);
         }
 
         if (save.Failed)
@@ -336,6 +347,18 @@ public sealed class ConfigSetCommand : AsyncCommand<ConfigSetCommand.Settings>
 
         return CommandOutput.Success();
     }
+
+    /// <summary>
+    /// Why a value was turned down: the setting's own reason, then what the
+    /// setting is for.
+    /// </summary>
+    /// <remarks>
+    /// The reason was dropped, and only the description said. It is the part
+    /// that says what was wrong - which words are allowed, which pair of a list
+    /// could not be read - where the description says what the setting is.
+    /// </remarks>
+    private static string Refused(ConfigKeys.Entry entry, FormatException why) =>
+        $"Not valid for {entry.Key}: {why.Message} {entry.Description}.";
 }
 
 /// <summary>Opens the config file in the platform's editor (spec section 77).</summary>
