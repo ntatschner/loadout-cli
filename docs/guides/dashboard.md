@@ -183,6 +183,40 @@ A look chosen before this version, in the old Paper, Slate or Oxblood themes,
 comes back as Graphite; High contrast stays High contrast; and every old accent
 becomes Bay.
 
+### 9. Work on your ideas
+
+Open the **Ideas** tab. Like the settings, it's a page of its own rather than
+a way of looking at the runs, so the run pane's heading and forms are put away
+while you're on it. The number on the tab is how many ideas are waiting on
+your answers.
+
+- **Drop an idea in** keeps what you write, on a project or the workspace-wide
+  list. Nothing happens to it until you refine it.
+- **Dump notes kept elsewhere** takes notes pasted from anywhere. An agent
+  splits them into separate ideas and tasks, each quoting its own words from
+  the notes, and they turn up on the page ticked. Untick what you don't want
+  and record the rest.
+- Each idea opens to show its questions, then the plan. Answer a question by
+  picking one of the agent's likely answers (the recommended one is first) or
+  in your own words. Choose an option for each layer, keep or drop pieces,
+  ask for a piece or the whole plan to be reworked, and take it another round.
+- Once the plan has taken in everything you asked of it, **Accept the plan**
+  puts it on a project as a task, with the plan written out beside it. A new
+  project is one of the choices, and it is only ever made because you chose it.
+
+A round with the agent takes a minute or two. The page doesn't wait for it: it
+says a round is going and reads again every few seconds until it's done. The
+rest of the time it reads every quarter of a minute or so, which catches
+anything changed from a terminal. It redraws only when something has changed,
+and never while you have something typed in a box, so an answer half-written
+isn't thrown away by the page catching up.
+
+Every button runs the command you'd otherwise type, `loadout idea answer` and
+the rest, so what the page can do and what the command line can do are the
+same thing. A round started from the page carries on if you close the tab,
+because it's run by the dashboard, not the browser. If you stop the dashboard,
+the round stops with it; the idea says where it got to either way.
+
 ## Only watching
 
 For a screen in a corner, start it so nothing on the page can change a run:
@@ -191,8 +225,9 @@ For a screen in a corner, start it so nothing on the page can change a run:
 loadout team dashboard --watch-only
 ```
 
-The server refuses anything that would start or change a run, and the page puts
-its controls away rather than showing buttons that do nothing.
+The server refuses anything that would start or change a run, or change an
+idea, and the page puts its controls away rather than showing buttons that do
+nothing. The ideas are still there to read.
 
 ## If it went wrong
 
