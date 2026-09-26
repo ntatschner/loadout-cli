@@ -70,7 +70,8 @@ project proposal <slug>` and applies it. Identity, the repository, `environment`
 and `environments` cannot be proposed at all. Consider:
 
 - `specialists.preferred` and `specialists.excluded`, from what `instructions explain`
-  chose and what it got wrong.
+  chose and what it got wrong. Confirm each id with `loadout_specialist` before
+  naming it: a proposal naming a specialist that does not exist is refused.
 - `profiles`, where one part of the code — a database, a frontend — needs context
   the rest never does.
 - `context.code_map`, only for a codebase big enough that a session spends real

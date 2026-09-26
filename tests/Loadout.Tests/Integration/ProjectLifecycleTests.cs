@@ -99,7 +99,12 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         _tasks = new Loadout.Core.Tasks.TaskService(_workspace, yaml, TimeProvider.System);
         _projects = new ProjectService(configuration, _workspace, _git, new PathSemantics(), _tasks);
         _yaml = yaml;
-        _proposals = new SettingsProposals(_workspace, yaml, TimeProvider.System);
+        _proposals = new SettingsProposals(
+            _workspace,
+            yaml,
+            TimeProvider.System,
+            new InstructionService(
+                new SpecialistLibrary(), new SpecialistResolver(), new RepositoryEvidenceReader(), configuration));
     }
 
     private YamlStore _yaml = null!;
@@ -523,6 +528,34 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         applied.Succeeded.Should().BeTrue(applied.Error);
         (await _workspace.ReadProjectAsync(slug)).Value!.Context.CodeMap.Should().BeTrue();
         (await _proposals.ReadAsync(slug)).Value.Should().BeNull("an applied proposal is used up");
+    }
+
+    [Fact]
+    public async Task A_proposal_naming_a_specialist_that_does_not_exist_is_refused()
+    {
+        // The first real proposal asked the person to drop a line if the
+        // specialist it named did not exist. The launcher knows; it says so.
+        var (slug, manifest) = await ProposableAsync("unchecked");
+
+        manifest.Specialists.Preferred.Add("platform.nowhere");
+
+        var proposed = await _proposals.ProposeAsync(slug, _yaml.Render(manifest), "because", "agent");
+
+        proposed.Failed.Should().BeTrue();
+        proposed.Error.Should().Contain("platform.nowhere");
+    }
+
+    [Fact]
+    public async Task A_proposal_naming_real_specialists_is_taken()
+    {
+        var (slug, manifest) = await ProposableAsync("checked");
+
+        manifest.Specialists.Preferred.Add("platform.windows");
+        manifest.Specialists.Excluded.Add("framework.aspnet-core");
+
+        var proposed = await _proposals.ProposeAsync(slug, _yaml.Render(manifest), "because", "agent");
+
+        proposed.Succeeded.Should().BeTrue(proposed.Error);
     }
 
     [Fact]

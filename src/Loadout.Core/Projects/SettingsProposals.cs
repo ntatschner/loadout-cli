@@ -60,11 +60,22 @@ public sealed class SettingsProposals : ISettingsProposals
     private readonly YamlStore _yaml;
     private readonly TimeProvider _time;
 
-    public SettingsProposals(IWorkspaceManager workspace, YamlStore yaml, TimeProvider time)
+    /// <summary>
+    /// Checks the specialists a proposal names. Optional so a caller without a
+    /// library still gets every other check.
+    /// </summary>
+    private readonly Instructions.IInstructionService? _instructions;
+
+    public SettingsProposals(
+        IWorkspaceManager workspace,
+        YamlStore yaml,
+        TimeProvider time,
+        Instructions.IInstructionService? instructions = null)
     {
         _workspace = workspace;
         _yaml = yaml;
         _time = time;
+        _instructions = instructions;
     }
 
     /// <summary>The sections a proposal may not change, as they are named in the file.</summary>
@@ -111,6 +122,21 @@ public sealed class SettingsProposals : ISettingsProposals
                 $"A proposal may not change {string.Join(", ", touched)}. Those decide which project "
                 + "this is and which credentials and sandbox a session gets, so they are changed by a "
                 + "person, in the file. Leave them as they are and propose the rest.",
+                ExitCode.InvalidArguments);
+        }
+
+        var unknown = await UnknownSpecialistsAsync(slug, current.Value!, proposed.Value!, ct)
+            .ConfigureAwait(false);
+
+        // Refused rather than passed on with a caveat. The first real proposal
+        // named a specialist its author had not checked and asked the person
+        // to drop the line if it did not exist: a question the launcher can
+        // answer, and should, before anybody reads it.
+        if (unknown.Count > 0)
+        {
+            return OperationResult<SettingsProposalView>.Fail(
+                $"There is no specialist called {string.Join(", ", unknown.Select(id => $"'{id}'"))}. "
+                + "loadout_specialist shows one by id; propose only ids that exist.",
                 ExitCode.InvalidArguments);
         }
 
@@ -248,6 +274,47 @@ public sealed class SettingsProposals : ISettingsProposals
         File.Delete(path);
 
         return Task.FromResult(OperationResult.Ok());
+    }
+
+    /// <summary>
+    /// Specialist ids the proposal adds, to the project or to a profile, that
+    /// the library does not have.
+    /// </summary>
+    /// <remarks>
+    /// Only the added ones. An id already in the file is somebody else's
+    /// decision, perhaps a specialist from a pack not on this machine, and a
+    /// proposal that leaves it alone must not be refused for it.
+    /// </remarks>
+    private async Task<List<string>> UnknownSpecialistsAsync(
+        string slug,
+        ProjectManifest current,
+        ProjectManifest proposed,
+        CancellationToken ct)
+    {
+        if (_instructions is null)
+        {
+            return [];
+        }
+
+        static IEnumerable<string> Named(ProjectManifest manifest) =>
+            manifest.Specialists.Preferred
+                .Concat(manifest.Specialists.Excluded)
+                .Concat(manifest.Profiles.Values.SelectMany(
+                    profile => profile.Specialists.Preferred.Concat(profile.Specialists.Excluded)));
+
+        var added = Named(proposed)
+            .Except(Named(current), StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (added.Count == 0)
+        {
+            return [];
+        }
+
+        var library = await _instructions.LibraryAsync(_workspace.LocalPath, slug, ct).ConfigureAwait(false);
+
+        return [.. added.Where(id => library.Find(id) is null)];
     }
 
     private string PathFor(string slug) =>
