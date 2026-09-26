@@ -175,6 +175,21 @@ internal sealed record Shape(
             "tests/Api.Tests/OrderTests.cs",
             "node_modules/left-pad/index.ts",
         ]),
+        // A generic host carries appsettings.json too. It once pulled in the
+        // ASP.NET Core specialist on that file alone, for a service with no
+        // web stack at all.
+        new("dotnet-worker", "implement", "add a retry to the upload step",
+        [
+            "src/Service/Service.csproj|<Project Sdk=\"Microsoft.NET.Sdk.Worker\"></Project>",
+            "src/Service/appsettings.json|{}",
+            "src/Service/Program.cs", "src/Service/Worker.cs", "src/Service/Jobs.cs",
+        ]),
+        new("dotnet-web", "implement", "add a retry to the upload step",
+        [
+            "src/Web/Web.csproj|<Project Sdk=\"Microsoft.NET.Sdk.Web\"></Project>",
+            "src/Web/appsettings.json|{}",
+            "src/Web/Program.cs", "src/Web/Endpoints.cs", "src/Web/Orders.cs",
+        ]),
         new("django-app", "implement", "add a field to the order model",
         [
             "requirements.txt|Django==5.0\npsycopg2-binary==2.9",
