@@ -36,6 +36,10 @@ namespace Loadout.Agents;
 /// The commit or branch a worktree made for this launch starts from, or null
 /// for the repository's head. Ignored where the tree already exists.
 /// </param>
+/// <param name="OpeningPrompt">
+/// The session's first message, sent as though typed. Set by the launcher for
+/// onboarding; ignored for a headless or resumed session.
+/// </param>
 /// <param name="Profile">Context profile to apply (spec section 34).</param>
 /// <param name="IncludeHandoff">Append the most recent handoff to the context (spec section 69).</param>
 /// <param name="Environment">Environment to work in, such as production (spec section 57).</param>
@@ -98,7 +102,8 @@ public sealed record LaunchRequest(
     bool CreateWorktree = false,
     string? PermissionPolicyPath = null,
     IReadOnlyList<string>? ReachableDirectories = null,
-    string? WorktreeFrom = null);
+    string? WorktreeFrom = null,
+    string? OpeningPrompt = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -782,7 +787,12 @@ public sealed class AgentLauncher : IAgentLauncher
             // work in. A team's directory is the first of these: its nodes are
             // briefed with the path and told to keep things there, and until
             // this was passed on the agent refused every write to it.
-            request.ReachableDirectories);
+            request.ReachableDirectories,
+
+            // Only for a person's session. A headless one is given its
+            // messages through its own protocol, and a resumed one is carrying
+            // on from where it stopped, not starting anew.
+            headless is null && request.ResumeSessionId is null ? request.OpeningPrompt : null);
 
         var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
         if (invocationResult.Failed)
@@ -873,7 +883,11 @@ public sealed class AgentLauncher : IAgentLauncher
                 launch.Project.Entry.Slug,
                 launch.Project.Entry.Name,
                 launch.Adapter.Name,
-                request.Task,
+
+                // The plan's task, not the request's: the launcher can give a
+                // session its task, as it does for onboarding, and the record
+                // has to say what the session was actually given.
+                launch.Plan.Task,
                 request.Profile,
                 request.Worktree,
                 launch.Compiled?.Instructions),
@@ -1030,7 +1044,17 @@ public sealed class AgentLauncher : IAgentLauncher
                 var (task, mode, specialists) = Core.Projects.ProjectOnboardingTask.Onboarding(
                     request.Mode, request.Specialists);
 
-                return request with { Task = task, Mode = mode, Specialists = specialists };
+                // Sent as the session's first message as well. An interactive
+                // agent waits for somebody to type, and the task alone only
+                // chooses its instructions: without this the onboarding sat
+                // at an idle prompt, and nothing said it was waiting on you.
+                return request with
+                {
+                    Task = task,
+                    Mode = mode,
+                    Specialists = specialists,
+                    OpeningPrompt = request.OpeningPrompt ?? task,
+                };
 
             case Core.Projects.OnboardingTurn.Remind:
                 warnings.Add(

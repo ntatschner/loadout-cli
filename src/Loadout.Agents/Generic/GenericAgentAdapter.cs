@@ -84,8 +84,15 @@ public sealed class GenericAgentAdapter : AgentAdapterBase
             environment[key] = Expand(value, placeholders);
         }
 
+        // A described agent says nothing about how it takes a first message,
+        // and guessing would put the words somewhere the agent reads as
+        // something else. Said, so the person knows to type it.
+        IReadOnlyList<string>? warnings = context.OpeningPrompt is { Length: > 0 } prompt
+            ? [$"'{Name}' is started without its first message, because nothing says how it takes one. Type: {prompt}"]
+            : null;
+
         return OperationResult<AgentInvocation>.Ok(
-            new AgentInvocation(descriptor.ExecutablePath, arguments, environment));
+            new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));
     }
 
     private static Dictionary<string, string> BuildPlaceholders(AgentLaunchContext context) => new()

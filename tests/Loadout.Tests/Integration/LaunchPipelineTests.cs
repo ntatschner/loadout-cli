@@ -222,6 +222,11 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         plan.Instructions!.Selected.Select(s => s.Specialist.Id)
             .Should().Contain(ProjectOnboardingTask.Skill);
         result.Value.Warnings.Should().Contain(w => w.Contains("onboards the project"));
+
+        // The session has to start on it, not at an idle prompt. The probe is
+        // a described agent with no known way to take a first message, so it
+        // is told what to type instead.
+        result.Value.Warnings.Should().Contain(w => w.Contains("Type: " + ProjectOnboardingTask.Title));
     }
 
     [Fact]
@@ -242,6 +247,24 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         plan.Instructions!.Selected.Select(s => s.Specialist.Id)
             .Should().NotContain(ProjectOnboardingTask.Skill);
         result.Value.Warnings.Should().Contain(w => w.Contains("has not been onboarded"));
+    }
+
+    [Fact]
+    public async Task The_launch_history_records_the_onboarding_as_the_task_the_session_was_given()
+    {
+        // The history once said "(no task given)" for an onboarding session,
+        // because it recorded what was typed rather than what the session got.
+        await _tasks.DeclareAsync(
+            ProjectSlug, ProjectOnboardingTask.Id, Loadout.Models.Tasks.TaskState.Open, "loadout project add");
+
+        var since = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        var result = await _launcher.LaunchAsync(new LaunchRequest(ProjectSlug, "probe", Offline: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        (await _ledger.ReadAsync(since)).Value!
+            .Should().ContainSingle().Which.Task.Should().Be(ProjectOnboardingTask.Title);
     }
 
     [Fact]

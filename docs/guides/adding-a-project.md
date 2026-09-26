@@ -105,7 +105,10 @@ loadout storefront
 
 Because the project is waiting to be onboarded, that session does it instead of
 waiting for work. It starts in investigate mode with the project onboarding skill,
-and the launch says so before the agent starts. The agent:
+the launch says so before the agent starts, and "Onboard this project" is sent as
+its first message, so it gets going without you typing anything. An agent you
+described yourself in `config.yaml` has no known way to take a first message; the
+launch tells you what to type instead. The agent:
 
 - asks Loadout what it already knows: what a session is given, where the code
   departs from its specialists, what every launch costs, any memory an agent left
