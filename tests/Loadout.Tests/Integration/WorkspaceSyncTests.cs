@@ -28,6 +28,7 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
     private readonly ThrottledProcessLauncher _processes = new();
 
     private IWorkspaceManager _workspace = null!;
+    private IGitManager _git = null!;
     private string _remote = null!;
     private string _otherClone = null!;
 
@@ -68,9 +69,9 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
 
         paths.EnsureDirectoriesExist();
 
-        var git = new GitManager(_processes, new ExecutableResolver(environment, []));
+        _git = new GitManager(_processes, new ExecutableResolver(environment, []));
 
-        _workspace = new WorkspaceManager(paths, git, new YamlStore(permissions), TimeProvider.System);
+        _workspace = new WorkspaceManager(paths, _git, new YamlStore(permissions), TimeProvider.System);
 
         await BuildRemoteAsync().ConfigureAwait(false);
     }
@@ -391,6 +392,69 @@ public sealed class WorkspaceSyncTests : IAsyncLifetime
 
         pending.Succeeded.Should().BeTrue();
         pending.Value!.Should().Contain(p => p.Contains("pending.md"));
+    }
+
+    [Fact]
+    public async Task A_scoped_commit_leaves_changes_elsewhere_uncommitted()
+    {
+        await _workspace.SyncAsync(Config());
+        await ConfigureIdentityAsync();
+
+        Directory.CreateDirectory(Path.Combine(_workspace.LocalPath, "mine"));
+        Directory.CreateDirectory(Path.Combine(_workspace.LocalPath, "theirs"));
+
+        await File.WriteAllTextAsync(Path.Combine(_workspace.LocalPath, "mine", "note.md"), "Mine.");
+        await File.WriteAllTextAsync(Path.Combine(_workspace.LocalPath, "theirs", "note.md"), "Theirs.");
+
+        // Staged by somebody else before this commit ran, which is the case a
+        // plain "git commit" would sweep up along with the named paths.
+        await RunGitAsync(_workspace.LocalPath, "add", "theirs/note.md");
+
+        var result = await _git.CommitPathsAsync(_workspace.LocalPath, "scoped", ["mine"]);
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value.Should().BeTrue();
+
+        (await RunGitAsync(_workspace.LocalPath, "show", "--name-only", "--pretty=format:", "HEAD"))
+            .Trim().Should().Be("mine/note.md");
+
+        (await RunGitAsync(_workspace.LocalPath, "status", "--porcelain"))
+            .Should().Contain("theirs/note.md", "it was not this commit's to take");
+    }
+
+    [Fact]
+    public async Task Saving_one_project_commits_only_that_project()
+    {
+        await _workspace.SyncAsync(Config());
+        await ConfigureIdentityAsync();
+
+        var mine = Path.Combine(_workspace.LocalPath, "projects", "alpha");
+        var theirs = Path.Combine(_workspace.LocalPath, "projects", "beta");
+
+        Directory.CreateDirectory(mine);
+        Directory.CreateDirectory(theirs);
+
+        await File.WriteAllTextAsync(Path.Combine(mine, "handoff.md"), "What alpha learned.");
+
+        // Another session's unfinished work, with a credential in it. It must
+        // neither be committed by alpha's save nor stop alpha's save.
+        await File.WriteAllTextAsync(
+            Path.Combine(theirs, "handoff.md"),
+            "The deploy token is ghp_abcdefghijklmnopqrstuvwxyz0123 and it works.");
+
+        (await _workspace.GetPendingChangesAsync("alpha")).Value!
+            .Should().OnlyContain(path => path.StartsWith("projects/alpha/", StringComparison.Ordinal));
+
+        var result = await _workspace.SaveAsync("alpha", "claude", push: false, "alpha");
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value.Should().BeTrue();
+
+        (await RunGitAsync(_workspace.LocalPath, "show", "--name-only", "--pretty=format:", "HEAD"))
+            .Trim().Should().Be("projects/alpha/handoff.md");
+
+        (await RunGitAsync(_workspace.LocalPath, "status", "--porcelain"))
+            .Should().Contain("projects/beta/");
     }
 
     [Fact]

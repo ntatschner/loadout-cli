@@ -362,6 +362,53 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<bool>> CommitPathsAsync(
+        string repositoryPath,
+        string message,
+        IReadOnlyList<string> paths,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+
+        if (paths.Count == 0)
+        {
+            return OperationResult<bool>.Ok(false);
+        }
+
+        List<string> Scoped(params string[] command) => [.. command, "--", .. paths];
+
+        var statusResult = await RunAsync(repositoryPath, Scoped("status", "--porcelain"), LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+
+        if (statusResult.Failed)
+        {
+            return OperationResult<bool>.Fail(statusResult.Error!);
+        }
+
+        if (statusResult.Value!.Trim().Length == 0)
+        {
+            return OperationResult<bool>.Ok(false);
+        }
+
+        var stageResult = await RunAsync(repositoryPath, Scoped("add", "--all"), LocalOperationTimeout, ct)
+            .ConfigureAwait(false);
+        if (stageResult.Failed)
+        {
+            return OperationResult<bool>.Fail(stageResult.Error!);
+        }
+
+        // Naming the paths on the commit as well is what keeps a file staged
+        // elsewhere out of it: with pathspecs, git commits only those paths and
+        // leaves the rest of the index as it found it.
+        var commitResult = await RunAsync(repositoryPath, Scoped("commit", "--message", message),
+            LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        return commitResult.Succeeded
+            ? OperationResult<bool>.Ok(true)
+            : OperationResult<bool>.Fail(commitResult.Error!);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> CreateBranchAsync(
         string repositoryPath,
         string branchName,
@@ -376,11 +423,27 @@ internal sealed class GitManager : IGitManager
     }
 
     /// <inheritdoc />
-    public async Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(
+    public Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(
         string repositoryPath,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        ListChangedAsync(repositoryPath, ["status", "--porcelain"], ct);
+
+    /// <inheritdoc />
+    public Task<OperationResult<IReadOnlyList<string>>> ListChangedFilesAsync(
+        string repositoryPath,
+        IReadOnlyList<string> paths,
+        CancellationToken ct = default) =>
+        ListChangedAsync(
+            repositoryPath,
+            ["status", "--porcelain", "--untracked-files=all", "--", .. paths],
+            ct);
+
+    private async Task<OperationResult<IReadOnlyList<string>>> ListChangedAsync(
+        string repositoryPath,
+        IReadOnlyList<string> arguments,
+        CancellationToken ct)
     {
-        var result = await RunAsync(repositoryPath, ["status", "--porcelain"], LocalOperationTimeout, ct)
+        var result = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct)
             .ConfigureAwait(false);
 
         if (result.Failed)

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Projects;
 using Loadout.Core.Workspace;
 using Loadout.Models;
 using Loadout.Platform.Abstractions;
@@ -137,11 +138,13 @@ public sealed class DesktopCommand : AsyncCommand<DesktopCommand.Settings>
 public sealed class WorkspaceSaveCommand : AsyncCommand<WorkspaceSaveCommand.Settings>
 {
     private readonly IWorkspaceManager _workspace;
+    private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
 
-    public WorkspaceSaveCommand(IWorkspaceManager workspace, IAnsiConsole console)
+    public WorkspaceSaveCommand(IWorkspaceManager workspace, IProjectService projects, IAnsiConsole console)
     {
         _workspace = workspace;
+        _projects = projects;
         _console = console;
     }
 
@@ -149,6 +152,10 @@ public sealed class WorkspaceSaveCommand : AsyncCommand<WorkspaceSaveCommand.Set
     {
         [CommandOption("--message <MESSAGE>")]
         [Description("Project name to record in the commit message.")]
+        public string? Message { get; init; }
+
+        [CommandOption("--project <SLUG>")]
+        [Description("Save only this project's workspace files, and leave the rest uncommitted.")]
         public string? Project { get; init; }
 
         [CommandOption("--local")]
@@ -161,7 +168,22 @@ public sealed class WorkspaceSaveCommand : AsyncCommand<WorkspaceSaveCommand.Set
     {
         var output = new CommandOutput(_console, settings);
 
-        var pending = await _workspace.GetPendingChangesAsync().ConfigureAwait(false);
+        // Unscoped unless asked: this command is the explicit way to save
+        // everything, which is what a session's own save now points people at.
+        string? slug = null;
+
+        if (settings.Project is { Length: > 0 } handle)
+        {
+            var resolution = await _projects.ResolveAsync(handle, cancellationToken).ConfigureAwait(false);
+            if (resolution.Failed)
+            {
+                return output.Fail(resolution);
+            }
+
+            slug = resolution.Value!.Entry.Slug;
+        }
+
+        var pending = await _workspace.GetPendingChangesAsync(slug, cancellationToken).ConfigureAwait(false);
         if (pending.Failed)
         {
             return output.Fail(pending);
@@ -209,9 +231,11 @@ public sealed class WorkspaceSaveCommand : AsyncCommand<WorkspaceSaveCommand.Set
         }
 
         var result = await _workspace.SaveAsync(
-            settings.Project ?? "workspace",
+            settings.Message ?? slug ?? "workspace",
             "manual",
-            push: !settings.Local).ConfigureAwait(false);
+            push: !settings.Local,
+            slug,
+            cancellationToken).ConfigureAwait(false);
 
         if (result.Failed)
         {

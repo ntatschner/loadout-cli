@@ -44,6 +44,15 @@ public sealed class WorkspaceSavePrompt
             return;
         }
 
+        // A session saves its own project and nothing else: the rest may be
+        // another session's unfinished work. Said once, so the files left
+        // behind are not a surprise later.
+        if (outcome.ProjectSlug is not null && outcome.OtherPendingWorkspaceChanges > 0)
+        {
+            _console.MarkupLine(
+                $"[dim]{Markup.Escape(AgentLauncher.OtherPendingNote(outcome.OtherPendingWorkspaceChanges))}[/]");
+        }
+
         if (!settings.AllowsPrompting)
         {
             // Nobody can answer, so the changes are left exactly as they are and
@@ -110,6 +119,7 @@ public sealed class WorkspaceSavePrompt
             outcome.ProjectName ?? "workspace",
             outcome.AgentName ?? "agent",
             push: choice == SaveAndSync,
+            outcome.ProjectSlug,
             ct).ConfigureAwait(false);
 
         if (result.Failed)

@@ -126,6 +126,16 @@ public sealed record LaunchRequest(
 /// print and a caller to inspect. Null when the launch failed before it got
 /// that far.
 /// </param>
+/// <param name="ProjectSlug">
+/// The project whose workspace directory a save should cover. When set,
+/// <paramref name="PendingWorkspaceChanges"/> lists only that directory, so the
+/// question is never asked about files the save would leave alone. Null keeps
+/// the old behaviour of saving everything.
+/// </param>
+/// <param name="OtherPendingWorkspaceChanges">
+/// How many workspace files outside the project were pending too, and will be
+/// left uncommitted by a scoped save.
+/// </param>
 public sealed record LaunchOutcome(
     int AgentExitCode,
     WorkspaceSyncOutcome SyncOutcome,
@@ -135,7 +145,9 @@ public sealed record LaunchOutcome(
     string? ProjectName = null,
     string? AgentName = null,
     SettingSource AgentSource = SettingSource.BuiltIn,
-    LaunchPlan? Plan = null);
+    LaunchPlan? Plan = null,
+    string? ProjectSlug = null,
+    int OtherPendingWorkspaceChanges = 0);
 
 /// <summary>
 /// What a launch resolved to, before anything was started.
@@ -338,8 +350,9 @@ public sealed class AgentLauncher : IAgentLauncher
             await NoteMissingHandoffAsync(launch.Project.Entry.Slug, startedAt, warnings, ct)
                 .ConfigureAwait(false);
 
-            var pending = await HandleExitPolicyAsync(
-                launch.Config, launch.Project.Entry.Name, launch.Adapter.Name, warnings, ct).ConfigureAwait(false);
+            var (pending, otherPending) = await HandleExitPolicyAsync(
+                launch.Config, launch.Project.Entry.Name, launch.Project.Entry.Slug, launch.Adapter.Name,
+                warnings, ct).ConfigureAwait(false);
 
             return OperationResult<LaunchOutcome>.Ok(new LaunchOutcome(
                 runResult.Value,
@@ -350,7 +363,9 @@ public sealed class AgentLauncher : IAgentLauncher
                 launch.Project.Entry.Name,
                 launch.Adapter.Name,
                 launch.Agent.Source,
-                launch.Plan));
+                launch.Plan,
+                launch.Project.Entry.Slug,
+                otherPending));
         }
         finally
         {
@@ -1164,37 +1179,56 @@ public sealed class AgentLauncher : IAgentLauncher
     /// changed in the workspace.
     /// </summary>
     /// <returns>
-    /// The pending paths when a person needs to decide, or null when the policy
-    /// already settled it.
+    /// The project's pending paths when a person needs to decide, or null when
+    /// the policy already settled it; and how many pending files lie outside
+    /// the project, which no session save commits.
     /// </returns>
-    private async Task<IReadOnlyList<string>?> HandleExitPolicyAsync(
+    /// <remarks>
+    /// Scoped to the session's own project. The workspace is shared by every
+    /// session on the machine, and saving everything pending committed, and
+    /// under "always" pushed, whatever another session in another project had
+    /// not finished writing.
+    /// </remarks>
+    private async Task<(IReadOnlyList<string>? Pending, int Other)> HandleExitPolicyAsync(
         Models.Configuration.LauncherConfig config,
         string projectName,
+        string projectSlug,
         string agentName,
         List<string> warnings,
         CancellationToken ct)
     {
         if (string.Equals(config.Sync.Exit, "never", StringComparison.OrdinalIgnoreCase))
         {
-            return null;
+            return (null, 0);
         }
 
-        var pendingResult = await _workspace.GetPendingChangesAsync(ct).ConfigureAwait(false);
+        var allResult = await _workspace.GetPendingChangesAsync(ct).ConfigureAwait(false);
+        var pendingResult = await _workspace.GetPendingChangesAsync(projectSlug, ct).ConfigureAwait(false);
+
+        // The full list reports an untracked directory as itself, so an entry
+        // that is the project's directory or one of its parents may hold only
+        // this project's files; it is not counted as somebody else's.
+        var own = $"projects/{projectSlug}/";
+
+        var other = allResult.Succeeded
+            ? allResult.Value!.Count(path => !own.StartsWith(path, StringComparison.Ordinal)
+                && !path.StartsWith(own, StringComparison.Ordinal))
+            : 0;
 
         if (pendingResult.Failed || pendingResult.Value!.Count == 0)
         {
             // A session that only read changes nothing, which is the common
             // case and must not produce an empty commit (spec section 46).
-            return null;
+            return (null, other);
         }
 
         if (!string.Equals(config.Sync.Exit, "always", StringComparison.OrdinalIgnoreCase))
         {
-            return pendingResult.Value;
+            return (pendingResult.Value, other);
         }
 
         var saveResult = await _workspace
-            .SaveAsync(projectName, agentName, push: true, ct)
+            .SaveAsync(projectName, agentName, push: true, projectSlug, ct)
             .ConfigureAwait(false);
 
         if (saveResult.Failed)
@@ -1204,8 +1238,20 @@ public sealed class AgentLauncher : IAgentLauncher
             warnings.Add(saveResult.Error!);
         }
 
-        return null;
+        if (other > 0)
+        {
+            warnings.Add(OtherPendingNote(other));
+        }
+
+        return (null, other);
     }
+
+    /// <summary>
+    /// The one line saying what a scoped save left behind, and how to save it.
+    /// </summary>
+    public static string OtherPendingNote(int count) =>
+        $"{count} workspace file(s) outside this project were left uncommitted. "
+        + "Save them with: loadout workspace save";
 
     private async Task<WorkspaceSyncOutcome> SynchroniseAsync(
         Models.Configuration.LauncherConfig config,
