@@ -20,9 +20,16 @@ internal sealed record DumpNotes(string Text, bool OnProject, bool Split)
     /// than a command line, because notes are prose with spaces and quotes in
     /// them and the catalogue splits a command line on spaces.
     /// </summary>
+    /// <remarks>
+    /// Joined to its option with an equals sign. The parser refuses a value
+    /// that starts with a dash - "Option does not have a name" - whether it
+    /// follows the option or stands alone, and notes are most often a list of
+    /// bullets. Written as one argument, the value is never looked at as an
+    /// option.
+    /// </remarks>
     internal IReadOnlyList<string> Arguments(string? project) =>
     [
-        "--text", Text,
+        $"--text={Text}",
         .. OnProject && project is { Length: > 0 } ? (string[])["--project", project] : ["--global"],
         .. Split ? [] : (string[])["--no-split"],
     ];

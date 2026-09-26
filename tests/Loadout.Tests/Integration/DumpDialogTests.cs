@@ -45,11 +45,11 @@ public sealed class DumpDialogTests
     {
         var notes = new DumpNotes("- fix the \"flaky\" test\n- a status page", OnProject: true, Split: true);
 
-        notes.Arguments("website").Should().Equal("--text", "- fix the \"flaky\" test\n- a status page", "--project", "website");
-        notes.Arguments(null).Should().Equal("--text", notes.Text, "--global");
+        notes.Arguments("website").Should().Equal("--text=- fix the \"flaky\" test\n- a status page", "--project", "website");
+        notes.Arguments(null).Should().Equal($"--text={notes.Text}", "--global");
 
         new DumpNotes("x", OnProject: false, Split: false).Arguments("website")
-            .Should().Equal("--text", "x", "--global", "--no-split");
+            .Should().Equal("--text=x", "--global", "--no-split");
     }
 
     [Fact]

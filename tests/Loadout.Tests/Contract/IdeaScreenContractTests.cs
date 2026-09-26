@@ -19,6 +19,7 @@ public sealed class IdeaScreenContractTests
         [
             [LauncherCommands.DumpAdd, .. new DumpNotes("- a \"quoted\" note\n- another", true, true).Arguments("website")],
             [LauncherCommands.DumpAdd, .. new DumpNotes("x", false, false).Arguments(null)],
+            [LauncherCommands.DumpAdd, .. new DumpNotes("- one\n- two", false, true).Arguments(null)],
             [LauncherCommands.DumpApply, .. DumpPiecesDialog.Arguments("dump-1", "website", [1, 3], offered: 4)],
             [LauncherCommands.DumpApply, .. DumpPiecesDialog.Arguments("dump-1", null, [1], offered: 1)],
         ];
@@ -46,5 +47,12 @@ public sealed class IdeaScreenContractTests
         everything.Should().NotContain("Unknown option");
         everything.Should().NotContain("Unexpected option");
         everything.Should().NotContain("Unknown command");
+
+        // The parser's refusal of a value that starts with a dash. These three
+        // alone passed a line that failed on every bulleted list, because the
+        // one message that line produced was none of them.
+        everything.Should().NotContain("Option does not have a name");
+        everything.Should().NotContain("missing required argument");
+        everything.Should().NotContain("Could not match");
     }
 }

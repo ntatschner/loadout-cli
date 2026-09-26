@@ -84,7 +84,7 @@ public sealed class IdeaDumpAddCommand : AsyncCommand<IdeaDumpAddCommand.Setting
         public string? File { get; init; }
 
         [CommandOption("--text <TEXT>")]
-        [Description("The notes themselves, instead of a file.")]
+        [Description("The notes themselves, instead of a file. Notes that start with a dash go as --text=\"- ...\".")]
         public string? Text { get; init; }
 
         [CommandOption("--project <SLUG>")]
