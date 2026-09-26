@@ -162,6 +162,46 @@ public sealed class ToolNominatorTests : IDisposable
         Directory.EnumerateFiles(Path.Combine(_store.Paths.Paths.State, "tools", "inbox")).Should().ContainSingle();
     }
 
+    [Theory]
+    [InlineData("# Clear the cache (make sure it exists first).\n")]
+    [InlineData("echo \"done; make a note of the size\"\n")]
+    [InlineData("echo 'cleared (make sure nothing else is writing)'\n")]
+    public async Task A_command_in_a_comment_or_a_quoted_string_after_a_bracket_or_separator_is_not_run(string prose)
+    {
+        // Where a command starts is after an opening bracket or a separator,
+        // and inside a comment or a quoted sentence those are prose: "(make
+        // sure" in a comment was counted as running make.
+        var (registry, _) = _store.Registry();
+        await _store.PromoteAsync(
+            registry,
+            ToolStoreFixture.Manifest("free-cache", "1.0"),
+            prose + Cache,
+            ToolStoreFixture.Cases());
+
+        Run("20260901-1000-a001", "alpha", Command("make"));
+        Run("20260902-1000-b001", "beta", Command("make"));
+
+        Nominator().Find([]).Should().ContainSingle(one => one.Rule == 3 && one.Key == "3 make",
+            "the tool's script mentions make in prose and never runs it");
+    }
+
+    [Fact]
+    public async Task A_command_run_inside_a_substitution_in_a_quoted_string_is_still_run()
+    {
+        var (registry, _) = _store.Registry();
+        await _store.PromoteAsync(
+            registry,
+            ToolStoreFixture.Manifest("free-cache", "1.0"),
+            "echo \"built: $(make -s version)\"\n" + Cache,
+            ToolStoreFixture.Cases());
+
+        Run("20260901-1000-a001", "alpha", Command("make"));
+        Run("20260902-1000-b001", "beta", Command("make"));
+
+        Nominator().Find([]).Should().NotContain(one => one.Key == "3 make",
+            "the script runs make, inside a substitution the quotes do not stop");
+    }
+
     [Fact]
     public async Task A_one_word_command_is_not_covered_by_a_script_mentioning_it_in_prose()
     {
