@@ -63,6 +63,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly IScheduleService _schedules;
     private readonly IRunJournal _journal;
     private readonly ICommandCatalogue _commands;
+    private readonly Loadout.Core.Ideas.IIdeaService _ideas;
+    private readonly Loadout.Core.Ideas.IIdeaDumps _dumps;
     private readonly IPlatformPaths _paths;
     private readonly Loadout.Core.Projects.IProjectService _projects;
     private readonly Loadout.Core.Tasks.ITaskService _tasks;
@@ -114,8 +116,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Workspace.IWorkspaceManager workspace,
         Loadout.Agents.IAgentRegistry agents,
         IProcessLauncher launcher,
-        Loadout.Core.Tools.IToolNominationPass nominations)
+        Loadout.Core.Tools.IToolNominationPass nominations,
+        Loadout.Core.Ideas.IIdeaService ideas,
+        Loadout.Core.Ideas.IIdeaDumps dumps)
     {
+        _ideas = ideas;
+        _dumps = dumps;
         _launcher = launcher;
         _nominations = nominations;
         _inFlight = new InFlight(commands);
@@ -348,6 +354,13 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // journeys for twenty.
             server.Clear = (asking, ct) => DashboardActions.ClearedAsync(
                 _commands, _time, asking, output, ct);
+
+            // And the ideas: read for the page and worked through from it, by
+            // typing the command for each step. A round with an agent runs on
+            // here, which outlives the page that started it.
+            var ideas = new DashboardIdeas(_commands, _ideas, _dumps, _projects, _time, output);
+            server.IdeasFor = ideas.ReadAsync;
+            server.Ideate = ideas.DoAsync;
 
             // What there is to start, read per request like the waiting area:
             // a team written a moment ago, from the page or from a terminal,

@@ -191,7 +191,9 @@ public sealed class DaemonStartsWorkTests
             workspace: null!,
             agents: null!,
             launcher: null!,
-            nominations: nominations!);
+            nominations: nominations!,
+            ideas: null!,
+            dumps: null!);
 
     /// <summary>A nomination pass with nothing to file.</summary>
     private sealed class NothingNominated : Loadout.Core.Tools.IToolNominationPass
