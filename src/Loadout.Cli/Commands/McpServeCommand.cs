@@ -155,6 +155,7 @@ public sealed class LoadoutTools
     private readonly LoadoutToolScope _scope;
     private readonly Core.Tools.IToolRegistry _catalogue;
     private readonly ISettingsProposals _proposals;
+    private readonly Core.Ideas.IIdeaService _ideas;
 
     public LoadoutTools(
         IInstructionService instructions,
@@ -168,9 +169,11 @@ public sealed class LoadoutTools
         TimeProvider time,
         LoadoutToolScope scope,
         Core.Tools.IToolRegistry catalogue,
-        ISettingsProposals proposals)
+        ISettingsProposals proposals,
+        Core.Ideas.IIdeaService ideas)
     {
         _proposals = proposals;
+        _ideas = ideas;
         _catalogue = catalogue;
         _instructions = instructions;
         _memory = memory;
@@ -596,7 +599,7 @@ public sealed class LoadoutTools
             .ThenBy(item => item.Id, StringComparer.Ordinal))
         {
             lines.Add(
-                $"{item.Id} [{item.State.ToString().ToLowerInvariant()}] {item.Title}"
+                $"{item.Id} [{item.State.ToString().ToLowerInvariant()}{(item.Kind == Models.Tasks.TaskKind.Idea ? ", idea" : string.Empty)}] {item.Title}"
                 + $" - said by {(item.DeclaredBy.Length > 0 ? item.DeclaredBy : "nobody named")}"
                 + $" on {item.DeclaredUtc:yyyy-MM-dd}");
         }
@@ -1022,6 +1025,121 @@ public sealed class LoadoutTools
             ? $"Recorded {declared.Value!.Id} as {parsed.ToString().ToLowerInvariant()}, "
                 + "attributed to this session and dated now."
             : declared.Error ?? "The task could not be recorded.";
+    }
+
+    [McpServerTool(Name = "loadout_idea_add")]
+    [Description(
+        "Drop an idea in to be fleshed out later, without leaving what you are doing: something "
+        + "the person mentioned in passing, or a direction worth exploring that is not this task. "
+        + "It is kept verbatim and nobody acts on it until a person refines it. Use scope "
+        + "'global' for an idea that belongs to no project yet.")]
+    public async Task<string> AddIdeaAsync(
+        [Description("The idea, in the person's words where you have them.")] string text,
+        [Description("'project' for this project's list, 'global' for the workspace-wide one.")]
+        string scope = "project",
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+        string? slug = null;
+
+        if (!string.Equals(scope, "global", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.Equals(scope, "project", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"There is no '{scope}' scope. Use 'project' or 'global'.";
+            }
+
+            slug = await SlugAsync(ct).ConfigureAwait(false);
+
+            if (slug is null)
+            {
+                return "No project could be worked out from here. Use scope 'global' instead.";
+            }
+        }
+
+        var captured = await _ideas.CaptureAsync(slug, text, "agent", null, ct).ConfigureAwait(false);
+
+        return captured.Succeeded
+            ? $"Kept as '{captured.Value!.Id}' on {Core.Tasks.TaskPaths.Describe(slug)}. A person refines it "
+                + $"with: loadout idea refine {captured.Value.Id}"
+            : captured.Error ?? "The idea could not be kept.";
+    }
+
+    [McpServerTool(Name = "loadout_ideas")]
+    [Description(
+        "The ideas somebody has dropped in, on every project and the workspace-wide list, and where "
+        + "each stands. Give an id to read one in full: the questions, the answers, and the plan "
+        + "with what the person kept, dropped or chose. Read only; ideas are refined and accepted "
+        + "by a person.")]
+    public async Task<string> IdeasAsync(
+        [Description("An idea's id, to read that one in full. Leave out to list them all.")]
+        string? id = null,
+        CancellationToken ct = default)
+    {
+        if (id is { Length: > 0 })
+        {
+            var place = await _ideas.LocateAsync(id, await SlugAsync(ct).ConfigureAwait(false), ct)
+                .ConfigureAwait(false);
+
+            if (place.Failed)
+            {
+                return place.Error ?? "The idea could not be found.";
+            }
+
+            var read = await _ideas.ReadAsync(place.Value!, ct).ConfigureAwait(false);
+
+            if (read.Failed)
+            {
+                return read.Error ?? "The idea could not be read.";
+            }
+
+            var record = read.Value!;
+            var text = new System.Text.StringBuilder();
+
+            text.AppendLine($"{record.Id} on {place.Value!.Where}: "
+                + Core.Ideas.IdeaWork.StageOf(record).ToString().ToLowerInvariant());
+            text.AppendLine($"Asked: {record.Ask}");
+
+            foreach (var question in record.Rounds.SelectMany(round => round.Questions))
+            {
+                text.AppendLine($"{question.Id}. {question.Question} "
+                    + (question.Answer.Length > 0 ? $"Answer: {question.Answer}" : "(not answered)"));
+            }
+
+            if (record.Plan is { } plan)
+            {
+                text.AppendLine($"Plan, revision {plan.Revision}: {plan.Title}");
+                text.AppendLine(plan.Understanding);
+
+                foreach (var layer in plan.Layers)
+                {
+                    var chosen = layer.Options.FirstOrDefault(o => o.Id == layer.Chosen)?.Title ?? "none";
+
+                    text.AppendLine($"{layer.Id} {layer.Name}: {chosen} "
+                        + $"[{layer.Verdict.ToString().ToLowerInvariant()}]");
+                }
+
+                foreach (var addition in plan.Additions)
+                {
+                    text.AppendLine($"{addition.Id} {addition.Title} [{addition.Verdict.ToString().ToLowerInvariant()}]");
+                }
+            }
+
+            return text.ToString();
+        }
+
+        var listed = await _ideas.ListAsync(ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return listed.Error ?? "The ideas could not be read.";
+        }
+
+        return listed.Value!.Count == 0
+            ? "No ideas have been dropped in."
+            : string.Join('\n', listed.Value!.Select(idea =>
+                $"{idea.Place.Id} ({idea.Place.Where}) [{idea.Stage.ToString().ToLowerInvariant()}] {idea.Title}"));
     }
 
     /// <summary>What the repository has to say about the claims.</summary>

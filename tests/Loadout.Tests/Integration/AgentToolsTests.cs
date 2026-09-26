@@ -172,7 +172,8 @@ public sealed class AgentToolsTests : IAsyncLifetime
             TimeProvider.System,
             new LoadoutToolScope(slug),
             catalogue: null!,
-            proposals: null!);
+            proposals: null!,
+            ideas: null!);
 
     private async Task RegisterCsharpRepositoryAsync(string name)
     {

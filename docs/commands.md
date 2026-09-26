@@ -70,7 +70,13 @@
 | `loadout commands` | List everything the launcher can do, grouped by what it is for |
 | `loadout list` | List registered projects |
 | `loadout running` | The sessions running now, and how long each has been quiet |
-| `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository |
+| `loadout task list\|declare\|remove` | Record what is being worked on, and check it against the repository. `--global` is the list for what belongs to no project yet |
+| `loadout idea add\|list\|show\|remove` | Drop an idea in, on a project or the workspace-wide list, to be fleshed out later |
+| `loadout idea refine <id>` | Have an agent take an idea one round further: ask its questions, propose a plan with options for each layer, or revise it |
+| `loadout idea answer\|choose\|keep\|drop\|improve` | Answer the agent's questions, pick an option for a layer, keep or drop a piece, or ask for one to be reworked |
+| `loadout idea accept <id>` | Write the plan out and turn the idea into a task on its project, or on a new one with `--new-project` |
+| `loadout idea dump add <file\|->` | Drop in notes kept elsewhere, from a file, standard input or `--text`, and have an agent split them into separate ideas and tasks, each carrying its own words from the notes |
+| `loadout idea dump list\|show\|split\|apply` | See the notes dropped in, split one again, and record the pieces you want, all or `--only 1,3` |
 | `loadout tools search\|show\|submit\|used` | The tools this machine shares between every team: find one before building it, send in a candidate, idea, bug or lesson, and say how a use went |
 | `loadout tools audit\|verify\|promote\|deprecate\|retire` | Look after the catalogue: what happened to it, whether its files still match, and a tool's way in and out |
 | `loadout tools health [name]` | How each active tool is doing beyond passing its cases: how long they took, how often recent uses failed or were worked around, how big it has grown, and whether anyone still uses it |
@@ -423,7 +429,7 @@ Every launch declares Loadout itself as an MCP server, so the handoff runs both
 ways: a session can ask the launcher things rather than parse console output
 written for a person.
 
-Fifteen tools, each making the same call its command makes:
+Seventeen tools, each making the same call its command makes:
 
 | | |
 |---|---|
@@ -435,6 +441,8 @@ Fifteen tools, each making the same call its command makes:
 | `loadout_remember` | Record one durable fact about the project, with a description, screened for credentials |
 | `loadout_tasks` | What the project is working on, and what the repository does not back up, as `task list` says it |
 | `loadout_task_declare` | Record where a task stands, attributed and dated, as `task declare` does |
+| `loadout_idea_add` | Drop an idea in without leaving the work in hand, as `idea add` does |
+| `loadout_ideas` | Every idea and where it stands, or one in full, as `idea list` and `idea show` say it |
 | `loadout_mode` | Change the posture for the rest of the session, and get what that changes |
 | `loadout_progress` | For a node of a team run: say what you are doing, in your own words |
 | `loadout_teams` | What the team runs on this machine are doing, and which have stopped to ask |

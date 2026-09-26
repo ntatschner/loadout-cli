@@ -161,6 +161,7 @@ public static class WaitingRoom
                 }
 
                 var queued = (read.Value ?? [])
+                    .Where(one => one.Kind == TaskKind.Task)
                     .Where(one => one.State is TaskState.Open or TaskState.Blocked)
                     .OrderBy(one => one.State == TaskState.Blocked)
                     .ThenBy(one => one.DeclaredUtc)

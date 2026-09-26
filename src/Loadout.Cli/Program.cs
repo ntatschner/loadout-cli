@@ -667,6 +667,34 @@ public static class Program
             task.AddCommand<TaskRemoveCommand>("remove");
         });
 
+        TopBranch(config, "idea", idea =>
+        {
+            idea.Describe(
+                "Drop ideas in and have an agent flesh them out into a plan, one round at a time.",
+                CommandCategory.Workspace,
+                "ideas brainstorm someday flesh out plan design new project questions");
+            idea.AddCommand<IdeaAddCommand>("add");
+            idea.AddCommand<IdeaListCommand>("list");
+            idea.AddCommand<IdeaShowCommand>("show");
+            idea.AddCommand<IdeaRefineCommand>("refine");
+            idea.AddCommand<IdeaAnswerCommand>("answer");
+            idea.AddCommand<IdeaChooseCommand>("choose");
+            idea.AddCommand<IdeaKeepCommand>("keep");
+            idea.AddCommand<IdeaDropCommand>("drop");
+            idea.AddCommand<IdeaImproveCommand>("improve");
+            idea.AddCommand<IdeaAcceptCommand>("accept");
+            idea.AddCommand<IdeaRemoveCommand>("remove");
+            idea.AddBranch("dump", dump =>
+            {
+                dump.SetDescription("Notes kept elsewhere, dropped in whole and split by an agent into ideas and tasks.");
+                dump.AddCommand<IdeaDumpAddCommand>("add");
+                dump.AddCommand<IdeaDumpListCommand>("list");
+                dump.AddCommand<IdeaDumpShowCommand>("show");
+                dump.AddCommand<IdeaDumpSplitCommand>("split");
+                dump.AddCommand<IdeaDumpApplyCommand>("apply");
+            });
+        });
+
         TopBranch(config, "tools", tools =>
         {
             tools.Describe(

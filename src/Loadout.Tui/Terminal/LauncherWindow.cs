@@ -439,6 +439,21 @@ internal sealed class LauncherWindow : Window
                     Action = RemoveSelected,
                 },
             ]),
+            new MenuBarItem("_Ideas", [
+                new MenuItem
+                {
+                    Title = "_Dump notes to split into ideas and tasks...",
+                    Action = () => Close(new LauncherIntent(LauncherAction.DumpNotes, Selected)),
+                },
+                new MenuItem
+                {
+                    Title = "_Record pieces of an earlier dump...",
+                    Action = () => Close(new LauncherIntent(LauncherAction.RecordDump, Selected)),
+                },
+                new Line(),
+                new MenuItem { Title = "All _ideas", Action = () => RunCommand(LauncherCommands.IdeaList) },
+                new MenuItem { Title = "All d_umps", Action = () => RunCommand(LauncherCommands.DumpList) },
+            ]),
             new MenuBarItem("_Tools", [
                 new MenuItem { Title = "All _commands…", Action = () => _showPalette(this) },
                 new Line(),

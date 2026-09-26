@@ -24,6 +24,24 @@ public enum TaskState
     Dropped,
 }
 
+/// <summary>What sort of thing a task is.</summary>
+public enum TaskKind
+{
+    /// <summary>Work somebody could pick up.</summary>
+    Task,
+
+    /// <summary>
+    /// Something not yet shaped into work: dropped in to be fleshed out, and
+    /// kept out of what a session is told until it has been.
+    /// </summary>
+    /// <remarks>
+    /// A task rather than a list of its own, because an idea turns into one:
+    /// accepting it keeps the id and the history and changes the kind, where a
+    /// separate list would have to copy it across and keep the two in step.
+    /// </remarks>
+    Idea,
+}
+
 /// <summary>
 /// One piece of work, and who said what about it when.
 /// </summary>
@@ -49,6 +67,9 @@ public sealed class TaskItem
     public string Title { get; set; } = string.Empty;
 
     public TaskState State { get; set; } = TaskState.Open;
+
+    /// <summary>Work, or an idea still being shaped.</summary>
+    public TaskKind Kind { get; set; } = TaskKind.Task;
 
     /// <summary>Who said so: an agent name, or whoever was at the keyboard.</summary>
     public string DeclaredBy { get; set; } = string.Empty;
