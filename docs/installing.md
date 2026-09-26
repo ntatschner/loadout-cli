@@ -43,14 +43,14 @@ Pass options to `install.sh` after `sh -s --`, and to `install.ps1` by running
 the downloaded file:
 
 ```bash
-curl -fsSL .../install.sh | sh -s -- --version 0.50.0     # a particular release
+curl -fsSL .../install.sh | sh -s -- --version 0.51.0     # a particular release
 curl -fsSL .../install.sh | sh -s -- --prefix /usr/local  # somewhere other than ~/.local
 curl -fsSL .../install.sh | sh -s -- --dry-run            # download and verify, install nothing
-sh install.sh --archive loadout-0.50.0-linux-x64.tar.gz   # an archive you already have
+sh install.sh --archive loadout-0.51.0-linux-x64.tar.gz   # an archive you already have
 ```
 
 ```powershell
-./install.ps1 -Version 0.50.0
+./install.ps1 -Version 0.51.0
 ./install.ps1 -WhatIf          # download and verify, install nothing
 ```
 
@@ -67,11 +67,11 @@ A release also carries an `.msi`, a `.deb` and an `.rpm`, if you'd rather not
 manage a `PATH` entry by hand:
 
 ```powershell
-msiexec /i loadout-0.50.0-win-x64.msi        # per-user, no elevation
+msiexec /i loadout-0.51.0-win-x64.msi        # per-user, no elevation
 ```
 
 ```bash
-sudo dpkg -i loadout_0.50.0_amd64.deb        # or: sudo rpm -i loadout-0.50.0-1.x86_64.rpm
+sudo dpkg -i loadout_0.51.0_amd64.deb        # or: sudo rpm -i loadout-0.51.0-1.x86_64.rpm
 ```
 
 The MSI installs per user into `%LOCALAPPDATA%\Programs\loadout`, adds that to
@@ -125,8 +125,8 @@ had the older version.
 ## Building a release locally
 
 ```bash
-pwsh ./build/package.ps1 -Runtime linux-x64 -Version 0.50.0     # archive
-pwsh ./build/installer.ps1 -Runtime win-x64 -Version 0.50.0     # native installer
+pwsh ./build/package.ps1 -Runtime linux-x64 -Version 0.51.0     # archive
+pwsh ./build/installer.ps1 -Runtime win-x64 -Version 0.51.0     # native installer
 ```
 
 Each format is built by the tooling that owns it — WiX for the MSI, `dpkg-deb`
@@ -142,7 +142,7 @@ Maintenance Fee agreement, and that's a decision for whoever owns the project,
 not one a build script should make for them.
 
 ```bash
-pwsh ./build/package.ps1 -Runtime osx-arm64 -Version 0.50.0
+pwsh ./build/package.ps1 -Runtime osx-arm64 -Version 0.51.0
 ```
 
 That leaves the archive and its checksum in `artifacts/`. Unix archives get the
@@ -196,11 +196,11 @@ nothing has to be running to answer:
 ```json
 {
   "schemaVersion": 1,
-  "version": "0.50.0",
+  "version": "0.51.0",
   "notes": "What changed.",
   "artifacts": {
     "osx-arm64": {
-      "url": "https://internal.example/loadout/loadout-0.50.0-osx-arm64.tar.gz",
+      "url": "https://internal.example/loadout/loadout-0.51.0-osx-arm64.tar.gz",
       "sha256": "985daa42...",
       "size": 31110221
     }
