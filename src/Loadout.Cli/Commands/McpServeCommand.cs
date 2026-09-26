@@ -154,6 +154,7 @@ public sealed class LoadoutTools
     private readonly TimeProvider _time;
     private readonly LoadoutToolScope _scope;
     private readonly Core.Tools.IToolRegistry _catalogue;
+    private readonly ISettingsProposals _proposals;
 
     public LoadoutTools(
         IInstructionService instructions,
@@ -166,8 +167,10 @@ public sealed class LoadoutTools
         IRunJournal runs,
         TimeProvider time,
         LoadoutToolScope scope,
-        Core.Tools.IToolRegistry catalogue)
+        Core.Tools.IToolRegistry catalogue,
+        ISettingsProposals proposals)
     {
+        _proposals = proposals;
         _catalogue = catalogue;
         _instructions = instructions;
         _memory = memory;
@@ -1053,6 +1056,65 @@ public sealed class LoadoutTools
         return commits.Succeeded
             ? Core.Tasks.TaskCorroboration.Check(tasks, commits.Value!, now)
             : [];
+    }
+
+    [McpServerTool(Name = "loadout_project_settings")]
+    [Description(
+        "This project's project.yaml as it is now: which agent and model it launches, the context "
+        + "files every session gets, its profiles and specialist preferences. Read it before "
+        + "proposing a change with loadout_propose_settings.")]
+    public async Task<string> ProjectSettingsAsync(CancellationToken ct = default)
+    {
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var path = Path.Combine(_workspace.LocalPath, "projects", slug, "project.yaml");
+
+        return File.Exists(path)
+            ? await File.ReadAllTextAsync(path, ct).ConfigureAwait(false)
+            : $"'{slug}' has no project.yaml in the workspace.";
+    }
+
+    [McpServerTool(Name = "loadout_propose_settings")]
+    // Proposed rather than written: the settings choose what every later
+    // session is told, and a session that could rewrite them would be choosing
+    // its own instructions with nobody watching. A person applies it.
+    [Description(
+        "Propose a change to this project's project.yaml for the person to review and apply. Pass "
+        + "the whole file as it should be after the change - start from loadout_project_settings - "
+        + "and say why for each change. Identity, repository, environment and environments cannot "
+        + "be proposed; they decide which credentials and sandbox a session gets. A new proposal "
+        + "replaces the previous one.")]
+    public async Task<string> ProposeSettingsAsync(
+        [Description("The complete project.yaml as it would be after the change.")] string manifest,
+        [Description("Why each change is worth making, one line per change.")] string reasons,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(manifest);
+
+        var slug = await SlugAsync(ct).ConfigureAwait(false);
+
+        if (slug is null)
+        {
+            return "No project could be worked out from here.";
+        }
+
+        var proposed = await _proposals
+            .ProposeAsync(slug, manifest, reasons, "agent", ct)
+            .ConfigureAwait(false);
+
+        if (proposed.Failed)
+        {
+            return proposed.Error ?? "The proposal could not be recorded.";
+        }
+
+        return "Proposed. The person reviews it with 'loadout project proposal " + slug
+            + "' and applies it with --apply. The changes:" + Environment.NewLine
+            + string.Join(Environment.NewLine, proposed.Value!.Changes);
     }
 
     [McpServerTool(Name = "loadout_mode")]

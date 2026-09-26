@@ -51,6 +51,7 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     private ConfigurationService _configuration = null!;
     private LauncherConfig _config = null!;
     private IWorkspaceManager _workspace = null!;
+    private Loadout.Core.Tasks.TaskService _tasks = null!;
 
     public LaunchPipelineTests() =>
         _root = Path.Combine(Path.GetTempPath(), "loadout-launch-" + Guid.NewGuid().ToString("N"));
@@ -133,6 +134,7 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         var agents = new AgentRegistry(resolver, _processes, config);
         _ledger = new LaunchLedger(_paths, permissions, TimeProvider.System);
         _running = new SessionRegistry(_paths, permissions, new ProcessInspector(), TimeProvider.System);
+        _tasks = new Loadout.Core.Tasks.TaskService(workspace, yaml, TimeProvider.System);
 
         _launcher = new AgentLauncher(
             _projects,
@@ -159,7 +161,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
             new Loadout.Core.Statusline.LoadedSpecialistStore(
                 _paths, new Loadout.Core.Configuration.YamlStore(new Loadout.Tests.Fakes.NoOpFilePermissions()),
                 TimeProvider.System),
-            _reaper);
+            _reaper,
+            _tasks);
     }
 
     /// <summary>Records whether the launch asked for a collection.</summary>
@@ -196,6 +199,67 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         }
 
         return Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task A_session_started_without_a_task_onboards_a_project_waiting_for_it()
+    {
+        await _tasks.DeclareAsync(
+            ProjectSlug, ProjectOnboardingTask.Id, Loadout.Models.Tasks.TaskState.Open, "loadout project add");
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        var plan = result.Value!.Plan!;
+
+        plan.Task.Should().Be(ProjectOnboardingTask.Title);
+
+        // Investigate, not the launcher's default of implement: onboarding
+        // reads and records, and the skill loads whatever mode it is.
+        plan.Mode.Should().Be("investigate");
+        plan.Instructions!.Selected.Select(s => s.Specialist.Id)
+            .Should().Contain(ProjectOnboardingTask.Skill);
+        result.Value.Warnings.Should().Contain(w => w.Contains("onboards the project"));
+    }
+
+    [Fact]
+    public async Task A_session_started_for_something_else_is_reminded_rather_than_taken_over()
+    {
+        await _tasks.DeclareAsync(
+            ProjectSlug, ProjectOnboardingTask.Id, Loadout.Models.Tasks.TaskState.Open, "loadout project add");
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true, Task: "fix the upload retry"));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        var plan = result.Value!.Plan!;
+
+        plan.Task.Should().Be("fix the upload retry");
+        plan.Mode.Should().BeNull();
+        plan.Instructions!.Selected.Select(s => s.Specialist.Id)
+            .Should().NotContain(ProjectOnboardingTask.Skill);
+        result.Value.Warnings.Should().Contain(w => w.Contains("has not been onboarded"));
+    }
+
+    [Fact]
+    public async Task A_project_whose_onboarding_was_skipped_launches_as_it_always_did()
+    {
+        await _tasks.DeclareAsync(
+            ProjectSlug, ProjectOnboardingTask.Id, Loadout.Models.Tasks.TaskState.Dropped, "somebody");
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+
+        var plan = result.Value!.Plan!;
+
+        plan.Task.Should().BeNull();
+        plan.Mode.Should().BeNull();
+        result.Value.Warnings.Should().NotContain(w => w.Contains("onboard"));
     }
 
     [Fact]

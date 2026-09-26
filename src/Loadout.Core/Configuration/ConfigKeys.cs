@@ -179,6 +179,13 @@ public static class ConfigKeys
             Group: Groups.Editor,
             WhenUnset: "new projects open in the editor's default profile"),
 
+        new("onboarding-run", "Onboarding for a newly registered project: first-launch or skip",
+            (c, _) => c.Onboarding.Run,
+            (c, _, v) => c.Onboarding.Run = OneOf(v, "", "first-launch", "skip"), false,
+            Sample: "skip",
+            Group: Groups.Agents,
+            WhenUnset: "the first session started without a task onboards it"),
+
         new("editor-command", "Editor opened by 'loadout code': code, code-insiders, codium, cursor",
             (c, _) => c.Editor.Command,
             (c, _, v) => c.Editor.Command = v, false,

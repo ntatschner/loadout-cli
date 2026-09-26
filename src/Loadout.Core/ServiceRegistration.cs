@@ -30,6 +30,7 @@ public static class ServiceRegistration
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton<IProjectService, ProjectService>();
         services.AddSingleton<Projects.IProjectTemplateService, Projects.ProjectTemplateService>();
+        services.AddSingleton<Projects.ISettingsProposals, Projects.SettingsProposals>();
         services.AddSingleton<IContextCompiler, ContextCompiler>();
         services.AddSingleton<IHandoffService, HandoffService>();
         services.AddSingleton<IPreflightService, PreflightService>();

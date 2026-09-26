@@ -56,7 +56,9 @@ Registered storefront (storefront)
 
 You should see the repository registered under a short name, its slug. The slug
 is what `loadout <project>` takes and what memory and launch history are filed
-under. If setup already registered it, this tells you so.
+under. If setup already registered it, this tells you so. [Adding a
+project](adding-a-project.md) covers the other ways in and every setting a
+project can carry.
 
 ### 3. Protect it
 

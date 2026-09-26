@@ -98,7 +98,12 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         _configuration = configuration;
         _tasks = new Loadout.Core.Tasks.TaskService(_workspace, yaml, TimeProvider.System);
         _projects = new ProjectService(configuration, _workspace, _git, new PathSemantics(), _tasks);
+        _yaml = yaml;
+        _proposals = new SettingsProposals(_workspace, yaml, TimeProvider.System);
     }
+
+    private YamlStore _yaml = null!;
+    private SettingsProposals _proposals = null!;
 
     public Task DisposeAsync()
     {
@@ -446,9 +451,9 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
 
         tasks.Succeeded.Should().BeTrue(tasks.Error);
 
-        var setup = tasks.Value!.Should().ContainSingle().Subject;
+        // Alongside the onboarding every new project gets, which has its own tests.
+        var setup = tasks.Value!.Should().ContainSingle(t => t.Id == "setup-repository").Subject;
 
-        setup.Id.Should().Be("setup-repository");
         setup.State.Should().Be(Models.Tasks.TaskState.Open);
         setup.Note.Should().Contain("Git repository");
     }
@@ -467,7 +472,183 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
         // And the other half: no task, and the section stays off. A repository
         // that is already a repository has nothing to be told.
         manifest.Value.Context.Tasks.Should().BeFalse();
-        (await _tasks.ListAsync("proper")).Value!.Should().BeEmpty();
+        (await _tasks.ListAsync("proper")).Value!.Should().NotContain(t => t.Id == "setup-repository");
+    }
+
+    [Fact]
+    public async Task Registering_a_new_project_queues_its_onboarding()
+    {
+        var repository = await CreateRepositoryAsync("newcomer", "ssh://git.internal/apps/newcomer.git");
+
+        await _projects.AddAsync(repository);
+
+        var tasks = await _tasks.ListAsync("newcomer");
+
+        tasks.Succeeded.Should().BeTrue(tasks.Error);
+
+        var onboarding = tasks.Value!.Should().ContainSingle(t => t.Id == "onboard-project").Subject;
+
+        onboarding.State.Should().Be(Models.Tasks.TaskState.Open);
+        onboarding.DeclaredBy.Should().Be("loadout project add");
+    }
+
+    /// <summary>A registered project, and its manifest as the text a proposal would start from.</summary>
+    private async Task<(string Slug, Models.Projects.ProjectManifest Manifest)> ProposableAsync(string name)
+    {
+        var repository = await CreateRepositoryAsync(name, $"ssh://git.internal/apps/{name}.git");
+
+        await _projects.AddAsync(repository);
+
+        return (name, (await _workspace.ReadProjectAsync(name)).Value!);
+    }
+
+    [Fact]
+    public async Task A_proposal_changes_nothing_until_it_is_applied()
+    {
+        var (slug, manifest) = await ProposableAsync("proposed");
+
+        manifest.Context.CodeMap = true;
+
+        var proposed = await _proposals.ProposeAsync(
+            slug, _yaml.Render(manifest), "code_map: the tree is large enough to get lost in", "agent");
+
+        proposed.Succeeded.Should().BeTrue(proposed.Error);
+        proposed.Value!.Changes.Should().ContainInOrder("-   code_map: false", "+   code_map: true");
+
+        (await _workspace.ReadProjectAsync(slug)).Value!.Context.CodeMap.Should().BeFalse(
+            "proposing is not applying");
+
+        var applied = await _proposals.ApplyAsync(slug);
+
+        applied.Succeeded.Should().BeTrue(applied.Error);
+        (await _workspace.ReadProjectAsync(slug)).Value!.Context.CodeMap.Should().BeTrue();
+        (await _proposals.ReadAsync(slug)).Value.Should().BeNull("an applied proposal is used up");
+    }
+
+    [Fact]
+    public async Task A_discarded_proposal_leaves_the_settings_alone()
+    {
+        var (slug, manifest) = await ProposableAsync("declined");
+
+        manifest.Context.CodeMap = true;
+
+        await _proposals.ProposeAsync(slug, _yaml.Render(manifest), "worth a try", "agent");
+
+        (await _proposals.DiscardAsync(slug)).Succeeded.Should().BeTrue();
+
+        (await _proposals.ReadAsync(slug)).Value.Should().BeNull();
+        (await _workspace.ReadProjectAsync(slug)).Value!.Context.CodeMap.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("environment")]
+    [InlineData("environments")]
+    [InlineData("repository")]
+    [InlineData("id")]
+    public async Task A_proposal_may_not_touch_identity_or_credentials(string section)
+    {
+        var (slug, manifest) = await ProposableAsync("guarded-" + section);
+
+        switch (section)
+        {
+            case "environment":
+                manifest.Environment["DATABASE_URL"] = new Models.Projects.EnvironmentBinding { Secret = "prod/db" };
+                break;
+            case "environments":
+                manifest.Environments["production"] = new Models.Projects.EnvironmentDefinition
+                {
+                    SecurityProfile = "development",
+                };
+                break;
+            case "repository":
+                manifest.Repository.Remote = "https://example.invalid/elsewhere.git";
+                break;
+            default:
+                manifest.Id = Guid.NewGuid().ToString();
+                break;
+        }
+
+        var proposed = await _proposals.ProposeAsync(slug, _yaml.Render(manifest), "because", "agent");
+
+        proposed.Failed.Should().BeTrue();
+        proposed.Error.Should().Contain(section);
+        (await _proposals.ReadAsync(slug)).Value.Should().BeNull("nothing refused is kept");
+    }
+
+    [Fact]
+    public async Task A_proposal_made_before_somebody_edited_the_file_is_not_applied_over_them()
+    {
+        var (slug, manifest) = await ProposableAsync("overtaken");
+
+        manifest.Context.CodeMap = true;
+        await _proposals.ProposeAsync(slug, _yaml.Render(manifest), "big tree", "agent");
+
+        // Somebody edits the file by hand in the meantime.
+        var edited = (await _workspace.ReadProjectAsync(slug)).Value!;
+        edited.Agents.Model = "big-model";
+        await _workspace.WriteProjectAsync(edited);
+
+        (await _proposals.ReadAsync(slug)).Value!.Stale.Should().BeTrue();
+
+        var applied = await _proposals.ApplyAsync(slug);
+
+        applied.Failed.Should().BeTrue();
+        (await _workspace.ReadProjectAsync(slug)).Value!.Agents.Model.Should().Be(
+            "big-model", "applying would have undone the edit with nothing to say so");
+    }
+
+    [Fact]
+    public async Task A_proposal_without_a_reason_or_without_a_change_is_refused()
+    {
+        var (slug, manifest) = await ProposableAsync("unreasoned");
+
+        (await _proposals.ProposeAsync(slug, _yaml.Render(manifest), "no change", "agent"))
+            .Failed.Should().BeTrue();
+
+        manifest.Context.CodeMap = true;
+
+        (await _proposals.ProposeAsync(slug, _yaml.Render(manifest), "  ", "agent"))
+            .Failed.Should().BeTrue();
+
+        (await _proposals.ProposeAsync(slug, "not: [valid", "a reason", "agent"))
+            .Failed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_project_whose_manifest_already_exists_is_not_queued_for_onboarding()
+    {
+        // Written by another machine, or by hand: somebody has been here before,
+        // and onboarding it again on every machine it reaches would be noise.
+        await _workspace.WriteProjectAsync(new Models.Projects.ProjectManifest
+        {
+            Id = Guid.NewGuid().ToString(),
+            Slug = "known",
+            Name = "known",
+        });
+
+        var repository = await CreateRepositoryAsync("known", "ssh://git.internal/apps/known.git");
+
+        await _projects.AddAsync(repository);
+
+        (await _tasks.ListAsync("known")).Value!.Should().NotContain(t => t.Id == "onboard-project");
+    }
+
+    [Fact]
+    public async Task Onboarding_set_to_skip_is_recorded_as_skipped_rather_than_left_out()
+    {
+        var config = (await _configuration.LoadConfigAsync()).Value!;
+        config.Onboarding.Run = "skip";
+        await _configuration.SaveConfigAsync(config);
+
+        var repository = await CreateRepositoryAsync("hurried", "ssh://git.internal/apps/hurried.git");
+
+        await _projects.AddAsync(repository);
+
+        var onboarding = (await _tasks.ListAsync("hurried")).Value!
+            .Should().ContainSingle(t => t.Id == "onboard-project").Subject;
+
+        onboarding.State.Should().Be(Models.Tasks.TaskState.Dropped);
+        onboarding.Note.Should().Contain("onboarding-run");
     }
 
     [Fact]

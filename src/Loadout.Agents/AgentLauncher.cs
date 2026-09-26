@@ -240,6 +240,12 @@ public sealed class AgentLauncher : IAgentLauncher
     /// </summary>
     private readonly Core.Sessions.IRuntimeReaper? _reaper;
 
+    /// <summary>
+    /// Reads whether the project is waiting to be onboarded. Optional so a
+    /// launcher built without one behaves exactly as it did before.
+    /// </summary>
+    private readonly Core.Tasks.ITaskService? _tasks;
+
     public AgentLauncher(
         IProjectService projects,
         IWorkspaceManager workspace,
@@ -259,8 +265,10 @@ public sealed class AgentLauncher : IAgentLauncher
         IPolicyService policies,
         Core.Usage.ISpendWatch spend,
         Core.Statusline.ILoadedSpecialistStore loaded,
-        Core.Sessions.IRuntimeReaper? reaper = null)
+        Core.Sessions.IRuntimeReaper? reaper = null,
+        Core.Tasks.ITaskService? tasks = null)
     {
+        _tasks = tasks;
         _reaper = reaper;
         _spend = spend;
         _loaded = loaded;
@@ -538,6 +546,9 @@ public sealed class AgentLauncher : IAgentLauncher
         }
 
         var manifest = await LoadManifestAsync(project.Entry.Slug, warnings, ct).ConfigureAwait(false);
+
+        request = await OnboardingAsync(project.Entry.Slug, request, attended: headless is null, warnings, ct)
+            .ConfigureAwait(false);
 
         var agent = ResolveAgent(request, manifest, project, config);
         var agentName = agent.Value;
@@ -975,6 +986,68 @@ public sealed class AgentLauncher : IAgentLauncher
             + "Create one at projects/" + slug + "/project.yaml in the workspace.");
 
         return null;
+    }
+
+    /// <summary>
+    /// Turns the first session in a newly registered project into its
+    /// onboarding, or reminds a session started for something else that it is
+    /// still to do.
+    /// </summary>
+    /// <remarks>
+    /// Done here, before anything reads the mode or the task, so the model
+    /// chosen for the mode, the specialists and the plan all agree. The skill is
+    /// named explicitly because a skill otherwise loads only in the modes it
+    /// lists and on the words it lists, and onboarding must not depend on how
+    /// somebody happened to phrase the launch.
+    /// </remarks>
+    private async Task<LaunchRequest> OnboardingAsync(
+        string slug,
+        LaunchRequest request,
+        bool attended,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        if (_tasks is null || !attended)
+        {
+            return request;
+        }
+
+        var tasks = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+        var turn = Core.Projects.ProjectOnboardingTask.TurnFor(
+            tasks.Succeeded && Core.Projects.ProjectOnboardingTask.Pending(tasks.Value!),
+            request.Task,
+            attended);
+
+        switch (turn)
+        {
+            case Core.Projects.OnboardingTurn.Onboard:
+                warnings.Add(
+                    "This session onboards the project: it learns the code, records what it finds and "
+                    + "proposes settings for you to apply. Skip it instead with "
+                    + $"'loadout project onboard {slug} --skip'.");
+
+                var named = request.Specialists ?? [];
+
+                return request with
+                {
+                    Task = Core.Projects.ProjectOnboardingTask.Title,
+                    Mode = request.Mode ?? Core.Projects.ProjectOnboardingTask.Mode,
+                    Specialists = named.Contains(Core.Projects.ProjectOnboardingTask.Skill, StringComparer.OrdinalIgnoreCase)
+                        ? named
+                        : [.. named, Core.Projects.ProjectOnboardingTask.Skill],
+                };
+
+            case Core.Projects.OnboardingTurn.Remind:
+                warnings.Add(
+                    $"'{slug}' has not been onboarded yet. Start a session without a task to do it, "
+                    + $"or skip it with 'loadout project onboard {slug} --skip'.");
+
+                return request;
+
+            default:
+                return request;
+        }
     }
 
     /// <summary>

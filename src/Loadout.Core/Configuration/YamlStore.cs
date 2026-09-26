@@ -40,6 +40,32 @@ public sealed class YamlStore
     public YamlStore(IFilePermissions permissions) => _permissions = permissions;
 
     /// <summary>
+    /// Reads YAML handed over as text rather than from a file, with the same
+    /// conventions a file gets.
+    /// </summary>
+    public OperationResult<T> Parse<T>(string text)
+        where T : class
+    {
+        try
+        {
+            var value = string.IsNullOrWhiteSpace(text) ? null : _deserializer.Deserialize<T>(text);
+
+            return value is null
+                ? OperationResult<T>.Fail("There was nothing to read.", ExitCode.ConfigurationInvalid)
+                : OperationResult<T>.Ok(value);
+        }
+        catch (YamlException ex)
+        {
+            return OperationResult<T>.Fail(
+                $"Not valid YAML at line {ex.Start.Line}, column {ex.Start.Column}: {ex.Message}",
+                ExitCode.ConfigurationInvalid);
+        }
+    }
+
+    /// <summary>The text a value would be written as.</summary>
+    public string Render<T>(T value) => _serializer.Serialize(value);
+
+    /// <summary>
     /// Loads a YAML file, returning the supplied default when it does not
     /// exist. A missing config file is a first-run condition, not an error.
     /// </summary>
