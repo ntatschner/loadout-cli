@@ -15,6 +15,8 @@
 | `loadout project survey [--adopt]` | Find agent state no project accounts for, and take on what it can |
 | `loadout project link [project]` | Record inside a repository which project it belongs to |
 | `loadout project context [key] [on\|off]` | Show or change what the project carries into every session: its open tasks, its code map |
+| `loadout project onboard [project] [--skip]` | Onboard a project now in an agent session you watch, or record that it is skipped |
+| `loadout project proposal [project] [--apply\|--discard]` | Show the settings change a session proposed, then apply or discard it |
 | `loadout code [project]` | Open a project in the editor, under the profile its agent uses |
 | `loadout config list\|get\|set\|edit` | Read and write launcher settings, and say where they live |
 | `loadout workspace status\|sync\|save\|open` | Manage the central workspace clone |

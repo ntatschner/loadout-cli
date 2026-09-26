@@ -363,6 +363,11 @@ internal sealed class ProjectService : IProjectService
             Remote = state.RemoteUrl ?? string.Empty,
         };
 
+        // Onboarding is for a project nobody has worked out anything about. A
+        // manifest that already exists was written by another machine or by
+        // hand, so somebody has been here before and it is not queued again.
+        var fresh = false;
+
         if (existing is null)
         {
             registry.Projects.Add(entry);
@@ -383,6 +388,8 @@ internal sealed class ProjectService : IProjectService
 
             if (existingManifest.Failed)
             {
+                fresh = true;
+
                 var manifestResult = await _workspace.WriteProjectAsync(
                     new ProjectManifest
                     {
@@ -444,6 +451,11 @@ internal sealed class ProjectService : IProjectService
             await SeedSetupTaskAsync(entry.Slug, state.Root, ct).ConfigureAwait(false);
         }
 
+        if (fresh)
+        {
+            await SeedOnboardingTaskAsync(entry.Slug, ct).ConfigureAwait(false);
+        }
+
         return await ResolveAsync(entry.Slug, ct).ConfigureAwait(false);
     }
 
@@ -481,6 +493,44 @@ internal sealed class ProjectService : IProjectService
                 + "changes are hard to review until they are done. Close this with "
                 + "'loadout task declare setup-repository done' once there is a repository, "
                 + "and consider 'loadout protect' after it.",
+            ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Queues the new project's onboarding for its first session, or records
+    /// that this machine skips it.
+    /// </summary>
+    /// <remarks>
+    /// Recorded either way. A skipped onboarding with nothing to say so looks
+    /// exactly like one nobody thought of, and the task is the one place a later
+    /// session or another machine can read which it was.
+    /// <para>
+    /// Best effort, for the same reason as the setup task: the registration has
+    /// already been written, and a workspace that cannot take a task is not a
+    /// reason to report that it failed.
+    /// </para>
+    /// </remarks>
+    private async Task SeedOnboardingTaskAsync(string slug, CancellationToken ct)
+    {
+        if (_tasks is null)
+        {
+            return;
+        }
+
+        var config = await _configuration.LoadConfigAsync(ct).ConfigureAwait(false);
+
+        var skipped = config.Succeeded
+            && string.Equals(config.Value!.Onboarding.Run, "skip", StringComparison.OrdinalIgnoreCase);
+
+        await _tasks.DeclareAsync(
+            slug,
+            ProjectOnboardingTask.Id,
+            skipped ? TaskState.Dropped : TaskState.Open,
+            declaredBy: "loadout project add",
+            title: ProjectOnboardingTask.Title,
+            note: skipped
+                ? "Skipped, because onboarding-run is set to skip on the machine that registered it."
+                : ProjectOnboardingTask.QueuedNote,
             ct).ConfigureAwait(false);
     }
 

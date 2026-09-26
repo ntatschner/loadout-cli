@@ -967,6 +967,8 @@ public static class Program
             project.AddCommand<ProjectSurveyCommand>("survey");
             project.AddCommand<ProjectLinkCommand>("link");
             project.AddCommand<ProjectContextCommand>("context");
+            project.AddCommand<ProjectOnboardCommand>("onboard");
+            project.AddCommand<ProjectProposalCommand>("proposal");
         });
 
         TopBranch(config, "workspace", workspace =>

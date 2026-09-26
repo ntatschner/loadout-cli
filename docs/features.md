@@ -5,7 +5,7 @@ the commands.
 
 ## Instructions picked for the job
 
-There are 103 specialists built into the binary: foundations, modes, languages,
+There are 104 specialists built into the binary: foundations, modes, languages,
 frameworks, databases, platforms, clouds, functional areas, skills and the roles
 a team run gives its nodes. Instead
 of one enormous prompt that's mostly irrelevant, Loadout works out which ones

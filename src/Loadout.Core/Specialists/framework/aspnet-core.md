@@ -5,10 +5,10 @@ title: ASP.NET Core
 summary: Middleware order, model binding and endpoint behaviour.
 globs:
   - '**/Startup.cs'
-  - '**/appsettings.json'
   - '**/Controllers/**'
 dependencies:
   - 'Microsoft.AspNetCore'
+  - 'Microsoft.NET.Sdk.Web'
 task_phrases:
   - 'asp.net'
   - 'aspnet'

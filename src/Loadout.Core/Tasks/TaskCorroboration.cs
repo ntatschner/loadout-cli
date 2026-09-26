@@ -65,6 +65,14 @@ public static class TaskCorroboration
                 continue;
             }
 
+            // Onboarding's work is memory and a settings proposal, all of it in
+            // the workspace, so the repository never shows it. Checked against
+            // commits, every onboarded project would be flagged for ever.
+            if (string.Equals(task.Id, Projects.ProjectOnboardingTask.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             if (task.State == TaskState.Done)
             {
                 // Anything at all, by anyone. Asking for a commit that names

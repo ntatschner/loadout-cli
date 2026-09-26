@@ -9,6 +9,29 @@ language.csharp
 framework.dotnet
 function.distributed-systems
 
+# dotnet-worker
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.forward-motion
+foundation.verification
+mode.implement
+language.csharp
+framework.dotnet
+function.distributed-systems
+
+# dotnet-web
+foundation.change-safety
+foundation.engineering-core
+foundation.evidence-first
+foundation.forward-motion
+foundation.verification
+mode.implement
+language.csharp
+framework.aspnet-core
+framework.dotnet
+function.distributed-systems
+
 # django-app
 foundation.change-safety
 foundation.engineering-core

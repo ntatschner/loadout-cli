@@ -30,7 +30,8 @@ public sealed class LoadoutToolsCatalogueTests : IDisposable
             runs: null!,
             TimeProvider.System,
             new LoadoutToolScope(null),
-            catalogue);
+            catalogue,
+            proposals: null!);
 
     [Fact]
     public void loadout_tools_submit_screens_secrets()

@@ -106,7 +106,14 @@ public sealed class ClaudeAdapter : AgentAdapterBase
             // would have no way to tell.
             [ScreenReaderMode] = ["--ax-screen-reader"],
             [StrictMcp] = ["--strict-mcp-config"],
+
+            // The positional prompt, as the usage line spells it:
+            // "claude [options] [command] [prompt]".
+            [OpeningPrompt] = ["[prompt]"],
         };
+
+    /// <summary>Capability key for starting an interactive session with a first message.</summary>
+    private const string OpeningPrompt = "opening_prompt";
 
     /// <summary>Capability key for routing permission prompts to a tool.</summary>
     private const string PermissionAnswerer = "permission_answerer";
@@ -160,6 +167,9 @@ public sealed class ClaudeAdapter : AgentAdapterBase
         // Everything after a bare -- belongs to the agent untouched
         // (spec section 36), so it is appended last and never inspected.
         arguments.AddRange(context.PassthroughArguments);
+
+        // After the passthrough, so it is the last positional argument.
+        AddOpeningPrompt(context, descriptor, OpeningPrompt, arguments, warnings);
 
         var environment = context.ResolvedEnvironment is null
             ? new Dictionary<string, string>()

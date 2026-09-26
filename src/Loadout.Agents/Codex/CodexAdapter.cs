@@ -53,7 +53,13 @@ public sealed class CodexAdapter : AgentAdapterBase
             [AgentCapabilities.Sandboxing] = ["--sandbox"],
             [AgentCapabilities.SessionResume] = ["resume"],
             [ModelSelection] = ["--model"],
+
+            // "codex [OPTIONS] [PROMPT]".
+            [OpeningPrompt] = ["[PROMPT]"],
         };
+
+    /// <summary>Capability key for starting an interactive session with a first message.</summary>
+    private const string OpeningPrompt = "opening_prompt";
 
     /// <inheritdoc />
     public override async Task<OperationResult<AgentInvocation>> BuildInvocationAsync(
@@ -106,6 +112,8 @@ public sealed class CodexAdapter : AgentAdapterBase
         ReportProjectSkills(context, warnings);
 
         arguments.AddRange(context.PassthroughArguments);
+
+        AddOpeningPrompt(context, descriptor, OpeningPrompt, arguments, warnings);
 
         return OperationResult<AgentInvocation>.Ok(
             new AgentInvocation(descriptor.ExecutablePath, arguments, environment, warnings));

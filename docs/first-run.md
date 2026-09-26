@@ -612,7 +612,12 @@ loadout config set onboarding-agent codex
 loadout config set onboarding-model big-model
 loadout config set onboarding-models "review=small-model;implement=big-model"
 loadout config set onboarding-editor Agents
+loadout config set onboarding-run skip
 ```
+
+`onboarding-run` decides what happens to a new project's onboarding: queued for
+the first session started without a task of its own, which is the default, or
+recorded as skipped. See [Adding a project](guides/adding-a-project.md#5-let-the-first-session-onboard-it).
 
 `loadout project add` then fills those in and **says what it filled**:
 

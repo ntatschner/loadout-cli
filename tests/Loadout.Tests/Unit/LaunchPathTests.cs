@@ -148,4 +148,30 @@ public sealed class LaunchPathTests
         processes.Requests.Should().HaveCount(2);
         second.Should().BeSameAs(first);
     }
+
+    [Fact]
+    public void The_launch_sheet_previews_the_onboarding_a_launch_with_no_task_will_become()
+    {
+        // The sheet exists to say what the session about to start will load.
+        // Previewing an ordinary implement session while the launch runs the
+        // onboarding would be the sheet contradicting the launch.
+        var (task, mode, named) = TerminalLauncher.PreviewedSession(
+            new LaunchPreviewRequest(Project(), "claude", null, null, null), onboardingPending: true);
+
+        task.Should().Be(Loadout.Core.Projects.ProjectOnboardingTask.Title);
+        mode.Should().Be("investigate");
+        named.Should().Contain(Loadout.Core.Projects.ProjectOnboardingTask.Skill);
+    }
+
+    [Fact]
+    public void The_launch_sheet_previews_a_task_of_its_own_as_it_was_typed()
+    {
+        var (task, mode, named) = TerminalLauncher.PreviewedSession(
+            new LaunchPreviewRequest(Project(), "claude", null, "fix the upload retry", "review"),
+            onboardingPending: true);
+
+        task.Should().Be("fix the upload retry");
+        mode.Should().Be("review");
+        named.Should().BeNull();
+    }
 }

@@ -201,4 +201,49 @@ public abstract class AgentAdapterBase : IAgentAdapter
 
         return capabilities;
     }
+
+    /// <summary>
+    /// Appends the session's first message, after everything else and behind a
+    /// bare <c>--</c>.
+    /// </summary>
+    /// <remarks>
+    /// Behind <c>--</c> because the agents take the prompt as a positional
+    /// argument, and an option that accepts several values - Claude Code's
+    /// <c>--add-dir</c> - would otherwise read the prompt as one more of them.
+    /// Passthrough arguments that already carry a <c>--</c> have ended the
+    /// options themselves, so a second would be read as the prompt.
+    /// </remarks>
+    protected static void AddOpeningPrompt(
+        AgentLaunchContext context,
+        AgentDescriptor descriptor,
+        string capability,
+        List<string> arguments,
+        List<string> warnings)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(arguments);
+        ArgumentNullException.ThrowIfNull(warnings);
+
+        if (context.OpeningPrompt is not { Length: > 0 } prompt)
+        {
+            return;
+        }
+
+        if (!descriptor.Supports(capability))
+        {
+            warnings.Add(
+                $"This build of {descriptor.DisplayName} does not advertise an opening prompt, so the "
+                + $"session waits for you. Type: {prompt}");
+
+            return;
+        }
+
+        if (!context.PassthroughArguments.Contains("--"))
+        {
+            arguments.Add("--");
+        }
+
+        arguments.Add(prompt);
+    }
 }

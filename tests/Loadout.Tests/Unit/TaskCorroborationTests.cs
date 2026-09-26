@@ -36,6 +36,19 @@ public sealed class TaskCorroborationTests
     }
 
     [Fact]
+    public void A_finished_onboarding_is_not_expected_to_leave_a_commit()
+    {
+        // Its work is memory and a settings proposal, all in the workspace.
+        // Found on the first real onboarding, which was flagged the moment it
+        // was done.
+        TaskCorroboration.Check(
+            [Task("onboard-project", TaskState.Done, Now.AddHours(-1))],
+            [Commit(Now.AddHours(-5))],
+            Now)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void Called_done_with_something_committed_since_is_left_alone()
     {
         TaskCorroboration.Check(

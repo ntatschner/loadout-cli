@@ -396,4 +396,11 @@ public sealed class OnboardingSettings
 
     /// <summary>Editor profile a new project opens under.</summary>
     public string EditorProfile { get; set; } = string.Empty;
+
+    /// <summary>
+    /// What happens to a new project's onboarding: <c>first-launch</c> queues it
+    /// for the next session started without a task of its own, <c>skip</c>
+    /// records it as skipped. Empty means <c>first-launch</c>.
+    /// </summary>
+    public string Run { get; set; } = string.Empty;
 }

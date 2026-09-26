@@ -67,6 +67,11 @@ namespace Loadout.Agents;
 /// preset already applied, or null when they have set nothing. An adapter
 /// switches on whatever its own agent offers for it.
 /// </param>
+/// <param name="OpeningPrompt">
+/// The first message of an interactive session, sent as though the person had
+/// typed it, or null to wait for them. The launcher sets it when it has given
+/// the session its work, as it does for onboarding.
+/// </param>
 /// <param name="ReachableDirectories">
 /// Anywhere beyond the project this session may work in. A team's directory is
 /// the first of these: its nodes are briefed with the path and told to keep
@@ -89,7 +94,8 @@ public sealed record AgentLaunchContext(
     IReadOnlyList<string>? AllowedHooks = null,
     HeadlessOptions? Headless = null,
     Models.Configuration.AccessibilitySettings? Accessibility = null,
-    IReadOnlyList<string>? ReachableDirectories = null);
+    IReadOnlyList<string>? ReachableDirectories = null,
+    string? OpeningPrompt = null);
 
 /// <summary>A fully resolved launch, ready to be handed to the process layer.</summary>
 /// <param name="Executable">Absolute path to the agent binary.</param>

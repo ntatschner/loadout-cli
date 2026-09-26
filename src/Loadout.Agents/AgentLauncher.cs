@@ -36,6 +36,10 @@ namespace Loadout.Agents;
 /// The commit or branch a worktree made for this launch starts from, or null
 /// for the repository's head. Ignored where the tree already exists.
 /// </param>
+/// <param name="OpeningPrompt">
+/// The session's first message, sent as though typed. Set by the launcher for
+/// onboarding; ignored for a headless or resumed session.
+/// </param>
 /// <param name="Profile">Context profile to apply (spec section 34).</param>
 /// <param name="IncludeHandoff">Append the most recent handoff to the context (spec section 69).</param>
 /// <param name="Environment">Environment to work in, such as production (spec section 57).</param>
@@ -98,7 +102,8 @@ public sealed record LaunchRequest(
     bool CreateWorktree = false,
     string? PermissionPolicyPath = null,
     IReadOnlyList<string>? ReachableDirectories = null,
-    string? WorktreeFrom = null);
+    string? WorktreeFrom = null,
+    string? OpeningPrompt = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -240,6 +245,12 @@ public sealed class AgentLauncher : IAgentLauncher
     /// </summary>
     private readonly Core.Sessions.IRuntimeReaper? _reaper;
 
+    /// <summary>
+    /// Reads whether the project is waiting to be onboarded. Optional so a
+    /// launcher built without one behaves exactly as it did before.
+    /// </summary>
+    private readonly Core.Tasks.ITaskService? _tasks;
+
     public AgentLauncher(
         IProjectService projects,
         IWorkspaceManager workspace,
@@ -259,8 +270,10 @@ public sealed class AgentLauncher : IAgentLauncher
         IPolicyService policies,
         Core.Usage.ISpendWatch spend,
         Core.Statusline.ILoadedSpecialistStore loaded,
-        Core.Sessions.IRuntimeReaper? reaper = null)
+        Core.Sessions.IRuntimeReaper? reaper = null,
+        Core.Tasks.ITaskService? tasks = null)
     {
+        _tasks = tasks;
         _reaper = reaper;
         _spend = spend;
         _loaded = loaded;
@@ -539,6 +552,9 @@ public sealed class AgentLauncher : IAgentLauncher
 
         var manifest = await LoadManifestAsync(project.Entry.Slug, warnings, ct).ConfigureAwait(false);
 
+        request = await OnboardingAsync(project.Entry.Slug, request, attended: headless is null, warnings, ct)
+            .ConfigureAwait(false);
+
         var agent = ResolveAgent(request, manifest, project, config);
         var agentName = agent.Value;
 
@@ -771,7 +787,12 @@ public sealed class AgentLauncher : IAgentLauncher
             // work in. A team's directory is the first of these: its nodes are
             // briefed with the path and told to keep things there, and until
             // this was passed on the agent refused every write to it.
-            request.ReachableDirectories);
+            request.ReachableDirectories,
+
+            // Only for a person's session. A headless one is given its
+            // messages through its own protocol, and a resumed one is carrying
+            // on from where it stopped, not starting anew.
+            headless is null && request.ResumeSessionId is null ? request.OpeningPrompt : null);
 
         var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
         if (invocationResult.Failed)
@@ -862,7 +883,11 @@ public sealed class AgentLauncher : IAgentLauncher
                 launch.Project.Entry.Slug,
                 launch.Project.Entry.Name,
                 launch.Adapter.Name,
-                request.Task,
+
+                // The plan's task, not the request's: the launcher can give a
+                // session its task, as it does for onboarding, and the record
+                // has to say what the session was actually given.
+                launch.Plan.Task,
                 request.Profile,
                 request.Worktree,
                 launch.Compiled?.Instructions),
@@ -975,6 +1000,72 @@ public sealed class AgentLauncher : IAgentLauncher
             + "Create one at projects/" + slug + "/project.yaml in the workspace.");
 
         return null;
+    }
+
+    /// <summary>
+    /// Turns the first session in a newly registered project into its
+    /// onboarding, or reminds a session started for something else that it is
+    /// still to do.
+    /// </summary>
+    /// <remarks>
+    /// Done here, before anything reads the mode or the task, so the model
+    /// chosen for the mode, the specialists and the plan all agree. The skill is
+    /// named explicitly because a skill otherwise loads only in the modes it
+    /// lists and on the words it lists, and onboarding must not depend on how
+    /// somebody happened to phrase the launch.
+    /// </remarks>
+    private async Task<LaunchRequest> OnboardingAsync(
+        string slug,
+        LaunchRequest request,
+        bool attended,
+        List<string> warnings,
+        CancellationToken ct)
+    {
+        if (_tasks is null || !attended)
+        {
+            return request;
+        }
+
+        var tasks = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+        var turn = Core.Projects.ProjectOnboardingTask.TurnFor(
+            tasks.Succeeded && Core.Projects.ProjectOnboardingTask.Pending(tasks.Value!),
+            request.Task,
+            attended);
+
+        switch (turn)
+        {
+            case Core.Projects.OnboardingTurn.Onboard:
+                warnings.Add(
+                    "This session onboards the project: it learns the code, records what it finds and "
+                    + "proposes settings for you to apply. Skip it instead with "
+                    + $"'loadout project onboard {slug} --skip'.");
+
+                var (task, mode, specialists) = Core.Projects.ProjectOnboardingTask.Onboarding(
+                    request.Mode, request.Specialists);
+
+                // Sent as the session's first message as well. An interactive
+                // agent waits for somebody to type, and the task alone only
+                // chooses its instructions: without this the onboarding sat
+                // at an idle prompt, and nothing said it was waiting on you.
+                return request with
+                {
+                    Task = task,
+                    Mode = mode,
+                    Specialists = specialists,
+                    OpeningPrompt = request.OpeningPrompt ?? task,
+                };
+
+            case Core.Projects.OnboardingTurn.Remind:
+                warnings.Add(
+                    $"'{slug}' has not been onboarded yet. Start a session without a task to do it, "
+                    + $"or skip it with 'loadout project onboard {slug} --skip'.");
+
+                return request;
+
+            default:
+                return request;
+        }
     }
 
     /// <summary>

@@ -12,6 +12,7 @@ should see.
 
 - [Installing](guides/installing.md) — download, check, install, and confirm it worked
 - [Your first run](guides/first-run.md) — set up the workspace, register a repository, protect it, open the launcher
+- [Adding a project](guides/adding-a-project.md) — register a repository, protect it, and every setting its `project.yaml` can carry
 - [Launching a session](guides/launching.md) — the launch sheet, the task, the mode, and a dry run
 - [Using the dashboard](guides/dashboard.md) — start it, open it, find your way round, answer a gate, stop a run
 - [Running a team](guides/teams.md) — choose a team, say what done means, watch it, read what it delivered
