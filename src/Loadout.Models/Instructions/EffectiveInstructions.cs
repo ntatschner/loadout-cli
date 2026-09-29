@@ -18,11 +18,17 @@ public enum SpecialistTrigger
     /// <summary>The posture chosen for this launch.</summary>
     Mode,
 
+    /// <summary>The core of a coding style in force for this project.</summary>
+    Style,
+
     /// <summary>Named by the user.</summary>
     Explicit,
 
     /// <summary>Required by another specialist that was selected.</summary>
     Required,
+
+    /// <summary>Follows in a specialist that was selected, such as a style's C# file after C#.</summary>
+    Accompanies,
 
     /// <summary>Matched words in the task.</summary>
     TaskSemantics,
@@ -62,11 +68,15 @@ public sealed record SpecialistSelection(
     /// Foundation carries the safety rules and mode carries the posture, so
     /// neither is negotiable. Something named explicitly is not either: a user
     /// who asked for the security specialist and silently did not get it has
-    /// been told something untrue about their own session.
+    /// been told something untrue about their own session. Nor is the core of a
+    /// chosen style, which is kept small by the validator for exactly this
+    /// reason: a style that silently fell away under budget pressure would make
+    /// the session write code in somebody else's way.
     /// </remarks>
     public bool IsNegotiable =>
         Trigger is not (SpecialistTrigger.Foundation
             or SpecialistTrigger.Mode
+            or SpecialistTrigger.Style
             or SpecialistTrigger.Explicit);
 }
 

@@ -58,6 +58,8 @@
 | `loadout instructions explain --against-mode\|--against-task` | Show only what changes between two ways of asking |
 | `loadout instructions audit\|validate` | Check a project against what its specialists ask for, or check the library itself |
 | `loadout instructions new <id>` | Draft a specialist or skill in the workspace, or in one project |
+| `loadout style list\|show\|use` | See your coding styles, which are in force for a project, and choose the named one it uses |
+| `loadout instructions explain --style <name>` | See what a task would load under a different named style |
 | `loadout instructions export <specialist>` | Copy a built-in specialist into the workspace so it can be edited |
 | `loadout instructions stats` | Say which specialists launches actually reached, and which none did |
 | `loadout instructions probe [specialist]` | Say how often sessions did what a specialist asks for, week by week |

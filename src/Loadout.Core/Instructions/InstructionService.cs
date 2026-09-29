@@ -18,6 +18,7 @@ namespace Loadout.Core.Instructions;
 /// <param name="Explicit">Specialists named on the command line.</param>
 /// <param name="Excluded">Specialists ruled out on the command line.</param>
 /// <param name="Mode">Posture named on the command line.</param>
+/// <param name="Style">Named coding style given on the command line, which replaces the project's choice.</param>
 public sealed record InstructionRequest(
     ProjectManifest? Manifest = null,
     string? RepositoryPath = null,
@@ -28,7 +29,8 @@ public sealed record InstructionRequest(
     string? Task = null,
     IReadOnlyList<string>? Explicit = null,
     IReadOnlyList<string>? Excluded = null,
-    string? Mode = null);
+    string? Mode = null,
+    string? Style = null);
 
 /// <summary>Works out what an agent should be told, and why.</summary>
 public interface IInstructionService
@@ -169,6 +171,19 @@ internal sealed class InstructionService : IInstructionService
         }
 
         var preferences = Preferences(request);
+        var style = Style(request);
+
+        // A style asked for by name that has no part in the library is refused
+        // for the same reason an unknown specialist is. One set in a project
+        // that has since gone is not: the launch carries on with the personal
+        // and codebase styles, and 'loadout style list' shows the gap.
+        if (request.Style is { Length: > 0 } asked
+            && CodingStyles.Find(catalogue, asked) is null)
+        {
+            return OperationResult<EffectiveInstructions>.Fail(
+                $"No style named '{asked.Trim()}'. Run 'loadout style list' to see what there is.",
+                ExitCode.InvalidArguments);
+        }
 
         var specialistRequest = new SpecialistRequest(
             catalogue,
@@ -180,7 +195,8 @@ internal sealed class InstructionService : IInstructionService
             evidence,
             request.Agent,
             settings.MaxTokens,
-            settings.WarnAtPercent);
+            settings.WarnAtPercent,
+            style);
 
         var unknown = SpecialistResolver.UnknownExplicit(specialistRequest);
 
@@ -283,12 +299,43 @@ internal sealed class InstructionService : IInstructionService
 
         if (request.ProfileName is { Length: > 0 } name
             && manifest.Profiles.TryGetValue(name, out var profile)
-            && !profile.Specialists.IsEmpty())
+            && profile.Specialists.HasSelection())
         {
             return profile.Specialists;
         }
 
         return manifest.Specialists;
+    }
+
+    /// <summary>
+    /// The named style in force: the command line's, then the profile's, then
+    /// the project's.
+    /// </summary>
+    /// <remarks>
+    /// Falls through rather than being replaced with the rest of the
+    /// preferences. A profile narrows what a session knows about; it does not
+    /// change whose code is being written.
+    /// </remarks>
+    private static string? Style(InstructionRequest request)
+    {
+        if (request.Style is { Length: > 0 } asked)
+        {
+            return asked.Trim();
+        }
+
+        if (request.Manifest is not { } manifest)
+        {
+            return null;
+        }
+
+        if (request.ProfileName is { Length: > 0 } name
+            && manifest.Profiles.TryGetValue(name, out var profile)
+            && NullIfEmpty(profile.Specialists.Style) is { } chosen)
+        {
+            return chosen.Trim();
+        }
+
+        return NullIfEmpty(manifest.Specialists.Style)?.Trim();
     }
 
     /// <summary>Exclusions from the command line and from the project both count.</summary>

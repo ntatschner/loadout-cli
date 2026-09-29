@@ -98,12 +98,21 @@ public static class SpecialistScaffold
 
         var canonical = $"{kind.ToString().ToLowerInvariant()}.{name.ToLowerInvariant()}";
 
+        if (kind is SpecialistKind.Style && CodingStyles.PartOf(canonical) is null)
+        {
+            return OperationResult<SpecialistDraft>.Fail(
+                $"'{canonical}' is not a part of a style. Use 'style.<name>' for the core, "
+                + "'style.<name>.<language>' for a language file, or "
+                + "'style.<name>.pattern.<pattern>' for a pattern.",
+                ExitCode.InvalidArguments);
+        }
+
         var content = Compose(
             canonical,
             kind,
             name,
-            string.IsNullOrWhiteSpace(title) ? Humanise(name) : title.Trim(),
-            string.IsNullOrWhiteSpace(summary) ? SummaryFor(kind) : summary.Trim(),
+            string.IsNullOrWhiteSpace(title) ? TitleFor(kind, canonical, name) : title.Trim(),
+            string.IsNullOrWhiteSpace(summary) ? SummaryFor(kind, canonical) : summary.Trim(),
             measured);
 
         return OperationResult<SpecialistDraft>.Ok(
@@ -119,6 +128,22 @@ public static class SpecialistScaffold
     /// filesystem alone.
     /// </remarks>
     public static string DirectoryFor(SpecialistKind kind) => kind.ToString().ToLowerInvariant();
+
+    /// <summary>
+    /// The directory a specialist belongs in, under a library root.
+    /// </summary>
+    /// <remarks>
+    /// A style keeps its parts together in a directory of its own, so the
+    /// files for 'work' can be read, copied or deleted as one.
+    /// </remarks>
+    public static string DirectoryFor(SpecialistDraft draft)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+
+        return draft.Kind == SpecialistKind.Style && CodingStyles.NameOf(draft.Id) is { } style
+            ? Path.Combine(DirectoryFor(draft.Kind), style)
+            : DirectoryFor(draft.Kind);
+    }
 
     private static string Compose(
         string id,
@@ -143,7 +168,7 @@ public static class SpecialistScaffold
 
         AppendMeasured(text, measured);
 
-        AppendBody(text, kind, title);
+        AppendBody(text, kind, id, title);
 
         return text.ToString();
     }
@@ -213,6 +238,10 @@ public static class SpecialistScaffold
                 // and teaches the next person the wrong thing about the field.
                 break;
 
+            case SpecialistKind.Style:
+                AppendStyleActivation(text, name);
+                break;
+
             case SpecialistKind.Language:
             case SpecialistKind.Framework:
             case SpecialistKind.Database:
@@ -236,8 +265,39 @@ public static class SpecialistScaffold
         }
     }
 
-    private static void AppendBody(StringBuilder text, SpecialistKind kind, string title)
+    /// <summary>
+    /// What each part of a style is found by.
+    /// </summary>
+    /// <remarks>
+    /// A core needs nothing: it is in force because its style is. A language
+    /// file follows its language in, and a pattern waits for the task to name
+    /// it.
+    /// </remarks>
+    private static void AppendStyleActivation(StringBuilder text, string name)
     {
+        switch (CodingStyles.PartOf($"style.{name}"))
+        {
+            case StylePart.Language:
+                text.AppendLine("accompanies:");
+                text.AppendLine(CultureInfo.InvariantCulture, $"  - language.{name.Split('.')[^1].ToLowerInvariant()}");
+                break;
+
+            case StylePart.Pattern:
+                text.AppendLine("task_phrases:");
+                text.AppendLine(CultureInfo.InvariantCulture, $"  - '{Humanise(name.Split('.')[^1]).ToLowerInvariant()}'");
+                break;
+        }
+    }
+
+    private static void AppendBody(StringBuilder text, SpecialistKind kind, string id, string title)
+    {
+        if (kind is SpecialistKind.Style)
+        {
+            AppendStyleBody(text, CodingStyles.PartOf(id) ?? StylePart.Core);
+
+            return;
+        }
+
         if (kind is SpecialistKind.Skill)
         {
             text.AppendLine("## When to use");
@@ -277,6 +337,51 @@ public static class SpecialistScaffold
         text.AppendLine("prefer the things that are not obvious from reading the code.");
     }
 
+    /// <summary>
+    /// What each part of a style is for, as prompts to replace.
+    /// </summary>
+    /// <remarks>
+    /// A pattern is the only part drafted with an example block, because it is
+    /// the only part the validator expects one in: a core or a language file is
+    /// rules, and an example there is paid for on every launch that loads it.
+    /// </remarks>
+    private static void AppendStyleBody(StringBuilder text, StylePart part)
+    {
+        if (part is StylePart.Pattern)
+        {
+            text.AppendLine("## The rule");
+            text.AppendLine();
+            text.AppendLine("One or two sentences saying what this pattern is and why it is done this way.");
+            text.AppendLine();
+            text.AppendLine("## Example");
+            text.AppendLine();
+            text.AppendLine("```");
+            text.AppendLine("// Real code from a repository that follows it, trimmed to what shows the pattern.");
+            text.AppendLine("```");
+            text.AppendLine();
+            text.AppendLine("## When not to use this");
+            text.AppendLine();
+            text.AppendLine("Where the pattern gives way, so it is not applied where it does harm.");
+
+            return;
+        }
+
+        text.AppendLine("## Rules");
+        text.AppendLine();
+        text.AppendLine("- One rule per line, written as an instruction, such as: return a result type");
+        text.AppendLine("  rather than throwing for a failure the caller expects.");
+        text.AppendLine();
+        text.AppendLine("Only what makes this way of writing code yours. What any competent developer");
+        text.AppendLine("would do anyway costs context and changes nothing.");
+
+        if (part is StylePart.Core)
+        {
+            text.AppendLine();
+            text.AppendLine("This loads on every launch, so keep it to the rules that apply in every");
+            text.AppendLine("language. Put the rest in a language file, and examples in patterns.");
+        }
+    }
+
     /// <summary>Turns a hyphenated identifier into something a person would write.</summary>
     private static string Humanise(string name)
     {
@@ -290,8 +395,32 @@ public static class SpecialistScaffold
         return char.ToUpperInvariant(words[0]) + words[1..];
     }
 
-    private static string SummaryFor(SpecialistKind kind) => kind switch
+    /// <summary>What to call a drafted specialist when no title was given.</summary>
+    private static string TitleFor(SpecialistKind kind, string id, string name)
     {
+        if (kind is not SpecialistKind.Style || CodingStyles.NameOf(id) is not { } style)
+        {
+            return Humanise(name);
+        }
+
+        var segments = id.Split('.');
+
+        return CodingStyles.PartOf(id) switch
+        {
+            StylePart.Language => $"{Humanise(style)} style: {segments[2]}",
+            StylePart.Pattern => $"{Humanise(style)} pattern: {Humanise(segments[3])}",
+            _ => $"{Humanise(style)} style",
+        };
+    }
+
+    private static string SummaryFor(SpecialistKind kind, string id) => kind switch
+    {
+        SpecialistKind.Style => CodingStyles.PartOf(id) switch
+        {
+            StylePart.Language => "How code in this language is written here.",
+            StylePart.Pattern => "A pattern, with what following it looks like.",
+            _ => "How code is written, whatever the language.",
+        },
         SpecialistKind.Foundation => "Applies to every task.",
         SpecialistKind.Mode => "How to work when this mode is chosen.",
         SpecialistKind.Language => "Working in this language.",

@@ -37,6 +37,7 @@ narrower one is read last.
 | Platform | Where it runs | `platform.docker` |
 | Cloud | Whose cloud | `cloud.azure` |
 | Function | A cross-cutting specialty | `function.performance` |
+| Style | How you write code | `style.personal` |
 | Skill | A procedure to follow | `skill.query-optimisation` |
 | Project | The project's own instructions | `projects/<slug>/context/` |
 
@@ -157,6 +158,89 @@ the specialist yourself on the command line.
 
 A profile's preferences replace the project's rather than adding to them, so a
 profile can narrow.
+
+## Coding styles
+
+A style is how somebody writes code, as opposed to what they know about a
+language: early returns or a single exit, a result type or exceptions, what a
+repository class looks like. It lives in the same library as every other
+specialist, under the `style` kind, so it is loaded, budgeted and explained the
+same way.
+
+A style has up to three parts, and each costs something only when it is
+relevant:
+
+| Part | Id | Loads |
+|---|---|---|
+| Core | `style.work` | On every launch the style is in force |
+| Language file | `style.work.csharp` | Only when the language it accompanies does |
+| Pattern | `style.work.pattern.repository` | Only when the task mentions it |
+
+A language file says what it follows with `accompanies`, and goes when that
+language goes, whether it was excluded or dropped for budget. A pattern is a
+rule plus example code, found by its `task_phrases`, so the examples cost
+nothing on a task that has nothing to do with them.
+
+### Which styles are in force
+
+Three layers, read in this order, so the later one wins where two disagree:
+
+1. **Personal** — `style.personal`, in force everywhere.
+2. **Named** — one style chosen for a kind of work, such as `work` for the day
+   job and `loose` for throwaway projects.
+3. **Codebase** — `style.codebase` under one project's specialists, for that
+   codebase's own conventions.
+
+The order is by layer, not by where a file came from. A named style you chose
+overrides your personal defaults, in the same way a project overrides the
+workspace, even when both sit in the workspace. A style that isn't in force
+never loads from evidence: another style's repository pattern doesn't turn up
+because a task said "repository". Naming one of its parts with `--specialist`
+still works.
+
+Choose the named style for a project, or for one of its profiles:
+
+```bash
+loadout style use work
+loadout style use loose --profile spike
+loadout style use none
+```
+
+This writes `style:` under `specialists:` in the project manifest. Unlike the
+rest of a profile's preferences, a profile that doesn't name a style keeps the
+project's: a profile narrows what a session knows about, not whose code it's
+writing.
+
+### Writing one
+
+```bash
+loadout instructions new style.personal
+loadout instructions new style.personal.csharp
+loadout instructions new style.work.pattern.repository
+loadout instructions new style.codebase --project starstats
+```
+
+Each part lands in `style/<name>/` and is valid as drafted: a language file
+already accompanies `language.<name>`, and a pattern already has a task phrase,
+an example block and a "When not to use this" section to fill in. A codebase
+style drafted with `--project` starts from what the repository can be seen to
+do.
+
+`loadout style list` shows every style, which are in force here, and what each
+core costs. `loadout style show <name>` prints the core and says when each
+language file and pattern loads.
+
+Validation warns about a style that works but costs more than it should:
+
+- a core over about 1,000 tokens, since a core loads on every launch and is
+  never dropped for budget
+- a language file that accompanies nothing, so nothing will load it
+- a pattern with no example code, which is a rule and belongs in the core or a
+  language file
+- a codebase style outside a project, which would apply to every project
+
+The launcher ships no styles. Shipping one would hand everybody somebody
+else's habits.
 
 ## Seeing what an agent will be told
 
@@ -382,6 +466,7 @@ What the planner chose and why, and what a statement locks.
 | `dependencies` | Substrings of a declared dependency. |
 | `globs` | Repository paths that suggest it. |
 | `requires` | Other specialists needed for this one to make sense. |
+| `accompanies` | Specialists this one follows in. It loads when any of them does, and never otherwise. |
 | `modes` | Restrict to particular postures. Empty means all. |
 | `capabilities` | Agent capabilities needed before it is worth loading. |
 
