@@ -1510,6 +1510,15 @@ public sealed class DashboardServer : IDisposable
             Json);
     }
 
+    /// <summary>What the office shows for a node, as the page reads it.</summary>
+    private static object Office(OfficeIntent intent) => new
+    {
+        lamp = intent.Lamp.ToString().ToLowerInvariant(),
+        place = intent.Place.ToString().ToLowerInvariant(),
+        pose = intent.Pose.ToString().ToLowerInvariant(),
+        intent.Bubble,
+    };
+
     /// <summary>
     /// One run, as the page needs it.
     /// </summary>
@@ -1628,6 +1637,11 @@ public sealed class DashboardServer : IDisposable
             // another node, done. The state above is what it last reported,
             // and stays for the page's own logic.
             activity = run.Activity(node),
+
+            // The picture of the same thing: the light on the desk, where the
+            // person is and how they sit. Worked out here, beside the words,
+            // so that the office and the badges cannot disagree about a node.
+            office = Office(OfficeIntent.For(run, node)),
             node.Turns,
             cost = node.CostUsd,
             node.Branch,

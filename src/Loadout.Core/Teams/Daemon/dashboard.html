@@ -5099,22 +5099,24 @@
   function desk(run, node, set) {
     var li = document.createElement("li");
     var button = document.createElement("button");
-    var gone = node.state === "done" || node.state === "reported" || node.state === "failed";
+    var office = node.office || {};
+
+    // A failed node keeps the finished look it has always had; the server
+    // keeps it at its desk for the canvas office, which is a different thing.
+    var gone = office.place === "gone" || office.lamp === "failed";
 
     button.type = "button";
     button.className = "desk"
       + (gone ? " gone" : "")
-      + (node.state === "working" ? " busy" : "");
+      + (office.pose === "type" ? " busy" : "");
 
     // The kit's key for how they are, which colours the word on the plate and
-    // draws the bay they stand in when there is no art. Waiting for you is
-    // read from the same word the plate prints, so the two cannot disagree.
+    // draws the bay they stand in when there is no art. The same key the
+    // badges use, from the same place, so the two cannot disagree.
     var doingNow = gone ? "left" : (node.activity || node.state);
-    var key = doingNow === "waiting for you" ? "wait"
-      : node.state === "failed" ? "fail"
-      : gone || doingNow === "done" ? "done"
-      : node.state === "working" ? "run"
-      : null;
+    var key = nodeState(node, run).key;
+
+    if (key === "stopped") { key = null; }
 
     if (key) { button.setAttribute("data-state", key); }
 
@@ -6148,21 +6150,18 @@
   }
 
   /*
-    How a node is doing, as the kit's state key: waiting for you if a gate is
-    on it, running while it works, done or failed once it has finished, and
-    quiet otherwise.
+    How a node is doing, as the kit's state key, read from the lamp the
+    server gives its desk: waiting for you, running, failed, done, and
+    stopped otherwise. Worked out on the server beside the activity word, so
+    the desks, the badges and the word cannot disagree - and a node last seen
+    working in a run that has ended is not shown working.
   */
-  function nodeState(node, run) {
-    var stuck = (run.gates || []).some(function (gate) { return gate.node === node.node; });
+  var KitKeys = { waiting: "wait", working: "run", failed: "fail", done: "done" };
 
-    if (stuck) { return { word: "waiting for you", key: "wait" }; }
-    if (node.state === "working") { return { word: node.activity || "working", key: "run" }; }
-    if (node.state === "failed") { return { word: "failed", key: "fail" }; }
-    if (node.state === "done" || node.state === "reported" || node.activity === "done") {
-      return { word: node.activity || node.state, key: "done" };
-    }
+  function nodeState(node) {
+    var lamp = (node.office || {}).lamp;
 
-    return { word: node.activity || node.state, key: "stopped" };
+    return { word: node.activity || node.state, key: KitKeys[lamp] || "stopped" };
   }
 
   /*

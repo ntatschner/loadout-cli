@@ -1466,6 +1466,27 @@ public sealed class DashboardServerTests : IAsyncLifetime
         run.GetProperty("nodes")[0].GetProperty("doing").GetString().Should().Be("Read docs/commands.md");
     }
 
+    /// <summary>
+    /// Each node carries what the office shows for it, worked out on the
+    /// server, and the page's desks and badges both read their key from it.
+    /// </summary>
+    [Fact]
+    public async Task Each_node_carries_what_the_office_shows_for_it()
+    {
+        var json = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync());
+        var office = json.RootElement.GetProperty("runs")[0].GetProperty("nodes")[0].GetProperty("office");
+
+        office.GetProperty("lamp").GetString().Should().Be("working");
+        office.GetProperty("place").GetString().Should().Be("desk");
+        office.GetProperty("pose").GetString().Should().Be("type");
+        office.GetProperty("bubble").ValueKind.Should().Be(JsonValueKind.Null);
+
+        var page = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        page.Should().Contain("var key = nodeState(node, run).key;");
+        page.Should().Contain("var lamp = (node.office || {}).lamp;");
+    }
+
     /// <summary>Gives the stub a real directory with the papers named in it.</summary>
     private string Papers(params string[] names)
     {
