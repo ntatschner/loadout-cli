@@ -69,12 +69,34 @@ public sealed class SpecialistPreferences
     /// </summary>
     public string Mode { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The named coding style for this work, e.g. <c>work</c>. Empty means only
+    /// the personal style and the codebase's own.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the other three, a profile that leaves this empty keeps the
+    /// project's. A profile narrows what a session knows about; it does not
+    /// change who is writing the code, and losing the style every time a
+    /// profile was picked would be a surprise nobody asked for.
+    /// </remarks>
+    public string Style { get; set; } = string.Empty;
+
     /// <summary>Whether anything has been said at all.</summary>
     /// <remarks>
     /// A method rather than a property so the YAML writer leaves it out: as a
     /// property it was written into every project.yaml as is_empty, although
-    /// it is worked out from the other three and nothing reads it back.
+    /// it is worked out from the others and nothing reads it back.
     /// </remarks>
     public bool IsEmpty() =>
-        Preferred.Count == 0 && Excluded.Count == 0 && string.IsNullOrWhiteSpace(Mode);
+        Preferred.Count == 0 && Excluded.Count == 0 && string.IsNullOrWhiteSpace(Mode)
+        && string.IsNullOrWhiteSpace(Style);
+
+    /// <summary>Whether anything besides the style has been said.</summary>
+    /// <remarks>
+    /// What decides whether a profile's selection replaces the project's. A
+    /// profile that only picks a style has not said anything about which
+    /// specialists matter, so the project's still stand.
+    /// </remarks>
+    public bool HasSelection() =>
+        Preferred.Count > 0 || Excluded.Count > 0 || !string.IsNullOrWhiteSpace(Mode);
 }

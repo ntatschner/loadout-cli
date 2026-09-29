@@ -28,6 +28,8 @@ internal static class SpecialistValidator
             CheckRequires(specialist, specialists, findings);
             CheckActivation(specialist, findings);
             CheckCapabilities(specialist, findings);
+            CheckAccompanies(specialist, specialists, findings);
+            CheckStyle(specialist, findings);
         }
 
         findings.AddRange(FindCycles(specialists));
@@ -112,14 +114,18 @@ internal static class SpecialistValidator
         if (activation.Always
             || activation.GlobList.Count > 0
             || activation.DependencyList.Count > 0
-            || activation.TaskPhraseList.Count > 0)
+            || activation.TaskPhraseList.Count > 0
+            || activation.AccompaniesList.Count > 0)
         {
             return;
         }
 
         // Modes are chosen rather than detected, so having no evidence is
         // correct for them. So are roles: the team that uses one names it.
-        if (specialist.Kind is SpecialistKind.Mode or SpecialistKind.Role)
+        // So is a style's core, which is in force because the style is.
+        if (specialist.Kind is SpecialistKind.Mode or SpecialistKind.Role
+            || (specialist.Kind is SpecialistKind.Style
+                && CodingStyles.PartOf(specialist.Id) == StylePart.Core))
         {
             return;
         }
@@ -128,6 +134,115 @@ internal static class SpecialistValidator
             specialist.Id, RuleFindingSeverity.Warning, "specialist-unreachable",
             $"'{specialist.Id}' declares no evidence, so it will only ever load when "
             + "named explicitly."));
+    }
+
+    /// <summary>
+    /// What a specialist accompanies has to exist, or it can never load.
+    /// </summary>
+    /// <remarks>
+    /// A warning rather than an error: the library is still sound, and the
+    /// usual cause is a style's file for a language this machine has no
+    /// specialist for yet. But nothing else would ever say that the file is
+    /// dead weight.
+    /// </remarks>
+    private static void CheckAccompanies(
+        SpecialistDocument specialist,
+        IReadOnlyDictionary<string, SpecialistDocument> specialists,
+        List<RuleFinding> findings)
+    {
+        foreach (var leader in specialist.Activation.AccompaniesList)
+        {
+            if (!specialists.ContainsKey(leader))
+            {
+                findings.Add(new RuleFinding(
+                    specialist.Id, RuleFindingSeverity.Warning, "specialist-accompanies-missing",
+                    $"'{specialist.Id}' accompanies '{leader}', which is not in the library, "
+                    + "so it will only load when named."));
+            }
+        }
+    }
+
+    /// <summary>
+    /// A style's parts have to be addressable as parts, and its core small.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The id is the only thing that says which part of which style a file is,
+    /// so a malformed one is an error: <c>style.work.csharp.extra</c> belongs to
+    /// no part and would never load.
+    /// </para>
+    /// <para>
+    /// The rest are warnings about a style that works but costs more than it
+    /// should or loads less than its author thinks. A core is paid for on every
+    /// launch and never dropped for budget. A language file with nothing to
+    /// accompany is a file nothing loads. A pattern without example code is a
+    /// rule wearing a pattern's name, and belongs in the core or a language
+    /// file where it is cheaper to find.
+    /// </para>
+    /// </remarks>
+    private static void CheckStyle(SpecialistDocument specialist, List<RuleFinding> findings)
+    {
+        if (specialist.Kind != SpecialistKind.Style)
+        {
+            return;
+        }
+
+        switch (CodingStyles.PartOf(specialist.Id))
+        {
+            case null:
+                findings.Add(new RuleFinding(
+                    specialist.Id, RuleFindingSeverity.Error, "style-id",
+                    $"'{specialist.Id}' is not a part of a style. Use 'style.<name>' for the core, "
+                    + "'style.<name>.<language>' for a language file, or "
+                    + "'style.<name>.pattern.<pattern>' for a pattern."));
+                break;
+
+            case StylePart.Core:
+                if (specialist.EstimatedTokens > CodingStyles.CoreTokenCeiling)
+                {
+                    findings.Add(new RuleFinding(
+                        specialist.Id, RuleFindingSeverity.Warning, "style-core-too-large",
+                        $"'{specialist.Id}' is about {specialist.EstimatedTokens:N0} tokens, over the "
+                        + $"{CodingStyles.CoreTokenCeiling:N0} a core should cost. It loads on every "
+                        + "launch; move what applies to one language into a language file, and "
+                        + "examples into patterns."));
+                }
+
+                break;
+
+            case StylePart.Language:
+                if (specialist.Activation.AccompaniesList.Count == 0)
+                {
+                    findings.Add(new RuleFinding(
+                        specialist.Id, RuleFindingSeverity.Warning, "style-language-unattached",
+                        $"'{specialist.Id}' is a language file that accompanies nothing. Add "
+                        + "'accompanies: [language.<name>]' so it loads with its language."));
+                }
+
+                break;
+
+            case StylePart.Pattern:
+                if (!specialist.Body.Contains("```", StringComparison.Ordinal))
+                {
+                    findings.Add(new RuleFinding(
+                        specialist.Id, RuleFindingSeverity.Warning, "style-pattern-example",
+                        $"'{specialist.Id}' is a pattern with no example code. A pattern is a rule "
+                        + "plus what following it looks like; without the example it is a rule, "
+                        + "and belongs in the core or a language file."));
+                }
+
+                break;
+        }
+
+        if (string.Equals(CodingStyles.NameOf(specialist.Id), CodingStyles.Codebase, StringComparison.Ordinal)
+            && specialist.Origin != SpecialistOrigin.Project)
+        {
+            findings.Add(new RuleFinding(
+                specialist.Id, RuleFindingSeverity.Warning, "style-codebase-scope",
+                $"'{specialist.Id}' is a codebase style outside a project, so it applies to every "
+                + "project. Move it under the project it describes, or make it part of your "
+                + "personal style."));
+        }
     }
 
     /// <summary>Capability requirements have to name capabilities that exist.</summary>

@@ -45,6 +45,18 @@ public enum SpecialistKind
     /// <summary>A cross-cutting engineering specialty such as security or performance.</summary>
     Function,
 
+    /// <summary>
+    /// How somebody writes code: a named coding style, or one part of one.
+    /// </summary>
+    /// <remarks>
+    /// After everything that says what the code is and what the work is about,
+    /// so where a style and the C# specialist disagree about early returns, the
+    /// style is read last and wins. It is somebody's decision about their own
+    /// code, which is narrower than general advice about the language. Before
+    /// skills and roles, which say what to do rather than how to write it.
+    /// </remarks>
+    Style,
+
     /// <summary>A repeatable procedure rather than a body of expertise.</summary>
     Skill,
 
@@ -141,6 +153,12 @@ public enum SpecialistOrigin
 /// <param name="Modes">
 /// Modes this specialist applies to. Empty means all of them.
 /// </param>
+/// <param name="Accompanies">
+/// Specialists this one follows in: it loads whenever any of them is selected,
+/// and never otherwise. The inverse of <paramref name="Requires"/>, and what a
+/// style's C# file uses so that it costs nothing on a launch that has no C# in
+/// it.
+/// </param>
 public sealed record SpecialistActivation(
     bool Always = false,
     IReadOnlyList<string>? Globs = null,
@@ -149,7 +167,8 @@ public sealed record SpecialistActivation(
     IReadOnlyList<string>? Requires = null,
     IReadOnlyList<string>? Capabilities = null,
     IReadOnlyList<string>? Modes = null,
-    string? Command = null)
+    string? Command = null,
+    IReadOnlyList<string>? Accompanies = null)
 {
     public static readonly SpecialistActivation None = new();
 
@@ -164,6 +183,8 @@ public sealed record SpecialistActivation(
     public IReadOnlyList<string> CapabilityList => Capabilities ?? [];
 
     public IReadOnlyList<string> ModeList => Modes ?? [];
+
+    public IReadOnlyList<string> AccompaniesList => Accompanies ?? [];
 }
 
 /// <summary>

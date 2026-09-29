@@ -915,6 +915,17 @@ public static class Program
             instructions.AddCommand<InstructionsNewCommand>("new");
         });
 
+        TopBranch(config, "style", style =>
+        {
+            style.Describe(
+                "Your coding styles, and which of them a project uses.",
+                CommandCategory.AgentConfiguration,
+                "coding style conventions house style personal named codebase patterns");
+            style.AddCommand<StyleListCommand>("list");
+            style.AddCommand<StyleShowCommand>("show");
+            style.AddCommand<StyleUseCommand>("use");
+        });
+
         TopBranch(config, "docs", docs =>
         {
             docs.Describe(

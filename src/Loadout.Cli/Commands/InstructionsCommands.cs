@@ -119,7 +119,7 @@ public sealed class InstructionsListSettings : GlobalSettings
     public string? Project { get; init; }
 
     [CommandOption("--kind <KIND>")]
-    [Description("Only one kind: foundation, mode, language, framework, database, platform, cloud, function or skill.")]
+    [Description("Only one kind: foundation, mode, language, framework, database, platform, cloud, function, style, skill or role.")]
     public string? Kind { get; init; }
 }
 
@@ -404,6 +404,10 @@ public sealed class InstructionsExplainSettings : GlobalSettings
     [Description("Never load this specialist. Repeatable.")]
     public string[] Without { get; init; } = [];
 
+    [CommandOption("--style <NAME>")]
+    [Description("Use this named coding style instead of the one the project chose.")]
+    public string? Style { get; init; }
+
     [CommandOption("--against-mode <MODE>")]
     [Description("Compare against this mode instead, and show only what changes.")]
     public string? AgainstMode { get; init; }
@@ -577,7 +581,8 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
             Task: settings.Task,
             Explicit: settings.Specialist,
             Excluded: settings.Without,
-            Mode: settings.Mode)).ConfigureAwait(false);
+            Mode: settings.Mode,
+            Style: settings.Style)).ConfigureAwait(false);
 
         if (resolved.Failed)
         {
@@ -602,7 +607,8 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
                 // silently dropping what the first was told to leave out would
                 // make the difference include changes nobody asked for.
                 Excluded: [.. settings.Without, .. settings.AgainstWithout],
-                Mode: settings.AgainstMode ?? settings.Mode)).ConfigureAwait(false);
+                Mode: settings.AgainstMode ?? settings.Mode,
+                Style: settings.Style)).ConfigureAwait(false);
 
             if (against.Failed)
             {
@@ -1091,7 +1097,7 @@ public sealed class InstructionsNewCommand : InstructionsCommandBase<Instruction
             scope = "the workspace";
         }
 
-        var directory = Path.Combine(root, SpecialistScaffold.DirectoryFor(draft.Kind));
+        var directory = Path.Combine(root, SpecialistScaffold.DirectoryFor(draft));
         var path = Path.Combine(directory, draft.FileName);
 
         if (File.Exists(path) && !settings.Force)

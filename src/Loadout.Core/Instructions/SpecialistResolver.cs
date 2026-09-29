@@ -17,6 +17,10 @@ namespace Loadout.Core.Instructions;
 /// </param>
 /// <param name="TokenBudget">The ceiling on estimated tokens, or 0 for none.</param>
 /// <param name="WarnAtPercent">Share of the budget worth mentioning.</param>
+/// <param name="Style">
+/// The named coding style chosen for this work, or null. The personal and
+/// codebase styles are in force whatever this says.
+/// </param>
 public sealed record SpecialistRequest(
     SpecialistCatalogue Catalogue,
     string? Mode = null,
@@ -27,7 +31,8 @@ public sealed record SpecialistRequest(
     RepositoryEvidence? Evidence = null,
     AgentDescriptor? Agent = null,
     int TokenBudget = 0,
-    int WarnAtPercent = 80);
+    int WarnAtPercent = 80,
+    string? Style = null);
 
 /// <summary>Chooses the specialists for one task.</summary>
 public interface ISpecialistResolver
@@ -74,8 +79,10 @@ internal sealed class SpecialistResolver : ISpecialistResolver
     [
         /* Foundation         */ 100,
         /* Mode               */ 100,
+        /* Style              */ 100,
         /* Explicit           */ 100,
         /* Required           */ 90,
+        /* Accompanies        */ 90,
         /* TaskSemantics      */ 80,
         /* Dependency         */ 60,
         /* ProjectPreference  */ 45,
@@ -87,7 +94,9 @@ internal sealed class SpecialistResolver : ISpecialistResolver
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var catalogue = request.Catalogue;
+        // Styles that are not in force are not candidates for anything but an
+        // explicit request. Everything evidence-driven draws from this.
+        var catalogue = CodingStyles.InForceOnly(request.Catalogue, request.Style);
         var evidence = request.Evidence ?? RepositoryEvidence.None;
         var excluded = new HashSet<string>(
             request.Excluded ?? [], StringComparer.OrdinalIgnoreCase);
@@ -99,7 +108,8 @@ internal sealed class SpecialistResolver : ISpecialistResolver
 
         AddFoundation(catalogue, candidates);
         AddMode(catalogue, mode, candidates);
-        AddExplicit(catalogue, request, candidates);
+        AddStyles(catalogue, request.Style, candidates);
+        AddExplicit(request.Catalogue, request, candidates);
         AddTaskMatches(catalogue, request.Task, mode, candidates);
         AddDependencyMatches(catalogue, evidence, mode, candidates);
         AddPreferences(catalogue, request, evidence, mode, candidates);
@@ -110,16 +120,21 @@ internal sealed class SpecialistResolver : ISpecialistResolver
         // until nothing new appears, which keeps a shallow graph shallow.
         AddRequirements(catalogue, candidates);
 
+        // Then what follows the selection in, and anything that in turn needs.
+        AddAccompaniments(catalogue, candidates);
+        AddRequirements(catalogue, candidates);
+
         RemoveExcluded(candidates, excluded, omitted);
         RemoveUnsupported(candidates, request.Agent, omitted);
+        RemoveUnaccompanied(candidates, omitted);
 
-        var ordered = Order(candidates.Values);
+        var ordered = Order(candidates.Values, request.Style);
         var conflicts = FindConflicts(ordered);
 
         var kept = ApplyBudget(ordered, request, omitted, out var budget);
 
         return new EffectiveInstructions(
-            mode, kept, Order(omitted).ToList(), conflicts, budget, evidence.Truncated);
+            mode, kept, Order(omitted, request.Style).ToList(), conflicts, budget, evidence.Truncated);
     }
 
     /// <summary>The mode asked for, or the default when it was not named or does not exist.</summary>
@@ -156,6 +171,28 @@ internal sealed class SpecialistResolver : ISpecialistResolver
         if (catalogue.Find(ModeId(mode)) is { } document)
         {
             Offer(candidates, document, SpecialistTrigger.Mode, $"{mode} mode");
+        }
+    }
+
+    /// <summary>
+    /// The core of each style in force, least specific first.
+    /// </summary>
+    /// <remarks>
+    /// Only the core. A style's language files follow their language in, and
+    /// its patterns wait for the task to point at them, so a style with a
+    /// dozen patterns costs one page on a launch that needs none of them.
+    /// </remarks>
+    private static void AddStyles(
+        SpecialistCatalogue catalogue,
+        string? chosen,
+        Dictionary<string, SpecialistSelection> candidates)
+    {
+        foreach (var (name, layer) in CodingStyles.InForce(chosen))
+        {
+            if (catalogue.Find($"style.{name}") is { Kind: SpecialistKind.Style } core)
+            {
+                Offer(candidates, core, SpecialistTrigger.Style, CodingStyles.Reason(layer, name));
+            }
         }
     }
 
@@ -499,6 +536,88 @@ internal sealed class SpecialistResolver : ISpecialistResolver
     }
 
     /// <summary>
+    /// Brings in what follows a selected specialist, repeatedly until nothing
+    /// new arrives.
+    /// </summary>
+    /// <remarks>
+    /// Any one of the specialists it accompanies is enough: a style's
+    /// TypeScript file can reasonably follow both TypeScript and JavaScript.
+    /// </remarks>
+    private static void AddAccompaniments(
+        SpecialistCatalogue catalogue,
+        Dictionary<string, SpecialistSelection> candidates)
+    {
+        bool added;
+
+        do
+        {
+            added = false;
+
+            foreach (var specialist in catalogue.All)
+            {
+                if (candidates.ContainsKey(specialist.Id))
+                {
+                    continue;
+                }
+
+                var leader = specialist.Activation.AccompaniesList
+                    .FirstOrDefault(candidates.ContainsKey);
+
+                if (leader is null)
+                {
+                    continue;
+                }
+
+                Offer(candidates, specialist, SpecialistTrigger.Accompanies, $"accompanies {leader}");
+
+                added = true;
+            }
+        }
+        while (added);
+    }
+
+    /// <summary>
+    /// Takes out anything that came only to accompany a specialist that is no
+    /// longer there.
+    /// </summary>
+    /// <remarks>
+    /// A style's C# file that stayed after C# itself was excluded or dropped
+    /// for budget would be rules about a language the session was not told it
+    /// is working in. Run until nothing changes, since one removal can orphan
+    /// something that followed it.
+    /// </remarks>
+    private static void RemoveUnaccompanied(
+        Dictionary<string, SpecialistSelection> candidates,
+        List<SpecialistSelection> omitted)
+    {
+        bool removed;
+
+        do
+        {
+            removed = false;
+
+            foreach (var selection in candidates.Values.ToList())
+            {
+                if (selection.Trigger != SpecialistTrigger.Accompanies
+                    || selection.Specialist.Activation.AccompaniesList.Any(candidates.ContainsKey))
+                {
+                    continue;
+                }
+
+                candidates.Remove(selection.Specialist.Id);
+
+                omitted.Add(selection with
+                {
+                    Reason = $"{selection.Reason}, but that was not loaded",
+                });
+
+                removed = true;
+            }
+        }
+        while (removed);
+    }
+
+    /// <summary>
     /// Removes what was ruled out.
     /// </summary>
     /// <remarks>
@@ -561,7 +680,8 @@ internal sealed class SpecialistResolver : ISpecialistResolver
     }
 
     /// <summary>
-    /// Puts selections into composition order: by layer, then by id.
+    /// Puts selections into composition order: by layer, then by id, with
+    /// styles in their own layer order.
     /// </summary>
     /// <remarks>
     /// Sorted rather than left in discovery order so that the same inputs
@@ -569,9 +689,12 @@ internal sealed class SpecialistResolver : ISpecialistResolver
     /// different order every launch would make every compiled context look
     /// changed, and nothing that changes every time gets read twice.
     /// </remarks>
-    private static IEnumerable<SpecialistSelection> Order(IEnumerable<SpecialistSelection> selections) =>
+    private static IEnumerable<SpecialistSelection> Order(
+        IEnumerable<SpecialistSelection> selections,
+        string? style) =>
         selections
             .OrderBy(s => (int)s.Specialist.Kind)
+            .ThenBy(s => CodingStyles.Rank(s.Specialist, style))
             .ThenBy(s => s.Specialist.Id, StringComparer.Ordinal);
 
     /// <summary>
@@ -661,6 +784,15 @@ internal sealed class SpecialistResolver : ISpecialistResolver
                 {
                     Reason = $"{drop.Reason}, but dropped to stay inside the context budget",
                 });
+
+                // What followed it in goes with it, so it is not left holding
+                // tokens for a language the session no longer has.
+                var remaining = kept.ToDictionary(s => s.Specialist.Id, StringComparer.OrdinalIgnoreCase);
+
+                RemoveUnaccompanied(remaining, omitted);
+
+                kept.RemoveAll(s => !remaining.ContainsKey(s.Specialist.Id));
+                negotiable.RemoveAll(s => !remaining.ContainsKey(s.Specialist.Id));
             }
         }
 

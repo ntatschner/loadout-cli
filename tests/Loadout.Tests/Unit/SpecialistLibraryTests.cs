@@ -50,7 +50,11 @@ public sealed class SpecialistLibraryTests
     {
         var catalogue = await BuiltInAsync();
 
-        foreach (var kind in Enum.GetValues<SpecialistKind>())
+        // Except styles. A style is how one person or one codebase writes
+        // code, so the launcher shipping one would be handing everybody
+        // somebody else's habits; the layer is empty until somebody writes
+        // their own.
+        foreach (var kind in Enum.GetValues<SpecialistKind>().Where(k => k != SpecialistKind.Style))
         {
             catalogue.OfKind(kind).Should().NotBeEmpty(
                 $"the {kind} layer is part of the composition and an empty one is a gap");
