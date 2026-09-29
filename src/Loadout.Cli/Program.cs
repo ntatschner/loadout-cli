@@ -754,6 +754,12 @@ public static class Program
             });
             team.AddCommand<TeamDashboardCommand>("dashboard");
 
+            team.AddBranch("office", office =>
+            {
+                office.SetDescription("The art the dashboard's office is drawn with.");
+                office.AddCommand<TeamOfficeCheckCommand>("check");
+            });
+
             // A branch whose default starts it, so 'team daemon' means what it
             // always did and the controls are daemon commands rather than team
             // commands called daemon-stop.

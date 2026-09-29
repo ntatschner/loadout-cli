@@ -274,6 +274,33 @@ public sealed class DashboardServerTests : IAsyncLifetime
             .Select(one => one.GetString()).Should().Contain("lobby").And.Contain("open-office");
     }
 
+    /// <summary>
+    /// A tile scene is sent only once it passes its check, and the kit's own
+    /// room is always there to fall back on.
+    /// </summary>
+    [Fact]
+    public async Task A_tile_scene_is_sent_only_when_it_is_fit_to_draw()
+    {
+        var kit = OfficeScene.Kit();
+
+        Directory.CreateDirectory(Path.Combine(_art, "tiled"));
+        File.WriteAllText(Path.Combine(_art, "tiled", OfficeScene.FileName), JsonSerializer.Serialize(kit));
+
+        // Its only desk under a wall.
+        Directory.CreateDirectory(Path.Combine(_art, "walled"));
+        File.WriteAllText(
+            Path.Combine(_art, "walled", OfficeScene.FileName),
+            JsonSerializer.Serialize(kit with { Desks = [new OfficeSpot(0, 0)] }));
+
+        using var read = JsonDocument.Parse(await (await GetAsync("/api/office")).Content.ReadAsStringAsync());
+        var offices = read.RootElement.GetProperty("offices");
+
+        offices.GetProperty("tiled").GetProperty("scene").GetProperty("desks").GetArrayLength().Should().Be(12);
+        offices.GetProperty("walled").GetProperty("scene").ValueKind.Should().Be(JsonValueKind.Null);
+        offices.GetProperty("open-office").GetProperty("scene").ValueKind.Should().Be(JsonValueKind.Null);
+        read.RootElement.GetProperty("kit").GetProperty("schema").GetString().Should().Be(OfficeScene.Version);
+    }
+
     [Fact]
     public async Task A_piece_of_the_chosen_set_is_served_as_an_image()
     {

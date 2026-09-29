@@ -1267,8 +1267,21 @@ public sealed class DashboardServer : IDisposable
                             {
                                 room = OfficeArt.Room(root, one),
                                 pieces = OfficeArt.Pieces(root, one),
+
+                                // A room made of tiles, only once it passes
+                                // the check. One that does not is left out
+                                // rather than drawn wrong for a whole run;
+                                // 'loadout team office check' says why.
+                                scene = OfficeScenes.Has(root, one) && OfficeScenes.Check(root, one) is { Fit: true } check
+                                    ? check.Scene
+                                    : null,
                             },
                             StringComparer.Ordinal),
+
+                    // The room drawn with no set installed, in the kit's own
+                    // colours, so the office has somewhere to walk people
+                    // about on every machine.
+                    kit = OfficeScene.Kit(),
 
                     waitingSet = root is null ? string.Empty : WaitingSet,
                     waitingPieces = root is null || WaitingSet.Length == 0
