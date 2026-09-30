@@ -1,0 +1,346 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace Loadout.Core.Teams;
+
+/// <summary>What the building needs of one kind of room.</summary>
+/// <param name="Tags">The kit pieces the room is furnished from; one of each group must exist, or the kit's shapes stand in.</param>
+/// <param name="Min">The smallest the room may be, in tiles: width and depth.</param>
+/// <param name="Max">The largest, or null for no limit.</param>
+/// <param name="Count">A fixed number of these rooms, when the number does not depend on the team.</param>
+/// <param name="ByTeam">
+/// How many for a team of a given size: <c>{"1": 1, "5": 2, "10": 3}</c> is one
+/// from a team of one, two from five, three from ten. Wins over Count.
+/// </param>
+/// <param name="Level">Where in the building: floor (every run's floor), lobby, roof, basement-1, basement-2.</param>
+/// <param name="Where">A placement hint the planner honours: corner, ends, core, north-wall.</param>
+/// <param name="Core">Whether it belongs to the building's core, in the same place on every floor.</param>
+/// <param name="Walls">Wall kinds the planner may choose between: glass, solid.</param>
+/// <param name="Function">What the room is for on the dashboard, for its popups: mail, storage, bin, server, questions, controls, summary, waiting, idle.</param>
+public sealed record OfficeRoomRule(
+    [property: JsonPropertyName("tags")] IReadOnlyList<string>? Tags = null,
+    [property: JsonPropertyName("min")] IReadOnlyList<int>? Min = null,
+    [property: JsonPropertyName("max")] IReadOnlyList<int>? Max = null,
+    [property: JsonPropertyName("count")] int? Count = null,
+    [property: JsonPropertyName("by-team")] IReadOnlyDictionary<string, int>? ByTeam = null,
+    [property: JsonPropertyName("level")] string Level = "floor",
+    [property: JsonPropertyName("where")] string? Where = null,
+    [property: JsonPropertyName("core")] bool Core = false,
+    [property: JsonPropertyName("walls")] IReadOnlyList<string>? Walls = null,
+    [property: JsonPropertyName("function")] string? Function = null)
+{
+    /// <summary>How many of these rooms a team of this size gets.</summary>
+    public int CountFor(int team)
+    {
+        if (ByTeam is { Count: > 0 } table)
+        {
+            var found = 0;
+            var best = int.MinValue;
+
+            foreach (var (from, count) in table)
+            {
+                if (int.TryParse(from, NumberStyles.None, CultureInfo.InvariantCulture, out var size)
+                    && size <= team && size > best)
+                {
+                    best = size;
+                    found = count;
+                }
+            }
+
+            return found;
+        }
+
+        return Count ?? 1;
+    }
+}
+
+/// <summary>How long the building waits before it moves a team between floors.</summary>
+/// <param name="SpillUpSeconds">Too big for its floor this long: it spills onto the floor above.</param>
+/// <param name="GiveBackSeconds">Fits on fewer floors this long: it gives one back.</param>
+/// <param name="KeptMinutes">How long a finished run keeps its floor, dark.</param>
+public sealed record OfficeMoves(
+    [property: JsonPropertyName("spill-up-seconds")] int SpillUpSeconds = 20,
+    [property: JsonPropertyName("give-back-seconds")] int GiveBackSeconds = 300,
+    [property: JsonPropertyName("kept-minutes")] int KeptMinutes = 60);
+
+/// <summary>
+/// The design decisions the building is generated from.
+/// </summary>
+/// <param name="Schema">Always <see cref="OfficeRules.Version"/>.</param>
+/// <param name="Floor">Every floor plate's size in tiles: width and depth.</param>
+/// <param name="MinFloors">The fewest floors the tower is drawn with, whatever is running.</param>
+/// <param name="Rooms">Each kind of room, by name.</param>
+/// <param name="Use">Which room a person goes to in each state: working, lead-waiting, briefing, review, merge-gate, failed, free, done.</param>
+/// <param name="Moves">How long the building waits before moving a team.</param>
+/// <remarks>
+/// <para>
+/// Built in, from the decisions of 30 Sep 2026 recorded in the specification,
+/// and overridden in part by a pack's rules.json: a room named there replaces
+/// the built-in room of that name, anything else it names replaces the
+/// built-in value, and whatever it leaves out stays as built in.
+/// </para>
+/// <para>
+/// Counts are tables by team size rather than formulas, so anybody can read and
+/// edit them, and there is no little language to parse and document.
+/// </para>
+/// </remarks>
+public sealed record OfficeRules(
+    [property: JsonPropertyName("schema")] string Schema,
+    [property: JsonPropertyName("floor")] IReadOnlyList<int>? Floor = null,
+    [property: JsonPropertyName("min-floors")] int? MinFloors = null,
+    [property: JsonPropertyName("rooms")] IReadOnlyDictionary<string, OfficeRoomRule>? Rooms = null,
+    [property: JsonPropertyName("use")] IReadOnlyDictionary<string, string>? Use = null,
+    [property: JsonPropertyName("moves")] OfficeMoves? Moves = null)
+{
+    /// <summary>What <see cref="Schema"/> has to say.</summary>
+    public const string Version = "loadout.rules/1";
+
+    /// <summary>The file a set keeps its rules in, when it has any.</summary>
+    public const string FileName = "rules.json";
+
+    /// <summary>The levels a room can be on.</summary>
+    public static readonly IReadOnlyList<string> Levels = ["floor", "lobby", "roof", "basement-1", "basement-2"];
+
+    /// <summary>The placement hints the planner understands.</summary>
+    public static readonly IReadOnlyList<string> Placements = ["corner", "ends", "core", "north-wall", "near-open-plan"];
+
+    /// <summary>The states a person can be in, as <see cref="Use"/> names them.</summary>
+    public static readonly IReadOnlyList<string> States = ["working", "lead-waiting", "briefing", "review", "merge-gate", "failed", "asks-you", "free", "done"];
+
+    /// <summary>The rules as decided, before any pack changes them.</summary>
+    public static OfficeRules Default { get; } = new(
+        Version,
+        [24, 16],
+        10,
+        new Dictionary<string, OfficeRoomRule>(StringComparer.Ordinal)
+        {
+            // Every run's floor.
+            ["open-plan"] = new(["desk"], Min: [8, 5], Count: 1),
+            ["status-board"] = new(["status-board"], Count: 1, Where: "north-wall", Function: "summary"),
+            ["lead-office"] = new(["exec-desk"], Min: [4, 3], Max: [6, 4], Count: 1, Where: "corner", Walls: ["glass", "solid"], Function: "controls"),
+            ["meeting"] = new(
+                ["meeting-4", "meeting-6", "meeting-10"],
+                Min: [3, 3],
+                ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 1, ["5"] = 2, ["10"] = 3 },
+                Where: "near-open-plan",
+                Walls: ["glass", "solid"],
+                Function: "questions"),
+            ["kitchen"] = new(["kitchen", "coffee"], Min: [3, 3], Count: 1, Function: "idle"),
+            ["lounge"] = new(["sofa"], Min: [3, 3], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Function: "idle"),
+            ["cupboard"] = new(["cupboard"], Min: [1, 1], Max: [2, 2], Count: 1),
+            ["storage-cupboard"] = new(["storage"], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["8"] = 1 }),
+            ["lift"] = new(["lift"], Count: 1, Core: true, Where: "core"),
+            ["stairs"] = new(["stairs"], Count: 1, Core: true, Where: "core"),
+            ["toilets"] = new(["toilet"], Count: 1, Core: true, Where: "core"),
+            ["exit"] = new(["exit"], Count: 2, Where: "ends"),
+
+            // The rest of the building.
+            ["reception"] = new(["reception", "sofa"], Level: "lobby", Count: 1, Function: "waiting"),
+            ["break-area"] = new(["pergola", "sofa"], Level: "roof", Count: 1, Function: "idle"),
+            ["mail-room"] = new(["mail"], Level: "basement-1", Count: 1, Function: "mail"),
+            ["storage"] = new(["storage"], Level: "basement-1", Count: 1, Function: "storage"),
+            ["garbage"] = new(["bin"], Level: "basement-2", Count: 1, Function: "bin"),
+            ["server-room"] = new(["server"], Level: "basement-2", Count: 1, Function: "server"),
+        },
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["working"] = "open-plan",
+            ["lead-waiting"] = "lead-office",
+            ["briefing"] = "meeting|cupboard",
+            ["review"] = "meeting|cupboard",
+            ["merge-gate"] = "meeting|cupboard",
+            ["failed"] = "open-plan",
+            ["asks-you"] = "stay",
+            ["free"] = "break-area|kitchen|lounge",
+            ["done"] = "lift",
+        },
+        new OfficeMoves());
+
+    /// <summary>These rules with a pack's changes laid over them.</summary>
+    public OfficeRules With(OfficeRules? changes)
+    {
+        if (changes is null)
+        {
+            return this;
+        }
+
+        var rooms = new Dictionary<string, OfficeRoomRule>(Rooms ?? new Dictionary<string, OfficeRoomRule>(), StringComparer.Ordinal);
+
+        foreach (var (name, room) in changes.Rooms ?? new Dictionary<string, OfficeRoomRule>())
+        {
+            rooms[name] = room;
+        }
+
+        var use = new Dictionary<string, string>(Use ?? new Dictionary<string, string>(), StringComparer.Ordinal);
+
+        foreach (var (state, room) in changes.Use ?? new Dictionary<string, string>())
+        {
+            use[state] = room;
+        }
+
+        return this with
+        {
+            Floor = changes.Floor ?? Floor,
+            MinFloors = changes.MinFloors ?? MinFloors,
+            Rooms = rooms,
+            Use = use,
+            Moves = changes.Moves ?? Moves,
+        };
+    }
+
+    /// <summary>Every tag some room is furnished from.</summary>
+    public IReadOnlySet<string> Tags() =>
+        (Rooms ?? new Dictionary<string, OfficeRoomRule>())
+            .Values
+            .SelectMany(room => room.Tags ?? [])
+            .ToHashSet(StringComparer.Ordinal);
+}
+
+/// <summary>Reading a pack's rules and saying what is wrong with them.</summary>
+public static class OfficeRuleBook
+{
+    /// <summary>The built-in rules with a set's rules.json over them, and what is wrong with the result.</summary>
+    public static (OfficeRules Rules, IReadOnlyList<string> Problems) Read(string root, string set)
+    {
+        var path = Path.Combine(root, set, OfficeRules.FileName);
+
+        if (!OfficeArt.Names(set) || !File.Exists(path))
+        {
+            return (OfficeRules.Default, []);
+        }
+
+        OfficeRules? changes;
+
+        try
+        {
+            changes = JsonSerializer.Deserialize<OfficeRules>(File.ReadAllText(path));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return (OfficeRules.Default, [$"{OfficeRules.FileName} could not be read: {ex.Message}"]);
+        }
+
+        if (changes is null)
+        {
+            return (OfficeRules.Default, [$"{OfficeRules.FileName} is empty."]);
+        }
+
+        var problems = new List<string>();
+
+        if (changes.Schema != OfficeRules.Version)
+        {
+            problems.Add($"{OfficeRules.FileName}: schema is '{changes.Schema}'; this Loadout reads '{OfficeRules.Version}'.");
+        }
+
+        var merged = OfficeRules.Default.With(changes);
+
+        problems.AddRange(Problems(merged));
+
+        return (merged, problems);
+    }
+
+    /// <summary>Everything wrong with a set of rules, as sentences naming the room.</summary>
+    public static IReadOnlyList<string> Problems(OfficeRules rules)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var problems = new List<string>();
+
+        if (rules.Floor is not [var width, var depth] || width is < 12 or > 64 || depth is < 8 or > 64)
+        {
+            problems.Add("floor has to be a width of 12 to 64 tiles and a depth of 8 to 64.");
+        }
+
+        if (rules.MinFloors is < 1 or > 200)
+        {
+            problems.Add($"min-floors is {rules.MinFloors}; it has to be 1 to 200.");
+        }
+
+        if (rules.Moves is { } moves
+            && (moves.SpillUpSeconds < 0 || moves.GiveBackSeconds < 0 || moves.KeptMinutes < 0))
+        {
+            problems.Add("moves cannot be negative.");
+        }
+
+        var rooms = rules.Rooms ?? new Dictionary<string, OfficeRoomRule>();
+
+        foreach (var (name, room) in rooms)
+        {
+            var called = $"room '{name}'";
+
+            if (room.Tags is not { Count: > 0 })
+            {
+                problems.Add($"{called} names no tags, so there is nothing to furnish it with.");
+            }
+
+            if (!OfficeRules.Levels.Contains(room.Level))
+            {
+                problems.Add($"{called} is on level '{room.Level}'; it has to be one of {string.Join(", ", OfficeRules.Levels)}.");
+            }
+
+            if (room.Where is { } where && !OfficeRules.Placements.Contains(where))
+            {
+                problems.Add($"{called} is placed '{where}'; it has to be one of {string.Join(", ", OfficeRules.Placements)}.");
+            }
+
+            if (room.Min is { } min && (min is not [var mw, var md] || mw < 1 || md < 1))
+            {
+                problems.Add($"{called} min has to be a width and depth of at least 1.");
+            }
+
+            if (room.Max is { } max && (max is not [var xw, var xd] || xw < 1 || xd < 1))
+            {
+                problems.Add($"{called} max has to be a width and depth of at least 1.");
+            }
+            else if (room.Min is [var lw, var ld] && room.Max is [var hw, var hd] && (hw < lw || hd < ld))
+            {
+                problems.Add($"{called} max {hw}x{hd} is smaller than its min {lw}x{ld}.");
+            }
+
+            if (room.Count is < 0)
+            {
+                problems.Add($"{called} count is {room.Count}; it cannot be negative.");
+            }
+
+            foreach (var (from, count) in room.ByTeam ?? new Dictionary<string, int>())
+            {
+                if (!int.TryParse(from, NumberStyles.None, CultureInfo.InvariantCulture, out var size) || size < 1)
+                {
+                    problems.Add($"{called} by-team has '{from}'; each key has to be a team size of 1 or more.");
+                }
+
+                if (count < 0)
+                {
+                    problems.Add($"{called} by-team gives {count} for {from}; it cannot be negative.");
+                }
+            }
+
+            foreach (var wall in room.Walls ?? [])
+            {
+                if (wall is not ("glass" or "solid"))
+                {
+                    problems.Add($"{called} has walls '{wall}'; they have to be glass or solid.");
+                }
+            }
+        }
+
+        foreach (var (state, where) in rules.Use ?? new Dictionary<string, string>())
+        {
+            if (!OfficeRules.States.Contains(state))
+            {
+                problems.Add($"use names state '{state}'; the states are {string.Join(", ", OfficeRules.States)}.");
+            }
+
+            foreach (var room in where.Split('|'))
+            {
+                if (room is not ("stay" or "lift") && !rooms.ContainsKey(room))
+                {
+                    problems.Add($"use sends '{state}' to '{room}', and there is no such room.");
+                }
+            }
+        }
+
+        return problems;
+    }
+}

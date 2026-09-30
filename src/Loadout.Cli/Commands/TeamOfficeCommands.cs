@@ -50,10 +50,17 @@ public sealed class TeamOfficeCheckCommand : Command<TeamOfficeCheckCommand.Sett
             return output.Fail($"There is no set called '{settings.Set}' in {root}.", ExitCode.InvalidArguments);
         }
 
+        // A kit is what the building is generated from, and a set with one is
+        // checked as a kit, with its rules; a scene is a single room.
+        if (OfficeKits.Has(root, settings.Set))
+        {
+            return Kit(output, root, settings.Set);
+        }
+
         if (!OfficeScenes.Has(root, settings.Set))
         {
             return output.Fail(
-                $"'{settings.Set}' has no {OfficeScene.FileName}: it is a painted room, and only tile scenes are checked.",
+                $"'{settings.Set}' has no {OfficeKit.FileName} or {OfficeScene.FileName}: it is a painted room, and only kits and tile scenes are checked.",
                 ExitCode.InvalidArguments);
         }
 
@@ -80,6 +87,42 @@ public sealed class TeamOfficeCheckCommand : Command<TeamOfficeCheckCommand.Sett
             {
                 output.WriteLine($"  {Markup.Escape(problem)}");
             }
+        }
+
+        return check.Fit ? CommandOutput.Success() : (int)ExitCode.ConfigurationInvalid;
+    }
+
+    private static int Kit(CommandOutput output, string root, string set)
+    {
+        var check = OfficeKits.Check(root, set);
+
+        if (output.IsJson)
+        {
+            output.WriteJson(new { set, kind = "kit", fit = check.Fit, problems = check.Problems, drawnFromTheBuiltInKit = check.Missing });
+        }
+        else if (check.Fit)
+        {
+            var kit = check.Kit!;
+
+            output.WriteLine(
+                $"[green]{Markup.Escape(set)}[/] is a kit the building can be made from: "
+                + $"{kit.Pieces.Count} piece(s), {kit.Tilesets.Count} tileset(s), {kit.Sheets?.Count ?? 0} sheet(s).");
+        }
+        else
+        {
+            output.WriteLine($"[red]{Markup.Escape(set)}[/] will not be used until these are put right:");
+
+            foreach (var problem in check.Problems)
+            {
+                output.WriteLine($"  {Markup.Escape(problem)}");
+            }
+        }
+
+        // Not a fault: a pack can be built up a piece at a time, and whatever
+        // it lacks is drawn in the built-in kit's shapes meanwhile.
+        if (!output.IsJson && check.Missing.Count > 0)
+        {
+            output.WriteLine($"[dim]Drawn from the built-in kit until the set has them: {Markup.Escape(string.Join(", ", check.Missing))}.[/]");
         }
 
         return check.Fit ? CommandOutput.Success() : (int)ExitCode.ConfigurationInvalid;

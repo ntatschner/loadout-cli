@@ -602,6 +602,19 @@ public static class OfficeScenes
             }
         }
 
+        SheetProblems(sheets, sizeOf, problems);
+    }
+
+    /// <summary>
+    /// Everything wrong with a set of sprite sheets: frames, anchors, pictures,
+    /// the animations every sheet must have and the frames each one uses.
+    /// </summary>
+    /// <remarks>Shared by scenes and kits, which hold sheets the same way.</remarks>
+    internal static void SheetProblems(
+        IReadOnlyDictionary<string, OfficeSheet> sheets,
+        Func<string, (int Width, int Height)?> sizeOf,
+        List<string> problems)
+    {
         foreach (var (name, sheet) in sheets)
         {
             var called = $"sheet '{name}'";
