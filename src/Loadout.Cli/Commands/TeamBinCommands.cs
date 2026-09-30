@@ -185,6 +185,10 @@ public sealed class TeamBinEmptyCommand : AsyncCommand<TeamBinEmptyCommand.Setti
 
     public sealed class Settings : GlobalSettings
     {
+        [CommandArgument(0, "[name]")]
+        [Description("Only these, as 'team bin' names them: a run's identifier or a team's name. Everything when none is named.")]
+        public string[] Names { get; init; } = [];
+
         [CommandOption("--older-than <AGE>")]
         [Description("Take only what has been in the bin longer than this: 30d, 12h, 90m.")]
         public string? OlderThan { get; init; }
@@ -221,6 +225,27 @@ public sealed class TeamBinEmptyCommand : AsyncCommand<TeamBinEmptyCommand.Setti
         var days = await Binning.DaysAsync(_configuration, cancellationToken).ConfigureAwait(false);
         var now = _time.GetUtcNow();
         var chosen = _bin.Choose(now, age);
+
+        // Named: only those, and a name that is not in the bin at all is a
+        // mistake to say out loud rather than a quiet "nothing to delete" -
+        // the garbage room's "delete for good" names one thing, and a typo
+        // there would otherwise look like it had worked.
+        if (settings.Names.Length > 0)
+        {
+            var all = _bin.List();
+            var missing = settings.Names
+                .Where(name => all.All(entry => !string.Equals(entry.Name, name, StringComparison.Ordinal)))
+                .ToList();
+
+            if (missing.Count > 0)
+            {
+                return output.Fail(
+                    $"Not in the bin: {string.Join(", ", missing)}. See what is with: loadout team bin",
+                    ExitCode.ProjectNotFound);
+            }
+
+            chosen = [.. chosen.Where(entry => settings.Names.Contains(entry.Name, StringComparer.Ordinal))];
+        }
 
         if (settings.DryRun)
         {

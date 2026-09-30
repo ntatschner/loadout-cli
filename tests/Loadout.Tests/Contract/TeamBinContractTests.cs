@@ -94,6 +94,32 @@ public sealed class TeamBinContractTests
     }
 
     [BuiltCliFact]
+    public async Task Emptying_by_name_takes_only_what_is_named_and_refuses_what_is_not_there()
+    {
+        const string other = "20260920-0900-bbbb";
+
+        using var loadout = new LoadoutProcess();
+
+        await WriteRunAsync(loadout);
+        await WriteRunAsync(loadout, other);
+
+        (await loadout.RunAsync("team", "runs", "remove", Run, other)).ExitCode.Should().Be(0);
+
+        var missing = await loadout.RunAsync("team", "bin", "empty", "20260920-0900-cccc", "--yes");
+
+        missing.ExitCode.Should().NotBe(0);
+        (missing.StandardOutput + missing.StandardError).Should().Contain("Not in the bin: 20260920-0900-cccc");
+        Count(await loadout.RunAsync("team", "bin", "--json")).Should().Be(2, "a name that is not there deletes nothing");
+
+        (await loadout.RunAsync("team", "bin", "empty", other, "--yes")).ExitCode.Should().Be(0);
+
+        var left = (await loadout.RunAsync("team", "bin", "--json")).Json().GetProperty("entries");
+
+        left.GetArrayLength().Should().Be(1);
+        left[0].GetProperty("name").GetString().Should().Be(Run, "only the one named went");
+    }
+
+    [BuiltCliFact]
     public async Task Zero_days_is_kept_until_emptied_rather_than_deleted_at_once()
     {
         using var loadout = new LoadoutProcess();
@@ -129,9 +155,9 @@ public sealed class TeamBinContractTests
     }
 
     /// <summary>A finished run's journal, and nothing else.</summary>
-    private static async Task<string> WriteRunAsync(LoadoutProcess loadout)
+    private static async Task<string> WriteRunAsync(LoadoutProcess loadout, string run = Run)
     {
-        var directory = Path.Combine(await StateAsync(loadout), "teams", "runs", Run);
+        var directory = Path.Combine(await StateAsync(loadout), "teams", "runs", run);
 
         Directory.CreateDirectory(directory);
 
