@@ -206,6 +206,37 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void Materials_are_laid_over_the_neighbourhood_by_name_with_a_size_and_their_pictures()
+    {
+        (int Width, int Height)? Pictures(string name) => name is "brick.png" or "brick-night.png" ? (64, 96) : null;
+
+        var good = OfficeKit.Kit() with
+        {
+            Materials = new Dictionary<string, OfficeMaterial>(StringComparer.Ordinal)
+            {
+                ["facade-brick"] = new("brick.png", [64, 96], "brick-night.png"),
+            },
+        };
+
+        OfficeKits.Problems(good, Pictures).Should().BeEmpty();
+
+        var bad = OfficeKit.Kit() with
+        {
+            Materials = new Dictionary<string, OfficeMaterial>(StringComparer.Ordinal)
+            {
+                ["facade-marble"] = new("brick.png", [64, 96]),
+                ["roof"] = new("brick.png", [0, 96]),
+                ["road"] = new("tarmac.png", [32, 32], "brick-night.png"),
+            },
+        };
+
+        OfficeKits.Problems(bad, Pictures).Should().BeEquivalentTo(
+            "material 'facade-marble' is not one the neighbourhood uses; they are " + string.Join(", ", OfficeKit.MaterialNames) + ".",
+            "material 'roof' needs a size of two numbers from 1 to 1024: the tile's width and height in art pixels.",
+            "material 'road' uses 'tarmac.png', which is not in the set or is not a picture.");
+    }
+
+    [Fact]
     public void A_facade_must_be_made_of_facade_pieces_that_exist()
     {
         var kit = Small(("bay", new OfficePiece(null, null, [1, 1], ["facade-bay"], Place: "facade")),

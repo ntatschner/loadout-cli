@@ -529,6 +529,32 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_building_carries_the_kits_materials_for_the_neighbourhood()
+    {
+        Directory.CreateDirectory(Path.Combine(_art, "street"));
+
+        // Enough of a PNG for its size to be read: the signature, then IHDR with 64 by 96.
+        byte[] header = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0, 0, 0, 64, 0, 0, 0, 96];
+
+        File.WriteAllBytes(Path.Combine(_art, "street", "brick.png"), header);
+        File.WriteAllText(Path.Combine(_art, "street", OfficeKit.FileName), JsonSerializer.Serialize(OfficeKit.Kit() with
+        {
+            Materials = new Dictionary<string, OfficeMaterial>(StringComparer.Ordinal)
+            {
+                ["facade-brick"] = new("brick.png", [64, 96]),
+            },
+        }));
+        _server.OfficeSet = "street";
+
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+        var brick = building.RootElement.GetProperty("materials").GetProperty("facade-brick");
+
+        building.RootElement.GetProperty("kit").GetString().Should().Be("street");
+        brick.GetProperty("picture").GetString().Should().Be("brick.png");
+        brick.GetProperty("size")[1].GetInt32().Should().Be(96);
+    }
+
+    [Fact]
     public async Task A_configured_kit_is_the_one_the_building_is_made_from()
     {
         Directory.CreateDirectory(Path.Combine(_art, "tower"));

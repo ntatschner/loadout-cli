@@ -53,6 +53,19 @@ public sealed record OfficePiece(
     [property: JsonPropertyName("seats")] IReadOnlyList<OfficeSeat>? Seats = null,
     [property: JsonPropertyName("animation")] OfficePieceAnimation? Animation = null);
 
+/// <summary>
+/// A pixel-art image laid over the faces of the neighbourhood the page
+/// generates round the tower: one tile of it per bay and storey of a building,
+/// or per tile of ground, so it turns and zooms with the meshes it covers.
+/// </summary>
+/// <param name="Picture">The image, in the set, tileable in both directions.</param>
+/// <param name="Size">How much of a face one tile covers, in art pixels: a bay's width and a storey's height for a facade.</param>
+/// <param name="Night">The same tile after dark, lit windows and all; null draws the day tile dimmed.</param>
+public sealed record OfficeMaterial(
+    [property: JsonPropertyName("picture")] string Picture,
+    [property: JsonPropertyName("size")] IReadOnlyList<int> Size,
+    [property: JsonPropertyName("night")] string? Night = null);
+
 /// <summary>The pieces the tower's outside is assembled from, by piece name.</summary>
 /// <param name="Bays">One module of a storey; several give the facade some variety.</param>
 /// <param name="Corner">The module at each end of a storey, mirrored for the right.</param>
@@ -80,6 +93,7 @@ public sealed record OfficeFacade(
 /// <param name="Facade">What the outside is made of, or null to draw it in the kit's shapes.</param>
 /// <param name="Skins">For each role, the sheets people in it may be drawn with; "worker" for any other.</param>
 /// <param name="Sheets">The sheets, by name, as a scene holds them.</param>
+/// <param name="Materials">Images laid over the neighbourhood round the tower, by material name, or null to draw it in code.</param>
 /// <remarks>
 /// <para>
 /// A scene is one room drawn by hand. A kit is the parts a building is made
@@ -101,8 +115,16 @@ public sealed record OfficeKit(
     [property: JsonPropertyName("pieces")] IReadOnlyDictionary<string, OfficePiece> Pieces,
     [property: JsonPropertyName("facade")] OfficeFacade? Facade = null,
     [property: JsonPropertyName("skins")] IReadOnlyDictionary<string, IReadOnlyList<string>>? Skins = null,
-    [property: JsonPropertyName("sheets")] IReadOnlyDictionary<string, OfficeSheet>? Sheets = null)
+    [property: JsonPropertyName("sheets")] IReadOnlyDictionary<string, OfficeSheet>? Sheets = null,
+    [property: JsonPropertyName("materials")] IReadOnlyDictionary<string, OfficeMaterial>? Materials = null)
 {
+    /// <summary>
+    /// The surfaces the neighbourhood is made of, which a kit may give images
+    /// for. Any it leaves out are drawn in code: flat colour with windows.
+    /// </summary>
+    public static readonly IReadOnlyList<string> MaterialNames =
+        ["facade-glass", "facade-brick", "facade-concrete", "roof", "road", "pavement", "grass", "canopy", "trunk"];
+
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.kit/1";
 
@@ -290,6 +312,11 @@ public static class OfficeKits
             Facade(kit, facade, problems);
         }
 
+        foreach (var (name, material) in kit.Materials ?? new Dictionary<string, OfficeMaterial>())
+        {
+            Material(name, material, sizeOf, problems);
+        }
+
         var sheets = kit.Sheets ?? new Dictionary<string, OfficeSheet>();
 
         foreach (var (role, names) in kit.Skins ?? new Dictionary<string, IReadOnlyList<string>>())
@@ -446,6 +473,27 @@ public static class OfficeKits
         box is [var x, var y, var bw, var bh]
         && x >= 0 && y >= 0 && bw >= 1 && bh >= 1
         && x + bw <= size.Width && y + bh <= size.Height;
+
+    private static void Material(string name, OfficeMaterial material, Func<string, (int Width, int Height)?> sizeOf, List<string> problems)
+    {
+        if (!OfficeKit.MaterialNames.Contains(name, StringComparer.Ordinal))
+        {
+            problems.Add($"material '{name}' is not one the neighbourhood uses; they are {string.Join(", ", OfficeKit.MaterialNames)}.");
+        }
+
+        if (material.Size is not [>= 1 and <= 1024, >= 1 and <= 1024])
+        {
+            problems.Add($"material '{name}' needs a size of two numbers from 1 to 1024: the tile's width and height in art pixels.");
+        }
+
+        foreach (var picture in new[] { material.Picture, material.Night }.OfType<string>())
+        {
+            if (sizeOf(picture) is null)
+            {
+                problems.Add($"material '{name}' uses '{picture}', which is not in the set or is not a picture.");
+            }
+        }
+    }
 
     private static void Facade(OfficeKit kit, OfficeFacade facade, List<string> problems)
     {

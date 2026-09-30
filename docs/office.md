@@ -28,6 +28,12 @@ What you can read from out here:
 
 Hover over a floor to see whose it is; click it to go in.
 
+Round the tower is a neighbourhood: blocks of other buildings, parks and roads,
+made in the page as 3D shapes and drawn through the same camera, so it turns
+and zooms with the tower. It's the same neighbourhood for everybody and doesn't
+rearrange itself, every building in it is lower than the tower, and anything
+standing between you and the tower is faded so it never hides it.
+
 The street round the tower changes with your clock: day, dusk, night and dawn,
 with the lamps and headlights on after dark. Some days it rains, and in winter
 it sometimes snows. The weather comes from the date, so everyone looking today
@@ -124,6 +130,20 @@ which partitions each may have, and which layouts to use.
 ```
 loadout config set team-office-set my-office
 loadout team office check my-office
+```
+
+A kit can also bring **materials** for the neighbourhood: a pixel-art tile for
+each of `facade-glass`, `facade-brick`, `facade-concrete`, `roof`, `road`,
+`pavement`, `grass`, `canopy` and `trunk`, with how much of a surface one tile
+covers (a bay's width and a storey's height, for a facade) and, if it likes, a
+night version with the windows lit. Each tile is laid over every cell of the
+surfaces it covers, following them as the view turns. A material with no tile is
+drawn in plain colour with windows.
+
+```json
+"materials": {
+  "facade-brick": { "picture": "brick.png", "size": [64, 96], "night": "brick-night.png" }
+}
 ```
 
 `team office check` says whether a set can be used, names each thing wrong with

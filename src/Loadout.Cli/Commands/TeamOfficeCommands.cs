@@ -106,7 +106,8 @@ public sealed class TeamOfficeCheckCommand : Command<TeamOfficeCheckCommand.Sett
 
             output.WriteLine(
                 $"[green]{Markup.Escape(set)}[/] is a kit the building can be made from: "
-                + $"{kit.Pieces.Count} piece(s), {kit.Tilesets.Count} tileset(s), {kit.Sheets?.Count ?? 0} sheet(s).");
+                + $"{kit.Pieces.Count} piece(s), {kit.Tilesets.Count} tileset(s), {kit.Sheets?.Count ?? 0} sheet(s), "
+                + $"{kit.Materials?.Count ?? 0} material(s) for the neighbourhood.");
         }
         else
         {

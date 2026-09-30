@@ -1746,6 +1746,10 @@ public sealed class DashboardServer : IDisposable
             // The smallest and largest the page may draw it, in CSS pixels per
             // pixel of art; it picks whole device-pixel steps in between.
             scale = new { min = OfficeScale.Min, max = OfficeScale.Max },
+
+            // The images a kit lays over the neighbourhood the page generates;
+            // empty for the built-in kit, which draws it in code.
+            materials = set.Length > 0 ? kit.Materials ?? new Dictionary<string, OfficeMaterial>() : new Dictionary<string, OfficeMaterial>(),
             capacity,
             kit = set.Length > 0 ? set : null,
             occupied = view.Occupied.Select(floor => new

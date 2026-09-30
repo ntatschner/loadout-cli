@@ -17,6 +17,12 @@
 // somewhere different, and everybody coming back. Nobody may fail to arrive,
 // and no two people may share a tile for longer than squeezing past takes.
 //
+// And the neighbourhood round the tower, generated in the page as meshes: for
+// several tile and floor sizes, no building overlaps another, a road or the
+// tower's block; every one is lower than the tower; no tree stands in a
+// building; every face is a flat rectangle facing the way it says; and the
+// same sizes always give the same neighbourhood.
+//
 // Run by OfficeEngineTests. Exit 0 when all is well; 1 with every fault by
 // kind, a count and the first few places, otherwise.
 import fs from "node:fs";
@@ -69,11 +75,12 @@ const code = [
   cut("  function tileSeat(room, name) {", "  function tileWalk(room, person, toX, toY) {"),
   cut("  function tileWalk(room, person, toX, toY) {", "  // Take in a fresh reading of the run"),
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
+  cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
 ].join("\n");
 
 // The page's own switch for reduced motion: off, so people walk.
 const engine = new Function("function tilesStill() { return false; }\n" + code
-  + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep };")();
+  + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -324,7 +331,61 @@ for (const [name, raw] of chosen) {
   }
 }
 
+// ---- the neighbourhood ----
+
+let cities = 0;
+let blocks = 0;
+
+for (const [t, cols, rows] of [[32, 24, 16], [16, 24, 16], [32, 30, 20], [32, 16, 12]]) {
+  const w = cols * t;
+  const d = rows * t;
+  const s = t * 3;
+  const where = `neighbourhood for ${t}px tiles, a ${cols}x${rows} floor`;
+  const city = engine.cityMake(t, w, d, s);
+  const again = engine.cityMake(t, w, d, s);
+  const pave = t * 1.5;
+  const tower = { x0: -pave, y0: -pave, x1: w + pave, y1: d + pave };
+  const lowest = 12 * s;
+
+  cities += 1;
+  blocks += city.buildings.length;
+
+  if (JSON.stringify(city.faces) !== JSON.stringify(again.faces)) { fault("the neighbourhood changes from one making to the next", where); }
+
+  const overlap = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+  const roads = city.faces.filter((face) => face.m === "road").map((face) => ({
+    x0: Math.min(...face.c.map((p) => p[0])), x1: Math.max(...face.c.map((p) => p[0])),
+    y0: Math.min(...face.c.map((p) => p[1])), y1: Math.max(...face.c.map((p) => p[1])),
+  }));
+
+  city.buildings.forEach((one, i) => {
+    if (overlap(one, tower)) { fault("a neighbour stands on the tower's block", `${where}: building ${i}`); }
+    if (roads.some((road) => overlap(one, road))) { fault("a neighbour stands in a road", `${where}: building ${i}`); }
+    if (city.buildings.some((other, j) => j > i && overlap(one, other))) { fault("two neighbours overlap", `${where}: building ${i}`); }
+    if (one.z >= lowest) { fault("a neighbour is as tall as the tower", `${where}: building ${i}, ${one.z / s} storeys`); }
+  });
+
+  city.trees.forEach(([x, y], i) => {
+    if (city.buildings.some((one) => x > one.x0 && x < one.x1 && y > one.y0 && y < one.y1)) { fault("a tree stands in a building", `${where}: tree ${i}`); }
+  });
+
+  city.faces.forEach((face, i) => {
+    const [a, b, , c] = face.c;
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const length = Math.hypot(...n);
+    const square = Math.abs(u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) < 1e-6;
+    const flat = [0, 1, 2].every((k) => Math.abs(face.c[2][k] - (b[k] + c[k] - a[k])) < 1e-6);
+    // Which way it faces, whichever way round its corners go.
+    const facing = length > 0 && Math.abs(Math.abs((n[0] * face.n[0] + n[1] * face.n[1] + n[2] * face.n[2]) / length) - 1) < 1e-6;
+
+    if (!square || !flat || !facing) { fault("a face is not the rectangle it says it is", `${where}: face ${i} (${face.m})`); }
+  });
+}
+
 console.log(`${scenes} scenes (every scene at four turns), ${paths} paths from the door`);
+console.log(`${cities} neighbourhoods made: ${blocks} buildings, none overlapping, all lower than the tower`);
 console.log(`${simulated} scenes walked: ${walks} walks, two people on one tile for ${(sharedMs / 1000).toFixed(1)}s in all, at most ${(longestShare / 1000).toFixed(2)}s at a time`);
 
 if (!faults.size) {
