@@ -303,6 +303,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.OfficeSet = office.Set;
             server.WaitingSet = OfficeArt.Chosen(_paths, teams?.WaitingSet).Set;
             server.OfficeScale = OfficeScale.Parse(teams?.OfficeScale) ?? OfficeScale.Default;
+            server.Bin = new TeamBin(_paths);
+            server.IsDaemon = true;
+            server.DaemonPaused = () => DaemonControl.Paused(_paths);
+            server.BinDays = TeamBin.Days(teams?.BinDays);
 
             // The same page the dashboard command would serve. Two dashboards
             // that looked different depending on which command started them

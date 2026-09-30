@@ -67,8 +67,9 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 *Terminal* shows what a node is doing now.
 
 - **List** — dense and complete. The default.
-- **Office** — one room per run, a desk per node. The one to leave on a spare
-  screen.
+- **Office** — the runs as a building, a floor per run and a desk per node. The
+  one to leave on a spare screen. Click a floor to go in; [the office](../office.md)
+  explains the rest.
 
   ![The office screen. One room per run, two across, each with its team and state beside its name. The docs-crew run's room has a desk for each of its three nodes, each desk a card with a rounded square on it and the node's name and state written under it: done, waiting for you, and left. The one waiting for you is outlined in amber with a dot on its corner.](../images/dashboard-office.png)
 

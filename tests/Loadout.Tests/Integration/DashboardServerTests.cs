@@ -439,6 +439,83 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_basements_are_served_and_nothing_below_them()
+    {
+        var one = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/place/basement-1/0")).Content.ReadAsStringAsync())!;
+        var two = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/place/basement-2/0")).Content.ReadAsStringAsync())!;
+
+        one.Areas!.Should().Contain(area => area.Kind == "mail-room");
+        two.Areas!.Should().Contain(area => area.Kind == "garbage");
+        (await GetAsync("/api/office/place/basement-3/0")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task The_bin_is_read_with_when_each_thing_in_it_goes()
+    {
+        var state = Path.Combine(_art, "bin-state");
+        var paths = new Loadout.Platform.Linux.LinuxPaths(
+            new Loadout.Tests.Fakes.FakeEnvironmentProvider(
+                Path.Combine(state, "home"),
+                new Dictionary<string, string>
+                {
+                    ["XDG_CONFIG_HOME"] = Path.Combine(state, "config"),
+                    ["XDG_DATA_HOME"] = Path.Combine(state, "data"),
+                    ["XDG_STATE_HOME"] = Path.Combine(state, "state"),
+                    ["XDG_CACHE_HOME"] = Path.Combine(state, "cache"),
+                }),
+            new Loadout.Tests.Fakes.NoOpFilePermissions(),
+            new Loadout.Models.Platform.HostPlatform(
+                Loadout.Models.Platform.HostOperatingSystem.Linux,
+                System.Runtime.InteropServices.Architecture.X64, "test", "TEST"));
+
+        paths.EnsureDirectoriesExist();
+
+        var file = Path.Combine(state, "night-shift.yaml");
+
+        File.WriteAllText(file, "name: night-shift");
+
+        var bin = new TeamBin(paths);
+        var binned = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
+
+        bin.PutTeam("night-shift", file, binned);
+        _server.Bin = bin;
+        _server.BinDays = 7;
+
+        using var read = JsonDocument.Parse(await (await GetAsync("/api/bin")).Content.ReadAsStringAsync());
+        var entry = read.RootElement.GetProperty("entries")[0];
+
+        read.RootElement.GetProperty("days").GetInt32().Should().Be(7);
+        entry.GetProperty("kind").GetString().Should().Be("team");
+        entry.GetProperty("name").GetString().Should().Be("night-shift");
+        entry.GetProperty("goes").GetDateTimeOffset().Should().Be(binned.AddDays(7));
+    }
+
+    [Fact]
+    public async Task The_server_room_is_told_whether_this_is_the_daemon_and_whether_it_is_held()
+    {
+        using var plain = JsonDocument.Parse(await (await GetAsync("/api/daemon")).Content.ReadAsStringAsync());
+
+        plain.RootElement.GetProperty("daemon").GetBoolean().Should().BeFalse();
+        plain.RootElement.GetProperty("paused").ValueKind.Should().Be(JsonValueKind.Null, "nothing here can say");
+
+        _server.IsDaemon = true;
+        _server.DaemonPaused = () => true;
+
+        using var daemon = JsonDocument.Parse(await (await GetAsync("/api/daemon")).Content.ReadAsStringAsync());
+
+        daemon.RootElement.GetProperty("daemon").GetBoolean().Should().BeTrue();
+        daemon.RootElement.GetProperty("paused").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_server_given_no_bin_says_it_is_empty()
+    {
+        using var read = JsonDocument.Parse(await (await GetAsync("/api/bin")).Content.ReadAsStringAsync());
+
+        read.RootElement.GetProperty("entries").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
     public async Task The_building_carries_this_machines_office_size()
     {
         _server.OfficeScale = new OfficeScale(1.5, 3);

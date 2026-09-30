@@ -160,6 +160,18 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public string WaitingSet { get; set; } = string.Empty;
 
+    /// <summary>Whether this server is the daemon's, for the server room to say so.</summary>
+    public bool IsDaemon { get; set; }
+
+    /// <summary>Whether the daemon's schedules are held, for the server room; null where nothing can say.</summary>
+    public Func<bool>? DaemonPaused { get; set; }
+
+    /// <summary>The bin, for the garbage room to show; null where nothing gave this server one.</summary>
+    public TeamBin? Bin { get; set; }
+
+    /// <summary>How many days the bin keeps things, from team-bin-days, so the page can say when each goes.</summary>
+    public int BinDays { get; set; } = TeamBin.DefaultDays;
+
     /// <summary>How large the office may be drawn, from team-office-scale; the default when unset or unreadable.</summary>
     public OfficeScale OfficeScale { get; set; } = OfficeScale.Default;
 
@@ -1280,11 +1292,49 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // The daemon as the server room shows it: whether this is it, and
+        // whether its schedules are held.
+        if (path == "/api/daemon")
+        {
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { daemon = IsDaemon, paused = DaemonPaused?.Invoke() }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        // What is in the bin, for the garbage room. Read, never changed, here:
+        // bringing something back or deleting it is a verb, through a command.
+        if (path == "/api/bin")
+        {
+            var entries = Bin?.List() ?? [];
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    days = BinDays,
+                    entries = entries.Select(one => new
+                    {
+                        kind = one.KindWord,
+                        name = one.Name,
+                        team = one.Team,
+                        binned = one.Removed,
+
+                        // Null where the bin keeps things until it is emptied by hand.
+                        goes = one.Expires(BinDays),
+                        unmerged = one.Unmerged,
+                        bytes = one.Bytes,
+                    }),
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
         if (path.StartsWith("/api/office/place/", StringComparison.Ordinal))
         {
-            // /api/office/place/<lobby|roof>/<seats>: the lobby or the roof, laid out to seat that many.
+            // /api/office/place/<lobby|roof>/<seats>: the lobby or the roof, laid out to seat that many;
+            // /api/office/place/<basement-1|basement-2>/0: a basement, which seats nobody.
             var rest = path["/api/office/place/".Length..].Split('/');
-            var scene = rest is [var name and ("lobby" or "roof"), var seatsText]
+            var scene = rest is [var name and ("lobby" or "roof" or "basement-1" or "basement-2"), var seatsText]
                 && int.TryParse(seatsText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seats)
                     ? Place(name, seats)
                     : null;
@@ -1765,7 +1815,13 @@ public sealed class DashboardServer : IDisposable
             }
         }
 
-        var scene = (name == "lobby" ? FloorPlanner.Lobby(kit, rules, step) : FloorPlanner.Roof(kit, rules, step)).Scene;
+        var scene = (name switch
+        {
+            "lobby" => FloorPlanner.Lobby(kit, rules, step),
+            "roof" => FloorPlanner.Roof(kit, rules, step),
+            "basement-1" => FloorPlanner.Basement(kit, rules, 1),
+            _ => FloorPlanner.Basement(kit, rules, 2),
+        }).Scene;
 
         lock (_building)
         {

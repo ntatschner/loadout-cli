@@ -285,6 +285,101 @@ public static class FloorPlanner
         return new OfficeFloorPlan(Scene(parts, floor, spots, coreLeft, band), spots.Count, 0);
     }
 
+    /// <summary>
+    /// A basement: under the street, walled all round, the core coming down in
+    /// the same place, a corridor along it, and two rooms off the corridor -
+    /// the mail room and storage on the first level down, the garbage room and
+    /// the server room on the second.
+    /// </summary>
+    /// <param name="kit">The pack's kit, or the built-in one.</param>
+    /// <param name="rules">The rules, with any pack changes already over them.</param>
+    /// <param name="level">1 or 2: how far down.</param>
+    /// <remarks>
+    /// Each room is filled with its kind of piece in rows - pigeonholes,
+    /// shelves, bins, racks - each named for its kind and a number, so the page
+    /// can put a thing it knows about in each: a run's post in a pigeonhole, a
+    /// run's delivered files on a shelf, a removed run in a bin.
+    /// </remarks>
+    public static OfficeFloorPlan Basement(OfficeKit kit, OfficeRules rules, int level)
+    {
+        ArgumentNullException.ThrowIfNull(kit);
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentOutOfRangeException.ThrowIfLessThan(level, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(level, 2);
+
+        var parts = new Parts(kit);
+        var random = new Random(Seed("basement", level));
+        var (floor, _, band, coreLeft, coreWidth) = Shell(rules);
+        var width = floor.Width;
+        var height = floor.Height;
+        var rooms = rules.Rooms ?? new Dictionary<string, OfficeRoomRule>();
+
+        // No glass below the street.
+        for (var x = 0; x < width; x++)
+        {
+            floor.Wall(x, height - 1, Cell.Solid);
+        }
+
+        for (var y = 1; y < height - 1; y++)
+        {
+            floor.Wall(0, y, Cell.Solid);
+            floor.Wall(width - 1, y, Cell.Solid);
+        }
+
+        Core(floor, parts, random, coreLeft, coreWidth, band);
+        floor.Areas.Add(new OfficeArea("corridor", "corridor", 1, band + 1, width - 2, 2, null));
+
+        var (west, east) = level == 1 ? ("mail-room", "storage") : ("garbage", "server-room");
+        var (westTag, eastTag) = level == 1 ? ("mail", "storage") : ("bin", "server");
+        var top = band + 4;
+        var h = height - 1 - top;
+        var middle = width / 2;
+
+        foreach (var (name, tag, x, w) in new[] { (west, westTag, 1, middle - 1), (east, eastTag, middle + 1, width - 2 - middle) })
+        {
+            var door = x + w / 2;
+
+            Room(floor, name, name, x, top, w, h, top - 1, "solid", rooms, parts, random, northDoor: door);
+            Fill(floor, parts, random, tag, x, top, w, h);
+        }
+
+        for (var y = top - 1; y < height - 1; y++)
+        {
+            floor.Wall(middle, y, Cell.Solid);
+        }
+
+        // A desk in the band for whoever works down here: the post on the
+        // first level, the machines on the second.
+        var desk = parts.Pick("desk", random, one => one.Footprint[1] == 1 && one.Seats is { Count: > 0 });
+
+        floor.Put("keeper-desk", "desk", desk.Piece, 2, 2, "desk");
+
+        return new OfficeFloorPlan(Scene(parts, floor, [.. floor.Seats], coreLeft, band), 0, 0);
+    }
+
+    /// <summary>
+    /// Rows of one kind of piece in a room, a row between each and one clear
+    /// along the top, so every piece can be walked to from the door.
+    /// </summary>
+    private static void Fill(Floor floor, Parts parts, Random random, string tag, int x, int y, int w, int h)
+    {
+        var piece = parts.Pick(tag, random, one => one.Footprint[1] == 1 && one.Footprint[0] <= Math.Max(1, (w - 1) / 2));
+        var pw = piece.Piece.Footprint[0];
+        var index = 0;
+
+        for (var row = y + 1; row <= y + h - 1; row += 2)
+        {
+            for (var at = x; at + pw <= x + w; at += pw + 1)
+            {
+                // The room reserved its own area, so free here means clear.
+                if (Enumerable.Range(at, pw).All(cx => floor.Clear(cx, row)))
+                {
+                    floor.Put($"{tag}-{++index}", tag, piece.Piece, at, row);
+                }
+            }
+        }
+    }
+
     /// <summary>What is wrong with one seeded attempt, for tests saying why a floor needed a retry.</summary>
     internal static IReadOnlyList<string> Faults(OfficeKit kit, OfficeRules rules, string seed, int team, int attempt)
     {

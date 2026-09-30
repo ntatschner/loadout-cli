@@ -1223,9 +1223,11 @@ only in how you look at it; the fifth shows what has not become a run yet, and
 the sixth shows what one is doing right now.
 
 - **List** — dense and complete. The working view, and the default.
-- **Office** — one room per run, a desk per node. The glanceable one, the thing
-  you leave on a spare screen. A finished room stays and empties: the agents
-  leave, the name and the result remain, and you can walk back into it.
+- **Office** — the runs as a building, a floor per run and a desk per node. The
+  glanceable one, the thing you leave on a spare screen. A finished floor goes
+  dark for an hour and you can still walk into it. [The office](office.md) has
+  the whole of it: the views, the lobby, the roof, the basements, and what the
+  rooms can do.
 - **Graph** — who asked whom, as the delegation tree. This is what a list
   cannot show — the *shape* of a run — and it is the one to reach for when
   something is stuck. Every box is focusable in tree order and opens the run.

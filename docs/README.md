@@ -41,6 +41,7 @@ step, and every term explained the first time it appears.
 - [Commands](commands.md) — the whole command surface, editors, sessions, MCP servers
 - [The launcher](launcher.md) — the terminal UI, keys and navigation
 - [Teams](teams.md) — several agents on one goal: the teams that ship, writing your own, watching a run
+- [The office](office.md) — the dashboard's building: a floor per run, what the rooms show, and making it look like yours
 - [Accessibility](accessibility.md) — how you are written to and asked, and what was verified
 
 ### Instructions and context

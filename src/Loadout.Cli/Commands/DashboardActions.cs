@@ -130,6 +130,8 @@ internal static partial class DashboardActions
     internal static readonly string[] Verbs =
     [
         "gate", "gates", "message", "stop", "forget", "pause", "resume", "name", "pr", "say", "budget", "pickup",
+        "restore", "purge", "restore-team", "purge-team",
+        "daemon-pause", "daemon-resume", "daemon-restart",
     ];
 
     /// <summary>
@@ -169,6 +171,20 @@ internal static partial class DashboardActions
             // the answers they are waiting on — and the command refuses it
             // whatever the page thinks it is looking at.
             "forget" => ("team runs remove", [action.Run]),
+
+            // The garbage room's: out of the bin, or out of it for good. The
+            // page asks before a purge; --yes is the command's own way of
+            // being told somebody already has.
+            "restore" => ("team runs restore", [action.Run]),
+            "purge" => ("team bin empty", [action.Run, "--yes"]),
+            "restore-team" => ("team restore", [action.Run]),
+            "purge-team" => ("team bin empty", [action.Run, "--yes"]),
+
+            // The server room's. Not about a run at all, so the run is not
+            // passed; the page asks before each, by what it will do.
+            "daemon-pause" => ("team daemon pause", []),
+            "daemon-resume" => ("team daemon resume", []),
+            "daemon-restart" => ("team daemon restart", []),
 
             "pause" => ("team halt", [action.Run, "--pause"]),
             "resume" => ("team halt", [action.Run, "--resume"]),

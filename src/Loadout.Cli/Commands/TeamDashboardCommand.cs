@@ -412,6 +412,9 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         server.OfficeSet = office.Set;
         server.WaitingSet = OfficeArt.Chosen(_paths, machine.Value?.Teams.WaitingSet).Set;
         server.OfficeScale = OfficeScale.Parse(machine.Value?.Teams.OfficeScale) ?? OfficeScale.Default;
+        server.Bin = new TeamBin(_paths);
+        server.DaemonPaused = () => DaemonControl.Paused(_paths);
+        server.BinDays = TeamBin.Days(machine.Value?.Teams.BinDays);
 
         // Which of the two pages this is. The flag wins for one run, then the
         // profile - the same order as everything else here, and the same order

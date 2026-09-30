@@ -1603,6 +1603,13 @@
   .tower-inside { position: relative; display: grid; place-items: center; padding: 48px; overflow: auto; max-height: 78vh; transition: transform 0.26s ease-out, opacity 0.26s ease-out; }
   .tower-inside.tower-arrive { transform: scale(0.9); opacity: 0; }
   .tower-slot { position: relative; z-index: 1; }
+  .tower-popup { position: absolute; z-index: 5; max-width: 22rem; padding: var(--space-3);
+    background: var(--surface-1); color: var(--ink); border: var(--lk-border) solid var(--line-strong);
+    border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+  .tower-popup b { display: block; margin-bottom: var(--space-2); }
+  .tower-popup p { margin: 0 0 var(--space-1); font-size: 0.9em; }
+  .tower-popup .tower-popup-foot { color: var(--ink-muted); }
+  .tower-popup .lk-btn-row { margin-top: var(--space-2); display: flex; gap: var(--space-2); flex-wrap: wrap; }
   @media (prefers-reduced-motion: reduce) { .tower-outside, .tower-inside { transition: none; } }
   .tower-inside[hidden] { display: none; }
   .tower-backdrop { position: absolute; top: 0; left: 50%; transform: translateX(-50%); pointer-events: none; }
@@ -6385,6 +6392,10 @@
       } else if (found) {
         tileCard(room, found, event);
       }
+
+      if (!found && room.onPlace) {
+        canvas.style.cursor = towerAt(room, event).area && towerAt(room, event).area.function ? "pointer" : "";
+      }
     });
 
     canvas.addEventListener("mouseleave", function () {
@@ -6394,7 +6405,16 @@
     });
 
     canvas.addEventListener("click", function (event) {
-      if (tileHit(room, event) && room.run) { watch(room.run); }
+      var person = tileHit(room, event);
+
+      // A room in the building opens a popup for what was clicked instead.
+      if (room.onPlace) {
+        room.onPlace(room, event, person);
+
+        return;
+      }
+
+      if (person && room.run) { watch(room.run); }
     });
 
     tileUpdate(room, run);
@@ -7355,7 +7375,8 @@
   function towerWhen(due) {
     var when = new Date(due);
 
-    return isNaN(when.getTime()) ? String(due) : when.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+    // The date as well as the time: something due, or going from the bin, can be weeks away.
+    return isNaN(when.getTime()) ? String(due) : when.toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
 
   /*
@@ -7408,6 +7429,382 @@
 
     return people;
   }
+
+  // Whoever works in a basement: the post on the first level, the machines on the second.
+  function towerKeeper(place) {
+    var post = place === "basement-1";
+
+    return [{
+      node: "keeper",
+      person: post ? "Post" : "Tech",
+      personFull: post ? "The post room clerk" : "The technician",
+      role: "role.keeper",
+      activity: post ? "sorting the runs' post" : "minding the machines",
+      office: { lamp: "quiet", place: "desk", pose: "type" },
+    }];
+  }
+
+  // The bin and the daemon, read for the basements now and then rather than on every draw.
+  var towerBin = [];
+  var towerBinDays = 30;
+  var towerDaemon = null;
+  var towerBelowAt = 0;
+
+  function towerReadBelow(now) {
+    if (!now && Date.now() - towerBelowAt < 10000) { return; }
+
+    towerBelowAt = Date.now();
+
+    api("/api/bin").then(function (answer) {
+      towerBin = answer.entries || [];
+      towerBinDays = typeof answer.days === "number" ? answer.days : 30;
+    }).catch(function () { /* As it was. */ });
+
+    api("/api/daemon").then(function (answer) { towerDaemon = answer; }).catch(function () { /* As it was. */ });
+  }
+
+  // What is at the pointer in a room: the area it is in and the piece under it, in the scene's cells.
+  function towerAt(room, event) {
+    var box = room.canvas.getBoundingClientRect();
+    var t = room.scene.tile;
+    var x = Math.floor((event.clientX - box.left) * (room.canvas.width / box.width) / room.scale / t);
+    var y = Math.floor((event.clientY - box.top) * (room.canvas.height / box.height) / room.scale / t);
+    var within = function (one) { return x >= one.x && x < one.x + (one.w || 1) && y >= one.y && y < one.y + (one.h || 1); };
+    var areas = (room.scene.areas || []).filter(within);
+
+    // The smallest area that holds the point: a room inside the open plan, not the open plan.
+    areas.sort(function (a, b) { return a.w * a.h - b.w * b.h; });
+
+    return { area: areas[0] || null, prop: (room.scene.props || []).filter(within).pop() || null, x: x, y: y };
+  }
+
+  /*
+    A room in the building is a real part of the dashboard: clicking what is
+    in it opens a popup with what it holds and what can be done about it.
+    Nothing here does any of it - reading acts at once, and anything that
+    changes or removes something asks first and then runs the command
+    somebody would have typed, through the same path as every other button.
+  */
+  function towerClick(room, event, person) {
+    var at = towerAt(room, event);
+    var function_ = at.area && at.area.function;
+    var run = towerRuns[room.run && room.run.id] || room.run;
+    var floorRun = room.towerFloor ? towerRuns[room.towerFloor.run] : null;
+
+    if (person && floorRun && !function_) {
+      watch(floorRun);
+
+      return;
+    }
+
+    if (!function_) {
+      towerPopupClose();
+
+      return;
+    }
+
+    var popup = towerRoomPopup(function_, at, floorRun || run);
+
+    if (popup) { towerPopupOpen(popup, event); }
+  }
+
+  function towerRoomPopup(function_, at, run) {
+    var runs = Object.keys(towerRuns).map(function (id) { return towerRuns[id]; })
+      .sort(function (a, b) { return String(b.started).localeCompare(String(a.started)); });
+    var open = run && run.id && towerRuns[run.id] ? { label: "Open the run", go: function () { watch(run); } } : null;
+    // Which pigeonhole, shelf or bin: the piece's number, when it is one of those.
+    var holds = at.prop && ["mail", "storage", "bin"].indexOf(at.prop.kind) >= 0 && /-(\d+)$/.test(at.prop.id);
+    var index = holds ? Number(at.prop.id.match(/-(\d+)$/)[1]) - 1 : -1;
+    var names = function (nodes, test) {
+      return (nodes || []).filter(test).map(function (node) { return (node.person || node.node) + " \u00b7 " + (node.activity || node.state || ""); });
+    };
+
+    switch (function_) {
+      case "controls":
+        return {
+          title: "The lead's office",
+          lines: [run.goal || "No goal written down.", "Spent $" + Number(run.cost || 0).toFixed(2)
+            + (run.budget && run.budget.cap ? " of $" + run.budget.cap : ""), run.outcome || ""],
+          buttons: [open, run.running ? {
+            label: "Stop the run",
+            danger: true,
+            ask: "Stop " + (run.room || run.id) + "? Its nodes are told to finish, and it ends.",
+            yes: "Stop it",
+            go: function () { return act(run.id, "stop", {}); },
+            said: "Asked the run to stop.",
+          } : null],
+        };
+      case "questions":
+        // waitingForYou says whether; the gates and what needs attention say what.
+        var asked = (run.gates || []).concat(run.attention || []).map(function (one) {
+          return typeof one === "string" ? one : one.title || one.question || one.gate || one.kind || "a decision";
+        });
+
+        return {
+          title: "Meeting room",
+          lines: run.waitingForYou || asked.length
+            ? ["Waiting for you:"].concat(asked.length ? asked : ["a question or a decision"],
+              ["They are answered on the run's page, where there is room to read them."])
+            : ["Nothing is waiting for you here."],
+          buttons: [open],
+        };
+      case "summary":
+        return {
+          title: run.room || run.id,
+          lines: [run.goal || "", (run.rounds || 0) + " round(s), $" + Number(run.cost || 0).toFixed(2) + " spent", run.outcome || ""],
+          buttons: [open],
+        };
+      case "work":
+        return {
+          title: "Working here",
+          lines: names(run.nodes, function (node) { return (node.office || {}).place !== "gone"; }),
+          buttons: [open],
+        };
+      case "idle":
+        var idle = [];
+
+        Object.keys(towerRuns).forEach(function (id) {
+          idle = idle.concat(names(towerRuns[id].nodes, function (node) {
+            return towerRuns[id].running && (node.office || {}).place === "free";
+          }));
+        });
+
+        return { title: "Taking a break", lines: idle.length ? idle : ["Nobody is free just now."], buttons: [] };
+      case "waiting":
+      case "schedules":
+        var items = towerWaiting.filter(function (one) { return function_ === "waiting" || one.kind === "schedule"; });
+
+        return {
+          title: function_ === "waiting" ? "The waiting room" : "What is scheduled next",
+          lines: items.length ? items.map(function (one) {
+            return one.id + " \u00b7 " + (one.held ? "held" : one.due ? "due " + towerWhen(one.due) : one.because || one.kind);
+          }) : ["Nothing is waiting."],
+          buttons: [{ label: "Open the waiting list", go: function () { towerShowView("view-waiting"); } }],
+        };
+      case "arrivals":
+        var today = new Date().toDateString();
+        var arrived = runs.filter(function (one) { return new Date(one.started).toDateString() === today; });
+
+        return {
+          title: "Reception",
+          lines: arrived.length ? arrived.map(function (one) { return (one.team || one.id) + " \u00b7 " + towerWhen(one.started); }) : ["Nobody has arrived today."],
+          buttons: [],
+        };
+      case "mail":
+        var post = index >= 0 ? runs.slice(index, index + 1) : runs.slice(0, 6);
+
+        return {
+          title: index >= 0 ? "A pigeonhole" : "The mail room",
+          lines: post.length ? post.map(function (one) {
+            return (one.room || one.id) + ": in, \u201c" + (one.goal || "no goal") + "\u201d; out, " + (one.outcome || "nothing yet");
+          }) : ["No post: no runs yet."],
+          buttons: post.length === 1 ? [{ label: "Open the run", go: function () { watch(post[0]); } }] : [],
+        };
+      case "storage":
+        var shelf = index >= 0 ? runs.slice(index, index + 1) : runs.slice(0, 6);
+
+        return {
+          title: index >= 0 ? "A shelf" : "Storage",
+          lines: shelf.length ? shelf.map(function (one) {
+            return (one.room || one.id) + ": " + ((one.merged || []).length ? (one.merged || []).length + " branch(es) delivered" : "nothing delivered yet");
+          }) : ["Nothing stored: no runs yet."],
+          buttons: shelf.length === 1 ? [{ label: "Open the run", go: function () { watch(shelf[0]); } }] : [],
+        };
+      case "bin":
+        return towerBinPopup(index);
+      case "server":
+        return towerServerPopup();
+      default:
+        return null;
+    }
+  }
+
+  // A bin in the garbage room holds one thing from the bin; the room as a whole, all of them.
+  function towerBinPopup(index) {
+    var entry = index >= 0 ? towerBin[index] : null;
+
+    if (index >= 0 && !entry) {
+      return { title: "An empty bin", lines: ["Nothing in this one."], buttons: [] };
+    }
+
+    if (!entry) {
+      return {
+        title: "The garbage room",
+        lines: towerBin.length
+          ? towerBin.map(function (one) { return one.kind + " " + one.name + (one.goes ? " \u00b7 goes " + towerWhen(one.goes) : ""); })
+          : ["The bin is empty."],
+        buttons: [],
+        foot: (towerBinDays > 0 ? "Kept " + towerBinDays + " days while the daemon runs." : "Kept until the bin is emptied by hand.")
+          + " Click a bin to bring one back.",
+      };
+    }
+
+    var team = entry.kind === "team";
+
+    return {
+      title: (team ? "Team " : "Run ") + entry.name,
+      lines: [
+        (team ? "Removed " : "Forgotten ") + towerWhen(entry.binned)
+          + (entry.goes ? ", goes for good " + towerWhen(entry.goes) : ", kept until the bin is emptied"),
+        team ? "" : "Team: " + (entry.team || "not recorded"),
+        (entry.unmerged || []).length ? "Left " + entry.unmerged.join(", ") + ", which Git still has" : "",
+      ],
+      buttons: [{
+        label: "Bring it back",
+        ask: "Bring " + entry.name + " back out of the bin?",
+        yes: "Bring it back",
+        go: function () { return act(entry.name, team ? "restore-team" : "restore", {}); },
+        said: entry.name + " is back.",
+      }, {
+        label: "Delete for good",
+        danger: true,
+        ask: "Delete " + entry.name + " for good? Nothing brings it back.",
+        yes: "Delete it",
+        go: function () { return act(entry.name, team ? "purge-team" : "purge", {}); },
+        said: entry.name + " is gone for good.",
+      }],
+    };
+  }
+
+  function towerServerPopup() {
+    var going = Object.keys(towerRuns).filter(function (id) { return towerRuns[id].running; }).length;
+    var schedules = towerWaiting.filter(function (one) { return one.kind === "schedule"; }).length;
+    var daemon = towerDaemon || {};
+
+    return {
+      title: "The server room",
+      lines: [
+        daemon.daemon ? "This page is served by the daemon." : "This page is served by a dashboard, not the daemon.",
+        daemon.paused ? "Schedules are held: nothing fires until they are resumed." : "Schedules fire when they are due.",
+        going + " run(s) going, " + schedules + " scheduled.",
+      ],
+      buttons: [daemon.paused ? {
+        label: "Resume the schedules",
+        ask: "Let the schedules fire again?",
+        yes: "Resume",
+        go: function () { return act("daemon", "daemon-resume", {}); },
+        said: "The schedules are resumed.",
+      } : {
+        label: "Hold the schedules",
+        ask: "Hold every schedule until they are resumed? Runs already going carry on.",
+        yes: "Hold them",
+        go: function () { return act("daemon", "daemon-pause", {}); },
+        said: "The schedules are held.",
+      }, daemon.daemon ? {
+        label: "Restart the daemon",
+        danger: true,
+        ask: "Restart the daemon? This page goes away for a moment and comes back.",
+        yes: "Restart it",
+        go: function () { return act("daemon", "daemon-restart", {}); },
+        said: "The daemon is restarting.",
+      } : null],
+    };
+  }
+
+  function towerShowView(id) {
+    var button = document.getElementById(id);
+
+    if (button) { button.click(); }
+  }
+
+  var towerPopupEl = null;
+
+  function towerPopupClose() {
+    if (towerPopupEl && towerPopupEl.parentNode) { towerPopupEl.parentNode.removeChild(towerPopupEl); }
+
+    towerPopupEl = null;
+  }
+
+  // One popup at a time, by what was clicked, with its actions; Escape or a click elsewhere closes it.
+  function towerPopupOpen(popup, event) {
+    towerPopupClose();
+
+    var stage = towerHold.querySelector(".tower-stage");
+    var box = stage.getBoundingClientRect();
+    var el = document.createElement("div");
+    var head = document.createElement("b");
+
+    el.className = "tower-popup";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", popup.title);
+    head.textContent = popup.title;
+    el.appendChild(head);
+
+    popup.lines.filter(Boolean).forEach(function (line) {
+      var row = document.createElement("p");
+
+      row.textContent = line;
+      el.appendChild(row);
+    });
+
+    if (popup.foot) {
+      var foot = document.createElement("p");
+
+      foot.className = "tower-popup-foot";
+      foot.textContent = popup.foot;
+      el.appendChild(foot);
+    }
+
+    var row = document.createElement("div");
+
+    row.className = "lk-btn-row";
+
+    popup.buttons.filter(Boolean).forEach(function (one) {
+      var button = document.createElement("button");
+
+      button.type = "button";
+      button.className = "lk-btn" + (one.danger ? " lk-btn--danger" : "");
+      button.textContent = one.label;
+      button.addEventListener("click", function () {
+        var asked = one.ask ? agreed(one.ask, one.yes || one.label) : Promise.resolve(true);
+
+        asked.then(function (yes) {
+          if (!yes) { return; }
+
+          var done = one.go();
+
+          towerPopupClose();
+
+          if (done && done.then) {
+            done.then(function () {
+              announce(one.said || "Done.");
+              towerReadBelow(true);
+              setTimeout(towerShow, 800);
+            }).catch(function (e) { announce(e.message); });
+          }
+        });
+      });
+      row.appendChild(button);
+    });
+
+    var close = document.createElement("button");
+
+    close.type = "button";
+    close.className = "lk-btn lk-btn--quiet";
+    close.textContent = "Close";
+    close.addEventListener("click", towerPopupClose);
+    row.appendChild(close);
+    el.appendChild(row);
+    stage.appendChild(el);
+
+    el.style.left = Math.max(0, Math.min(event.clientX - box.left + 8, box.width - el.offsetWidth - 8)) + "px";
+    el.style.top = Math.max(0, Math.min(event.clientY - box.top + 8, box.height - el.offsetHeight - 8)) + "px";
+    towerPopupEl = el;
+    (row.querySelector("button") || close).focus();
+  }
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && towerPopupEl) {
+      event.stopImmediatePropagation();
+      towerPopupClose();
+    }
+  }, true);
+
+  document.addEventListener("pointerdown", function (event) {
+    if (towerPopupEl && !towerPopupEl.contains(event.target) && !(event.target.closest && event.target.closest("dialog"))) {
+      if (event.target.tagName !== "CANVAS") { towerPopupClose(); }
+    }
+  });
 
   // A run that has just started: its lead walks in from the street and up in the lift.
   function towerArrive(room, arrival) {
@@ -7555,7 +7952,7 @@
       }
 
       towerHover = towerHit(event);
-      outside.style.cursor = towerHover && (towerHover.run || towerHover.lobby || towerHover.roof) ? "pointer" : "";
+      outside.style.cursor = towerHover && (towerHover.run || towerHover.lobby || towerHover.roof || towerHover.basement) ? "pointer" : "";
       towerCard(event);
       towerDraw();
     });
@@ -7573,7 +7970,7 @@
 
       var hit = towerHit(event);
 
-      if (hit && (hit.run || hit.lobby || hit.roof)) {
+      if (hit && (hit.run || hit.lobby || hit.roof || hit.basement)) {
         towerHover = null;
         card.hidden = true;
         towerEnter(hit, event);
@@ -7726,6 +8123,7 @@
 
     towerView = hit.lobby ? { mode: "inside", place: "lobby" }
       : hit.roof ? { mode: "inside", place: "roof" }
+      : hit.basement ? { mode: "inside", place: "basement-" + hit.basement }
       : { mode: "inside", run: hit.run, part: hit.part };
     towerLook.facing = towerLook.turn;
     keep("loadout.office.view", towerView);
@@ -7753,6 +8151,7 @@
   }
 
   function towerLeave() {
+    towerPopupClose();
     var inside = towerHold.querySelector(".tower-inside");
     var outside = towerHold.querySelector(".tower-outside");
 
@@ -7887,6 +8286,7 @@
     var holder = towerHold.querySelector(".tower-inside");
 
     room.towerFloor = mine.towerFloor;
+    room.onPlace = towerClick;
     towerRoom = room;
     room.fitWidth = Math.max(160, holder.clientWidth - 96);
     room.fitHeight = Math.max(160, window.innerHeight * 0.78 - 96);
@@ -7924,14 +8324,19 @@
         .catch(function () { /* The lobby as it was. */ });
     }
 
-    var people = place === "lobby" ? towerLobbyPeople() : towerRoofPeople();
-    var seats = place === "lobby" ? towerWaiting.length : people.length;
-    var step = Math.min(48, Math.ceil(Math.max(0, seats) / 4) * 4);
+    var below = place.indexOf("basement-") === 0;
+
+    if (below) { towerReadBelow(); }
+
+    var people = place === "lobby" ? towerLobbyPeople() : below ? towerKeeper(place) : towerRoofPeople();
+    var seats = place === "lobby" ? towerWaiting.length : below ? 0 : people.length;
+    var step = below ? 0 : Math.min(48, Math.ceil(Math.max(0, seats) / 4) * 4);
     var key = place + "|" + step;
     var plan = towerScenes[key];
 
-    where.textContent = place === "lobby"
-      ? "Lobby \u00b7 " + towerWaiting.length + " waiting"
+    where.textContent = place === "lobby" ? "Lobby \u00b7 " + towerWaiting.length + " waiting"
+      : place === "basement-1" ? "Basement 1 \u00b7 the mail room and storage"
+      : place === "basement-2" ? "Basement 2 \u00b7 the garbage room and the server room"
       : "Roof \u00b7 " + people.length + " taking a break";
 
     if (!plan) {
@@ -7952,11 +8357,12 @@
     towerHold.querySelector(".tower-right").hidden = !turns;
 
     var scene = plan.turned[facing] || (plan.turned[facing] = turnScene(plan.scene, facing));
-    var run = { id: place, team: place === "lobby" ? "Lobby" : "Roof", running: true, nodes: people };
+    var run = { id: place, team: place === "lobby" ? "Lobby" : below ? "Basement" : "Roof", running: true, nodes: people };
     var room = tileRoom(place + "|" + step + "|" + facing, run, (towerData && towerData.kit) || "", scene);
     var slot = towerHold.querySelector(".tower-slot");
 
     towerRoom = room;
+    room.onPlace = towerClick;
     room.fitWidth = Math.max(160, holder.clientWidth - 96);
     room.fitHeight = Math.max(160, window.innerHeight * 0.78 - 96);
     room.zoom = towerZoom.inside || 0;
@@ -7994,7 +8400,7 @@
     }
 
     tileSize(room);
-    towerBackdrop(holder, place === "lobby" ? 0 : towerFloors() + 1);
+    towerBackdrop(holder, place === "lobby" ? 0 : below ? -Number(place.slice(-1)) : towerFloors() + 1);
     wakeTiles();
   }
 
@@ -8198,6 +8604,9 @@
       eye: eye,
       ahead: ahead,
       street: view === "ground",
+      depth: function (p) {
+        return (p[0] - eye[0]) * ahead[0] + (p[1] - eye[1]) * ahead[1] + (p[2] - eye[2]) * ahead[2];
+      },
       project: function (p) {
         var dx = p[0] - eye[0];
         var dy = p[1] - eye[1];
@@ -8240,10 +8649,13 @@
     var step = fit * Math.pow(1.25, Math.max(0, towerZoom.outside || 0));
 
     canvas._scale = step;
-    canvas.width = Math.round(cssWidth * dpr);
-    canvas.height = Math.round(cssHeight * dpr);
-    canvas.style.width = cssWidth + "px";
-    canvas.style.height = cssHeight + "px";
+
+    if (canvas.width !== Math.round(cssWidth * dpr) || canvas.height !== Math.round(cssHeight * dpr)) {
+      canvas.width = Math.round(cssWidth * dpr);
+      canvas.height = Math.round(cssHeight * dpr);
+      canvas.style.width = cssWidth + "px";
+      canvas.style.height = cssHeight + "px";
+    }
 
     var top = towerTop();
 
@@ -8266,12 +8678,11 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    var sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    var scene = towerScene(new Date());
+    var clock = tilesStill() ? 0 : now / 1000;
 
-    sky.addColorStop(0, c.deep);
-    sky.addColorStop(1, c.bg);
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    towerLight = scene;
+    towerSkyDraw(ctx, canvas, scene, clock);
 
     // Which walls face the eye, nearest drawn last.
     var sides = towerSides().filter(function (side) {
@@ -8295,6 +8706,12 @@
     }
 
     towerGround(ctx, c, project, camera);
+
+    // The street in front of the tower is drawn after it, the one behind before.
+    var south = sides.some(function (side) { return side.out[1] === -1; });
+    var west = sides.some(function (side) { return side.out[0] === -1; });
+
+    towerStreet(ctx, project, camera, scene, clock, { south: !south, west: !west });
     towerStorey3d(ctx, c, project, sides, 0, null, towerHover && towerHover.number === 0, now, null);
 
     for (var n = 1; n <= towerFloors(); n += 1) {
@@ -8302,6 +8719,8 @@
     }
 
     towerCrown(ctx, c, project, sides, busiest, camera.ahead[2] >= 0);
+    towerStreet(ctx, project, camera, scene, clock, { south: south, west: west });
+    towerWeatherDraw(ctx, canvas, scene, clock);
 
     if (towerHover && towerHover.roof && camera.ahead[2] < 0) {
       var roofZ = towerLevelZ(towerFloors() + 1)[0];
@@ -8313,6 +8732,278 @@
     }
 
     canvas.setAttribute("aria-label", towerHold.querySelector(".tower-where").textContent);
+    towerTick();
+  }
+
+  /*
+    The scene round the tower: the time of day from the viewer's clock, and
+    the weather from the date, so everybody looking today sees the same.
+    ?office-sky=night and ?office-weather=rain choose them instead, for
+    looking at one without waiting for it.
+  */
+  var towerLight = null;
+  var TOWER_SKIES = {
+    night: { top: "#04060c", low: "#16203a", cloud: "rgba(120, 130, 160, 0.22)", glass: "#0e1722", ground: "rgba(22, 25, 30, 0.9)", lamps: true },
+    dawn: { top: "#34426e", low: "#f0b27a", cloud: "rgba(255, 210, 180, 0.55)", glass: "#243750", ground: "rgba(44, 46, 54, 0.85)", lamps: true },
+    day: { top: "#5f9fd6", low: "#cfe3f4", cloud: "rgba(255, 255, 255, 0.78)", glass: "#2a4560", ground: "rgba(58, 62, 68, 0.82)", lamps: false },
+    dusk: { top: "#2b1c48", low: "#e0874c", cloud: "rgba(255, 180, 140, 0.5)", glass: "#1d2a3c", ground: "rgba(36, 36, 44, 0.86)", lamps: true },
+  };
+
+  function towerScene(date) {
+    var asked = new URLSearchParams(location.search);
+    var hour = date.getHours() + date.getMinutes() / 60;
+    var sky = TOWER_SKIES[asked.get("office-sky")] ? asked.get("office-sky")
+      : hour < 5.5 || hour >= 21 ? "night" : hour < 7.5 ? "dawn" : hour < 18.5 ? "day" : "dusk";
+    var key = date.getFullYear() * 400 + date.getMonth() * 32 + date.getDate();
+    var roll = ((key * 2654435761) >>> 0) % 10;
+    var winter = date.getMonth() >= 10 || date.getMonth() <= 1;
+    var weather = ["clear", "rain", "snow"].indexOf(asked.get("office-weather")) >= 0 ? asked.get("office-weather")
+      : roll === 0 && winter ? "snow" : roll < 2 ? "rain" : "clear";
+
+    return Object.assign({ sky: sky, weather: weather }, TOWER_SKIES[sky]);
+  }
+
+  // A number from 0 to 1 that is the same for the same n every time.
+  function towerNoise(n) {
+    var x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+
+    return x - Math.floor(x);
+  }
+
+  function towerSkyDraw(ctx, canvas, scene, clock) {
+    var sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+
+    sky.addColorStop(0, scene.top);
+    sky.addColorStop(1, scene.low);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Stars at night, clouds otherwise dimmer at night and heavier in bad weather.
+    if (scene.sky === "night" && scene.weather === "clear") {
+      for (var s = 0; s < 70; s += 1) {
+        var twinkle = 0.4 + 0.6 * Math.abs(Math.sin(clock * (0.5 + towerNoise(s + 7)) + s));
+
+        ctx.fillStyle = "rgba(230, 236, 255, " + (0.7 * twinkle).toFixed(2) + ")";
+        ctx.fillRect(towerNoise(s) * canvas.width, towerNoise(s + 100) * canvas.height * 0.5, 2, 2);
+      }
+    }
+
+    var clouds = scene.weather === "clear" ? 6 : 12;
+
+    ctx.fillStyle = scene.weather === "clear" ? scene.cloud : "rgba(90, 96, 110, 0.55)";
+
+    for (var i = 0; i < clouds; i += 1) {
+      var w = canvas.width * (0.12 + towerNoise(i + 20) * 0.14);
+      var speed = canvas.width * (0.004 + towerNoise(i + 40) * 0.006);
+      var x = ((towerNoise(i) * (canvas.width + w * 2) + clock * speed) % (canvas.width + w * 2)) - w;
+      var y = canvas.height * (0.04 + towerNoise(i + 60) * 0.3);
+
+      // Each puff its own shape: in one path they are joined by a line, and filled as a wedge.
+      [[0, 0, 2, 7], [-0.22, 1 / 18, 4, 9], [0.2, 1 / 20, 4.5, 10]].forEach(function (puff) {
+        ctx.beginPath();
+        ctx.ellipse(x + w * puff[0], y + w * puff[1], w / puff[2], w / puff[3], 0, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+  }
+
+  function towerWeatherDraw(ctx, canvas, scene, clock) {
+    var dpr = window.devicePixelRatio || 1;
+
+    if (scene.weather === "rain") {
+      ctx.strokeStyle = "rgba(180, 200, 230, 0.45)";
+      ctx.lineWidth = dpr;
+
+      for (var r = 0; r < 160; r += 1) {
+        var x = (towerNoise(r) * canvas.width + clock * 90 * dpr) % canvas.width;
+        var y = (towerNoise(r + 300) * canvas.height + clock * 900 * dpr) % canvas.height;
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 3 * dpr, y + 12 * dpr);
+        ctx.stroke();
+      }
+    }
+
+    if (scene.weather === "snow") {
+      ctx.fillStyle = "rgba(245, 248, 255, 0.85)";
+
+      for (var f = 0; f < 110; f += 1) {
+        var fy = (towerNoise(f + 500) * canvas.height + clock * (30 + towerNoise(f) * 30) * dpr) % canvas.height;
+        var fx = towerNoise(f + 700) * canvas.width + Math.sin(clock + f) * 8 * dpr;
+
+        ctx.beginPath();
+        ctx.arc(fx, fy, (1 + towerNoise(f + 900)) * dpr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  /*
+    The streets along the tower's south and west sides: a road with a line
+    down it, cars going both ways, and lamps along the pavement that come on
+    from dusk to dawn. Each side is drawn with the tower in between or not,
+    as the camera sees it, so traffic goes behind the tower as well as in front.
+  */
+  function towerStreet(ctx, project, camera, scene, clock, which) {
+    var t = towerTile();
+    var w = towerWidth();
+    var d = towerDepth();
+    var pave = t * 1.5;
+    var reach = Math.max(w, d) * 1.2;
+    var near = t * 1.2;
+    var roads = [];
+
+    if (which.south) {
+      roads.push({ name: "south", from: [-reach, -pave - t * 2.5], to: [w + reach, -pave - t * 2.5], across: [0, 1] });
+    }
+
+    if (which.west) {
+      roads.push({ name: "west", from: [-pave - t * 2.5, -reach], to: [-pave - t * 2.5, d + reach], across: [1, 0] });
+    }
+
+    function seen(points) {
+      return !camera.street || points.every(function (p) { return camera.depth(p) > near; });
+    }
+
+    function quad(points, fill) {
+      if (!seen(points)) { return; }
+
+      towerQuad(ctx, project, points[0], points[1], points[2], points[3]);
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+
+    roads.forEach(function (road, index) {
+      var ax = road.across[0] * t * 2;
+      var ay = road.across[1] * t * 2;
+      var a = road.from;
+      var b = road.to;
+      var length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      var ux = (b[0] - a[0]) / length;
+      var uy = (b[1] - a[1]) / length;
+
+      quad([[a[0], a[1], 0.5], [b[0], b[1], 0.5], [b[0] + ax, b[1] + ay, 0.5], [a[0] + ax, a[1] + ay, 0.5]],
+        scene.weather === "snow" ? "#c9ced8" : scene.weather === "rain" ? "#1a1e25" : "#24272d");
+
+      // The line down the middle, dashed.
+      for (var dash = 0; dash < length; dash += t * 1.5) {
+        var m0 = [a[0] + ux * dash + ax / 2, a[1] + uy * dash + ay / 2];
+        var m1 = [m0[0] + ux * t * 0.7, m0[1] + uy * t * 0.7];
+
+        quad([[m0[0], m0[1], 1], [m1[0], m1[1], 1], [m1[0] + road.across[0] * 2, m1[1] + road.across[1] * 2, 1], [m0[0] + road.across[0] * 2, m0[1] + road.across[1] * 2, 1]],
+          "rgba(230, 210, 120, 0.7)");
+      }
+
+      // Cars, each in its own lane and direction, going round when they reach the end.
+      for (var car = 0; car < 4; car += 1) {
+        var seed = index * 10 + car;
+        var dir = car % 2 ? 1 : -1;
+        var speed = t * (2.5 + towerNoise(seed + 3) * 3);
+        var along = ((towerNoise(seed) * length + dir * clock * speed) % length + length) % length;
+        var lane = dir > 0 ? 0.25 : 0.75;
+        var cx = a[0] + ux * along + road.across[0] * t * 2 * lane;
+        var cy = a[1] + uy * along + road.across[1] * t * 2 * lane;
+        var hl = t * 0.7;
+        var hw = t * 0.32;
+        var h = t * 0.45;
+        var colours = ["#c0392b", "#2e86c1", "#d4ac0d", "#839192", "#1e8449", "#f0f3f4"];
+        var colour = colours[Math.floor(towerNoise(seed + 9) * colours.length)];
+        var corners = [
+          [cx - ux * hl - road.across[0] * hw, cy - uy * hl - road.across[1] * hw],
+          [cx + ux * hl - road.across[0] * hw, cy + uy * hl - road.across[1] * hw],
+          [cx + ux * hl + road.across[0] * hw, cy + uy * hl + road.across[1] * hw],
+          [cx - ux * hl + road.across[0] * hw, cy - uy * hl + road.across[1] * hw],
+        ];
+
+        // Its sides, then its roof.
+        for (var e = 0; e < 4; e += 1) {
+          var p0 = corners[e];
+          var p1 = corners[(e + 1) % 4];
+
+          quad([[p0[0], p0[1], 1], [p1[0], p1[1], 1], [p1[0], p1[1], h], [p0[0], p0[1], h]], "rgba(20, 22, 26, 0.9)");
+        }
+
+        quad(corners.map(function (one) { return [one[0], one[1], h]; }), colour);
+
+        // Headlights from dusk to dawn, at the end it is going towards.
+        if (scene.lamps) {
+          var fx = cx + ux * dir * hl;
+          var fy = cy + uy * dir * hl;
+          var glow = [fx, fy, h * 0.5];
+
+          if (seen([glow])) {
+            var spot = project(glow);
+
+            ctx.fillStyle = "rgba(255, 240, 180, 0.9)";
+            ctx.beginPath();
+            ctx.arc(spot[0], spot[1], Math.max(1.5, (window.devicePixelRatio || 1) * 1.5), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+
+      // Lamps along the tower's side of the road.
+      for (var lamp = t * 2; lamp < length; lamp += t * 4) {
+        var lx = a[0] + ux * lamp - road.across[0] * t * 0.3;
+        var ly = a[1] + uy * lamp - road.across[1] * t * 0.3;
+        var foot = [lx, ly, 0];
+        var head = [lx, ly, t * 2.2];
+
+        if (!seen([foot, head])) { continue; }
+
+        var pf = project(foot);
+        var ph = project(head);
+
+        ctx.strokeStyle = "#3b4048";
+        ctx.lineWidth = Math.max(1, (window.devicePixelRatio || 1));
+        ctx.beginPath();
+        ctx.moveTo(pf[0], pf[1]);
+        ctx.lineTo(ph[0], ph[1]);
+        ctx.stroke();
+
+        if (scene.lamps) {
+          var radius = Math.max(4, Math.hypot(ph[0] - pf[0], ph[1] - pf[1]) * 0.35);
+          var halo = ctx.createRadialGradient(ph[0], ph[1], 0, ph[0], ph[1], radius);
+          var flicker = 0.75 + 0.1 * Math.sin(clock * 3 + lamp);
+
+          halo.addColorStop(0, "rgba(255, 220, 150, " + flicker.toFixed(2) + ")");
+          halo.addColorStop(1, "rgba(255, 220, 150, 0)");
+          ctx.fillStyle = halo;
+          ctx.beginPath();
+          ctx.arc(ph[0], ph[1], radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    });
+  }
+
+  // Keeps the outside moving while it can be seen: about twenty frames a second, none when still.
+  var towerTicking = false;
+
+  function towerTick() {
+    if (towerTicking || tilesStill()) { return; }
+
+    towerTicking = true;
+
+    var last = 0;
+
+    (function frame(now) {
+      if (!towerHold || towerView.mode === "inside" || towerHold.offsetParent === null || tilesStill() || document.hidden) {
+        towerTicking = false;
+
+        return;
+      }
+
+      // Drawn with the flag still up, so the draw's own call to start
+      // ticking finds it running rather than starting a second loop.
+      if (now - last >= 50) {
+        last = now;
+        towerDraw();
+      }
+
+      requestAnimationFrame(frame);
+    })(performance.now());
   }
 
   // How wide and tall the whole building draws at one device pixel per unit, seen from above a corner.
@@ -8369,7 +9060,7 @@
       var lit = people ? Math.max(1, Math.min(bays, Math.round(people / capacity * bays * 1.4))) : 0;
 
       polygons.push(towerQuad(ctx, project, towerOn(side, 0, z[0]), towerOn(side, 1, z[0]), towerOn(side, 1, z[1]), towerOn(side, 0, z[1])));
-      ctx.fillStyle = level < 0 ? "#2a2d31" : level === 0 ? "#24344a" : "#1c2a3a";
+      ctx.fillStyle = level < 0 ? "#2a2d31" : level === 0 ? "#24344a" : towerLight ? towerLight.glass : "#1c2a3a";
       ctx.fill();
 
       if (level === 0) {
@@ -8473,7 +9164,7 @@
       });
     }
 
-    if (level >= 0) { towerFaces.push({ level: level, polygons: polygons }); }
+    towerFaces.push({ level: level, polygons: polygons });
   }
 
   // The street and the pavement round the tower, over the basements.
@@ -8492,7 +9183,7 @@
       ctx.fillRect(0, far[1], ctx.canvas.width, ctx.canvas.height - far[1]);
     } else {
       towerQuad(ctx, project, [-reach, -reach, 0], [w + reach, -reach, 0], [w + reach, d + reach, 0], [-reach, d + reach, 0]);
-      ctx.fillStyle = "rgba(40, 44, 50, 0.82)";
+      ctx.fillStyle = towerLight && towerLight.weather === "snow" ? "rgba(214, 220, 230, 0.9)" : towerLight ? towerLight.ground : "rgba(40, 44, 50, 0.82)";
       ctx.fill();
     }
 
@@ -8579,6 +9270,7 @@
       if (face.polygons.some(function (polygon) { return towerInside(point, polygon); })) {
         if (face.level === 0) { return { number: 0, lobby: true }; }
         if (face.level === "roof") { return { number: towerFloors() + 1, roof: true }; }
+        if (face.level < 0) { return { number: face.level, basement: -face.level }; }
 
         var occupant = towerOccupant(face.level);
 
@@ -8602,6 +9294,10 @@
 
     if (towerHover.lobby) {
       lines = ["Lobby", "Reception and the waiting room", towerWaiting.length + " waiting"];
+    } else if (towerHover.basement) {
+      lines = towerHover.basement === 1
+        ? ["Basement 1", "The mail room and storage"]
+        : ["Basement 2", "The garbage room and the server room", towerBin.length + " in the bin"];
     } else if (towerHover.roof) {
       lines = ["Roof", "The break area", towerRoofPeople().length + " taking a break"];
     } else if (towerHover.occupant) {
@@ -8670,6 +9366,7 @@
       towerSeenRuns[run.id] = true;
     });
     towerBreaks(Date.now());
+    towerReadBelow();
 
     if (Date.now() - towerWaitingAt > 15000) {
       towerWaitingAt = Date.now();
