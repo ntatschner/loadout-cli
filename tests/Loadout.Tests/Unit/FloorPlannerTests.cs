@@ -116,6 +116,66 @@ public sealed class FloorPlannerTests
     }
 
     [Fact]
+    public void Small_teams_get_corridor_floors_as_well_as_open_ones()
+    {
+        var kinds = Enumerable.Range(0, 40)
+            .Select(one => Plan($"run-{one}", 3).Scene.Areas!)
+            .Select(areas => areas.Any(area => area.Kind == "corridor") ? "corridor" : "open")
+            .ToHashSet();
+
+        kinds.Should().BeEquivalentTo(["corridor", "open"]);
+    }
+
+    [Fact]
+    public void A_corridor_floor_seats_its_team_in_rooms_off_the_corridor()
+    {
+        var plan = Enumerable.Range(0, 40)
+            .Select(one => Plan($"run-{one}", 4))
+            .First(one => one.Scene.Areas!.Any(area => area.Kind == "corridor"));
+        var rooms = plan.Scene.Areas!.Where(area => area.Kind == "team-room").ToList();
+
+        rooms.Should().NotBeEmpty();
+        plan.Scene.Desks.Should().HaveCount(4);
+
+        // Every seat but the lead's is inside a team room.
+        plan.Scene.Desks.Skip(1).Should().OnlyContain(seat =>
+            rooms.Any(room => seat.X >= room.X && seat.X < room.X + room.W && seat.Y >= room.Y && seat.Y < room.Y + room.H));
+    }
+
+    [Fact]
+    public void A_team_too_big_for_a_corridor_floor_gets_open_plan()
+    {
+        Enumerable.Range(0, 40)
+            .Select(one => Plan($"run-{one}", 12).Scene.Areas!)
+            .Should().OnlyContain(areas => !areas.Any(area => area.Kind == "corridor"));
+    }
+
+    [Fact]
+    public void Rooms_can_be_partitioned_by_screens_and_planters_as_well_as_walls()
+    {
+        var kinds = Enumerable.Range(0, 60)
+            .SelectMany(one => new[] { Plan($"run-{one}", 3), Plan($"run-{one}", 8) })
+            .SelectMany(plan => plan.Scene.Props!)
+            .Select(prop => prop.Kind)
+            .ToHashSet();
+
+        kinds.Should().Contain("partition-screen").And.Contain("partition-planter");
+    }
+
+    [Fact]
+    public void Rules_refuse_a_layout_or_partition_the_planner_does_not_know()
+    {
+        var broken = Rules.With(new OfficeRules(
+            OfficeRules.Version,
+            Rooms: new Dictionary<string, OfficeRoomRule> { ["lounge"] = new(["sofa"], Walls: ["hedge"]) },
+            Layouts: ["maze"]));
+
+        OfficeRuleBook.Problems(broken).Should().BeEquivalentTo(
+            "layouts names 'maze'; a floor is laid out as one of open, corridor.",
+            "room 'lounge' has walls 'hedge'; they have to be one of solid, glass, screen, planters, open.");
+    }
+
+    [Fact]
     public void Rooms_carry_what_they_are_for_on_the_dashboard()
     {
         var areas = Plan("run-c", 10).Scene.Areas!;

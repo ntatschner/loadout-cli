@@ -73,6 +73,7 @@ public sealed record OfficeMoves(
 /// <param name="Rooms">Each kind of room, by name.</param>
 /// <param name="Use">Which room a person goes to in each state: working, lead-waiting, briefing, review, merge-gate, failed, free, done.</param>
 /// <param name="Moves">How long the building waits before moving a team.</param>
+/// <param name="Layouts">The kinds of floor a run may be given, one chosen by its seed: open, corridor.</param>
 /// <remarks>
 /// <para>
 /// Built in, from the decisions of 30 Sep 2026 recorded in the specification,
@@ -91,13 +92,27 @@ public sealed record OfficeRules(
     [property: JsonPropertyName("min-floors")] int? MinFloors = null,
     [property: JsonPropertyName("rooms")] IReadOnlyDictionary<string, OfficeRoomRule>? Rooms = null,
     [property: JsonPropertyName("use")] IReadOnlyDictionary<string, string>? Use = null,
-    [property: JsonPropertyName("moves")] OfficeMoves? Moves = null)
+    [property: JsonPropertyName("moves")] OfficeMoves? Moves = null,
+    [property: JsonPropertyName("layouts")] IReadOnlyList<string>? Layouts = null)
 {
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.rules/1";
 
     /// <summary>The file a set keeps its rules in, when it has any.</summary>
     public const string FileName = "rules.json";
+
+    /// <summary>
+    /// The kinds of floor the planner can lay out: open (one open plan below
+    /// the band of rooms) and corridor (a corridor with team rooms off it).
+    /// </summary>
+    public static readonly IReadOnlyList<string> FloorLayouts = ["open", "corridor"];
+
+    /// <summary>
+    /// What may stand between a room and the floor around it: walls (solid,
+    /// glass), low screens, a row of planters, or nothing but the room's
+    /// name (open).
+    /// </summary>
+    public static readonly IReadOnlyList<string> Partitions = ["solid", "glass", "screen", "planters", "open"];
 
     /// <summary>The levels a room can be on.</summary>
     public static readonly IReadOnlyList<string> Levels = ["floor", "lobby", "roof", "basement-1", "basement-2"];
@@ -124,10 +139,13 @@ public sealed record OfficeRules(
                 Min: [3, 3],
                 ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 1, ["5"] = 2, ["10"] = 3 },
                 Where: "near-open-plan",
-                Walls: ["glass", "solid"],
+                Walls: ["glass", "solid", "screen"],
                 Function: "questions"),
             ["kitchen"] = new(["kitchen", "coffee"], Min: [3, 3], Count: 1, Function: "idle"),
-            ["lounge"] = new(["sofa"], Min: [3, 3], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Function: "idle"),
+            ["lounge"] = new(["sofa", "partition-planter"], Min: [3, 3], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Walls: ["planters", "open", "screen"], Function: "idle"),
+
+            // A corridor floor's rooms off the corridor, each with its own desks.
+            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "screen", "planters", "open"], Function: "work"),
             ["cupboard"] = new(["cupboard"], Min: [1, 1], Max: [2, 2], Count: 1),
             ["storage-cupboard"] = new(["storage"], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["8"] = 1 }),
             ["lift"] = new(["lift"], Count: 1, Core: true, Where: "core"),
@@ -155,7 +173,8 @@ public sealed record OfficeRules(
             ["free"] = "break-area|kitchen|lounge",
             ["done"] = "lift",
         },
-        new OfficeMoves());
+        new OfficeMoves(),
+        ["open", "corridor"]);
 
     /// <summary>These rules with a pack's changes laid over them.</summary>
     public OfficeRules With(OfficeRules? changes)
@@ -186,6 +205,7 @@ public sealed record OfficeRules(
             Rooms = rooms,
             Use = use,
             Moves = changes.Moves ?? Moves,
+            Layouts = changes.Layouts ?? Layouts,
         };
     }
 
@@ -263,6 +283,19 @@ public static class OfficeRuleBook
             problems.Add("moves cannot be negative.");
         }
 
+        if (rules.Layouts is { } layouts)
+        {
+            if (layouts.Count == 0)
+            {
+                problems.Add("layouts is empty; name at least one of open, corridor.");
+            }
+
+            foreach (var layout in layouts.Where(one => !OfficeRules.FloorLayouts.Contains(one)))
+            {
+                problems.Add($"layouts names '{layout}'; a floor is laid out as one of {string.Join(", ", OfficeRules.FloorLayouts)}.");
+            }
+        }
+
         var rooms = rules.Rooms ?? new Dictionary<string, OfficeRoomRule>();
 
         foreach (var (name, room) in rooms)
@@ -318,9 +351,9 @@ public static class OfficeRuleBook
 
             foreach (var wall in room.Walls ?? [])
             {
-                if (wall is not ("glass" or "solid"))
+                if (!OfficeRules.Partitions.Contains(wall))
                 {
-                    problems.Add($"{called} has walls '{wall}'; they have to be glass or solid.");
+                    problems.Add($"{called} has walls '{wall}'; they have to be one of {string.Join(", ", OfficeRules.Partitions)}.");
                 }
             }
         }

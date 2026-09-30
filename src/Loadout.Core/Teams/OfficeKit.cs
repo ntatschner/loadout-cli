@@ -159,6 +159,8 @@ public sealed record OfficeKit(
             ["toilet"] = Shape(1, 1, ["toilet"]),
             ["exit"] = Shape(1, 1, ["exit"], place: "wall-any", blocks: false),
             ["plant"] = Shape(1, 1, ["plant", "decor"]),
+            ["screen"] = Shape(1, 1, ["partition-screen"]),
+            ["planter-box"] = Shape(1, 1, ["partition-planter"]),
             ["reception"] = Shape(3, 1, ["reception"], [new(1, -1, "s")]),
             ["pergola"] = Shape(3, 2, ["pergola"], blocks: false),
             ["mail"] = Shape(3, 1, ["mail"]),
