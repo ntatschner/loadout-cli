@@ -160,6 +160,9 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public string WaitingSet { get; set; } = string.Empty;
 
+    /// <summary>How large the office may be drawn, from team-office-scale; the default when unset or unreadable.</summary>
+    public OfficeScale OfficeScale { get; set; } = OfficeScale.Default;
+
     /// <summary>
     /// What is queued rather than going, or null where nothing can say.
     /// </summary>
@@ -1661,13 +1664,22 @@ public sealed class DashboardServer : IDisposable
     /// <summary>Who is on which floor now, as the page reads it.</summary>
     private object Building(IReadOnlyList<RunSummary> runs)
     {
-        var (_, rules, capacity, set) = OfficeKitNow();
+        var (kit, rules, capacity, set) = OfficeKitNow();
         var view = _building.Update(runs, capacity, rules, DateTimeOffset.UtcNow);
 
         return new
         {
             floors = view.Floors,
             basements = 2,
+
+            // Every floor's size in tiles, and a tile's in pixels, so the page
+            // draws the tower as wide as the floors inside it.
+            plate = rules.Floor ?? [24, 16],
+            tile = kit.Tile,
+
+            // The smallest and largest the page may draw it, in CSS pixels per
+            // pixel of art; it picks whole device-pixel steps in between.
+            scale = new { min = OfficeScale.Min, max = OfficeScale.Max },
             capacity,
             kit = set.Length > 0 ? set : null,
             occupied = view.Occupied.Select(floor => new

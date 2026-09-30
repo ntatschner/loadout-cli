@@ -397,6 +397,11 @@ public sealed class DashboardServerTests : IAsyncLifetime
         var first = root.GetProperty("occupied")[0];
 
         root.GetProperty("floors").GetInt32().Should().Be(10);
+        root.GetProperty("tile").GetInt32().Should().Be(32, "the built-in kit's tile, which the page draws the tower in");
+        root.GetProperty("plate")[0].GetInt32().Should().Be(24);
+        root.GetProperty("plate")[1].GetInt32().Should().Be(16);
+        root.GetProperty("scale").GetProperty("min").GetDouble().Should().Be(1);
+        root.GetProperty("scale").GetProperty("max").GetDouble().Should().Be(2);
         root.GetProperty("kit").ValueKind.Should().Be(JsonValueKind.Null, "no kit is configured, so the built-in one is used");
         first.GetProperty("run").GetString().Should().Be("20260916-1200-aaaa");
         first.GetProperty("number").GetInt32().Should().Be(1);
@@ -414,6 +419,18 @@ public sealed class DashboardServerTests : IAsyncLifetime
         (await GetAsync("/api/office/floor/20260916-1200-aaaa/1")).StatusCode.Should().Be(HttpStatusCode.NotFound, "the run has only one floor");
         (await GetAsync("/api/office/floor/no-such-run/0")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await GetAsync("/api/office/floor/20260916-1200-aaaa/x")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task The_building_carries_this_machines_office_size()
+    {
+        _server.OfficeScale = new OfficeScale(1.5, 3);
+
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+        var scale = building.RootElement.GetProperty("scale");
+
+        scale.GetProperty("min").GetDouble().Should().Be(1.5);
+        scale.GetProperty("max").GetDouble().Should().Be(3);
     }
 
     [Fact]

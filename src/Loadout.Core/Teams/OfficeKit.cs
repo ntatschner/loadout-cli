@@ -137,8 +137,11 @@ public sealed record OfficeKit(
         static OfficePiece Shape(int w, int h, string[] tags, OfficeSeat[]? seats = null, string place = "floor", bool blocks = true, string depth = "sorted") =>
             new(null, null, [w, h], tags, blocks, depth, place, seats);
 
+        // Tile n is corner pattern n, so the page, drawing these in the kit's
+        // colours with no picture, can tell from a tile's number which corners
+        // are wall and draw the wall's edge where it runs.
         static OfficeTileset Plain(string lower, string upper) =>
-            new(null, lower, upper, CornerPatterns.Select((pattern, index) => (pattern, index)).ToDictionary(one => one.pattern, one => one.index % 2, StringComparer.Ordinal));
+            new(null, lower, upper, CornerPatterns.Select((pattern, index) => (pattern, index)).ToDictionary(one => one.pattern, one => one.index, StringComparer.Ordinal));
 
         var pieces = new Dictionary<string, OfficePiece>(StringComparer.Ordinal)
         {

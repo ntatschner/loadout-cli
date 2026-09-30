@@ -226,6 +226,16 @@ public sealed class MachineTeams
     /// different.
     /// </remarks>
     public string WaitingSet { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How large the office may be drawn, as min-max screen pixels per pixel of
+    /// art, or empty for the default of 1-2.
+    /// </summary>
+    /// <remarks>
+    /// Machine-local because it is about this machine's screen: the same office
+    /// wants a different range on a laptop and on a wall display.
+    /// </remarks>
+    public string OfficeScale { get; set; } = string.Empty;
 }
 
 /// <summary>This machine's view of one project.</summary>

@@ -373,6 +373,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "a desk is a square with the node's name in it, which is what it has always been"),
 
+        new("team-office-scale",
+            "How large the office may be drawn: the smallest and largest screen pixels per pixel of art, as min-max",
+            (_, m) => m.Teams.OfficeScale,
+            (_, m, v) => m.Teams.OfficeScale = OfficeScale(v),
+            true,
+            Sample: "1-2",
+            Group: Groups.Machine,
+            WhenUnset: "1-2: the art at one to two screen pixels per pixel, in whole steps that keep it crisp"),
+
         new("team-waiting-set",
             "Which set of art the dashboard's waiting area draws with",
             (_, m) => m.Teams.WaitingSet,
@@ -681,6 +690,13 @@ public static class ConfigKeys
     /// default leaves a person who asked for plain language reading jargon
     /// and no way to find out why.
     /// </remarks>
+    /// <summary>A range of office scales, min-max, each between 0.5 and 8.</summary>
+    private static string OfficeScale(string value) =>
+        value.Trim().Length == 0
+            ? string.Empty
+            : Teams.OfficeScale.Parse(value)?.ToString()
+                ?? throw new FormatException($"'{value.Trim()}' is not a range like 1-2: two numbers from 0.5 to 8, the smaller first.");
+
     private static string OneOf(string value, params string[] allowed)
     {
         var trimmed = value.Trim().ToLowerInvariant();

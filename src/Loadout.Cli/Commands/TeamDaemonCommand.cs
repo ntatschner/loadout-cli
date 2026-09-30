@@ -299,6 +299,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.OfficeRoot = office.Root;
             server.OfficeSet = office.Set;
             server.WaitingSet = OfficeArt.Chosen(_paths, teams?.WaitingSet).Set;
+            server.OfficeScale = OfficeScale.Parse(teams?.OfficeScale) ?? OfficeScale.Default;
 
             // The same page the dashboard command would serve. Two dashboards
             // that looked different depending on which command started them

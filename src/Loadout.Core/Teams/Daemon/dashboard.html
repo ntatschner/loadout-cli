@@ -1589,6 +1589,24 @@
      outline rather than a border, so the frame adds nothing to the width the
      script measured. */
   .tile-floor { position: relative; }
+  /* The building: its outside view, the floor you are on inside it, and the
+     tower faded behind that floor. */
+  .rooms > .tower { grid-column: 1 / -1; }
+  .tower-controls { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+  .tower-controls [hidden] { display: none; }
+  .tower-stage { position: relative; }
+  .tower-outside { display: block; margin: 0 auto; image-rendering: pixelated; border-radius: var(--radius-sm); touch-action: none; }
+  .tower-views { display: inline-flex; gap: var(--space-1); }
+  .tower-views [aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+  .tower-outside { transition: transform 0.42s ease-in, opacity 0.42s ease-in; }
+  .tower-outside.tower-swoop { transform: scale(3); opacity: 0; }
+  .tower-inside { position: relative; display: grid; place-items: center; padding: 48px; overflow: auto; max-height: 78vh; transition: transform 0.26s ease-out, opacity 0.26s ease-out; }
+  .tower-inside.tower-arrive { transform: scale(0.9); opacity: 0; }
+  .tower-slot { position: relative; z-index: 1; }
+  @media (prefers-reduced-motion: reduce) { .tower-outside, .tower-inside { transition: none; } }
+  .tower-inside[hidden] { display: none; }
+  .tower-backdrop { position: absolute; top: 0; left: 50%; transform: translateX(-50%); pointer-events: none; }
+  .tower-inside .tile-floor { position: relative; z-index: 1; }
   .tile-floor canvas { display: block; margin: 0 auto; image-rendering: pixelated; outline: var(--lk-border) solid var(--line); border-radius: var(--radius-sm); }
   .tile-card { position: absolute; z-index: 5; display: grid; gap: 2px; max-width: 220px; padding: var(--space-2) var(--space-3); background: var(--surface-1); border: var(--lk-border) solid var(--line-strong); border-radius: var(--radius-sm); font-size: 0.75rem; pointer-events: none; }
   .tile-card[hidden] { display: none; }
@@ -2887,6 +2905,16 @@
           <div class="lk-field">
             <label for="set-waiting" class="lk-label">Waiting area art</label>
             <select id="set-waiting" class="lk-select"><option value="">a list of words</option></select>
+          </div>
+
+          <div class="lk-field">
+            <label for="set-office-scale" class="lk-label">Office size</label>
+            <input type="text" id="set-office-scale" class="lk-input" placeholder="1-2"
+                   inputmode="decimal" aria-describedby="set-office-scale-about">
+            <p id="set-office-scale-about" class="lk-help">
+              Screen pixels per pixel of art, smallest to largest, where the office
+              starts: 1-2 unless you set it. Zoom goes either side of it.
+            </p>
           </div>
         </div>
 
@@ -6231,6 +6259,24 @@
       }
     });
 
+    // Somebody no longer on this floor - moved to another floor of the
+    // building, or gone from the run - walks out of the door and is gone.
+    var here = {};
+
+    people.forEach(function (node) { here[node.node] = true; });
+
+    Object.keys(room.people).forEach(function (name) {
+      var gone = room.people[name];
+
+      if (here[name] || gone.leaving || gone.gone) { return; }
+
+      gone.errand = null;
+      gone.leaving = true;
+      tileWalk(room, gone, room.scene.door.x, room.scene.door.y);
+
+      if (!gone.path.length) { gone.gone = true; }
+    });
+
     // Somebody new has been briefed: the lead goes over to them. That is the
     // one piece of life in the room that is also news - the lead delegating.
     if (arrived.length && !tilesStill()) {
@@ -6426,6 +6472,13 @@
     // squares that are replaced a moment later.
     if (scene.tiles && !atlas) { return null; }
 
+    // A generated floor draws from several atlases, numbered one after
+    // another; a pictureless one is the built-in kit's, drawn in its colours.
+    var atlases = scene.atlases && scene.atlases.length ? scene.atlases : null;
+    var sheets = atlases ? atlases.map(function (one) { return one.picture ? tilePicture(room.set, one.picture) : null; }) : null;
+
+    if (atlases && atlases.some(function (one, i) { return one.picture && !sheets[i]; })) { return null; }
+
     var baked = document.createElement("canvas");
 
     baked.width = scene.width * t;
@@ -6445,7 +6498,9 @@
 
           if (tile === undefined || tile < 0) { continue; }
 
-          if (atlas) {
+          if (atlases) {
+            tileFromAtlases(ctx, c, atlases, sheets, tile, x, y, t, layer);
+          } else if (atlas) {
             ctx.drawImage(atlas, (tile % columns) * t, Math.floor(tile / columns) * t, t, t, x * t, y * t, t, t);
           } else if (layer === 0) {
             ctx.fillStyle = tile % 2 ? c.floorB : c.floorA;
@@ -6495,12 +6550,89 @@
       return;
     }
 
-    ctx.fillStyle = c.wall;
+    var kind = TILE_KINDS[(prop.kind || "").replace(/^meeting-\d+$/, "meeting")];
+
+    ctx.fillStyle = kind || c.wall;
     ctx.fillRect(prop.x * t, prop.y * t - lift, w * t, h * t);
     ctx.fillStyle = c.line;
     ctx.fillRect(prop.x * t, (prop.y + h) * t - lift, w * t, lift);
-    ctx.fillStyle = c.deep;
-    ctx.fillRect(prop.x * t + Math.round(t * 0.25), prop.y * t - lift + 2, Math.round(t * 0.5), Math.round(t * 0.3));
+
+    if (!kind || prop.kind === "desk" || prop.kind === "exec-desk" || prop.kind === "status-board") {
+      ctx.fillStyle = c.deep;
+      ctx.fillRect(prop.x * t + Math.round(t * 0.25), prop.y * t - lift + 2, Math.round(t * 0.5), Math.round(t * 0.3));
+    }
+  }
+
+  // What each of the built-in kit's shapes is, by colour, until there is art.
+  var TILE_KINDS = {
+    "desk": "#8a6a4a", "exec-desk": "#5a3d2b", "meeting": "#7a5c3e", "sofa": "#6b7fa8",
+    "kitchen": "#9aa3ad", "coffee": "#4a3a33", "lift": "#b8c0c8", "stairs": "#7d8793",
+    "toilet": "#d7dee4", "cupboard": "#8f7d6a", "exit": "#2e9e5b", "plant": "#3f8f4e",
+    "partition-screen": "#9aa6b2", "partition-planter": "#4f8a3c", "status-board": "#2b3a55",
+    "reception": "#a88a5e", "storage": "#8d8173", "visitor-chair": "#6b5a4a"
+  };
+
+  /*
+    One tile of a generated floor. A pictureless atlas is the built-in kit's,
+    whose tile n is corner pattern n: north-west, north-east, south-west,
+    south-east, one bit each for wall. The wall cells themselves are on the
+    walls layer, so a carpet cell beside one shows only a thin edge on each
+    side whose two corners are wall, and a notch at a lone one: painting the
+    whole quarter would draw every wall two cells thick.
+  */
+  function tileFromAtlases(ctx, c, atlases, sheets, tile, x, y, t, layer) {
+    var offset = 0;
+
+    for (var i = 0; i < atlases.length; i += 1) {
+      var atlas = atlases[i];
+
+      if (tile < offset + atlas.tiles) {
+        var local = tile - offset;
+        var sheet = sheets[i];
+
+        if (sheet) {
+          var columns = Math.max(1, Math.floor(sheet.width / t));
+
+          ctx.drawImage(sheet, (local % columns) * t, Math.floor(local / columns) * t, t, t, x * t, y * t, t, t);
+
+          return;
+        }
+
+        var glass = atlas.upper === "glass";
+        var wall = glass ? "rgba(150, 200, 230, 0.6)" : c.wall;
+
+        if (layer === 1 || local === 15) {
+          ctx.fillStyle = (x + y) % 2 ? c.floorB : c.floorA;
+          ctx.fillRect(x * t, y * t, t, t);
+          ctx.fillStyle = wall;
+          ctx.fillRect(x * t, y * t, t, t);
+
+          return;
+        }
+
+        ctx.fillStyle = (x + y) % 2 ? c.floorB : c.floorA;
+        ctx.fillRect(x * t, y * t, t, t);
+        ctx.fillStyle = wall;
+
+        var edge = Math.max(2, Math.round(t / 10));
+        var left = x * t;
+        var top = y * t;
+        var sides = [[12, left, top, t, edge], [3, left, top + t - edge, t, edge], [10, left, top, edge, t], [5, left + t - edge, top, edge, t]];
+        var lone = [[8, left, top], [4, left + t - edge, top], [2, left, top + t - edge], [1, left + t - edge, top + t - edge]];
+
+        sides.forEach(function (side) {
+          if ((local & side[0]) === side[0]) { ctx.fillRect(side[1], side[2], side[3], side[4]); }
+        });
+
+        lone.forEach(function (corner) {
+          if (local & corner[0]) { ctx.fillRect(corner[1], corner[2], edge, edge); }
+        });
+
+        return;
+      }
+
+      offset += atlas.tiles;
+    }
   }
 
   // Move everybody on, and say whether this room wants another frame.
@@ -6695,13 +6827,17 @@
     var wide = scene.width * scene.tile;
     var tall = scene.height * scene.tile;
     var dpr = window.devicePixelRatio || 1;
-    var across = room.floor.clientWidth || wide;
+    var across = room.fitWidth || room.floor.clientWidth || wide;
     var scale = across * dpr / wide;
 
     // Whole multiples where there is room for them, so every pixel of the art
     // is the same size; a fraction only where the room is narrower than the
     // art. The kit's room has no art to keep square, so it fills the width.
-    if (scene.tiles && scale >= 1) { scale = Math.floor(scale); }
+    // A tile room is drawn in whole device-pixel steps between the machine's
+    // smallest and largest office scale.
+    if (scene.tiles || scene.atlases) {
+      scale = zoomStep(wide, across, dpr, room.zoom || 0, tall, room.fitHeight);
+    }
 
     if (scale !== room.scale) {
       room.scale = scale;
@@ -6711,6 +6847,48 @@
       room.canvas.style.height = room.canvas.height / dpr + "px";
       room.dirty = true;
     }
+  }
+
+  /*
+    Device pixels per pixel of art, always a whole number so every pixel of
+    the art is the same size. Zooming moves along every such step from half a
+    CSS pixel per art pixel to four. Where the view starts is the machine's
+    office scale: the largest step inside it at which the whole floor fits,
+    or the smallest inside it where none does, and the page pans from there.
+  */
+  function zoomSteps(dpr) {
+    var limits = (towerData && towerData.scale) || { min: 1, max: 2 };
+    var steps = [];
+
+    for (var step = 1; step <= 64; step += 1) {
+      var css = step / dpr;
+
+      if (css > Math.max(4, limits.max) + 1e-9) { break; }
+      if (css >= Math.min(0.5, limits.min) - 1e-9) { steps.push(step); }
+    }
+
+    return steps.length ? steps : [1];
+  }
+
+  function zoomStep(wide, across, dpr, zoom, tall, down) {
+    var limits = (towerData && towerData.scale) || { min: 1, max: 2 };
+    var steps = zoomSteps(dpr);
+    var within = steps.filter(function (step) { return step / dpr >= limits.min - 1e-9 && step / dpr <= limits.max + 1e-9; });
+
+    // A range too narrow to hold a whole step at this screen's scaling starts at the step nearest its bottom.
+    if (!within.length) {
+      within = [steps.reduce(function (best, step) { return Math.abs(step / dpr - limits.min) < Math.abs(best / dpr - limits.min) ? step : best; }, steps[0])];
+    }
+
+    var start = within[0];
+
+    within.forEach(function (step) {
+      if (wide * step / dpr <= across + 0.5 && (!tall || !down || tall * step / dpr <= down + 0.5)) { start = step; }
+    });
+
+    var at = steps.indexOf(start) + (zoom || 0);
+
+    return steps[Math.max(0, Math.min(steps.length - 1, at))];
   }
 
   function tileDraw(room, now) {
@@ -6984,7 +7162,8 @@
 
     // A view switched away from hides its rooms rather than removing them, so
     // "none left" is not enough: nobody can see a room with no layout box.
-    var seen = Object.keys(tileRooms).some(function (key) { return tileRooms[key].floor.offsetParent !== null; });
+    var seen = Object.keys(tileRooms).some(function (key) { return tileRooms[key].floor.offsetParent !== null; })
+      || (towerHold !== null && towerHold.offsetParent !== null);
 
     if (!seen && officeStream) {
       officeStream.close();
@@ -7019,6 +7198,11 @@
 
       officeLive = true;
 
+      if (read.building) {
+        towerData = read.building;
+        towerShow();
+      }
+
       var byId = {};
 
       (read.runs || []).forEach(function (run) { byId[run.id] = run; });
@@ -7029,8 +7213,9 @@
 
         if (fresh) {
           // Everything else about the run stays as the last poll had it; the
-          // people are what the stream is for.
-          tileUpdate(room, Object.assign({}, room.run, { running: fresh.running, nodes: fresh.nodes }));
+          // people are what the stream is for - on a floor of the building,
+          // only the people the building has put on it.
+          tileUpdate(room, Object.assign({}, room.run, { running: fresh.running, nodes: towerNodes(room, fresh.nodes) }));
         }
       });
     });
@@ -7046,7 +7231,1170 @@
     wakeTiles();
   });
 
+  /* ==================================================================
+    The building: the office as a tower, one floor per run.
+
+    Outside, the tower drawn in code from above a corner, from high above, or
+    from the street looking up, and turned round in quarter turns: two
+    basements under the street, a two-storey lobby, a floor for each run and
+    more above, and the crown with the name on it lit in the colour of
+    whatever most needs seeing. A floor shows how full it is by lit windows and
+    the people in them, and how it is doing by a strip along its slab. Click a
+    floor and the view closes on its windows and goes through the glass; the
+    floor is drawn facing the way the tower was, turned in quarter turns, and
+    zoomed in whole steps so the art stays crisp. Back or Escape comes out
+    again, to where the view was.
+
+    Who is on which floor is the server's (/api/office/building, and the
+    office stream while it is live); this only draws it and moves about it.
+  ================================================================== */
+
+  var towerData = null;
+  var towerHold = null;
+  var towerRuns = {};
+  var towerScenes = {};
+  var towerView = kept("loadout.office.view", { mode: "outside" });
+  var towerLook = kept("loadout.office.look", { view: "corner", turn: 0, facing: 0 });
+  var towerZoom = kept("loadout.office.zoom", { outside: 0, inside: 0 });
+  var towerScroll = Number(kept("loadout.office.scroll", 0)) || 0;
+  var towerHover = null;
+  var towerDrag = null;
+  var towerYaw = null;
+  var towerFaces = [];
+  var towerTurning = 0;
+  var towerRoom = null;
+
+  var TOWER_VIEWS = [["corner", "Corner"], ["aerial", "Aerial"], ["ground", "From the street"]];
+
+  // Which of a run's nodes the building has put on a floor room, lead first.
+  function towerNodes(room, nodes) {
+    if (!room.towerFloor || !towerData) { return nodes; }
+
+    var floor = (towerData.occupied || []).filter(function (one) {
+      return one.run === room.towerFloor.run && one.part === room.towerFloor.part;
+    })[0];
+
+    if (!floor) { return []; }
+
+    return (nodes || []).filter(function (node) { return floor.nodes.indexOf(node.node) >= 0; });
+  }
+
+  function towerButtonFor(controls, name, label, title) {
+    var button = document.createElement("button");
+
+    button.type = "button";
+    button.className = "lk-btn tower-" + name;
+    button.textContent = label;
+
+    if (title) { button.title = title; button.setAttribute("aria-label", title); }
+
+    button.addEventListener("click", function () { towerButton(name); });
+    controls.appendChild(button);
+
+    return button;
+  }
+
+  function towerElement() {
+    var li = document.createElement("li");
+    var head = document.createElement("div");
+    var name = document.createElement("h3");
+    var where = document.createElement("p");
+    var controls = document.createElement("div");
+    var views = document.createElement("div");
+    var stage = document.createElement("div");
+    var outside = document.createElement("canvas");
+    var inside = document.createElement("div");
+    var backdrop = document.createElement("canvas");
+    var slot = document.createElement("div");
+    var card = document.createElement("div");
+
+    li.className = "room lk-room tower";
+    head.className = "lk-room-head";
+    name.textContent = "The building";
+    where.className = "where tower-where";
+    controls.className = "tower-controls";
+    views.className = "tower-views";
+    stage.className = "tower-stage";
+    outside.className = "tower-outside";
+    outside.setAttribute("role", "img");
+    inside.className = "tower-inside";
+    inside.hidden = true;
+    backdrop.className = "tower-backdrop";
+    backdrop.setAttribute("aria-hidden", "true");
+    slot.className = "tower-slot";
+    card.className = "tile-card";
+    card.hidden = true;
+    card.setAttribute("aria-hidden", "true");
+
+    TOWER_VIEWS.forEach(function (one) {
+      var button = towerButtonFor(views, "view-" + one[0], one[1]);
+
+      button.setAttribute("aria-pressed", "false");
+    });
+
+    controls.appendChild(views);
+    towerButtonFor(controls, "back", "Back to the building");
+    towerButtonFor(controls, "left", "⟲", "Turn left");
+    towerButtonFor(controls, "right", "⟳", "Turn right");
+    towerButtonFor(controls, "out", "−", "Zoom out");
+    towerButtonFor(controls, "in", "+", "Zoom in");
+    towerButtonFor(controls, "up", "Up");
+    towerButtonFor(controls, "down", "Down");
+
+    head.appendChild(name);
+    head.appendChild(where);
+    head.appendChild(controls);
+    inside.appendChild(backdrop);
+    inside.appendChild(slot);
+    stage.appendChild(outside);
+    stage.appendChild(inside);
+    stage.appendChild(card);
+    li.appendChild(head);
+    li.appendChild(stage);
+
+    // The wheel scrolls up and down the tower; with Ctrl held, or a pinch, it zooms.
+    outside.addEventListener("wheel", function (event) {
+      event.preventDefault();
+
+      if (event.ctrlKey) {
+        towerZoomBy(event.deltaY < 0 ? 1 : -1);
+
+        return;
+      }
+
+      towerMove(-event.deltaY);
+    }, { passive: false });
+
+    inside.addEventListener("wheel", function (event) {
+      if (!event.ctrlKey) { return; }
+
+      event.preventDefault();
+      towerZoomBy(event.deltaY < 0 ? 1 : -1);
+    }, { passive: false });
+
+    outside.addEventListener("pointerdown", function (event) {
+      towerDrag = { x: event.clientX, y: event.clientY, scroll: towerScroll, moved: false };
+      outside.setPointerCapture(event.pointerId);
+    });
+
+    outside.addEventListener("pointermove", function (event) {
+      if (towerDrag) {
+        var by = event.clientY - towerDrag.y;
+
+        if (Math.abs(by) > 4 || Math.abs(event.clientX - towerDrag.x) > 4) { towerDrag.moved = true; }
+        if (towerDrag.moved) { towerScroll = towerDrag.scroll + by / towerPixel(); towerDraw(); }
+
+        return;
+      }
+
+      towerHover = towerHit(event);
+      outside.style.cursor = towerHover && towerHover.run ? "pointer" : "";
+      towerCard(event);
+      towerDraw();
+    });
+
+    outside.addEventListener("pointerup", function (event) {
+      var dragged = towerDrag && towerDrag.moved;
+
+      towerDrag = null;
+
+      if (dragged) {
+        keep("loadout.office.scroll", towerScroll);
+
+        return;
+      }
+
+      var hit = towerHit(event);
+
+      if (hit && hit.run) {
+        towerHover = null;
+        card.hidden = true;
+        towerEnter(hit, event);
+      }
+    });
+
+    outside.addEventListener("pointerleave", function () {
+      towerHover = null;
+      card.hidden = true;
+      towerDraw();
+    });
+
+    // Inside, a drag pans a floor zoomed past the width of the page.
+    inside.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) { return; }
+
+      towerDrag = { x: event.clientX, y: event.clientY, left: inside.scrollLeft, top: inside.scrollTop, moved: false, inside: true };
+    });
+
+    inside.addEventListener("pointermove", function (event) {
+      if (!towerDrag || !towerDrag.inside) { return; }
+
+      var bx = event.clientX - towerDrag.x;
+      var by = event.clientY - towerDrag.y;
+
+      if (Math.abs(bx) > 4 || Math.abs(by) > 4) { towerDrag.moved = true; }
+
+      if (towerDrag.moved) {
+        inside.scrollLeft = towerDrag.left - bx;
+        inside.scrollTop = towerDrag.top - by;
+      }
+    });
+
+    ["pointerup", "pointerleave"].forEach(function (kind) {
+      inside.addEventListener(kind, function () { if (towerDrag && towerDrag.inside) { towerDrag = null; } });
+    });
+
+    return li;
+  }
+
+  function towerButton(which) {
+    if (which === "back") { towerLeave(); return; }
+    if (which === "in") { towerZoomBy(1); return; }
+    if (which === "out") { towerZoomBy(-1); return; }
+    if (which === "up") { towerMove(towerStorey() * 3 * towerPixel()); return; }
+    if (which === "down") { towerMove(-towerStorey() * 3 * towerPixel()); return; }
+
+    if (which === "left" || which === "right") {
+      var by = which === "left" ? 3 : 1;
+
+      if (towerView.mode === "inside") {
+        towerLook.facing = (towerLook.facing + by) % 4;
+        keep("loadout.office.look", towerLook);
+        towerShow();
+      } else {
+        towerLook.turn = (towerLook.turn + by) % 4;
+        keep("loadout.office.look", towerLook);
+        towerSpin();
+      }
+
+      return;
+    }
+
+    if (which.indexOf("view-") === 0) {
+      towerLook.view = which.slice(5);
+      keep("loadout.office.look", towerLook);
+      towerShow();
+    }
+  }
+
+  function towerZoomBy(by) {
+    var key = towerView.mode === "inside" ? "inside" : "outside";
+
+    var was = towerZoom[key] || 0;
+    var before = key === "inside" && towerRoom ? towerRoom.scale : null;
+
+    towerZoom[key] = Math.max(key === "outside" ? 0 : -16, Math.min(16, was + by));
+
+    // Past the last step there is nothing to zoom to: stay, rather than count
+    // presses that then have to be undone before anything moves again.
+    if (key === "inside" && towerRoom) {
+      towerRoom.zoom = towerZoom.inside;
+      tileSize(towerRoom);
+
+      if (towerRoom.scale === before) {
+        towerZoom.inside = was;
+        towerRoom.zoom = was;
+
+        return;
+      }
+    }
+
+    // Zooming in from the whole building starts at the floors in use.
+    if (key === "outside" && by > 0 && towerZoom.outside === 1) {
+      var used = towerData ? (towerData.occupied || []).filter(function (one) { return !one.dark; }) : [];
+
+      towerScroll = used.length ? towerLevelZ(used[0].number)[0] : 0;
+    }
+    keep("loadout.office.zoom", towerZoom);
+    towerShow();
+  }
+
+  function towerMove(by) {
+    towerScroll += by / towerPixel();
+    towerDraw();
+    keep("loadout.office.scroll", towerScroll);
+  }
+
+  function towerTile() { return (towerData && towerData.tile) || 32; }
+  function towerStorey() { return towerTile() * 3; }
+  function towerWidth() { return ((towerData && towerData.plate && towerData.plate[0]) || 24) * towerTile(); }
+  function towerDepth() { return ((towerData && towerData.plate && towerData.plate[1]) || 16) * towerTile(); }
+  function towerFloors() { return (towerData && towerData.floors) || 10; }
+  function towerBasements() { return (towerData && towerData.basements) || 2; }
+
+  // CSS pixels per art pixel, from the canvas as last sized.
+  function towerPixel() {
+    var canvas = towerHold && towerHold.querySelector(".tower-outside");
+
+    return canvas && canvas._scale ? canvas._scale / (window.devicePixelRatio || 1) : 1;
+  }
+
+  // Heights in art pixels: a level's bottom and top. The lobby is two storeys.
+  function towerLevelZ(level) {
+    var storey = towerStorey();
+
+    if (level < 0) { return [level * storey, (level + 1) * storey]; }
+    if (level === 0) { return [0, storey * 2]; }
+
+    return [storey * (level + 1), storey * (level + 2)];
+  }
+
+  // The top of the parapet round the roof: the highest thing drawn.
+  function towerTop() { return towerLevelZ(towerFloors() + 1)[0] + towerStorey() * 0.45; }
+
+  function towerOccupant(number) {
+    return towerData ? (towerData.occupied || []).filter(function (one) { return one.number === number; })[0] || null : null;
+  }
+
+  function towerFloorOf(view) {
+    return towerData ? (towerData.occupied || []).filter(function (one) {
+      return one.run === view.run && one.part === view.part;
+    })[0] || null : null;
+  }
+
+  // The swoop in: close on the floor's windows, then through the glass.
+  function towerEnter(hit, event) {
+    var outside = towerHold.querySelector(".tower-outside");
+    var box = outside.getBoundingClientRect();
+
+    towerView = { mode: "inside", run: hit.run, part: hit.part };
+    towerLook.facing = towerLook.turn;
+    keep("loadout.office.view", towerView);
+    keep("loadout.office.look", towerLook);
+
+    if (tilesStill()) {
+      towerShow();
+
+      return;
+    }
+
+    outside.style.transformOrigin = (event.clientX - box.left) + "px " + (event.clientY - box.top) + "px";
+    outside.classList.add("tower-swoop");
+
+    setTimeout(function () {
+      outside.classList.remove("tower-swoop");
+      outside.style.transformOrigin = "";
+
+      var inside = towerHold.querySelector(".tower-inside");
+
+      inside.classList.add("tower-arrive");
+      towerShow();
+      requestAnimationFrame(function () { requestAnimationFrame(function () { inside.classList.remove("tower-arrive"); }); });
+    }, 420);
+  }
+
+  function towerLeave() {
+    var inside = towerHold.querySelector(".tower-inside");
+    var outside = towerHold.querySelector(".tower-outside");
+
+    towerView = { mode: "outside" };
+    keep("loadout.office.view", towerView);
+
+    if (tilesStill()) {
+      towerShow();
+
+      return;
+    }
+
+    inside.classList.add("tower-arrive");
+
+    setTimeout(function () {
+      inside.classList.remove("tower-arrive");
+      outside.classList.add("tower-swoop");
+      towerShow();
+      requestAnimationFrame(function () { requestAnimationFrame(function () { outside.classList.remove("tower-swoop"); }); });
+    }, 260);
+  }
+
+  // A quarter turn outside, eased over a moment unless motion is off.
+  function towerSpin() {
+    var target = Math.PI / 4 + towerLook.turn * Math.PI / 2;
+
+    if (towerYaw === null || tilesStill()) {
+      towerYaw = target;
+      towerDraw();
+
+      return;
+    }
+
+    var from = towerYaw;
+    var delta = ((target - from) % (Math.PI * 2) + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+    var start = performance.now();
+    var turning = towerTurning = start;
+
+    (function step(now) {
+      if (towerTurning !== turning) { return; }
+
+      var t = Math.min(1, (now - start) / 380);
+
+      towerYaw = from + delta * (1 - Math.pow(1 - t, 3));
+      towerDraw();
+
+      if (t < 1) { requestAnimationFrame(step); }
+    })(start);
+  }
+
+  function towerShow() {
+    if (!towerHold) { return; }
+
+    var inside = towerView.mode === "inside";
+    var floor = inside ? towerFloorOf(towerView) : null;
+
+    // A floor that has gone (its run finished and freed) sends the view back out.
+    if (inside && towerData && !floor) {
+      towerView = { mode: "outside" };
+      keep("loadout.office.view", towerView);
+      inside = false;
+    }
+
+    towerHold.querySelector(".tower-outside").hidden = inside;
+    towerHold.querySelector(".tower-inside").hidden = !inside;
+    towerHold.querySelector(".tower-back").hidden = !inside;
+    towerHold.querySelector(".tower-views").hidden = inside;
+    ["up", "down"].forEach(function (one) {
+      towerHold.querySelector(".tower-" + one).hidden = inside || (towerLook.view !== "ground" && (towerZoom.outside || 0) <= 0);
+    });
+
+    TOWER_VIEWS.forEach(function (one) {
+      towerHold.querySelector(".tower-view-" + one[0]).setAttribute("aria-pressed", String(towerLook.view === one[0]));
+    });
+
+    var where = towerHold.querySelector(".tower-where");
+
+    if (!inside) {
+      var busy = towerData ? (towerData.occupied || []).filter(function (one) { return !one.dark; }).length : 0;
+
+      where.textContent = towerData ? towerFloors() + " floors, " + busy + " in use" : "";
+      towerHold.querySelector(".tower-left").hidden = false;
+      towerHold.querySelector(".tower-right").hidden = false;
+
+      if (towerYaw === null) { towerYaw = Math.PI / 4 + towerLook.turn * Math.PI / 2; }
+
+      towerDraw();
+
+      return;
+    }
+
+    // Remembered as inside, with the building not yet read: wait for it.
+    if (!floor) { return; }
+
+    var run = towerRuns[floor.run] || { id: floor.run, nodes: [] };
+
+    where.textContent = (run.team || "") + (run.room ? " · " + run.room : "") + " · floor " + floor.number;
+
+    var key = floor.run + "|" + floor.part + "|" + floor.people;
+    var plan = towerScenes[key];
+
+    if (!plan) {
+      api("/api/office/floor/" + encodeURIComponent(floor.run) + "/" + floor.part)
+        .then(function (answer) {
+          towerScenes[key] = { scene: answer, turned: {} };
+          towerShow();
+        })
+        .catch(function () { /* The floor comes on the next look. */ });
+
+      return;
+    }
+
+    // Turning needs art for every facing; the kit's shapes have it, a pack's
+    // art has one facing until it brings the others.
+    var turns = sceneTurns(plan.scene);
+    var facing = turns ? towerLook.facing : 0;
+
+    towerHold.querySelector(".tower-left").hidden = !turns;
+    towerHold.querySelector(".tower-right").hidden = !turns;
+
+    var scene = plan.turned[facing] || (plan.turned[facing] = turnScene(plan.scene, facing));
+    var mine = { towerFloor: { run: floor.run, part: floor.part } };
+    var here = Object.assign({}, run, { nodes: towerNodes(mine, run.nodes) });
+    var room = tileRoom("floor|" + floor.run + "|" + floor.part + "|" + facing, here, (towerData && towerData.kit) || "", scene);
+    var slot = towerHold.querySelector(".tower-slot");
+    var holder = towerHold.querySelector(".tower-inside");
+
+    room.towerFloor = mine.towerFloor;
+    towerRoom = room;
+    room.fitWidth = Math.max(160, holder.clientWidth - 96);
+    room.fitHeight = Math.max(160, window.innerHeight * 0.78 - 96);
+    room.zoom = towerZoom.inside || 0;
+
+    if (room.fresh) { tileUpdate(room, here); }
+
+    if (room.floor.parentNode !== slot) {
+      slot.textContent = "";
+      slot.appendChild(room.floor);
+    }
+
+    tileSize(room);
+    towerBackdrop(holder, floor.number);
+    wakeTiles();
+  }
+
+  /*
+    Whether a floor can be turned: only when everything on it is drawn from the
+    kit's shapes, which look the same from any side. A picture has one facing.
+  */
+  function sceneTurns(scene) {
+    return !scene.tiles
+      && !(scene.atlases || []).some(function (one) { return one.picture; })
+      && !(scene.props || []).some(function (one) { return one.piece; });
+  }
+
+  /*
+    A floor turned a quarter turn clockwise k times: the cell at (x, y) of a
+    w by h floor goes to (h - 1 - y, x). A kit tile is its corner pattern, and
+    the corners go round with it: north-west to north-east, north-east to
+    south-east, south-east to south-west, south-west to north-west.
+  */
+  function turnScene(scene, k) {
+    var out = scene;
+
+    for (var i = 0; i < (k % 4 + 4) % 4; i += 1) { out = turnOnce(out); }
+
+    return out;
+  }
+
+  var TURN_FACING = { n: "e", e: "s", s: "w", w: "n" };
+
+  function turnOnce(scene) {
+    var w = scene.width;
+    var h = scene.height;
+    var atlases = scene.atlases || [];
+
+    function corners(tile) {
+      if (tile < 0) { return tile; }
+
+      var offset = 0;
+
+      for (var i = 0; i < atlases.length; i += 1) {
+        if (tile < offset + atlases[i].tiles) {
+          var local = tile - offset;
+          var turned = (local & 2 ? 8 : 0) | (local & 8 ? 4 : 0) | (local & 4 ? 1 : 0) | (local & 1 ? 2 : 0);
+
+          return offset + turned;
+        }
+
+        offset += atlases[i].tiles;
+      }
+
+      return tile;
+    }
+
+    function grid(rows) {
+      if (!rows) { return rows; }
+
+      var out = [];
+
+      for (var y = 0; y < w; y += 1) {
+        var row = [];
+
+        for (var x = 0; x < h; x += 1) {
+          var old = (rows[h - 1 - x] || [])[y];
+
+          row.push(old === undefined ? -1 : corners(old));
+        }
+
+        out.push(row);
+      }
+
+      return out;
+    }
+
+    function spot(one) {
+      return one ? Object.assign({}, one, { x: h - 1 - one.y, y: one.x, facing: TURN_FACING[one.facing || "s"] || "s" }) : one;
+    }
+
+    function rect(one) {
+      var ow = one.w || 1;
+      var oh = one.h || 1;
+
+      return Object.assign({}, one, { x: h - one.y - oh, y: one.x, w: oh, h: ow });
+    }
+
+    var spots = {};
+
+    Object.keys(scene.spots || {}).forEach(function (name) { spots[name] = spot(scene.spots[name]); });
+
+    return Object.assign({}, scene, {
+      width: h,
+      height: w,
+      floor: grid(scene.floor),
+      walls: grid(scene.walls),
+      props: (scene.props || []).map(rect),
+      desks: (scene.desks || []).map(spot),
+      door: spot(scene.door),
+      spots: spots,
+      areas: (scene.areas || []).map(rect),
+    });
+  }
+
+  // The tower beyond the floor's glass: the storeys above and below, faded.
+  function towerBackdrop(holder, number) {
+    var backdrop = holder.querySelector(".tower-backdrop");
+    var floor = holder.querySelector(".tile-floor canvas");
+
+    if (!backdrop || !floor || !floor.width) { return; }
+
+    var dpr = window.devicePixelRatio || 1;
+    var pad = 48;
+    var cssW = floor.width / dpr + pad * 2;
+    var cssH = floor.height / dpr + pad * 2;
+
+    backdrop.width = Math.round(cssW * dpr);
+    backdrop.height = Math.round(cssH * dpr);
+    backdrop.style.width = cssW + "px";
+    backdrop.style.height = cssH + "px";
+
+    var ctx = backdrop.getContext("2d");
+    var c = tileColours();
+    var storey = towerStorey();
+    var k = (floor.width / dpr) / (floor.width / dpr > 0 ? towerWidth() : 1);
+
+    ctx.setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
+    ctx.globalAlpha = 0.35;
+
+    var width = backdrop.width / (dpr * k);
+    var height = backdrop.height / (dpr * k);
+
+    for (var y = height / 2 - storey * 3; y < height; y += storey) {
+      towerFlatStorey(ctx, c, 0, y, width, storey, towerOccupant(number + Math.round((height / 2 - y) / storey)));
+    }
+
+    ctx.globalAlpha = 1;
+  }
+
+  // One storey face-on, for the backdrop behind a floor.
+  function towerFlatStorey(ctx, c, x, y, width, height, occupant) {
+    var tile = towerTile();
+    var bays = Math.max(1, Math.round(width / tile));
+    var lit = occupant && !occupant.dark ? Math.min(bays, occupant.people * 2) : 0;
+
+    ctx.fillStyle = "#1c2a3a";
+    ctx.fillRect(x, y, width, height);
+    ctx.fillStyle = "rgba(255, 214, 140, 0.85)";
+
+    for (var i = 0; i < lit; i += 1) {
+      var bay = Math.floor((i + 0.5) * bays / lit);
+
+      ctx.fillRect(x + bay * tile + 3, y + 6, tile - 6, height - 14);
+    }
+
+    ctx.fillStyle = "#9c7a4a";
+
+    for (var fin = 0; fin <= bays; fin += 1) { ctx.fillRect(x + fin * tile - 1, y, 3, height - 8); }
+
+    ctx.fillStyle = "#5a5f66";
+    ctx.fillRect(x, y + height - 8, width, 8);
+  }
+
+  /*
+    The camera. Corner and aerial look down on the tower from far off, so it
+    is all but square-on to the eye and a storey is the same height at the
+    top as at the bottom; scrolling moves the camera up and down it. From the
+    street the camera stands at the corner at head height and looks up, and
+    scrolling tips its gaze up or down instead.
+  */
+  function towerCamera(canvasWidth, canvasHeight, step) {
+    var width = towerWidth();
+    var depth = towerDepth();
+    var yaw = towerYaw === null ? Math.PI / 4 : towerYaw;
+    var top = towerTop();
+    var view = towerLook.view;
+    var pitch = view === "aerial" ? 1.05 : view === "ground" ? -(0.3 + Math.max(0, Math.min(1, towerScroll / top)) * 0.45) : 0.45;
+    var far = view === "ground" ? Math.hypot(width, depth) * 1.6 : 8000;
+    var target = view === "ground"
+      ? null
+      : [width / 2, depth / 2, (towerZoom.outside || 0) <= 0
+        ? (top - towerBasements() * towerStorey() * 0.5) / 2
+        : Math.max(-towerBasements() * towerStorey(), Math.min(top, towerScroll))];
+
+    // Looking from the south-west corner at turn 0, round clockwise with each turn.
+    var ahead = [Math.sin(yaw) * Math.cos(pitch), Math.cos(yaw) * Math.cos(pitch), -Math.sin(pitch)];
+    var eye;
+
+    if (view === "ground") {
+      eye = [width / 2 - Math.sin(yaw) * far, depth / 2 - Math.cos(yaw) * far, 26];
+    } else {
+      eye = [target[0] - ahead[0] * far, target[1] - ahead[1] * far, target[2] - ahead[2] * far];
+    }
+
+    var right = [Math.cos(yaw), -Math.sin(yaw), 0];
+    var up = [
+      right[1] * ahead[2] - right[2] * ahead[1],
+      right[2] * ahead[0] - right[0] * ahead[2],
+      right[0] * ahead[1] - right[1] * ahead[0],
+    ];
+    var focal = view === "ground" ? canvasHeight / step * 0.75 : far;
+
+    return {
+      eye: eye,
+      ahead: ahead,
+      street: view === "ground",
+      project: function (p) {
+        var dx = p[0] - eye[0];
+        var dy = p[1] - eye[1];
+        var dz = p[2] - eye[2];
+        var f = Math.max(1, dx * ahead[0] + dy * ahead[1] + dz * ahead[2]);
+        var u = dx * right[0] + dy * right[1] + dz * right[2];
+        var v = dx * up[0] + dy * up[1] + dz * up[2];
+
+        return [canvasWidth / 2 + u * focal / f * step, canvasHeight * (view === "ground" ? 0.6 : 0.5) - v * focal / f * step];
+      },
+    };
+  }
+
+  // The four walls of the tower, each with its outward direction and its run along the ground.
+  function towerSides() {
+    var w = towerWidth();
+    var d = towerDepth();
+
+    return [
+      { from: [0, 0], to: [w, 0], out: [0, -1], long: true },
+      { from: [w, 0], to: [w, d], out: [1, 0], long: false },
+      { from: [w, d], to: [0, d], out: [0, 1], long: true },
+      { from: [0, d], to: [0, 0], out: [-1, 0], long: false },
+    ];
+  }
+
+  function towerDraw() {
+    if (!towerHold || towerView.mode === "inside") { return; }
+
+    var canvas = towerHold.querySelector(".tower-outside");
+    var dpr = window.devicePixelRatio || 1;
+    var across = canvas.parentNode.clientWidth || 800;
+    // The tower is drawn in code rather than from pixel art, so it has no
+    // whole steps to keep to: at the first zoom the whole building fits, and
+    // each zoom after is a quarter more, scrolled up and down it.
+    var cssWidth = across;
+    var cssHeight = Math.max(320, Math.round(window.innerHeight * 0.7));
+    var extent = towerExtent();
+    var fit = Math.min(across * dpr / (extent[0] * 1.08), cssHeight * dpr / (extent[1] * 1.08));
+    var step = fit * Math.pow(1.25, Math.max(0, towerZoom.outside || 0));
+
+    canvas._scale = step;
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssHeight * dpr);
+    canvas.style.width = cssWidth + "px";
+    canvas.style.height = cssHeight + "px";
+
+    var top = towerTop();
+
+    towerScroll = Math.max(towerLook.view === "ground" ? 0 : -towerBasements() * towerStorey(), Math.min(towerScroll, top));
+
+    var ctx = canvas.getContext("2d");
+    var c = tileColours();
+    var camera = towerCamera(canvas.width, canvas.height, step);
+    var project = camera.project;
+    var now = performance.now();
+    var busiest = "quiet";
+
+    (towerData ? towerData.occupied || [] : []).forEach(function (one) {
+      if (one.dark) { return; }
+      if (one.state === "waiting" || (one.state === "failed" && busiest !== "waiting") || (one.state === "working" && busiest === "quiet")) {
+        busiest = one.state;
+      }
+    });
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    var sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+
+    sky.addColorStop(0, c.deep);
+    sky.addColorStop(1, c.bg);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Which walls face the eye, nearest drawn last.
+    var sides = towerSides().filter(function (side) {
+      var mid = [(side.from[0] + side.to[0]) / 2, (side.from[1] + side.to[1]) / 2];
+
+      return (camera.eye[0] - mid[0]) * side.out[0] + (camera.eye[1] - mid[1]) * side.out[1] > 0;
+    });
+
+    sides.sort(function (a, b) {
+      var da = Math.hypot((a.from[0] + a.to[0]) / 2 - camera.eye[0], (a.from[1] + a.to[1]) / 2 - camera.eye[1]);
+      var db = Math.hypot((b.from[0] + b.to[0]) / 2 - camera.eye[0], (b.from[1] + b.to[1]) / 2 - camera.eye[1]);
+
+      return db - da;
+    });
+
+    towerFaces = [];
+
+    // Under the street: the basements, seen through it faintly.
+    for (var b = towerBasements(); b >= 1; b -= 1) {
+      towerStorey3d(ctx, c, project, sides, -b, null, false, now, "B" + b);
+    }
+
+    towerGround(ctx, c, project, camera);
+    towerStorey3d(ctx, c, project, sides, 0, null, towerHover && towerHover.number === 0, now, null);
+
+    for (var n = 1; n <= towerFloors(); n += 1) {
+      towerStorey3d(ctx, c, project, sides, n, towerOccupant(n), towerHover && towerHover.number === n, now, null);
+    }
+
+    towerCrown(ctx, c, project, sides, busiest, camera.ahead[2] >= 0);
+
+    canvas.setAttribute("aria-label", towerHold.querySelector(".tower-where").textContent);
+  }
+
+  // How wide and tall the whole building draws at one device pixel per unit, seen from above a corner.
+  function towerExtent() {
+    var pitch = towerLook.view === "aerial" ? 1.05 : 0.45;
+    var across = (towerWidth() + towerDepth()) * Math.SQRT1_2;
+    var high = towerTop() + towerBasements() * towerStorey() * 0.5;
+
+    return [across, high * Math.cos(pitch) + across * Math.sin(pitch)];
+  }
+
+  function towerQuad(ctx, project, a, b, c2, d) {
+    var p = [project(a), project(b), project(c2), project(d)];
+
+    ctx.beginPath();
+    ctx.moveTo(p[0][0], p[0][1]);
+    ctx.lineTo(p[1][0], p[1][1]);
+    ctx.lineTo(p[2][0], p[2][1]);
+    ctx.lineTo(p[3][0], p[3][1]);
+    ctx.closePath();
+
+    return p;
+  }
+
+  // A point on a wall: t along it from its start, at height z.
+  function towerOn(side, t, z) {
+    return [side.from[0] + (side.to[0] - side.from[0]) * t, side.from[1] + (side.to[1] - side.from[1]) * t, z];
+  }
+
+  function towerStateColour(c, state) {
+    return state === "waiting" ? c.wait : state === "failed" ? c.fail : state === "working" ? c.run : c.muted;
+  }
+
+  /*
+    One level of the tower on each wall facing the eye: glass, bronze fins,
+    windows lit by how many are on the floor with somebody in each, the slab
+    with its strip. The lobby is taller and all glass; a basement is concrete
+    with its name on it.
+  */
+  function towerStorey3d(ctx, c, project, sides, level, occupant, hovered, now, label) {
+    var z = towerLevelZ(level);
+    var tile = towerTile();
+    var slab = 8;
+    var people = occupant && !occupant.dark ? occupant.people : 0;
+    var capacity = (towerData && towerData.capacity) || 12;
+    var polygons = [];
+    var sofar = 0;
+
+    ctx.globalAlpha = level < 0 ? 0.55 : 1;
+
+    sides.forEach(function (side) {
+      var length = Math.hypot(side.to[0] - side.from[0], side.to[1] - side.from[1]);
+      var bays = Math.max(1, Math.round(length / tile));
+      var lit = people ? Math.max(1, Math.min(bays, Math.round(people / capacity * bays * 1.4))) : 0;
+
+      polygons.push(towerQuad(ctx, project, towerOn(side, 0, z[0]), towerOn(side, 1, z[0]), towerOn(side, 1, z[1]), towerOn(side, 0, z[1])));
+      ctx.fillStyle = level < 0 ? "#2a2d31" : level === 0 ? "#24344a" : "#1c2a3a";
+      ctx.fill();
+
+      if (level === 0) {
+        towerQuad(ctx, project, towerOn(side, 0.04, z[0] + slab), towerOn(side, 0.96, z[0] + slab), towerOn(side, 0.96, z[1] - 10), towerOn(side, 0.04, z[1] - 10));
+        ctx.fillStyle = "rgba(255, 226, 170, 0.5)";
+        ctx.fill();
+
+        if (side.long) {
+          towerQuad(ctx, project, towerOn(side, 0.45, z[0]), towerOn(side, 0.55, z[0]), towerOn(side, 0.55, z[0] + tile * 2.4), towerOn(side, 0.45, z[0] + tile * 2.4));
+          ctx.fillStyle = c.deep;
+          ctx.fill();
+        }
+      }
+
+      if (level > 0) {
+        for (var i = 0; i < bays; i += 1) {
+          var on = lit && (i * lit % bays) < lit;
+
+          if (!on) { continue; }
+
+          var a = (i + 0.12) / bays;
+          var e = (i + 0.88) / bays;
+
+          towerQuad(ctx, project, towerOn(side, a, z[0] + slab + 2), towerOn(side, e, z[0] + slab + 2), towerOn(side, e, z[1] - 4), towerOn(side, a, z[1] - 4));
+          ctx.fillStyle = "rgba(255, 214, 140, 0.85)";
+          ctx.fill();
+
+          // Somebody in the window, bobbing a little unless motion is off.
+          if (sofar < people) {
+            var bob = tilesStill() ? 0 : Math.sin(now / 600 + i) * 1.5;
+            var mid = (i + 0.5) / bays;
+            var halfW = 0.16 / bays;
+
+            towerQuad(ctx, project,
+              towerOn(side, mid - halfW, z[0] + slab + 2),
+              towerOn(side, mid + halfW, z[0] + slab + 2),
+              towerOn(side, mid + halfW * 0.7, z[0] + slab + tile * 1.25 + bob),
+              towerOn(side, mid - halfW * 0.7, z[0] + slab + tile * 1.25 + bob));
+            ctx.fillStyle = "rgba(30, 30, 40, 0.8)";
+            ctx.fill();
+
+            var head = project(towerOn(side, mid, z[0] + slab + tile * 1.55 + bob));
+            var head2 = project(towerOn(side, mid + halfW * 0.8, z[0] + slab + tile * 1.55 + bob));
+
+            ctx.beginPath();
+            ctx.arc(head[0], head[1], Math.max(1, Math.hypot(head2[0] - head[0], head2[1] - head[1])), 0, Math.PI * 2);
+            ctx.fill();
+            sofar += 1;
+          }
+        }
+      }
+
+      if (level >= 0) {
+        ctx.strokeStyle = "#9c7a4a";
+        ctx.lineWidth = 1.5;
+
+        for (var fin = 0; fin <= bays; fin += level === 0 ? 2 : 1) {
+          var low = project(towerOn(side, fin / bays, z[0]));
+          var high = project(towerOn(side, fin / bays, z[1] - slab));
+
+          ctx.beginPath();
+          ctx.moveTo(low[0], low[1]);
+          ctx.lineTo(high[0], high[1]);
+          ctx.stroke();
+        }
+      }
+
+      // The slab, and the strip along it saying how the floor is doing.
+      towerQuad(ctx, project, towerOn(side, 0, z[1] - slab), towerOn(side, 1, z[1] - slab), towerOn(side, 1, z[1]), towerOn(side, 0, z[1]));
+      ctx.fillStyle = "#5a5f66";
+      ctx.fill();
+
+      if (occupant && !occupant.dark) {
+        towerQuad(ctx, project, towerOn(side, 0, z[0]), towerOn(side, 1, z[0]), towerOn(side, 1, z[0] + 3), towerOn(side, 0, z[0] + 3));
+        ctx.fillStyle = towerStateColour(c, occupant.state);
+        ctx.fill();
+      }
+
+      if (label && side === sides[sides.length - 1]) {
+        var spot = project(towerOn(side, 0.06, (z[0] + z[1]) / 2));
+
+        ctx.fillStyle = c.muted;
+        ctx.font = "600 " + Math.round(12 * (window.devicePixelRatio || 1)) + "px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(label, spot[0], spot[1]);
+      }
+    });
+
+    ctx.globalAlpha = 1;
+
+    if (hovered) {
+      ctx.strokeStyle = c.ink;
+      ctx.lineWidth = 2;
+
+      polygons.forEach(function (p) {
+        ctx.beginPath();
+        p.forEach(function (point, i) { if (i) { ctx.lineTo(point[0], point[1]); } else { ctx.moveTo(point[0], point[1]); } });
+        ctx.closePath();
+        ctx.stroke();
+      });
+    }
+
+    if (level >= 0) { towerFaces.push({ level: level, polygons: polygons }); }
+  }
+
+  // The street and the pavement round the tower, over the basements.
+  function towerGround(ctx, c, project, camera) {
+    var w = towerWidth();
+    var d = towerDepth();
+    var reach = Math.max(w, d) * 1.2;
+
+    // From the street the far side of the street is behind the camera, and a
+    // corner behind it cannot be drawn: the ground is the band below the
+    // horizon instead.
+    if (camera.street) {
+      var far = project([camera.eye[0] + camera.ahead[0] * 1e5, camera.eye[1] + camera.ahead[1] * 1e5, camera.eye[2]]);
+
+      ctx.fillStyle = "rgba(40, 44, 50, 0.95)";
+      ctx.fillRect(0, far[1], ctx.canvas.width, ctx.canvas.height - far[1]);
+    } else {
+      towerQuad(ctx, project, [-reach, -reach, 0], [w + reach, -reach, 0], [w + reach, d + reach, 0], [-reach, d + reach, 0]);
+      ctx.fillStyle = "rgba(40, 44, 50, 0.82)";
+      ctx.fill();
+    }
+
+    var pave = towerTile() * 1.5;
+
+    towerQuad(ctx, project, [-pave, -pave, 0], [w + pave, -pave, 0], [w + pave, d + pave, 0], [-pave, d + pave, 0]);
+    ctx.fillStyle = c.line;
+    ctx.fill();
+  }
+
+  // The roof and the crown with the name on it, lit in the colour of whatever needs seeing.
+  function towerCrown(ctx, c, project, sides, state, below) {
+    var w = towerWidth();
+    var d = towerDepth();
+    var z = towerLevelZ(towerFloors() + 1);
+
+    if (!below) {
+      towerQuad(ctx, project, [0, 0, z[0]], [w, 0, z[0]], [w, d, z[0]], [0, d, z[0]]);
+      ctx.fillStyle = "#3a3f46";
+      ctx.fill();
+
+      // The break area on the roof: a deck and a few planters.
+      towerQuad(ctx, project, [w * 0.55, d * 0.2, z[0] + 1], [w * 0.9, d * 0.2, z[0] + 1], [w * 0.9, d * 0.8, z[0] + 1], [w * 0.55, d * 0.8, z[0] + 1]);
+      ctx.fillStyle = "#6b5440";
+      ctx.fill();
+    }
+
+    sides.forEach(function (side) {
+      towerQuad(ctx, project, towerOn(side, 0, z[0]), towerOn(side, 1, z[0]), towerOn(side, 1, z[0] + towerStorey() * 0.45), towerOn(side, 0, z[0] + towerStorey() * 0.45));
+      ctx.fillStyle = "#2f343b";
+      ctx.fill();
+    });
+
+    // The name, on the longest wall in view.
+    var front = sides.filter(function (side) { return side.long; }).pop() || sides[sides.length - 1];
+
+    if (!front) { return; }
+
+    var left = project(towerOn(front, 0.12, z[0] + towerStorey() * 0.22));
+    var right = project(towerOn(front, 0.88, z[0] + towerStorey() * 0.22));
+    var high = project(towerOn(front, 0.12, z[0] + towerStorey() * 0.4));
+    var across = Math.hypot(right[0] - left[0], right[1] - left[1]);
+    var tall = Math.hypot(high[0] - left[0], high[1] - left[1]);
+
+    if (across < 20 || tall < 4) { return; }
+
+    ctx.save();
+    ctx.translate(left[0], left[1]);
+    ctx.rotate(Math.atan2(right[1] - left[1], right[0] - left[0]));
+    ctx.fillStyle = towerStateColour(c, state);
+    ctx.font = "800 " + Math.round(tall * 1.6) + "px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("LOADOUT", across / 2, 0, across);
+    ctx.restore();
+  }
+
+  function towerInside(point, polygon) {
+    var inside = false;
+
+    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+      var a = polygon[i];
+      var b = polygon[j];
+
+      if ((a[1] > point[1]) !== (b[1] > point[1]) && point[0] < (b[0] - a[0]) * (point[1] - a[1]) / (b[1] - a[1]) + a[0]) {
+        inside = !inside;
+      }
+    }
+
+    return inside;
+  }
+
+  // What the pointer is over: a floor (with its run, if any) or the lobby. Nearest first.
+  function towerHit(event) {
+    var canvas = towerHold.querySelector(".tower-outside");
+    var box = canvas.getBoundingClientRect();
+    var point = [(event.clientX - box.left) * canvas.width / box.width, (event.clientY - box.top) * canvas.height / box.height];
+
+    for (var i = towerFaces.length - 1; i >= 0; i -= 1) {
+      var face = towerFaces[i];
+
+      if (face.polygons.some(function (polygon) { return towerInside(point, polygon); })) {
+        if (face.level === 0) { return { number: 0, lobby: true }; }
+
+        var occupant = towerOccupant(face.level);
+
+        return { number: face.level, run: occupant ? occupant.run : null, part: occupant ? occupant.part : 0, occupant: occupant };
+      }
+    }
+
+    return null;
+  }
+
+  function towerCard(event) {
+    var card = towerHold.querySelector(".tile-card");
+
+    if (!towerHover) {
+      card.hidden = true;
+
+      return;
+    }
+
+    var lines;
+
+    if (towerHover.lobby) {
+      lines = ["Lobby", "Reception and the waiting room"];
+    } else if (towerHover.occupant) {
+      var one = towerHover.occupant;
+      var run = towerRuns[one.run] || {};
+
+      lines = [
+        (run.team || one.run) + (one.part ? " (upstairs)" : ""),
+        "Floor " + one.number + (run.room ? " · " + run.room : ""),
+        one.dark ? "finished, lights out" : one.people + (one.people === 1 ? " person" : " people") + " · " + one.state,
+      ];
+    } else {
+      lines = ["Floor " + towerHover.number, "Empty"];
+    }
+
+    card.textContent = "";
+
+    lines.forEach(function (line, i) {
+      var row = document.createElement(i === 0 ? "b" : "span");
+
+      row.textContent = line;
+      card.appendChild(row);
+    });
+
+    var box = towerHold.querySelector(".tower-stage").getBoundingClientRect();
+
+    card.style.left = Math.min(event.clientX - box.left + 12, Math.max(0, box.width - 220)) + "px";
+    card.style.top = (event.clientY - box.top + 12) + "px";
+    card.hidden = false;
+  }
+
+  document.addEventListener("keydown", function (event) {
+    if (!towerHold || towerHold.offsetParent === null) { return; }
+    if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) { return; }
+
+    if (event.key === "Escape" && towerView.mode === "inside") { towerButton("back"); }
+    if (event.key === "q" || event.key === "Q") { towerButton("left"); }
+    if (event.key === "e" || event.key === "E") { towerButton("right"); }
+    if (event.key === "+" || event.key === "=") { towerZoomBy(1); }
+    if (event.key === "-") { towerZoomBy(-1); }
+  });
+
+  window.addEventListener("resize", function () { towerShow(); });
+
   function drawOffice(runs) {
+    var box = document.getElementById("office");
+
+    runs.forEach(function (run) { towerRuns[run.id] = run; });
+
+    if (!towerHold) { towerHold = towerElement(); }
+
+    if (towerHold.parentNode !== box) {
+      box.textContent = "";
+      box.appendChild(towerHold);
+    }
+
+    // The building from the stream while it is live; asked for otherwise.
+    if (!officeLive || !towerData) {
+      api("/api/office/building")
+        .then(function (answer) {
+          towerData = answer;
+          towerShow();
+        })
+        .catch(function () { /* Drawn from what there is. */ });
+    }
+
+    listenToOffice();
+    keepStill();
+    towerShow();
+  }
+
+  /*
+    The office as it was before the building: a room per run. Kept for the
+    board's team panels until the building replaces them too.
+  */
+  function drawOfficeRooms(runs) {
     var box = document.getElementById("office");
 
     box.textContent = "";
@@ -10317,6 +11665,7 @@
       artSets("set-waiting", set.officeSets || [], set.waitingSet || "",
         "a list of words");
 
+      document.getElementById("set-office-scale").value = set.officeScale || "";
       document.getElementById("set-listen").value = set.webhookListen || "";
       document.getElementById("set-team-budget").value = set.teamBudget || "";
       document.getElementById("set-webhook-teams").value =
@@ -10499,6 +11848,26 @@
           })
           .catch(function (e) { announce(e.message); });
       });
+    });
+
+    document.getElementById("set-office-scale").addEventListener("change", function () {
+      var value = document.getElementById("set-office-scale").value.trim();
+
+      settle({ what: "office-scale", value: value })
+        .then(function () {
+          // The server reads it when it starts; this page draws with it now.
+          var parts = (value || "1-2").split("-").map(Number);
+
+          if (towerData && parts.length === 2) {
+            towerData.scale = { min: parts[0], max: parts[1] };
+            Object.keys(tileRooms).forEach(function (key) { tileRooms[key].scale = 0; });
+          }
+
+          announce("The office starts at " + (value || "1-2") + " here now, and everywhere once the dashboard next starts.");
+
+          return fillSettings();
+        })
+        .catch(function (e) { announce(e.message); });
     });
 
     document.getElementById("set-webhook-teams").addEventListener("change", function () {

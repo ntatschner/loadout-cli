@@ -38,6 +38,7 @@ public sealed record TrustedOnThisMachine(string Team, string Remedy, string By,
 /// <param name="WebhookTokenSet">Whether a trigger token is held. Never the token.</param>
 /// <param name="Trusted">Remedies agreed to run unattended.</param>
 /// <param name="TeamBudget">This machine's default for a team that sets no budget: a figure, none, or empty.</param>
+/// <param name="OfficeScale">How large the office may be drawn, min-max, or empty for the default.</param>
 public sealed record MachineSettings(
     string NotifyKind,
     string NotifyChat,
@@ -49,7 +50,8 @@ public sealed record MachineSettings(
     IReadOnlyList<string> WebhookTeams,
     bool WebhookTokenSet,
     IReadOnlyList<TrustedOnThisMachine> Trusted,
-    string TeamBudget = "");
+    string TeamBudget = "",
+    string OfficeScale = "");
 
 /// <summary>
 /// Something the page asked this machine be set to.
@@ -70,8 +72,8 @@ public sealed record MachineSettings(
 /// </para>
 /// </remarks>
 /// <param name="What">
-/// Which setting: notify, office, waiting, listen, webhook-teams, webhook or
-/// remedy.
+/// Which setting: notify, office, office-scale, waiting, listen, webhook-teams,
+/// webhook or remedy.
 /// </param>
 /// <param name="Value">
 /// What to set it to, in the words the command takes. For a remedy, its name.
