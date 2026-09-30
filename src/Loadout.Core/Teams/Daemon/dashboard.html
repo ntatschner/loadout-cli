@@ -6082,6 +6082,8 @@
       return (a.role === "role.project-lead" ? 0 : 1) - (b.role === "role.project-lead" ? 0 : 1);
     });
 
+    var arrived = [];
+
     people.forEach(function (node) {
       var intent = node.office || { lamp: "quiet", place: "desk", pose: "idle" };
       var person = room.people[node.node];
@@ -6094,6 +6096,12 @@
       var seat = tileSeat(room, node.node);
 
       if (!person) {
+        // Their own sequence of choices, from the run and the node, so the
+        // same run wanders the same way every time it is drawn.
+        var hash = 0;
+
+        (run.id + "|" + node.node).split("").forEach(function (ch) { hash = (hash * 31 + ch.charCodeAt(0)) >>> 0; });
+
         // Everybody there when the room is first drawn is already at their
         // desk; only somebody briefed while it is being watched walks in.
         person = room.people[node.node] = {
@@ -6104,15 +6112,31 @@
           leaving: false,
           gone: false,
           seed: (node.node.length * 7919 + node.node.charCodeAt(0)) % 1000 / 1000,
+          rng: hash || 1,
+          errand: null,
+          nextErrand: 0,
         };
 
-        if (!room.fresh) { tileWalk(room, person, seat.x, seat.y); }
+        if (!room.fresh) {
+          tileWalk(room, person, seat.x, seat.y);
+          arrived.push(node.node);
+        }
       }
 
       person.node = node;
       person.intent = intent;
 
+      // An errand lasts only while nothing is asked of them. A visit from the
+      // lead is allowed while its light is quiet; wandering only while free.
+      if (person.errand && !(person.errand.visit ? intent.lamp === "quiet" : intent.place === "free")) {
+        person.errand = null;
+
+        if (intent.place !== "gone") { tileWalk(room, person, seat.x, seat.y); }
+      }
+
       if (intent.place === "gone") {
+        person.errand = null;
+
         if (!person.leaving && !person.gone) {
           person.leaving = true;
           tileWalk(room, person, door.x, door.y);
@@ -6124,10 +6148,31 @@
         person.leaving = false;
         person.gone = false;
         tileWalk(room, person, seat.x, seat.y);
-      } else if (!person.path.length && (person.x !== seat.x || person.y !== seat.y)) {
+      } else if (!person.errand && !person.path.length && (person.x !== seat.x || person.y !== seat.y)) {
         tileWalk(room, person, seat.x, seat.y);
       }
     });
+
+    // Somebody new has been briefed: the lead goes over to them. That is the
+    // one piece of life in the room that is also news - the lead delegating.
+    if (arrived.length && !tilesStill()) {
+      var lead = null;
+
+      Object.keys(room.people).forEach(function (name) {
+        var one = room.people[name];
+
+        if (one.node && one.node.role === "role.project-lead" && !one.gone && !one.leaving) { lead = one; }
+      });
+
+      if (lead && (lead.intent || {}).lamp === "quiet" && !(lead.errand && lead.errand.visit)) {
+        var beside = tileBeside(room, tileSeat(room, arrived[arrived.length - 1]));
+
+        if (beside) {
+          lead.errand = { visit: true, stage: "going", stay: 2500, facing: beside.facing };
+          tileWalk(room, lead, beside.x, beside.y);
+        }
+      }
+    }
 
     room.fresh = false;
     room.dirty = true;
@@ -6423,7 +6468,134 @@
     return moving;
   }
 
-  // Whether anything in the room changes on its own: typing, a pulsing lamp.
+  // The next of somebody's own choices, between 0 and 1.
+  function tileRandom(person) {
+    person.rng = (Math.imul(person.rng, 1664525) + 1013904223) >>> 0;
+
+    return person.rng / 4294967296;
+  }
+
+  // A tile to stand on next to a seat, facing it, that is nobody's own seat.
+  function tileBeside(room, seat) {
+    var scene = room.scene;
+    var seats = {};
+
+    Object.keys(room.seats).forEach(function (name) { seats[room.seats[name].x + "," + room.seats[name].y] = true; });
+
+    var found = null;
+
+    [[0, 1, "n"], [1, 0, "w"], [-1, 0, "e"], [0, -1, "s"]].some(function (step) {
+      var x = seat.x + step[0];
+      var y = seat.y + step[1];
+
+      if (x < 0 || y < 0 || x >= scene.width || y >= scene.height) { return false; }
+      if (room.blocked[y * scene.width + x] || seats[x + "," + y]) { return false; }
+      if (x === scene.door.x && y === scene.door.y) { return false; }
+
+      found = { x: x, y: y, facing: step[2] };
+
+      return true;
+    });
+
+    return found;
+  }
+
+  // Somewhere for somebody with nothing to do to go: one of the room's
+  // named spots, or over to a colleague. Null where nowhere is free.
+  function tileErrand(room, name, person) {
+    var busy = {};
+
+    Object.keys(room.people).forEach(function (other) {
+      var one = room.people[other];
+
+      if (other !== name && !one.gone) { busy[Math.round(one.x) + "," + Math.round(one.y)] = true; }
+    });
+
+    var colleagues = Object.keys(room.people).filter(function (other) {
+      return other !== name && !room.people[other].gone && !room.people[other].leaving;
+    });
+
+    if (colleagues.length && tileRandom(person) < 0.35) {
+      var beside = tileBeside(room, tileSeat(room, colleagues[Math.floor(tileRandom(person) * colleagues.length)]));
+
+      if (beside && !busy[beside.x + "," + beside.y]) { return beside; }
+    }
+
+    var spots = room.scene.spots ? Object.keys(room.scene.spots).map(function (key) { return room.scene.spots[key]; }) : [];
+
+    if (!spots.length) { return null; }
+
+    var spot = spots[Math.floor(tileRandom(person) * spots.length)];
+
+    return busy[spot.x + "," + spot.y] ? null : { x: spot.x, y: spot.y, facing: spot.facing || "s" };
+  }
+
+  /*
+    The room's life between readings: somebody nothing is asking anything of
+    gets up now and then, goes somewhere, stays a few seconds and comes back;
+    and the lead's visit to a newcomer runs its course. Nothing here decides
+    anybody's state - only what they do while the state leaves them free.
+  */
+  function tileAmbient(room, now) {
+    var still = tilesStill();
+
+    Object.keys(room.people).forEach(function (name) {
+      var person = room.people[name];
+      var intent = person.intent || {};
+
+      if (person.gone || person.leaving) { return; }
+
+      var errand = person.errand;
+
+      if (errand) {
+        if (person.path.length) { return; }
+
+        if (errand.stage === "going") {
+          errand.stage = "staying";
+          errand.until = now + (still ? 0 : errand.stay);
+          person.facing = errand.facing || person.facing;
+          room.dirty = true;
+        } else if (errand.stage === "staying" && now >= errand.until) {
+          var seat = tileSeat(room, name);
+
+          errand.stage = "returning";
+          tileWalk(room, person, seat.x, seat.y);
+        } else if (errand.stage === "returning") {
+          person.errand = null;
+          person.facing = tileSeat(room, name).facing;
+          person.nextErrand = now + 6000 + tileRandom(person) * 10000;
+          room.dirty = true;
+        }
+
+        return;
+      }
+
+      if (still || intent.place !== "free" || person.path.length) { return; }
+
+      // Not all at once: each waits a while of their own before the first.
+      if (!person.nextErrand) {
+        person.nextErrand = now + 3000 + tileRandom(person) * 9000;
+
+        return;
+      }
+
+      if (now < person.nextErrand) { return; }
+
+      var to = tileErrand(room, name, person);
+
+      if (!to) {
+        person.nextErrand = now + 8000;
+
+        return;
+      }
+
+      person.errand = { visit: false, stage: "going", stay: 2500 + tileRandom(person) * 3500, facing: to.facing };
+      tileWalk(room, person, to.x, to.y);
+    });
+  }
+
+  // Whether anything in the room changes on its own: typing, a pulsing lamp,
+  // or somebody free to get up.
   function tileLively(room) {
     if (tilesStill()) { return false; }
 
@@ -6431,7 +6603,8 @@
       var person = room.people[name];
       var intent = person.intent || {};
 
-      return !person.gone && (intent.pose === "type" || intent.lamp === "working" || intent.lamp === "failed");
+      return !person.gone && (intent.pose === "type" || intent.lamp === "working" || intent.lamp === "failed"
+        || intent.place === "free" || !!person.errand);
     });
   }
 
@@ -6515,6 +6688,9 @@
 
   function tilePose(person) {
     if (person.path.length) { return "walk"; }
+
+    // Away from their desk, whatever they would be doing at it.
+    if (person.errand) { return "idle"; }
 
     return (person.intent && person.intent.pose) || "idle";
   }
@@ -6682,6 +6858,8 @@
       var holder = room.floor.closest(".room");
 
       if (document.hidden || (holder && holder.classList.contains("unwatched"))) { return; }
+
+      tileAmbient(room, now);
 
       var moving = tileStep(room, now);
       var lively = tileLively(room);

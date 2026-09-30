@@ -330,6 +330,15 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // walk anybody back.
         page.Should().Contain("new EventSource(\"/api/office/events?token=\"");
         page.Should().Contain("if (officeLive) {");
+
+        // Only somebody nothing is asking anything of wanders, an errand ends
+        // the moment that changes, and nobody wanders with motion turned down.
+        page.Should().Contain("if (still || intent.place !== \"free\" || person.path.length) { return; }");
+        page.Should().Contain("if (person.errand && !(person.errand.visit ? intent.lamp === \"quiet\" : intent.place === \"free\")) {");
+
+        // The lead goes over to somebody newly briefed, only while its own
+        // light is quiet.
+        page.Should().Contain("if (lead && (lead.intent || {}).lamp === \"quiet\" && !(lead.errand && lead.errand.visit)) {");
     }
 
     /// <summary>
