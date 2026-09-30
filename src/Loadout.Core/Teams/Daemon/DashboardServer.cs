@@ -130,6 +130,15 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     private readonly Dictionary<string, (string Stamp, RunSummary Summary)> _summaries = new(StringComparer.Ordinal);
 
+    /// <summary>Who is on which floor, remembered between looks so moves wait as the rules say.</summary>
+    private readonly OfficeBuilding _building = new();
+
+    /// <summary>The kit in use and what it was read from, re-read when the set changes on disk.</summary>
+    private (string Stamp, OfficeKit Kit, OfficeRules Rules, int Capacity, string Set)? _kit;
+
+    /// <summary>Floors already laid out, by run, which of its floors, and how many sit there.</summary>
+    private readonly Dictionary<string, OfficeScene> _floors = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Where the office art lives on this machine, or null for none.
     /// </summary>
@@ -1258,6 +1267,33 @@ public sealed class DashboardServer : IDisposable
         // What art there is, if any, so the page knows which desks it can
         // draw and which it has to leave as a square. Answered even with
         // nothing installed, because "none" is an answer the page acts on.
+        if (path == "/api/office/building")
+        {
+            var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(Building(summaries), Json))
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        if (path.StartsWith("/api/office/floor/", StringComparison.Ordinal))
+        {
+            // /api/office/floor/<run>/<part>: the run's floor, laid out.
+            var rest = path["/api/office/floor/".Length..].Split('/');
+            var scene = rest is [var runId, var partText]
+                && RunJournal.Names(runId)
+                && int.TryParse(partText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var part)
+                    ? Floor(runId, part)
+                    : null;
+
+            await (scene is null
+                ? WriteAsync(context, 404, "application/json; charset=utf-8", JsonSerializer.Serialize(new { error = "No such floor." }, Json))
+                : WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(scene, Json))).ConfigureAwait(false);
+
+            return;
+        }
+
         if (path == "/api/office/events")
         {
             await OfficeStreamAsync(context, ct).ConfigureAwait(false);
@@ -1565,9 +1601,8 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     private string OfficeSnapshot()
     {
-        var runs = _journal.List(40)
-            .Select(Summary)
-            .OfType<RunSummary>()
+        var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
+        var runs = summaries
             .Select(run => new
             {
                 id = run.RunId,
@@ -1586,7 +1621,101 @@ public sealed class DashboardServer : IDisposable
             })
             .ToList();
 
-        return JsonSerializer.Serialize(new { runs }, Json);
+        // Who is on which floor, so a spill or a floor given back shows on the
+        // page the moment it happens rather than at the next poll.
+        return JsonSerializer.Serialize(new { runs, building = Building(summaries) }, Json);
+    }
+
+    /// <summary>The building's kit and rules: the configured set when it is a usable kit, the built-in one otherwise.</summary>
+    private (OfficeKit Kit, OfficeRules Rules, int Capacity, string Set) OfficeKitNow()
+    {
+        var root = OfficeRoot;
+        var set = OfficeSet;
+        var stamp = root is { } found && set.Length > 0 && OfficeKits.Has(found, set)
+            ? set + "|" + OfficeScenes.Stamp(found, set)
+            : string.Empty;
+
+        lock (_building)
+        {
+            if (_kit is { } kept && kept.Stamp == stamp)
+            {
+                return (kept.Kit, kept.Rules, kept.Capacity, kept.Set);
+            }
+
+            var (kit, rules, used) = (OfficeKit.Kit(), OfficeRules.Default, string.Empty);
+
+            if (stamp.Length > 0 && OfficeKits.Check(root!, set) is { Fit: true } check)
+            {
+                (kit, rules, used) = (check.Kit!, check.Rules, set);
+            }
+
+            var capacity = FloorPlanner.Capacity(kit, rules);
+
+            _kit = (stamp, kit, rules, capacity, used);
+            _floors.Clear();
+
+            return (kit, rules, capacity, used);
+        }
+    }
+
+    /// <summary>Who is on which floor now, as the page reads it.</summary>
+    private object Building(IReadOnlyList<RunSummary> runs)
+    {
+        var (_, rules, capacity, set) = OfficeKitNow();
+        var view = _building.Update(runs, capacity, rules, DateTimeOffset.UtcNow);
+
+        return new
+        {
+            floors = view.Floors,
+            basements = 2,
+            capacity,
+            kit = set.Length > 0 ? set : null,
+            occupied = view.Occupied.Select(floor => new
+            {
+                number = floor.Number,
+                run = floor.Run,
+                part = floor.Part,
+                people = floor.People,
+                state = floor.State,
+                dark = floor.Dark,
+                nodes = floor.Nodes,
+            }),
+        };
+    }
+
+    /// <summary>One floor of a run, laid out, from the cache when nothing about it has changed.</summary>
+    private OfficeScene? Floor(string runId, int part)
+    {
+        var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
+        var (kit, rules, capacity, _) = OfficeKitNow();
+        var view = _building.Update(summaries, capacity, rules, DateTimeOffset.UtcNow);
+        var floor = view.Occupied.FirstOrDefault(one => one.Run == runId && one.Part == part);
+
+        if (floor is null)
+        {
+            return null;
+        }
+
+        // Seeded by the run, and by which of its floors, so a spill floor is not
+        // a copy of the one below; sized for however many sit on it now.
+        var key = $"{runId}#{part}#{floor.People}";
+
+        lock (_building)
+        {
+            if (_floors.TryGetValue(key, out var kept))
+            {
+                return kept;
+            }
+        }
+
+        var scene = FloorPlanner.Plan(kit, rules, part == 0 ? runId : $"{runId}#floor{part}", Math.Max(1, floor.People)).Scene;
+
+        lock (_building)
+        {
+            _floors[key] = scene;
+        }
+
+        return scene;
     }
 
     /// <summary>One run's summary, read again only when its files have changed.</summary>

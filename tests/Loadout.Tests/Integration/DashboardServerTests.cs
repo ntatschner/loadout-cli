@@ -385,6 +385,62 @@ public sealed class DashboardServerTests : IAsyncLifetime
         (await Task.WhenAny(repeat, Task.Delay(1500))).Should().NotBe(repeat, "the page already has the latest");
     }
 
+    /// <summary>
+    /// The building says how tall it is and who is on which floor, and each
+    /// run's floor comes back laid out, checked, with the lead's office in it.
+    /// </summary>
+    [Fact]
+    public async Task The_building_puts_each_run_on_a_floor_and_lays_the_floor_out()
+    {
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+        var root = building.RootElement;
+        var first = root.GetProperty("occupied")[0];
+
+        root.GetProperty("floors").GetInt32().Should().Be(10);
+        root.GetProperty("kit").ValueKind.Should().Be(JsonValueKind.Null, "no kit is configured, so the built-in one is used");
+        first.GetProperty("run").GetString().Should().Be("20260916-1200-aaaa");
+        first.GetProperty("number").GetInt32().Should().Be(1);
+        first.GetProperty("nodes").GetArrayLength().Should().Be(1);
+
+        var floor = await GetAsync("/api/office/floor/20260916-1200-aaaa/0");
+
+        floor.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var scene = JsonSerializer.Deserialize<OfficeScene>(await floor.Content.ReadAsStringAsync())!;
+
+        OfficeScenes.Problems(scene, _ => null).Should().BeEmpty();
+        scene.Areas!.Should().Contain(area => area.Kind == "lead-office");
+
+        (await GetAsync("/api/office/floor/20260916-1200-aaaa/1")).StatusCode.Should().Be(HttpStatusCode.NotFound, "the run has only one floor");
+        (await GetAsync("/api/office/floor/no-such-run/0")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetAsync("/api/office/floor/20260916-1200-aaaa/x")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_configured_kit_is_the_one_the_building_is_made_from()
+    {
+        Directory.CreateDirectory(Path.Combine(_art, "tower"));
+        File.WriteAllText(Path.Combine(_art, "tower", OfficeKit.FileName), JsonSerializer.Serialize(OfficeKit.Kit()));
+        _server.OfficeSet = "tower";
+
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+
+        building.RootElement.GetProperty("kit").GetString().Should().Be("tower");
+    }
+
+    [Fact]
+    public async Task The_office_stream_carries_the_building()
+    {
+        var url = new Uri(_root.TrimEnd('/') + "/api/office/events?token=" + _server.Token);
+
+        using var stream = await _client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+        var (_, data) = await NextEvent(stream).WaitAsync(TimeSpan.FromSeconds(10));
+
+        JsonDocument.Parse(data).RootElement.GetProperty("building").GetProperty("occupied")[0]
+            .GetProperty("run").GetString().Should().Be("20260916-1200-aaaa");
+    }
+
     /// <summary>The next office event on a stream: its id and its data.</summary>
     private static async Task<(string Id, string Data)> NextEvent(HttpResponseMessage response)
     {
