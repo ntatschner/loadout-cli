@@ -17,6 +17,12 @@ dotnet test tests/Loadout.Tests/Loadout.Tests.csproj
 
 Warnings are errors. The build should be silent.
 
+The tests also need **node** on the path. `OfficeEngineTests` runs the office
+page's own JavaScript, cut out of `dashboard.html`, against floors the planner
+generates, because testing a C# copy of it would test the copy. Without node
+that test fails and says why, rather than skipping, so it can't pass for a test
+that never ran. CI's runners and `build/docker` have it.
+
 ## Dependencies
 
 Package versions live in `Directory.Packages.props`, pinned exactly, with a

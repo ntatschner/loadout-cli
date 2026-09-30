@@ -19,13 +19,14 @@ FROM ${SDK_IMAGE}
 
 # dpkg-deb ships with the base image; rpm does not. Both are needed to build the
 # Linux packages, and file/binutils are what verify the results are what they
-# claim to be.
+# claim to be. Node runs the office page's engine under OfficeEngineTests.
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         rpm \
         file \
         binutils \
         git \
+        nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # The packaging scripts are PowerShell so that one command works on all three
