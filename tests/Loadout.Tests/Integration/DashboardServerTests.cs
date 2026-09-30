@@ -301,6 +301,31 @@ public sealed class DashboardServerTests : IAsyncLifetime
         read.RootElement.GetProperty("kit").GetProperty("schema").GetString().Should().Be(OfficeScene.Version);
     }
 
+    /// <summary>
+    /// The page draws a tile scene, or the kit's room where nothing is
+    /// installed, on a canvas kept between polls, and only while something in
+    /// it moves.
+    /// </summary>
+    [Fact]
+    public async Task The_page_draws_tile_rooms_on_a_canvas_that_outlives_the_poll()
+    {
+        var page = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // A painted set keeps its own view; no set at all gets the kit's room.
+        page.Should().Contain("if (office && office.room) { return null; }");
+        page.Should().Contain("return kitScene;");
+        page.Should().Contain("kitScene = answer.kit || null;");
+
+        // Kept by where it is shown and which run, so a poll re-attaches it
+        // rather than restarting every walk.
+        page.Should().Contain("tileRoom((shownIn || \"office\") + \"|\" + run.id + \"|\" + set, run, set, scene).floor");
+
+        // Nobody walks when motion is turned down, and nothing is drawn for a
+        // room nobody can see.
+        page.Should().Contain("person.path = tilesStill() ? [] : tilePath(room, fromX, fromY, toX, toY);");
+        page.Should().Contain("if (document.hidden || (holder && holder.classList.contains(\"unwatched\"))) { return; }");
+    }
+
     [Fact]
     public async Task A_piece_of_the_chosen_set_is_served_as_an_image()
     {

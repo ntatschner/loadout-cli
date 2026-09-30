@@ -1584,6 +1584,16 @@
     carries its own solid plate, so the text it holds is read against that and
     not against whatever happens to be painted underneath.
   */
+  /* The tile office: one canvas per room, sized in whole multiples of the
+     art by the script, and a card for whoever the pointer is over. An
+     outline rather than a border, so the frame adds nothing to the width the
+     script measured. */
+  .tile-floor { position: relative; }
+  .tile-floor canvas { display: block; margin: 0 auto; image-rendering: pixelated; outline: var(--lk-border) solid var(--line); border-radius: var(--radius-sm); }
+  .tile-card { position: absolute; z-index: 5; display: grid; gap: 2px; max-width: 220px; padding: var(--space-2) var(--space-3); background: var(--surface-1); border: var(--lk-border) solid var(--line-strong); border-radius: var(--radius-sm); font-size: 0.75rem; pointer-events: none; }
+  .tile-card[hidden] { display: none; }
+  .tile-card span { color: var(--ink-muted); overflow-wrap: anywhere; }
+
   .room .floor {
     position: relative;
 
@@ -4605,7 +4615,7 @@
     var list = document.createElement("ul");
 
     list.className = "rooms lk-rooms";
-    list.appendChild(roomOf(run, setFor(team)));
+    list.appendChild(roomOf(run, setFor(team), "board"));
     holds.appendChild(list);
 
     keepStill();
@@ -5612,7 +5622,7 @@
     screen, which draws every run in the machine's office, and a viewer panel,
     which draws one team in the office that team works in.
   */
-  function roomOf(run, set) {
+  function roomOf(run, set, shownIn) {
     var li = document.createElement("li");
     var how = state(run);
     var office = offices[set] || null;
@@ -5638,6 +5648,24 @@
 
     head.appendChild(where);
     li.appendChild(head);
+
+    // A room made of tiles, or the kit's room where nothing is installed, is
+    // drawn on a canvas that outlives this draw; a painted room is drawn below.
+    var scene = sceneFor(set);
+
+    if (scene) {
+      li.appendChild(tileRoom((shownIn || "office") + "|" + run.id + "|" + set, run, set, scene).floor);
+
+      if (!(run.nodes || []).length) {
+        var empty = document.createElement("p");
+
+        empty.className = "where";
+        empty.textContent = run.running ? "Nobody has been briefed yet." : "Everybody has gone home.";
+        li.appendChild(empty);
+      }
+
+      return li;
+    }
 
     var desks = document.createElement("ul");
     var spare = document.createElement("ul");
@@ -5799,10 +5827,893 @@
       entries.forEach(function (entry) {
         entry.target.classList.toggle("unwatched", !entry.isIntersecting);
       });
+
+      // A tile room scrolled back into view carries on from where it was.
+      wakeTiles();
     }, { rootMargin: "200px" });
 
     rooms.forEach(function (room) { watcher.observe(room); });
   }
+
+  /* ==================================================================
+    The tile office: a room drawn on a canvas, with people who walk.
+
+    Decorative, like the painted rooms, and more so: the board, the graph
+    and the run pane carry everything here as words, so the canvas is
+    hidden from assistive technology and says only a one-line summary.
+
+    What each person should be doing is decided on the server (node.office:
+    lamp, place, pose, bubble), and this only animates them towards it. The
+    room outlives the poll: the page rebuilds every view every few seconds,
+    and a canvas rebuilt that often would restart every walk and lose every
+    frame, so each room is kept by run and re-attached rather than redrawn.
+  ================================================================== */
+
+  // The room drawn when no set is installed, sent by the server with the art.
+  var kitScene = null;
+
+  // Each room on the page, by where it is shown, which run and which set.
+  var tileRooms = {};
+  var tileLoop = 0;
+
+  // Pictures by address, loaded once and shared between rooms.
+  var tilePictures = {};
+
+  // How fast somebody walks, in tiles a second.
+  var TILE_PACE = 3;
+
+  function tilesStill() {
+    return (document.documentElement.getAttribute("data-motion") || "full") !== "full";
+  }
+
+  /*
+    Which scene draws a set: its own tile scene, nothing where it is a painted
+    room (that has its own view), and the kit's room where there is no set.
+  */
+  function sceneFor(set) {
+    var office = offices[set];
+
+    if (office && office.scene) { return office.scene; }
+    if (office && office.room) { return null; }
+
+    return kitScene;
+  }
+
+  function tilePicture(set, piece) {
+    var url = "/office/" + encodeURIComponent(set) + "/" + encodeURIComponent(piece)
+      + "?token=" + encodeURIComponent(token);
+    var known = tilePictures[url];
+
+    if (known) { return known.ready ? known.image : null; }
+
+    known = tilePictures[url] = { image: new Image(), ready: false };
+    known.image.onload = function () {
+      known.ready = true;
+
+      // Whatever was drawn without it is drawn again with it.
+      Object.keys(tileRooms).forEach(function (key) { tileRooms[key].dirty = true; tileRooms[key].baked = null; });
+      wakeTiles();
+    };
+    known.image.src = url;
+
+    return null;
+  }
+
+  // The kit's colours as they stand now, read from the page so a theme change
+  // reaches the room the next time it is baked.
+  function tileColours() {
+    var style = getComputedStyle(document.documentElement);
+    var read = function (name, fallback) { return (style.getPropertyValue(name) || "").trim() || fallback; };
+
+    return {
+      key: document.documentElement.getAttribute("data-theme") || "",
+      bg: read("--bg", "#0b1016"),
+      floorA: read("--surface-2", "#19232d"),
+      floorB: read("--surface-1", "#121a22"),
+      deep: read("--surface-3", "#080c11"),
+      line: read("--line", "#243140"),
+      wall: read("--line-strong", "#6a7d92"),
+      ink: read("--ink", "#edf2f7"),
+      muted: read("--ink-muted", "#afbccb"),
+      body: read("--brand-steel", "#5b6e82"),
+      lead: read("--accent", "#3d8bfd"),
+      run: read("--status-run", "#3d8bfd"),
+      wait: read("--status-wait", "#e0a100"),
+      fail: read("--status-fail", "#e5484d"),
+    };
+  }
+
+  // Where nobody can stand: no floor, a wall, or under something that blocks.
+  function tileBlocked(scene) {
+    var blocked = [];
+
+    for (var y = 0; y < scene.height; y += 1) {
+      for (var x = 0; x < scene.width; x += 1) {
+        var floor = (scene.floor[y] || [])[x];
+        var wall = scene.walls ? (scene.walls[y] || [])[x] : -1;
+
+        blocked.push(floor === undefined || floor < 0 || (wall !== undefined && wall >= 0));
+      }
+    }
+
+    (scene.props || []).forEach(function (prop) {
+      if (prop.blocks === false) { return; }
+
+      for (var py = prop.y; py < prop.y + (prop.h || 1); py += 1) {
+        for (var px = prop.x; px < prop.x + (prop.w || 1); px += 1) {
+          if (px >= 0 && py >= 0 && px < scene.width && py < scene.height) { blocked[py * scene.width + px] = true; }
+        }
+      }
+    });
+
+    return blocked;
+  }
+
+  // The tiles from one place to another, a step at a time; empty when there is no way.
+  function tilePath(room, fromX, fromY, toX, toY) {
+    var scene = room.scene;
+    var w = scene.width;
+    var start = fromY * w + fromX;
+    var goal = toY * w + toX;
+    var came = {};
+    var queue = [start];
+
+    came[start] = -1;
+
+    while (queue.length) {
+      var at = queue.shift();
+
+      if (at === goal) { break; }
+
+      var x = at % w;
+      var y = (at - x) / w;
+
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (step) {
+        var nx = x + step[0];
+        var ny = y + step[1];
+        var next = ny * w + nx;
+
+        if (nx < 0 || ny < 0 || nx >= w || ny >= scene.height) { return; }
+        if (came[next] !== undefined) { return; }
+        if (room.blocked[next] && next !== goal) { return; }
+
+        came[next] = at;
+        queue.push(next);
+      });
+    }
+
+    if (came[goal] === undefined) { return []; }
+
+    var path = [];
+
+    for (var back = goal; back !== start; back = came[back]) {
+      path.unshift({ x: back % w, y: Math.floor(back / w) });
+    }
+
+    return path;
+  }
+
+  /*
+    Where each person belongs. The lead gets the first desk, and everybody
+    keeps the desk they were given for as long as the room lasts, so nobody
+    swaps seats because somebody else arrived. More people than desks stand
+    on the free tiles nearest the door.
+  */
+  function tileSeat(room, name) {
+    if (room.seats[name]) { return room.seats[name]; }
+
+    var used = {};
+
+    Object.keys(room.seats).forEach(function (other) { used[room.seats[other].x + "," + room.seats[other].y] = true; });
+
+    var seat = null;
+
+    room.scene.desks.some(function (desk) {
+      if (used[desk.x + "," + desk.y]) { return false; }
+
+      seat = { x: desk.x, y: desk.y, facing: desk.facing || "s", desk: true };
+
+      return true;
+    });
+
+    if (!seat) {
+      // The nearest tile to the door that nobody has and nobody sits at,
+      // nearest by walking rather than as the crow flies, so it is always
+      // somewhere they can get to.
+      var scene = room.scene;
+      var door = scene.door;
+      var desks = {};
+
+      scene.desks.forEach(function (desk) { desks[desk.x + "," + desk.y] = true; });
+
+      var seen = {};
+      var queue = [door];
+
+      seen[door.x + "," + door.y] = true;
+
+      while (queue.length && !seat) {
+        var at = queue.shift();
+        var here = at.x + "," + at.y;
+
+        if (at !== door && !used[here] && !desks[here]) {
+          seat = { x: at.x, y: at.y, facing: "s", desk: false };
+          break;
+        }
+
+        [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (step) {
+          var nx = at.x + step[0];
+          var ny = at.y + step[1];
+
+          if (nx < 0 || ny < 0 || nx >= scene.width || ny >= scene.height) { return; }
+          if (seen[nx + "," + ny] || room.blocked[ny * scene.width + nx]) { return; }
+
+          seen[nx + "," + ny] = true;
+          queue.push({ x: nx, y: ny });
+        });
+      }
+
+      // A room with no floor to spare: they wait in the doorway.
+      if (!seat) { seat = { x: door.x, y: door.y, facing: "s", desk: false }; }
+    }
+
+    room.seats[name] = seat;
+
+    return seat;
+  }
+
+  function tileWalk(room, person, toX, toY) {
+    var fromX = Math.round(person.x);
+    var fromY = Math.round(person.y);
+
+    person.path = tilesStill() ? [] : tilePath(room, fromX, fromY, toX, toY);
+
+    // Nowhere to walk, or no walking wanted: they are simply there.
+    if (!person.path.length) {
+      person.x = toX;
+      person.y = toY;
+    }
+  }
+
+  // Take in a fresh reading of the run: who is here, and what each should be doing.
+  function tileUpdate(room, run) {
+    room.run = run;
+
+    var people = (run.nodes || []).slice().sort(function (a, b) {
+      return (a.role === "role.project-lead" ? 0 : 1) - (b.role === "role.project-lead" ? 0 : 1);
+    });
+
+    people.forEach(function (node) {
+      var intent = node.office || { lamp: "quiet", place: "desk", pose: "idle" };
+      var person = room.people[node.node];
+      var door = room.scene.door;
+
+      // Somebody who has already gone is not walked in only to walk out, and
+      // takes no desk from anybody who is still here.
+      if (!person && intent.place === "gone") { return; }
+
+      var seat = tileSeat(room, node.node);
+
+      if (!person) {
+        // Everybody there when the room is first drawn is already at their
+        // desk; only somebody briefed while it is being watched walks in.
+        person = room.people[node.node] = {
+          x: room.fresh ? seat.x : door.x,
+          y: room.fresh ? seat.y : door.y,
+          path: [],
+          facing: seat.facing,
+          leaving: false,
+          gone: false,
+          seed: (node.node.length * 7919 + node.node.charCodeAt(0)) % 1000 / 1000,
+        };
+
+        if (!room.fresh) { tileWalk(room, person, seat.x, seat.y); }
+      }
+
+      person.node = node;
+      person.intent = intent;
+
+      if (intent.place === "gone") {
+        if (!person.leaving && !person.gone) {
+          person.leaving = true;
+          tileWalk(room, person, door.x, door.y);
+
+          if (!person.path.length) { person.gone = true; }
+        }
+      } else if (person.leaving || person.gone) {
+        // Back again: a run resumed, or a node relaunched.
+        person.leaving = false;
+        person.gone = false;
+        tileWalk(room, person, seat.x, seat.y);
+      } else if (!person.path.length && (person.x !== seat.x || person.y !== seat.y)) {
+        tileWalk(room, person, seat.x, seat.y);
+      }
+    });
+
+    room.fresh = false;
+    room.dirty = true;
+
+    // The one thing said about the picture: how many, doing what.
+    var counts = {};
+
+    people.forEach(function (node) {
+      var lamp = (node.office || {}).lamp || "quiet";
+
+      counts[lamp] = (counts[lamp] || 0) + 1;
+    });
+
+    var said = [];
+
+    if (counts.working) { said.push(counts.working + " working"); }
+    if (counts.waiting) { said.push(counts.waiting + " waiting for you"); }
+    if (counts.failed) { said.push(counts.failed + " failed"); }
+    if (counts.done) { said.push(counts.done + " gone home"); }
+
+    room.canvas.setAttribute("aria-label", (run.room || run.id) + ": "
+      + (people.length ? people.length + (people.length === 1 ? " person" : " people")
+        + (said.length ? ", " + said.join(", ") : "") : "nobody here") + ".");
+
+    wakeTiles();
+  }
+
+  // One room: its canvas, its people, and a card for whoever the pointer is over.
+  function tileRoom(key, run, set, scene) {
+    var room = tileRooms[key];
+
+    if (room && room.scene === scene) {
+      tileUpdate(room, run);
+
+      return room;
+    }
+
+    var floor = document.createElement("div");
+    var canvas = document.createElement("canvas");
+    var card = document.createElement("div");
+
+    floor.className = "tile-floor";
+    canvas.setAttribute("role", "img");
+    card.className = "tile-card";
+    card.hidden = true;
+    card.setAttribute("aria-hidden", "true");
+    floor.appendChild(canvas);
+    floor.appendChild(card);
+
+    room = tileRooms[key] = {
+      floor: floor,
+      canvas: canvas,
+      card: card,
+      set: set,
+      scene: scene,
+      blocked: tileBlocked(scene),
+      people: {},
+      seats: {},
+      fresh: true,
+      dirty: true,
+      baked: null,
+      colours: null,
+      scale: 0,
+      last: 0,
+      drawn: 0,
+      hover: null,
+    };
+
+    canvas.addEventListener("mousemove", function (event) {
+      var found = tileHit(room, event);
+
+      if (found !== room.hover) {
+        room.hover = found;
+        canvas.style.cursor = found ? "pointer" : "";
+        tileCard(room, found, event);
+      } else if (found) {
+        tileCard(room, found, event);
+      }
+    });
+
+    canvas.addEventListener("mouseleave", function () {
+      room.hover = null;
+      canvas.style.cursor = "";
+      card.hidden = true;
+    });
+
+    canvas.addEventListener("click", function (event) {
+      if (tileHit(room, event) && room.run) { watch(room.run); }
+    });
+
+    tileUpdate(room, run);
+
+    return room;
+  }
+
+  // The person under the pointer, or null.
+  function tileHit(room, event) {
+    if (!room.scale) { return null; }
+
+    var box = room.canvas.getBoundingClientRect();
+    var x = (event.clientX - box.left) * (room.canvas.width / box.width) / room.scale;
+    var y = (event.clientY - box.top) * (room.canvas.height / box.height) / room.scale;
+    var t = room.scene.tile;
+    var found = null;
+
+    Object.keys(room.people).forEach(function (name) {
+      var person = room.people[name];
+
+      if (person.gone) { return; }
+
+      var feetX = (person.x + 0.5) * t;
+      var feetY = (person.y + 0.85) * t;
+
+      if (x >= feetX - 0.4 * t && x <= feetX + 0.4 * t && y >= feetY - 1.25 * t && y <= feetY + 0.1 * t) {
+        // The one nearest the viewer, where two overlap.
+        if (!found || person.y > found.y) { found = person; }
+      }
+    });
+
+    return found;
+  }
+
+  function tileCard(room, person, event) {
+    var card = room.card;
+
+    if (!person) {
+      card.hidden = true;
+
+      return;
+    }
+
+    var node = person.node;
+    var lines = [
+      node.personFull || node.person || node.node,
+      node.node + " · " + (node.role || "").replace(/^role\./, ""),
+      node.activity || node.state,
+    ];
+
+    if (node.doing) { lines.push(node.doing); }
+
+    card.textContent = "";
+
+    lines.forEach(function (line, i) {
+      var row = document.createElement(i === 0 ? "b" : "span");
+
+      row.textContent = line;
+      card.appendChild(row);
+    });
+
+    var box = room.floor.getBoundingClientRect();
+
+    card.style.left = Math.min(event.clientX - box.left + 12, Math.max(0, box.width - 220)) + "px";
+    card.style.top = (event.clientY - box.top + 12) + "px";
+    card.hidden = false;
+  }
+
+  // Everything that never moves, drawn once at the scene's own size.
+  function tileBake(room) {
+    var scene = room.scene;
+    var t = scene.tile;
+    var c = room.colours;
+    var atlas = scene.tiles ? tilePicture(room.set, scene.tiles) : null;
+
+    // With an atlas that has not arrived, draw nothing yet rather than kit
+    // squares that are replaced a moment later.
+    if (scene.tiles && !atlas) { return null; }
+
+    var baked = document.createElement("canvas");
+
+    baked.width = scene.width * t;
+    baked.height = scene.height * t;
+
+    var ctx = baked.getContext("2d");
+    var columns = atlas ? Math.floor(atlas.width / t) : 0;
+
+    ctx.imageSmoothingEnabled = false;
+
+    [scene.floor, scene.walls].forEach(function (grid, layer) {
+      if (!grid) { return; }
+
+      for (var y = 0; y < scene.height; y += 1) {
+        for (var x = 0; x < scene.width; x += 1) {
+          var tile = (grid[y] || [])[x];
+
+          if (tile === undefined || tile < 0) { continue; }
+
+          if (atlas) {
+            ctx.drawImage(atlas, (tile % columns) * t, Math.floor(tile / columns) * t, t, t, x * t, y * t, t, t);
+          } else if (layer === 0) {
+            ctx.fillStyle = tile % 2 ? c.floorB : c.floorA;
+            ctx.fillRect(x * t, y * t, t, t);
+          } else {
+            ctx.fillStyle = c.wall;
+            ctx.fillRect(x * t, y * t, t, t);
+            ctx.fillStyle = c.line;
+            ctx.fillRect(x * t, y * t + t - 2, t, 2);
+          }
+        }
+      }
+    });
+
+    (scene.props || []).forEach(function (prop) {
+      if (prop.depth === "floor") { tileProp(room, ctx, prop); }
+    });
+
+    return baked;
+  }
+
+  function tileProp(room, ctx, prop) {
+    var t = room.scene.tile;
+    var c = room.colours;
+    var w = prop.w || 1;
+    var h = prop.h || 1;
+
+    if (prop.piece) {
+      var picture = tilePicture(room.set, prop.piece);
+
+      if (!picture || !prop.source) { return; }
+
+      var s = prop.source;
+
+      ctx.drawImage(picture, s[0], s[1], s[2], s[3], prop.x * t + (w * t - s[2]) / 2, (prop.y + h) * t - s[3], s[2], s[3]);
+
+      return;
+    }
+
+    // The kit's block: a top and a front, standing a little proud of the floor.
+    var lift = Math.round(t * 0.35);
+
+    if (prop.depth === "floor") {
+      ctx.fillStyle = c.line;
+      ctx.fillRect(prop.x * t + 1, prop.y * t + 1, w * t - 2, h * t - 2);
+
+      return;
+    }
+
+    ctx.fillStyle = c.wall;
+    ctx.fillRect(prop.x * t, prop.y * t - lift, w * t, h * t);
+    ctx.fillStyle = c.line;
+    ctx.fillRect(prop.x * t, (prop.y + h) * t - lift, w * t, lift);
+    ctx.fillStyle = c.deep;
+    ctx.fillRect(prop.x * t + Math.round(t * 0.25), prop.y * t - lift + 2, Math.round(t * 0.5), Math.round(t * 0.3));
+  }
+
+  // Move everybody on, and say whether this room wants another frame.
+  function tileStep(room, now) {
+    var dt = Math.min(64, now - (room.last || now)) / 1000;
+    var moving = false;
+
+    room.last = now;
+
+    Object.keys(room.people).forEach(function (name) {
+      var person = room.people[name];
+
+      if (!person.path.length) { return; }
+
+      moving = true;
+
+      var next = person.path[0];
+      var dx = next.x - person.x;
+      var dy = next.y - person.y;
+      var far = Math.sqrt(dx * dx + dy * dy);
+      var go = TILE_PACE * dt;
+
+      person.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "e" : "w") : (dy > 0 ? "s" : "n");
+
+      if (far <= go) {
+        person.x = next.x;
+        person.y = next.y;
+        person.path.shift();
+
+        if (!person.path.length) {
+          if (person.leaving) {
+            person.gone = true;
+          } else {
+            person.facing = tileSeat(room, name).facing;
+          }
+        }
+      } else {
+        person.x += dx / far * go;
+        person.y += dy / far * go;
+      }
+    });
+
+    return moving;
+  }
+
+  // Whether anything in the room changes on its own: typing, a pulsing lamp.
+  function tileLively(room) {
+    if (tilesStill()) { return false; }
+
+    return Object.keys(room.people).some(function (name) {
+      var person = room.people[name];
+      var intent = person.intent || {};
+
+      return !person.gone && (intent.pose === "type" || intent.lamp === "working" || intent.lamp === "failed");
+    });
+  }
+
+  function tileSize(room) {
+    var scene = room.scene;
+    var wide = scene.width * scene.tile;
+    var tall = scene.height * scene.tile;
+    var dpr = window.devicePixelRatio || 1;
+    var across = room.floor.clientWidth || wide;
+    var scale = across * dpr / wide;
+
+    // Whole multiples where there is room for them, so every pixel of the art
+    // is the same size; a fraction only where the room is narrower than the
+    // art. The kit's room has no art to keep square, so it fills the width.
+    if (scene.tiles && scale >= 1) { scale = Math.floor(scale); }
+
+    if (scale !== room.scale) {
+      room.scale = scale;
+      room.canvas.width = Math.round(wide * scale);
+      room.canvas.height = Math.round(tall * scale);
+      room.canvas.style.width = room.canvas.width / dpr + "px";
+      room.canvas.style.height = room.canvas.height / dpr + "px";
+      room.dirty = true;
+    }
+  }
+
+  function tileDraw(room, now) {
+    var colours = tileColours();
+
+    if (!room.colours || room.colours.key !== colours.key) {
+      room.colours = colours;
+      room.baked = null;
+    }
+
+    if (!room.baked) { room.baked = tileBake(room); }
+
+    tileSize(room);
+
+    var ctx = room.canvas.getContext("2d");
+    var scene = room.scene;
+    var t = scene.tile;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, room.canvas.width, room.canvas.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(room.scale, 0, 0, room.scale, 0, 0);
+
+    if (room.baked) { ctx.drawImage(room.baked, 0, 0); }
+
+    // People and standing props together, nearest the viewer last.
+    var items = [];
+
+    (scene.props || []).forEach(function (prop) {
+      if (prop.depth !== "floor") { items.push({ y: (prop.y + (prop.h || 1)) * t, prop: prop }); }
+    });
+
+    Object.keys(room.people).forEach(function (name) {
+      var person = room.people[name];
+
+      if (!person.gone) { items.push({ y: (person.y + 0.85) * t, person: person }); }
+    });
+
+    items.sort(function (a, b) { return a.y - b.y; });
+
+    items.forEach(function (item) {
+      if (item.prop) {
+        tileProp(room, ctx, item.prop);
+      } else {
+        tilePerson(room, ctx, item.person, now);
+      }
+    });
+
+    // Names last, over everything, so furniture never hides who somebody is.
+    items.forEach(function (item) {
+      if (item.person) { tilePlate(room, ctx, item.person); }
+    });
+
+    room.drawn = now;
+    room.dirty = false;
+  }
+
+  function tilePose(person) {
+    if (person.path.length) { return "walk"; }
+
+    return (person.intent && person.intent.pose) || "idle";
+  }
+
+  function tilePerson(room, ctx, person, now) {
+    var scene = room.scene;
+    var t = scene.tile;
+    var c = room.colours;
+    var feetX = (person.x + 0.5) * t;
+    var feetY = (person.y + 0.85) * t;
+    var pose = tilePose(person);
+    var still = tilesStill();
+    var clock = now / 1000 + person.seed * 10;
+    var role = ((person.node && person.node.role) || "").replace(/^role\./, "");
+    var skins = scene.skins || {};
+    var sheet = scene.sheets ? scene.sheets[skins[role] || skins.worker] : null;
+    var picture = sheet ? tilePicture(room.set, sheet.piece) : null;
+    var top;
+
+    if (sheet && picture) {
+      var animations = sheet.animations;
+      var animation = animations[pose + "_" + person.facing]
+        || (pose === "slump" ? animations["sit_" + person.facing] : null)
+        || animations["idle_" + person.facing];
+      var frames = animation.frames;
+      var frame = still ? frames[0] : frames[Math.floor(clock * (animation.fps || 6)) % frames.length];
+      var fw = sheet.frame[0];
+      var fh = sheet.frame[1];
+      var columns = Math.max(1, Math.floor(picture.width / fw));
+
+      ctx.drawImage(picture, (frame % columns) * fw, Math.floor(frame / columns) * fh, fw, fh,
+        Math.round(feetX - sheet.anchor[0]), Math.round(feetY - sheet.anchor[1]), fw, fh);
+
+      top = feetY - sheet.anchor[1];
+    } else {
+      // The kit's person: a body and a head, in the kit's colours.
+      var seated = pose === "sit" || pose === "type" || pose === "slump";
+      var bodyW = Math.round(t * 0.55);
+      var bodyH = Math.round(t * (seated ? 0.45 : 0.6));
+      var bob = 0;
+
+      if (!still && pose === "walk") { bob = Math.round(Math.abs(Math.sin(clock * 10)) * t * 0.08); }
+      if (!still && pose === "type") { bob = Math.floor(clock * 6) % 2; }
+
+      var bodyTop = Math.round(feetY - bodyH - (seated ? t * 0.1 : 0) - bob);
+      var headR = Math.max(2, Math.round(t * 0.22));
+      var lean = pose === "slump" ? headR : 0;
+      var headX = feetX + (person.facing === "e" ? lean : person.facing === "w" ? -lean : 0);
+      var headY = bodyTop - headR + 1 + (pose === "slump" ? headR : 0);
+
+      ctx.fillStyle = role === "project-lead" ? c.lead : c.body;
+      ctx.fillRect(Math.round(feetX - bodyW / 2), bodyTop, bodyW, bodyH);
+      ctx.fillStyle = c.muted;
+      ctx.beginPath();
+      ctx.arc(headX, headY, headR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Which way they face, by the eyes you can see.
+      if (person.facing !== "n") {
+        ctx.fillStyle = c.deep;
+
+        var eye = Math.max(1, Math.round(t / 16));
+
+        if (person.facing === "s") {
+          ctx.fillRect(Math.round(headX - headR / 2) - eye / 2, Math.round(headY), eye, eye);
+          ctx.fillRect(Math.round(headX + headR / 2) - eye / 2, Math.round(headY), eye, eye);
+        } else {
+          ctx.fillRect(Math.round(headX + (person.facing === "e" ? headR / 2 : -headR / 2)), Math.round(headY), eye, eye);
+        }
+      }
+
+      top = headY - headR;
+    }
+
+    tileLamp(room, ctx, person, feetX, top, now);
+  }
+
+  // The light over somebody's head, and the mark beside it when there is one.
+  function tileLamp(room, ctx, person, x, top, now) {
+    var intent = person.intent || {};
+    var c = room.colours;
+    var t = room.scene.tile;
+    var colour = intent.lamp === "working" ? c.run
+      : intent.lamp === "waiting" ? c.wait
+      : intent.lamp === "failed" ? c.fail
+      : null;
+
+    if (!colour || person.leaving) { return; }
+
+    var size = Math.max(2, Math.round(t * 0.2));
+    var alpha = 1;
+
+    if (!tilesStill()) {
+      // Working breathes; failed blinks, and never all the way out, so the
+      // light is always there to be seen.
+      if (intent.lamp === "working") { alpha = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(now / 300 + person.seed * 6)); }
+      if (intent.lamp === "failed") { alpha = Math.floor(now / 700) % 2 ? 0.5 : 1; }
+    }
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = colour;
+    ctx.fillRect(Math.round(x - size / 2), Math.round(top - size - 2), size, size);
+    ctx.globalAlpha = 1;
+
+    if (intent.bubble) {
+      var font = Math.max(6, Math.round(t * 0.5));
+      var bx = Math.round(x + size);
+      var by = Math.round(top - font - 3);
+
+      ctx.fillStyle = c.ink;
+      ctx.fillRect(bx, by, Math.round(font * 0.9), font + 2);
+      ctx.fillStyle = colour;
+      ctx.fillRect(bx, by + font + 2, Math.round(font * 0.9), 1);
+      ctx.fillStyle = c.deep;
+      ctx.font = "bold " + font + "px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText(intent.bubble, bx + Math.round(font * 0.45), by + 1);
+    }
+  }
+
+  // A name under their feet, at a size a person can read whatever the scale.
+  function tilePlate(room, ctx, person) {
+    var node = person.node;
+
+    if (!node) { return; }
+
+    var t = room.scene.tile;
+    var dpr = window.devicePixelRatio || 1;
+    var font = 11 * dpr / room.scale;
+    var name = node.person || node.node;
+    var x = (person.x + 0.5) * t;
+    var y = (person.y + 0.85) * t + 1;
+
+    ctx.font = "600 " + font + "px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    var wide = ctx.measureText(name).width + font * 0.6;
+
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = room.colours.deep;
+    ctx.fillRect(x - wide / 2, y, wide, font * 1.3);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = person.leaving ? room.colours.muted : room.colours.ink;
+    ctx.fillText(name, x, y + font * 0.15);
+  }
+
+  /*
+    One loop for every room, and only while something is happening: somebody
+    walking, a lamp to pulse, somebody typing. A room nobody can see - off
+    screen, or in a hidden tab - is skipped; a room where everyone is sat
+    still is drawn once and left.
+  */
+  function tileTick(now) {
+    tileLoop = 0;
+
+    var more = false;
+    var walking = false;
+
+    Object.keys(tileRooms).forEach(function (key) {
+      var room = tileRooms[key];
+
+      // Thrown away with the view it was in.
+      if (!room.floor.isConnected) {
+        delete tileRooms[key];
+
+        return;
+      }
+
+      var holder = room.floor.closest(".room");
+
+      if (document.hidden || (holder && holder.classList.contains("unwatched"))) { return; }
+
+      var moving = tileStep(room, now);
+      var lively = tileLively(room);
+
+      // Walking wants every frame; a lamp or a keyboard is fine at eight a second.
+      if (moving || room.dirty || (lively && now - room.drawn >= 125)) { tileDraw(room, now); }
+
+      if (moving || lively) { more = true; }
+      if (moving) { walking = true; }
+    });
+
+    // Every frame while somebody walks; otherwise only as often as a lamp or
+    // a keyboard changes, rather than waking a hundred times a second to
+    // decide there is nothing to draw.
+    if (walking) {
+      tileLoop = requestAnimationFrame(tileTick);
+    } else if (more) {
+      tileLoop = -1;
+      setTimeout(function () {
+        tileLoop = 0;
+        wakeTiles();
+      }, 125);
+    }
+  }
+
+  function wakeTiles() {
+    if (!tileLoop) { tileLoop = requestAnimationFrame(tileTick); }
+  }
+
+  document.addEventListener("visibilitychange", wakeTiles);
+  window.addEventListener("resize", function () {
+    Object.keys(tileRooms).forEach(function (key) { tileRooms[key].dirty = true; });
+    wakeTiles();
+  });
 
   function drawOffice(runs) {
     var box = document.getElementById("office");
@@ -10476,8 +11387,11 @@
         (answer.waitingPieces || []).forEach(function (piece) { waitingPieces[piece] = true; });
         room = answer.room || null;
         offices = answer.offices || {};
+        kitScene = answer.kit || null;
+
+        // A set counts once it has a room to draw, painted or made of tiles.
         installed = (answer.sets || []).filter(function (one) {
-          return offices[one] && offices[one].room;
+          return offices[one] && (offices[one].room || offices[one].scene);
         });
 
         // A board restored from a previous visit was drawn before any of this
