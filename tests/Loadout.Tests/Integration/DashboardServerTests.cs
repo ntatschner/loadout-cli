@@ -422,6 +422,23 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_lobby_and_the_roof_are_laid_out_for_the_seats_asked_for_in_steps_of_four()
+    {
+        var lobby = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/place/lobby/5")).Content.ReadAsStringAsync())!;
+        var roof = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/place/roof/1")).Content.ReadAsStringAsync())!;
+
+        lobby.Desks.Should().HaveCount(8, "five waiting is asked for as eight seats");
+        roof.Desks.Should().HaveCount(4);
+        OfficeScenes.Problems(lobby, _ => null).Should().BeEmpty();
+        lobby.Areas!.Should().Contain(area => area.Kind == "reception");
+        roof.Areas!.Should().Contain(area => area.Kind == "break-area");
+
+        (await GetAsync("/api/office/place/basement/4")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetAsync("/api/office/place/lobby/many")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetAsync("/api/office/place/lobby")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task The_building_carries_this_machines_office_size()
     {
         _server.OfficeScale = new OfficeScale(1.5, 3);

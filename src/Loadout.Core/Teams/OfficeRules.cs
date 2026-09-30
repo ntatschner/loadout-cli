@@ -17,7 +17,7 @@ namespace Loadout.Core.Teams;
 /// <param name="Where">A placement hint the planner honours: corner, ends, core, north-wall.</param>
 /// <param name="Core">Whether it belongs to the building's core, in the same place on every floor.</param>
 /// <param name="Walls">Wall kinds the planner may choose between: glass, solid.</param>
-/// <param name="Function">What the room is for on the dashboard, for its popups: mail, storage, bin, server, questions, controls, summary, waiting, idle.</param>
+/// <param name="Function">What the room is for on the dashboard, for its popups: mail, storage, bin, server, questions, controls, summary, arrivals, waiting, schedules, idle.</param>
 public sealed record OfficeRoomRule(
     [property: JsonPropertyName("tags")] IReadOnlyList<string>? Tags = null,
     [property: JsonPropertyName("min")] IReadOnlyList<int>? Min = null,
@@ -154,7 +154,9 @@ public sealed record OfficeRules(
             ["exit"] = new(["exit"], Count: 2, Where: "ends"),
 
             // The rest of the building.
-            ["reception"] = new(["reception", "sofa"], Level: "lobby", Count: 1, Function: "waiting"),
+            ["reception"] = new(["reception"], Level: "lobby", Count: 1, Function: "arrivals"),
+            ["waiting-room"] = new(["sofa"], Level: "lobby", Count: 1, Function: "waiting"),
+            ["lobby-screen"] = new(["status-board"], Level: "lobby", Count: 1, Where: "north-wall", Function: "schedules"),
             ["break-area"] = new(["pergola", "sofa"], Level: "roof", Count: 1, Function: "idle"),
             ["mail-room"] = new(["mail"], Level: "basement-1", Count: 1, Function: "mail"),
             ["storage"] = new(["storage"], Level: "basement-1", Count: 1, Function: "storage"),

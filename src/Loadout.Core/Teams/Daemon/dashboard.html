@@ -6569,7 +6569,8 @@
     "kitchen": "#9aa3ad", "coffee": "#4a3a33", "lift": "#b8c0c8", "stairs": "#7d8793",
     "toilet": "#d7dee4", "cupboard": "#8f7d6a", "exit": "#2e9e5b", "plant": "#3f8f4e",
     "partition-screen": "#9aa6b2", "partition-planter": "#4f8a3c", "status-board": "#2b3a55",
-    "reception": "#a88a5e", "storage": "#8d8173", "visitor-chair": "#6b5a4a"
+    "reception": "#a88a5e", "storage": "#8d8173", "visitor-chair": "#6b5a4a",
+    "pergola": "rgba(140, 105, 70, 0.4)", "lobby-screen": "#2b3a55", "mail": "#8a7a5c", "bin": "#4d5a4a", "server": "#39465a"
   };
 
   /*
@@ -6924,7 +6925,22 @@
     Object.keys(room.people).forEach(function (name) {
       var person = room.people[name];
 
-      if (!person.gone) { items.push({ y: (person.y + 0.85) * t, person: person }); }
+      if (person.gone) { return; }
+
+      // Somebody on a thing that does not block - a sofa, a bench - sits in
+      // it, so they are drawn after it rather than under its front.
+      var y = (person.y + 0.85) * t;
+      var cx = Math.round(person.x);
+      var cy = Math.round(person.y);
+
+      (scene.props || []).forEach(function (prop) {
+        if (prop.blocks === false && prop.depth !== "floor"
+          && cx >= prop.x && cx < prop.x + (prop.w || 1) && cy >= prop.y && cy < prop.y + (prop.h || 1)) {
+          y = Math.max(y, (prop.y + (prop.h || 1)) * t + 0.01);
+        }
+      });
+
+      items.push({ y: y, person: person });
     });
 
     items.sort(function (a, b) { return a.y - b.y; });
@@ -7205,7 +7221,15 @@
 
       var byId = {};
 
-      (read.runs || []).forEach(function (run) { byId[run.id] = run; });
+      (read.runs || []).forEach(function (run) {
+        byId[run.id] = run;
+
+        if (towerRuns[run.id]) {
+          towerRuns[run.id] = Object.assign({}, towerRuns[run.id], { running: run.running, nodes: run.nodes });
+        }
+      });
+
+      towerBreaks(Date.now());
 
       Object.keys(tileRooms).forEach(function (key) {
         var room = tileRooms[key];
@@ -7263,6 +7287,15 @@
   var towerFaces = [];
   var towerTurning = 0;
   var towerRoom = null;
+  var towerWaiting = [];
+  var towerWaitingAt = 0;
+  var towerFreeSince = {};
+  var towerSeenRuns = null;
+  var towerArrivals = [];
+
+  // How long somebody has to be free before they go up to the roof, rather
+  // than to the kitchen on their own floor.
+  var TOWER_BREAK = 60000;
 
   var TOWER_VIEWS = [["corner", "Corner"], ["aerial", "Aerial"], ["ground", "From the street"]];
 
@@ -7276,7 +7309,139 @@
 
     if (!floor) { return []; }
 
-    return (nodes || []).filter(function (node) { return floor.nodes.indexOf(node.node) >= 0; });
+    return (nodes || []).filter(function (node) {
+      return floor.nodes.indexOf(node.node) >= 0 && !towerOnBreak(floor.run, node.node);
+    });
+  }
+
+  // Who has been free long enough to have gone up to the roof, from the runs as last read.
+  function towerBreaks(now) {
+    var seen = {};
+
+    Object.keys(towerRuns).forEach(function (id) {
+      var run = towerRuns[id];
+
+      if (!run.running) { return; }
+
+      (run.nodes || []).forEach(function (node) {
+        var key = id + "|" + node.node;
+
+        if ((node.office || {}).place === "free") {
+          seen[key] = true;
+
+          if (!towerFreeSince[key]) { towerFreeSince[key] = now; }
+        }
+      });
+    });
+
+    Object.keys(towerFreeSince).forEach(function (key) { if (!seen[key]) { delete towerFreeSince[key]; } });
+  }
+
+  function towerOnBreak(runId, name) {
+    var since = towerFreeSince[runId + "|" + name];
+
+    return !!since && Date.now() - since >= TOWER_BREAK;
+  }
+
+  // A short name to go on somebody's plate: the first word, clipped.
+  function towerShort(text) {
+    var word = String(text || "").trim().split(/\s+/)[0] || "?";
+
+    return word.length > 10 ? word.slice(0, 9) + "\u2026" : word;
+  }
+
+  function towerWhen(due) {
+    var when = new Date(due);
+
+    return isNaN(when.getTime()) ? String(due) : when.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  }
+
+  /*
+    The lobby's people: the receptionist, and somebody on a sofa for each
+    thing waiting - a schedule not yet due, a task not yet started - whose
+    card says what it is and when.
+  */
+  function towerLobbyPeople() {
+    var quiet = { lamp: "quiet", place: "desk", pose: "idle" };
+    var people = [{
+      node: "receptionist",
+      person: "Reception",
+      personFull: "The receptionist",
+      role: "role.reception",
+      activity: towerWaiting.length ? towerWaiting.length + " waiting" : "nothing waiting",
+      office: quiet,
+    }];
+
+    towerWaiting.forEach(function (one) {
+      people.push({
+        node: "waiting-" + one.kind + "-" + one.id,
+        person: towerShort(one.id || one.title),
+        personFull: one.title || one.id,
+        role: one.kind,
+        activity: one.held ? "held" : one.due ? "due " + towerWhen(one.due) : (one.because || "waiting"),
+        doing: [one.team, one.project].filter(Boolean).join(" \u00b7 "),
+        office: quiet,
+      });
+    });
+
+    return people;
+  }
+
+  // The roof's people: everybody on a break, from every running floor, their card saying whose.
+  function towerRoofPeople() {
+    var people = [];
+
+    Object.keys(towerRuns).forEach(function (id) {
+      var run = towerRuns[id];
+
+      (run.nodes || []).forEach(function (node) {
+        if (!run.running || !towerOnBreak(id, node.node)) { return; }
+
+        people.push(Object.assign({}, node, {
+          node: id + "|" + node.node,
+          doing: (run.team || id) + (node.doing ? " \u00b7 " + node.doing : ""),
+        }));
+      });
+    });
+
+    return people;
+  }
+
+  // A run that has just started: its lead walks in from the street and up in the lift.
+  function towerArrive(room, arrival) {
+    var scene = room.scene;
+    var lift = (scene.spots || {}).lift;
+    var name = "arrival-" + arrival.run;
+
+    if (!lift || room.people[name]) { return; }
+
+    var lead = arrival.lead || {};
+    var intent = { lamp: "quiet", place: "desk", pose: "idle" };
+    var person = room.people[name] = {
+      x: scene.door.x,
+      y: scene.door.y,
+      path: [],
+      facing: "n",
+      leaving: true,
+      gone: false,
+      seed: 0.5,
+      rng: 1,
+      errand: null,
+      nextErrand: 0,
+      intent: intent,
+      node: {
+        node: name,
+        person: lead.person || "Lead",
+        personFull: (lead.personFull || lead.person || "The lead") + ", arriving",
+        role: "role.project-lead",
+        activity: "on the way up to " + (arrival.team || "a new floor"),
+        office: intent,
+      },
+    };
+
+    tileWalk(room, person, lift.x, lift.y);
+
+    if (!person.path.length) { person.gone = true; }
   }
 
   function towerButtonFor(controls, name, label, title) {
@@ -7388,7 +7553,7 @@
       }
 
       towerHover = towerHit(event);
-      outside.style.cursor = towerHover && towerHover.run ? "pointer" : "";
+      outside.style.cursor = towerHover && (towerHover.run || towerHover.lobby || towerHover.roof) ? "pointer" : "";
       towerCard(event);
       towerDraw();
     });
@@ -7406,7 +7571,7 @@
 
       var hit = towerHit(event);
 
-      if (hit && hit.run) {
+      if (hit && (hit.run || hit.lobby || hit.roof)) {
         towerHover = null;
         card.hidden = true;
         towerEnter(hit, event);
@@ -7557,7 +7722,9 @@
     var outside = towerHold.querySelector(".tower-outside");
     var box = outside.getBoundingClientRect();
 
-    towerView = { mode: "inside", run: hit.run, part: hit.part };
+    towerView = hit.lobby ? { mode: "inside", place: "lobby" }
+      : hit.roof ? { mode: "inside", place: "roof" }
+      : { mode: "inside", run: hit.run, part: hit.part };
     towerLook.facing = towerLook.turn;
     keep("loadout.office.view", towerView);
     keep("loadout.office.look", towerLook);
@@ -7638,10 +7805,10 @@
     if (!towerHold) { return; }
 
     var inside = towerView.mode === "inside";
-    var floor = inside ? towerFloorOf(towerView) : null;
+    var floor = inside && !towerView.place ? towerFloorOf(towerView) : null;
 
     // A floor that has gone (its run finished and freed) sends the view back out.
-    if (inside && towerData && !floor) {
+    if (inside && !towerView.place && towerData && !floor) {
       towerView = { mode: "outside" };
       keep("loadout.office.view", towerView);
       inside = false;
@@ -7671,6 +7838,12 @@
       if (towerYaw === null) { towerYaw = Math.PI / 4 + towerLook.turn * Math.PI / 2; }
 
       towerDraw();
+
+      return;
+    }
+
+    if (towerView.place) {
+      towerShowPlace();
 
       return;
     }
@@ -7726,6 +7899,100 @@
 
     tileSize(room);
     towerBackdrop(holder, floor.number);
+    wakeTiles();
+  }
+
+  /*
+    The lobby or the roof: laid out by the server for however many are
+    waiting or on a break, in steps of four, and filled from what the page
+    already knows rather than the office stream, which carries runs.
+  */
+  function towerShowPlace() {
+    var place = towerView.place;
+    var holder = towerHold.querySelector(".tower-inside");
+    var where = towerHold.querySelector(".tower-where");
+
+    if (place === "lobby" && Date.now() - towerWaitingAt > 15000) {
+      towerWaitingAt = Date.now();
+      api("/api/waiting")
+        .then(function (answer) {
+          towerWaiting = answer.waiting || [];
+          towerShow();
+        })
+        .catch(function () { /* The lobby as it was. */ });
+    }
+
+    var people = place === "lobby" ? towerLobbyPeople() : towerRoofPeople();
+    var seats = place === "lobby" ? towerWaiting.length : people.length;
+    var step = Math.min(48, Math.ceil(Math.max(0, seats) / 4) * 4);
+    var key = place + "|" + step;
+    var plan = towerScenes[key];
+
+    where.textContent = place === "lobby"
+      ? "Lobby \u00b7 " + towerWaiting.length + " waiting"
+      : "Roof \u00b7 " + people.length + " taking a break";
+
+    if (!plan) {
+      api("/api/office/place/" + place + "/" + step)
+        .then(function (answer) {
+          towerScenes[key] = { scene: answer, turned: {} };
+          towerShow();
+        })
+        .catch(function () { /* It comes on the next look. */ });
+
+      return;
+    }
+
+    var turns = sceneTurns(plan.scene);
+    var facing = turns ? towerLook.facing : 0;
+
+    towerHold.querySelector(".tower-left").hidden = !turns;
+    towerHold.querySelector(".tower-right").hidden = !turns;
+
+    var scene = plan.turned[facing] || (plan.turned[facing] = turnScene(plan.scene, facing));
+    var run = { id: place, team: place === "lobby" ? "Lobby" : "Roof", running: true, nodes: people };
+    var room = tileRoom(place + "|" + step + "|" + facing, run, (towerData && towerData.kit) || "", scene);
+    var slot = towerHold.querySelector(".tower-slot");
+
+    towerRoom = room;
+    room.fitWidth = Math.max(160, holder.clientWidth - 96);
+    room.fitHeight = Math.max(160, window.innerHeight * 0.78 - 96);
+    room.zoom = towerZoom.inside || 0;
+
+    tileUpdate(room, run);
+
+    // The receptionist has a desk of their own, not a sofa. Moved there after
+    // the room is made, because making it seats everybody in the desks' order.
+    var desk = (scene.spots || {})["reception-1"];
+    var pinned = room.seats.receptionist;
+
+    if (place === "lobby" && desk && (!pinned || pinned.x !== desk.x || pinned.y !== desk.y)) {
+      var who = room.people.receptionist;
+
+      room.seats.receptionist = { x: desk.x, y: desk.y, facing: desk.facing || "s", desk: true };
+
+      if (who) {
+        who.x = desk.x;
+        who.y = desk.y;
+        who.path = [];
+        who.facing = desk.facing || "s";
+      }
+
+      room.dirty = true;
+    }
+
+    if (place === "lobby") {
+      towerArrivals = towerArrivals.filter(function (one) { return Date.now() - one.at < 60000; });
+      towerArrivals.forEach(function (one) { towerArrive(room, one); });
+    }
+
+    if (room.floor.parentNode !== slot) {
+      slot.textContent = "";
+      slot.appendChild(room.floor);
+    }
+
+    tileSize(room);
+    towerBackdrop(holder, place === "lobby" ? 0 : towerFloors() + 1);
     wakeTiles();
   }
 
@@ -8034,6 +8301,15 @@
 
     towerCrown(ctx, c, project, sides, busiest, camera.ahead[2] >= 0);
 
+    if (towerHover && towerHover.roof && camera.ahead[2] < 0) {
+      var roofZ = towerLevelZ(towerFloors() + 1)[0];
+
+      towerQuad(ctx, project, [0, 0, roofZ], [towerWidth(), 0, roofZ], [towerWidth(), towerDepth(), roofZ], [0, towerDepth(), roofZ]);
+      ctx.strokeStyle = c.ink;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
     canvas.setAttribute("aria-label", towerHold.querySelector(".tower-where").textContent);
   }
 
@@ -8232,9 +8508,11 @@
     var z = towerLevelZ(towerFloors() + 1);
 
     if (!below) {
-      towerQuad(ctx, project, [0, 0, z[0]], [w, 0, z[0]], [w, d, z[0]], [0, d, z[0]]);
+      var roof = towerQuad(ctx, project, [0, 0, z[0]], [w, 0, z[0]], [w, d, z[0]], [0, d, z[0]]);
+
       ctx.fillStyle = "#3a3f46";
       ctx.fill();
+      towerFaces.push({ level: "roof", polygons: [roof] });
 
       // The break area on the roof: a deck and a few planters.
       towerQuad(ctx, project, [w * 0.55, d * 0.2, z[0] + 1], [w * 0.9, d * 0.2, z[0] + 1], [w * 0.9, d * 0.8, z[0] + 1], [w * 0.55, d * 0.8, z[0] + 1]);
@@ -8298,6 +8576,7 @@
 
       if (face.polygons.some(function (polygon) { return towerInside(point, polygon); })) {
         if (face.level === 0) { return { number: 0, lobby: true }; }
+        if (face.level === "roof") { return { number: towerFloors() + 1, roof: true }; }
 
         var occupant = towerOccupant(face.level);
 
@@ -8320,7 +8599,9 @@
     var lines;
 
     if (towerHover.lobby) {
-      lines = ["Lobby", "Reception and the waiting room"];
+      lines = ["Lobby", "Reception and the waiting room", towerWaiting.length + " waiting"];
+    } else if (towerHover.roof) {
+      lines = ["Roof", "The break area", towerRoofPeople().length + " taking a break"];
     } else if (towerHover.occupant) {
       var one = towerHover.occupant;
       var run = towerRuns[one.run] || {};
@@ -8366,7 +8647,34 @@
   function drawOffice(runs) {
     var box = document.getElementById("office");
 
-    runs.forEach(function (run) { towerRuns[run.id] = run; });
+    // A run started since the last look arrives in the lobby: not on the
+    // page's first look, when everything running would arrive at once.
+    runs.forEach(function (run) {
+      var started = Date.parse(run.started || "");
+
+      if (towerSeenRuns && !towerSeenRuns[run.id] && run.running && !isNaN(started) && Date.now() - started < 120000) {
+        towerArrivals.push({
+          run: run.id,
+          team: run.team,
+          at: Date.now(),
+          lead: (run.nodes || []).filter(function (node) { return node.role === "role.project-lead"; })[0],
+        });
+      }
+    });
+
+    towerSeenRuns = towerSeenRuns || {};
+    runs.forEach(function (run) {
+      towerRuns[run.id] = run;
+      towerSeenRuns[run.id] = true;
+    });
+    towerBreaks(Date.now());
+
+    if (Date.now() - towerWaitingAt > 15000) {
+      towerWaitingAt = Date.now();
+      api("/api/waiting")
+        .then(function (answer) { towerWaiting = answer.waiting || []; })
+        .catch(function () { /* The count as it was. */ });
+    }
 
     if (!towerHold) { towerHold = towerElement(); }
 

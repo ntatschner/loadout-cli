@@ -1280,6 +1280,22 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        if (path.StartsWith("/api/office/place/", StringComparison.Ordinal))
+        {
+            // /api/office/place/<lobby|roof>/<seats>: the lobby or the roof, laid out to seat that many.
+            var rest = path["/api/office/place/".Length..].Split('/');
+            var scene = rest is [var name and ("lobby" or "roof"), var seatsText]
+                && int.TryParse(seatsText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seats)
+                    ? Place(name, seats)
+                    : null;
+
+            await (scene is null
+                ? WriteAsync(context, 404, "application/json; charset=utf-8", JsonSerializer.Serialize(new { error = "No such place." }, Json))
+                : WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(scene, Json))).ConfigureAwait(false);
+
+            return;
+        }
+
         if (path.StartsWith("/api/office/floor/", StringComparison.Ordinal))
         {
             // /api/office/floor/<run>/<part>: the run's floor, laid out.
@@ -1721,6 +1737,35 @@ public sealed class DashboardServer : IDisposable
         }
 
         var scene = FloorPlanner.Plan(kit, rules, part == 0 ? runId : $"{runId}#floor{part}", Math.Max(1, floor.People)).Scene;
+
+        lock (_building)
+        {
+            _floors[key] = scene;
+        }
+
+        return scene;
+    }
+
+    /// <summary>
+    /// The lobby or the roof, laid out for a number of seats rounded up to the
+    /// next four, so one more thing waiting does not rearrange the furniture;
+    /// never more than 48, which is more than either can hold anyway.
+    /// </summary>
+    private OfficeScene Place(string name, int seats)
+    {
+        var (kit, rules, _, _) = OfficeKitNow();
+        var step = Math.Min(48, (Math.Max(0, seats) + 3) / 4 * 4);
+        var key = $"{name}#{step}";
+
+        lock (_building)
+        {
+            if (_floors.TryGetValue(key, out var kept))
+            {
+                return kept;
+            }
+        }
+
+        var scene = (name == "lobby" ? FloorPlanner.Lobby(kit, rules, step) : FloorPlanner.Roof(kit, rules, step)).Scene;
 
         lock (_building)
         {
