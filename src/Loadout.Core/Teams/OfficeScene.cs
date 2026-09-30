@@ -281,6 +281,41 @@ public sealed record OfficeSceneCheck(OfficeScene? Scene, IReadOnlyList<string> 
 /// </remarks>
 public static class OfficeScenes
 {
+    /// <summary>
+    /// When anything in a set last changed, as a word for a picture's address.
+    /// </summary>
+    /// <remarks>
+    /// Pictures are cached for an hour, which suited painted rooms. A tile
+    /// scene says exactly where each frame sits in its sheet, so a scene read
+    /// fresh beside a sheet the browser kept from before the set was rebuilt
+    /// draws pieces of the wrong frames. Putting this in the address makes an
+    /// edited set a different address, and an unchanged one still cached.
+    /// </remarks>
+    public static string Stamp(string root, string set)
+    {
+        if (!OfficeArt.Names(set))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var directory = new DirectoryInfo(Path.Combine(root, set));
+
+            return directory.Exists
+                ? directory.EnumerateFiles()
+                    .Select(file => file.LastWriteTimeUtc.Ticks)
+                    .DefaultIfEmpty(0)
+                    .Max()
+                    .ToString("x", System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
     /// <summary>Whether a set is a tile scene rather than a painted room.</summary>
     public static bool Has(string root, string set) =>
         OfficeArt.Names(set) && File.Exists(Path.Combine(root, set, OfficeScene.FileName));

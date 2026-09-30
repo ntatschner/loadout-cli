@@ -1301,6 +1301,11 @@ public sealed class DashboardServer : IDisposable
                                 scene = OfficeScenes.Has(root, one) && OfficeScenes.Check(root, one) is { Fit: true } check
                                     ? check.Scene
                                     : null,
+
+                                // When the set last changed, for the page to put
+                                // in its pictures' addresses: a rebuilt set must
+                                // not be drawn from sheets cached before it was.
+                                stamp = OfficeScenes.Stamp(root, one),
                             },
                             StringComparer.Ordinal),
 

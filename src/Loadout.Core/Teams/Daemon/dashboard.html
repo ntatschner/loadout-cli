@@ -5880,8 +5880,11 @@
   }
 
   function tilePicture(set, piece) {
+    // With when the set last changed, so a rebuilt set is fetched afresh rather
+    // than drawn from sheets the browser cached before its scene changed.
     var url = "/office/" + encodeURIComponent(set) + "/" + encodeURIComponent(piece)
-      + "?token=" + encodeURIComponent(token);
+      + "?token=" + encodeURIComponent(token)
+      + "&v=" + encodeURIComponent((offices[set] || {}).stamp || "");
     var known = tilePictures[url];
 
     if (known) { return known.ready ? known.image : null; }
@@ -6427,7 +6430,11 @@
 
   // Move everybody on, and say whether this room wants another frame.
   function tileStep(room, now) {
-    var dt = Math.min(64, now - (room.last || now)) / 1000;
+    // Capped so that a long gap - a tab brought back, a room scrolled into
+    // view - does not jump anybody across the room, but loosely: at 64ms, a
+    // machine drawing ten frames a second walked everybody at two thirds of
+    // their pace.
+    var dt = Math.min(250, now - (room.last || now)) / 1000;
     var moving = false;
 
     room.last = now;

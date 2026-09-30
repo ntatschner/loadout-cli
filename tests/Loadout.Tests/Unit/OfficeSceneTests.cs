@@ -252,6 +252,25 @@ public sealed class OfficeSceneTests : IDisposable
     }
 
     [Fact]
+    public void A_set_rebuilt_gets_a_new_stamp_so_its_pictures_are_fetched_afresh()
+    {
+        var set = Path.Combine(_root, "tiled");
+        var sheet = Path.Combine(set, "skin-lead.png");
+
+        Directory.CreateDirectory(set);
+        WritePng(sheet, 48, 48);
+        File.SetLastWriteTimeUtc(sheet, new DateTime(2026, 9, 30, 9, 0, 0, DateTimeKind.Utc));
+
+        var before = OfficeScenes.Stamp(_root, "tiled");
+
+        File.SetLastWriteTimeUtc(sheet, new DateTime(2026, 9, 30, 9, 5, 0, DateTimeKind.Utc));
+
+        before.Should().NotBeEmpty();
+        OfficeScenes.Stamp(_root, "tiled").Should().NotBe(before);
+        OfficeScenes.Stamp(_root, "..").Should().BeEmpty();
+    }
+
+    [Fact]
     public void A_picture_is_measured_from_its_png_header_and_anything_else_is_not_a_png()
     {
         Directory.CreateDirectory(_root);
