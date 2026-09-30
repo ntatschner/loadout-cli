@@ -44,6 +44,52 @@ public sealed class PermissionAskTests : IDisposable
     private static PendingAsk Ask(string id = "impl-1-abc") =>
         new(id, "implementer/1", "role.implementer", "Bash", "gh pr create", DateTimeOffset.UtcNow);
 
+    /// <summary>
+    /// Two people answering the same question at once, from the dashboard and
+    /// the terminal, say, must both succeed, and the question ends up answered.
+    /// </summary>
+    /// <remarks>
+    /// Each answer used to be written to the same side file before being moved
+    /// into place, so when two raced, one moved the other's file away and the
+    /// second move found nothing: FileNotFoundException on a macOS CI leg, in a
+    /// run whose own console answered as the test did.
+    /// </remarks>
+    [Fact]
+    public async Task Two_answers_at_once_both_land_and_leave_the_question_answered()
+    {
+        Directory.CreateDirectory(_directory);
+
+        for (var round = 0; round < 50; round++)
+        {
+            var id = $"race-{round}";
+            var answers = Enumerable.Range(0, 8)
+                .Select(i => Task.Run(() => NodePermissions.AnswerAsync(_directory, id, new AskAnswer(i % 2 == 0, $"answer {i}"))))
+                .ToArray();
+
+            await FluentActions.Awaiting(() => Task.WhenAll(answers)).Should().NotThrowAsync();
+
+            NodePermissions.Answered(_directory, id).Should().NotBeNull();
+        }
+
+        Directory.EnumerateFiles(_directory, "*.writing*").Should().BeEmpty("nothing half-written is left behind");
+    }
+
+    /// <summary>
+    /// The first answer stands: the node may already have acted on it, and a
+    /// second landing on top would say otherwise about a decision made.
+    /// </summary>
+    [Fact]
+    public async Task A_second_answer_does_not_replace_the_first()
+    {
+        Directory.CreateDirectory(_directory);
+
+        await NodePermissions.AnswerAsync(_directory, "once", new AskAnswer(true, "yes, go on"));
+        await NodePermissions.AnswerAsync(_directory, "once", new AskAnswer(false, "no, stop"));
+
+        NodePermissions.Answered(_directory, "once")!.Allowed.Should().BeTrue();
+        NodePermissions.Answered(_directory, "once")!.Reason.Should().Be("yes, go on");
+    }
+
     [Fact]
     public async Task A_question_waits_until_somebody_answers_it()
     {
