@@ -15,6 +15,14 @@ buttons (or Q and E) walk you round it a quarter at a time. At the first zoom
 the whole building fits. Zoom in (the + button, Ctrl and the wheel, or a pinch)
 and you can scroll up and down it, starting at the floors in use.
 
+**The lobby** is the close-up: across the street from the entrance, looking in
+through the glass at the receptionist behind the desk and everyone waiting on
+the sofas, each with the name of what they're waiting for over them. They're the
+same people the lobby shows from inside, doing the same things, so a run that
+starts has its lead walk in off the street while you watch. Point at somebody to
+see what they are and when it's due; click to go in. The turn buttons take you
+round to the lobby's other sides.
+
 What you can read from out here:
 
 - **Lit windows** on a floor in use, more of them the fuller it is, with

@@ -7463,7 +7463,7 @@
   // than to the kitchen on their own floor.
   var TOWER_BREAK = 60000;
 
-  var TOWER_VIEWS = [["corner", "Corner"], ["aerial", "Aerial"], ["ground", "From the street"]];
+  var TOWER_VIEWS = [["corner", "Corner"], ["aerial", "Aerial"], ["ground", "From the street"], ["lobby", "The lobby"]];
 
   // Which of a run's nodes the building has put on a floor room, lead first.
   function towerNodes(room, nodes) {
@@ -8319,8 +8319,12 @@
   }
 
   // A quarter turn outside, eased over a moment unless motion is off.
+  function towerYawFor() {
+    return (towerLook.view === "lobby" ? 0 : Math.PI / 4) + towerLook.turn * Math.PI / 2;
+  }
+
   function towerSpin() {
-    var target = Math.PI / 4 + towerLook.turn * Math.PI / 2;
+    var target = towerYawFor();
 
     if (towerYaw === null || tilesStill()) {
       towerYaw = target;
@@ -8365,7 +8369,7 @@
     towerHold.querySelector(".tower-back").hidden = !inside;
     towerHold.querySelector(".tower-views").hidden = inside;
     ["up", "down"].forEach(function (one) {
-      towerHold.querySelector(".tower-" + one).hidden = inside || (towerLook.view !== "ground" && (towerZoom.outside || 0) <= 0);
+      towerHold.querySelector(".tower-" + one).hidden = inside || towerLook.view === "lobby" || (towerLook.view !== "ground" && (towerZoom.outside || 0) <= 0);
     });
 
     TOWER_VIEWS.forEach(function (one) {
@@ -8381,7 +8385,7 @@
       towerHold.querySelector(".tower-left").hidden = false;
       towerHold.querySelector(".tower-right").hidden = false;
 
-      if (towerYaw === null) { towerYaw = Math.PI / 4 + towerLook.turn * Math.PI / 2; }
+      if (towerYaw === null || towerYaw % (Math.PI / 2) !== towerYawFor() % (Math.PI / 2)) { towerYaw = towerYawFor(); }
 
       towerDraw();
 
@@ -8454,11 +8458,13 @@
     waiting or on a break, in steps of four, and filled from what the page
     already knows rather than the office stream, which carries runs.
   */
-  function towerShowPlace() {
-    var place = towerView.place;
-    var holder = towerHold.querySelector(".tower-inside");
-    var where = towerHold.querySelector(".tower-where");
-
+  /*
+    The room a place is drawn from, with its people brought up to date: the
+    same room whether it is looked at from inside or, for the lobby, through
+    the glass from the street, so the people in it are the same people doing
+    the same things. Null until its layout has come.
+  */
+  function towerPlaceRoom(place, facing) {
     if (place === "lobby" && Date.now() - towerWaitingAt > 15000) {
       towerWaitingAt = Date.now();
       api("/api/waiting")
@@ -8479,39 +8485,28 @@
     var key = place + "|" + step;
     var plan = towerScenes[key];
 
-    where.textContent = place === "lobby" ? "Lobby \u00b7 " + towerWaiting.length + " waiting"
-      : place === "basement-1" ? "Basement 1 \u00b7 the mail room and storage"
-      : place === "basement-2" ? "Basement 2 \u00b7 the garbage room and the server room"
-      : "Roof \u00b7 " + people.length + " taking a break";
-
     if (!plan) {
-      api("/api/office/place/" + place + "/" + step)
-        .then(function (answer) {
-          towerScenes[key] = { scene: answer, turned: {} };
-          towerShow();
-        })
-        .catch(function () { /* It comes on the next look. */ });
+      if (!towerAsked[key]) {
+        towerAsked[key] = true;
+        api("/api/office/place/" + place + "/" + step)
+          .then(function (answer) {
+            towerScenes[key] = { scene: answer, turned: {} };
+            towerShow();
+          })
+          .catch(function () { /* It comes on the next look. */ })
+          .then(function () { delete towerAsked[key]; });
+      }
 
-      return;
+      return null;
     }
 
-    var turns = sceneTurns(plan.scene);
-    var facing = turns ? towerLook.facing : 0;
-
-    towerHold.querySelector(".tower-left").hidden = !turns;
-    towerHold.querySelector(".tower-right").hidden = !turns;
-
-    var scene = plan.turned[facing] || (plan.turned[facing] = turnScene(plan.scene, facing));
+    var turned = sceneTurns(plan.scene) ? facing : 0;
+    var scene = plan.turned[turned] || (plan.turned[turned] = turnScene(plan.scene, turned));
     var run = { id: place, team: place === "lobby" ? "Lobby" : below ? "Basement" : "Roof", running: true, nodes: people };
-    var room = tileRoom(place + "|" + step + "|" + facing, run, (towerData && towerData.kit) || "", scene);
-    var slot = towerHold.querySelector(".tower-slot");
+    var room = tileRoom(place + "|" + step + "|" + turned, run, (towerData && towerData.kit) || "", scene);
 
-    towerRoom = room;
     room.onPlace = towerClick;
-    room.fitWidth = Math.max(160, holder.clientWidth - 96);
-    room.fitHeight = Math.max(160, window.innerHeight * 0.78 - 96);
-    room.zoom = towerZoom.inside || 0;
-
+    room.people_ = people.length;
     tileUpdate(room, run);
 
     // The receptionist has a desk of their own, not a sofa. Moved there after
@@ -8538,6 +8533,37 @@
       towerArrivals = towerArrivals.filter(function (one) { return Date.now() - one.at < 60000; });
       towerArrivals.forEach(function (one) { towerArrive(room, one); });
     }
+
+    return room;
+  }
+
+  var towerAsked = {};
+
+  function towerShowPlace() {
+    var place = towerView.place;
+    var holder = towerHold.querySelector(".tower-inside");
+    var where = towerHold.querySelector(".tower-where");
+    var below = place.indexOf("basement-") === 0;
+    var room = towerPlaceRoom(place, towerLook.facing);
+    var waiting = towerWaiting.length;
+
+    where.textContent = place === "lobby" ? "Lobby \u00b7 " + waiting + " waiting"
+      : place === "basement-1" ? "Basement 1 \u00b7 the mail room and storage"
+      : place === "basement-2" ? "Basement 2 \u00b7 the garbage room and the server room"
+      : "Roof \u00b7 " + (room ? room.people_ : towerRoofPeople().length) + " taking a break";
+
+    if (!room) { return; }
+
+    var turns = sceneTurns(room.scene);
+    var slot = towerHold.querySelector(".tower-slot");
+
+    towerHold.querySelector(".tower-left").hidden = !turns;
+    towerHold.querySelector(".tower-right").hidden = !turns;
+
+    towerRoom = room;
+    room.fitWidth = Math.max(160, holder.clientWidth - 96);
+    room.fitHeight = Math.max(160, window.innerHeight * 0.78 - 96);
+    room.zoom = towerZoom.inside || 0;
 
     if (room.floor.parentNode !== slot) {
       slot.textContent = "";
@@ -8719,7 +8745,8 @@
     var yaw = towerYaw === null ? Math.PI / 4 : towerYaw;
     var top = towerTop();
     var view = towerLook.view;
-    var pitch = view === "aerial" ? 1.05 : view === "ground" ? -(0.3 + Math.max(0, Math.min(1, towerScroll / top)) * 0.45) : 0.45;
+    var pitch = view === "aerial" ? 1.05 : view === "ground" ? -(0.3 + Math.max(0, Math.min(1, towerScroll / top)) * 0.45)
+      : view === "lobby" ? -0.03 : 0.45;
     var far = view === "ground" ? Math.hypot(width, depth) * 1.6 : 8000;
     var target = view === "ground"
       ? null
@@ -8733,6 +8760,15 @@
 
     if (view === "ground") {
       eye = [width / 2 - Math.sin(yaw) * far, depth / 2 - Math.cos(yaw) * far, 26];
+    } else if (view === "lobby") {
+      // Square on to a face of the lobby, far enough back to take in its whole width.
+      var across = Math.abs(Math.sin(yaw)) > 0.5 ? depth : width;
+      var behind = Math.abs(Math.sin(yaw)) > 0.5 ? width / 2 : depth / 2;
+
+      // Close enough that the lobby's two storeys fill most of the view,
+      // at the height of somebody on the far pavement.
+      far = behind + across * 0.4;
+      eye = [width / 2 - Math.sin(yaw) * far, depth / 2 - Math.cos(yaw) * far, towerTile() * 2.6];
     } else {
       eye = [target[0] - ahead[0] * far, target[1] - ahead[1] * far, target[2] - ahead[2] * far];
     }
@@ -8743,12 +8779,15 @@
       right[2] * ahead[0] - right[0] * ahead[2],
       right[0] * ahead[1] - right[1] * ahead[0],
     ];
-    var focal = view === "ground" ? canvasHeight / step * 0.75 : far;
+    var focal = view === "ground" ? canvasHeight / step * 0.75
+      : view === "lobby" ? canvasWidth / step * 0.52 * Math.pow(1.25, towerZoom.outside || 0)
+      : far;
 
     return {
       eye: eye,
       ahead: ahead,
-      street: view === "ground",
+      street: view === "ground" || view === "lobby",
+      lobby: view === "lobby",
       depth: function (p) {
         return (p[0] - eye[0]) * ahead[0] + (p[1] - eye[1]) * ahead[1] + (p[2] - eye[2]) * ahead[2];
       },
@@ -8760,7 +8799,7 @@
         var u = dx * right[0] + dy * right[1] + dz * right[2];
         var v = dx * up[0] + dy * up[1] + dz * up[2];
 
-        return [canvasWidth / 2 + u * focal / f * step, canvasHeight * (view === "ground" ? 0.6 : 0.5) - v * focal / f * step];
+        return [canvasWidth / 2 + u * focal / f * step, canvasHeight * (view === "ground" ? 0.6 : view === "lobby" ? 0.48 : 0.5) - v * focal / f * step];
       },
     };
   }
@@ -8858,7 +8897,10 @@
     var west = sides.some(function (side) { return side.out[0] === -1; });
 
     towerStreet(ctx, project, camera, scene, clock, { south: !south, west: !west });
-    towerStorey3d(ctx, c, project, sides, 0, null, towerHover && towerHover.number === 0, now, null);
+
+    if (camera.lobby) { towerLobbyInside(ctx, c, project, camera, now); }
+
+    towerStorey3d(ctx, c, project, sides, 0, null, towerHover && towerHover.number === 0, now, null, camera.lobby);
 
     for (var n = 1; n <= towerFloors(); n += 1) {
       towerStorey3d(ctx, c, project, sides, n, towerOccupant(n), towerHover && towerHover.number === n, now, null);
@@ -9428,6 +9470,8 @@
       var points = face.c.map(project);
       var faded = which === "near" && cityOverlaps(points, hideBox);
 
+      if (faded && camera.lobby) { return; }
+
       g.globalAlpha = faded ? 0.28 : 1;
       cityFace(g, face, points, project, scene, night);
     });
@@ -9556,6 +9600,156 @@
     }
   }
 
+  /*
+    The lobby seen through its glass from the street: its floor, its back
+    wall, the core, the furniture as boxes and the people standing or sitting
+    where they are, all from the lobby's own layout and its own room - the
+    one the inside view draws - so it is the same receptionist at the same
+    desk and the same people waiting on the same sofas, moving as they move
+    inside. Drawn far to near, before the glass goes over it.
+  */
+  var towerSeen = [];
+
+  var LOBBY_HEIGHTS = {
+    "desk": 0.8, "exec-desk": 0.8, "reception": 1.05, "sofa": 0.5, "plant": 1.3, "coffee": 1.1, "kitchen": 1.0,
+    "lift": 2.4, "toilet": 2.2, "cupboard": 2.2, "exit": 2.2, "visitor-chair": 0.5, "partition-planter": 0.9,
+    "partition-screen": 1.4, "storage": 1.8,
+  };
+
+  function towerLobbyInside(ctx, c, project, camera, now) {
+    towerSeen = [];
+
+    var room = towerPlaceRoom("lobby", 0);
+
+    if (!room) { return; }
+
+    // Nobody would otherwise move them while the room is not on the page.
+    tileStep(room, now);
+    tileAmbient(room, now);
+
+    var scene = room.scene;
+    var t = towerTile();
+    var d = towerDepth();
+    var high = towerStorey() * 2;
+    var X = function (x) { return x * t; };
+    var Y = function (y) { return d - y * t; };
+    var items = [];
+
+    function quad(points, fill) {
+      if (points.some(function (p) { return camera.depth(p) < t * 0.5; })) { return; }
+
+      towerQuad(ctx, project, points[0], points[1], points[2], points[3]);
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+
+    // A box: its top and whichever of its sides face the camera.
+    function box(x0, y0, x1, y1, z0, z1, colour) {
+      var eye = camera.eye;
+      var shade = function (k) { return cityShade(colour, k, false); };
+
+      if (eye[1] < y0) { quad([[x0, y0, z1], [x1, y0, z1], [x1, y0, z0], [x0, y0, z0]], shade([0, -1, 0])); }
+      if (eye[1] > y1) { quad([[x1, y1, z1], [x0, y1, z1], [x0, y1, z0], [x1, y1, z0]], shade([0, 1, 0])); }
+      if (eye[0] < x0) { quad([[x0, y1, z1], [x0, y0, z1], [x0, y0, z0], [x0, y1, z0]], shade([-1, 0, 0])); }
+      if (eye[0] > x1) { quad([[x1, y0, z1], [x1, y1, z1], [x1, y1, z0], [x1, y0, z0]], shade([1, 0, 0])); }
+      if (eye[2] > z1) { quad([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], shade([0, 0, 1])); }
+    }
+
+    // The floor, in the carpet's two colours, and the back wall.
+    for (var fy = 1; fy < scene.height - 1; fy += 1) {
+      for (var fx = 1; fx < scene.width - 1; fx += 1) {
+        quad([[X(fx), Y(fy), 0.5], [X(fx + 1), Y(fy), 0.5], [X(fx + 1), Y(fy + 1), 0.5], [X(fx), Y(fy + 1), 0.5]],
+          (fx + fy) % 2 ? c.floorB : c.floorA);
+      }
+    }
+
+    quad([[X(1), Y(1), high], [X(scene.width - 1), Y(1), high], [X(scene.width - 1), Y(1), 0], [X(1), Y(1), 0]], "#3a4150");
+
+    // The core's walls, full height, and the furniture.
+    for (var wy = 1; wy < scene.height - 1; wy += 1) {
+      for (var wx = 1; wx < scene.width - 1; wx += 1) {
+        if ((scene.walls[wy] || [])[wx] >= 0) {
+          items.push({ depth: camera.depth([X(wx + 0.5), Y(wy + 0.5), high / 2]), draw: box.bind(null, X(wx), Y(wy + 1), X(wx + 1), Y(wy), 0, high, "#6a7d92") });
+        }
+      }
+    }
+
+    (scene.props || []).forEach(function (prop) {
+      var kind = (prop.kind || "").replace(/^meeting-\d+$/, "meeting");
+      var colour = /^#/.test(TILE_KINDS[kind] || "") ? TILE_KINDS[kind] : "#7a6a58";
+      var up = (LOBBY_HEIGHTS[kind] || 0.8) * t;
+      var x0 = X(prop.x);
+      var x1 = X(prop.x + (prop.w || 1));
+      var y0 = Y(prop.y + (prop.h || 1));
+      var y1 = Y(prop.y);
+
+      if (kind === "lobby-screen" || kind === "status-board") {
+        // On the back wall, off the floor.
+        items.push({ depth: camera.depth([(x0 + x1) / 2, y1, t * 1.7]), draw: function () {
+          quad([[x0, y1 - 2, t * 2.4], [x1, y1 - 2, t * 2.4], [x1, y1 - 2, t * 1.2], [x0, y1 - 2, t * 1.2]], "#18253a");
+          quad([[x0 + 3, y1 - 3, t * 2.3], [x1 - 3, y1 - 3, t * 2.3], [x1 - 3, y1 - 3, t * 1.3], [x0 + 3, y1 - 3, t * 1.3]], c.run);
+        } });
+
+        return;
+      }
+
+      if (kind === "stairs") { return; }
+
+      items.push({ depth: camera.depth([(x0 + x1) / 2, (y0 + y1) / 2, up / 2]), draw: box.bind(null, x0, y0, x1, y1, 0, up, colour) });
+    });
+
+    // The people: a figure on their tile, the height of a person, their name over them.
+    Object.keys(room.people).forEach(function (name) {
+      var person = room.people[name];
+
+      if (person.gone) { return; }
+
+      var wx = X(person.x + 0.5);
+      var wy = Y(person.y + 0.5);
+      var seated = !person.path.length && room.seats[name] && room.seats[name].x === person.x && room.seats[name].y === person.y
+        && name !== "receptionist";
+      var tall = t * (seated ? 1.25 : 1.75);
+
+      items.push({ depth: camera.depth([wx, wy, tall / 2]) - 1, draw: function () {
+        var feet = project([wx, wy, seated ? t * 0.45 : 0]);
+        var top = project([wx, wy, tall]);
+        var h = feet[1] - top[1];
+
+        if (h < 3 || camera.depth([wx, wy, 0]) < t) { return; }
+
+        var wide = h * 0.34;
+        var head = h * 0.16;
+        var role = ((person.node && person.node.role) || "").replace(/^role\./, "");
+
+        ctx.fillStyle = role === "project-lead" ? c.lead : role === "reception" ? c.wait : c.body;
+        ctx.fillRect(feet[0] - wide / 2, top[1] + head * 1.8, wide, h - head * 1.8);
+        ctx.fillStyle = c.muted;
+        ctx.beginPath();
+        ctx.arc(feet[0], top[1] + head, head, 0, Math.PI * 2);
+        ctx.fill();
+
+        var label = (person.node && (person.node.person || person.node.node)) || name;
+        var font = Math.max(9, Math.round(h * 0.16));
+
+        ctx.font = "600 " + font + "px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+
+        var labelWide = ctx.measureText(label).width + font * 0.6;
+
+        ctx.fillStyle = "rgba(10, 14, 20, 0.75)";
+        ctx.fillRect(feet[0] - labelWide / 2, top[1] - font * 1.35, labelWide, font * 1.3);
+        ctx.fillStyle = c.ink;
+        ctx.fillText(label, feet[0], top[1] - font * 0.15);
+
+        towerSeen.push({ x0: feet[0] - wide, x1: feet[0] + wide, y0: top[1] - font * 1.4, y1: feet[1], person: person });
+      } });
+    });
+
+    items.sort(function (a, b) { return b.depth - a.depth; });
+    items.forEach(function (item) { item.draw(); });
+  }
+
   // How wide and tall the whole building draws at one device pixel per unit, seen from above a corner.
   function towerExtent() {
     var pitch = towerLook.view === "aerial" ? 1.05 : 0.45;
@@ -9593,7 +9787,7 @@
     with its strip. The lobby is taller and all glass; a basement is concrete
     with its name on it.
   */
-  function towerStorey3d(ctx, c, project, sides, level, occupant, hovered, now, label) {
+  function towerStorey3d(ctx, c, project, sides, level, occupant, hovered, now, label, seeThrough) {
     var z = towerLevelZ(level);
     var tile = towerTile();
     var slab = 8;
@@ -9610,10 +9804,11 @@
       var lit = people ? Math.max(1, Math.min(bays, Math.round(people / capacity * bays * 1.4))) : 0;
 
       polygons.push(towerQuad(ctx, project, towerOn(side, 0, z[0]), towerOn(side, 1, z[0]), towerOn(side, 1, z[1]), towerOn(side, 0, z[1])));
-      ctx.fillStyle = level < 0 ? "#2a2d31" : level === 0 ? "#24344a" : towerLight ? towerLight.glass : "#1c2a3a";
+      ctx.fillStyle = seeThrough ? "rgba(150, 190, 225, 0.10)"
+        : level < 0 ? "#2a2d31" : level === 0 ? "#24344a" : towerLight ? towerLight.glass : "#1c2a3a";
       ctx.fill();
 
-      if (level === 0) {
+      if (level === 0 && !seeThrough) {
         towerQuad(ctx, project, towerOn(side, 0.04, z[0] + slab), towerOn(side, 0.96, z[0] + slab), towerOn(side, 0.96, z[1] - 10), towerOn(side, 0.04, z[1] - 10));
         ctx.fillStyle = "rgba(255, 226, 170, 0.5)";
         ctx.fill();
@@ -9814,6 +10009,15 @@
     var box = canvas.getBoundingClientRect();
     var point = [(event.clientX - box.left) * canvas.width / box.width, (event.clientY - box.top) * canvas.height / box.height];
 
+    // Somebody seen through the lobby's glass, nearest the camera first.
+    for (var k = towerSeen.length - 1; k >= 0; k -= 1) {
+      var seen = towerSeen[k];
+
+      if (point[0] >= seen.x0 && point[0] <= seen.x1 && point[1] >= seen.y0 && point[1] <= seen.y1) {
+        return { number: 0, lobby: true, person: seen.person };
+      }
+    }
+
     for (var i = towerFaces.length - 1; i >= 0; i -= 1) {
       var face = towerFaces[i];
 
@@ -9842,7 +10046,11 @@
 
     var lines;
 
-    if (towerHover.lobby) {
+    if (towerHover.person) {
+      var node = towerHover.person.node || {};
+
+      lines = [node.personFull || node.person || node.node, node.activity || "", node.doing || ""];
+    } else if (towerHover.lobby) {
       lines = ["Lobby", "Reception and the waiting room", towerWaiting.length + " waiting"];
     } else if (towerHover.basement) {
       lines = towerHover.basement === 1
