@@ -5952,45 +5952,120 @@
     return blocked;
   }
 
-  // The tiles from one place to another, a step at a time; empty when there is no way.
+  /*
+    The tiles from one place to another, a step at a time; empty when there is
+    no way.
+
+    The shortest way with the fewest turns, rather than the first shortest way
+    found. A plain search across a diagonal goes across one, up one, across
+    one: every step changes which way the walker faces, and the head turned on
+    every tile. Each step costs a hundred and each turn one more, so no route
+    is ever longer for having fewer turns.
+  */
+  var TILE_STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
   function tilePath(room, fromX, fromY, toX, toY) {
     var scene = room.scene;
     var w = scene.width;
     var start = fromY * w + fromX;
     var goal = toY * w + toX;
+
+    if (start === goal) { return []; }
+
+    // A state is a tile and the way it was entered; 4 means "where they began".
+    var startKey = start * 5 + 4;
+    var best = {};
     var came = {};
-    var queue = [start];
+    var heap = [];
+    var found = -1;
 
-    came[start] = -1;
+    function push(cost, key) {
+      heap.push([cost, key]);
 
-    while (queue.length) {
-      var at = queue.shift();
+      for (var i = heap.length - 1; i > 0;) {
+        var parent = (i - 1) >> 1;
 
-      if (at === goal) { break; }
+        if (heap[parent][0] <= heap[i][0]) { break; }
+
+        var swap = heap[parent]; heap[parent] = heap[i]; heap[i] = swap;
+        i = parent;
+      }
+    }
+
+    function pop() {
+      var top = heap[0];
+      var last = heap.pop();
+
+      if (heap.length) {
+        heap[0] = last;
+
+        for (var i = 0; ;) {
+          var left = i * 2 + 1;
+          var right = left + 1;
+          var least = i;
+
+          if (left < heap.length && heap[left][0] < heap[least][0]) { least = left; }
+          if (right < heap.length && heap[right][0] < heap[least][0]) { least = right; }
+          if (least === i) { break; }
+
+          var swap = heap[least]; heap[least] = heap[i]; heap[i] = swap;
+          i = least;
+        }
+      }
+
+      return top;
+    }
+
+    best[startKey] = 0;
+    push(0, startKey);
+
+    while (heap.length) {
+      var next = pop();
+      var cost = next[0];
+      var key = next[1];
+
+      if (cost !== best[key]) { continue; }
+
+      var at = Math.floor(key / 5);
+      var entered = key % 5;
+
+      if (at === goal) {
+        found = key;
+        break;
+      }
 
       var x = at % w;
       var y = (at - x) / w;
 
-      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(function (step) {
-        var nx = x + step[0];
-        var ny = y + step[1];
-        var next = ny * w + nx;
+      for (var d = 0; d < 4; d += 1) {
+        var nx = x + TILE_STEPS[d][0];
+        var ny = y + TILE_STEPS[d][1];
 
-        if (nx < 0 || ny < 0 || nx >= w || ny >= scene.height) { return; }
-        if (came[next] !== undefined) { return; }
-        if (room.blocked[next] && next !== goal) { return; }
+        if (nx < 0 || ny < 0 || nx >= w || ny >= scene.height) { continue; }
 
-        came[next] = at;
-        queue.push(next);
-      });
+        var tile = ny * w + nx;
+
+        if (room.blocked[tile] && tile !== goal) { continue; }
+
+        var nextKey = tile * 5 + d;
+        var nextCost = cost + 100 + (entered !== 4 && entered !== d ? 1 : 0);
+
+        if (best[nextKey] === undefined || nextCost < best[nextKey]) {
+          best[nextKey] = nextCost;
+          came[nextKey] = key;
+          push(nextCost, nextKey);
+        }
+      }
     }
 
-    if (came[goal] === undefined) { return []; }
+    if (found < 0) { return []; }
 
     var path = [];
 
-    for (var back = goal; back !== start; back = came[back]) {
-      path.unshift({ x: back % w, y: Math.floor(back / w) });
+    for (var back = found; back !== startKey; back = came[back]) {
+      var cell = Math.floor(back / 5);
+
+      path.unshift({ x: cell % w, y: Math.floor(cell / w) });
     }
 
     return path;

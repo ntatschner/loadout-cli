@@ -323,6 +323,10 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // Nobody walks when motion is turned down, and nothing is drawn for a
         // room nobody can see.
         page.Should().Contain("person.path = tilesStill() ? [] : tilePath(room, fromX, fromY, toX, toY);");
+
+        // Routes take the fewest turns among the shortest: a staircase across a
+        // diagonal turned the walker's head on every tile.
+        page.Should().Contain("var nextCost = cost + 100 + (entered !== 4 && entered !== d ? 1 : 0);");
         page.Should().Contain("if (document.hidden || (holder && holder.classList.contains(\"unwatched\"))) { return; }");
 
         // People move on the office stream while it is live, and the poll
