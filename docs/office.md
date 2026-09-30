@@ -53,6 +53,12 @@ a corridor with team rooms off it, divided by walls, glass, low screens or
 planters. Somebody moving between floors walks to the lift and is gone, and
 turns up from the lift on the other one.
 
+People walk round anyone standing still, pass behind whoever is sitting at a
+desk, and wait their turn where there's only room for one. If the wait goes on
+they look for another way, and in the end squeeze past, so nobody is ever stuck:
+two people meeting in a gap one tile wide do get by, the one later in the order
+giving way.
+
 Inside, a floor turns a quarter at a time, like the tower does, and zooms in
 whole steps so the pixels stay square. How big it starts is the machine setting
 `team-office-scale`, also on the Settings page as **Office size**: the smallest

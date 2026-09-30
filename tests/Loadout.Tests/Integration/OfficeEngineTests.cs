@@ -38,7 +38,7 @@ public sealed class OfficeEngineTests : IDisposable
     }
 
     [Fact]
-    public async Task The_page_can_walk_everywhere_the_planner_puts_somebody_on_every_floor_at_every_turn()
+    public async Task The_page_walks_everybody_everywhere_the_planner_puts_them_at_every_turn_without_them_standing_in_each_other()
     {
         WriteScenes(seeds: 20);
 

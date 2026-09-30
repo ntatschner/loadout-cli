@@ -6001,7 +6001,7 @@
   */
   var TILE_STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-  function tilePath(room, fromX, fromY, toX, toY) {
+  function tilePath(room, fromX, fromY, toX, toY, extra) {
     var scene = room.scene;
     var w = scene.width;
     var start = fromY * w + fromX;
@@ -6085,7 +6085,7 @@
         if (room.blocked[tile] && tile !== goal) { continue; }
 
         var nextKey = tile * 5 + d;
-        var nextCost = cost + 100 + (entered !== 4 && entered !== d ? 1 : 0);
+        var nextCost = cost + 100 + (entered !== 4 && entered !== d ? 1 : 0) + (extra && extra[tile] || 0);
 
         if (best[nextKey] === undefined || nextCost < best[nextKey]) {
           best[nextKey] = nextCost;
@@ -6180,7 +6180,7 @@
     var fromX = Math.round(person.x);
     var fromY = Math.round(person.y);
 
-    person.path = tilesStill() ? [] : tilePath(room, fromX, fromY, toX, toY);
+    person.path = tilesStill() ? [] : tilePath(room, fromX, fromY, toX, toY, tileCrowd(room, person));
 
     // Nowhere to walk, or no walking wanted: they are simply there.
     if (!person.path.length) {
@@ -6658,6 +6658,58 @@
     }
   }
 
+  /*
+    People in the way, as extra cost to walk through: somebody standing or
+    sitting still costs six tiles' walking, so a way round up to that long is
+    taken and a longer one is not; and the tile a walker is stepping into
+    costs a little, so two walkers do not pick the same line. A cost rather
+    than a wall because a seated row with no way round it still has to be
+    got past - squeezing by is better than never arriving.
+  */
+  var TILE_STILL = 600;
+  var TILE_CROSSING = 150;
+
+  function tileCrowd(room, me) {
+    var extra = {};
+    var w = room.scene.width;
+
+    Object.keys(room.people).forEach(function (name) {
+      var other = room.people[name];
+
+      if (other === me || other.gone) { return; }
+
+      if (!other.path.length) {
+        var cell = Math.round(other.y) * w + Math.round(other.x);
+
+        extra[cell] = (extra[cell] || 0) + TILE_STILL;
+      } else {
+        var next = other.path[0].y * w + other.path[0].x;
+
+        extra[next] = (extra[next] || 0) + TILE_CROSSING;
+      }
+    });
+
+    return extra;
+  }
+
+  /*
+    How long somebody waits for a tile before looking for another way, and
+    before squeezing past whoever is in it. The waits are bounded, so nobody
+    is ever stuck: two people meeting in a corridor one tile wide do pass,
+    the one later in the order waiting longer.
+
+    Counted from the first wait of a spell of trouble, which ends only once
+    they are a few steps nearer where they are going than when it began, and
+    with one new way looked for per spell. Counted from each wait instead,
+    somebody among seated desks went round, met the next person, went back,
+    and never arrived: every step started the clock again. Ended by a few
+    free steps instead, a detour exactly that long did the same in the lobby.
+    Going round in circles never gets anybody nearer, so it ends in a squeeze.
+  */
+  var TILE_REPLAN = 400;
+  var TILE_SQUEEZE = 1500;
+  var TILE_CLEAR = 3;
+
   // Move everybody on, and say whether this room wants another frame.
   function tileStep(room, now) {
     // Capped so that a long gap - a tab brought back, a room scrolled into
@@ -6669,14 +6721,103 @@
 
     room.last = now;
 
-    Object.keys(room.people).forEach(function (name) {
+    // Where everybody is, and which tile each walker is stepping into.
+    var names = Object.keys(room.people);
+    var w = room.scene.width;
+    var at = {};
+    var claimed = {};
+
+    names.forEach(function (name) {
+      var one = room.people[name];
+
+      if (one.gone) { return; }
+
+      var cell = Math.round(one.y) * w + Math.round(one.x);
+
+      (at[cell] = at[cell] || []).push(name);
+
+      if (one.claim !== undefined && one.claim !== null) { claimed[one.claim] = name; }
+    });
+
+    names.forEach(function (name) {
       var person = room.people[name];
 
-      if (!person.path.length) { return; }
+      if (!person.path.length) {
+        person.claim = null;
+
+        return;
+      }
 
       moving = true;
 
       var next = person.path[0];
+      var nextCell = next.y * w + next.x;
+
+      // At a tile's middle, about to step into the next: only once nobody is
+      // in it or stepping into it. Mid-step, carry on.
+      if (person.claim !== nextCell && person.x === Math.round(person.x) && person.y === Math.round(person.y)) {
+        var here = person.y * w + person.x;
+
+        // Somebody sitting at their own desk is walked past behind their
+        // chair, as in any office; anybody standing is waited for.
+        var inTheWay = (at[nextCell] || []).filter(function (other) {
+          var one = room.people[other];
+          var seat = room.seats[other];
+
+          return other !== name && !(!one.path.length && seat && seat.x === one.x && seat.y === one.y);
+        });
+
+        if (claimed[nextCell] && claimed[nextCell] !== name && inTheWay.indexOf(claimed[nextCell]) < 0) {
+          inTheWay.push(claimed[nextCell]);
+        }
+
+        if (inTheWay.length) {
+          person.waitSince = person.waitSince || now;
+
+          if (!person.troubleSince) {
+            person.troubleSince = now;
+            person.troubleLeft = person.path.length;
+          }
+
+          var waited = now - person.waitSince;
+          var troubled = now - person.troubleSince;
+
+          // Head on: somebody is stepping into the tile this one stands on.
+          // The one later in the order gives way, looking for another way at
+          // once and squeezing by last.
+          var yields = inTheWay.some(function (other) { return room.people[other].claim === here && other < name; });
+
+          if (!person.replanned && (waited >= TILE_REPLAN || yields)) {
+            var goal = person.path[person.path.length - 1];
+            var extra = tileCrowd(room, person);
+
+            extra[nextCell] = (extra[nextCell] || 0) + TILE_STILL * 3;
+            person.replanned = true;
+
+            var again = tilePath(room, person.x, person.y, goal.x, goal.y, extra);
+
+            if (again.length) { person.path = again; }
+
+            return;
+          }
+
+          if (troubled < (yields ? TILE_SQUEEZE * 2 : TILE_SQUEEZE)) { return; }
+        }
+
+        // Claimed at once, not at the next frame: two walkers reaching the
+        // same free tile in one frame both took it, and walked on as one.
+        person.claim = nextCell;
+        claimed[nextCell] = name;
+        person.waitSince = 0;
+
+        // A few steps nearer than when the trouble began, and it is over.
+        if (person.troubleSince && !inTheWay.length && person.path.length <= person.troubleLeft - TILE_CLEAR) {
+          person.troubleSince = 0;
+          person.replanned = false;
+        }
+      }
+
+      next = person.path[0];
       var dx = next.x - person.x;
       var dy = next.y - person.y;
       var far = Math.sqrt(dx * dx + dy * dy);
@@ -6688,6 +6829,7 @@
         person.x = next.x;
         person.y = next.y;
         person.path.shift();
+        person.claim = null;
 
         if (!person.path.length) {
           if (person.leaving) {
