@@ -6900,7 +6900,11 @@
       if (!tileRooms[key].floor.isConnected) { delete tileRooms[key]; }
     });
 
-    if (!Object.keys(tileRooms).length && officeStream) {
+    // A view switched away from hides its rooms rather than removing them, so
+    // "none left" is not enough: nobody can see a room with no layout box.
+    var seen = Object.keys(tileRooms).some(function (key) { return tileRooms[key].floor.offsetParent !== null; });
+
+    if (!seen && officeStream) {
       officeStream.close();
       officeStream = null;
       officeLive = false;

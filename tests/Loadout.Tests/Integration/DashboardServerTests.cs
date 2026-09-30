@@ -331,6 +331,11 @@ public sealed class DashboardServerTests : IAsyncLifetime
         page.Should().Contain("new EventSource(\"/api/office/events?token=\"");
         page.Should().Contain("if (officeLive) {");
 
+        // Closed once no tile room can be seen: switching view hides the rooms
+        // rather than removing them, and a stream left open keeps the daemon
+        // reading twice a second for nobody.
+        page.Should().Contain("return tileRooms[key].floor.offsetParent !== null;");
+
         // Only somebody nothing is asking anything of wanders, an errand ends
         // the moment that changes, and nobody wanders with motion turned down.
         page.Should().Contain("if (still || intent.place !== \"free\" || person.path.length) { return; }");
