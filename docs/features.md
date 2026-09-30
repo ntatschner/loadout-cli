@@ -247,9 +247,9 @@ loadout team edit docs-crew-mine
 The copy keeps the original's comments and ordering rather than being
 regenerated from it, and `team show` checks the result — a team naming a role
 that does not exist is a finding there rather than a failure half way through a
-run. `team remove` deletes one you wrote; the ones that ship and the ones from a
-pack are refused, because the next `pack update` would overwrite anything you
-changed in them.
+run. `team remove` moves one you wrote to the bin, and `team restore` brings it
+back; the ones that ship and the ones from a pack are refused, because the next
+`pack update` would overwrite anything you changed in them.
 
 Every run keeps what it wrote down, and you can clear out the ones you are done
 with:
@@ -270,6 +270,10 @@ appearing in the run's directory, so deleting one under a live run leaves
 processes waiting on answers that can no longer arrive — and it will not
 silently take a run that left a branch nothing merged. `--dry-run` lists what it
 would take and why it is keeping the rest.
+
+What it takes goes to the bin rather than away: `loadout team bin` lists it,
+`loadout team runs restore <run>` puts one back, and it is deleted for good after
+30 days, or whatever `team-bin-days` says.
 
 ## A dashboard for the runs
 

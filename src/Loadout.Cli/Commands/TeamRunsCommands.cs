@@ -28,18 +28,34 @@ namespace Loadout.Cli.Commands;
 /// all, and the thing that makes it safe is being told what it picked before
 /// it takes anything.
 /// </para>
+/// <para>
+/// Both move what they take to the bin rather than deleting it. They are typed
+/// while clearing up, which is when the wrong identifier gets pasted, and the
+/// journal is the only record of what a run did. See <see cref="TeamBin"/>.
+/// </para>
 /// </remarks>
-[Description("Forget one or more team runs: everything they wrote down, gone from this machine.")]
+[Description("Forget one or more team runs: moved to the bin, where they can be restored until it is emptied.")]
 [CommandMeta(CommandCategory.Start,
     Intent = "team runs remove delete forget clear old run history tidy", Mutates = true)]
 public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.Settings>
 {
     private readonly IRunJournal _journal;
+    private readonly TeamBin _bin;
+    private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
+    private readonly TimeProvider _time;
     private readonly IAnsiConsole _console;
 
-    public TeamRunsRemoveCommand(IRunJournal journal, IAnsiConsole console)
+    public TeamRunsRemoveCommand(
+        IRunJournal journal,
+        TeamBin bin,
+        Loadout.Core.Configuration.IConfigurationService configuration,
+        TimeProvider time,
+        IAnsiConsole console)
     {
         _journal = journal;
+        _bin = bin;
+        _configuration = configuration;
+        _time = time;
         _console = console;
     }
 
@@ -55,7 +71,7 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -66,10 +82,12 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
 
         if (settings.Runs.Length == 0)
         {
-            return Task.FromResult(output.Fail(
+            return output.Fail(
                 "Name at least one run. See what there is with: loadout team runs",
-                ExitCode.InvalidArguments));
+                ExitCode.InvalidArguments);
         }
+
+        var days = await Binning.DaysAsync(_configuration, cancellationToken).ConfigureAwait(false);
 
         var forgotten = new List<RunForgotten>();
         var refused = new List<Loadout.Models.Results.OperationResult>();
@@ -119,7 +137,12 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
             forgotten.Add(gone.Value!);
         }
 
-        return Task.FromResult(Report(output, forgotten, refused, settings.DryRun));
+        if (!settings.DryRun && forgotten.Count > 0)
+        {
+            Binning.Sweep(_bin, _time, days);
+        }
+
+        return Report(output, forgotten, refused, settings.DryRun, days);
     }
 
     /// <summary>
@@ -130,7 +153,8 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
         CommandOutput output,
         IReadOnlyList<RunForgotten> forgotten,
         IReadOnlyList<Loadout.Models.Results.OperationResult> refused,
-        bool dryRun)
+        bool dryRun,
+        int days)
     {
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(forgotten);
@@ -148,7 +172,9 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
                     one.Bytes,
                     one.Files,
                     one.Unmerged,
+                    bin = one.Bin,
                 }),
+                keptDays = days,
                 refused = refused.Select(one => one.Error),
             });
 
@@ -158,11 +184,13 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
         foreach (var one in forgotten)
         {
             output.WriteLine(dryRun
-                ? $"[dim]Would forget[/] [bold]{Markup.Escape(one.RunId)}[/]"
+                ? $"[dim]Would move[/] [bold]{Markup.Escape(one.RunId)}[/]"
                   + (one.Team is { Length: > 0 } ? $" [dim]({Markup.Escape(one.Team)})[/]" : string.Empty)
-                : $"[green]+[/] Forgot [bold]{Markup.Escape(one.RunId)}[/]"
+                  + " [dim]to the bin[/]"
+                : $"[green]+[/] Moved [bold]{Markup.Escape(one.RunId)}[/]"
                   + (one.Team is { Length: > 0 } ? $" [dim]({Markup.Escape(one.Team)})[/]" : string.Empty)
-                  + (one.Files > 0 ? $" [dim]{one.Files} file(s), {Size(one.Bytes)}[/]" : string.Empty));
+                  + " to the bin"
+                  + (one.Files > 0 ? $"[dim], {one.Files} file(s), {Size(one.Bytes)}[/]" : string.Empty));
 
             // Named rather than counted, because the name is the recoverable
             // part: the branch is still in Git and this line is the last thing
@@ -192,6 +220,18 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
         {
             output.WriteBlankLine();
             output.WriteLine("[dim]Nothing was removed.[/]");
+        }
+
+        if (!dryRun && forgotten.Count > 0)
+        {
+            // How to get it back, said once rather than under every run: a
+            // prune of forty is forty lines already. One run is named, so the
+            // line is the command to type rather than its shape.
+            output.WriteBlankLine();
+            output.WriteLine(
+                $"[dim]The bin keeps {(forgotten.Count == 1 ? "it" : "them")} {Binning.Kept(days)}. "
+                + $"Get {(forgotten.Count == 1 ? "it" : "one")} back with:[/] loadout team runs restore "
+                + (forgotten.Count == 1 ? Markup.Escape(forgotten[0].RunId) : "[[<run>]]"));
         }
 
         return Ended(refused);
@@ -232,12 +272,21 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
 public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Settings>
 {
     private readonly IRunJournal _journal;
+    private readonly TeamBin _bin;
+    private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
     private readonly TimeProvider _time;
     private readonly IAnsiConsole _console;
 
-    public TeamRunsPruneCommand(IRunJournal journal, TimeProvider time, IAnsiConsole console)
+    public TeamRunsPruneCommand(
+        IRunJournal journal,
+        TeamBin bin,
+        Loadout.Core.Configuration.IConfigurationService configuration,
+        TimeProvider time,
+        IAnsiConsole console)
     {
         _journal = journal;
+        _bin = bin;
+        _configuration = configuration;
         _time = time;
         _console = console;
     }
@@ -273,7 +322,7 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    protected override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -281,6 +330,8 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
         ArgumentNullException.ThrowIfNull(settings);
 
         var output = new CommandOutput(_console, settings);
+
+        var days = await Binning.DaysAsync(_configuration, cancellationToken).ConfigureAwait(false);
 
         TimeSpan? age = null;
 
@@ -290,9 +341,9 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
 
             if (age is null)
             {
-                return Task.FromResult(output.Fail(
+                return output.Fail(
                     $"'{said}' is not an age. Write one as 30d, 12h or 90m.",
-                    ExitCode.InvalidArguments));
+                    ExitCode.InvalidArguments);
             }
         }
 
@@ -307,10 +358,10 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
         {
             if (!RunOutcomes.TryParse(asked, out var outcome))
             {
-                return Task.FromResult(output.Fail(
+                return output.Fail(
                     $"'{asked}' is not an ending. Ask for one of: "
                     + string.Join(", ", RunOutcomes.Names) + ".",
-                    ExitCode.InvalidArguments));
+                    ExitCode.InvalidArguments);
             }
 
             outcomes.Add(outcome);
@@ -321,10 +372,10 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
         // than somebody who wants nothing to happen.
         if (outcomes.Contains(RunOutcome.Running))
         {
-            return Task.FromResult(output.Fail(
+            return output.Fail(
                 "A run that is still going is never forgotten. Stop it first with "
                 + "'loadout team stop', then forget it.",
-                ExitCode.InvalidArguments));
+                ExitCode.InvalidArguments);
         }
 
         // None of them given is not "take everything": it is somebody who has
@@ -332,17 +383,17 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
         // instruction to delete things is to ask for a clearer one.
         if (settings.Keep is null && age is null && outcomes.Count == 0)
         {
-            return Task.FromResult(output.Fail(
+            return output.Fail(
                 "Say what to take: --keep <count>, --older-than <age>, --failed, "
                 + "--outcome <ending>, or any of them together. Together they narrow each "
                 + "other: 'the failed ones older than that, but never below the newest count'.",
-                ExitCode.InvalidArguments));
+                ExitCode.InvalidArguments);
         }
 
         if (settings.Keep is < 0)
         {
-            return Task.FromResult(output.Fail(
-                "--keep cannot be negative. Use 0 to keep none.", ExitCode.InvalidArguments));
+            return output.Fail(
+                "--keep cannot be negative. Use 0 to keep none.", ExitCode.InvalidArguments);
         }
 
         var runs = _journal.List(int.MaxValue)
@@ -373,7 +424,7 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
                 }),
             });
 
-            return Task.FromResult(CommandOutput.Success());
+            return CommandOutput.Success();
         }
 
         if (chosen.Forgetting.Count == 0)
@@ -390,7 +441,7 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
                 output.WriteJson(new { dryRun = settings.DryRun, forgotten = Array.Empty<string>(), refused = Array.Empty<string>() });
             }
 
-            return Task.FromResult(CommandOutput.Success());
+            return CommandOutput.Success();
         }
 
         if (settings.DryRun)
@@ -407,7 +458,7 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
             output.WriteBlankLine();
             output.WriteLine("[dim]Nothing was removed. Repeat without --dry-run to take them.[/]");
 
-            return Task.FromResult(CommandOutput.Success());
+            return CommandOutput.Success();
         }
 
         // Named rather than counted, and before the question rather than
@@ -426,18 +477,18 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
 
             if (!settings.AllowsPrompting)
             {
-                return Task.FromResult(output.Fail(
+                return output.Fail(
                     $"That would forget {chosen.Forgetting.Count} run(s), and nobody is here to "
                     + "agree to it. Pass --yes.",
-                    ExitCode.InvalidArguments));
+                    ExitCode.InvalidArguments);
             }
 
             if (!_console.Confirm(
-                $"Forget {chosen.Forgetting.Count} run(s)? Their journals are the only copy", false))
+                $"Move {chosen.Forgetting.Count} run(s) to the bin? It keeps them {Binning.Kept(days)}", false))
             {
                 output.WriteLine("[dim]Nothing was removed.[/]");
 
-                return Task.FromResult(CommandOutput.Success());
+                return CommandOutput.Success();
             }
         }
 
@@ -458,8 +509,12 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
             forgotten.Add(gone.Value!);
         }
 
-        return Task.FromResult(
-            TeamRunsRemoveCommand.Report(output, forgotten, refused, dryRun: false));
+        if (forgotten.Count > 0)
+        {
+            Binning.Sweep(_bin, _time, days);
+        }
+
+        return TeamRunsRemoveCommand.Report(output, forgotten, refused, dryRun: false, days);
     }
 
     /// <summary>

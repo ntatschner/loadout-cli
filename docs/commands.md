@@ -85,12 +85,16 @@
 | `loadout tools trust <name@version> [--revoke]` | Agree that one version's script may run on this machine, as it is now |
 | `loadout tools verify <draft> --agree` | Answer a held verify yourself: it shows the script and the cases it would run, asks, and runs them if you say yes. Only at a terminal, so an agent cannot say yes for you |
 | `loadout team list\|show\|run` | Run a team of agents against a project: a lead that briefs workers and reports to you |
-| `loadout team new\|edit\|remove` | Write a team of your own, open its file, or delete it |
+| `loadout team new\|edit\|remove` | Write a team of your own, open its file, or move it to the bin |
+| `loadout team restore <team>` | Put a team back from the bin where it was, the copy removed most recently. Refused while a team of that name exists |
 | `loadout team run <team> "<goal>" --done-when` | Say what the run is judged on, one per use. The lead must report a verdict and evidence for every one |
 | `loadout team run <team> "<goal>" --usd` | What this run may spend in all, over the team's own budget: a figure, or `none` for no cap |
 | `loadout team capabilities` | The machinery a team's declarations can ask for, and what each one needs |
 | `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |
-| `loadout team runs remove\|prune` | Forget runs you are done with, one by one or by age, count or how they ended |
+| `loadout team runs remove\|prune` | Forget runs you are done with, one by one or by age, count or how they ended. They go to the bin, not away |
+| `loadout team runs restore <run>` | Put a run back from the bin. Refused while a run with that identifier exists |
+| `loadout team bin` | What is in the bin: each run and team, when it was removed, how many days it has left and its size |
+| `loadout team bin empty [--older-than <age>]` | Delete what is in the bin for good, all of it or only what is older than the age. Asks first, and needs `--yes` where nobody can be asked |
 | `loadout team outbox` | The files a run delivered, resolved from the commits its nodes reported |
 | `loadout team remedies` | What a team has worked out how to fix, and whether it is trusted here |
 | `loadout team remedy show\|trust\|requests` | One remedy in full, trusting or untrusting it, and the remediations waiting on you |

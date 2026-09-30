@@ -391,6 +391,17 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "the waiting area is a list of words, which is what it has always been"),
 
+        new("team-bin-days",
+            "Days a removed run or team stays in the bin before it goes for good. 0 keeps it until emptied",
+            (_, m) => m.Teams.BinDays is { } days
+                ? days.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty,
+            (_, m, v) => m.Teams.BinDays = v.Trim().Length == 0 ? null : Count(v),
+            true,
+            Sample: "30",
+            Group: Groups.Machine,
+            WhenUnset: "thirty days, then the daemon deletes it"),
+
         new("team-webhook-teams",
             "Comma-separated teams something outside this machine may start",
             (_, m) => string.Join(", ", m.Teams.WebhookTeams),

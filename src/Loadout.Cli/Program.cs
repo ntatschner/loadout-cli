@@ -737,6 +737,18 @@ public static class Program
                 runs.SetDefaultCommand<TeamRunsCommand>();
                 runs.AddCommand<TeamRunsRemoveCommand>("remove");
                 runs.AddCommand<TeamRunsPruneCommand>("prune");
+                runs.AddCommand<TeamRunsRestoreCommand>("restore");
+            });
+
+            team.AddCommand<TeamRestoreCommand>("restore");
+
+            // The same shape as 'runs': 'team bin' lists, and emptying it is a
+            // bin command rather than a team command called bin-empty.
+            team.AddBranch("bin", bin =>
+            {
+                bin.SetDescription("Removed runs and teams, kept for a while in case they are wanted back.");
+                bin.SetDefaultCommand<TeamBinCommand>();
+                bin.AddCommand<TeamBinEmptyCommand>("empty");
             });
 
             team.AddCommand<TeamStatusCommand>("status");

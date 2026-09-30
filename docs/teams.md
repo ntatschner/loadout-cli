@@ -256,10 +256,15 @@ it.
 A team you write is available to every project. `--for-this-project` puts it
 under one instead.
 
-`loadout team remove <team>` deletes one you wrote. The ones that ship and the
-ones from a pack are refused, and the refusal names the copy that gets you past
-it: editing a file inside a pack checkout is what the next `pack update`
-overwrites.
+`loadout team remove <team>` moves one you wrote to the bin, and
+`loadout team restore <team>` puts it back where it was (see
+[The bin](#the-bin)). The ones that ship and the ones from a pack are refused,
+and the refusal names the copy that gets you past it: editing a file inside a
+pack checkout is what the next `pack update` overwrites.
+
+A team of yours lives in the workspace, so its going is a change there like any
+other, and the command says so. Until `loadout workspace save`, the file's
+removal is on this machine only.
 
 `loadout team show quick-review` checks it. A team naming a role that does not
 exist, a lead that is not a node, or a gate nobody can decide is a finding
@@ -844,6 +849,50 @@ Three things it will not take:
 Nothing here touches Git. A run's branches and its working trees outlive it, and
 a command called "forget the notes about it" that also deleted the work would be
 the worst kind of surprise — so it names what it is leaving behind instead.
+
+### The bin
+
+`remove` and `prune` do not delete a run; they move it to the bin, and
+`team remove` does the same with a team of yours. All three are typed while
+clearing up, which is when the wrong identifier gets pasted, and a run's journal
+is the only record of what it did. Before the bin, there was no way back from
+either.
+
+```
+loadout team bin
+loadout team runs restore 20260917-1116-ed59
+loadout team restore quick-review
+loadout team bin empty --older-than 7d
+```
+
+`team bin` lists what is there: whether each is a run or a team, when it was
+removed, how many days it has left and how much disk it holds. `team runs
+restore` puts a run back under its own identifier, and `team restore` puts a
+team's file back where it was — under the project it was written for, if it was
+written for one. A team removed more than once comes back as the copy removed
+most recently; the older copies stay listed.
+
+Neither will restore over something already there. A run with that identifier,
+or a team with that name, is refused rather than replaced, because replacing it
+would be losing the other one — which is the thing the bin is for.
+
+Things stay in the bin for 30 days, then go for good.
+`loadout config set team-bin-days <days>` changes that, and `0` keeps everything
+until you empty the bin yourself: of the two ways to read a zero on a setting
+that deletes things, deleting at once is the one nobody can take back. The
+daemon clears out what has run out once an hour, and so does every removal, so a
+machine that never runs the daemon still clears its bin — but only when
+something new goes into it.
+
+`team bin empty` deletes for good, and is the one command here with no way
+back. It names everything it would take before asking, needs `--yes` where
+nobody is at a terminal to ask, and under `--dry-run` lists what it would take
+and deletes nothing. `--older-than <age>` takes only what has been there longer.
+
+Two limits worth knowing. The bin holds what these commands put in it and
+nothing else: a run's branches were never touched, so they are not in it either.
+And a team's file in the bin is a copy on this machine; the workspace's history
+is still the record another machine sees.
 
 `loadout team log --events` prints only what happened. A node writes a line for
 every tool call it makes and every sentence it says about itself, and on one
