@@ -28,6 +28,7 @@ public sealed record OfficeSpot(
 /// down the room it stands. Sorted is what a painted room needed a second
 /// front picture for.
 /// </param>
+/// <param name="Kind">The kit tag it was placed as (desk, lift...), so a part drawn in the kit's shapes can say what it is.</param>
 public sealed record OfficeProp(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("piece")] string? Piece,
@@ -37,7 +38,8 @@ public sealed record OfficeProp(
     [property: JsonPropertyName("w")] int W = 1,
     [property: JsonPropertyName("h")] int H = 1,
     [property: JsonPropertyName("blocks")] bool Blocks = true,
-    [property: JsonPropertyName("depth")] string Depth = "sorted");
+    [property: JsonPropertyName("depth")] string Depth = "sorted",
+    [property: JsonPropertyName("kind")] string? Kind = null);
 
 /// <summary>One animation in a sprite sheet.</summary>
 /// <param name="Frames">Frame numbers, left to right and top to bottom across the sheet.</param>
@@ -57,6 +59,40 @@ public sealed record OfficeSheet(
     [property: JsonPropertyName("anchor")] IReadOnlyList<int> Anchor,
     [property: JsonPropertyName("animations")] IReadOnlyDictionary<string, OfficeAnimation> Animations);
 
+/// <summary>One of several tile pictures a scene draws from.</summary>
+/// <param name="Picture">The picture, or null to draw in the kit's colours.</param>
+/// <param name="Tiles">How many tiles it holds; a scene's tile numbers run on from one atlas to the next.</param>
+/// <param name="Lower">The terrain its tiles call lower, so the kit's colours know what to draw.</param>
+/// <param name="Upper">And upper.</param>
+/// <remarks>
+/// A generated floor draws solid walls, glass partitions and the curtain wall
+/// from separate tilesets, so it needs more than the one picture a hand-made
+/// scene names in <see cref="OfficeScene.Tiles"/>. Tile 0 of the second atlas
+/// is numbered straight after the last tile of the first.
+/// </remarks>
+public sealed record OfficeAtlas(
+    [property: JsonPropertyName("picture")] string? Picture,
+    [property: JsonPropertyName("tiles")] int Tiles,
+    [property: JsonPropertyName("lower")] string Lower,
+    [property: JsonPropertyName("upper")] string Upper);
+
+/// <summary>A room of a generated floor: what it is, where, and what it is for on the dashboard.</summary>
+/// <param name="Name">Its name, unique on the floor: lead-office, meeting-1, kitchen.</param>
+/// <param name="Kind">The rules' room kind.</param>
+/// <param name="X">Left tile, inside its walls.</param>
+/// <param name="Y">Top tile, inside its walls.</param>
+/// <param name="W">Width in tiles, inside its walls.</param>
+/// <param name="H">Depth in tiles, inside its walls.</param>
+/// <param name="Function">What clicking it offers: questions, controls, summary, idle, and so on; null for none.</param>
+public sealed record OfficeArea(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("x")] int X,
+    [property: JsonPropertyName("y")] int Y,
+    [property: JsonPropertyName("w")] int W,
+    [property: JsonPropertyName("h")] int H,
+    [property: JsonPropertyName("function")] string? Function = null);
+
 /// <summary>
 /// A room drawn from tiles, with people who walk about in it.
 /// </summary>
@@ -73,6 +109,8 @@ public sealed record OfficeSheet(
 /// <param name="Spots">Named places somebody with nothing to do may go.</param>
 /// <param name="Skins">Which sheet draws each role, with "worker" for any other.</param>
 /// <param name="Sheets">The sheets, by name.</param>
+/// <param name="Atlases">Several tile pictures in place of <paramref name="Tiles"/>, numbered one after another; a generated floor has one per wall kind.</param>
+/// <param name="Areas">The rooms of a generated floor, for their popups; none on a hand-made scene.</param>
 /// <remarks>
 /// <para>
 /// The second kind of set, beside the painted rooms of <see cref="OfficeRoom"/>.
@@ -98,7 +136,9 @@ public sealed record OfficeScene(
     [property: JsonPropertyName("door")] OfficeSpot Door,
     [property: JsonPropertyName("spots")] IReadOnlyDictionary<string, OfficeSpot>? Spots = null,
     [property: JsonPropertyName("skins")] IReadOnlyDictionary<string, string>? Skins = null,
-    [property: JsonPropertyName("sheets")] IReadOnlyDictionary<string, OfficeSheet>? Sheets = null)
+    [property: JsonPropertyName("sheets")] IReadOnlyDictionary<string, OfficeSheet>? Sheets = null,
+    [property: JsonPropertyName("atlases")] IReadOnlyList<OfficeAtlas>? Atlases = null,
+    [property: JsonPropertyName("areas")] IReadOnlyList<OfficeArea>? Areas = null)
 {
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.office/2";
@@ -387,7 +427,9 @@ public static class OfficeScenes
             return problems;
         }
 
-        var tileCount = Atlas(scene, sizeOf, problems);
+        var tileCount = scene.Atlases is { Count: > 0 } atlases
+            ? Atlases(scene, atlases, sizeOf, problems)
+            : Atlas(scene, sizeOf, problems);
 
         Grid(scene, "floor", scene.Floor, tileCount, problems);
 
@@ -406,8 +448,61 @@ public static class OfficeScenes
         }
 
         Sheets(scene, sizeOf, problems);
+        Areas(scene, problems);
 
         return problems;
+    }
+
+    private static int? Atlases(
+        OfficeScene scene,
+        IReadOnlyList<OfficeAtlas> atlases,
+        Func<string, (int Width, int Height)?> sizeOf,
+        List<string> problems)
+    {
+        var total = 0;
+
+        foreach (var atlas in atlases)
+        {
+            if (atlas.Tiles < 1)
+            {
+                problems.Add($"atlas '{atlas.Picture ?? atlas.Upper}' holds {atlas.Tiles} tiles; it has to hold at least one.");
+            }
+
+            if (atlas.Picture is { } picture && scene.Tile is >= 4 and <= 128)
+            {
+                if (sizeOf(picture) is not { } size)
+                {
+                    problems.Add($"atlas '{picture}' is not a PNG in the set.");
+                }
+                else if (size.Width / scene.Tile * (size.Height / scene.Tile) < atlas.Tiles)
+                {
+                    problems.Add($"atlas '{picture}' is {size.Width}x{size.Height}, too small for the {atlas.Tiles} tiles it claims.");
+                }
+            }
+
+            total += Math.Max(0, atlas.Tiles);
+        }
+
+        return total;
+    }
+
+    private static void Areas(OfficeScene scene, List<string> problems)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var area in scene.Areas ?? [])
+        {
+            if (!names.Add(area.Name))
+            {
+                problems.Add($"area '{area.Name}' appears twice.");
+            }
+
+            if (area.W < 1 || area.H < 1
+                || !scene.Inside(area.X, area.Y) || !scene.Inside(area.X + area.W - 1, area.Y + area.H - 1))
+            {
+                problems.Add($"area '{area.Name}' at {area.X},{area.Y} ({area.W}x{area.H}) is not inside the room.");
+            }
+        }
     }
 
     private static int? Atlas(OfficeScene scene, Func<string, (int Width, int Height)?> sizeOf, List<string> problems)
