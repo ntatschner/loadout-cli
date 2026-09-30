@@ -238,7 +238,8 @@ internal sealed class TeamsWindow : Window
     private bool Asks(RunSummary run)
     {
         using var confirm = new ChoiceDialog(
-            $"Forget {run.RunId}? Everything it wrote down goes, and there is no other copy.",
+            $"Forget {run.RunId}? Everything it wrote down goes to the bin, "
+            + "where 'loadout team runs restore' can bring it back.",
             ["No, leave it", $"Yes, forget {run.RunId}"],
             _application);
 

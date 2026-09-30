@@ -161,6 +161,7 @@ public static class ServiceRegistration
         services.AddSingleton<Teams.ITeamCatalogue>(provider =>
             new Teams.TeamCatalogue(ct => Packs.PackDirectories.ApprovedAsync(
                 provider.GetRequiredService<Packs.IPackService>(), "teams", ct)));
+        services.AddSingleton<Teams.TeamBin>();
         services.AddSingleton<Teams.IRunJournal, Teams.RunJournal>();
         services.AddSingleton<Teams.IRunOutbox, Teams.RunOutbox>();
         services.AddSingleton<Teams.IRemedyBook, Teams.RemedyBook>();

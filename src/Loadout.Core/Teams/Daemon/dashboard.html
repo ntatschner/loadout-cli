@@ -2764,7 +2764,9 @@
              form goes before the form, not as small print under its button. -->
         <p class="lk-notice" data-state="held">
           A run still going is never forgotten, and nor is one that left a branch
-          nothing merged. Their journals are the only copy of what they did.
+          nothing merged. The ones forgotten go to the bin, and
+          <code>loadout team runs restore</code> brings one back until the bin
+          is emptied.
         </p>
 
         <div class="lk-fields">
@@ -4005,7 +4007,7 @@
 
       said += keep === null ? "" : ", keeping the newest " + keep;
 
-      return said + "? Their journals are the only copy.";
+      return said + "? They go to the bin, and can be restored until it is emptied.";
     }
 
     go.addEventListener("click", function () {
@@ -7932,9 +7934,11 @@
 
       // Named in the question. A run's journal is the only copy of what it
       // did, and this button sits in a list where the next one along is a
-      // different run.
+      // different run. It goes to the bin rather than away, and the question
+      // says so, because that is what makes answering it cheap.
       agreed("Forget " + nameOf(run)
-        + "? Everything it wrote down goes, and there is no other copy.", "Forget it").then(function (yes) {
+        + "? Everything it wrote down goes to the bin, where "
+        + "'loadout team runs restore' can bring it back.", "Forget it").then(function (yes) {
         if (!yes) { return; }
 
         drop.disabled = true;
@@ -8910,7 +8914,8 @@
     forget.onclick = function () {
       // Named in the question. A run's journal is the only copy of what it did.
       agreed("Forget " + (run.room || run.id)
-        + "? Everything it wrote down goes, and there is no other copy.", "Forget it").then(function (yes) {
+        + "? Everything it wrote down goes to the bin, where "
+        + "'loadout team runs restore' can bring it back.", "Forget it").then(function (yes) {
         if (!yes) { return; }
 
         act(run.id, "forget", {})
