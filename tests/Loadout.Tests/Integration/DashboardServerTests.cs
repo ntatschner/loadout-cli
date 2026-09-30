@@ -324,6 +324,68 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // room nobody can see.
         page.Should().Contain("person.path = tilesStill() ? [] : tilePath(room, fromX, fromY, toX, toY);");
         page.Should().Contain("if (document.hidden || (holder && holder.classList.contains(\"unwatched\"))) { return; }");
+
+        // People move on the office stream while it is live, and the poll
+        // stops moving them, so an answer read just before a change cannot
+        // walk anybody back.
+        page.Should().Contain("new EventSource(\"/api/office/events?token=\"");
+        page.Should().Contain("if (officeLive) {");
+    }
+
+    /// <summary>
+    /// The office stream sends every run's people and what each should be
+    /// doing, numbered, and a page already holding the latest is not sent it
+    /// again.
+    /// </summary>
+    [Fact]
+    public async Task The_office_streams_who_is_in_each_room_and_does_not_repeat_itself()
+    {
+        var url = new Uri(_root.TrimEnd('/') + "/api/office/events?token=" + _server.Token);
+
+        using var first = await _client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+        first.Content.Headers.ContentType!.MediaType.Should().Be("text/event-stream");
+
+        var (id, data) = await NextEvent(first).WaitAsync(TimeSpan.FromSeconds(10));
+        var run = JsonDocument.Parse(data).RootElement.GetProperty("runs")[0];
+
+        run.GetProperty("id").GetString().Should().Be("20260916-1200-aaaa");
+        run.GetProperty("nodes")[0].GetProperty("office").GetProperty("lamp").GetString().Should().Be("working");
+        run.GetProperty("nodes")[0].GetProperty("person").GetString().Should().NotBeNullOrEmpty();
+
+        // Reconnecting with the id it had: nothing has changed, so nothing comes.
+        using var again = new HttpRequestMessage(HttpMethod.Get, url);
+
+        again.Headers.Add("Last-Event-ID", id);
+
+        // And it is told at once that it is connected, rather than hearing
+        // nothing at all until the first heartbeat.
+        using var second = await _client.SendAsync(again, HttpCompletionOption.ResponseHeadersRead)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+        var repeat = NextEvent(second);
+
+        (await Task.WhenAny(repeat, Task.Delay(1500))).Should().NotBe(repeat, "the page already has the latest");
+    }
+
+    /// <summary>The next office event on a stream: its id and its data.</summary>
+    private static async Task<(string Id, string Data)> NextEvent(HttpResponseMessage response)
+    {
+        using var reader = new StreamReader(await response.Content.ReadAsStreamAsync());
+        string? id = null;
+
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            if (line.StartsWith("id: ", StringComparison.Ordinal))
+            {
+                id = line["id: ".Length..];
+            }
+            else if (line.StartsWith("data: ", StringComparison.Ordinal) && id is not null)
+            {
+                return (id, line["data: ".Length..]);
+            }
+        }
+
+        throw new InvalidOperationException("The stream ended without an event.");
     }
 
     [Fact]

@@ -6159,8 +6159,16 @@
   function tileRoom(key, run, set, scene) {
     var room = tileRooms[key];
 
+    listenToOffice();
+
     if (room && room.scene === scene) {
-      tileUpdate(room, run);
+      // The stream moves people while it is live; the poll only keeps the
+      // rest of the run current, for the card and for opening it.
+      if (officeLive) {
+        room.run = Object.assign({}, run, { nodes: room.run ? room.run.nodes : run.nodes });
+      } else {
+        tileUpdate(room, run);
+      }
 
       return room;
     }
@@ -6667,16 +6675,10 @@
     var more = false;
     var walking = false;
 
+    pruneTiles();
+
     Object.keys(tileRooms).forEach(function (key) {
       var room = tileRooms[key];
-
-      // Thrown away with the view it was in.
-      if (!room.floor.isConnected) {
-        delete tileRooms[key];
-
-        return;
-      }
-
       var holder = room.floor.closest(".room");
 
       if (document.hidden || (holder && holder.classList.contains("unwatched"))) { return; }
@@ -6707,6 +6709,71 @@
 
   function wakeTiles() {
     if (!tileLoop) { tileLoop = requestAnimationFrame(tileTick); }
+  }
+
+  /*
+    Forget rooms thrown away with the view they were in, and stop listening
+    to the office once there are none left to feed. Called after every poll
+    as well as on every tick, because a view switched away from while
+    everyone sat still has no tick to notice it.
+  */
+  function pruneTiles() {
+    Object.keys(tileRooms).forEach(function (key) {
+      if (!tileRooms[key].floor.isConnected) { delete tileRooms[key]; }
+    });
+
+    if (!Object.keys(tileRooms).length && officeStream) {
+      officeStream.close();
+      officeStream = null;
+      officeLive = false;
+    }
+  }
+
+  /*
+    The office's own stream from the server: who is in each room and what
+    each should be doing, the moment it changes, rather than on the next poll
+    four seconds later. Opened while there is a tile room on the page. While
+    it is live, the poll no longer moves anybody, so a poll answer read a
+    moment before a change cannot walk somebody back to where they were.
+  */
+  var officeStream = null;
+  var officeLive = false;
+
+  function listenToOffice() {
+    if (officeStream || !window.EventSource) { return; }
+
+    officeStream = new EventSource("/api/office/events?token=" + encodeURIComponent(token));
+
+    officeStream.addEventListener("office", function (event) {
+      var read;
+
+      try {
+        read = JSON.parse(event.data);
+      } catch (e) {
+        return;
+      }
+
+      officeLive = true;
+
+      var byId = {};
+
+      (read.runs || []).forEach(function (run) { byId[run.id] = run; });
+
+      Object.keys(tileRooms).forEach(function (key) {
+        var room = tileRooms[key];
+        var fresh = room.run ? byId[room.run.id] : null;
+
+        if (fresh) {
+          // Everything else about the run stays as the last poll had it; the
+          // people are what the stream is for.
+          tileUpdate(room, Object.assign({}, room.run, { running: fresh.running, nodes: fresh.nodes }));
+        }
+      });
+    });
+
+    // The browser reconnects by itself, sending the last id it had. Until it
+    // has, the poll moves people again.
+    officeStream.addEventListener("error", function () { officeLive = false; });
   }
 
   document.addEventListener("visibilitychange", wakeTiles);
@@ -11453,6 +11520,8 @@
 
           if (one) { one.draw(answer.runs); }
 
+          pruneTiles();
+
           return;
         }
 
@@ -11464,6 +11533,8 @@
           showChoices();
           drawOpenScreens(answer.runs);
         }
+
+        pruneTiles();
       })
       .catch(function (wrong) {
         say(wrong.message + " The dashboard may have been stopped.");

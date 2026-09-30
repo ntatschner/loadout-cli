@@ -50,6 +50,9 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>How long the office stream stays silent before saying it is still there.</summary>
+    private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(15);
+
     /// <summary>The segments under a run that only ever read.</summary>
     /// <remarks>
     /// Named rather than assumed. The right default for a segment nobody has
@@ -109,7 +112,23 @@ public sealed class DashboardServer : IDisposable
     {
         _journal = journal;
         _git = git;
+        _office = new OfficeFeed(OfficeSnapshot, Interval);
     }
+
+    /// <summary>What the office shows, read once for every page listening.</summary>
+    private readonly OfficeFeed _office;
+
+    /// <summary>
+    /// Each run's summary, with what its files looked like when it was read.
+    /// </summary>
+    /// <remarks>
+    /// The office feed reads every run twice a second while a page listens,
+    /// and nearly all of them have not changed since the last look. A run is
+    /// read again only when its journal or its directory has: a question
+    /// arrives as a file beside the journal, not a line in it, and adding a
+    /// file changes the directory.
+    /// </remarks>
+    private readonly Dictionary<string, (string Stamp, RunSummary Summary)> _summaries = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Where the office art lives on this machine, or null for none.
@@ -1239,6 +1258,13 @@ public sealed class DashboardServer : IDisposable
         // What art there is, if any, so the page knows which desks it can
         // draw and which it has to leave as a square. Answered even with
         // nothing installed, because "none" is an answer the page acts on.
+        if (path == "/api/office/events")
+        {
+            await OfficeStreamAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         if (path == "/api/office")
         {
             var root = OfficeRoot;
@@ -1521,6 +1547,151 @@ public sealed class DashboardServer : IDisposable
                 owns = Owns,
             },
             Json);
+    }
+
+    /// <summary>
+    /// Only what the office draws, for every run: who is in each room and
+    /// what each should be doing.
+    /// </summary>
+    /// <remarks>
+    /// Much smaller than the runs list, and with nothing in it that changes on
+    /// its own - no elapsed time, no countdown - so two reads of an unchanged
+    /// machine are the same text and the feed sends nothing.
+    /// </remarks>
+    private string OfficeSnapshot()
+    {
+        var runs = _journal.List(40)
+            .Select(Summary)
+            .OfType<RunSummary>()
+            .Select(run => new
+            {
+                id = run.RunId,
+                run.Running,
+                nodes = run.Nodes.Select(node => new
+                {
+                    node.Node,
+                    node.Role,
+                    node.State,
+                    activity = run.Activity(node),
+                    node.Doing,
+                    person = DeskNames.For(run.RunId, node.Node),
+                    personFull = DeskNames.Full(run.RunId, node.Node),
+                    office = Office(OfficeIntent.For(run, node)),
+                }),
+            })
+            .ToList();
+
+        return JsonSerializer.Serialize(new { runs }, Json);
+    }
+
+    /// <summary>One run's summary, read again only when its files have changed.</summary>
+    private RunSummary? Summary(string runId)
+    {
+        var directory = _journal.DirectoryOf(runId);
+        var journal = new FileInfo(Path.Combine(directory, "journal.jsonl"));
+        var stamp = string.Create(
+            CultureInfo.InvariantCulture,
+            $"{(journal.Exists ? journal.Length : -1)}|{(journal.Exists ? journal.LastWriteTimeUtc.Ticks : 0)}|{Directory.GetLastWriteTimeUtc(directory).Ticks}");
+
+        lock (_summaries)
+        {
+            if (_summaries.TryGetValue(runId, out var kept) && kept.Stamp == stamp)
+            {
+                return kept.Summary;
+            }
+        }
+
+        var read = _journal.Summarise(runId);
+
+        if (read.Failed)
+        {
+            return null;
+        }
+
+        lock (_summaries)
+        {
+            _summaries[runId] = (stamp, read.Value!);
+        }
+
+        return read.Value;
+    }
+
+    /// <summary>
+    /// The office as it changes, one whole snapshot per message.
+    /// </summary>
+    /// <remarks>
+    /// Each message is complete, so a page that reconnects needs nothing but
+    /// the next one and nothing is lost between them. The id is the feed's
+    /// sequence number, which the browser sends back as Last-Event-ID; a
+    /// page already holding the latest waits for the one after it.
+    /// </remarks>
+    private async Task OfficeStreamAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        var response = context.Response;
+
+        response.StatusCode = 200;
+        response.ContentType = "text/event-stream; charset=utf-8";
+        response.Headers["Cache-Control"] = "no-cache";
+        response.SendChunked = true;
+
+        var had = long.TryParse(context.Request.Headers["Last-Event-ID"], NumberStyles.None, CultureInfo.InvariantCulture, out var last)
+            ? last
+            : 0;
+
+        try
+        {
+            // Said at once, because nothing goes to the browser - not even
+            // the headers - until something is written. A page reconnecting
+            // with the latest already in hand would otherwise hear nothing,
+            // not even that it had connected, until the first heartbeat.
+            await response.OutputStream.WriteAsync(": open\n\n"u8.ToArray(), ct).ConfigureAwait(false);
+            await response.OutputStream.FlushAsync(ct).ConfigureAwait(false);
+
+            while (!ct.IsCancellationRequested)
+            {
+                string message;
+
+                // Nothing tells this server a page has closed; a write to it
+                // fails, and nothing else does. So a quiet office still writes
+                // a comment now and then, which finds a page that has gone and
+                // lets the feed stop reading for it.
+                using (var beat = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    beat.CancelAfter(Heartbeat);
+
+                    try
+                    {
+                        var (sequence, snapshot) = await _office.NextAsync(had, beat.Token).ConfigureAwait(false);
+
+                        message = string.Create(CultureInfo.InvariantCulture, $"id: {sequence}\nevent: office\ndata: {snapshot}\n\n");
+                        had = sequence;
+                    }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        message = ": still here\n\n";
+                    }
+                }
+
+                var bytes = Encoding.UTF8.GetBytes(message);
+
+                await response.OutputStream.WriteAsync(bytes, ct).ConfigureAwait(false);
+                await response.OutputStream.FlushAsync(ct).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or HttpListenerException or IOException or ObjectDisposedException)
+        {
+            // The page went, or the server is stopping. Either way there is
+            // nobody left to write to.
+        }
+
+        try
+        {
+            response.Close();
+        }
+        catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or InvalidOperationException)
+        {
+            // Already gone with the connection.
+        }
     }
 
     /// <summary>What the office shows for a node, as the page reads it.</summary>
@@ -2811,5 +2982,9 @@ public sealed class DashboardServer : IDisposable
         return reader.ReadToEnd();
     }
 
-    public void Dispose() => Discard();
+    public void Dispose()
+    {
+        _office.Dispose();
+        Discard();
+    }
 }
