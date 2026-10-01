@@ -70,7 +70,9 @@ public static class FloorPlanner
                 built = Build(parts, rules, new Random(Seed(seed, attempt)), Math.Max(1, team), plain: false, "open");
             }
 
-            if (built is not null && OfficeScenes.Problems(built.Value.Scene, _ => null).Count == 0)
+            // No pictures to measure here: the kit's check measured them, and
+            // a check that can't find them refuses every try with art in it.
+            if (built is not null && OfficeScenes.Problems(built.Value.Scene, sizeOf: null).Count == 0)
             {
                 return new OfficeFloorPlan(built.Value.Scene, built.Value.Capacity, attempt);
             }
@@ -385,7 +387,7 @@ public static class FloorPlanner
     {
         var built = Build(new Parts(kit), rules, new Random(Seed(seed, attempt)), Math.Max(1, team), plain: false, Layout(rules, seed, attempt));
 
-        return built is null ? ["the band did not fit"] : OfficeScenes.Problems(built.Value.Scene, _ => null);
+        return built is null ? ["the band did not fit"] : OfficeScenes.Problems(built.Value.Scene, sizeOf: null);
     }
 
     /// <summary>How many a floor seats, lead included, when the team is large.</summary>

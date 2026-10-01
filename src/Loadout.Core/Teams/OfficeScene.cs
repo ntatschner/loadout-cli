@@ -464,12 +464,13 @@ public static class OfficeScenes
     /// <param name="sizeOf">
     /// The width and height of a piece, or null where the set has no such
     /// picture or it is not a PNG. Passed in so the rules can be tested without
-    /// a directory of pictures.
+    /// a directory of pictures. Null to leave the pictures unchecked, for a
+    /// scene made from a kit whose check has already measured them: the
+    /// planner has none to measure.
     /// </param>
-    public static IReadOnlyList<string> Problems(OfficeScene scene, Func<string, (int Width, int Height)?> sizeOf)
+    public static IReadOnlyList<string> Problems(OfficeScene scene, Func<string, (int Width, int Height)?>? sizeOf)
     {
         ArgumentNullException.ThrowIfNull(scene);
-        ArgumentNullException.ThrowIfNull(sizeOf);
 
         var problems = new List<string>();
 
@@ -520,7 +521,7 @@ public static class OfficeScenes
     private static int? Atlases(
         OfficeScene scene,
         IReadOnlyList<OfficeAtlas> atlases,
-        Func<string, (int Width, int Height)?> sizeOf,
+        Func<string, (int Width, int Height)?>? sizeOf,
         List<string> problems)
     {
         var total = 0;
@@ -532,7 +533,7 @@ public static class OfficeScenes
                 problems.Add($"atlas '{atlas.Picture ?? atlas.Upper}' holds {atlas.Tiles} tiles; it has to hold at least one.");
             }
 
-            if (atlas.Picture is { } picture && scene.Tile is >= 4 and <= 128)
+            if (atlas.Picture is { } picture && sizeOf is not null && scene.Tile is >= 4 and <= 128)
             {
                 if (sizeOf(picture) is not { } size)
                 {
@@ -591,9 +592,9 @@ public static class OfficeScenes
         }
     }
 
-    private static int? Atlas(OfficeScene scene, Func<string, (int Width, int Height)?> sizeOf, List<string> problems)
+    private static int? Atlas(OfficeScene scene, Func<string, (int Width, int Height)?>? sizeOf, List<string> problems)
     {
-        if (scene.Tiles is null)
+        if (scene.Tiles is null || sizeOf is null)
         {
             return null;
         }
@@ -657,7 +658,7 @@ public static class OfficeScenes
         }
     }
 
-    private static void Props(OfficeScene scene, Func<string, (int Width, int Height)?> sizeOf, List<string> problems)
+    private static void Props(OfficeScene scene, Func<string, (int Width, int Height)?>? sizeOf, List<string> problems)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
@@ -681,7 +682,7 @@ public static class OfficeScenes
                 problems.Add($"{called} has depth '{prop.Depth}'; it has to be floor or sorted.");
             }
 
-            if (prop.Piece is null)
+            if (prop.Piece is null || sizeOf is null)
             {
                 continue;
             }
@@ -760,7 +761,7 @@ public static class OfficeScenes
         }
     }
 
-    private static void Sheets(OfficeScene scene, Func<string, (int Width, int Height)?> sizeOf, List<string> problems)
+    private static void Sheets(OfficeScene scene, Func<string, (int Width, int Height)?>? sizeOf, List<string> problems)
     {
         if (scene.Skins is null && scene.Sheets is null && scene.Cast is null)
         {
@@ -813,7 +814,7 @@ public static class OfficeScenes
     /// <remarks>Shared by scenes and kits, which hold sheets the same way.</remarks>
     internal static void SheetProblems(
         IReadOnlyDictionary<string, OfficeSheet> sheets,
-        Func<string, (int Width, int Height)?> sizeOf,
+        Func<string, (int Width, int Height)?>? sizeOf,
         List<string> problems)
     {
         foreach (var (name, sheet) in sheets)
@@ -866,7 +867,11 @@ public static class OfficeScenes
 
             int? frames = null;
 
-            if (sizeOf(sheet.Piece) is not { } size)
+            if (sizeOf is null)
+            {
+                // Measured by the kit's check; nothing to count frames against here.
+            }
+            else if (sizeOf(sheet.Piece) is not { } size)
             {
                 problems.Add($"{called} is '{sheet.Piece}', and the set has no PNG by that name.");
             }

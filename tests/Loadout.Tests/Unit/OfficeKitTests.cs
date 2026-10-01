@@ -200,6 +200,32 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void A_kit_of_pictures_is_planned_as_the_built_in_one_is_rather_than_falling_back_to_open_plan()
+    {
+        // The planner has no pictures to measure; the kit check measured them.
+        // Checking each try's floor for pictures it cannot see refused every
+        // try with art in it, and every floor of an art kit came out plain:
+        // no meeting rooms and no kitchen.
+        var desk = new OfficePiece("desk.png", [0, 0, 96, 64], [3, 1], ["desk"], Seats: [new(1, -1, "s")]);
+        var kit = Small(("desk-a", desk));
+
+        foreach (var team in new[] { 1, 3, 5, 8 })
+        {
+            foreach (var seed in new[] { "run-a", "run-b", "run-c" })
+            {
+                var plan = FloorPlanner.Plan(kit, OfficeRules.Default, seed, team);
+
+                plan.Attempt.Should().BeGreaterThanOrEqualTo(0, $"team {team}, {seed} came out plain");
+                plan.Scene.Areas!.Select(area => area.Kind).Should().Contain(["meeting", "kitchen"], $"team {team}, {seed}");
+                if (team > 1)
+                {
+                    plan.Scene.Props!.Should().Contain(prop => prop.Piece == "desk.png", $"team {team}, {seed}");
+                }
+            }
+        }
+    }
+
+    [Fact]
     public void A_tile_picture_carries_its_corners_onto_the_floor_and_they_are_checked()
     {
         // A picture's tiles are wherever its kit put them, so the page can
