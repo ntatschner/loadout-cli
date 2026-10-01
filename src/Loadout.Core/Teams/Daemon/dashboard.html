@@ -6747,6 +6747,9 @@
   var TILE_SQUEEZE = 1500;
   var TILE_CLEAR = 3;
 
+  // How long sitting down, and getting up again, take: a sheet's sit-down is drawn across it.
+  var TILE_RISE = 900;
+
   // Move everybody on, and say whether this room wants another frame.
   function tileStep(room, now) {
     // Capped so that a long gap - a tab brought back, a room scrolled into
@@ -6786,6 +6789,16 @@
       }
 
       moving = true;
+
+      // Somebody sitting gets up before they walk off: their sit-down played
+      // backwards, in their chair, and only then the first step.
+      if (person.seated && person.canSit) {
+        if (!person.riseAt) { person.riseAt = now; }
+        if (now - person.riseAt < TILE_RISE) { return; }
+      }
+
+      person.seated = false;
+      person.riseAt = 0;
 
       var next = person.path[0];
       var nextCell = next.y * w + next.x;
@@ -6873,6 +6886,8 @@
             person.gone = true;
           } else {
             person.facing = tileSeat(room, name).facing;
+            // The moment they reach their place, for sitting down into it.
+            person.arrivedAt = now;
           }
         }
       } else {
@@ -7353,6 +7368,34 @@
         || animations["idle_" + person.facing];
       var frames = animation.frames;
       var frame = still ? frames[0] : frames[Math.floor(clock * (animation.fps || 6)) % frames.length];
+      var seatedPose = pose === "sit" || pose === "type" || pose === "slump";
+      var sitDown = animations["sitdown_" + person.facing];
+
+      // Sitting down as they reach their chair, and getting up before they
+      // leave it (tileStep holds them there meanwhile): the sit-down drawn once
+      // across TILE_RISE, backwards for getting up.
+      person.canSit = !!sitDown && !still;
+
+      // Whether they're in their chair, as drawn; left alone while they're getting up out of it.
+      if (part !== "upper" && !person.riseAt) { person.seated = seatedPose; }
+
+      if (sitDown && !still) {
+        var since = -1;
+        var backwards = false;
+
+        if (person.riseAt && person.path.length) {
+          since = now - person.riseAt;
+          backwards = true;
+        } else if (seatedPose && person.arrivedAt) {
+          since = now - person.arrivedAt;
+        }
+
+        if (since >= 0 && since < TILE_RISE) {
+          var step = Math.min(sitDown.frames.length - 1, Math.floor(since / TILE_RISE * sitDown.frames.length));
+
+          frame = sitDown.frames[backwards ? sitDown.frames.length - 1 - step : step];
+        }
+      }
       var fw = sheet.frame[0];
       var fh = sheet.frame[1];
       var columns = Math.max(1, Math.floor(picture.width / fw));

@@ -171,6 +171,11 @@ the desk is drawn over their legs, and everything above their lap is drawn again
 on top, so their hands are on the keyboard rather than under the desk. Without a
 lap, the desk covers them.
 
+A sheet can add `sitdown_n`, `sitdown_e`, `sitdown_s` and `sitdown_w`, from
+standing to sitting. Then somebody reaching their chair sits down into it, and
+somebody leaving it gets up first, the same frames backwards, before taking a
+step. Without them, people go from standing to sitting at once, as before.
+
 A sheet can also give the **face** in each frame that shows one: where the eyes
 and mouth are (`faces`, by frame number) and the person's skin, brow and lip
 colours (`face`). Then expressions are drawn over the face rather than drawn
@@ -193,6 +198,7 @@ somebody who is neither, because "Theo" over an older woman reads as a mistake.
 A sheet that doesn't say keeps the names everybody had before. One consequence
 worth knowing: the name now follows the kit, so two machines with different
 kits can call the same node by different names.
+
 
 `team office check` says whether a set can be used, names each thing wrong with
 it, and lists any part the rules need that the kit doesn't have. Those are

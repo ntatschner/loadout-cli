@@ -82,7 +82,7 @@ const code = [
 // The page's own switch for reduced motion: off, so people walk.
 const engine = new Function("function tilesStill() { return false; }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
-  + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR };")();
+  + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -548,6 +548,42 @@ for (const traits of [[], ["beard"], ["glasses"], ["eyes_closed"], ["grin"]]) {
 }
 
 console.log(`face layer: ${drawn} pixels across every expression and trait, none away from the face`);
+
+// ---- getting up before walking off ----
+
+// Somebody in their chair, whose sheet can sit down, is given somewhere to go:
+// they stay put while they get up, then walk. Somebody who can't sit down that
+// way walks at once, so nothing built-in is held up.
+{
+  const [name, raw] = chosen.find(([one]) => one.startsWith("floor"));
+  const scene = engine.turnScene(raw, 0);
+  const seat = scene.desks[0];
+
+  for (const canSit of [true, false]) {
+    const room = { scene, blocked: engine.tileBlocked(scene), seats: {}, people: {} };
+    const person = { x: seat.x, y: seat.y, facing: seat.facing, path: [], seated: true, canSit, gone: false, leaving: false, intent: {} };
+
+    room.people.p = person;
+    room.seats.p = seat;
+    engine.tileWalk(room, person, scene.door.x, scene.door.y);
+
+    if (!person.path.length) { fault("no way from a desk to the door to test getting up on", name); break; }
+
+    let movedAt = -1;
+
+    for (let now = 1000; now < 1000 + engine.TILE_RISE * 3; now += 50) {
+      engine.tileStep(room, now);
+
+      if (movedAt < 0 && (person.x !== seat.x || person.y !== seat.y)) { movedAt = now - 1000; }
+    }
+
+    const where = `${name}, ${canSit ? "a sheet that sits down" : "no sit-down"}: first moved after ${movedAt}ms`;
+
+    if (canSit && (movedAt < 0 || movedAt < engine.TILE_RISE - 50)) { fault("somebody walks off before they've got up", where); }
+    if (!canSit && (movedAt < 0 || movedAt > 200)) { fault("somebody with no sit-down is held in their chair", where); }
+    if (movedAt < 0) { fault("somebody never leaves their chair", where); }
+  }
+}
 console.log(`${scenes} scenes (every scene at four turns), ${paths} paths from the door`);
 console.log(`${cities} neighbourhoods made: ${blocks} buildings, none overlapping, all lower than the tower`);
 console.log(`${simulated} scenes walked: ${walks} walks, two people on one tile for ${(sharedMs / 1000).toFixed(1)}s in all, at most ${(longestShare / 1000).toFixed(2)}s at a time`);
