@@ -6191,6 +6191,40 @@
     }
   }
 
+  /*
+    A run's nodes come with the kit's person who draws them, chosen on the
+    server so the name on the desk fits the face (OfficeCast). Anybody else - a
+    person waiting in the lobby, the basement's keeper - is drawn from their
+    role's list by a number fixed by who they are, so they stay the same person
+    from one drawing to the next.
+  */
+  function tileCastPlace(run, node) {
+    var hash = 0;
+
+    ((run.id || "") + "|" + node.node).split("").forEach(function (ch) { hash = (hash * 31 + ch.charCodeAt(0)) >>> 0; });
+
+    return hash;
+  }
+
+  // The sheet somebody is drawn with: who the server cast them as, else the kit's list for their role, else the set's one sheet a role.
+  function tileSheet(scene, role, person) {
+    if (!scene.sheets) { return null; }
+
+    var cast = person.node && person.node.cast;
+
+    if (cast && scene.sheets[cast]) { return scene.sheets[cast]; }
+
+    if (scene.cast) {
+      var names = scene.cast[role] || scene.cast.worker || [];
+
+      return names.length ? scene.sheets[names[(person.cast || 0) % names.length]] : null;
+    }
+
+    var skins = scene.skins || {};
+
+    return scene.sheets[skins[role] || skins.worker];
+  }
+
   // Take in a fresh reading of the run: who is here, and what each should be doing.
   function tileUpdate(room, run) {
     room.run = run;
@@ -6229,6 +6263,7 @@
           leaving: false,
           gone: false,
           seed: (node.node.length * 7919 + node.node.charCodeAt(0)) % 1000 / 1000,
+          cast: tileCastPlace(run, node),
           rng: hash || 1,
           errand: null,
           nextErrand: 0,
@@ -7147,8 +7182,7 @@
     var still = tilesStill();
     var clock = now / 1000 + person.seed * 10;
     var role = ((person.node && person.node.role) || "").replace(/^role\./, "");
-    var skins = scene.skins || {};
-    var sheet = scene.sheets ? scene.sheets[skins[role] || skins.worker] : null;
+    var sheet = tileSheet(scene, role, person);
     var picture = sheet ? tilePicture(room.set, sheet.piece) : null;
     var top;
 

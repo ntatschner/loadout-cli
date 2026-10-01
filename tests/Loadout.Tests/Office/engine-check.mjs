@@ -80,7 +80,8 @@ const code = [
 
 // The page's own switch for reduced motion: off, so people walk.
 const engine = new Function("function tilesStill() { return false; }\n" + code
-  + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake };")();
+  + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
+  + " tileCastPlace, tileSheet };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -384,6 +385,55 @@ for (const [t, cols, rows] of [[32, 24, 16], [16, 24, 16], [32, 30, 20], [32, 16
   });
 }
 
+// ---- who is drawn as whom ----
+
+// A kit's cast: one sheet for the lead's role, nine for everybody else. Which
+// of them draws each of a run's nodes is the server's choice (OfficeCast), so
+// the name fits the face; the page has to draw exactly who it is told, keep
+// them on the roof, and pick for itself only for people the server does not
+// cast - somebody waiting in the lobby, the keeper.
+const workers = ["w0", "w1", "w2", "w3", "w4", "w5", "w6", "w7", "w8"];
+const sheets = Object.fromEntries(["lead", "porter", ...workers].map((name) => [name, { piece: name + ".png" }]));
+const castScene = { sheets, cast: { "project-lead": ["lead"], keeper: ["porter"], worker: workers } };
+let casts = 0;
+
+for (const name of workers) {
+  const node = { node: "implementer/1", role: "role.implementer", cast: name };
+  const floor = engine.tileSheet(castScene, "implementer", { node, cast: engine.tileCastPlace({ id: "r" }, node) });
+  // On the roof the node is copied under "run|node", its cast with it.
+  const roofNode = Object.assign({}, node, { node: "r|implementer/1" });
+  const roof = engine.tileSheet(castScene, "implementer", { node: roofNode, cast: engine.tileCastPlace({ id: "roof" }, roofNode) });
+
+  casts += 1;
+
+  if (floor !== sheets[name]) { fault("somebody is not drawn as the server cast them", name); }
+  if (roof !== floor) { fault("somebody looks different on the roof from on their own floor", name); }
+}
+
+// Nobody the server cast: their role's list, the same pick every time, and never the wrong role's.
+for (const who of ["waiting-task-12", "waiting-schedule-3", "keeper"]) {
+  const node = { node: who };
+  const role = who === "keeper" ? "keeper" : "task";
+  const first = engine.tileSheet(castScene, role, { node, cast: engine.tileCastPlace({ id: "lobby" }, node) });
+  const again = engine.tileSheet(castScene, role, { node, cast: engine.tileCastPlace({ id: "lobby" }, node) });
+
+  if (!first) { fault("somebody the server did not cast is drawn with no sheet", who); }
+  if (first !== again) { fault("somebody the server did not cast changes from one drawing to the next", who); }
+  if (role === "keeper" && first !== sheets.porter) { fault("the keeper is not drawn from the keeper's list", who); }
+  if (role !== "keeper" && !workers.some((name) => sheets[name] === first)) { fault("somebody waiting is not drawn from the workers", who); }
+}
+
+// A cast naming a sheet the set does not have falls back on the role's list rather than drawing nobody.
+if (!engine.tileSheet(castScene, "implementer", { node: { node: "x", cast: "nobody" }, cast: 0 })) {
+  fault("a cast sheet the set lacks draws nobody at all", "nobody");
+}
+
+// A set with no cast keeps drawing a role with its one sheet.
+if (engine.tileSheet({ sheets, skins: { worker: "w3" } }, "implementer", { node: { node: "x" }, cast: 7 }) !== sheets.w3) {
+  fault("a set's skins are not used when it has no cast", "skins only");
+}
+
+console.log(`${casts} people drawn as the server cast them, on their floor and on the roof; the uncast drawn from their role's list`);
 console.log(`${scenes} scenes (every scene at four turns), ${paths} paths from the door`);
 console.log(`${cities} neighbourhoods made: ${blocks} buildings, none overlapping, all lower than the tower`);
 console.log(`${simulated} scenes walked: ${walks} walks, two people on one tile for ${(sharedMs / 1000).toFixed(1)}s in all, at most ${(longestShare / 1000).toFixed(2)}s at a time`);

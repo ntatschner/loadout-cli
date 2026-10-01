@@ -53,11 +53,13 @@ public sealed record OfficeAnimation(
 /// <param name="Frame">One frame's width and height in pixels.</param>
 /// <param name="Anchor">Where in a frame the feet are, in pixels.</param>
 /// <param name="Animations">Each animation by name: idle_n, walk_e, type_s and the rest.</param>
+/// <param name="Gender">Who the sheet draws, one of <see cref="DeskNames.Genders"/>, so the name on their desk fits; null for no one in particular.</param>
 public sealed record OfficeSheet(
     [property: JsonPropertyName("piece")] string Piece,
     [property: JsonPropertyName("frame")] IReadOnlyList<int> Frame,
     [property: JsonPropertyName("anchor")] IReadOnlyList<int> Anchor,
-    [property: JsonPropertyName("animations")] IReadOnlyDictionary<string, OfficeAnimation> Animations);
+    [property: JsonPropertyName("animations")] IReadOnlyDictionary<string, OfficeAnimation> Animations,
+    [property: JsonPropertyName("gender")] string? Gender = null);
 
 /// <summary>One of several tile pictures a scene draws from.</summary>
 /// <param name="Picture">The picture, or null to draw in the kit's colours.</param>
@@ -111,6 +113,12 @@ public sealed record OfficeArea(
 /// <param name="Sheets">The sheets, by name.</param>
 /// <param name="Atlases">Several tile pictures in place of <paramref name="Tiles"/>, numbered one after another; a generated floor has one per wall kind.</param>
 /// <param name="Areas">The rooms of a generated floor, for their popups; none on a hand-made scene.</param>
+/// <param name="Cast">
+/// For each role, the sheets its people are drawn from, in order, with "worker"
+/// for any other: a kit's <see cref="OfficeKit.Skins"/>, carried onto the floors
+/// built from it. Where it is given it wins over <paramref name="Skins"/>, which
+/// can name only one sheet a role.
+/// </param>
 /// <remarks>
 /// <para>
 /// The second kind of set, beside the painted rooms of <see cref="OfficeRoom"/>.
@@ -138,7 +146,8 @@ public sealed record OfficeScene(
     [property: JsonPropertyName("skins")] IReadOnlyDictionary<string, string>? Skins = null,
     [property: JsonPropertyName("sheets")] IReadOnlyDictionary<string, OfficeSheet>? Sheets = null,
     [property: JsonPropertyName("atlases")] IReadOnlyList<OfficeAtlas>? Atlases = null,
-    [property: JsonPropertyName("areas")] IReadOnlyList<OfficeArea>? Areas = null)
+    [property: JsonPropertyName("areas")] IReadOnlyList<OfficeArea>? Areas = null,
+    [property: JsonPropertyName("cast")] IReadOnlyDictionary<string, IReadOnlyList<string>>? Cast = null)
 {
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.office/2";
@@ -676,7 +685,7 @@ public static class OfficeScenes
 
     private static void Sheets(OfficeScene scene, Func<string, (int Width, int Height)?> sizeOf, List<string> problems)
     {
-        if (scene.Skins is null && scene.Sheets is null)
+        if (scene.Skins is null && scene.Sheets is null && scene.Cast is null)
         {
             return;
         }
@@ -684,7 +693,27 @@ public static class OfficeScenes
         var sheets = scene.Sheets ?? new Dictionary<string, OfficeSheet>();
         var skins = scene.Skins ?? new Dictionary<string, string>();
 
-        if (!skins.ContainsKey("worker"))
+        if (scene.Cast is { } cast)
+        {
+            if (!cast.ContainsKey("worker"))
+            {
+                problems.Add("cast has no 'worker', which draws every role the set does not name.");
+            }
+
+            foreach (var (role, names) in cast)
+            {
+                if (names.Count == 0)
+                {
+                    problems.Add($"cast gives '{role}' nobody to draw it with.");
+                }
+
+                foreach (var name in names.Where(name => !sheets.ContainsKey(name)))
+                {
+                    problems.Add($"cast draws '{role}' with sheet '{name}', and there is no such sheet.");
+                }
+            }
+        }
+        else if (!skins.ContainsKey("worker"))
         {
             problems.Add("skins has no 'worker', which draws every role the set does not name.");
         }
@@ -713,6 +742,11 @@ public static class OfficeScenes
         foreach (var (name, sheet) in sheets)
         {
             var called = $"sheet '{name}'";
+
+            if (sheet.Gender is { } gender && !DeskNames.Genders.Contains(gender))
+            {
+                problems.Add($"{called} is drawn as '{gender}'; it has to be one of {string.Join(", ", DeskNames.Genders)}.");
+            }
 
             if (sheet.Frame is not [var fw, var fh] || fw < 1 || fh < 1)
             {

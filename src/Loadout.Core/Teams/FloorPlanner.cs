@@ -417,6 +417,10 @@ public static class FloorPlanner
 
         public int Tile => _kit.Tile;
 
+        /// <summary>The kit's people: its sheets, and which of them draw each role.</summary>
+        public (IReadOnlyDictionary<string, OfficeSheet>? Sheets, IReadOnlyDictionary<string, IReadOnlyList<string>>? Cast) People =>
+            _kit.Sheets is { Count: > 0 } && _kit.Skins is { Count: > 0 } ? (_kit.Sheets, _kit.Skins) : (null, null);
+
         public (string Name, OfficePiece Piece) Pick(string tag, Random random, Func<OfficePiece, bool>? fits = null)
         {
             foreach (var kit in new[] { _kit, _builtIn })
@@ -1295,6 +1299,7 @@ public static class FloorPlanner
         }
 
         var lift = floor.Spots.TryGetValue("lift", out var arrival) ? arrival : new OfficeSpot(coreLeft, band + 2, "n");
+        var (sheets, cast) = parts.People;
 
         return new OfficeScene(
             OfficeScene.Version,
@@ -1308,8 +1313,10 @@ public static class FloorPlanner
             desks,
             lift with { Facing = "s" },
             floor.Spots,
+            Sheets: sheets,
             Atlases: atlases,
-            Areas: floor.Areas);
+            Areas: floor.Areas,
+            Cast: cast);
     }
 
     private static int AtlasTiles(OfficeTileset tileset) => tileset.Corners.Values.DefaultIfEmpty(0).Max() + 1;

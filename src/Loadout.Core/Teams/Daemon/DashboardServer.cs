@@ -1622,7 +1622,7 @@ public sealed class DashboardServer : IDisposable
                 one.Succeeded ? 200 : 404,
                 "application/json; charset=utf-8",
                 one.Succeeded
-                    ? JsonSerializer.Serialize(Describe(one.Value!), Json)
+                    ? JsonSerializer.Serialize(Describe(one.Value!, OfficeKitNow().Kit), Json)
                     : JsonSerializer.Serialize(new { error = one.Error }, Json)).ConfigureAwait(false);
 
             return;
@@ -1634,10 +1634,11 @@ public sealed class DashboardServer : IDisposable
     /// <summary>Every run this machine knows about, newest first.</summary>
     private string Runs()
     {
+        var kit = OfficeKitNow().Kit;
         var runs = _journal.List(40)
             .Select(_journal.Summarise)
             .Where(read => read.Succeeded)
-            .Select(read => Describe(read.Value!))
+            .Select(read => Describe(read.Value!, kit))
             .ToList();
 
         // Whether this server can do anything about any of them. The page
@@ -1671,21 +1672,24 @@ public sealed class DashboardServer : IDisposable
     private string OfficeSnapshot()
     {
         var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
+        var kit = OfficeKitNow().Kit;
         var runs = summaries
-            .Select(run => new
+            .Select(run => (run, cast: OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)))))
+            .Select(one => new
             {
-                id = run.RunId,
-                run.Running,
-                nodes = run.Nodes.Select(node => new
+                id = one.run.RunId,
+                one.run.Running,
+                nodes = one.run.Nodes.Select(node => new
                 {
                     node.Node,
                     node.Role,
                     node.State,
-                    activity = run.Activity(node),
+                    activity = one.run.Activity(node),
                     node.Doing,
-                    person = DeskNames.For(run.RunId, node.Node),
-                    personFull = DeskNames.Full(run.RunId, node.Node),
-                    office = Office(OfficeIntent.For(run, node)),
+                    person = DeskNames.For(one.run.RunId, node.Node, OfficeCast.GenderOf(kit, one.cast.GetValueOrDefault(node.Node))),
+                    personFull = DeskNames.Full(one.run.RunId, node.Node, OfficeCast.GenderOf(kit, one.cast.GetValueOrDefault(node.Node))),
+                    cast = one.cast.GetValueOrDefault(node.Node),
+                    office = Office(OfficeIntent.For(one.run, node)),
                 }),
             })
             .ToList();
@@ -1962,7 +1966,9 @@ public sealed class DashboardServer : IDisposable
     /// a contract that does not move when the summary grows a field, and so
     /// what is sent is only what the page shows.
     /// </remarks>
-    private static object Describe(RunSummary run) => new
+    private static object Describe(RunSummary run, OfficeKit kit) => Describe(run, kit, OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role))));
+
+    private static object Describe(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> cast) => new
     {
         id = run.RunId,
 
@@ -2095,8 +2101,11 @@ public sealed class DashboardServer : IDisposable
             // room on the machine; this points at exactly one node of exactly
             // one run, which is what a person needs to say a week later. The
             // technical name is still right there beside it.
-            person = DeskNames.For(run.RunId, node.Node),
-            personFull = DeskNames.Full(run.RunId, node.Node),
+            person = DeskNames.For(run.RunId, node.Node, OfficeCast.GenderOf(kit, cast.GetValueOrDefault(node.Node))),
+            personFull = DeskNames.Full(run.RunId, node.Node, OfficeCast.GenderOf(kit, cast.GetValueOrDefault(node.Node))),
+
+            // Which of the office kit's people draws them, so the name above fits the face.
+            cast = cast.GetValueOrDefault(node.Node),
         }),
 
         // Every exchange, one by one, rather than only each node's total. Two

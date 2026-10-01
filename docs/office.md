@@ -154,6 +154,27 @@ drawn in plain colour with windows.
 }
 ```
 
+A kit can bring **people** too: a sprite sheet for each person, with their
+standing, walking, sitting and typing frames from each of four sides, and
+`skins`, which says who draws each role. A role can name several people, and
+`worker` covers any role the kit doesn't name.
+
+```json
+"skins": { "project-lead": ["lead"], "worker": ["engineer", "analyst", "tester"] },
+"sheets": { "analyst": { "piece": "cast-analyst.png", "frame": [96, 96], "anchor": [48, 76],
+                         "gender": "woman", "animations": { "idle_s": { "frames": [0] } } } }
+```
+
+Each node of a run is drawn by one of its role's people, chosen so nobody in a
+run turns up twice until everybody on the list has, and the same node is the
+same person every time, on its floor and on the roof. A sheet's `gender`, one of
+`woman`, `man` or `nonbinary`, decides the name on that person's desk: a woman's
+name for a woman, a man's for a man, and a name that could be anybody's for
+somebody who is neither, because "Theo" over an older woman reads as a mistake.
+A sheet that doesn't say keeps the names everybody had before. One consequence
+worth knowing: the name now follows the kit, so two machines with different
+kits can call the same node by different names.
+
 `team office check` says whether a set can be used, names each thing wrong with
 it, and lists any part the rules need that the kit doesn't have. Those are
 drawn in the built-in shapes until it does. A set for others to use should leave
