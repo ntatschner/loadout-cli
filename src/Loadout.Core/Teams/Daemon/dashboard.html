@@ -1591,16 +1591,19 @@
   .tile-floor { position: relative; }
   /* The building: its outside view, the floor you are on inside it, and the
      tower faded behind that floor. */
-  .rooms > .tower { grid-column: 1 / -1; }
+  /* min-width 0 here and on the stage: a grid item is never narrower than its
+     content by default, so zooming into a floor widened its column, and with
+     it the whole page; held to the panel, the floor scrolls inside it instead. */
+  .rooms > .tower { grid-column: 1 / -1; min-width: 0; }
   .tower-controls { display: flex; gap: var(--space-2); flex-wrap: wrap; }
   .tower-controls [hidden] { display: none; }
-  .tower-stage { position: relative; }
+  .tower-stage { position: relative; min-width: 0; }
   .tower-outside { display: block; margin: 0 auto; image-rendering: pixelated; border-radius: var(--radius-sm); touch-action: none; }
   .tower-views { display: inline-flex; gap: var(--space-1); }
   .tower-views [aria-pressed="true"] { background: var(--accent); color: var(--bg); }
   .tower-outside { transition: transform 0.42s ease-in, opacity 0.42s ease-in; }
   .tower-outside.tower-swoop { transform: scale(3); opacity: 0; }
-  .tower-inside { position: relative; display: grid; place-items: center; padding: 48px; overflow: auto; max-height: 78vh; transition: transform 0.26s ease-out, opacity 0.26s ease-out; }
+  .tower-inside { position: relative; display: grid; place-items: center; padding: 48px; overflow: auto; max-height: 78vh; max-width: 100%; transition: transform 0.26s ease-out, opacity 0.26s ease-out; }
   .tower-inside.tower-arrive { transform: scale(0.9); opacity: 0; }
   .tower-slot { position: relative; z-index: 1; }
   .tower-popup { position: absolute; z-index: 5; max-width: 22rem; padding: var(--space-3);
