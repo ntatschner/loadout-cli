@@ -152,6 +152,9 @@ public sealed class DashboardServer : IDisposable
     /// <summary>Which set in that directory to draw with, or empty for none.</summary>
     public string OfficeSet { get; set; } = string.Empty;
 
+    /// <summary>Who in the kit's cast plays which role, from team-office-cast; empty lets the office choose.</summary>
+    public IReadOnlyDictionary<string, string> OfficeCastPins { get; set; } = new Dictionary<string, string>();
+
     /// <summary>Which set the waiting area draws with, or empty for none.</summary>
     /// <remarks>
     /// Its own, because a reception full of people waiting and an office full
@@ -1622,7 +1625,7 @@ public sealed class DashboardServer : IDisposable
                 one.Succeeded ? 200 : 404,
                 "application/json; charset=utf-8",
                 one.Succeeded
-                    ? JsonSerializer.Serialize(Describe(one.Value!, OfficeKitNow().Kit), Json)
+                    ? JsonSerializer.Serialize(Describe(one.Value!, OfficeKitNow().Kit, OfficeCastPins), Json)
                     : JsonSerializer.Serialize(new { error = one.Error }, Json)).ConfigureAwait(false);
 
             return;
@@ -1638,7 +1641,7 @@ public sealed class DashboardServer : IDisposable
         var runs = _journal.List(40)
             .Select(_journal.Summarise)
             .Where(read => read.Succeeded)
-            .Select(read => Describe(read.Value!, kit))
+            .Select(read => Describe(read.Value!, kit, OfficeCastPins))
             .ToList();
 
         // Whether this server can do anything about any of them. The page
@@ -1674,7 +1677,7 @@ public sealed class DashboardServer : IDisposable
         var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
         var kit = OfficeKitNow().Kit;
         var runs = summaries
-            .Select(run => (run, cast: OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)))))
+            .Select(run => (run, cast: OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)), OfficeCastPins)))
             .Select(one => new
             {
                 id = one.run.RunId,
@@ -1966,9 +1969,10 @@ public sealed class DashboardServer : IDisposable
     /// a contract that does not move when the summary grows a field, and so
     /// what is sent is only what the page shows.
     /// </remarks>
-    private static object Describe(RunSummary run, OfficeKit kit) => Describe(run, kit, OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role))));
+    private static object Describe(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> pins) =>
+        Described(run, kit, OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)), pins));
 
-    private static object Describe(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> cast) => new
+    private static object Described(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> cast) => new
     {
         id = run.RunId,
 

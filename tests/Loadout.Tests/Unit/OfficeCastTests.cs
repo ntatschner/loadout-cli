@@ -111,6 +111,50 @@ public sealed class OfficeCastTests
     }
 
     [Fact]
+    public void A_role_pinned_to_somebody_is_drawn_as_them_and_nobody_else_is()
+    {
+        // team-office-cast: who plays which role, chosen rather than left to the office.
+        var pins = OfficeCast.Pins("reviewer=w4, project-lead=w0");
+        var cast = OfficeCast.For(CastKit(), "20261001-0900-a1b2", Run(8), pins);
+
+        cast["lead"].Should().Be("w0", "the lead's role is pinned to w0 rather than the kit's lead");
+        cast["implementer/2"].Should().Be("w4", "the first reviewer by name is the pinned one");
+        cast.Where(one => one.Key is not "lead" and not "implementer/2").Select(one => one.Value)
+            .Should().NotContain(["w0", "w4"], "a pinned person is taken out of everybody else's list")
+            .And.OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void A_second_node_of_a_pinned_role_comes_from_the_list()
+    {
+        var cast = OfficeCast.For(CastKit(), "r", [("reviewer/1", "role.reviewer"), ("reviewer/2", "role.reviewer")], OfficeCast.Pins("reviewer=w2"));
+
+        cast["reviewer/1"].Should().Be("w2");
+        cast["reviewer/2"].Should().NotBe("w2", "two of one person in a room is the thing pinning mustn't cause");
+    }
+
+    [Fact]
+    public void A_pin_for_somebody_the_kit_lacks_is_ignored()
+    {
+        OfficeCast.For(CastKit(), "r", Run(3), OfficeCast.Pins("project-lead=nobody"))
+            .Should().BeEquivalentTo(OfficeCast.For(CastKit(), "r", Run(3)));
+    }
+
+    [Fact]
+    public void The_setting_is_read_as_role_and_person_pairs()
+    {
+        OfficeCast.Pins("project-lead=w3, role.reviewer = w4, junk, =x, tester=, ,implementer=w1, implementer=w5")
+            .Should().BeEquivalentTo(new Dictionary<string, string>
+            {
+                ["project-lead"] = "w3",
+                ["reviewer"] = "w4",
+                ["implementer"] = "w5",
+            });
+
+        OfficeCast.Pins(null).Should().BeEmpty();
+    }
+
+    [Fact]
     public void A_kit_with_no_cast_draws_nobody_in_particular()
     {
         OfficeCast.For(OfficeKit.Kit(), "r", Run(3)).Should().BeEmpty();

@@ -382,6 +382,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "1-2: the art at one to two screen pixels per pixel, in whole steps that keep it crisp"),
 
+        new("team-office-cast",
+            "Who in the office's cast plays which role, as role=person pairs, comma separated",
+            (_, m) => m.Teams.OfficeCast,
+            (_, m, v) => m.Teams.OfficeCast = OfficeCastPins(v),
+            true,
+            Sample: "project-lead=analyst, reviewer=tester",
+            Group: Groups.Machine,
+            WhenUnset: "the office chooses: the lead's role gets the lead, and every other node somebody from the cast in turn"),
+
         new("team-waiting-set",
             "Which set of art the dashboard's waiting area draws with",
             (_, m) => m.Teams.WaitingSet,
@@ -707,6 +716,27 @@ public static class ConfigKeys
             ? string.Empty
             : Teams.OfficeScale.Parse(value)?.ToString()
                 ?? throw new FormatException($"'{value.Trim()}' is not a range like 1-2: two numbers from 0.5 to 8, the smaller first.");
+
+    /// <summary>
+    /// role=person pairs for the office's cast, refused when one isn't, rather than half-applied:
+    /// a pair the office skipped without saying would look like the setting not working.
+    /// </summary>
+    private static string OfficeCastPins(string value)
+    {
+        var pairs = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (var pair in pairs)
+        {
+            var parts = pair.Split('=', StringSplitOptions.TrimEntries);
+
+            if (parts is not [{ Length: > 0 } role, { Length: > 0 } person] || role.Contains(' ', StringComparison.Ordinal) || person.Contains(' ', StringComparison.Ordinal))
+            {
+                throw new FormatException($"'{pair}' is not role=person, such as project-lead=analyst.");
+            }
+        }
+
+        return string.Join(", ", pairs.Select(pair => string.Join("=", pair.Split('=', StringSplitOptions.TrimEntries))));
+    }
 
     private static string OneOf(string value, params string[] allowed)
     {

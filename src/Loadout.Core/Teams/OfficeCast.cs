@@ -28,7 +28,17 @@ public static class OfficeCast
     /// <param name="kit">The office kit in use.</param>
     /// <param name="runId">The run.</param>
     /// <param name="nodes">The run's nodes, each with its role as the run gives it ("role.project-lead").</param>
-    public static IReadOnlyDictionary<string, string> For(OfficeKit kit, string runId, IEnumerable<(string Node, string Role)> nodes)
+    /// <param name="pins">
+    /// Who plays which role, from the team-office-cast setting: role (without "role.") to a sheet.
+    /// The first node of a pinned role, by name, is drawn as that person; any more of the role are
+    /// drawn from its list as usual. A pinned person is taken out of every list, so nobody turns up
+    /// twice; a pin naming a sheet the kit lacks is ignored.
+    /// </param>
+    public static IReadOnlyDictionary<string, string> For(
+        OfficeKit kit,
+        string runId,
+        IEnumerable<(string Node, string Role)> nodes,
+        IReadOnlyDictionary<string, string>? pins = null)
     {
         var drawn = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -38,6 +48,14 @@ public static class OfficeCast
         }
 
         var start = Start(runId);
+        var pinned = (pins ?? new Dictionary<string, string>())
+            .Where(pin => sheets.ContainsKey(pin.Value))
+            .ToDictionary(pin => pin.Key, pin => pin.Value, StringComparer.Ordinal);
+        var taken = pinned.Values.ToHashSet(StringComparer.Ordinal);
+        var used = new HashSet<string>(StringComparer.Ordinal);
+
+        // A kit's list with the pinned people taken out, the same one each time it's asked for.
+        var without = new Dictionary<IReadOnlyList<string>, IReadOnlyList<string>>(ReferenceEqualityComparer.Instance);
 
         // Nodes drawn from the same list, by the list: two roles that both fall
         // back on "worker" share it, and so share its people out between them.
@@ -45,9 +63,25 @@ public static class OfficeCast
 
         foreach (var (node, role) in nodes.OrderBy(one => one.Node, StringComparer.Ordinal))
         {
-            if (ListFor(skins, role) is not { Count: > 0 } list)
+            var roleName = RoleName(role);
+
+            if (pinned.TryGetValue(roleName, out var person) && used.Add(roleName))
+            {
+                drawn[node] = person;
+
+                continue;
+            }
+
+            if (ListFor(skins, role) is not { Count: > 0 } full)
             {
                 continue;
+            }
+
+            if (!without.TryGetValue(full, out var list))
+            {
+                var left = full.Where(name => !taken.Contains(name)).ToList();
+
+                list = without[full] = left.Count > 0 ? left : full;
             }
 
             var index = lists.FindIndex(one => ReferenceEquals(one.List, list));
@@ -81,12 +115,31 @@ public static class OfficeCast
     public static string? GenderOf(OfficeKit kit, string? sheet) =>
         sheet is not null && kit.Sheets is { } sheets && sheets.TryGetValue(sheet, out var found) ? found.Gender : null;
 
-    private static IReadOnlyList<string>? ListFor(IReadOnlyDictionary<string, IReadOnlyList<string>> skins, string role)
+    /// <summary>
+    /// The team-office-cast setting read into pins: "project-lead=analyst, reviewer=tester". Blank
+    /// pairs and ones with no "=" are skipped; a later pair for the same role wins.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Pins(string? setting)
     {
-        var name = role.StartsWith("role.", StringComparison.Ordinal) ? role["role.".Length..] : role;
+        var pins = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        return skins.TryGetValue(name, out var list) ? list : skins.GetValueOrDefault("worker");
+        foreach (var pair in (setting ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var cut = pair.IndexOf('=', StringComparison.Ordinal);
+
+            if (cut > 0 && cut < pair.Length - 1)
+            {
+                pins[RoleName(pair[..cut].Trim())] = pair[(cut + 1)..].Trim();
+            }
+        }
+
+        return pins;
     }
+
+    private static string RoleName(string role) => role.StartsWith("role.", StringComparison.Ordinal) ? role["role.".Length..] : role;
+
+    private static IReadOnlyList<string>? ListFor(IReadOnlyDictionary<string, IReadOnlyList<string>> skins, string role) =>
+        skins.TryGetValue(RoleName(role), out var list) ? list : skins.GetValueOrDefault("worker");
 
     // A stable hash, as DeskNames uses: string.GetHashCode differs from one process to the next.
     private static uint Start(string runId) => BitConverter.ToUInt32(SHA256.HashData(Encoding.UTF8.GetBytes(runId)), 0);

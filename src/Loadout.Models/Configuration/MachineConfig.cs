@@ -238,6 +238,17 @@ public sealed class MachineTeams
     public string OfficeScale { get; set; } = string.Empty;
 
     /// <summary>
+    /// Who in the office kit's cast plays which role, as role=person pairs
+    /// ("project-lead=analyst, reviewer=tester"), or empty to let the office
+    /// choose.
+    /// </summary>
+    /// <remarks>
+    /// Machine-local, like the set it names people from: a pin for somebody
+    /// the kit in use doesn't have is simply ignored.
+    /// </remarks>
+    public string OfficeCast { get; set; } = string.Empty;
+
+    /// <summary>
     /// How many days a removed run or team stays in the bin before it is
     /// deleted for good, or null for the default of thirty.
     /// </summary>

@@ -199,6 +199,17 @@ A sheet that doesn't say keeps the names everybody had before. One consequence
 worth knowing: the name now follows the kit, so two machines with different
 kits can call the same node by different names.
 
+To choose who plays a role rather than leave it to the office, name them with
+`team-office-cast`, as role=person pairs:
+
+```
+loadout config set team-office-cast "project-lead=analyst, reviewer=tester"
+```
+
+The first node of that role in a run, by name, is drawn as that person, and
+they're taken out of everybody else's list, so nobody turns up twice. Any more
+nodes of the role are drawn from its list as usual, and a pair naming somebody
+the kit doesn't have is ignored. The name on the desk still fits whoever it is.
 
 `team office check` says whether a set can be used, names each thing wrong with
 it, and lists any part the rules need that the kit doesn't have. Those are
