@@ -54,12 +54,19 @@ public sealed record OfficeAnimation(
 /// <param name="Anchor">Where in a frame the feet are, in pixels.</param>
 /// <param name="Animations">Each animation by name: idle_n, walk_e, type_s and the rest.</param>
 /// <param name="Gender">Who the sheet draws, one of <see cref="DeskNames.Genders"/>, so the name on their desk fits; null for no one in particular.</param>
+/// <param name="Lap">
+/// Where in a frame a desk's top meets the body when they sit at it, in pixels
+/// from the top: at a desk side-on the desk is drawn over the legs below it and
+/// the arms above it are drawn again over the desk, so the hands are on the
+/// keyboard rather than under the desk. Null draws the desk over all of them.
+/// </param>
 public sealed record OfficeSheet(
     [property: JsonPropertyName("piece")] string Piece,
     [property: JsonPropertyName("frame")] IReadOnlyList<int> Frame,
     [property: JsonPropertyName("anchor")] IReadOnlyList<int> Anchor,
     [property: JsonPropertyName("animations")] IReadOnlyDictionary<string, OfficeAnimation> Animations,
-    [property: JsonPropertyName("gender")] string? Gender = null);
+    [property: JsonPropertyName("gender")] string? Gender = null,
+    [property: JsonPropertyName("lap")] int? Lap = null);
 
 /// <summary>One of several tile pictures a scene draws from.</summary>
 /// <param name="Picture">The picture, or null to draw in the kit's colours.</param>
@@ -758,6 +765,11 @@ public static class OfficeScenes
             if (sheet.Anchor is not [var ax, var ay] || ax < 0 || ay < 0 || ax > fw || ay > fh)
             {
                 problems.Add($"{called} needs an anchor of x and y inside its {fw}x{fh} frame.");
+            }
+
+            if (sheet.Lap is { } lap && (lap < 0 || lap > fh))
+            {
+                problems.Add($"{called} puts its lap at {lap}, outside its {fh} pixel high frame.");
             }
 
             int? frames = null;

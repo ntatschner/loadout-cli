@@ -76,12 +76,13 @@ const code = [
   cut("  function tileWalk(room, person, toX, toY) {", "  // Take in a fresh reading of the run"),
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
   cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
+  cut("  function tilePose(person) {", "  // part \"upper\" draws only"),
 ].join("\n");
 
 // The page's own switch for reduced motion: off, so people walk.
 const engine = new Function("function tilesStill() { return false; }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
-  + " tileCastPlace, tileSheet };")();
+  + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -434,6 +435,50 @@ if (engine.tileSheet({ sheets, skins: { worker: "w3" } }, "implementer", { node:
 }
 
 console.log(`${casts} people drawn as the server cast them, on their floor and on the roof; the uncast drawn from their role's list`);
+
+// ---- sitting at a desk side-on ----
+
+// Somebody sitting facing along the floor is drawn twice, the second time
+// above their lap over the desk they face, so their hands are on it. That
+// needs the desk to be found: at every turn of every floor walked above, a
+// seat facing east or west must have its desk straight ahead, and nobody
+// facing up or down the floor, or walking, may be taken for sitting side-on.
+let sideOn = 0;
+
+// Working floors only: the lobby's and the roof's seats are sofas and benches, with no desk to sit at.
+for (const [name, raw] of chosen.filter(([name]) => name.startsWith("floor"))) {
+  for (let k = 0; k < 4; k += 1) {
+    const scene = engine.turnScene(raw, k);
+    const room = { scene, people: {} };
+
+    scene.desks.forEach((seat, i) => {
+      const person = { x: seat.x, y: seat.y, facing: seat.facing, path: [], intent: { pose: "type" }, gone: false };
+      const where = `${name}, turn ${k}, desk ${i} facing ${seat.facing}`;
+
+      room.people.p = person;
+
+      const desk = engine.tileSideDesk(room, person);
+
+      if (seat.facing === "e" || seat.facing === "w") {
+        sideOn += 1;
+
+        if (!desk) { fault("somebody sitting side-on has no desk in front of them", where); return; }
+        if (!engine.tileAtDesk(room, desk).includes(person)) { fault("a desk does not know who sits side-on at it", where); }
+      } else if (desk) {
+        fault("somebody facing up or down the floor is taken for sitting side-on", where);
+      }
+
+      person.path = [{ x: seat.x, y: seat.y + 1 }];
+
+      if (engine.tileSideDesk(room, person)) { fault("somebody walking is taken for sitting at a desk", where); }
+    });
+  }
+}
+
+// Turned floors always have seats side-on; none would mean this checked nothing.
+if (!sideOn) { fault("no seat on any turned floor faces along it, so sitting side-on went unchecked", "every floor"); }
+
+console.log(`${sideOn} seats side-on to their desk, each finding the desk in front of it`);
 console.log(`${scenes} scenes (every scene at four turns), ${paths} paths from the door`);
 console.log(`${cities} neighbourhoods made: ${blocks} buildings, none overlapping, all lower than the tower`);
 console.log(`${simulated} scenes walked: ${walks} walks, two people on one tile for ${(sharedMs / 1000).toFixed(1)}s in all, at most ${(longestShare / 1000).toFixed(2)}s at a time`);

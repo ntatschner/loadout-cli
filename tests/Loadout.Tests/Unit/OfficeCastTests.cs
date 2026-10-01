@@ -187,6 +187,25 @@ public sealed class OfficeCastTests
         problems.Should().Contain(problem => problem.Contains("sheet 'w0' is drawn as 'robot'", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(-1, true)]
+    [InlineData(97, true)]
+    [InlineData(0, false)]
+    [InlineData(54, false)]
+    [InlineData(96, false)]
+    public void A_lap_has_to_be_inside_its_frame(int lap, bool refused)
+    {
+        // Where a desk's top meets somebody sitting: everything above it is drawn
+        // again over the desk, so a lap outside the frame draws nothing or all of it.
+        var kit = CastKit();
+        var sheets = kit.Sheets!.ToDictionary(one => one.Key, one => one.Key == "w0" ? one.Value with { Lap = lap } : one.Value);
+        var problems = new List<string>();
+
+        OfficeScenes.SheetProblems(sheets, _ => (96 * 8, 96), problems);
+
+        problems.Any(problem => problem.Contains("sheet 'w0' puts its lap", StringComparison.Ordinal)).Should().Be(refused);
+    }
+
     [Fact]
     public void A_floor_built_from_a_kit_with_a_cast_carries_it_to_the_page()
     {

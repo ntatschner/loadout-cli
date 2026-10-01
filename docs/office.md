@@ -162,8 +162,14 @@ standing, walking, sitting and typing frames from each of four sides, and
 ```json
 "skins": { "project-lead": ["lead"], "worker": ["engineer", "analyst", "tester"] },
 "sheets": { "analyst": { "piece": "cast-analyst.png", "frame": [96, 96], "anchor": [48, 76],
-                         "gender": "woman", "animations": { "idle_s": { "frames": [0] } } } }
+                         "gender": "woman", "lap": 58, "animations": { "idle_s": { "frames": [0] } } } }
 ```
+
+`lap` is the row of a frame where a desk's top meets them when they sit. When the
+floor is turned so somebody sits side-on to their desk, they're pulled up to it,
+the desk is drawn over their legs, and everything above their lap is drawn again
+on top, so their hands are on the keyboard rather than under the desk. Without a
+lap, the desk covers them.
 
 Each node of a run is drawn by one of its role's people, chosen so nobody in a
 run turns up twice until everybody on the list has, and the same node is the

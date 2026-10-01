@@ -7149,6 +7149,7 @@
     items.forEach(function (item) {
       if (item.prop) {
         tileProp(room, ctx, item.prop);
+        tileAtDesk(room, item.prop).forEach(function (person) { tilePerson(room, ctx, person, now, "upper"); });
       } else {
         tilePerson(room, ctx, item.person, now);
       }
@@ -7172,7 +7173,41 @@
     return (person.intent && person.intent.pose) || "idle";
   }
 
-  function tilePerson(room, ctx, person, now) {
+  /*
+    Somebody sitting side-on at a desk, facing along the floor rather than up
+    or down it, has their legs under the desk and their arms on it. Sorting by
+    where feet are puts the desk over all of them, so once a desk is drawn their
+    top half - above their lap, which their sheet says - is drawn again over it.
+    Facing up or down the floor needs nothing: from behind they are in front of
+    the desk, and from the front its monitor hides everything but their head.
+  */
+  function tileAtDesk(room, prop) {
+    return Object.keys(room.people).map(function (name) { return room.people[name]; }).filter(function (person) {
+      return tileSideDesk(room, person) === prop;
+    });
+  }
+
+  // The desk somebody is sitting side-on at, or null.
+  function tileSideDesk(room, person) {
+    var pose = tilePose(person);
+
+    if (person.gone || (pose !== "sit" && pose !== "type" && pose !== "slump")) { return null; }
+    if (person.facing !== "e" && person.facing !== "w") { return null; }
+
+    var x = Math.round(person.x) + (person.facing === "e" ? 1 : -1);
+    var y = Math.round(person.y);
+
+    return (room.scene.props || []).filter(function (prop) {
+      return (prop.kind === "desk" || prop.kind === "exec-desk")
+        && x >= prop.x && x < prop.x + (prop.w || 1) && y >= prop.y && y < prop.y + (prop.h || 1);
+    })[0] || null;
+  }
+
+  // Sitting side-on, somebody is pulled up to the desk so their hands are on it, not at its edge.
+  var TILE_PULL_UP = 0.3;
+
+  // part "upper" draws only what is above their lap, for drawing again over the desk they sit at.
+  function tilePerson(room, ctx, person, now, part) {
     var scene = room.scene;
     var t = scene.tile;
     var c = room.colours;
@@ -7187,6 +7222,8 @@
     var top;
 
     if (sheet && picture) {
+      if (sheet.lap && tileSideDesk(room, person)) { feetX += (person.facing === "e" ? 1 : -1) * TILE_PULL_UP * t; }
+
       var animations = sheet.animations;
       var animation = animations[pose + "_" + person.facing]
         || (pose === "slump" ? animations["sit_" + person.facing] : null)
@@ -7196,12 +7233,21 @@
       var fw = sheet.frame[0];
       var fh = sheet.frame[1];
       var columns = Math.max(1, Math.floor(picture.width / fw));
+      // Above the lap only, for the pass over the desk; the whole frame otherwise.
+      var rows = part === "upper" ? Math.max(0, Math.min(fh, sheet.lap || 0)) : fh;
 
-      ctx.drawImage(picture, (frame % columns) * fw, Math.floor(frame / columns) * fh, fw, fh,
-        Math.round(feetX - sheet.anchor[0]), Math.round(feetY - sheet.anchor[1]), fw, fh);
+      if (!rows) { return; }
+
+      ctx.drawImage(picture, (frame % columns) * fw, Math.floor(frame / columns) * fh, fw, rows,
+        Math.round(feetX - sheet.anchor[0]), Math.round(feetY - sheet.anchor[1]), fw, rows);
+
+      if (part === "upper") { return; }
 
       top = feetY - sheet.anchor[1];
     } else {
+      // The built-in person has no lap to draw above.
+      if (part === "upper") { return; }
+
       // The kit's person: a body and a head, in the kit's colours.
       var seated = pose === "sit" || pose === "type" || pose === "slump";
       var bodyW = Math.round(t * 0.55);
