@@ -8832,11 +8832,12 @@
   /*
     Whether a floor can be turned: only when everything on it looks right from
     every side. The kit's shapes do; a picture prop does once its kit gives all
-    four of its sides; a tile picture has one facing still.
+    four of its sides; a tile picture does once it says which tile has which
+    corners, so the turned pattern can be found in it.
   */
   function sceneTurns(scene) {
     return !scene.tiles
-      && !(scene.atlases || []).some(function (one) { return one.picture; })
+      && !(scene.atlases || []).some(function (one) { return one.picture && !one.corners; })
       && !(scene.props || []).some(function (one) {
         return one.piece && !["n", "e", "s", "w"].every(function (side) { return one.sides && one.sides[side]; });
       });
@@ -8863,6 +8864,16 @@
     var h = scene.height;
     var atlases = scene.atlases || [];
 
+    // A picture's tiles are wherever its kit put them: back from tile to
+    // pattern, turn the pattern, and on to the tile that has it.
+    var patterns = atlases.map(function (one) {
+      var back = {};
+
+      Object.keys(one.corners || {}).forEach(function (pattern) { back[one.corners[pattern]] = pattern; });
+
+      return back;
+    });
+
     function corners(tile) {
       if (tile < 0) { return tile; }
 
@@ -8871,6 +8882,14 @@
       for (var i = 0; i < atlases.length; i += 1) {
         if (tile < offset + atlases[i].tiles) {
           var local = tile - offset;
+
+          if (atlases[i].corners) {
+            var was = patterns[i][local];
+
+            // Corners in the order north-west, north-east, south-west, south-east.
+            return was ? offset + atlases[i].corners[was[2] + was[0] + was[3] + was[1]] : tile;
+          }
+
           var turned = (local & 2 ? 8 : 0) | (local & 8 ? 4 : 0) | (local & 4 ? 1 : 0) | (local & 1 ? 2 : 0);
 
           return offset + turned;

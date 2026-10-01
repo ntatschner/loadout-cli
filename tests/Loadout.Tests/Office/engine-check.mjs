@@ -589,6 +589,43 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   if (engine.sceneTurns(short)) { fault("a floor turns with a picture that has only some of its sides", "two sides"); }
 }
 
+// ---- tile pictures that turn with the floor ----
+
+// A picture's tiles sit wherever its kit put them. Turned, every cell has to
+// land on the tile whose corners are the built-in atlas's turned corners at
+// the same cell; four turns bring every tile back; and a picture without its
+// corners keeps the floor from turning.
+{
+  const patterns = Array.from({ length: 16 }, (_, bits) => [3, 2, 1, 0].map((b) => (bits >> b & 1 ? "u" : "l")).join(""));
+  const shuffled = {};
+
+  patterns.forEach((pattern, bits) => { shuffled[pattern] = (bits * 5 + 3) % 16; });
+
+  const cells = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14], [15, 0, 5]];
+  const scene = (atlas, at) => ({
+    width: 3, height: 6, tile: 32, desks: [], props: [], door: { x: 0, y: 0, facing: "s" },
+    atlases: [atlas], floor: cells.map((row) => row.map(at)), walls: null,
+  });
+  const plain = scene({ picture: null, tiles: 16, lower: "carpet", upper: "wall" }, (bits) => bits);
+  const picture = scene({ picture: "walls.png", tiles: 16, lower: "carpet", upper: "wall", corners: shuffled }, (bits) => shuffled[patterns[bits]]);
+  const patternOf = Object.fromEntries(Object.entries(shuffled).map(([pattern, index]) => [index, pattern]));
+
+  for (let k = 1; k <= 3; k += 1) {
+    const want = engine.turnScene(plain, k).floor;
+    const got = engine.turnScene(picture, k).floor;
+    const wrong = want.flatMap((row, y) => row.map((bits, x) => (patternOf[got[y][x]] !== patterns[bits] ? `${x},${y}` : null)).filter(Boolean));
+
+    if (wrong.length) { fault("a turned tile picture shows the wrong tile", `turn ${k}: ${wrong.slice(0, 3).join(" ")}`); }
+  }
+
+  if (JSON.stringify(engine.turnScene(picture, 4).floor) !== JSON.stringify(picture.floor)) { fault("four turns don't bring a tile picture back", "four turns"); }
+  if (!engine.sceneTurns(picture)) { fault("a floor with a tile picture that gives its corners won't turn", "corners"); }
+
+  const unmapped = Object.assign({}, picture, { atlases: [Object.assign({}, picture.atlases[0], { corners: undefined })] });
+
+  if (engine.sceneTurns(unmapped)) { fault("a floor turns with a tile picture that doesn't say which tile has which corners", "no corners"); }
+}
+
 // ---- getting up before walking off ----
 
 // Somebody in their chair, whose sheet can sit down, is given somewhere to go:

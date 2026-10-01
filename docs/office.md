@@ -138,7 +138,9 @@ which partitions each may have, and which layouts to use.
 A piece can give its `sides` as well: where in its picture it is seen with its
 front facing each way, `n`, `e`, `s` and `w`. Turn the floor a quarter and a
 desk that faced you shows its side, not the same picture on its side. A floor
-turns once every picture piece on it has all four.
+turns once every picture piece on it has all four. Floor and wall tiles need
+nothing extra: a tileset already says which tile has which corners, so a turned
+floor is drawn from the tiles whose corners match where the walls now run.
 
 ```
 loadout config set team-office-set my-office
@@ -229,9 +231,10 @@ Stated plainly, so nobody finds out by surprise:
   building is drawn in flat coloured shapes. The pixel-art pack that replaces
   them is being made.
 - **Floors of art turn only once their pictures allow it.** A pack's pieces
-  turn once they give all four sides; its floor and wall tiles don't turn yet,
-  so a floor drawn from tile pictures stays facing one way. Floors drawn in the
-  built-in shapes turn now.
+  turn once they give all four sides. Tiles are picked by their corners, not
+  turned, so shading drawn into a tile, a shadow along a wall's south face say,
+  stays where it was drawn. A room drawn from one hand-made picture doesn't
+  turn at all.
 - **The painted rooms and the separate Waiting area are still here.** They go
   once the building has its art.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors

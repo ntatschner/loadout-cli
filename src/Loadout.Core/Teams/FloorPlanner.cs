@@ -1229,8 +1229,8 @@ public static class FloorPlanner
         var glass = parts.Tileset("carpet-glass");
         var atlases = new List<OfficeAtlas>
         {
-            new(solid.Picture, AtlasTiles(solid), solid.Lower, solid.Upper),
-            new(glass.Picture, AtlasTiles(glass), glass.Lower, glass.Upper),
+            Atlas(solid),
+            Atlas(glass),
         };
         var offsets = new[] { 0, atlases[0].Tiles };
         var sets = new[] { solid, glass };
@@ -1319,6 +1319,11 @@ public static class FloorPlanner
             Areas: floor.Areas,
             Cast: cast);
     }
+
+    // A picture carries its corner patterns so the page can turn it; the
+    // built-in atlas's tile numbers are its patterns, so it needs none.
+    private static OfficeAtlas Atlas(OfficeTileset tileset) =>
+        new(tileset.Picture, AtlasTiles(tileset), tileset.Lower, tileset.Upper, tileset.Picture is null ? null : tileset.Corners);
 
     private static int AtlasTiles(OfficeTileset tileset) => tileset.Corners.Values.DefaultIfEmpty(0).Max() + 1;
 }

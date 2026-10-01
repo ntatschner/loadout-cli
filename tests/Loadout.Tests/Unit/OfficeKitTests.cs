@@ -200,6 +200,36 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void A_tile_picture_carries_its_corners_onto_the_floor_and_they_are_checked()
+    {
+        // A picture's tiles are wherever its kit put them, so the page can
+        // only turn the floor with the kit's corners in hand. The built-in
+        // atlas's tile numbers are its patterns, and it carries none.
+        var shuffled = OfficeKit.CornerPatterns.Select((pattern, bits) => (pattern, bits)).ToDictionary(one => one.pattern, one => (one.bits * 5 + 3) % 16);
+        var small = Small();
+        var kit = small with
+        {
+            Tilesets = new Dictionary<string, OfficeTileset>(small.Tilesets) { ["carpet-wall"] = new("walls.png", "carpet", "wall", shuffled) },
+        };
+
+        var scene = FloorPlanner.Plan(kit, OfficeRules.Default, "run-a", 3).Scene;
+
+        scene.Atlases![0].Corners.Should().BeEquivalentTo(shuffled);
+        scene.Atlases[1].Corners.Should().BeNull();
+
+        var wrong = new Dictionary<string, int>(shuffled) { ["uuuu"] = 16, ["sideways"] = 0 };
+
+        wrong.Remove("llll");
+        OfficeScenes.Problems(scene with { Atlases = [scene.Atlases[0] with { Corners = wrong }, scene.Atlases[1]] }, _ => (128, 128))
+            .Should().BeEquivalentTo(
+            [
+                "atlas 'walls.png' gives no tile for the corners llll.",
+                "atlas 'walls.png' names corners 'sideways'; a pattern is four of l and u.",
+                "atlas 'walls.png' puts corners 'uuuu' at tile 16, outside its 16.",
+            ]);
+    }
+
+    [Fact]
     public void A_tile_past_the_end_of_the_atlas_is_named()
     {
         var corners = OfficeKit.CornerPatterns.ToDictionary(one => one, one => one == "uuuu" ? 16 : 0);

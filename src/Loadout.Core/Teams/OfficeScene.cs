@@ -114,6 +114,12 @@ public sealed record OfficeFaceLook(
 /// <param name="Tiles">How many tiles it holds; a scene's tile numbers run on from one atlas to the next.</param>
 /// <param name="Lower">The terrain its tiles call lower, so the kit's colours know what to draw.</param>
 /// <param name="Upper">And upper.</param>
+/// <param name="Corners">
+/// For a picture, which of its tiles has which corner pattern, as a kit's
+/// tileset gives them: the page turns such a floor by finding the tile with
+/// the turned pattern. Null for the built-in atlas, whose tile numbers are
+/// their patterns.
+/// </param>
 /// <remarks>
 /// A generated floor draws solid walls, glass partitions and the curtain wall
 /// from separate tilesets, so it needs more than the one picture a hand-made
@@ -124,7 +130,8 @@ public sealed record OfficeAtlas(
     [property: JsonPropertyName("picture")] string? Picture,
     [property: JsonPropertyName("tiles")] int Tiles,
     [property: JsonPropertyName("lower")] string Lower,
-    [property: JsonPropertyName("upper")] string Upper);
+    [property: JsonPropertyName("upper")] string Upper,
+    [property: JsonPropertyName("corners")] IReadOnlyDictionary<string, int>? Corners = null);
 
 /// <summary>A room of a generated floor: what it is, where, and what it is for on the dashboard.</summary>
 /// <param name="Name">Its name, unique on the floor: lead-office, meeting-1, kitchen.</param>
@@ -534,6 +541,28 @@ public static class OfficeScenes
                 else if (size.Width / scene.Tile * (size.Height / scene.Tile) < atlas.Tiles)
                 {
                     problems.Add($"atlas '{picture}' is {size.Width}x{size.Height}, too small for the {atlas.Tiles} tiles it claims.");
+                }
+            }
+
+            if (atlas.Corners is { } corners)
+            {
+                var absent = OfficeKit.CornerPatterns.Where(pattern => !corners.ContainsKey(pattern)).ToList();
+
+                if (absent.Count > 0)
+                {
+                    problems.Add($"atlas '{atlas.Picture ?? atlas.Upper}' gives no tile for the corners {string.Join(", ", absent)}.");
+                }
+
+                foreach (var (pattern, index) in corners)
+                {
+                    if (!OfficeKit.CornerPatterns.Contains(pattern))
+                    {
+                        problems.Add($"atlas '{atlas.Picture ?? atlas.Upper}' names corners '{pattern}'; a pattern is four of l and u.");
+                    }
+                    else if (index < 0 || index >= atlas.Tiles)
+                    {
+                        problems.Add($"atlas '{atlas.Picture ?? atlas.Upper}' puts corners '{pattern}' at tile {index}, outside its {atlas.Tiles}.");
+                    }
                 }
             }
 
