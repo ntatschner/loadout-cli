@@ -82,7 +82,7 @@ const code = [
 // The page's own switch for reduced motion: off, so people walk.
 const engine = new Function("function tilesStill() { return false; }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
-  + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk };")();
+  + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -479,6 +479,75 @@ for (const [name, raw] of chosen.filter(([name]) => name.startsWith("floor"))) {
 if (!sideOn) { fault("no seat on any turned floor faces along it, so sitting side-on went unchecked", "every floor"); }
 
 console.log(`${sideOn} seats side-on to their desk, each finding the desk in front of it`);
+
+// ---- the face layer ----
+
+// Which expression: from what the node is doing first, and a passing mood only now and then.
+const said = (intent, pose, extra) => engine.tileExpression(Object.assign({ intent, seed: 0.3 }, extra || {}), pose, 1234);
+
+if (said({ lamp: "failed" }, "type") !== "frown") { fault("a failed node does not frown", "failed"); }
+if (said({ lamp: "waiting" }, "idle") !== "surprised") { fault("a node waiting on you does not look up", "waiting"); }
+if (said({ lamp: "quiet" }, "walk", { leaving: true }) !== "smile") { fault("somebody leaving done does not smile", "leaving"); }
+if (said({ lamp: "working" }, "type") !== "focused") { fault("somebody typing does not look focused", "typing"); }
+if (said({ lamp: "quiet" }, "slump") !== "tired") { fault("somebody slumped does not look tired", "slump"); }
+
+let moodMs = 0;
+const moodAt = new Set();
+
+for (let now = 0; now < engine.TILE_MOOD_EVERY * 4; now += 100) {
+  if (engine.tileExpression({ intent: { lamp: "quiet" }, seed: 0.3 }, "idle", now)) { moodMs += 100; }
+}
+
+for (const seed of [0.1, 0.35, 0.6, 0.85]) {
+  for (let now = 0; now < engine.TILE_MOOD_EVERY; now += 500) {
+    if (engine.tileExpression({ intent: { lamp: "quiet" }, seed }, "idle", now)) { moodAt.add(Math.floor(now / 1000)); }
+  }
+}
+
+if (!moodMs || moodMs > engine.TILE_MOOD_FOR * 4 + 100) { fault("a passing mood is never there, or there too long", `${moodMs}ms in ${engine.TILE_MOOD_EVERY * 4}ms`); }
+if (moodAt.size < 8) { fault("everybody's passing mood comes at the same moment", `${moodAt.size} different seconds for four people`); }
+
+// Drawing: a made-up face, front and side, at every expression and with every trait.
+const front = { eyes: [[40.5, 30], [49.5, 30]], mouth: [45, 36] };
+const side = { eyes: [[50, 30]], mouth: [53, 35] };
+const look = { skin: "#c08868", brow: "#20181a", lip: "#7a4a3f" };
+const expressions = ["smile", "focused", "tired", "frown", "surprised", "yawn"];
+let drawn = 0;
+
+for (const traits of [[], ["beard"], ["glasses"], ["eyes_closed"], ["grin"]]) {
+  const sheet = { faces: { 3: front, 4: side }, face: Object.assign({ traits }, look) };
+
+  for (const expression of expressions.concat([null])) {
+    for (const [frame, facing] of [[3, "s"], [4, "e"], [4, "w"], [9, "s"]]) {
+      const pixels = [];
+      const ctx = { fillStyle: "", fillRect(x, y) { pixels.push({ x, y, colour: this.fillStyle }); } };
+      const where = `${expression} facing ${facing}, traits ${traits.join(",") || "none"}`;
+      const place = sheet.faces[frame];
+
+      engine.tileFace(ctx, sheet, frame, facing, expression, 100, 200);
+      drawn += pixels.length;
+
+      if ((!expression || !place) && pixels.length) { fault("a face is drawn on with nothing to draw", where); continue; }
+      if (!expression || !place) { continue; }
+      if (!pixels.length) { fault("an expression draws nothing", where); }
+
+      for (const p of pixels) {
+        const x = p.x - 100;
+        const y = p.y - 200;
+        const nearMouth = Math.abs(x - place.mouth[0]) <= 4 && y >= place.mouth[1] - 1 && y <= place.mouth[1] + 2;
+        const onEyes = place.eyes.some(([ex, ey]) => Math.abs(x - ex) <= 2 && y >= ey - 1 && y <= ey);
+
+        if (!nearMouth && !onEyes) { fault("the face layer draws away from the face", `${where}: ${x},${y}`); break; }
+        if (onEyes && !nearMouth && (traits.includes("glasses") || traits.includes("eyes_closed"))) { fault("eyes behind glasses or already closed are drawn over", where); break; }
+        if (p.colour === look.skin && (place.eyes.length === 1 || traits.includes("beard"))) {
+          if (!onEyes) { fault("skin is painted over a side view's mouth or a beard", where); break; }
+        }
+      }
+    }
+  }
+}
+
+console.log(`face layer: ${drawn} pixels across every expression and trait, none away from the face`);
 console.log(`${scenes} scenes (every scene at four turns), ${paths} paths from the door`);
 console.log(`${cities} neighbourhoods made: ${blocks} buildings, none overlapping, all lower than the tower`);
 console.log(`${simulated} scenes walked: ${walks} walks, two people on one tile for ${(sharedMs / 1000).toFixed(1)}s in all, at most ${(longestShare / 1000).toFixed(2)}s at a time`);

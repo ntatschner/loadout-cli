@@ -207,6 +207,33 @@ public sealed class OfficeCastTests
     }
 
     [Fact]
+    public void A_kit_check_refuses_a_face_it_cannot_draw_on()
+    {
+        // The face layer draws expressions at these places, so one off the frame,
+        // or a trait it doesn't know how to leave alone, is a set that can't work.
+        var kit = CastKit();
+        var faces = new Dictionary<string, OfficeFacePlace>(StringComparer.Ordinal)
+        {
+            ["0"] = new([[40.5, 30], [49.5, 30]], [45, 36]),
+            ["1"] = new([[50, 30]], [96, 35]),
+            ["walk"] = new([[50, 30]], [53, 35]),
+            ["2"] = new([], [53, 35]),
+        };
+        var sheets = kit.Sheets!.ToDictionary(
+            one => one.Key,
+            one => one.Key == "w0" ? one.Value with { Faces = faces, Face = new OfficeFaceLook("#c08868", Traits: ["glasses", "moustache"]) } : one.Value);
+        var problems = new List<string>();
+
+        OfficeScenes.SheetProblems(sheets, _ => (96 * 8, 96), problems);
+
+        problems.Should().Contain(problem => problem.Contains("frame 1: a face needs", StringComparison.Ordinal), "a mouth on the frame's edge is outside it");
+        problems.Should().Contain(problem => problem.Contains("frame 2: a face needs", StringComparison.Ordinal), "a face with no eyes has nothing to draw tired or yawning on");
+        problems.Should().Contain(problem => problem.Contains("a face for 'walk', which is not a frame number", StringComparison.Ordinal));
+        problems.Should().Contain(problem => problem.Contains("face trait 'moustache'", StringComparison.Ordinal));
+        problems.Should().NotContain(problem => problem.Contains("frame 0:", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_floor_built_from_a_kit_with_a_cast_carries_it_to_the_page()
     {
         var scene = FloorPlanner.Plan(CastKit(), OfficeRules.Default, "run-a", 5).Scene;

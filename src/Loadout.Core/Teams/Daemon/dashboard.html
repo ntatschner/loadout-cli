@@ -7206,6 +7206,129 @@
   // Sitting side-on, somebody is pulled up to the desk so their hands are on it, not at its edge.
   var TILE_PULL_UP = 0.3;
 
+  /*
+    The face layer. A kit can say where the eyes and mouth are in every frame
+    that shows a face, so an expression is a few pixels drawn over it in the
+    person's own colours rather than another set of drawings to make: focused
+    while typing, tired when slumped, a frown when something has failed,
+    surprise when they're waiting on you, a smile on the way out. Otherwise the
+    face is left as it was drawn, with a few seconds of a passing mood now and
+    then so the room doesn't look set like a photograph.
+  */
+  var TILE_MOODS = ["smile", "yawn", "smile", "surprised"];
+  var TILE_MOOD_EVERY = 30000;
+  var TILE_MOOD_FOR = 2500;
+
+  function tileExpression(person, pose, now) {
+    var intent = person.intent || {};
+
+    if (intent.lamp === "failed") { return "frown"; }
+    if (intent.lamp === "waiting") { return "surprised"; }
+    if (person.leaving) { return "smile"; }
+    if (pose === "slump") { return "tired"; }
+    if (pose === "type") { return "focused"; }
+    if (tilesStill()) { return null; }
+
+    var shifted = now + (person.seed || 0) * TILE_MOOD_EVERY;
+
+    if (shifted % TILE_MOOD_EVERY < TILE_MOOD_FOR) {
+      return TILE_MOODS[Math.floor(shifted / TILE_MOOD_EVERY) % TILE_MOODS.length];
+    }
+
+    return null;
+  }
+
+  // A colour a step darker, for an eyelid, or for a mouth whose own colour is a grin's teeth.
+  function tileShade(hex, by) {
+    var n = parseInt((hex || "#000000").slice(1), 16);
+    var k = 1 - by;
+
+    return "rgb(" + Math.round((n >> 16 & 255) * k) + "," + Math.round((n >> 8 & 255) * k) + "," + Math.round((n & 255) * k) + ")";
+  }
+
+  function tileLight(hex) {
+    var n = parseInt((hex || "#000000").slice(1), 16);
+
+    return (n >> 16 & 255) * 3 + (n >> 8 & 255) * 6 + (n & 255);
+  }
+
+  // Draws an expression over frame number frame, whose top left is at ox, oy.
+  function tileFace(ctx, sheet, frame, facing, expression, ox, oy) {
+    var place = expression && sheet.faces && sheet.faces[frame];
+
+    if (!place) { return; }
+
+    var look = sheet.face || {};
+    var traits = look.traits || [];
+    var skin = look.skin || "#c08868";
+    var lip = look.lip && tileLight(look.lip) < tileLight(skin) ? look.lip : tileShade(skin, 0.45);
+    // An open mouth is the inside of their own mouth, not their brows, which may be any colour their hair is.
+    var dark = tileShade(skin, 0.7);
+    var lash = look.brow && tileLight(look.brow) < tileLight(skin) ? look.brow : dark;
+    var lid = tileShade(skin, 0.2);
+    var keepEyes = traits.indexOf("glasses") >= 0 || traits.indexOf("eyes_closed") >= 0;
+    var beard = traits.indexOf("beard") >= 0;
+    var mx = place.mouth[0];
+    var my = place.mouth[1];
+
+    function dot(x, y, colour) {
+      ctx.fillStyle = colour;
+      ctx.fillRect(ox + Math.floor(x), oy + Math.floor(y), 1, 1);
+    }
+
+    // A row of width pixels centred on cx, which may sit between two pixels.
+    function row(cx, y, width, colour) {
+      var left = Math.round(cx - width / 2);
+
+      for (var x = left; x < left + width; x += 1) { dot(x, y, colour); }
+    }
+
+    function lids() {
+      if (keepEyes) { return; }
+      place.eyes.forEach(function (eye) { row(eye[0], eye[1] - 1, 3, lid); });
+    }
+
+    function shut() {
+      if (keepEyes) { return; }
+      place.eyes.forEach(function (eye) { row(eye[0], eye[1] - 1, 3, skin); row(eye[0], eye[1], 3, lash); });
+    }
+
+    if (place.eyes.length === 1) {
+      // From the side the mouth is at the face's edge: marks are only added, so
+      // nothing is ever painted past the outline.
+      var back = facing === "w" ? 1 : -1;
+      var front = Math.round(mx);
+
+      if (expression === "smile") { dot(front + back, my, lip); dot(front + back * 2, my - 1, lip); }
+      if (expression === "frown") { dot(front + back, my, lip); dot(front + back * 2, my + 1, lip); }
+      if (expression === "focused") { dot(front + back, my, lip); }
+      if (expression === "tired") { dot(front + back, my, lip); lids(); }
+      if (expression === "surprised") { dot(front, my, dark); dot(front, my + 1, dark); }
+      if (expression === "yawn") { dot(front, my, dark); dot(front, my + 1, dark); dot(front, my + 2, dark); shut(); }
+
+      return;
+    }
+
+    // From the front: the mouth's rows are painted over with skin first, so the
+    // drawn one doesn't show through - except in a beard, where only lips are added.
+    // Eight wide: the widest smiles drawn (a grin, a broad one) are that wide, and
+    // anything narrower leaves their corners behind as specks either side.
+    if (!beard) {
+      row(mx, my - 1, 8, skin);
+      row(mx, my, 8, skin);
+      row(mx, my + 1, 8, skin);
+    }
+
+    var left = Math.round(mx - 2);
+
+    if (expression === "smile") { row(mx, my, 4, lip); dot(left - 1, my - 1, lip); dot(left + 4, my - 1, lip); }
+    if (expression === "frown") { row(mx, my, 4, lip); dot(left - 1, my + 1, lip); dot(left + 4, my + 1, lip); }
+    if (expression === "focused") { row(mx, my, 3, lip); }
+    if (expression === "tired") { row(mx, my, 3, lip); lids(); }
+    if (expression === "surprised") { row(mx, my, 2, dark); row(mx, my + 1, 2, dark); }
+    if (expression === "yawn") { row(mx, my - 1, 2, dark); row(mx, my, 2, dark); row(mx, my + 1, 2, dark); shut(); }
+  }
+
   // part "upper" draws only what is above their lap, for drawing again over the desk they sit at.
   function tilePerson(room, ctx, person, now, part) {
     var scene = room.scene;
@@ -7240,6 +7363,10 @@
 
       ctx.drawImage(picture, (frame % columns) * fw, Math.floor(frame / columns) * fh, fw, rows,
         Math.round(feetX - sheet.anchor[0]), Math.round(feetY - sheet.anchor[1]), fw, rows);
+
+      // The face is above the lap, so it goes on in both passes.
+      tileFace(ctx, sheet, frame, person.facing, tileExpression(person, pose, now),
+        Math.round(feetX - sheet.anchor[0]), Math.round(feetY - sheet.anchor[1]));
 
       if (part === "upper") { return; }
 

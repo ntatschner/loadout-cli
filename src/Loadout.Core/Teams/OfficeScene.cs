@@ -60,13 +60,46 @@ public sealed record OfficeAnimation(
 /// the arms above it are drawn again over the desk, so the hands are on the
 /// keyboard rather than under the desk. Null draws the desk over all of them.
 /// </param>
+/// <param name="Faces">
+/// Where the eyes and mouth are in each frame that shows a face, by frame number,
+/// for drawing expressions over it. A frame not listed is drawn as it is.
+/// </param>
+/// <param name="Face">What the face layer draws with: the person's skin, brow and lip colours, and what to leave alone.</param>
 public sealed record OfficeSheet(
     [property: JsonPropertyName("piece")] string Piece,
     [property: JsonPropertyName("frame")] IReadOnlyList<int> Frame,
     [property: JsonPropertyName("anchor")] IReadOnlyList<int> Anchor,
     [property: JsonPropertyName("animations")] IReadOnlyDictionary<string, OfficeAnimation> Animations,
     [property: JsonPropertyName("gender")] string? Gender = null,
-    [property: JsonPropertyName("lap")] int? Lap = null);
+    [property: JsonPropertyName("lap")] int? Lap = null,
+    [property: JsonPropertyName("faces")] IReadOnlyDictionary<string, OfficeFacePlace>? Faces = null,
+    [property: JsonPropertyName("face")] OfficeFaceLook? Face = null);
+
+/// <summary>Where a face is in one frame, in the frame's pixels.</summary>
+/// <param name="Eyes">Each eye's centre, x then y; the y is the eye's lower row. One eye from the side, the near one first from three-quarters.</param>
+/// <param name="Mouth">The centre of the mouth's row.</param>
+public sealed record OfficeFacePlace(
+    [property: JsonPropertyName("eyes")] IReadOnlyList<IReadOnlyList<double>> Eyes,
+    [property: JsonPropertyName("mouth")] IReadOnlyList<double> Mouth);
+
+/// <summary>What the face layer draws a person's expressions with.</summary>
+/// <param name="Skin">Their skin, as #rrggbb, for painting over what an expression replaces.</param>
+/// <param name="Brow">Their brows and lashes.</param>
+/// <param name="Lip">Their mouth; one lighter than their skin (a grin's teeth) is drawn darker instead.</param>
+/// <param name="Traits">What expressions must leave alone: <see cref="Traits"/>.</param>
+public sealed record OfficeFaceLook(
+    [property: JsonPropertyName("skin")] string? Skin = null,
+    [property: JsonPropertyName("brow")] string? Brow = null,
+    [property: JsonPropertyName("lip")] string? Lip = null,
+    [property: JsonPropertyName("traits")] IReadOnlyList<string>? Traits = null)
+{
+    /// <summary>
+    /// glasses: the eyes are behind lenses, so only the mouth changes. beard: the
+    /// mouth is in a beard, so nothing is painted over with skin. eyes_closed: the
+    /// eyes are already closed in a smile and stay so. grin: the mouth is teeth.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Known = ["glasses", "beard", "eyes_closed", "grin"];
+}
 
 /// <summary>One of several tile pictures a scene draws from.</summary>
 /// <param name="Picture">The picture, or null to draw in the kit's colours.</param>
@@ -770,6 +803,28 @@ public static class OfficeScenes
             if (sheet.Lap is { } lap && (lap < 0 || lap > fh))
             {
                 problems.Add($"{called} puts its lap at {lap}, outside its {fh} pixel high frame.");
+            }
+
+            foreach (var trait in sheet.Face?.Traits ?? [])
+            {
+                if (!OfficeFaceLook.Known.Contains(trait))
+                {
+                    problems.Add($"{called} has a face trait '{trait}'; the face layer knows {string.Join(", ", OfficeFaceLook.Known)}.");
+                }
+            }
+
+            foreach (var (key, place) in sheet.Faces ?? new Dictionary<string, OfficeFacePlace>())
+            {
+                var points = place.Eyes.Append(place.Mouth).ToList();
+
+                if (!int.TryParse(key, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _))
+                {
+                    problems.Add($"{called} has a face for '{key}', which is not a frame number.");
+                }
+                else if (place.Eyes.Count is < 1 or > 2 || points.Any(point => point is not [var x, var y] || x < 0 || y < 0 || x >= fw || y >= fh))
+                {
+                    problems.Add($"{called} frame {key}: a face needs one or two eyes and a mouth, inside its {fw}x{fh} frame.");
+                }
             }
 
             int? frames = null;

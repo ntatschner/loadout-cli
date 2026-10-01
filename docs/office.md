@@ -171,6 +171,19 @@ the desk is drawn over their legs, and everything above their lap is drawn again
 on top, so their hands are on the keyboard rather than under the desk. Without a
 lap, the desk covers them.
 
+A sheet can also give the **face** in each frame that shows one: where the eyes
+and mouth are (`faces`, by frame number) and the person's skin, brow and lip
+colours (`face`). Then expressions are drawn over the face rather than drawn
+again for every pose: focused while typing, tired when slumped, a frown when the
+node has failed, surprise when it's waiting on you, and a smile on the way out.
+Otherwise the face is left as drawn, with a few seconds of a passing smile or
+yawn every half minute or so, at a different moment for each person. A face's
+`traits` say what to leave alone: `glasses` and `eyes_closed` keep the eyes as
+they are, `beard` keeps the beard, so only lips are added, and `grin` marks a
+mouth that is teeth. From the side, an expression only ever adds a few pixels,
+so it can't paint past the outline of a profile. With reduced motion on, faces
+keep to what the node is doing and the passing moods stop.
+
 Each node of a run is drawn by one of its role's people, chosen so nobody in a
 run turns up twice until everybody on the list has, and the same node is the
 same person every time, on its floor and on the roof. A sheet's `gender`, one of
