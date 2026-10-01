@@ -42,6 +42,12 @@ public sealed record OfficePieceAnimation(
 /// <param name="Place">floor, wall-north, wall-any, desk-top, ceiling or facade.</param>
 /// <param name="Seats">Where people sit at it, if they do.</param>
 /// <param name="Animation">Its frames, if it moves.</param>
+/// <param name="Sides">
+/// Where in the picture it is seen with its front facing each way (n, e, s, w):
+/// what a floor turned a quarter at a time needs. The south side is the one
+/// <paramref name="Source"/> gives. A floor turns only once every picture on
+/// it has all four.
+/// </param>
 public sealed record OfficePiece(
     [property: JsonPropertyName("picture")] string? Picture,
     [property: JsonPropertyName("source")] IReadOnlyList<int>? Source,
@@ -51,7 +57,8 @@ public sealed record OfficePiece(
     [property: JsonPropertyName("depth")] string Depth = "sorted",
     [property: JsonPropertyName("place")] string Place = "floor",
     [property: JsonPropertyName("seats")] IReadOnlyList<OfficeSeat>? Seats = null,
-    [property: JsonPropertyName("animation")] OfficePieceAnimation? Animation = null);
+    [property: JsonPropertyName("animation")] OfficePieceAnimation? Animation = null,
+    [property: JsonPropertyName("sides")] IReadOnlyDictionary<string, IReadOnlyList<int>>? Sides = null);
 
 /// <summary>
 /// A pixel-art image laid over the faces of the neighbourhood the page
@@ -445,6 +452,18 @@ public static class OfficeKits
         if (!Inside(piece.Source, size))
         {
             problems.Add($"{called} needs a source of x, y, width and height inside '{piece.Picture}', which is {size.Width}x{size.Height}.");
+        }
+
+        foreach (var (side, rect) in piece.Sides ?? new Dictionary<string, IReadOnlyList<int>>())
+        {
+            if (!OfficeScene.Facings.Contains(side))
+            {
+                problems.Add($"{called} has a side '{side}'; sides are {string.Join(", ", OfficeScene.Facings)}, the way its front faces.");
+            }
+            else if (!Inside(rect, size))
+            {
+                problems.Add($"{called} side {side} is not inside '{piece.Picture}', which is {size.Width}x{size.Height}.");
+            }
         }
 
         if (piece.Animation is { } animation)

@@ -161,6 +161,32 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void A_piece_with_its_sides_is_checked_and_carried_onto_the_floor()
+    {
+        // Sides are what lets a floor of pictures turn: each has to be a real
+        // place in the picture, named by the way the piece's front faces.
+        var sides = new Dictionary<string, IReadOnlyList<int>>
+        {
+            ["n"] = [0, 0, 96, 64], ["e"] = [96, 0, 32, 64], ["s"] = [128, 0, 96, 64], ["w"] = [224, 0, 32, 64],
+        };
+        var good = new OfficePiece("desk.png", sides["s"], [3, 1], ["desk"], Seats: [new(1, -1, "s")], Sides: sides);
+        var kit = Small(("desk-a", good));
+        Func<string, (int Width, int Height)?> pictures = piece => piece == "desk.png" ? (256, 64) : null;
+
+        OfficeKits.Problems(kit, pictures).Should().BeEmpty();
+        FloorPlanner.Plan(kit, OfficeRules.Default, "run-a", 3).Scene.Props!
+            .Where(prop => prop.Kind == "desk").Should().OnlyContain(prop => prop.Sides != null && prop.Sides.Count == 4 && prop.Facing == "s");
+
+        var odd = new Dictionary<string, IReadOnlyList<int>>(sides) { ["up"] = [0, 0, 8, 8], ["w"] = [240, 0, 32, 64] };
+
+        OfficeKits.Problems(Small(("desk-a", good with { Sides = odd })), pictures).Should().BeEquivalentTo(
+        [
+            "piece 'desk-a' has a side 'up'; sides are n, e, s, w, the way its front faces.",
+            "piece 'desk-a' side w is not inside 'desk.png', which is 256x64.",
+        ]);
+    }
+
+    [Fact]
     public void A_tileset_short_of_a_corner_pattern_says_which()
     {
         var corners = OfficeKit.CornerPatterns.Where(one => one != "ullu").ToDictionary(one => one, _ => 0);

@@ -29,6 +29,12 @@ public sealed record OfficeSpot(
 /// front picture for.
 /// </param>
 /// <param name="Kind">The kit tag it was placed as (desk, lift...), so a part drawn in the kit's shapes can say what it is.</param>
+/// <param name="Sides">
+/// Where in the picture it is seen facing each way, by the way its front faces
+/// (n, e, s, w), so a floor turned a quarter shows its side rather than the
+/// same picture on its side; null for a piece with one picture.
+/// </param>
+/// <param name="Facing">Which way its front faces: s, towards the viewer, unless a floor has been turned.</param>
 public sealed record OfficeProp(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("piece")] string? Piece,
@@ -39,7 +45,9 @@ public sealed record OfficeProp(
     [property: JsonPropertyName("h")] int H = 1,
     [property: JsonPropertyName("blocks")] bool Blocks = true,
     [property: JsonPropertyName("depth")] string Depth = "sorted",
-    [property: JsonPropertyName("kind")] string? Kind = null);
+    [property: JsonPropertyName("kind")] string? Kind = null,
+    [property: JsonPropertyName("sides")] IReadOnlyDictionary<string, IReadOnlyList<int>>? Sides = null,
+    [property: JsonPropertyName("facing")] string Facing = "s");
 
 /// <summary>One animation in a sprite sheet.</summary>
 /// <param name="Frames">Frame numbers, left to right and top to bottom across the sheet.</param>

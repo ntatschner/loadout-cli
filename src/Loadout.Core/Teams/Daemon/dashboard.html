@@ -6590,9 +6590,10 @@
     if (prop.piece) {
       var picture = tilePicture(room.set, prop.piece);
 
-      if (!picture || !prop.source) { return; }
+      // The side of it that faces the way its front does, on a turned floor; its one picture otherwise.
+      var s = (prop.sides && prop.sides[prop.facing || "s"]) || prop.source;
 
-      var s = prop.source;
+      if (!picture || !s) { return; }
 
       ctx.drawImage(picture, s[0], s[1], s[2], s[3], prop.x * t + (w * t - s[2]) / 2, (prop.y + h) * t - s[3], s[2], s[3]);
 
@@ -8826,13 +8827,16 @@
   }
 
   /*
-    Whether a floor can be turned: only when everything on it is drawn from the
-    kit's shapes, which look the same from any side. A picture has one facing.
+    Whether a floor can be turned: only when everything on it looks right from
+    every side. The kit's shapes do; a picture prop does once its kit gives all
+    four of its sides; a tile picture has one facing still.
   */
   function sceneTurns(scene) {
     return !scene.tiles
       && !(scene.atlases || []).some(function (one) { return one.picture; })
-      && !(scene.props || []).some(function (one) { return one.piece; });
+      && !(scene.props || []).some(function (one) {
+        return one.piece && !["n", "e", "s", "w"].every(function (side) { return one.sides && one.sides[side]; });
+      });
   }
 
   /*
@@ -8915,7 +8919,10 @@
       height: w,
       floor: grid(scene.floor),
       walls: grid(scene.walls),
-      props: (scene.props || []).map(rect),
+      // A prop turns with the floor: its footprint, and which way its front faces.
+      props: (scene.props || []).map(function (one) {
+        return Object.assign(rect(one), { facing: TURN_FACING[one.facing || "s"] || "s" });
+      }),
       desks: (scene.desks || []).map(spot),
       door: spot(scene.door),
       spots: spots,

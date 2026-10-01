@@ -77,12 +77,16 @@ const code = [
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
   cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
   cut("  function tilePose(person) {", "  // part \"upper\" draws only"),
+  cut("  function sceneTurns(scene) {", "  /*\n    A floor turned a quarter turn"),
+  cut("  function tileProp(room, ctx, prop) {", "  // What each of the built-in kit's shapes is"),
 ].join("\n");
 
-// The page's own switch for reduced motion: off, so people walk.
-const engine = new Function("function tilesStill() { return false; }\n" + code
+// The page's own switch for reduced motion: off, so people walk. A picture is
+// anything with a size here: what tileProp draws is recorded, not shown.
+const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
-  + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE };")();
+  + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
+  + " sceneTurns, tileProp };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -548,6 +552,42 @@ for (const traits of [[], ["beard"], ["glasses"], ["eyes_closed"], ["grin"]]) {
 }
 
 console.log(`face layer: ${drawn} pixels across every expression and trait, none away from the face`);
+
+// ---- props that turn with the floor ----
+
+// A prop's front turns with the floor, as seats do; four turns bring it back;
+// it's drawn from the side its front faces; and a floor turns only once every
+// picture on it has all four sides.
+{
+  const sides = { n: [0, 0, 64, 48], e: [64, 0, 32, 48], s: [96, 0, 64, 48], w: [160, 0, 32, 48] };
+  const scene = {
+    width: 6, height: 4, tile: 32, floor: [], walls: null, desks: [], door: { x: 0, y: 3, facing: "n" },
+    props: [{ id: "d", piece: "desk.png", source: sides.s, sides, x: 1, y: 1, w: 2, h: 1 }],
+  };
+  const drawnFrom = (one) => {
+    const calls = [];
+    engine.tileProp({ scene: { tile: 32 }, set: "x", colours: {} }, { drawImage: (...a) => calls.push(a.slice(1, 5)) }, one);
+    return JSON.stringify(calls[0]);
+  };
+  const seatTurn = { s: "w", w: "n", n: "e", e: "s" };
+  let facing = "s";
+
+  for (let k = 1; k <= 4; k += 1) {
+    const turned = engine.turnScene(scene, k).props[0];
+
+    facing = seatTurn[facing];
+
+    if ((turned.facing || "s") !== facing) { fault("a prop's front doesn't turn the way seats do", `turn ${k}: ${turned.facing}, seats ${facing}`); }
+    if (drawnFrom(turned) !== JSON.stringify(sides[turned.facing || "s"])) { fault("a turned prop isn't drawn from the side its front faces", `turn ${k}`); }
+  }
+
+  if ((engine.turnScene(scene, 4).props[0].facing || "s") !== "s") { fault("four turns don't bring a prop back to facing the viewer", "four turns"); }
+  if (!engine.sceneTurns(scene)) { fault("a floor whose pictures all have four sides won't turn", "four sides"); }
+
+  const short = Object.assign({}, scene, { props: [Object.assign({}, scene.props[0], { sides: { s: sides.s, n: sides.n } })] });
+
+  if (engine.sceneTurns(short)) { fault("a floor turns with a picture that has only some of its sides", "two sides"); }
+}
 
 // ---- getting up before walking off ----
 

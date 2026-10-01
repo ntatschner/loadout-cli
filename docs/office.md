@@ -135,6 +135,11 @@ footprint, where it can go and where people sit at it. A `rules.json` beside it
 changes the decisions: the size of a floor, which rooms there are and how many,
 which partitions each may have, and which layouts to use.
 
+A piece can give its `sides` as well: where in its picture it is seen with its
+front facing each way, `n`, `e`, `s` and `w`. Turn the floor a quarter and a
+desk that faced you shows its side, not the same picture on its side. A floor
+turns once every picture piece on it has all four.
+
 ```
 loadout config set team-office-set my-office
 loadout team office check my-office
@@ -223,9 +228,10 @@ Stated plainly, so nobody finds out by surprise:
 - **The built-in shapes are a stand-in.** Without a set, the inside of the
   building is drawn in flat coloured shapes. The pixel-art pack that replaces
   them is being made.
-- **Art turns only once a pack brings every facing.** A floor drawn from a
-  pack's pictures stays facing one way until the pack has its pieces from
-  each side; floors drawn in the built-in shapes turn now.
+- **Floors of art turn only once their pictures allow it.** A pack's pieces
+  turn once they give all four sides; its floor and wall tiles don't turn yet,
+  so a floor drawn from tile pictures stays facing one way. Floors drawn in the
+  built-in shapes turn now.
 - **The painted rooms and the separate Waiting area are still here.** They go
   once the building has its art.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors

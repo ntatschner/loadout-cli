@@ -562,7 +562,8 @@ public static class FloorPlanner
                 piece.Footprint[1],
                 piece.Blocks,
                 piece.Depth,
-                tag));
+                tag,
+                piece.Sides));
 
             if (piece.Blocks)
             {
