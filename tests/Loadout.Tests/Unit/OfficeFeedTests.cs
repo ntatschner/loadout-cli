@@ -94,12 +94,28 @@ public sealed class OfficeFeedTests
 
         feed.Listening.Should().Be(0);
 
-        // Give the loop its one more interval to notice, then count.
-        await Task.Delay(150);
-
+        // Let the loop notice. A fixed 150ms was one interval too few on a busy
+        // macOS runner, where a round already under way finished after it and
+        // read once more; so wait for the count to stop moving, for up to two
+        // seconds - a feed that never stops still fails below - then require it
+        // to stay still.
         var settled = Volatile.Read(ref reads);
 
-        await Task.Delay(200);
+        for (var waited = 0; waited < 2000; waited += 100)
+        {
+            await Task.Delay(100);
+
+            var now = Volatile.Read(ref reads);
+
+            if (now == settled)
+            {
+                break;
+            }
+
+            settled = now;
+        }
+
+        await Task.Delay(300);
         Volatile.Read(ref reads).Should().Be(settled, "nobody is listening, so nothing should be read");
 
         // And a page arriving later starts it again.
