@@ -60,7 +60,7 @@ public sealed class TeamOfficeCheckCommand : Command<TeamOfficeCheckCommand.Sett
         if (!OfficeScenes.Has(root, settings.Set))
         {
             return output.Fail(
-                $"'{settings.Set}' has no {OfficeKit.FileName} or {OfficeScene.FileName}: it is a painted room, and only kits and tile scenes are checked.",
+                $"'{settings.Set}' has no {OfficeKit.FileName} or {OfficeScene.FileName}: it is a painted room, which the office no longer draws, and only kits and tile scenes are checked.",
                 ExitCode.InvalidArguments);
         }
 

@@ -1247,9 +1247,11 @@ correct chart that said nothing. Real time is kept *inside* a day, which is
 where overlap lives and the only place it matters: two teams running at once
 are two teams running at once on an afternoon, never across a week.
 
-**None of them can do anything.** Every control lives in the detail pane, so
-answering a gate is implemented once rather than three times. Clicking anybody
-anywhere takes you there.
+**The controls live in the detail pane**, so answering a gate is implemented
+once rather than three times, and clicking anybody anywhere takes you there.
+The office's rooms are the exception that proves it: a room's popup offers
+what that room is for - stopping a schedule from the waiting room, emptying
+the bin from the basement - and each one runs the same command.
 
 **Ideas**, beside the settings, is not a view of the runs either: it's where
 ideas are dropped in and worked through into plans, a button for each command.
@@ -1257,23 +1259,13 @@ ideas are dropped in and worked through into plans, a button for each command.
 
 #### Several at once, or one on its own
 
-**Board** shows several screens together, and **a team's office is one of the
-things you can add**. Tick `docs-crew` and you get that team's room as a panel
-of its own; tick four teams and you get four offices side by side.
+**Board** shows several screens together.
 
 The viewer works out its own layout: one panel fills the window, four make a
 two by two, nine a three by three, and it stops at six across because a seventh
 column is a row of postage stamps. **Big** gives one panel the whole width.
-
-Each team works in its **own office**, so four panels are four different rooms
-rather than the same picture four times. Five rooms are fitted - an open-plan
-office, a network operations floor, a newsroom, a trading floor and a corporate
-headquarters - and a team is only ever put in one that has been. Which office
-is worked out from the team's name — so a team is always in the same room and
-you learn it — and the
-picker on the panel changes it when the worked-out one is not the one you
-wanted. Both that and which screens you chose are remembered in that browser
-and nowhere else; neither reaches the daemon.
+Which screens you chose is remembered in that browser and nowhere else; it
+never reaches the daemon.
 
 A panel does not copy a screen, it borrows it, so there is one office and one
 terminal however you arrange them.
@@ -1320,265 +1312,27 @@ The waiting room's popup can stop a schedule, asking first. Nothing here can
 fire a schedule or close a task: a task is somebody's record of work, not the
 page's to delete.
 
-#### Putting art in the office
+#### Art for the office
 
-Out of the box a desk is a square with the node's name and state written in it,
-and that is the whole design: the words come first and a picture is a second
-encoding on top of them, never the only one. Nothing below changes what a
-screen reader is handed.
-
-**Loadout ships no art.** Pixel-art asset packs are generally sold under
-licences that let you use the files inside a finished project and forbid
-redistributing the originals — and a public source repository hands everything
-in it to anybody who clones. So the art lives on your machine and Loadout only
-draws it.
-
-A set is a directory; a piece is a file in it, named after the role it draws:
-
-```
-<state>/teams/office/open-office/lead.png
-<state>/teams/office/open-office/implementer.png
-<state>/teams/office/open-office/reviewer.png
-<state>/teams/office/open-office/worker.png
-```
+Out of the box the building is drawn in its own shapes. **Loadout ships no
+art.** Pixel-art asset packs are generally sold under licences that let you use
+the files inside a finished project and forbid redistributing the originals,
+and a public source repository hands everything in it to anybody who clones. So
+the art lives on your machine, in a set under `<state>/teams/office/`, and
+Loadout only draws it. A set that is a **kit** - floor and wall tiles, furniture,
+people, the outside - is what the building is made from; [the office](office.md)
+says what goes in one and how `loadout team office check` reads it.
 
 ```sh
-loadout config set team-office-set "open-office"
+loadout config set team-office-set "my-office"
 ```
 
-A set can also carry the room itself, and where its desks are:
-
-```
-<state>/teams/office/open-office/room.png
-<state>/teams/office/open-office/room.json
-<state>/teams/office/open-office/front.png
-```
-
-`room.png` is the office **with nobody in it** — most packs ship an empty or
-environment-only variant beside the populated one, and the empty one is the
-one to use. The people in the room should be your nodes, not the artist's.
-
-`front.png` is the **furniture that goes in front of the people**: the chairs
-they are sitting in, and whatever else stands between them and the viewer. It
-is optional, and a set without one draws as it always did. A set with one looks
-like the artist's own scene instead, because a room drawn as a single picture
-can only ever be behind - so a seated figure sat on top of the chair it was in,
-legs across the seat and shoes over the castors, which is somebody standing in
-front of their own chair rather than sitting in it.
-
-The thing to understand about making one is that **it has to be the furniture's
-own shape**. The obvious construction - copy a rectangle of `room.png` around
-each desk and lay it back on top - does not layer anything. A rectangle has a
-straight top edge, so the person stops at a horizontal line with a chair
-somewhere underneath, and at the amount needed to hide the legs it leaves half
-a person. Where the person is wider than the chair it is worse still: plain
-floor from inside the rectangle erases them.
-
-**Look in the pack first - but for a shape, not for pixels.** These packs ship
-their furniture as individual transparent PNGs, and the trading floor ships
-four facings of its swivel chair. Use that art as a **stencil**: scale it to
-the height the chairs are drawn at in that room, stand it on its castors at
-each desk, and copy `room.png` through its alpha. The outline is the artist's -
-the curve of the back, the arms, the gap between them, a shoe showing past the
-base - and every pixel is the room's own.
-
-Pasting the art itself is the mistake to avoid, and it is an easy one to make:
-the room already has chairs in it, so what you get is a second chair on top of
-the first, a shade out and a pixel or two out of register. Spread the stencil
-by a pixel or two as well. Overhang costs nothing, because it can only redraw
-the room over itself; falling short leaves a sliver of somebody's leg across
-the arm of their chair.
-
-There is a test for having got this right, and it is worth running: laying
-`front.png` back over `room.png` must give `room.png` **exactly**. Anything
-that differs came from somewhere other than the room and will show up as a
-ghost behind an empty desk.
-
-The art cannot be *found* by matching - the best placement of one in its own
-empty scene agrees on 43%, which says these are separate renders rather than
-parts cut from the drawing. Each has to be placed and its height measured.
-Check the facing too: the open-plan office and the headquarters ship one facing
-each and it is not the one their rooms show, so the office's chair swallows a
-person seen from the side and the headquarters' puts a seat cushion on the
-sitter's back like a rucksack.
-
-**It is not only the chair.** Anything standing between somebody and the
-viewer belongs in front of them - the pedestal their legs go behind, the
-planter at the end of the run, the partition, the bin. The rule for which is
-the one every 2D engine uses and calls **y-sorting**: whatever stands nearer
-the viewer goes on top, and on a top-down room "nearer" means "its base is
-further down the picture". So for a person whose feet are at y, an object whose
-own base is below y is in front of them, and one whose base is above y - the
-monitor, the desk's far edge, the wall - stays behind, which is why a head can
-overlap a screen.
-
-Find those objects the same way. Around each desk, flood a generous box inwards
-from its edges, following pixels that match their neighbour within a tolerance:
-what the flood reaches is floor and the surfaces running out of the box, and
-what it cannot reach is the things standing in it. Label those, and keep the
-ones whose base falls below the person's feet.
-
-**A base nearer than somebody is not sufficient on its own**, and getting this
-wrong buries everybody. A desk is one connected mass that runs from behind the
-person to in front of them - its near edge is nearer, its surface is further -
-so sorting it as a single object puts the whole desk, monitors and all, on top
-of whoever is sitting at it. What is genuinely in front of a seated person is
-furniture no taller than they are. Anything rising past their shoulders is the
-desk they are sitting *at*, or the partition behind it, and belongs behind
-them. This is the limit of y-sorting that every engine shares: it orders whole
-objects, and it cannot put an object's near half in front of somebody and its
-far half behind.
-
-**A thing only goes in front if it is in front of everybody it touches.** One
-static layer cannot be in front of one person and behind another, and some of
-these rooms have desk rows closer together than a person is tall. A chair at
-the near row is genuinely in front of whoever sits in it and genuinely behind
-whoever sits at the row above; kept on the nearer-base test alone, it covered
-that second person completely. Check each candidate against every person it
-overlaps and drop it if it should be behind any of them - but not against the
-person sitting in it, because a chair's castors can fall a little above its own
-desk's coordinate, and comparing a chair with its own occupant throws every
-chair in the room away.
-
-**And a desk where nobody can be seen is not a desk.** After the layer is
-built, measure how much of the person at each desk it covers. Half of somebody
-hidden is a person sitting at a desk; nearly all of them is an agent that has
-simply disappeared from the room, which is worse than the legs-across-the-seat
-this layer exists to fix. Drop those desks and build the layer again, because
-the layer is built from where people are. Three newsroom desks went that way:
-its two front rows are five and a half percent apart and its people are nearly
-eight, so the near row's chairs covered the far row's people entirely.
-
-That is also why the chair still needs its own stencil in two of these rooms.
-The chair touches the desk in the picture, so the two flood as one object whose
-crown belongs to the desk, and the rule above drops it. The front layer is the
-union of both passes: the y-sorted objects, and the chair cut out by its own
-outline. Both take their pixels from `room.png`, so the union is still exactly
-the room and the test above still holds.
-
-One line still has to be measured: where the furniture *starts* being in front,
-because above it the person is in front of the desk and their arms belong on
-top of it. It is **the top of the chair's own back** in the empty room, read
-off a grid at half a percent a line, then turned into a share of the figure
-standing there. It runs from about half in the trading floor and the network
-floor to about three quarters in the open-plan office, whose chairs are seen
-from the side rather than from above.
-
-Guessing that line instead of measuring it fails in both directions. Too low
-and a strip of the person runs down the middle of the chair. Too high and their
-legs go behind furniture that is not there. The second one shipped here,
-because that room's desks were a chair and a half to the right of its chairs
-and nothing in the numbers said so. Look at one desk of every room, scaled up,
-before believing any of it.
-
-`room.json` says how big the scene is and where somebody stands in it:
-
-```json
-{
-  "width": 1024,
-  "height": 1024,
-  "person": 8,
-  "desks": [[20, 20], [15, 49], [30, 46], [43, 46], [15, 63]]
-}
-```
-
-Each desk is a percentage across and down the scene, so the room draws
-correctly at any width, and `person` is how tall a person is in that room -
-also a percentage of the scene. Per room, because the packs do not draw to one
-scale: a person is a twelfth of the open-plan office and a fifteenth of the
-trading floor, and one size applied to all of them is right in one room and
-floating over the furniture in the rest.
-
-It is the whole figure, shoes included, and the desk's coordinate is where the
-shoes land. Measure both from the artist's own person rather than from the
-blob they make in a diff, which is them and their chair together: that mistake
-drew everybody half again too tall, standing at the castors.
-
-**How to get those numbers right.** Draw the room yourself and compare it with
-the artist's. Composite one of the pack's own sprites onto the empty scene, put
-that beside the populated scene, and slide it until the two agree: where it
-agrees best is where somebody sits, and where no placement beats the empty room
-there is nobody there. That last part is the test for whether a place is a desk
-at all, and it is the only method here that has survived being checked.
-
-Three that did not, each of which shipped its mistake:
-
-**Diffing the populated scene against the empty one.** The obvious method, and
-it was wrong in both directions. What it caught was not only people: a potted
-plant, a filing cabinet and a wall of monitors whose animation differs between
-the two renders all came back as somebody at a desk. And where it did find a
-person it found the chair they had pulled out with them, because the empty
-scene tucks its chairs in - so everybody was measured half again as tall as
-they are and anchored at the castors rather than at their shoes. That is what
-put people in front of their seats instead of on them.
-
-**Finding the chairs by their own colour.** It found the meeting room's and
-missed the trading desks' entirely at full size, then found the trading desks'
-and missed the meeting room's once the image had been resized. A mask that
-changes its answer when the picture is resampled is not measuring the room.
-
-**Matching the pack's character PNGs into the scene.** Reasonable-sounding and
-hopeless: those files are redraws rather than the scene's own pixels. The
-correct placement of one agrees with the scene on 8% of its pixels, which is
-indistinguishable from the wrong ones.
-
-Two more things no method will tell you, and both were wrong until they were
-looked for:
-
-**Which way the chairs face.** A character sheet is usually front, side and
-back, and the right one is whichever matches the desks. A newsroom's banks put
-the monitor away from the viewer, so somebody at one is seen from behind; an
-open-plan desk with the monitor to the right wants the side view. Take the
-front view and everybody sits with their back to their work.
-
-**Whether the artist's person was sitting.** A found placement is where the
-artist drew somebody, not necessarily where somebody sits: a trading floor's
-reception had two people standing at the desk, and a seated sprite put there
-crouches in the middle of the floor. Keep the seats; leave the standing.
-
-**Where the desks are, as opposed to where the artist put somebody.** They may
-have populated the meeting room and left the desk banks empty. Where a room has
-an obvious bank of identical workstations and only some were drawn occupied,
-fill the rest along the row and column that were measured - and check the
-result against the scene rather than trusting the arithmetic. The **lead takes
-the first desk** and the workers take the rest in order; anybody the office has
-no furniture for stands in a row underneath rather than being left out. A set
-with no `room.json` draws its people in a row, which is what every set did
-before rooms existed.
-
-A pack that ships no usable empty scene is measured by eye off a percentage
-grid laid over its populated one, and the corporate headquarters is the one
-that needed it: its two master scenes are separate renders that disagree over
-half their pixels, so nothing there can be diffed or slid.
-
-The room describes itself so that adding a set needs no change to Loadout, and
-a `room.json` that will not parse falls back to the row rather than taking the
-view out.
-
-**What moves.** A node that is working breathes, gently; one that is blocked or
-finished is still. That is the only movement, and it is tied to what the node
-is actually doing rather than being decoration — the packs' own animated scenes
-are loops of *their* people, which are not the ones in your run. It stops
-entirely under `prefers-reduced-motion`.
-
-Rooms are laid out across the page rather than down it, so an afternoon's runs
-fit on one screen.
-
-Each desk looks for its own role — `implementer`, `reviewer`, `verifier`,
-whatever the team calls them, minus the `role.` — and falls back to `worker`.
-A role with neither keeps its empty square, so a half-finished set is a
-partly-drawn office rather than a broken one. `png`, `webp` and `gif` are
-served and nothing else is; a name that is a path reaches nothing.
-
-Several sets can sit side by side and the setting picks one, which is the point
-of a set rather than a folder: an office themed one way on Monday and another
-on Friday is one config change. A name no directory answers to draws squares —
-the same as having no art, rather than something subtly broken.
+A painted room from before the building, one picture with desks placed over it,
+is a set too: its files stay where they are, and nothing draws them any more.
 
 The images are served by the daemon from that directory, over the same loopback
 address and behind the same token as everything else on the page. Nothing is
-fetched from the internet, which was true when the page had no images and is
-still true now.
+fetched from the internet.
 
 Each run is also given a **room**, which is a name somebody might actually
 remember: *The Corner Office (Plant Died)*, *The Mezzanine (Lift Out of
@@ -1587,12 +1341,6 @@ Order)*, *The Breakout Space (Double Booked)*. A run is called
 head — and a week later "the one in the haunted meeting room" is how anybody
 refers to it. Worked out from the identifier rather than stored, so the same
 run is the same room on every machine that reads its journal.
-
-**Built shape first.** The office is elements rather than a canvas: every desk
-carries its name, its role and its state as words, and the sprite is an empty
-square waiting for art. When the art arrives it becomes a second encoding on
-top of a first rather than the only one, which is the decision that keeps this
-inside the accessibility bar rather than beside it.
 
 Rename any of them from the detail pane, or from a terminal:
 
@@ -1606,8 +1354,6 @@ itself. The journal is a record of what happened; what somebody decided to call
 it afterwards is not that, and putting it there would mean renaming a run by
 appending to its history. Emptying the box on the page is the same as
 `--clear`.
-
-**Not built yet.** The art for the office and the movement that goes with it.
 
 ### Four depths of one run
 
@@ -2327,10 +2073,6 @@ Said here rather than discovered:
 - The machine's ceiling covers outward actions only. Everything else a node may
   do comes from its role and the agent's own permissions, checked when it tries
   rather than before the run starts.
-- The *people* at the desks do not animate. A set is one still per role, and a
-  node working and a node waiting are told apart by the words on the desk, as
-  they were before there was any art. The room behind them can move; they
-  cannot.
 
 ## See also
 

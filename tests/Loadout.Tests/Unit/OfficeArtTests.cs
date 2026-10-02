@@ -111,7 +111,6 @@ public sealed class OfficeArtTests : IDisposable
     public void A_machine_with_no_art_has_no_sets_and_says_so_quietly()
     {
         OfficeArt.Sets(Office).Should().BeEmpty();
-        OfficeArt.Pieces(Office, "open-office").Should().BeEmpty();
         OfficeArt.FileOf(Office, "open-office", "lead").Should().BeNull();
     }
 
@@ -119,9 +118,6 @@ public sealed class OfficeArtTests : IDisposable
     public void A_piece_is_named_by_what_it_draws_rather_than_by_its_extension()
     {
         Set("open-office", "lead.png", "implementer.webp", "reviewer.gif");
-
-        OfficeArt.Pieces(Office, "open-office")
-            .Should().Equal("implementer", "lead", "reviewer");
 
         // The page asks for "lead" and does not have to know what somebody
         // saved it as.
@@ -137,8 +133,6 @@ public sealed class OfficeArtTests : IDisposable
         // The directory is the person's own, but a set unzipped from somewhere
         // carries whatever it carries, and the answer for those is a refusal
         // rather than a content type invented on the spot.
-        OfficeArt.Pieces(Office, "open-office").Should().Equal("lead");
-
         OfficeArt.FileOf(Office, "open-office", "licence.txt").Should().BeNull();
         OfficeArt.TypeOf("install.exe").Should().BeNull();
         OfficeArt.TypeOf("lead.png").Should().Be("image/png");
@@ -184,56 +178,6 @@ public sealed class OfficeArtTests : IDisposable
         // choice.
         chosen.Root.Should().Be(Office);
         OfficeArt.Sets(chosen.Root).Should().Equal("newsroom", "open-office");
-    }
-
-    /// <summary>A set with a room description in it.</summary>
-    private void Room(string name, string json)
-    {
-        var directory = Path.Combine(Office, name);
-
-        Directory.CreateDirectory(directory);
-        File.WriteAllText(Path.Combine(directory, "room.json"), json);
-    }
-
-    [Theory]
-    [InlineData(8.0, 8.0)]
-    [InlineData(6.5, 6.5)]
-    [InlineData(33.0, 33.0)]
-    // Somebody's typing mistake, in a file they edited by hand.
-    [InlineData(0.0, 10.0)]
-    [InlineData(-4.0, 10.0)]
-    [InlineData(100.0, 10.0)]
-    public void How_tall_a_person_is_has_to_be_a_size(double said, double drawn)
-    {
-        Room("open-office",
-            $$"""
-            {
-              "width": 1024,
-              "height": 1024,
-              "person": {{said}},
-              "desks": [[20, 20]]
-            }
-            """);
-
-        // A person of nought draws nobody and a person of a hundred draws one
-        // figure over the whole floor. Neither is a room, and both used to go
-        // straight through to the page.
-        OfficeArt.Room(Office, "open-office")!.Person.Should().Be(drawn);
-    }
-
-    [Fact]
-    public void A_room_that_does_not_say_how_tall_a_person_is_still_draws_one()
-    {
-        Room("open-office",
-            """
-            {
-              "width": 1024,
-              "height": 1024,
-              "desks": [[20, 20]]
-            }
-            """);
-
-        OfficeArt.Room(Office, "open-office")!.Person.Should().Be(10);
     }
 
     /// <summary>Paths whose state directory is the one this test wrote into.</summary>

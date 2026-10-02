@@ -1197,7 +1197,7 @@
   [data-motion="reduced"] .lk-caret { animation: none; }
 
   /* ==================================================================
-     OFFICE — one room per run, one desk per node
+     OFFICE — the building's panel
      ================================================================== */
   .lk-rooms { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--lk-gap); grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); }
   .lk-room { padding: var(--lk-pad); border-radius: var(--radius-lg); background: var(--surface-1); border: var(--lk-border) solid var(--line); box-shadow: var(--shadow-bay); display: grid; gap: var(--space-3);
@@ -1206,18 +1206,6 @@
   .lk-room-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
   .lk-room-head h3 { margin: 0; font-size: 0.9375rem; }
   .lk-room-head p { margin: 0; font-size: 0.8125rem; color: var(--ink-muted); }
-  .lk-desks { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
-  .lk-desk { display: grid; gap: 6px; justify-items: center; text-align: center; padding: var(--space-3) var(--space-2); border-radius: var(--radius-md); background: var(--surface-2); border: var(--lk-border) solid var(--line); }
-  .lk-desk-bay { width: 40px; height: 40px; border-radius: 10px; border: 2px solid var(--brand-steel); display: grid; place-items: center; position: relative; }
-  .lk-desk[data-state="run"] .lk-desk-bay { background: var(--s); border-color: var(--s); }
-  .lk-desk[data-state="wait"] .lk-desk-bay { border-color: var(--s); }
-  .lk-desk[data-state="wait"] .lk-desk-bay::after { content: ""; position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; border-radius: 3px; background: var(--s); box-shadow: 0 0 0 2px var(--surface-2); }
-  .lk-desk[data-state="done"] .lk-desk-bay { border-color: var(--s); }
-  .lk-desk[data-state="fail"] .lk-desk-bay { border-color: var(--s); border-style: dashed; }
-  .lk-desk-bay .lk-glyph { width: 14px; height: 14px; }
-  .lk-desk[data-state="run"] .lk-desk-bay .lk-glyph { background: var(--bg); }
-  .lk-desk b { font-size: 0.8125rem; font-weight: 700; overflow-wrap: anywhere; }
-  .lk-desk span { font-size: 0.75rem; color: var(--s, var(--ink-muted)); font-weight: 650; }
 
   /* ==================================================================
      GRAPH — who asked whom
@@ -1325,7 +1313,7 @@
   [data-presentation="plain"] { --lk-rise: 0px; }
   [data-presentation="plain"] * { box-shadow: none !important; animation: none !important; }
   /* Changed by the page: the select chevron and the office art are exempt. */
-  [data-presentation="plain"] *:not(.lk-select, .floor, .over, .sprite) { background-image: none !important; }
+  [data-presentation="plain"] *:not(.lk-select) { background-image: none !important; }
   [data-presentation="plain"] .lk-layout { grid-template-columns: minmax(0, 1fr) !important; max-width: 72ch; }
   [data-presentation="plain"] .lk-runs, [data-presentation="plain"] .lk-rooms { grid-template-columns: minmax(0, 1fr); }
   [data-presentation="plain"] .lk-topbar { position: static; backdrop-filter: none; background: var(--bg); }
@@ -1545,10 +1533,8 @@
   .again { color: var(--ink-muted); font-weight: 700; }
 
   /* ---- the office ----
-     Shape first and no art at all: every desk is a real element carrying its
-     name and its state as words, and a sprite - when there is one - becomes a
-     background on the same element rather than replacing it. That ordering is
-     what keeps this inside the accessibility bar rather than beside it. */
+     The building is a canvas, decorative: the run pane, the list and the
+     graph carry everything in it as words, and it says a one-line summary. */
 
   /*
     Rooms across the page rather than down it. Twelve runs stacked in one
@@ -1561,17 +1547,7 @@
 
   .room h3 { margin: 0; }
   .room .where { color: var(--ink-muted); font-size: var(--type-small-size); margin: 0; }
-  .room.empty { border-style: dashed; }
 
-  /*
-    The floor. Drawn at the scene's own shape and filled exactly, because the
-    desks are placed on it by percentage and any cropping would move them off
-    the furniture they belong to.
-
-    The scene stays behind the desks and never behind the words: every desk
-    carries its own solid plate, so the text it holds is read against that and
-    not against whatever happens to be painted underneath.
-  */
   /* The tile office: one canvas per room, sized in whole multiples of the
      art by the script, and a card for whoever the pointer is over. An
      outline rather than a border, so the frame adds nothing to the width the
@@ -1610,332 +1586,6 @@
   .tile-card[hidden] { display: none; }
   .tile-card span { color: var(--ink-muted); overflow-wrap: anywhere; }
 
-  .room .floor {
-    position: relative;
-
-    /* So the people can be sized against the room rather than against the
-       font. A character is 95 pixels tall in a 1024 pixel scene; at a fixed
-       rem size it came out half again too big and read as floating over the
-       furniture rather than sitting at it. */
-    container-type: size;
-    border: var(--lk-border) solid var(--line);
-    border-radius: var(--radius-sm);
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 100% 100%;
-    image-rendering: pixelated;
-  }
-
-  /*
-    The half of the room that goes in front of the people in it: the seats of
-    the chairs, their arms, the near edges of the desks.
-
-    A room drawn as one picture can only ever be behind, so a seated figure sat
-    on top of the chair it was in, with its legs across the seat and its shoes
-    over the castors - which is what it looked like, somebody standing in front
-    of their own chair. A set can ship a second copy of the room kept only
-    where furniture should cover somebody, and this lays it back over the
-    desks. Every pixel of it comes from the room itself, so where nobody is
-    standing it puts the room back exactly as it was and shows nothing.
-  */
-  .room .floor .over {
-    position: absolute;
-    inset: 0;
-
-    /* Above every sprite. A sprite's z-index is its row times ten, so the
-       lowest desk in a room cannot reach a thousand. */
-    z-index: 2000;
-    pointer-events: none;
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 100% 100%;
-    image-rendering: pixelated;
-  }
-
-  /* Above it, because a name nobody can read is not a name. The furniture
-     covers the person; it has no business covering who they are. */
-  .desks.placed .desk .plate { z-index: 3000; }
-
-  /* Without a scene there is nothing to stand on, so they stand in a row.
-     And nothing to take a height from, so not a size container: size
-     containment sizes an element without its contents, and with no scene
-     giving it an aspect ratio the floor came out as tall as its padding,
-     with the desks hanging below it over the next room. That is every room
-     on a machine with no office pack, which is the default. */
-  .room .floor.bare { padding: 0.75rem; container-type: normal; }
-
-  .desks:not(.lk-desks) { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-3); margin: 0; padding: 0; }
-
-  /* Without a scene the kit's room is the floor, so the floor draws no box
-     of its own inside it. */
-  .room .floor.bare { border: 0; }
-
-  /* The desks of a room that knows where its desks are. */
-  .desks.placed { display: block; position: absolute; inset: 0; }
-
-  .desks.placed li { position: absolute; }
-
-  .desks.placed .desk {
-    /* Anchored by the feet: the coordinate is where somebody stands, so the
-       sprite sits above it and the plate hangs under it. */
-    position: relative;
-    transform: translate(-50%, -100%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 0;
-    min-height: 0;
-    padding: 0;
-    font-size: 0.7rem;
-    line-height: 1.25;
-  }
-
-  /* The size the artist drew their own people in this room - measured off the
-     scene rather than picked, and per room, because the packs do not draw to
-     one scale.
-
-     The box is wider than any sprite in it on purpose. The art is a background
-     sized to `contain`, so whichever side of the box binds first decides how
-     big it comes out - and at the 0.65 this used to be, the network floor's
-     sprites are wider than that, so they were fitted by their width and
-     arrived a twentieth shorter than the room says a person is. Nothing shows
-     outside the art, so a box with room to spare costs nothing. */
-  .desks.placed .desk .sprite.drawn {
-    width: calc(var(--person, 10) * 0.8cqh);
-    height: calc(var(--person, 10) * 1cqh);
-    margin: 0;
-  }
-
-  /*
-    Hung below the sprite rather than stacked under it.
-
-    The desk is anchored by its bottom edge, and the plate was inside it - so
-    the coordinate landed at the bottom of the *plate* and the person floated a
-    plate's height above the chair. Every attempt to fix that by moving the
-    coordinate moved the label with it and never closed the gap. Out of the
-    flow, the desk is exactly as tall as the person, and the coordinate is
-    where they sit.
-
-    Kept narrow so two people standing near each other do not label over one
-    another. What is cut here is only ever repeated elsewhere: the whole
-    sentence is the button's accessible name, it is on the element's title for
-    a pointer, and the detail pane says all of it in full.
-  */
-  .desks.placed .desk .plate {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    max-width: 5.5rem;
-    overflow: hidden;
-  }
-
-  /*
-    On a floor plan a plate says who, and only who.
-
-    Neighbouring desks are twelve per cent of a room apart and a plate saying
-    name-and-state is three times that wide, so they label over one another.
-    So the plate is a name plate. How somebody is doing is on the card that
-    opens when you point at them or tab to them, and in the sentence a screen
-    reader is given, and in the List view in full. What is left here is the
-    one thing a floor plan is for: which of them is that.
-  */
-  .desks.placed .desk .who,
-  .desks.placed .desk .state {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .desks.placed .desk .who { font-size: 0.75rem; }
-  .desks.placed .desk .state { display: none; }
-
-  /* What a node is doing is a sentence, and a sentence on a floor plan covers
-     the floor. It stays on the desk for a screen reader and in the detail
-     pane for everybody. */
-  .desks.placed .desk .doing { display: none; }
-
-  /*
-    A desk is a person standing in the room with a name plate, not a card
-    pasted over a photograph. So the button itself carries nothing: the
-    sprite stands on the floor and the words sit on a plate of their own.
-  */
-  .desk:not(.lk-desk) {
-    position: relative;
-    display: grid;
-    justify-items: center;
-    gap: 6px;
-    border: var(--lk-border) solid transparent;
-    border-radius: var(--radius-md);
-    padding: var(--space-1);
-    min-width: 7rem;
-    min-height: 2.5rem;
-    font: inherit;
-    color: inherit;
-    background: transparent;
-    text-align: center;
-    cursor: pointer;
-  }
-
-  .desk:not(.lk-desk):hover { border-color: var(--line-strong); }
-
-  /* The kit's desk is a button here, because pressing it opens the run. */
-  .lk-desk { position: relative; font: inherit; color: inherit; cursor: pointer; width: 100%; }
-  .lk-desk:hover { border-color: var(--line-strong); }
-  .lk-desk.desk .plate { display: grid; gap: 2px; justify-items: center; background: none; border: 0; padding: 0; }
-
-  /*
-    The plate. Opaque, and deliberately so: this is what the desk's words are
-    read against once there is a room painted behind them, and a translucent
-    one would make the contrast depend on which pixel of which office happened
-    to land under which letter.
-  */
-  .desk .plate {
-    display: block;
-    background: var(--surface-2);
-    border: var(--lk-border) solid var(--line);
-    border-radius: var(--radius-xs);
-    padding: 0.2rem 0.4rem;
-  }
-
-  /* The word first and the colour second, here as everywhere else. */
-  .desk .who { display: block; font-weight: 700; font-size: var(--type-small-size); color: var(--ink); }
-  .desk .state { display: block; font-size: var(--type-label-size); font-weight: 650; color: var(--s, var(--ink-muted)); }
-  /* Somebody who has left keeps their words at full strength - dimming the
-     whole desk took the word under it below 4.5 to 1 in the light themes -
-     and is marked by the dashed plate and the quieter art instead. */
-  .desk:not(.lk-desk).gone .plate { border-style: dashed; }
-
-  /*
-    Where a sprite goes when there is one: a background on the desk, with the
-    words still in it. Nothing here needs art to work.
-
-    Without art it is one of the app icon's bays, the kit's only picture: a
-    steel outline while somebody is idle, filled while they work, outlined in
-    amber with the icon's corner dot while they wait for you, and dashed once
-    something failed. The state is written under it on the plate regardless;
-    the bay is a picture of it, not a replacement for it.
-  */
-  .desk .sprite { position: relative; }
-
-  /*
-    With art in it. The border goes, because a square drawn round a character
-    is a box and not a person; pixel art is scaled with no smoothing, because
-    the whole point of a 32px sprite is the pixels.
-  */
-  .desk .sprite.drawn {
-    /* A person is about twice as tall as they are wide, and a square box
-       letterboxes them into something too small to recognise. */
-    width: 3rem;
-    height: 5rem;
-
-    /* Gone, not just made invisible. It used to be `border-color: transparent`,
-       which leaves the border there: with content-box sizing that is a pixel
-       on every side, so every sprite came out two pixels wider and two taller
-       than the room says a person is, and stood a pixel below the coordinate
-       it was anchored to. Small, and in every room, and enough to put everyone
-       slightly out of register with the furniture drawn in front of them. */
-    display: block;
-    border: 0;
-    border-radius: 0;
-    background-repeat: no-repeat;
-    background-position: center bottom;
-    background-size: contain;
-
-    /* The whole point of pixel art is the pixels. Without this the browser
-       smooths them on the way down and the sprite arrives as a smudge. */
-    image-rendering: pixelated;
-  }
-
-  /* A desk whose node has finished keeps its sprite, quieter. The art says
-     nothing on its own, so dimming it costs no word any contrast. */
-  .desk.gone .sprite.drawn { opacity: 0.7; }
-
-  /*
-    Movement, and it means something.
-
-    Anybody still in the room breathes - an office where nothing at all moves
-    reads as a screenshot, and these are people. Somebody actually working
-    types as well, which is a faster and larger movement, so across a room you
-    can see who is doing something without reading a word. Anybody who has
-    left is perfectly still.
-
-    Staggered by desk, because six people bobbing in lockstep is not an office,
-    it is a chorus line. Travel, so reduced motion stops it as well as none.
-  */
-  @keyframes breathing {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-1px); }
-  }
-
-  @keyframes typing {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    25% { transform: translateY(-2px) rotate(-0.6deg); }
-    75% { transform: translateY(-1px) rotate(0.6deg); }
-  }
-
-  .desk .sprite.drawn { animation: breathing 4s ease-in-out infinite; }
-  .desk.busy .sprite.drawn { animation: typing 1.1s ease-in-out infinite; }
-  .desk.gone .sprite.drawn { animation: none; }
-
-  /* On the list item, not the button: each desk is the only child of its own
-     li, so counting buttons gives every one of them the same number and every
-     sprite the same delay - which is the chorus line this is here to avoid. */
-  .desks li:nth-child(2n) .sprite.drawn { animation-delay: -0.7s; }
-  .desks li:nth-child(3n) .sprite.drawn { animation-delay: -1.4s; }
-  .desks li:nth-child(5n) .sprite.drawn { animation-delay: -2.1s; }
-
-  [data-motion="reduced"] .desk .sprite.drawn { animation: none; }
-
-  @media (prefers-reduced-motion: reduce) {
-    .desk .sprite.drawn { animation: none !important; }
-  }
-
-  /*
-    A room scrolled out of sight stops moving.
-
-    Every sprite with a running transform animation is its own compositor
-    layer, and a board of thirty-six offices with a full team in each is about
-    nine hundred of them - all still being composited while the viewer looks at
-    one. Paused rather than removed, so a room scrolled back into view carries
-    on rather than restarting in step with every other room.
-  */
-  .room.unwatched .sprite.drawn { animation-play-state: paused; }
-
-  /*
-    Who somebody is, on hovering or focusing their desk. The plate has room
-    for a name and nothing else; this is where the rest of it goes, rather
-    than in a browser tooltip that cannot be styled, cannot be read by a
-    keyboard, and takes a second to appear.
-  */
-  .desk .desk-card {
-    display: none;
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 0.35rem);
-    transform: translateX(-50%);
-    z-index: 5;
-    width: max-content;
-    max-width: 18rem;
-    text-align: left;
-    white-space: normal;
-    background: var(--surface-1);
-    color: var(--ink);
-    border: var(--lk-border) solid var(--line-strong);
-    border-radius: var(--radius-sm);
-    padding: var(--space-2) var(--space-3);
-    font-size: var(--type-small-size);
-    line-height: 1.4;
-    box-shadow: var(--shadow-lift);
-  }
-
-  .desk:hover .desk-card, .desk:focus-visible .desk-card { display: block; }
-
-  .desk .desk-card b { display: block; font-size: var(--type-body-size); }
-  .desk .desk-card .line { display: block; color: var(--ink-muted); }
-
   /* ---- the terminal ----
      What a node is actually doing, as it does it. The same stream the detail
      pane shows for a node you picked, except this picks the one worth
@@ -1973,10 +1623,6 @@
   .board .screen.big .holds { max-height: 48rem; }
 
   /* A team's office is one room, drawn as large as its panel allows. */
-  .board .screen.office-of .holds { max-height: none; overflow: visible; }
-  .board .screen.office-of .rooms { grid-template-columns: minmax(0, 1fr); }
-  .board .screen.office-of .room { border: 0; margin: 0; padding: 0; background: none; box-shadow: none; }
-  .board .screen.office-of .room .where { display: none; }
 
   @media (max-width: 56rem) {
     .board { grid-template-columns: minmax(0, 1fr); }
@@ -2221,14 +1867,13 @@
   /* And one using a forced-colours mode keeps their own, with the borders
      still drawn. */
   @media (forced-colors: active) {
-    .run, .desk, .lk-log, .paper, .lk-meter-track, .lk-node { border: 1px solid CanvasText; }
+    .run, .lk-log, .paper, .lk-meter-track, .lk-node { border: 1px solid CanvasText; }
     .add, .drop, .hunk { color: CanvasText; }
     .bars .bar { background: CanvasText; forced-color-adjust: none; }
 
     .lk-tab[aria-pressed="true"] { border: 3px solid Highlight; }
     .lk-segment [role="tab"][aria-selected="true"], .papers .lk-btn[aria-pressed="true"] { border-bottom: 3px solid Highlight; }
     .lk-edge { stroke: CanvasText; }
-    .lk-desk-bay { border-color: CanvasText; }
   }
 </style>
 </head>
@@ -4443,57 +4088,6 @@
     { button: "view-settings", box: "settings", draw: drawSettings }
   ];
 
-  /*
-    Which office a team works in.
-
-    A room each, rather than everybody sharing one: a viewer showing four
-    teams at once wants four different rooms, or it is the same picture four
-    times and tells you nothing about which is which.
-
-    Decided once, the first time a team is seen, and written down. It used to
-    be worked out afresh every time by hashing the name across the installed
-    sets - which meant installing or removing a single set moved every team on
-    the machine into a different room. That is how an afternoon of measuring
-    one office came to be applied to a different one, with nothing anywhere
-    saying the room had changed.
-
-    A team keeps its office until somebody changes it on the panel, or until
-    the set it was in is gone.
-  */
-  var officeOf = kept("loadout.offices", {});
-
-  function setFor(team) {
-    if (!team) { return ""; }
-
-    var all = (installed || []).slice().sort();
-
-    if (!all.length) { return ""; }
-
-    // Still valid? A set can be uninstalled, and pointing at one that is not
-    // there draws nothing at all.
-    if (officeOf[team] && all.indexOf(officeOf[team]) >= 0) { return officeOf[team]; }
-
-    // An empty room first, so four teams get four offices rather than two of
-    // them colliding on a hash and looking identical.
-    var taken = {};
-
-    Object.keys(officeOf).forEach(function (other) {
-      if (other !== team && all.indexOf(officeOf[other]) >= 0) { taken[officeOf[other]] = true; }
-    });
-
-    var free = all.filter(function (one) { return !taken[one]; });
-    var from = free.length ? free : all;
-
-    var sum = 0;
-
-    for (var i = 0; i < team.length; i += 1) { sum += team.charCodeAt(i) * (i + 1); }
-
-    officeOf[team] = from[sum % from.length];
-    keep("loadout.offices", officeOf);
-
-    return officeOf[team];
-  }
-
   // What each screen is called once it is a panel on a board rather than the
   // thing the whole pane is showing.
   var titles = {
@@ -4539,14 +4133,9 @@
     });
   }
 
-  /* A screen named for a team rather than for one of the fixed views. */
-  function isTeamOffice(name) { return name.indexOf("office:") === 0; }
-
-  function teamOf(name) { return name.slice("office:".length); }
-
   function boardScreens() {
     return board.open.filter(function (name) {
-      return isTeamOffice(name) || views.some(function (one) { return one.box === name; });
+      return views.some(function (one) { return one.box === name; });
     });
   }
 
@@ -4563,37 +4152,6 @@
     return Math.min(6, Math.ceil(Math.sqrt(count)));
   }
 
-  /* One team's office, drawn into a panel of the viewer. */
-  function drawTeamOffice(name, holds) {
-    var team = teamOf(name);
-    var runs = (shown || []).filter(function (run) { return run.team === team; });
-
-    // The one going, or the last one there was. A panel for a team with
-    // nothing to show says so rather than disappearing.
-    var going = runs.filter(function (run) { return run.running; });
-    var run = going[0] || runs[0] || null;
-
-    holds.textContent = "";
-
-    if (!run) {
-      var none = document.createElement("p");
-
-      none.className = "lk-help";
-      none.textContent = team + " has not run on this machine.";
-      holds.appendChild(none);
-
-      return;
-    }
-
-    var list = document.createElement("ul");
-
-    list.className = "rooms lk-rooms";
-    list.appendChild(roomOf(run, setFor(team), "board"));
-    holds.appendChild(list);
-
-    keepStill();
-  }
-
   function drawBoard() {
     var holder = document.getElementById("board");
 
@@ -4608,52 +4166,14 @@
       var panel = document.createElement("section");
       var head = document.createElement("header");
       var title = document.createElement("h3");
-      var team = isTeamOffice(name) ? teamOf(name) : null;
 
-      panel.className = "screen lk-tile"
-        + (board.big === name ? " big" : "")
-        + (team ? " office-of" : "");
+      panel.className = "screen lk-tile" + (board.big === name ? " big" : "");
       panel.setAttribute("aria-labelledby", "screen-" + name);
       head.className = "lk-tile-head";
 
       title.id = "screen-" + name;
-      title.textContent = team ? team : (titles[name] || name);
+      title.textContent = titles[name] || name;
       head.appendChild(title);
-
-      /*
-        Which office this team works in, changeable here rather than only in a
-        config file: it is a thing you decide by looking at it.
-
-        Guarded, because a board restored from a previous visit is drawn
-        before the answer saying what art exists has arrived - and reading
-        .length off a list that is not there yet threw, which took the whole
-        of drawBoard with it and left the board silently empty.
-      */
-      var sets = installed || [];
-
-      if (team && sets.length > 1) {
-        var pick = document.createElement("select");
-
-        pick.className = "lk-select";
-        pick.setAttribute("aria-label", "Which office " + team + " works in");
-        sets.forEach(function (one) {
-          var choice = document.createElement("option");
-
-          choice.value = one;
-          choice.textContent = one;
-          choice.selected = one === setFor(team);
-          pick.appendChild(choice);
-        });
-
-        pick.addEventListener("change", function () {
-          officeOf[team] = pick.value;
-          keep("loadout.offices", officeOf);
-          drawBoard();
-          if (shown) { drawOpenScreens(shown); }
-        });
-
-        head.appendChild(pick);
-      }
 
       var big = document.createElement("button");
 
@@ -4692,17 +4212,10 @@
 
       holds.className = "holds lk-tile-body";
 
-      if (team) {
-        // Its own markup rather than a borrowed screen: there is one office
-        // box and a viewer may hold six teams at once.
-        holds.id = "holds-" + name;
-        drawTeamOffice(name, holds);
-      } else {
-        var box = document.getElementById(name);
+      var box = document.getElementById(name);
 
-        box.hidden = false;
-        holds.appendChild(box);
-      }
+      box.hidden = false;
+      holds.appendChild(box);
 
       panel.appendChild(holds);
       holder.appendChild(panel);
@@ -4736,14 +4249,6 @@
   /* Every screen the board is showing, drawn from the same state. */
   function drawOpenScreens(runs) {
     boardScreens().forEach(function (name) {
-      if (isTeamOffice(name)) {
-        var holds = document.getElementById("holds-" + name);
-
-        if (holds) { drawTeamOffice(name, holds); }
-
-        return;
-      }
-
       var one = views.filter(function (v) { return v.box === name; })[0];
 
       if (one) { one.draw(runs); }
@@ -4756,7 +4261,7 @@
     where.textContent = "";
 
     // The kit's choice cards, as real checkboxes in a fieldset that says what
-    // they choose between: the screens, then the offices.
+    // they choose between: the screens.
     function kind(legend) {
       var set = document.createElement("fieldset");
       var name = document.createElement("legend");
@@ -4799,27 +4304,8 @@
     }
 
     views.forEach(function (one) { offer(one.box, titles[one.box] || one.box); });
-
-    /*
-      And one per team that has run here, so a viewer can be four teams'
-      offices side by side rather than four ways of looking at all of them.
-      Taken from the runs themselves: a team nobody has run here is not a team
-      this machine can show anything about.
-    */
-    var teams = [];
-
-    (shown || []).forEach(function (run) {
-      if (run.team && teams.indexOf(run.team) < 0) { teams.push(run.team); }
-    });
-
-    teams.sort();
-
-    if (teams.length) {
-      into = kind("Offices");
-
-      teams.forEach(function (team) { offer("office:" + team, team); });
-    }
   }
+
 
   function showBoard() {
     board.on = true;
@@ -5059,173 +4545,15 @@
     var saved = kept("loadout.board", null);
 
     if (saved && saved.on && (saved.open || []).length) {
-      // Team offices count as well. This kept only the fixed views, so a
-      // board of team offices came back empty - and then saved the empty one
-      // over the top, which is how an arrangement disappears for good rather
-      // than just failing to appear once.
+      // A team's office panel, from before the building, is one of those.
       board.open = (saved.open || []).filter(function (name) {
-        return isTeamOffice(name) || views.some(function (one) { return one.box === name; });
+        return views.some(function (one) { return one.box === name; });
       });
       board.big = board.open.indexOf(saved.big) >= 0 ? saved.big : null;
 
       showBoard();
     }
   }());
-
-  /*
-    A desk. Its name and its state are words on the element, so a sprite - when
-    there is art to put there - is a second encoding on top of a first rather
-    than the only one. That ordering is the whole reason this is elements and
-    not a canvas.
-  */
-  function desk(run, node, set) {
-    var li = document.createElement("li");
-    var button = document.createElement("button");
-    var office = node.office || {};
-
-    // A failed node keeps the finished look it has always had; the server
-    // keeps it at its desk for the canvas office, which is a different thing.
-    var gone = office.place === "gone" || office.lamp === "failed";
-
-    button.type = "button";
-    button.className = "desk"
-      + (gone ? " gone" : "")
-      + (office.pose === "type" ? " busy" : "");
-
-    // The kit's key for how they are, which colours the word on the plate and
-    // draws the bay they stand in when there is no art. The same key the
-    // badges use, from the same place, so the two cannot disagree.
-    var doingNow = gone ? "left" : (node.activity || node.state);
-    var key = nodeState(node, run).key;
-
-    if (key === "stopped") { key = null; }
-
-    if (key) { button.setAttribute("data-state", key); }
-
-    var sprite = document.createElement("span");
-
-    // Decorative, and empty until there is art. Announced as nothing, which is
-    // what a picture of a person at a desk is worth saying about - the name and
-    // the state are already on the element as words, and this is the second
-    // encoding rather than the only one.
-    sprite.className = "sprite";
-    sprite.setAttribute("aria-hidden", "true");
-
-    var drawn = pieceFor(node, set);
-
-    if (drawn) {
-      sprite.className = "sprite drawn";
-      sprite.style.backgroundImage = "url(\"/office/" + encodeURIComponent(set)
-        + "/" + encodeURIComponent(drawn) + "?token=" + encodeURIComponent(token) + "\")";
-    } else {
-      // No art: the kit's desk, a card with one of the app icon's bays on it
-      // - a steel outline while idle, filled while working, outlined in amber
-      // with the icon's corner dot while waiting for you, dashed once failed -
-      // and the state's glyph in it. The words under it are the state; the
-      // bay is a picture of it.
-      button.classList.add("lk-desk");
-      sprite.className = "sprite lk-desk-bay";
-
-      if (key) {
-        var glyph = document.createElement("span");
-
-        glyph.className = "lk-glyph";
-        sprite.appendChild(glyph);
-      }
-    }
-
-    button.appendChild(sprite);
-
-    // Everything written goes on one plate, so there is a single opaque
-    // thing behind all of it rather than a chip per line.
-    var plate = document.createElement("span");
-
-    plate.className = "plate";
-    button.appendChild(plate);
-
-    var role = node.role.replace(/^role\./, "");
-    var doing = gone ? "left" : (node.activity || node.state);
-
-    var who = document.createElement("span");
-
-    // The person, not the slot. Every room on this machine has an
-    // implementer/1 in it and none of them can be told apart in conversation;
-    // this one is Priya and nobody else is.
-    who.className = "who";
-    who.textContent = (node.person || node.node)
-      + (node.role === "role.project-lead" ? " \u00b7 lead" : "");
-    plate.appendChild(who);
-
-    var state = document.createElement("span");
-
-    // On a floor plan the plate says who and how they are; which role they
-    // are playing is on the card, along with everything else. A plate wide
-    // enough for all three covers the desk next to it.
-    state.className = "state";
-    state.textContent = doing;
-    plate.appendChild(state);
-
-    /*
-      The rest of it, on hovering or focusing the desk. The technical name is
-      in here rather than on the plate because it is what the commands take
-      and what a journal calls it - needed, and needed second.
-    */
-    var card = document.createElement("span");
-
-    card.className = "desk-card";
-    card.setAttribute("aria-hidden", "true");
-
-    var title = document.createElement("b");
-
-    title.textContent = node.personFull || node.node;
-    card.appendChild(title);
-
-    [
-      node.node + " - " + role,
-      doing + (node.turns ? ", " + node.turns + " exchange" + (node.turns === 1 ? "" : "s") : ""),
-      typeof node.cost === "number" ? "$" + node.cost.toFixed(2) : null,
-      node.model || null,
-      node.doing || null,
-      node.said ? "says: " + node.said : null
-    ].filter(Boolean).forEach(function (text) {
-      var line = document.createElement("span");
-
-      line.className = "line";
-      line.textContent = text;
-      card.appendChild(line);
-    });
-
-    button.appendChild(card);
-
-    // Said as a sentence rather than left to whatever a reader makes of three
-    // stacked spans: "lead project-lead, blocked" is what those run together
-    // as, and a comma is the difference between a name and a mumble. The
-    // person first and the node second, in the order somebody would say them.
-    var sentence = (node.personFull ? node.personFull + ", " : "")
-      + node.node + ", " + role + ", " + doing
-      + (node.doing ? ", " + node.doing : "");
-
-    button.setAttribute("aria-label", sentence);
-
-    button.addEventListener("click", function () { watch(run); });
-
-    li.appendChild(button);
-
-    return li;
-  }
-
-  /*
-    Whether to draw the room moving.
-
-    The packs carry a head-bob loop of the whole floor as a GIF, which is the
-    thing that makes an office look like somewhere people are rather than a
-    diagram. It is also motion nobody asked for, so anybody who has asked
-    their system for less gets the still instead - and a GIF cannot be stopped
-    from CSS, so the choice is made here rather than in a media query.
-  */
-  function roomScene() {
-    return pieces.room ? "room" : null;
-  }
 
   /*
     The terminal. What one node is doing, line by line, as it does it.
@@ -5360,170 +4688,6 @@
   }
 
   /*
-    One run's room, drawn in a named office.
-
-    Its own function because a room is wanted in two places now: the office
-    screen, which draws every run in the machine's office, and a viewer panel,
-    which draws one team in the office that team works in.
-  */
-  function roomOf(run, set, shownIn) {
-    var li = document.createElement("li");
-    var how = state(run);
-    var office = offices[set] || null;
-    var plan = office && office.room ? office.room : null;
-
-    li.className = "room lk-room" + (run.running ? "" : " empty");
-
-    // Which room, then whose it is and how it is doing, on one line. What the
-    // run is for is on its card and in the detail pane; a floor plan with a
-    // paragraph over it is a page of words with a room at the bottom.
-    var head = document.createElement("div");
-    var name = document.createElement("h3");
-
-    head.className = "lk-room-head";
-    name.textContent = run.room || run.id;
-    head.appendChild(name);
-
-    var where = document.createElement("p");
-
-    where.className = "where";
-    where.textContent = run.team + (run.project ? " on " + run.project : "")
-      + " \u00b7 " + how.word;
-
-    head.appendChild(where);
-    li.appendChild(head);
-
-    // A room made of tiles, or the kit's room where nothing is installed, is
-    // drawn on a canvas that outlives this draw; a painted room is drawn below.
-    var scene = sceneFor(set);
-
-    if (scene) {
-      li.appendChild(tileRoom((shownIn || "office") + "|" + run.id + "|" + set, run, set, scene).floor);
-
-      if (!(run.nodes || []).length) {
-        var empty = document.createElement("p");
-
-        empty.className = "where";
-        empty.textContent = run.running ? "Nobody has been briefed yet." : "Everybody has gone home.";
-        li.appendChild(empty);
-      }
-
-      return li;
-    }
-
-    var desks = document.createElement("ul");
-    var spare = document.createElement("ul");
-
-    // Where this office says its desks are, if it says. The lead's place is
-    // first in the list, which is why the lead is first in the queue below.
-    var places = (plan && plan.desks) || [];
-
-    desks.className = "desks" + (places.length ? " placed" : " lk-desks");
-    spare.className = "desks lk-desks";
-
-    // The lead first and then its workers, so tabbing through a room follows
-    // the shape of the team rather than the order a journal happened to
-    // write things down in - and so the lead gets the lead's desk.
-    var people = (run.nodes || []).slice().sort(function (a, b) {
-      return (a.role === "role.project-lead" ? 0 : 1) - (b.role === "role.project-lead" ? 0 : 1);
-    });
-
-    people.forEach(function (node, i) {
-      var seat = desk(run, node, set);
-
-      if (places.length) {
-        if (i < places.length) {
-          seat.style.left = places[i][0] + "%";
-          seat.style.top = places[i][1] + "%";
-
-          /*
-            And the same coordinate again as a stacking order, so that where
-            two desks are close enough for their people to overlap, the one
-            nearer the viewer is drawn in front. This is y-sorting, which is
-            what every 2D engine does, and it costs nothing here because the
-            number is already to hand.
-
-            It goes on the sprite rather than on the desk on purpose. A
-            positioned element with a z-index becomes a stacking context, and
-            everything inside it is then trapped in that context - which would
-            put each desk's name plate back underneath the furniture layer,
-            however high the plate's own z-index was. The sprite has no such
-            children, so it can be ordered freely.
-          */
-          var art = seat.querySelector(".sprite");
-
-          if (art) { art.style.zIndex = Math.round(places[i][1] * 10); }
-
-          desks.appendChild(seat);
-
-          return;
-        }
-
-        // More people than the office has furniture. They stand in a row
-        // under the room rather than being left out of it.
-        spare.appendChild(seat);
-
-        return;
-      }
-
-      desks.appendChild(seat);
-    });
-
-    if (!people.length) {
-      var nobody = document.createElement("li");
-
-      nobody.className = "where";
-      nobody.textContent = run.running ? "Nobody has been briefed yet." : "Everybody has gone home.";
-
-      // An empty room still has a floor, so the words go under it.
-      (places.length ? spare : desks).appendChild(nobody);
-    }
-
-    var floor = document.createElement("div");
-    var has = office && (office.pieces || []).indexOf("room") >= 0;
-
-    floor.className = "floor" + (has ? "" : " bare");
-
-    if (has) {
-      // Decorative, and the desks stand on top of it. Which room this is,
-      // what team, and who is at which desk are all words on the elements
-      // already; a picture of an office adds nothing worth reading out.
-      floor.style.backgroundImage = "url(\"/office/" + encodeURIComponent(set)
-        + "/room?token=" + encodeURIComponent(token) + "\")";
-
-      if (plan && plan.width && plan.height) {
-        floor.style.aspectRatio = plan.width + " / " + plan.height;
-      }
-
-      if (plan && plan.person) {
-        floor.style.setProperty("--person", plan.person);
-      }
-    }
-
-    floor.appendChild(desks);
-
-    if (has && (office.pieces || []).indexOf("front") >= 0) {
-      var over = document.createElement("div");
-
-      over.className = "over";
-      over.setAttribute("aria-hidden", "true");
-      over.style.backgroundImage = "url(\"/office/" + encodeURIComponent(set)
-        + "/front?token=" + encodeURIComponent(token) + "\")";
-
-      floor.appendChild(over);
-    }
-
-    li.appendChild(floor);
-
-    // Anybody the room has no desk for stands in a row underneath rather than
-    // being left out: a run with more nodes than the office has furniture is
-    // still a run somebody needs to see all of.
-    if (spare.children.length) { li.appendChild(spare); }
-
-    return li;
-  }
-
-  /*
     Watches which rooms are actually on screen, so the ones that are not can
     stop animating. One observer, rebuilt with the rooms it watches, because
     every draw throws the old rooms away.
@@ -5593,9 +4757,6 @@
     frame, so each room is kept by run and re-attached rather than redrawn.
   ================================================================== */
 
-  // The room drawn when no set is installed, sent by the server with the art.
-  var kitScene = null;
-
   // Each room on the page, by where it is shown, which run and which set.
   var tileRooms = {};
   var tileLoop = 0;
@@ -5608,19 +4769,6 @@
 
   function tilesStill() {
     return (document.documentElement.getAttribute("data-motion") || "full") !== "full";
-  }
-
-  /*
-    Which scene draws a set: its own tile scene, nothing where it is a painted
-    room (that has its own view), and the kit's room where there is no set.
-  */
-  function sceneFor(set) {
-    var office = offices[set];
-
-    if (office && office.scene) { return office.scene; }
-    if (office && office.room) { return null; }
-
-    return kitScene;
   }
 
   function tilePicture(set, piece) {
@@ -6165,7 +5313,6 @@
         return;
       }
 
-      if (person && room.run) { watch(room.run); }
     });
 
     tileUpdate(room, run);
@@ -10364,30 +9511,6 @@
     listenToOffice();
     keepStill();
     towerShow();
-  }
-
-  /*
-    The office as it was before the building: a room per run. Kept for the
-    board's team panels until the building replaces them too.
-  */
-  function drawOfficeRooms(runs) {
-    var box = document.getElementById("office");
-
-    box.textContent = "";
-
-    runs.forEach(function (run) {
-      box.appendChild(roomOf(run, setFor(run.team)));
-    });
-
-    keepStill();
-
-    if (!runs.length) {
-      var none = document.createElement("li");
-
-      none.className = "where";
-      none.textContent = "No team has run on this machine yet.";
-      box.appendChild(none);
-    }
   }
 
   /*
@@ -15031,71 +14154,17 @@
   })();
 
   /*
-    The art, if any is installed. Asked for once rather than on every draw:
-    a set is a directory somebody filled before starting the daemon, and it
-    does not change underneath a page.
-
-    Everything below degrades to what the office drew before. No art, an
-    unreachable endpoint, a set naming pieces that are not there - all of them
-    end with an empty square and a name in words, which is what the desk was
-    built to be.
+    Every art set on this machine, with when each last changed, asked for once:
+    a picture's address carries the set's stamp, so a set rebuilt while the
+    page is open is fetched afresh rather than drawn from what the browser
+    kept. A dashboard with no art is the ordinary case, and says nothing.
   */
-  var pieces = {};
-
-  // Every set this machine has: its room and its pieces, by name.
   var offices = {};
-  var installed = [];
-
-  // What the chosen set says about its own room: how big the scene is and
-  // where somebody stands in it. Null for a set that says nothing, and then
-  // the office draws the row of people it always drew.
-  var room = null;
 
   function sprites() {
     return api("/api/office")
-      .then(function (answer) {
-        (answer.pieces || []).forEach(function (piece) { pieces[piece] = true; });
-        room = answer.room || null;
-        offices = answer.offices || {};
-        kitScene = answer.kit || null;
-
-        // A set counts once it has a room to draw, painted or made of tiles.
-        installed = (answer.sets || []).filter(function (one) {
-          return offices[one] && (offices[one].room || offices[one].scene);
-        });
-
-        // A board restored from a previous visit was drawn before any of this
-        // arrived, so it has no office pickers on it and its rooms are bare.
-        // Now that there is art, draw it again.
-        if (board.on) {
-          drawBoard();
-
-          if (shown) { drawOpenScreens(shown); }
-        }
-      })
-      .catch(function () {
-        // Nothing to say. A dashboard with no art is the ordinary case.
-      });
-  }
-
-  /*
-    Which piece draws this node, or null for none.
-
-    By role, because a role is what somebody recognises across runs - the
-    reviewer looks like the reviewer whichever run it is in - and by the bare
-    role name, so a set is a folder of files called implementer.png and
-    reviewer.png rather than anything that needs a manifest. "worker" is the
-    fallback for a set that did not draw every role, and a set with neither
-    leaves the square empty.
-  */
-  function pieceFor(node, set) {
-    var office = offices[set];
-    var has = office ? (office.pieces || []) : [];
-    var role = (node.role || "").replace(/^role\./, "");
-
-    if (has.indexOf(role) >= 0) { return role; }
-
-    return has.indexOf("worker") >= 0 ? "worker" : null;
+      .then(function (answer) { offices = answer.offices || {}; })
+      .catch(function () { /* No art: the building draws in its own shapes. */ });
   }
 
   function refresh() {

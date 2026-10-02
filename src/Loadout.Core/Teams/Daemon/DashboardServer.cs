@@ -1369,50 +1369,20 @@ public sealed class DashboardServer : IDisposable
         {
             var root = OfficeRoot;
 
+            // The art sets this machine has, each with when it last changed,
+            // for the page to put in its pictures' addresses: a rebuilt set
+            // must not be drawn from sheets cached before it was. The building
+            // itself comes from /api/office/building.
             await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
                 new
                 {
-                    set = root is null ? string.Empty : OfficeSet,
                     sets = root is null ? [] : OfficeArt.Sets(root),
-                    pieces = root is null || OfficeSet.Length == 0
-                        ? []
-                        : OfficeArt.Pieces(root, OfficeSet),
-                    room = root is null || OfficeSet.Length == 0
-                        ? null
-                        : OfficeArt.Room(root, OfficeSet),
-
-                    // Every set this machine has, each with its own room and
-                    // its own pieces. A viewer showing four teams at once
-                    // draws four different offices, and it cannot ask for
-                    // them one page load at a time.
                     offices = root is null
                         ? new Dictionary<string, object>()
                         : OfficeArt.Sets(root).ToDictionary(
                             one => one,
-                            one => (object)new
-                            {
-                                room = OfficeArt.Room(root, one),
-                                pieces = OfficeArt.Pieces(root, one),
-
-                                // A room made of tiles, only once it passes
-                                // the check. One that does not is left out
-                                // rather than drawn wrong for a whole run;
-                                // 'loadout team office check' says why.
-                                scene = OfficeScenes.Has(root, one) && OfficeScenes.Check(root, one) is { Fit: true } check
-                                    ? check.Scene
-                                    : null,
-
-                                // When the set last changed, for the page to put
-                                // in its pictures' addresses: a rebuilt set must
-                                // not be drawn from sheets cached before it was.
-                                stamp = OfficeScenes.Stamp(root, one),
-                            },
+                            one => (object)new { stamp = OfficeScenes.Stamp(root, one) },
                             StringComparer.Ordinal),
-
-                    // The room drawn with no set installed, in the kit's own
-                    // colours, so the office has somewhere to walk people
-                    // about on every machine.
-                    kit = OfficeScene.Kit(),
                 }, Json)).ConfigureAwait(false);
 
             return;
@@ -1422,10 +1392,8 @@ public sealed class DashboardServer : IDisposable
         {
             var rest = path["/office/".Length..];
 
-            // /office/<set>/<piece> for a page drawing several offices at
-            // once, and /office/<piece> for one drawing the configured one.
-            // Two forms rather than a flag, because the caller knows which
-            // question it is asking.
+            // /office/<set>/<piece>, which is what the page asks for, and
+            // /office/<piece> from the configured set.
             var cut = rest.IndexOf('/', StringComparison.Ordinal);
 
             await (cut > 0

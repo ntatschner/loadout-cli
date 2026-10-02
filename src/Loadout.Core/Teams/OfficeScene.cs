@@ -192,7 +192,7 @@ public sealed record OfficeArea(
 /// </param>
 /// <remarks>
 /// <para>
-/// The second kind of set, beside the painted rooms of <see cref="OfficeRoom"/>.
+/// A set that is one hand-made room, beside the kits the building is made from.
 /// A painted room is one picture, so a person can only be placed on it; a
 /// room made of tiles says where the floor is, so a person can walk across it.
 /// </para>

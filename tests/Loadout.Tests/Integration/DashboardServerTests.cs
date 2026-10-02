@@ -247,7 +247,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_page_is_told_what_art_there_is_to_draw_with()
+    public async Task The_page_is_told_what_art_there_is_with_when_each_set_changed()
     {
         var answer = await GetAsync("/api/office");
 
@@ -255,60 +255,41 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         using var read = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
 
-        read.RootElement.GetProperty("set").GetString().Should().Be("open-office");
-
-        read.RootElement.GetProperty("pieces").EnumerateArray()
-            .Select(one => one.GetString()).Should().Equal("lead");
-
         read.RootElement.GetProperty("sets").EnumerateArray()
             .Select(one => one.GetString()).Should().Contain("lobby").And.Contain("open-office");
+
+        // Each with its stamp, for its pictures' addresses, so a set rebuilt
+        // while the page is open is fetched again rather than drawn from what
+        // the browser kept.
+        read.RootElement.GetProperty("offices").GetProperty("open-office").TryGetProperty("stamp", out _).Should().BeTrue();
+
+        // And nothing about the painted rooms, which the office no longer
+        // draws, or the per-run rooms the building replaced.
+        foreach (var gone in new[] { "set", "pieces", "room", "kit" })
+        {
+            read.RootElement.TryGetProperty(gone, out _).Should().BeFalse("{0} was the painted rooms'", gone);
+        }
+
+        read.RootElement.GetProperty("offices").GetProperty("open-office").TryGetProperty("room", out _).Should().BeFalse();
     }
 
     /// <summary>
-    /// A tile scene is sent only once it passes its check, and the kit's own
-    /// room is always there to fall back on.
-    /// </summary>
-    [Fact]
-    public async Task A_tile_scene_is_sent_only_when_it_is_fit_to_draw()
-    {
-        var kit = OfficeScene.Kit();
-
-        Directory.CreateDirectory(Path.Combine(_art, "tiled"));
-        File.WriteAllText(Path.Combine(_art, "tiled", OfficeScene.FileName), JsonSerializer.Serialize(kit));
-
-        // Its only desk under a wall.
-        Directory.CreateDirectory(Path.Combine(_art, "walled"));
-        File.WriteAllText(
-            Path.Combine(_art, "walled", OfficeScene.FileName),
-            JsonSerializer.Serialize(kit with { Desks = [new OfficeSpot(0, 0)] }));
-
-        using var read = JsonDocument.Parse(await (await GetAsync("/api/office")).Content.ReadAsStringAsync());
-        var offices = read.RootElement.GetProperty("offices");
-
-        offices.GetProperty("tiled").GetProperty("scene").GetProperty("desks").GetArrayLength().Should().Be(12);
-        offices.GetProperty("walled").GetProperty("scene").ValueKind.Should().Be(JsonValueKind.Null);
-        offices.GetProperty("open-office").GetProperty("scene").ValueKind.Should().Be(JsonValueKind.Null);
-        read.RootElement.GetProperty("kit").GetProperty("schema").GetString().Should().Be(OfficeScene.Version);
-    }
-
-    /// <summary>
-    /// The page draws a tile scene, or the kit's room where nothing is
-    /// installed, on a canvas kept between polls, and only while something in
-    /// it moves.
+    /// The page draws the building's rooms on a canvas kept between polls, and
+    /// only while something in it moves.
     /// </summary>
     [Fact]
     public async Task The_page_draws_tile_rooms_on_a_canvas_that_outlives_the_poll()
     {
         var page = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        // A painted set keeps its own view; no set at all gets the kit's room.
-        page.Should().Contain("if (office && office.room) { return null; }");
-        page.Should().Contain("return kitScene;");
-        page.Should().Contain("kitScene = answer.kit || null;");
+        // No painted rooms and no room per run: the building is the office.
+        page.Should().NotContain("office.room");
+        page.Should().NotContain("function roomOf(");
+        page.Should().NotContain("kitScene");
 
-        // Kept by where it is shown and which run, so a poll re-attaches it
+        // Kept by which floor and which way it faces, so a poll re-attaches it
         // rather than restarting every walk.
-        page.Should().Contain("tileRoom((shownIn || \"office\") + \"|\" + run.id + \"|\" + set, run, set, scene).floor");
+        page.Should().Contain("tileRoom(\"floor|\" + floor.run + \"|\" + floor.part + \"|\" + facing + \"|\" + kit, here, kit, scene)");
 
         // Nobody walks when motion is turned down, and nothing is drawn for a
         // room nobody can see.
@@ -1574,24 +1555,6 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task An_office_with_no_art_still_holds_its_desks()
-    {
-        // With no office pack installed - the default - every room's floor is
-        // bare, and a bare floor has no picture to take its height from. It
-        // was still a size container, which sizes itself without its
-        // contents, so it came out 26 pixels tall and its desks hung below
-        // it over the next room.
-        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
-
-        text.Should().Contain(".room .floor.bare { padding: 0.75rem; container-type: normal; }");
-
-        // And the desk's hover card had the same class as a run's card, so
-        // the rich view's rule for run cards showed every desk's card at once.
-        text.Should().Contain("card.className = \"desk-card\";");
-        text.Should().NotContain(".desk .card");
-    }
-
-    [Fact]
     public async Task Every_id_on_the_page_is_used_once()
     {
         // The Settings page and the "What this machine is set to" fold were both
@@ -1855,7 +1818,6 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         var page = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        page.Should().Contain("var key = nodeState(node, run).key;");
         page.Should().Contain("var lamp = (node.office || {}).lamp;");
     }
 

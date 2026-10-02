@@ -188,12 +188,11 @@ wrong:
   sit straight on the page undecided. The grain moved to a layer behind the
   content; the body is a flat colour that can be measured, and it looks the
   same. Those checks pass now.
-- The office and the graph still come back incomplete — 140 contrast checks
-  over rooms with art painted behind them, two overlapping desk targets, and
-  24 pieces of SVG text in the graph. These are the same on the plain page, so
-  they are not something the full one introduced, and they are all "axe cannot
-  work this out" rather than "this is wrong". Every desk measured at or above
-  the target size when checked directly.
+- The graph still comes back incomplete — 24 pieces of SVG text that axe cannot
+  work out, the same on the plain page, so not something the full one
+  introduced. The office came back incomplete too, in the rooms with art painted
+  behind them and the desks over them; the building has since replaced those,
+  and is a canvas with a one-line summary that hasn't been audited.
 
 The themes were measured separately, by hand, across all 48 combinations of
 four themes, two schemes and six accents: every piece of text passes, the worst
