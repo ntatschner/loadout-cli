@@ -7235,6 +7235,8 @@
 
     controls.appendChild(views);
     towerButtonFor(controls, "back", "Back to the building");
+    towerButtonFor(controls, "below", "↓", "The next floor down with a team on it");
+    towerButtonFor(controls, "above", "↑", "The next floor up with a team on it");
     towerButtonFor(controls, "left", "⟲", "Turn left");
     towerButtonFor(controls, "right", "⟳", "Turn right");
     towerButtonFor(controls, "out", "−", "Zoom out");
@@ -7350,6 +7352,19 @@
 
   function towerButton(which) {
     if (which === "back") { towerLeave(); return; }
+
+    if (which === "above" || which === "below") {
+      var next = towerNextFloor(towerData ? towerData.occupied : [], towerHere(), which === "above" ? 1 : -1);
+
+      if (!next) { return; }
+
+      towerPopupClose();
+      towerView = { mode: "inside", run: next.run, part: next.part };
+      keep("loadout.office.view", towerView);
+      towerShow();
+
+      return;
+    }
     if (which === "in") { towerZoomBy(1); return; }
     if (which === "out") { towerZoomBy(-1); return; }
     if (which === "up") { towerMove(towerStorey() * 3 * towerPixel()); return; }
@@ -7446,6 +7461,28 @@
 
   function towerOccupant(number) {
     return towerData ? (towerData.occupied || []).filter(function (one) { return one.number === number; })[0] || null : null;
+  }
+
+  /*
+    The occupied floor nearest above (by 1) or below (by -1) the given level,
+    or null when there is none that way: what the floor view's arrows step to,
+    from a team's floor or from the lobby, roof or a basement.
+  */
+  function towerNextFloor(occupied, from, by) {
+    return (occupied || [])
+      .filter(function (one) { return by > 0 ? one.number > from : one.number < from; })
+      .sort(function (a, b) { return (a.number - b.number) * by; })[0] || null;
+  }
+
+  // The level the floor view is showing: a team's floor, the lobby (0), the roof or a basement.
+  function towerHere() {
+    if (towerView.place === "lobby") { return 0; }
+    if (towerView.place === "roof") { return towerFloors() + 1; }
+    if (towerView.place) { return -Number(towerView.place.slice("basement-".length)); }
+
+    var floor = towerFloorOf(towerView);
+
+    return floor ? floor.number : 0;
   }
 
   function towerFloorOf(view) {
@@ -7561,6 +7598,12 @@
     towerHold.querySelector(".tower-outside").hidden = inside;
     towerHold.querySelector(".tower-inside").hidden = !inside;
     towerHold.querySelector(".tower-back").hidden = !inside;
+    ["above", "below"].forEach(function (one) {
+      var button = towerHold.querySelector(".tower-" + one);
+
+      button.hidden = !inside;
+      button.disabled = !inside || !towerNextFloor(towerData ? towerData.occupied : [], towerHere(), one === "above" ? 1 : -1);
+    });
     towerHold.querySelector(".tower-views").hidden = inside;
     ["up", "down"].forEach(function (one) {
       towerHold.querySelector(".tower-" + one).hidden = inside || towerLook.view === "lobby" || (towerLook.view !== "ground" && (towerZoom.outside || 0) <= 0);
@@ -8051,16 +8094,21 @@
     };
   }
 
-  // The four walls of the tower, each with its outward direction and its run along the ground.
+  /*
+    The four walls of the tower, each with its outward direction and its run
+    along the ground. One of them is the front, with the way in: the long wall
+    seen first, at turn 0. It stays where it is as the view turns, so the other
+    turns show the tower's other walls, as walking round it would.
+  */
   function towerSides() {
     var w = towerWidth();
     var d = towerDepth();
 
     return [
-      { from: [0, 0], to: [w, 0], out: [0, -1], long: true },
-      { from: [w, 0], to: [w, d], out: [1, 0], long: false },
-      { from: [w, d], to: [0, d], out: [0, 1], long: true },
-      { from: [0, d], to: [0, 0], out: [-1, 0], long: false },
+      { from: [0, 0], to: [w, 0], out: [0, -1], long: true, front: true },
+      { from: [w, 0], to: [w, d], out: [1, 0], long: false, front: false },
+      { from: [w, d], to: [0, d], out: [0, 1], long: true, front: false },
+      { from: [0, d], to: [0, 0], out: [-1, 0], long: false, front: false },
     ];
   }
 
@@ -9082,12 +9130,12 @@
 
   /*
     Which module a bay of the lobby is drawn with: the entrance in the middle of
-    a long side, across two bays where it is twice a bay's width (the bay it
+    the front, across two bays where it is twice a bay's width (the bay it
     covers is skipped), and the lobby's modules everywhere else, picked as a
     storey's bays are.
   */
-  function towerLobbyModule(facade, side, i, bays, long) {
-    var entrance = long && facade.entrance;
+  function towerLobbyModule(facade, side, i, bays, front) {
+    var entrance = front && facade.entrance;
     var wide = entrance && facade.bays.length && facade.entrance.source[2] >= facade.bays[0].source[2] * 2 && bays >= 3;
     var at = Math.floor(bays / 2) - (wide ? 1 : 0);
 
@@ -9099,6 +9147,37 @@
     return { module: facade.lobby[Math.floor(towerNoise(side * 31 + i * 7) * n) % n], span: 1 };
   }
 
+  /*
+    A picture halved, and halved again, each time averaging every two by two
+    pixels into one, so a wall of forty bays seen from across the city is drawn
+    from a copy near the size it appears rather than shrunk in one step, which
+    drops most pixels and leaves ripples where the glass should be.
+  */
+  var towerMips = new WeakMap();
+
+  function towerMip(picture, halvings) {
+    var made = towerMips.get(picture);
+
+    if (!made) {
+      made = [picture];
+      towerMips.set(picture, made);
+    }
+
+    while (made.length <= halvings) {
+      var last = made[made.length - 1];
+      var w = Math.max(1, Math.ceil(last.width / 2));
+      var h = Math.max(1, Math.ceil(last.height / 2));
+      var half = document.createElement("canvas");
+
+      half.width = w;
+      half.height = h;
+      half.getContext("2d").drawImage(last, 0, 0, w, h);
+      made.push(half);
+    }
+
+    return made[halvings];
+  }
+
   // A module drawn over one bay of a wall, from z0 up to z1, its top at the top.
   function towerModule(ctx, project, side, a0, a1, z0, z1, module, mirror) {
     var s = module.source;
@@ -9107,10 +9186,13 @@
     var p00 = project(towerOn(side, left, z1));
     var p10 = project(towerOn(side, right, z1));
     var p01 = project(towerOn(side, left, z0));
+    var shown = Math.max(Math.hypot(p10[0] - p00[0], p10[1] - p00[1]) / s[2], Math.hypot(p01[0] - p00[0], p01[1] - p00[1]) / s[3]);
+    var halvings = shown > 0 ? Math.max(0, Math.min(5, Math.floor(Math.log2(1 / shown)))) : 0;
+    var f = Math.pow(2, halvings);
 
     ctx.save();
-    ctx.transform((p10[0] - p00[0]) / s[2], (p10[1] - p00[1]) / s[2], (p01[0] - p00[0]) / s[3], (p01[1] - p00[1]) / s[3], p00[0], p00[1]);
-    ctx.drawImage(module.picture, s[0], s[1], s[2], s[3], 0, 0, s[2], s[3]);
+    ctx.transform((p10[0] - p00[0]) / s[2] * f, (p10[1] - p00[1]) / s[2] * f, (p01[0] - p00[0]) / s[3] * f, (p01[1] - p00[1]) / s[3] * f, p00[0], p00[1]);
+    ctx.drawImage(towerMip(module.picture, halvings), s[0] / f, s[1] / f, s[2] / f, s[3] / f, 0, 0, s[2] / f, s[3] / f);
     ctx.restore();
   }
 
@@ -9150,7 +9232,7 @@
         for (var bay = 0; bay < bays; bay += 1) {
           var chosen = level > 0 ? towerFacadeModule(art, level, sideIndex, bay, bays)
             : level < 0 ? { module: art.basement, mirror: false }
-            : towerLobbyModule(art, sideIndex, bay, bays, side.long);
+            : towerLobbyModule(art, sideIndex, bay, bays, side.front);
 
           if (chosen.skip) { continue; }
 
@@ -9167,7 +9249,7 @@
         ctx.fillStyle = "rgba(255, 226, 170, 0.5)";
         ctx.fill();
 
-        if (side.long) {
+        if (side.front) {
           towerQuad(ctx, project, towerOn(side, 0.45, z[0]), towerOn(side, 0.55, z[0]), towerOn(side, 0.55, z[0] + tile * 2.4), towerOn(side, 0.45, z[0] + tile * 2.4));
           ctx.fillStyle = c.deep;
           ctx.fill();

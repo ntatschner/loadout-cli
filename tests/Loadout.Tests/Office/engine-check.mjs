@@ -81,17 +81,20 @@ const code = [
   cut("  function tileProp(room, ctx, prop) {", "  // What each of the built-in kit's shapes is"),
   cut("  function towerNoise(n) {", "  function towerSkyDraw("),
   cut("  function towerFacadeModule(facade, level, side, i, bays) {", "  /*\n    Which module a bay of the lobby"),
-  cut("  function towerLobbyModule(facade, side, i, bays, long) {", "  // A module drawn over one bay of a wall"),
+  cut("  function towerLobbyModule(facade, side, i, bays, front) {", "  /*\n    A picture halved"),
+  cut("  function towerSides() {", "  function towerDraw() {"),
+  cut("  function towerNextFloor(occupied, from, by) {", "  // The level the floor view is showing"),
   cut("  function towerStopButtons(items, can) {", "  function towerServerPopup() {"),
 ].join("\n");
 
 // The page's own switch for reduced motion: off, so people walk. A picture is
 // anything with a size here: what tileProp draws is recorded, not shown.
 const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n"
+  + "function towerWidth() { return 1280; } function towerDepth() { return 768; }\n"
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -689,16 +692,16 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   if (storey({ bays: [a, b, c] }, 4, 1, 8).some((one) => !facade.bays.includes(one.module))) { fault("a kit without a corner gets something other than its bays", "no corner"); }
 }
 
-// The lobby: an entrance twice a bay's width spans the two middle bays of a
-// long side, the second skipped, so nothing is drawn under it twice; one a
-// bay wide takes the middle bay alone; a short side has none.
+// The lobby: an entrance twice a bay's width spans the two middle bays of the
+// front, the second skipped, so nothing is drawn under it twice; one a bay
+// wide takes the middle bay alone; any other side has none.
 {
   const bay = { name: "bay", source: [0, 0, 32, 96] };
   const lobby = [{ name: "l1", source: [0, 0, 32, 192] }, { name: "l2", source: [32, 0, 32, 192] }];
   const wide = { name: "door", source: [0, 0, 64, 192] };
   const narrow = { name: "door", source: [0, 0, 32, 192] };
-  const front = (entrance, long, bays) => Array.from({ length: bays }, (_, i) =>
-    engine.towerLobbyModule({ bays: [bay], lobby, entrance }, 0, i, bays, long));
+  const front = (entrance, isFront, bays) => Array.from({ length: bays }, (_, i) =>
+    engine.towerLobbyModule({ bays: [bay], lobby, entrance }, 0, i, bays, isFront));
   const describe = (row) => row.map((one) => (one.skip ? "-" : one.module.name === "door" ? `door${one.span}` : "l")).join(" ");
   const cases = [
     [front(wide, true, 9), "l l l door2 - l l l l"],
@@ -707,6 +710,31 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   ];
 
   cases.filter(([row, want]) => describe(row) !== want).forEach(([row, want]) => fault("the lobby's entrance is in the wrong place", `${describe(row)}, not ${want}`));
+}
+
+// The tower has one way in, on one wall, however it is turned: a door on
+// both long walls showed a front door from behind.
+{
+  const fronts = engine.towerSides().filter((side) => side.front);
+
+  if (fronts.length !== 1 || !fronts[0].long) { fault("the tower does not have exactly one front, on a long wall", `${fronts.length} fronts`); }
+}
+
+// The floor view's arrows step to the nearest floor with a team on it, over
+// empty floors, either way, from a floor or from the lobby, roof or a
+// basement, and go nowhere past the last.
+{
+  const occupied = [{ number: 7, run: "c" }, { number: 2, run: "a" }, { number: 4, run: "b" }];
+  const step = (from, by) => (engine.towerNextFloor(occupied, from, by) || { run: "none" }).run;
+  const cases = [
+    [2, 1, "b"], [4, 1, "c"], [7, 1, "none"], [4, -1, "a"], [2, -1, "none"],
+    [0, 1, "a"], [-2, 1, "a"], [11, -1, "c"], [5, -1, "b"], [5, 1, "c"],
+  ];
+
+  cases.filter(([from, by, want]) => step(from, by) !== want)
+    .forEach(([from, by, want]) => fault("the floor arrows step to the wrong floor", `from ${from} by ${by}: ${step(from, by)}, not ${want}`));
+
+  if (engine.towerNextFloor(undefined, 3, 1) !== null) { fault("the floor arrows step somewhere with no floors in use", "none"); }
 }
 
 // ---- stopping a schedule from the lobby ----
