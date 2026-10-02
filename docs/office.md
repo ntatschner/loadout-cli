@@ -197,6 +197,13 @@ standing to sitting. Then somebody reaching their chair sits down into it, and
 somebody leaving it gets up first, the same frames backwards, before taking a
 step. Without them, people go from standing to sitting at once, as before.
 
+A sheet's `sit` is somebody on an office chair, the one they bring to their
+desk. A sofa, a bench or a meeting table's drawn chairs already have a seat, so
+a sheet can add `sofa_n`, `sofa_e`, `sofa_s` and `sofa_w`: sitting with nothing
+drawn under them. Somebody waiting on a sofa, or stopping at a meeting table
+while they wander, sits in those, and doesn't sit down on to an office chair
+first. Without them they sit on their own chair there too.
+
 A sheet can also give the **face** in each frame that shows one: where the eyes
 and mouth are (`faces`, by frame number) and the person's skin, brow and lip
 colours (`face`). Then expressions are drawn over the face rather than drawn

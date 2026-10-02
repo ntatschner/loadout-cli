@@ -7195,16 +7195,51 @@
 
     // Away from their desk, whatever they would be doing at it: sitting if
     // where they went is a seat - a sofa, a chair at a meeting table.
-    if (person.errand) { return person.errand.stage === "staying" && person.errand.sit ? "sit" : "idle"; }
+    if (person.errand) { return tileInSeat(person) ? "sit" : "idle"; }
 
     var pose = (person.intent && person.intent.pose) || "idle";
-    var home = person.home;
 
     // Nothing to do, in a seat that is for sitting in - waiting on a sofa in
     // the lobby, say - they sit rather than stand at it.
-    if (pose === "idle" && home && home.sit && person.x === home.x && person.y === home.y) { return "sit"; }
+    if (pose === "idle" && tileInSeat(person)) { return "sit"; }
 
     return pose;
+  }
+
+  /*
+    What a sheet draws somebody with: their pose from the way they face, the
+    sofa pose instead in a seat that is for sitting in, sitting for a slump the
+    sheet has no picture of, and standing for anything else it lacks. And the
+    sit-down to play on the way into a chair, which a sofa doesn't get: it
+    lowers them on to an office chair.
+  */
+  function tileAnimation(sheet, person, pose) {
+    var animations = sheet.animations;
+    var onSeat = pose === "sit" && tileInSeat(person) ? animations["sofa_" + person.facing] : null;
+
+    return {
+      animation: onSeat
+        || animations[pose + "_" + person.facing]
+        || (pose === "slump" ? animations["sit_" + person.facing] : null)
+        || animations["idle_" + person.facing],
+      sitDown: onSeat ? null : animations["sitdown_" + person.facing] || null,
+    };
+  }
+
+  /*
+    Whether somebody is in a seat that is for sitting in - a sofa, a bench, a
+    chair at a meeting table - rather than at a desk with its own chair: on an
+    errand to one and staying, or in their own seat. In one, a sheet's sofa
+    pose is drawn where it has one, sitting on the seat the room draws rather
+    than on the office chair the sit pose brings.
+  */
+  function tileInSeat(person) {
+    if (person.path.length) { return false; }
+    if (person.errand) { return person.errand.stage === "staying" && !!person.errand.sit; }
+
+    var home = person.home;
+
+    return !!(home && home.sit && person.x === home.x && person.y === home.y);
   }
 
   /*
@@ -7382,13 +7417,12 @@
       if (sheet.lap && tileSideDesk(room, person)) { feetX += (person.facing === "e" ? 1 : -1) * TILE_PULL_UP * t; }
 
       var animations = sheet.animations;
-      var animation = animations[pose + "_" + person.facing]
-        || (pose === "slump" ? animations["sit_" + person.facing] : null)
-        || animations["idle_" + person.facing];
+      var chosen = tileAnimation(sheet, person, pose);
+      var animation = chosen.animation;
       var frames = animation.frames;
       var frame = still ? frames[0] : frames[Math.floor(clock * (animation.fps || 6)) % frames.length];
       var seatedPose = pose === "sit" || pose === "type" || pose === "slump";
-      var sitDown = animations["sitdown_" + person.facing];
+      var sitDown = chosen.sitDown;
 
       // Sitting down as they reach their chair, and getting up before they
       // leave it (tileStep holds them there meanwhile): the sit-down drawn once

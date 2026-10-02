@@ -86,7 +86,7 @@ const code = [
 const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose };")();
+  + " sceneTurns, tileProp, tilePose, tileAnimation };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -629,6 +629,36 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   checks.push(["staying where people stand", engine.tilePose(b), "idle"]);
 
   checks.filter(([, got, want]) => got !== want).forEach(([what, got, want]) => fault("a person's pose in a seat is wrong", `${what}: ${got}, not ${want}`));
+
+  // What they're drawn with: the sofa pose in a seat for sitting, with no
+  // sit-down on to an office chair first; the sit pose and its sit-down at a
+  // seat that isn't; and a sheet without a sofa pose sits them as before.
+  const pose = (name) => ({ frames: [0], name });
+  const sheet = { animations: {} };
+
+  ["idle", "walk", "sit", "type", "sofa", "sitdown"].forEach((kind) => ["n", "e", "s", "w"].forEach((f) => { sheet.animations[`${kind}_${f}`] = pose(`${kind}_${f}`); }));
+
+  const plain = { animations: Object.fromEntries(Object.entries(sheet.animations).filter(([key]) => !key.startsWith("sofa_"))) };
+  const drawn = (one, who) => {
+    const chosen = engine.tileAnimation(one, who, engine.tilePose(who));
+
+    return `${chosen.animation.name}${chosen.sitDown ? " after " + chosen.sitDown.name : ""}`;
+  };
+
+  a.errand = null;
+  b.errand = null;
+  a.intent = { pose: "idle" };
+  b.intent = { pose: "sit" };
+  a.facing = "e";
+  b.facing = "s";
+
+  const drawing = [
+    ["idle in a sofa seat", drawn(sheet, a), "sofa_e"],
+    ["sitting at a seat that isn't for sitting", drawn(sheet, b), "sit_s after sitdown_s"],
+    ["idle in a sofa seat, no sofa pose", drawn(plain, a), "sit_e after sitdown_e"],
+  ];
+
+  drawing.filter(([, got, want]) => got !== want).forEach(([what, got, want]) => fault("a person in a seat is drawn with the wrong pose", `${what}: ${got}, not ${want}`));
 }
 
 // ---- tile pictures that turn with the floor ----
