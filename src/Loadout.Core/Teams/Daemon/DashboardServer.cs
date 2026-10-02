@@ -1731,6 +1731,10 @@ public sealed class DashboardServer : IDisposable
                 bay = floor.Bay,
                 bays = floor.Bays,
             }),
+
+            // Each occupied storey's outside, from its floor: solid and glass
+            // bays, and which are lit. A storey nobody is on is drawn plain.
+            facades = Facades(view),
         };
     }
 
@@ -1759,6 +1763,28 @@ public sealed class DashboardServer : IDisposable
         var (_, rules, capacity, _) = OfficeKitNow();
 
         return _building.Update(summaries, capacity, rules, DateTimeOffset.UtcNow);
+    }
+
+    private Dictionary<string, OfficeFacadeStrips> Facades(BuildingView view)
+    {
+        var facades = new Dictionary<string, OfficeFacadeStrips>(StringComparer.Ordinal);
+
+        foreach (var number in view.Occupied.Select(one => one.Number).Distinct())
+        {
+            if (Floor(view, number) is not { } scene)
+            {
+                continue;
+            }
+
+            var here = view.Occupied.Where(one => one.Number == number).ToList();
+            var anyone = here.Any(one => !one.Dark && one.People > 0);
+
+            facades[number.ToString(System.Globalization.CultureInfo.InvariantCulture)] = OfficeFacadePlan.For(
+                scene,
+                run => run is null ? anyone : here.Any(one => one.Run == run && !one.Dark && one.People > 0));
+        }
+
+        return facades;
     }
 
     private OfficeScene? Floor(BuildingView view, int number)

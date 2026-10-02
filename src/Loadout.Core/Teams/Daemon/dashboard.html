@@ -8485,6 +8485,16 @@
     ];
   }
 
+  /*
+    Which way a side of the tower faces, as the floor's plan names them: 0
+    south (the front), 1 east, 2 north, 3 west. By the way it faces, not by its
+    place in a list: only the sides facing the eye are drawn, so the first
+    drawn may be any of them.
+  */
+  function towerFacing(side) {
+    return side.out[1] < 0 ? 0 : side.out[0] > 0 ? 1 : side.out[1] > 0 ? 2 : 3;
+  }
+
   function towerDraw() {
     if (!towerHold || towerView.mode === "inside") { return; }
 
@@ -9591,10 +9601,19 @@
     var facade = seeThrough ? null : towerFacade();
     var art = facade && (level > 0 || (level === 0 && facade.lobby.length) || (level < 0 && facade.basement)) ? facade : null;
 
+    // An occupied storey's outside read from its floor: which bays are solid
+    // wall and which glass, and which are lit; the same for any kit.
+    var plan = level > 0 && !seeThrough && towerData && towerData.facades ? towerData.facades[String(level)] : null;
+
     sides.forEach(function (side, sideIndex) {
       var length = Math.hypot(side.to[0] - side.from[0], side.to[1] - side.from[1]);
       var bays = Math.max(1, Math.round(length / tile));
       var lit = people ? Math.max(1, Math.min(bays, Math.round(people / capacity * bays * 1.4))) : 0;
+      var facing = towerFacing(side);
+      var strip = plan ? [plan.s, plan.e, plan.n, plan.w][facing] : null;
+      var lights = plan ? [plan.litS, plan.litE, plan.litN, plan.litW][facing] : null;
+
+      if (strip && strip.length !== bays) { strip = null; lights = null; }
 
       polygons.push(towerQuad(ctx, project, towerOn(side, 0, z[0]), towerOn(side, 1, z[0]), towerOn(side, 1, z[1]), towerOn(side, 0, z[1])));
       ctx.fillStyle = seeThrough ? "rgba(150, 190, 225, 0.10)"
@@ -9610,6 +9629,26 @@
           if (chosen.skip) { continue; }
 
           towerModule(ctx, project, side, bay / bays, (bay + (chosen.span || 1)) / bays, z[0], z[1], chosen.module, chosen.mirror);
+        }
+      }
+
+      // Solid wall where the floor has one against the outside: a run of bays
+      // as one panel, so there is no seam down the middle of a wall.
+      if (strip) {
+        for (var run0 = 0; run0 < bays; run0 += 1) {
+          if (strip[run0] !== "s") { continue; }
+
+          var run1 = run0;
+
+          while (run1 + 1 < bays && strip[run1 + 1] === "s") { run1 += 1; }
+
+          towerQuad(ctx, project, towerOn(side, run0 / bays, z[0]), towerOn(side, (run1 + 1) / bays, z[0]), towerOn(side, (run1 + 1) / bays, z[1]), towerOn(side, run0 / bays, z[1]));
+          ctx.fillStyle = towerLight ? "#4a4d53" : "#8a8e95";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(0, 0, 0, 0.18)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          run0 = run1;
         }
       }
 
@@ -9631,7 +9670,8 @@
 
       if (level > 0) {
         for (var i = 0; i < bays; i += 1) {
-          var on = lit && (i * lit % bays) < lit;
+          // Lit where the floor says somebody's room is, else spread by headcount.
+          var on = lights ? lights[i] === "1" : lit && (i * lit % bays) < lit;
 
           if (!on) { continue; }
 

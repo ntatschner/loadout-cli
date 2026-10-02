@@ -86,7 +86,8 @@ const code = [
   cut("  function towerNoise(n) {", "  function towerSkyDraw("),
   cut("  function towerFacadeModule(facade, level, side, i, bays) {", "  /*\n    Which module a bay of the lobby"),
   cut("  function towerLobbyModule(facade, side, i, bays, front) {", "  /*\n    A picture halved"),
-  cut("  function towerSides() {", "  function towerDraw() {"),
+  cut("  function towerSides() {", "  /*\n    Which way a side of the tower faces"),
+  cut("  function towerFacing(side) {", "  function towerDraw() {"),
   cut("  function towerNextFloor(occupied, from, by) {", "  // The level the floor view is showing"),
   cut("  function towerStopButtons(items, can) {", "  function towerServerPopup() {"),
 ].join("\n");
@@ -98,7 +99,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -861,6 +862,18 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   if (JSON.stringify(turned.teams.map((team) => team.desks)) !== JSON.stringify([[turned.desks[0], turned.desks[1]], [turned.desks[2], turned.desks[3]]])) {
     fault("turning a shared floor leaves a team's desks where they were", "teams");
   }
+}
+
+// Each side of the tower reads its own strip of the floor's outside, by the
+// way it faces: the front the south strip, then east, north and west, in
+// whatever order the sides happen to be drawn.
+{
+  const sides = engine.towerSides();
+  const facings = sides.map(engine.towerFacing);
+
+  if (JSON.stringify(facings) !== "[0,1,2,3]") { fault("a side of the tower reads another side's outside", JSON.stringify(facings)); }
+  if (engine.towerFacing(sides.find((side) => side.front)) !== 0) { fault("the front does not read the south of the floor", "front"); }
+  if (JSON.stringify(sides.slice().reverse().map(engine.towerFacing)) !== "[3,2,1,0]") { fault("a side's outside depends on the order the sides are drawn in", "reversed"); }
 }
 
 // ---- stopping a schedule from the lobby ----

@@ -393,6 +393,14 @@ public sealed class DashboardServerTests : IAsyncLifetime
         OfficeScenes.Problems(scene, _ => null).Should().BeEmpty();
         scene.Areas!.Should().Contain(area => area.Kind == "lead-office");
 
+        // Its storey's outside, read from the floor: a letter a bay a side.
+        var facade = root.GetProperty("facades").GetProperty("1");
+
+        facade.GetProperty("s").GetString()!.Length.Should().Be(40);
+        facade.GetProperty("e").GetString()!.Length.Should().Be(24);
+        facade.GetProperty("n").GetString().Should().MatchRegex("^s+$");
+        facade.GetProperty("litS").GetString().Should().MatchRegex("^[01]{40}$");
+
         // Where on its floor the run is: a bay of three, the floor shared.
         first.GetProperty("bay").GetInt32().Should().Be(0);
         first.GetProperty("bays").GetInt32().Should().Be(1);

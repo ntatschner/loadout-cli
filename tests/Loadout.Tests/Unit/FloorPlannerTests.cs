@@ -291,6 +291,53 @@ public sealed class FloorPlannerTests
         scene.Areas!.Where(area => area.Kind is "kitchen" or "meeting" or "corridor").Should().OnlyContain(area => area.Run == null, "shared rooms are nobody's own");
     }
 
+    // ---- the outside, from the floor ----
+
+    [Fact]
+    public void A_storey_s_outside_is_solid_where_the_floor_has_a_wall_and_lit_where_a_team_is_in()
+    {
+        foreach (var number in Enumerable.Range(1, 10))
+        {
+            var scene = FloorPlanner.Shared(Tech, Rules, number, [new("a", 0, 0, 1, 3), new("c", 0, 2, 1, 2)]).Scene;
+            var strips = OfficeFacadePlan.For(scene, run => run == "a");
+            var band = scene.Areas!.Single(area => area.Kind == "corridor").Y - 1;
+
+            // One letter a bay: the long sides the floor's width, the short its depth.
+            new[] { strips.S, strips.N, strips.LitS, strips.LitN }.Should().OnlyContain(one => one.Length == scene.Width);
+            new[] { strips.E, strips.W, strips.LitE, strips.LitW }.Should().OnlyContain(one => one.Length == scene.Height);
+
+            // The north wall is solid all along; the windows are glass between
+            // the corners, and the band's wall where it meets the side glass is
+            // solid there too, so a room's wall is not glass from outside.
+            strips.N.Should().MatchRegex("^s+$", $"floor {number}: the north wall is solid");
+            strips.S[1..^1].Should().Contain("g");
+            strips.W[band].Should().Be('s', $"floor {number}: the band's wall meets the west glass");
+
+            // Lit behind team a's own area, never behind team c's, whose run is
+            // not in, nor behind solid wall.
+            var a = scene.Areas!.Where(area => area.Run == "a").ToList();
+            var c = scene.Areas!.Where(area => area.Run == "c").ToList();
+
+            for (var x = 1; x < scene.Width - 1; x++)
+            {
+                var lit = strips.LitS[x] == '1';
+
+                if (c.Any(area => x >= area.X && x < area.X + area.W && area.Y + area.H == scene.Height - 1))
+                {
+                    lit.Should().BeFalse($"floor {number}: column {x} is behind a team that is not in");
+                }
+
+                if (strips.S[x] == 's')
+                {
+                    lit.Should().BeFalse($"floor {number}: column {x} is wall");
+                }
+            }
+
+            strips.LitS.Should().Contain("1", $"floor {number}: team a is in");
+            OfficeFacadePlan.For(scene, _ => false).LitS.Should().MatchRegex("^0+$", "nobody is in");
+        }
+    }
+
     [Fact]
     public void Every_room_in_the_band_has_a_door_onto_the_corridor()
     {
