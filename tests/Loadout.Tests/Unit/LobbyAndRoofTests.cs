@@ -38,14 +38,18 @@ public sealed class LobbyAndRoofTests
     [Theory]
     [InlineData(0, 4)]
     [InlineData(3, 4)]
-    [InlineData(9, 10)]
+    [InlineData(9, 12)]
     [InlineData(16, 16)]
     public void The_waiting_room_seats_everything_waiting_and_never_looks_shut(int waiting, int seats)
     {
         var scene = FloorPlanner.Lobby(Kit, Rules, waiting).Scene;
 
-        scene.Desks.Should().HaveCount(seats, "a sofa seats two, and there are always at least two sofas");
+        // Sofas in pairs facing each other, two seats each, and always one pair.
+        scene.Desks.Should().HaveCount(seats, "a pair of sofas seats four, and there is always one pair");
         scene.Areas!.Should().Contain(area => area.Kind == "waiting-room" && area.Function == "waiting");
+
+        // Half the seats face north across the table at the other half.
+        scene.Desks.Count(seat => seat.Facing == "n").Should().Be(seats / 2);
     }
 
     [Fact]

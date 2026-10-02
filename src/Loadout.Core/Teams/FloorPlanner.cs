@@ -128,68 +128,91 @@ public static partial class FloorPlanner
         // IT help in the band east of the core, open to the lobby.
         Facility(floor, parts, random, rules, "it-help", "lobby", coreLeft + coreWidth + 1, 7, band, "open");
 
-        // Reception, east of the way in, facing the door, the receptionist behind.
+        // Reception just inside the door, east of the way in, facing it, the
+        // receptionist behind: the first thing somebody coming in walks up to.
         var desk = parts.Pick("reception", random, one => one.Seats is { Count: > 0 });
-        var deskX = coreLeft + coreWidth + 2;
-        var deskY = band + 3;
+        var dw = desk.Piece.Footprint[0];
+        var deskX = Math.Min(width - 2 - dw, door + 4);
+        var deskY = height - 6;
 
         floor.Put("reception-desk", "reception", desk.Piece, deskX, deskY, "reception");
-        floor.Areas.Add(new OfficeArea("reception", "reception", deskX - 1, band + 1, desk.Piece.Footprint[0] + 2, 4, Function(rules, "reception") ?? "arrivals"));
-        floor.Reserve(deskX - 1, band + 1, desk.Piece.Footprint[0] + 2, 4);
+        floor.Areas.Add(new OfficeArea("reception", "reception", deskX - 1, deskY - 1, dw + 2, 3, Function(rules, "reception") ?? "arrivals"));
+        floor.Reserve(deskX - 1, deskY - 1, dw + 2, 3);
 
-        // Sofas, west side first, two rows apart, one per two waiting and never
-        // fewer than two: a lobby with nowhere to sit looks shut.
+        // The waiting lounge west of the way in: sofas in pairs facing each
+        // other across a coffee table, a group for every four waiting and never
+        // none - a lobby with nowhere to sit looks shut - from the door outwards,
+        // on a rug.
         var sofa = parts.Pick("sofa", random, one => one.Footprint[1] == 1 && one.Seats is { Count: > 0 });
+        // Turned to face the first: a picture only where the set has its back,
+        // a shape always, having no picture to show the wrong side of.
+        var turned = sofa.Piece.Picture is null || sofa.Piece.Sides?.ContainsKey("n") == true ? Turned(sofa.Piece) : sofa.Piece;
+        var table = parts.Has("coffee-table", one => one.Footprint[1] == 1 && one.Footprint[0] <= sofa.Piece.Footprint[0])
+            ? parts.Pick("coffee-table", random, one => one.Footprint[1] == 1 && one.Footprint[0] <= sofa.Piece.Footprint[0]).Piece
+            : null;
         var sw = sofa.Piece.Footprint[0];
-        var per = sofa.Piece.Seats!.Count;
-        var slots = new List<(int X, int Y)>();
+        var per = sofa.Piece.Seats!.Count * 2;
+        var groups = Math.Max(1, (waiting + per - 1) / per);
+        var seats = new List<OfficeSpot>();
+        var placed = new List<(int X, int Y)>();
 
-        foreach (var west in new[] { true, false })
+        for (int row = height - 6, made = 0; made < groups && row - 2 > band + 1; row -= 5)
         {
-            for (var y = band + 3; y <= height - 3; y += 2)
+            for (var x = door - 3 - sw; made < groups && x >= 2; x -= sw + 3)
             {
-                for (var x = 2; x + sw <= width - 2; x += sw + 1)
+                if (!floor.Free(x, row, sw, 3))
                 {
-                    if ((x < width / 2) == west && floor.Free(x, y, sw, 1))
-                    {
-                        slots.Add((x, y));
-                    }
+                    continue;
                 }
+
+                var group = ++made;
+
+                floor.Put($"sofa-{group}a", "sofa", sofa.Piece, x, row);
+                floor.Put($"sofa-{group}b", "sofa", turned, x, row + 2, null, ReferenceEquals(turned, sofa.Piece) ? "s" : "n");
+
+                if (table is not null)
+                {
+                    floor.Put($"coffee-table-{group}", "coffee-table", table, x + (sw - table.Footprint[0]) / 2, row + 1);
+                }
+
+                floor.Take(x, row, sw, 3);
+                seats.AddRange(sofa.Piece.Seats.Select(seat => new OfficeSpot(x + seat.X, row + seat.Y, seat.Facing, Sit: true)));
+                seats.AddRange((turned.Seats ?? []).Select(seat => new OfficeSpot(x + seat.X, row + 2 + seat.Y, seat.Facing, Sit: true)));
+                placed.Add((x, row));
             }
         }
 
-        var wanted = Math.Max(2, (waiting + per - 1) / per);
-        var seats = new List<OfficeSpot>();
-        var placed = 0;
-
-        foreach (var (x, y) in slots.Take(wanted))
+        if (placed.Count > 0)
         {
-            floor.Put($"sofa-{++placed}", "sofa", sofa.Piece, x, y);
-            floor.Take(x, y, sw, 1);
-            seats.AddRange(sofa.Piece.Seats.Select(seat => new OfficeSpot(x + seat.X, y + seat.Y, seat.Facing, Sit: true)));
-        }
-
-        if (placed > 0)
-        {
-            var left = slots.Take(placed).Min(one => one.X);
-            var top = slots.Take(placed).Min(one => one.Y);
-            var right = slots.Take(placed).Max(one => one.X) + sw;
-            var bottom = slots.Take(placed).Max(one => one.Y) + 1;
+            var left = placed.Min(one => one.X) - 1;
+            var top = placed.Min(one => one.Y) - 1;
+            var right = placed.Max(one => one.X) + sw + 1;
+            var bottom = placed.Max(one => one.Y) + 4;
 
             floor.Areas.Add(new OfficeArea("waiting-room", "waiting-room", left, top, right - left, bottom - top, Function(rules, "waiting-room") ?? "waiting"));
         }
 
-        // Planters either side of the way in, and in the band's corners.
-        if (parts.Has("plant", one => one.Footprint[0] == 1 && one.Footprint[1] == 1))
-        {
-            var plant = parts.Pick("plant", random, one => one.Footprint[0] == 1 && one.Footprint[1] == 1);
-            var index = 0;
+        // Planters either side of the way in, in the band's corners and round
+        // the atrium's walls: the big ones where the set has them.
+        var big = parts.Has("planter-large", one => one.Footprint[0] == 1 && one.Footprint[1] == 1) ? "planter-large" : "plant";
 
-            foreach (var (x, y) in new[] { (door - 1, height - 2), (door + 2, height - 2), (1, 1), (width - 2, 1) })
+        if (parts.Has(big, one => one.Footprint[0] == 1 && one.Footprint[1] == 1))
+        {
+            var plant = parts.Pick(big, random, one => one.Footprint[0] == 1 && one.Footprint[1] == 1);
+            var index = 0;
+            var places = new List<(int X, int Y)> { (door - 1, height - 2), (door + 2, height - 2), (1, 1), (width - 2, 1) };
+
+            for (var y = band + 3; y < height - 3; y += 4)
             {
-                if (floor.Clear(x, y))
+                places.Add((1, y));
+                places.Add((width - 2, y));
+            }
+
+            foreach (var (x, y) in places)
+            {
+                if (floor.CanAdd(x, y, 1, 1, true) && !floor.Spots.Values.Any(spot => spot.X == x && spot.Y == y))
                 {
-                    floor.Put($"plant-{++index}", "plant", plant.Piece, x, y);
+                    floor.Put($"plant-{++index}", big, plant.Piece, x, y);
                 }
             }
         }
