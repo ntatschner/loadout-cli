@@ -43,6 +43,18 @@ public sealed class OfficeFeed : IDisposable
     /// <summary>How many pages are waiting on it, for tests and diagnostics.</summary>
     public int Listening => Volatile.Read(ref _listening);
 
+    /// <summary>Whether its loop is still reading, for tests to wait on rather than guess.</summary>
+    internal bool Looking
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _loop is not null;
+            }
+        }
+    }
+
     /// <summary>
     /// The first snapshot newer than the one a page already has.
     /// </summary>
