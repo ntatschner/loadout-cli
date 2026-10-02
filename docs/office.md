@@ -335,11 +335,11 @@ Stated plainly, so nobody finds out by surprise:
   turned, so shading drawn into a tile, a shadow along a wall's south face say,
   stays where it was drawn. A room drawn from one hand-made picture doesn't
   turn at all.
-- **From a corner, pieces mostly show a straight side.** A piece shows the
-  diagonal side its front turns towards where the set has that side; most of
-  the Tech set's pieces and all of its people have only the four straight ones
-  so far, so a desk seen from a corner is its front or its side, squared up.
-  The floor's own pictures are the square view's, laid on the diamond.
+- **From a corner, people show a straight side.** A piece shows the diagonal
+  side its front turns towards, and the Tech set has them for every piece but
+  its plain desk; its people have only four facings so far, so somebody seen
+  from a corner is drawn facing straight. The floor's own pictures are the
+  square view's, laid on the diamond.
 - **Some rules are checked but not used yet.** `scope` and `access` are held to
   their words but the planner doesn't read them, and the lobby, roof and
   basements are still laid out by hand.

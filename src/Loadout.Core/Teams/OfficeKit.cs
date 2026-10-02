@@ -242,6 +242,13 @@ public sealed record OfficeKit(
         ["facade-glass", "facade-brick", "facade-concrete", "roof", "road", "pavement", "grass", "canopy", "trunk"];
 
     /// <summary>
+    /// The sides a piece can have besides the four it faces: where its front
+    /// turns on the screen when a floor is seen from a corner, sw for a piece
+    /// facing s, and so on round.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Diagonals = ["ne", "se", "sw", "nw"];
+
+    /// <summary>
     /// What a floor's material is called before its name: <c>floor-wood</c> is
     /// what a room the rules floor with <c>wood</c> is drawn with.
     /// </summary>
@@ -646,9 +653,9 @@ public static class OfficeKits
 
         foreach (var (side, rect) in piece.Sides ?? new Dictionary<string, IReadOnlyList<int>>())
         {
-            if (!OfficeScene.Facings.Contains(side))
+            if (!OfficeScene.Facings.Contains(side) && !OfficeKit.Diagonals.Contains(side))
             {
-                problems.Add($"{called} has a side '{side}'; sides are {string.Join(", ", OfficeScene.Facings)}, the way its front faces.");
+                problems.Add($"{called} has a side '{side}'; sides are {string.Join(", ", OfficeScene.Facings)}, the way its front faces, or {string.Join(", ", OfficeKit.Diagonals)} for a floor seen from a corner.");
             }
             else if (!Inside(rect, size))
             {

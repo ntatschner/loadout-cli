@@ -273,11 +273,16 @@ public sealed class OfficeKitTests : IDisposable
         FloorPlanner.Plan(kit, OfficeRules.Default, "run-a", 3).Scene.Props!
             .Where(prop => prop.Kind == "desk").Should().OnlyContain(prop => prop.Sides != null && prop.Sides.Count == 4 && (prop.Facing == "s" || prop.Facing == "n"));
 
+        // A diagonal side, for a floor seen from a corner, is a side too.
+        var diagonal = new Dictionary<string, IReadOnlyList<int>>(sides) { ["sw"] = [0, 0, 32, 64] };
+
+        OfficeKits.Problems(Small(("desk-a", good with { Sides = diagonal })), pictures).Should().BeEmpty();
+
         var odd = new Dictionary<string, IReadOnlyList<int>>(sides) { ["up"] = [0, 0, 8, 8], ["w"] = [240, 0, 32, 64] };
 
         OfficeKits.Problems(Small(("desk-a", good with { Sides = odd })), pictures).Should().BeEquivalentTo(
         [
-            "piece 'desk-a' has a side 'up'; sides are n, e, s, w, the way its front faces.",
+            "piece 'desk-a' has a side 'up'; sides are n, e, s, w, the way its front faces, or ne, se, sw, nw for a floor seen from a corner.",
             "piece 'desk-a' side w is not inside 'desk.png', which is 256x64.",
         ]);
     }
