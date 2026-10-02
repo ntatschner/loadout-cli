@@ -76,6 +76,7 @@ const code = [
   cut("  function tileWalk(room, person, toX, toY) {", "  // Take in a fresh reading of the run"),
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
   cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
+  cut("  function tileDepth(scene, person, pose) {", "  function tilePose(person) {"),
   cut("  function tilePose(person) {", "  // part \"upper\" draws only"),
   cut("  function sceneTurns(scene) {", "  /*\n    A floor turned a quarter turn"),
   cut("  function tileProp(room, ctx, prop) {", "  // What each of the built-in kit's shapes is"),
@@ -94,7 +95,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -735,6 +736,37 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
     .forEach(([from, by, want]) => fault("the floor arrows step to the wrong floor", `from ${from} by ${by}: ${step(from, by)}, not ${want}`));
 
   if (engine.towerNextFloor(undefined, 3, 1) !== null) { fault("the floor arrows step somewhere with no floors in use", "none"); }
+}
+
+// Sitting with their back to the viewer, somebody is hidden by the back of
+// the chair or sofa they are in, and still drawn over the table they face;
+// facing the viewer or side-on they are in front of it; standing on or
+// walking over a seat they are in front of it whichever way they face.
+{
+  const tile = 32;
+  const table = { kind: "meeting-table", x: 4, y: 3, w: 3, h: 2 };
+  const chair = { kind: "chair", x: 5, y: 5, w: 1, h: 1, blocks: false };
+  const scene = { tile, props: [table, chair] };
+  const front = (prop) => (prop.y + prop.h) * tile;
+  const at = (facing, pose) => engine.tileDepth(scene, { x: 5, y: 5, facing }, pose);
+  const cases = [
+    ["n", "sit", "behind"], ["n", "type", "behind"], ["n", "slump", "behind"],
+    ["s", "sit", "in front"], ["e", "sit", "in front"], ["w", "sit", "in front"],
+    ["n", "idle", "in front"], ["n", "walk", "in front"],
+  ];
+
+  cases.forEach(([facing, pose, want]) => {
+    const y = at(facing, pose);
+    const got = y < front(chair) ? "behind" : "in front";
+
+    if (got !== want) { fault("somebody in a seat is drawn on the wrong side of it", `facing ${facing}, ${pose}: ${got}, not ${want}`); }
+    if (y <= front(table)) { fault("somebody in a seat is drawn under the table they face", `facing ${facing}, ${pose}`); }
+  });
+
+  // Nobody in a seat: where their feet are, whichever way they face.
+  const free = engine.tileDepth(scene, { x: 1, y: 1, facing: "n" }, "sit");
+
+  if (free !== (1 + 0.85) * tile) { fault("somebody in no seat is moved in the drawing order", `${free}`); }
 }
 
 // ---- stopping a schedule from the lobby ----

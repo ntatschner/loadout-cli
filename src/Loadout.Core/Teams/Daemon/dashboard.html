@@ -6019,20 +6019,7 @@
 
       if (person.gone) { return; }
 
-      // Somebody on a thing that does not block - a sofa, a bench - sits in
-      // it, so they are drawn after it rather than under its front.
-      var y = (person.y + 0.85) * t;
-      var cx = Math.round(person.x);
-      var cy = Math.round(person.y);
-
-      (scene.props || []).forEach(function (prop) {
-        if (prop.blocks === false && prop.depth !== "floor"
-          && cx >= prop.x && cx < prop.x + (prop.w || 1) && cy >= prop.y && cy < prop.y + (prop.h || 1)) {
-          y = Math.max(y, (prop.y + (prop.h || 1)) * t + 0.01);
-        }
-      });
-
-      items.push({ y: y, person: person });
+      items.push({ y: tileDepth(scene, person, tilePose(person)), person: person });
     });
 
     items.sort(function (a, b) { return a.y - b.y; });
@@ -6053,6 +6040,33 @@
 
     room.drawn = now;
     room.dirty = false;
+  }
+
+  /*
+    How far down the floor somebody is drawn, among the furniture: where their
+    feet are, unless they are in a seat they can walk onto - a sofa, a chair
+    at a table. Facing the viewer, or side-on, they sit in front of its back,
+    so they are drawn after it. With their back to the viewer the seat's back
+    is between them and the viewer and hides them, so they are drawn just
+    before it, still after the table they face.
+  */
+  function tileDepth(scene, person, pose) {
+    var t = scene.tile;
+    var y = (person.y + 0.85) * t;
+    var cx = Math.round(person.x);
+    var cy = Math.round(person.y);
+    var seated = pose === "sit" || pose === "type" || pose === "slump";
+
+    (scene.props || []).forEach(function (prop) {
+      if (prop.blocks === false && prop.depth !== "floor"
+        && cx >= prop.x && cx < prop.x + (prop.w || 1) && cy >= prop.y && cy < prop.y + (prop.h || 1)) {
+        var front = (prop.y + (prop.h || 1)) * t;
+
+        y = seated && person.facing === "n" ? Math.min(y, front - 0.01) : Math.max(y, front + 0.01);
+      }
+    });
+
+    return y;
   }
 
   function tilePose(person) {
