@@ -82,6 +82,12 @@ public sealed record OfficeMoves(
 /// <param name="Moves">How long the building waits before moving a team.</param>
 /// <param name="Layouts">The kinds of floor a run may be given, one chosen by its seed: open, corridor.</param>
 /// <param name="Storey">How high a storey is in tiles, or null for <see cref="StoreyTiles"/>.</param>
+/// <param name="Floors">
+/// What each kind of room is floored with, by the name of a kit material less
+/// its <c>floor-</c>: <c>{"kitchen": "tile", "lounge": "wood"}</c>. The keys
+/// <c>@floor</c>, <c>@lobby</c>, <c>@roof</c> and <c>@basement</c> floor
+/// whatever on that level is in no room.
+/// </param>
 /// <remarks>
 /// <para>
 /// Built in, from the decisions of 30 Sep 2026 recorded in the specification,
@@ -102,8 +108,17 @@ public sealed record OfficeRules(
     [property: JsonPropertyName("use")] IReadOnlyDictionary<string, string>? Use = null,
     [property: JsonPropertyName("moves")] OfficeMoves? Moves = null,
     [property: JsonPropertyName("layouts")] IReadOnlyList<string>? Layouts = null,
-    [property: JsonPropertyName("storey")] int? Storey = null)
+    [property: JsonPropertyName("storey")] int? Storey = null,
+    [property: JsonPropertyName("floors")] IReadOnlyDictionary<string, string>? Floors = null)
 {
+    /// <summary>
+    /// What a room of this kind is floored with, or what a level is floored
+    /// with outside its rooms when given <c>@</c> and the level; null where the
+    /// rules don't say, and the room is floored like the rest of its level.
+    /// </summary>
+    public string? FloorFor(string kind) =>
+        Floors is { } floors && floors.TryGetValue(kind, out var floor) && !string.IsNullOrWhiteSpace(floor) ? floor : null;
+
     /// <summary>
     /// How high a storey is, in tiles, where the rules don't say: five, so 3.75
     /// metres floor to floor at three quarters of a metre a tile, which is the
@@ -192,7 +207,29 @@ public sealed record OfficeRules(
             ["done"] = "lift",
         },
         new OfficeMoves(),
-        ["open", "corridor"]);
+        ["open", "corridor"],
+        Floors: new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            // Outside any room, by level.
+            ["@floor"] = "carpet",
+            ["@lobby"] = "stone",
+            ["@roof"] = "decking",
+            ["@basement"] = "concrete",
+
+            // Where people work on carpet tiles; where they walk, the darker
+            // walkway; somewhere to sit or eat, something harder or warmer.
+            ["open-plan"] = "carpet",
+            ["team-room"] = "carpet",
+            ["corridor"] = "walkway",
+            ["core"] = "stone",
+            ["lead-office"] = "wood",
+            ["meeting"] = "walkway",
+            ["kitchen"] = "tile",
+            ["lounge"] = "wood",
+            ["reception"] = "wood",
+            ["waiting-room"] = "walkway",
+            ["entrance"] = "mat",
+        });
 
     /// <summary>These rules with a pack's changes laid over them.</summary>
     public OfficeRules With(OfficeRules? changes)
@@ -225,7 +262,27 @@ public sealed record OfficeRules(
             Moves = changes.Moves ?? Moves,
             Layouts = changes.Layouts ?? Layouts,
             Storey = changes.Storey ?? Storey,
+            Floors = Merge(Floors, changes.Floors),
         };
+    }
+
+    // A set's map laid over the built-in one, key by key, so a set naming one
+    // room's floor keeps every other room's.
+    private static Dictionary<string, string>? Merge(IReadOnlyDictionary<string, string>? under, IReadOnlyDictionary<string, string>? over)
+    {
+        if (under is null && over is null)
+        {
+            return null;
+        }
+
+        var merged = new Dictionary<string, string>(under ?? new Dictionary<string, string>(), StringComparer.Ordinal);
+
+        foreach (var (key, value) in over ?? new Dictionary<string, string>())
+        {
+            merged[key] = value;
+        }
+
+        return merged;
     }
 
     /// <summary>Every tag some room is furnished from.</summary>

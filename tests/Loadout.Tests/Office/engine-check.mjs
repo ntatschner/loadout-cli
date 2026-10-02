@@ -76,6 +76,9 @@ const code = [
   cut("  function tileWalk(room, person, toX, toY) {", "  // Take in a fresh reading of the run"),
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
   cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
+  cut("  function tileFloorOf(scene, x, y) {", "  // How thick a wall is"),
+  cut("  var TILE_SOLID = ", "\n"),
+  cut("  var TILE_GLASS = ", "\n"),
   cut("  function tileDepth(scene, person, pose) {", "  function tilePose(person) {"),
   cut("  function tilePose(person) {", "  // part \"upper\" draws only"),
   cut("  function sceneTurns(scene) {", "  /*\n    A floor turned a quarter turn"),
@@ -95,7 +98,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -767,6 +770,65 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   const free = engine.tileDepth(scene, { x: 1, y: 1, facing: "n" }, "sit");
 
   if (free !== (1 + 0.85) * tile) { fault("somebody in no seat is moved in the drawing order", `${free}`); }
+}
+
+// Each cell is floored as the smallest room over it says, the level's floor
+// outside every room, carpet where nothing says.
+{
+  const scene = {
+    ground: "stone",
+    areas: [
+      { kind: "corridor", x: 0, y: 4, w: 10, h: 2, floor: "walkway" },
+      { kind: "status-board", x: 3, y: 4, w: 2, h: 1 },
+      { kind: "kitchen", x: 0, y: 0, w: 4, h: 4, floor: "tile" },
+      { kind: "open-plan", x: 0, y: 6, w: 10, h: 6, floor: "carpet" },
+      { kind: "lounge", x: 6, y: 8, w: 3, h: 3, floor: "wood" },
+    ],
+  };
+  const cases = [[1, 1, "tile"], [3, 4, "walkway"], [7, 9, "wood"], [1, 9, "carpet"], [8, 1, "stone"]];
+
+  cases.filter(([x, y, want]) => engine.tileFloorOf(scene, x, y) !== want)
+    .forEach(([x, y, want]) => fault("a cell is floored wrongly", `${x},${y}: ${engine.tileFloorOf(scene, x, y)}, not ${want}`));
+
+  if (engine.tileFloorOf({ areas: [] }, 0, 0) !== "carpet") { fault("a cell with nothing to say is not carpet", "none"); }
+}
+
+// Walls stand up: a run across has a face on every cell, a run down only at
+// its foot; glass is told from solid by its tileset; each stands at its own
+// foot, so somebody just behind it is drawn first.
+{
+  const tile = 32;
+  const S = 12;
+  const G = 20;
+  const walls = [
+    [-1, -1, -1, -1, -1],
+    [-1, S, S, S, -1],
+    [-1, -1, -1, G, -1],
+    [-1, -1, -1, G, -1],
+    [-1, -1, -1, -1, -1],
+  ];
+  const list = engine.tileWalls({ tile, width: 5, height: 5, walls, atlases: [{ tiles: 16 }, { tiles: 16 }] });
+  const at = (x, y) => list.find((one) => one.x === x && one.y === y);
+
+  if (list.length !== 5) { fault("the wrong number of wall cells", `${list.length}`); }
+  if (at(1, 1).glass || !at(3, 2).glass) { fault("glass and solid walls are told apart wrongly", "kinds"); }
+  if (!at(1, 1).right || at(1, 1).left || !at(3, 1).down || !at(3, 2).up || at(3, 3).down) { fault("a wall's neighbours are wrong", "neighbours"); }
+  if (!(at(3, 1).ground > 1 * tile && at(3, 1).ground < 2 * tile)) { fault("a wall stands outside its own cell", `${at(3, 1).ground}`); }
+
+  // A block of wall, two by two, is solid on top: every cell's inward corner filled.
+  const block = engine.tileWalls({ tile, width: 4, height: 4, walls: [[-1, -1, -1, -1], [-1, S, S, -1], [-1, S, S, -1], [-1, -1, -1, -1]], atlases: [{ tiles: 16 }] });
+  const corner = (x, y) => block.find((one) => one.x === x && one.y === y);
+
+  if (!corner(1, 1).downRight || !corner(2, 1).downLeft || !corner(1, 2).upRight || !corner(2, 2).upLeft) { fault("a block of wall has holes in its top", "inward corners"); }
+  if (corner(1, 1).upLeft || corner(2, 2).downRight || at(1, 1).downRight) { fault("a wall fills a corner with no wall in it", "outward corners"); }
+
+  const behind = { x: 2, y: 0, facing: "s" };
+
+  if (engine.tileDepth({ tile, props: [] }, behind, "idle") >= at(2, 1).ground) { fault("somebody behind a wall is drawn over it", "behind"); }
+
+  const before = { x: 2, y: 2, facing: "n" };
+
+  if (engine.tileDepth({ tile, props: [] }, before, "idle") <= at(2, 1).ground) { fault("somebody in front of a wall is drawn under it", "in front"); }
 }
 
 // ---- stopping a schedule from the lobby ----

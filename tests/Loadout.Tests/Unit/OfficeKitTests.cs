@@ -510,6 +510,9 @@ public sealed class OfficeKitTests : IDisposable
             Materials = new Dictionary<string, OfficeMaterial>(StringComparer.Ordinal)
             {
                 ["facade-brick"] = new("brick.png", [64, 96], "brick-night.png"),
+
+                // A floor, named for what the rules call it.
+                ["floor-wood"] = new("brick.png", [64, 96]),
             },
         };
 
@@ -520,13 +523,17 @@ public sealed class OfficeKitTests : IDisposable
             Materials = new Dictionary<string, OfficeMaterial>(StringComparer.Ordinal)
             {
                 ["facade-marble"] = new("brick.png", [64, 96]),
+                ["floor-"] = new("brick.png", [64, 96]),
+                ["floor-Oak Boards"] = new("brick.png", [64, 96]),
                 ["roof"] = new("brick.png", [0, 96]),
                 ["road"] = new("tarmac.png", [32, 32], "brick-night.png"),
             },
         };
 
         OfficeKits.Problems(bad, Pictures).Should().BeEquivalentTo(
-            "material 'facade-marble' is not one the neighbourhood uses; they are " + string.Join(", ", OfficeKit.MaterialNames) + ".",
+            "material 'facade-marble' is not one the neighbourhood uses or a floor; they are " + string.Join(", ", OfficeKit.MaterialNames) + ", and floor- with a floor's name.",
+            "material 'floor-' is not one the neighbourhood uses or a floor; they are " + string.Join(", ", OfficeKit.MaterialNames) + ", and floor- with a floor's name.",
+            "material 'floor-Oak Boards' is not one the neighbourhood uses or a floor; they are " + string.Join(", ", OfficeKit.MaterialNames) + ", and floor- with a floor's name.",
             "material 'roof' needs a size of two numbers from 1 to 1024: the tile's width and height in art pixels.",
             "material 'road' uses 'tarmac.png', which is not in the set or is not a picture.");
     }

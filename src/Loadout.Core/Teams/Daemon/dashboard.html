@@ -5413,7 +5413,24 @@
     // tile centred where four cells meet, so it starts half a tile up and left.
     var surface = scene.surface && atlases && sheets.every(Boolean) ? scene.surface : null;
 
-    if (surface) {
+    // Where the kit has floors, each room is floored with its own and the
+    // walls stand up off it, drawn among the people; the dual grid's flat
+    // walls are then not drawn at all.
+    var floors = surface ? tileFloorPictures(room) : null;
+
+    if (floors === undefined) { return null; }
+
+    room.standing = !!floors;
+
+    if (floors) {
+      for (var fy = 0; fy < scene.height; fy += 1) {
+        for (var fx = 0; fx < scene.width; fx += 1) {
+          var picture = floors[tileFloorOf(scene, fx, fy)] || floors.carpet;
+
+          ctx.drawImage(picture, (fx * t) % picture.width, (fy * t) % picture.height, t, t, fx * t, fy * t, t, t);
+        }
+      }
+    } else if (surface) {
       for (var sy = 0; sy <= scene.height; sy += 1) {
         for (var sx = 0; sx <= scene.width; sx += 1) {
           var piece = (surface[sy] || [])[sx];
@@ -6014,6 +6031,15 @@
       if (prop.depth !== "floor") { items.push({ y: (prop.y + (prop.h || 1)) * t, prop: prop }); }
     });
 
+    if (room.standing) {
+      if (room.wallsOf !== scene) {
+        room.wallsOf = scene;
+        room.wallList = tileWalls(scene);
+      }
+
+      room.wallList.forEach(function (wall) { items.push({ y: wall.ground, wall: wall }); });
+    }
+
     Object.keys(room.people).forEach(function (name) {
       var person = room.people[name];
 
@@ -6025,7 +6051,9 @@
     items.sort(function (a, b) { return a.y - b.y; });
 
     items.forEach(function (item) {
-      if (item.prop) {
+      if (item.wall) {
+        tileWall(ctx, item.wall, t);
+      } else if (item.prop) {
         tileProp(room, ctx, item.prop);
         tileAtDesk(room, item.prop).forEach(function (person) { tilePerson(room, ctx, person, now, "upper"); });
       } else {
@@ -6040,6 +6068,158 @@
 
     room.drawn = now;
     room.dirty = false;
+  }
+
+  /*
+    The kit's floor pictures by name - carpet, wood, tile - for a floor whose
+    rooms say what they are floored with: null where the kit has no floors, so
+    the dual grid's carpet and flat walls are drawn as before, and undefined
+    while any picture is still on its way.
+  */
+  function tileFloorPictures(room) {
+    var materials = (towerData && towerData.materials) || {};
+    var names = Object.keys(materials).filter(function (name) { return name.indexOf("floor-") === 0; });
+
+    if (!materials["floor-carpet"]) { return null; }
+
+    var pictures = {};
+    var waiting = false;
+
+    names.forEach(function (name) {
+      var picture = tilePicture(room.set, materials[name].picture);
+
+      if (picture) { pictures[name.slice("floor-".length)] = picture; } else { waiting = true; }
+    });
+
+    return waiting ? undefined : pictures;
+  }
+
+  /*
+    What a cell is floored with: the smallest room over it that says, so a
+    status board's strip of corridor stays corridor and a room inside the open
+    plan has its own floor; the level's floor outside every room; carpet where
+    nothing says.
+  */
+  function tileFloorOf(scene, x, y) {
+    var best = null;
+
+    (scene.areas || []).forEach(function (area) {
+      if (!area.floor || x < area.x || y < area.y || x >= area.x + (area.w || 1) || y >= area.y + (area.h || 1)) { return; }
+      if (!best || area.w * area.h < best.w * best.h) { best = area; }
+    });
+
+    return best ? best.floor : scene.ground || "carpet";
+  }
+
+  /*
+    The walls as they stand: one entry a wall cell, solid or glass (a glass
+    tile is one from the floor's second tileset), with which neighbours are
+    wall, so each draws as a post with arms out to them. Its ground line is
+    where its foot meets the floor, the depth it is drawn at among people and
+    furniture: somebody just behind it is drawn first and hidden by it.
+  */
+  function tileWalls(scene) {
+    var t = scene.tile;
+    var first = scene.atlases && scene.atlases[0] ? scene.atlases[0].tiles : Infinity;
+    var walls = [];
+
+    function wall(x, y) {
+      var tile = ((scene.walls || [])[y] || [])[x];
+
+      return tile !== undefined && tile >= 0;
+    }
+
+    for (var y = 0; y < scene.height; y += 1) {
+      for (var x = 0; x < scene.width; x += 1) {
+        if (!wall(x, y)) { continue; }
+
+        var glass = scene.walls[y][x] >= first;
+        var thick = Math.round(t * (glass ? TILE_GLASS : TILE_SOLID));
+
+        walls.push({
+          x: x,
+          y: y,
+          glass: glass,
+          thick: thick,
+          left: wall(x - 1, y),
+          right: wall(x + 1, y),
+          up: wall(x, y - 1),
+          down: wall(x, y + 1),
+          // Corners, so a block of wall - the core - is one solid top rather
+          // than posts and arms with the floor showing between them.
+          upLeft: wall(x - 1, y - 1) && wall(x - 1, y) && wall(x, y - 1),
+          upRight: wall(x + 1, y - 1) && wall(x + 1, y) && wall(x, y - 1),
+          downLeft: wall(x - 1, y + 1) && wall(x - 1, y) && wall(x, y + 1),
+          downRight: wall(x + 1, y + 1) && wall(x + 1, y) && wall(x, y + 1),
+          ground: y * t + (t + thick) / 2,
+        });
+      }
+    }
+
+    return walls;
+  }
+
+  // How thick a wall is, and how high it stands, in tiles: a solid wall about
+  // 22 cm, glass 15, both about a metre of face (enough to read as a wall
+  // without hiding the room behind it).
+  var TILE_SOLID = 0.3;
+  var TILE_GLASS = 0.2;
+  var TILE_WALL_HIGH = 1.4;
+
+  /*
+    One wall cell standing up: its face, where nothing of the wall continues
+    below it, under the part of it that runs across, and its top raised the
+    wall's height above where it stands, a post in the middle with arms out
+    to the walls beside it.
+  */
+  function tileWall(ctx, wall, t) {
+    var high = Math.round(t * TILE_WALL_HIGH);
+    var th = wall.thick;
+    var x0 = wall.x * t;
+    var y0 = wall.y * t;
+    var a = Math.round((t - th) / 2);
+    var left = wall.left ? x0 : x0 + a;
+    var right = wall.right ? x0 + t : x0 + a + th;
+    var foot = wall.ground;
+    var top = foot - high;
+
+    // The face, from its top down to the floor.
+    if (wall.glass) {
+      ctx.fillStyle = "rgba(170, 205, 235, 0.38)";
+      ctx.fillRect(left, top, right - left, high);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.fillRect(left, top + 3, right - left, 1);
+      ctx.fillStyle = "#59606c";
+      ctx.fillRect(left, foot - 2, right - left, 2);
+      ctx.fillRect(left, top, right - left, 2);
+
+      if (!wall.left) { ctx.fillRect(left, top, 2, high); }
+      if (!wall.right) { ctx.fillRect(right - 2, top, 2, high); }
+      if (wall.left && wall.x % 2 === 0) { ctx.fillRect(x0, top, 1, high); }
+    } else {
+      ctx.fillStyle = "#d8d3cb";
+      ctx.fillRect(left, top, right - left, high);
+      ctx.fillStyle = "#e8e4dd";
+      ctx.fillRect(left, top, right - left, 2);
+      ctx.fillStyle = "#9c968c";
+      ctx.fillRect(left, foot - 4, right - left, 4);
+    }
+
+    // The top, raised: a post where it stands, and arms out to its neighbours.
+    var cap = wall.glass ? "#59606c" : "#45454f";
+    var lift = -high;
+
+    ctx.fillStyle = cap;
+    ctx.fillRect(x0 + a, y0 + a + lift, th, th);
+
+    if (wall.left) { ctx.fillRect(x0, y0 + a + lift, a, th); }
+    if (wall.right) { ctx.fillRect(x0 + a + th, y0 + a + lift, t - a - th, th); }
+    if (wall.up) { ctx.fillRect(x0 + a, y0 + lift, th, a); }
+    if (wall.down) { ctx.fillRect(x0 + a, y0 + a + th + lift, th, t - a - th); }
+    if (wall.upLeft) { ctx.fillRect(x0, y0 + lift, a, a); }
+    if (wall.upRight) { ctx.fillRect(x0 + a + th, y0 + lift, t - a - th, a); }
+    if (wall.downLeft) { ctx.fillRect(x0, y0 + a + th + lift, a, t - a - th); }
+    if (wall.downRight) { ctx.fillRect(x0 + a + th, y0 + a + th + lift, t - a - th, t - a - th); }
   }
 
   /*

@@ -3070,6 +3070,62 @@
     64,
     64
    ]
+  },
+  "floor-carpet": {
+   "picture": "floor-carpet.png",
+   "size": [
+    128,
+    128
+   ]
+  },
+  "floor-walkway": {
+   "picture": "floor-walkway.png",
+   "size": [
+    128,
+    128
+   ]
+  },
+  "floor-wood": {
+   "picture": "floor-wood.png",
+   "size": [
+    128,
+    128
+   ]
+  },
+  "floor-tile": {
+   "picture": "floor-tile.png",
+   "size": [
+    128,
+    128
+   ]
+  },
+  "floor-stone": {
+   "picture": "floor-stone.png",
+   "size": [
+    128,
+    128
+   ]
+  },
+  "floor-concrete": {
+   "picture": "floor-concrete.png",
+   "size": [
+    128,
+    128
+   ]
+  },
+  "floor-decking": {
+   "picture": "floor-decking.png",
+   "size": [
+    128,
+    128
+   ]
+  },
+  "floor-mat": {
+   "picture": "floor-mat.png",
+   "size": [
+    128,
+    128
+   ]
   }
  },
  "sheets": {

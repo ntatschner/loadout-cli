@@ -148,6 +148,7 @@ public sealed record OfficeAtlas(
 /// <param name="W">Width in tiles, inside its walls.</param>
 /// <param name="H">Depth in tiles, inside its walls.</param>
 /// <param name="Function">What clicking it offers: questions, controls, summary, idle, and so on; null for none.</param>
+/// <param name="Floor">What it is floored with, a kit material less its <c>floor-</c>; null to be floored like the level around it.</param>
 public sealed record OfficeArea(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("kind")] string Kind,
@@ -155,7 +156,8 @@ public sealed record OfficeArea(
     [property: JsonPropertyName("y")] int Y,
     [property: JsonPropertyName("w")] int W,
     [property: JsonPropertyName("h")] int H,
-    [property: JsonPropertyName("function")] string? Function = null);
+    [property: JsonPropertyName("function")] string? Function = null,
+    [property: JsonPropertyName("floor")] string? Floor = null);
 
 /// <summary>
 /// A room drawn from tiles, with people who walk about in it.
@@ -183,6 +185,10 @@ public sealed record OfficeArea(
 /// chosen cell by cell spread it over half of each neighbour. Null to draw
 /// <paramref name="Floor"/> and <paramref name="Walls"/> instead; what blocks is
 /// read from those either way.
+/// </param>
+/// <param name="Ground">
+/// What anything in no room is floored with, a kit material less its
+/// <c>floor-</c>; null for the carpet of <paramref name="Surface"/>.
 /// </param>
 /// <param name="Cast">
 /// For each role, the sheets its people are drawn from, in order, with "worker"
@@ -219,7 +225,8 @@ public sealed record OfficeScene(
     [property: JsonPropertyName("atlases")] IReadOnlyList<OfficeAtlas>? Atlases = null,
     [property: JsonPropertyName("areas")] IReadOnlyList<OfficeArea>? Areas = null,
     [property: JsonPropertyName("cast")] IReadOnlyDictionary<string, IReadOnlyList<string>>? Cast = null,
-    [property: JsonPropertyName("surface")] IReadOnlyList<IReadOnlyList<int>>? Surface = null)
+    [property: JsonPropertyName("surface")] IReadOnlyList<IReadOnlyList<int>>? Surface = null,
+    [property: JsonPropertyName("ground")] string? Ground = null)
 {
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.office/2";

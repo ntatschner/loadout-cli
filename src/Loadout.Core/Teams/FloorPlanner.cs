@@ -194,7 +194,7 @@ public static class FloorPlanner
             }
         }
 
-        var scene = Scene(parts, floor, seats, coreLeft, band) with { Door = new OfficeSpot(door, height - 2, "n") };
+        var scene = Scene(parts, rules, "@lobby", floor, seats, coreLeft, band) with { Door = new OfficeSpot(door, height - 2, "n") };
 
         return new OfficeFloorPlan(scene, seats.Count, 0);
     }
@@ -284,7 +284,7 @@ public static class FloorPlanner
             }
         }
 
-        return new OfficeFloorPlan(Scene(parts, floor, spots, coreLeft, band), spots.Count, 0);
+        return new OfficeFloorPlan(Scene(parts, rules, "@roof", floor, spots, coreLeft, band), spots.Count, 0);
     }
 
     /// <summary>
@@ -356,7 +356,7 @@ public static class FloorPlanner
 
         floor.Put("keeper-desk", "desk", desk.Piece, 2, 2, "desk");
 
-        return new OfficeFloorPlan(Scene(parts, floor, [.. floor.Seats], coreLeft, band), 0, 0);
+        return new OfficeFloorPlan(Scene(parts, rules, "@basement", floor, [.. floor.Seats], coreLeft, band), 0, 0);
     }
 
     /// <summary>
@@ -879,7 +879,7 @@ public static class FloorPlanner
 
         desks.AddRange(floor.Seats);
 
-        return (Scene(parts, floor, desks, coreLeft, band), capacity);
+        return (Scene(parts, rules, "@floor", floor, desks, coreLeft, band), capacity);
     }
 
     /// <summary>Which partition a room gets, chosen from those its rule allows.</summary>
@@ -1403,7 +1403,7 @@ public static class FloorPlanner
         }
     }
 
-    private static OfficeScene Scene(Parts parts, Floor floor, List<OfficeSpot> desks, int coreLeft, int band)
+    private static OfficeScene Scene(Parts parts, OfficeRules rules, string level, Floor floor, List<OfficeSpot> desks, int coreLeft, int band)
     {
         foreach (var later in floor.Last)
         {
@@ -1553,9 +1553,12 @@ public static class FloorPlanner
             floor.Spots,
             Sheets: sheets,
             Atlases: atlases,
-            Areas: floor.Areas,
+            // Each room floored as the rules say for its kind, and anything in no
+            // room as they say for the level.
+            Areas: [.. floor.Areas.Select(area => area with { Floor = area.Floor ?? rules.FloorFor(area.Kind) })],
             Cast: cast,
-            Surface: surface);
+            Surface: surface,
+            Ground: rules.FloorFor(level));
     }
 
     // A picture carries its corner patterns so the page can turn it; the

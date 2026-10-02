@@ -205,6 +205,18 @@ public sealed record OfficeKit(
     public static readonly IReadOnlyList<string> MaterialNames =
         ["facade-glass", "facade-brick", "facade-concrete", "roof", "road", "pavement", "grass", "canopy", "trunk"];
 
+    /// <summary>
+    /// What a floor's material is called before its name: <c>floor-wood</c> is
+    /// what a room the rules floor with <c>wood</c> is drawn with.
+    /// </summary>
+    public const string FloorMaterial = "floor-";
+
+    /// <summary>Whether a kit may give a material this name: one of the neighbourhood's, or a floor.</summary>
+    public static bool IsMaterial(string name) =>
+        MaterialNames.Contains(name, StringComparer.Ordinal)
+        || (name.StartsWith(FloorMaterial, StringComparison.Ordinal) && name.Length > FloorMaterial.Length
+            && name[FloorMaterial.Length..].All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-'));
+
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.kit/1";
 
@@ -568,9 +580,9 @@ public static class OfficeKits
 
     private static void Material(string name, OfficeMaterial material, Func<string, (int Width, int Height)?> sizeOf, List<string> problems)
     {
-        if (!OfficeKit.MaterialNames.Contains(name, StringComparer.Ordinal))
+        if (!OfficeKit.IsMaterial(name))
         {
-            problems.Add($"material '{name}' is not one the neighbourhood uses; they are {string.Join(", ", OfficeKit.MaterialNames)}.");
+            problems.Add($"material '{name}' is not one the neighbourhood uses or a floor; they are {string.Join(", ", OfficeKit.MaterialNames)}, and {OfficeKit.FloorMaterial} with a floor's name.");
         }
 
         if (material.Size is not [>= 1 and <= 1024, >= 1 and <= 1024])
