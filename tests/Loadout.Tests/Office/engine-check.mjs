@@ -74,6 +74,7 @@ const code = [
   cut("  var TILE_PACE", "\n"),
   cut("  function tileDesks(room, name) {", "  function tileWalk(room, person, toX, toY) {"),
   cut("  function tileIso(scene) {", "  /*\n    The floor from a corner."),
+  cut("  function zoomSteps(dpr) {", "  /*\n    A floor seen from a corner:"),
   cut("  function tileWalk(room, person, toX, toY) {", "  // Take in a fresh reading of the run"),
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
   cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
@@ -96,11 +97,12 @@ const code = [
 // The page's own switch for reduced motion: off, so people walk. A picture is
 // anything with a size here: what tileProp draws is recorded, not shown.
 const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n"
+  + "var towerData = { scale: { min: 1, max: 2 } };\n"
   + "function towerWidth() { return 1280; } function towerDepth() { return 768; }\n"
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -907,6 +909,26 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 
   cases.filter(([prop, want]) => engine.tileIsoSide(prop) !== want)
     .forEach(([prop, want]) => fault("a piece from a corner shows the wrong side", `${prop.facing}: ${engine.tileIsoSide(prop)}, not ${want}`));
+}
+
+// A floor starts as big as fits in whole steps of the office's range; one too
+// big for that at its smallest is shrunk until the whole of it shows, rather
+// than cut off at the edges; zooming in goes in whole steps again.
+{
+  const cases = [
+    // wide, across, dpr, zoom, tall, down
+    [[600, 1500, 1, 0, 400, 1000], (s) => s === 2, "a small floor takes the range's largest step"],
+    [[1280, 1000, 1, 0, 768, 900], (s) => s < 1 && 1280 * s <= 1000.5, "a floor wider than the space shrinks below 1x to fit across"],
+    [[768, 1500, 1, 0, 1280, 954], (s) => s < 1 && 1280 * s <= 954.5, "a floor taller than the space shrinks to fit down"],
+    [[1280, 1000, 2, 0, 768, 900], (s) => s === 1, "on a 2x screen it takes the half step that fits, whole device pixels"],
+    [[1280, 1000, 1, 1, 768, 900], (s) => s >= 1 && Number.isInteger(s), "zooming in from a shrunk floor goes back to whole steps"],
+  ];
+
+  cases.forEach(([args, ok, what]) => {
+    const step = engine.zoomStep(...args);
+
+    if (!ok(step)) { fault("a floor is the wrong size for its space", `${what}: ${step}`); }
+  });
 }
 
 // ---- stopping a schedule from the lobby ----

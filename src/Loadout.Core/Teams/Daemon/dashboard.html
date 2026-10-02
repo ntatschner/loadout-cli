@@ -6029,11 +6029,23 @@
       within = [steps.reduce(function (best, step) { return Math.abs(step / dpr - limits.min) < Math.abs(best / dpr - limits.min) ? step : best; }, steps[0])];
     }
 
+    var fits = function (step) { return wide * step / dpr <= across + 0.5 && (!tall || !down || tall * step / dpr <= down + 0.5); };
     var start = within[0];
 
     within.forEach(function (step) {
-      if (wide * step / dpr <= across + 0.5 && (!tall || !down || tall * step / dpr <= down + 0.5)) { start = step; }
+      if (fits(step)) { start = step; }
     });
+
+    // Nothing in the range fits: the whole floor shown matters more than every
+    // pixel the same size, so smaller than the range, in whole steps where one
+    // fits and in a fraction where none does. Zooming in goes back to steps.
+    if (!fits(start) && !(zoom > 0)) {
+      var smaller = steps.filter(fits);
+
+      if (smaller.length) { return smaller[smaller.length - 1]; }
+
+      return Math.max(0.25, Math.min(across / wide, tall && down ? down / tall : Infinity) * dpr);
+    }
 
     var at = steps.indexOf(start) + (zoom || 0);
 
