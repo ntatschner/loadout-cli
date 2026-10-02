@@ -42,7 +42,7 @@ internal static partial class DashboardActions
     /// </remarks>
     internal static readonly string[] Settings =
     [
-        "notify", "office", "office-scale", "waiting", "listen", "webhook-teams", "webhook", "remedy", "team-budget",
+        "notify", "office", "office-scale", "listen", "webhook-teams", "webhook", "remedy", "team-budget",
     ];
 
     /// <summary>
@@ -84,7 +84,6 @@ internal static partial class DashboardActions
 
             "office" => ("config set", ["team-office-set", change.Value ?? string.Empty]),
             "office-scale" => ("config set", ["team-office-scale", change.Value ?? string.Empty]),
-            "waiting" => ("config set", ["team-waiting-set", change.Value ?? string.Empty]),
             "listen" => ("config set", ["team-webhook-listen", change.Value ?? string.Empty]),
             "team-budget" => ("config set", ["team-budget", change.Value ?? string.Empty]),
             "webhook-teams" => ("config set", ["team-webhook-teams", change.Value ?? string.Empty]),
@@ -247,7 +246,6 @@ internal static partial class DashboardActions
             NotifyChat: teams?.NotifyChat ?? string.Empty,
             NotifyAddressSet: held.Value is { Length: > 0 },
             OfficeSet: teams?.OfficeSet ?? string.Empty,
-            WaitingSet: teams?.WaitingSet ?? string.Empty,
             OfficeSets: OfficeArt.Sets(OfficeArt.Chosen(paths, null).Root),
             WebhookListen: Webhook.Listen(teams),
             TeamBudget: teams?.Budget ?? string.Empty,

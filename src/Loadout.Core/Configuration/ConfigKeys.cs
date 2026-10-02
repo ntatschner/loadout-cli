@@ -391,14 +391,6 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "the office chooses: the lead's role gets the lead, and every other node somebody from the cast in turn"),
 
-        new("team-waiting-set",
-            "Which set of art the dashboard's waiting area draws with",
-            (_, m) => m.Teams.WaitingSet,
-            (_, m, v) => m.Teams.WaitingSet = v.Trim(),
-            true,
-            Sample: "lobby",
-            Group: Groups.Machine,
-            WhenUnset: "the waiting area is a list of words, which is what it has always been"),
 
         new("team-bin-days",
             "Days a removed run or team stays in the bin before it goes for good. 0 keeps it until emptied",

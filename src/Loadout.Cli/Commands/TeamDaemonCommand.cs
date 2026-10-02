@@ -301,7 +301,6 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             server.OfficeRoot = office.Root;
             server.OfficeSet = office.Set;
-            server.WaitingSet = OfficeArt.Chosen(_paths, teams?.WaitingSet).Set;
             server.OfficeScale = OfficeScale.Parse(teams?.OfficeScale) ?? OfficeScale.Default;
             server.OfficeCastPins = OfficeCast.Pins(teams?.OfficeCast);
             server.Bin = new TeamBin(_paths);

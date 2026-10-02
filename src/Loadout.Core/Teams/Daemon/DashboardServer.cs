@@ -155,14 +155,6 @@ public sealed class DashboardServer : IDisposable
     /// <summary>Who in the kit's cast plays which role, from team-office-cast; empty lets the office choose.</summary>
     public IReadOnlyDictionary<string, string> OfficeCastPins { get; set; } = new Dictionary<string, string>();
 
-    /// <summary>Which set the waiting area draws with, or empty for none.</summary>
-    /// <remarks>
-    /// Its own, because a reception full of people waiting and an office full
-    /// of people working are different rooms and somebody may well want them
-    /// to look different.
-    /// </remarks>
-    public string WaitingSet { get; set; } = string.Empty;
-
     /// <summary>Whether this server is the daemon's, for the server room to say so.</summary>
     public bool IsDaemon { get; set; }
 
@@ -1421,11 +1413,6 @@ public sealed class DashboardServer : IDisposable
                     // colours, so the office has somewhere to walk people
                     // about on every machine.
                     kit = OfficeScene.Kit(),
-
-                    waitingSet = root is null ? string.Empty : WaitingSet,
-                    waitingPieces = root is null || WaitingSet.Length == 0
-                        ? []
-                        : OfficeArt.Pieces(root, WaitingSet),
                 }, Json)).ConfigureAwait(false);
 
             return;
@@ -1448,15 +1435,9 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
-        if (path.StartsWith("/waiting/", StringComparison.Ordinal))
-        {
-            await PieceAsync(context, WaitingSet, path["/waiting/".Length..]).ConfigureAwait(false);
-
-            return;
-        }
-
-        // What is queued rather than going. Answered even when nothing can
-        // say, because an empty waiting area is an answer somebody acts on.
+        // What is queued rather than going, for the lobby's waiting room.
+        // Answered even when nothing can say, because an empty lobby is an
+        // answer somebody acts on.
         if (path == "/api/waiting")
         {
             var waiting = WaitingFor is null

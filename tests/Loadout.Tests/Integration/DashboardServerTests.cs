@@ -59,14 +59,10 @@ public sealed class DashboardServerTests : IAsyncLifetime
         _server.OfficeRoot = _art;
         _server.OfficeSet = "open-office";
 
-        // A second set, because the waiting area draws with its own: a
-        // reception of people waiting and a floor of people working are
-        // different rooms.
+        // A second set, so the page is told of more than the one in use.
         Directory.CreateDirectory(Path.Combine(_art, "lobby"));
         File.WriteAllBytes(
             Path.Combine(_art, "lobby", "waiting-1.png"), [0x89, 0x50, 0x4E, 0x47]);
-
-        _server.WaitingSet = "lobby";
 
         _server.WaitingFor = _ => Task.FromResult<IReadOnlyList<Waiting>>(
         [
@@ -237,17 +233,17 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_waiting_area_draws_from_its_own_set()
+    public async Task The_waiting_area_has_no_art_of_its_own_any_more()
     {
-        var answer = await GetAsync("/waiting/waiting-1");
+        // The lobby's waiting room took over from the waiting list, and draws
+        // with the building's kit: the waiting list's own set and its route
+        // went with it.
+        (await GetAsync("/waiting/waiting-1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
 
-        answer.StatusCode.Should().Be(HttpStatusCode.OK);
-        answer.Content.Headers.ContentType!.MediaType.Should().Be("image/png");
+        using var read = JsonDocument.Parse(await (await GetAsync("/api/office")).Content.ReadAsStringAsync());
 
-        // And the two rooms do not reach into each other: the office set has
-        // no waiting-1 and the lobby has no lead.
-        (await GetAsync("/office/waiting-1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await GetAsync("/waiting/lead")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        read.RootElement.TryGetProperty("waitingSet", out _).Should().BeFalse();
+        read.RootElement.TryGetProperty("waitingPieces", out _).Should().BeFalse();
     }
 
     [Fact]
@@ -263,12 +259,6 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         read.RootElement.GetProperty("pieces").EnumerateArray()
             .Select(one => one.GetString()).Should().Equal("lead");
-
-        // Both sets in one answer, so the page asks once.
-        read.RootElement.GetProperty("waitingSet").GetString().Should().Be("lobby");
-
-        read.RootElement.GetProperty("waitingPieces").EnumerateArray()
-            .Select(one => one.GetString()).Should().Equal("waiting-1");
 
         read.RootElement.GetProperty("sets").EnumerateArray()
             .Select(one => one.GetString()).Should().Contain("lobby").And.Contain("open-office");
@@ -2553,20 +2543,22 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task There_are_six_screens_and_a_board_to_put_them_on()
+    public async Task There_are_five_screens_and_a_board_to_put_them_on()
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        // "Where to go" rather than "How to look at them": six of these are
+        // "Where to go" rather than "How to look at them": five of these are
         // ways of looking at the runs, and settings is not one of them.
         text.Should().Contain("<nav class=\"views\" aria-label=\"Where to go\">");
 
-        // Four read the runs, one reads what has not become one yet, and one
-        // is the output of whatever is running.
-        foreach (var view in new[] { "list", "office", "graph", "when", "waiting", "terminal" })
+        // Four read the runs and one is the output of whatever is running.
+        // What has not become a run yet waits in the office's lobby.
+        foreach (var view in new[] { "list", "office", "graph", "when", "terminal" })
         {
             text.Should().Contain($"id=\"view-{view}\"");
         }
+
+        text.Should().NotContain("id=\"view-waiting\"");
 
         // And the board, which shows several of them at once.
         text.Should().Contain("id=\"view-board\"");
@@ -2579,12 +2571,12 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("id=\"view-settings\"");
 
         // One of them is on and the rest are not. A group where every button
-        // claims to be pressed announces as nine pressed buttons.
+        // claims to be pressed announces as eight pressed buttons.
         //
-        // Nine rather than eight: the button that switches between the two
+        // Eight rather than seven: the button that switches between the two
         // presentations carries aria-pressed too, and starts off.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
-            .Should().HaveCount(9);
+            .Should().HaveCount(8);
     }
 
     [Fact]
@@ -2620,7 +2612,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // business. A name the page does not know shows the whole dashboard
         // rather than an error, which is the right way round for an address
         // somebody typed.
-        foreach (var screen in new[] { "office", "terminal", "waiting", "nonsense" })
+        foreach (var screen in new[] { "office", "terminal", "nonsense" })
         {
             var answer = await GetAsync("/screen/" + screen);
 
@@ -2707,7 +2699,6 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("<ul class=\"rooms lk-rooms\" id=\"office\" hidden></ul>");
         text.Should().Contain("<div id=\"graph\" hidden></div>");
         text.Should().Contain("<div id=\"when\" hidden></div>");
-        text.Should().Contain("<ul class=\"queue lk-queue\" id=\"waiting\" hidden></ul>");
         text.Should().Contain("<div class=\"terminal lk-terminal\" id=\"terminal\" hidden></div>");
     }
 

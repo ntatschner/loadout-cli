@@ -62,9 +62,10 @@ asking for the rich page isn't asking for more movement.
 
 ### 4. Move between the screens
 
-Across the top of the runs pane are six screens. The first four show the same
-runs in different ways; *Waiting* shows what hasn't become a run yet, and
-*Terminal* shows what a node is doing now.
+Across the top of the runs pane are five screens. The first four show the same
+runs in different ways, and *Terminal* shows what a node is doing now. What
+hasn't become a run yet, the schedules and the open tasks, waits in the
+office's lobby.
 
 - **List** — dense and complete. The default.
 - **Office** — the runs as a building, a floor per run and a desk per node. The
@@ -80,11 +81,6 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 - **Timeline** — where the time and money went, a strip per day.
 
   ![The timeline screen. Two days, each a single track with a bar for every run, runs that overlapped on lanes of their own, and the day's runs, time and cost beside it. A running run's bar is striped and a finished one is solid.](../images/dashboard-timeline.png)
-
-- **Waiting** — schedules that haven't fired and tasks nobody has finished.
-  Anything held says what's holding it, in words.
-
-  ![The waiting screen. One scheduled team run, due at 07:00, then two open tasks. The last one says "blocked" in words, and why.](../images/dashboard-waiting.png)
 
 - **Terminal** — a node's output, line by line, as it happens.
 

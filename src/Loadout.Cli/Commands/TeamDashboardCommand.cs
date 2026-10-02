@@ -410,7 +410,6 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
 
         server.OfficeRoot = office.Root;
         server.OfficeSet = office.Set;
-        server.WaitingSet = OfficeArt.Chosen(_paths, machine.Value?.Teams.WaitingSet).Set;
         server.OfficeScale = OfficeScale.Parse(machine.Value?.Teams.OfficeScale) ?? OfficeScale.Default;
         server.OfficeCastPins = OfficeCast.Pins(machine.Value?.Teams.OfficeCast);
         server.Bin = new TeamBin(_paths);

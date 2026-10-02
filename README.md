@@ -53,8 +53,8 @@ get `backup restore`.
 
 `loadout team dashboard` serves a page on this machine showing what every team
 run is doing, what's waiting for you and what it's spent. Runs that need you
-come first, under their own heading. It has six screens — List, Office, Graph,
-Timeline, Waiting and Terminal — and every button on it runs the same command
+come first, under their own heading. It has five screens — List, Office, Graph,
+Timeline and Terminal — and every button on it runs the same command
 you'd type, so there's one behaviour rather than two that drift apart.
 
 It listens on a loopback address, behind a token that changes every time it

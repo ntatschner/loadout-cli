@@ -677,7 +677,7 @@
 
     The spare height goes to the runs. The detail pane runs down all three
     rows, and with nothing saying which of them takes what it adds, a short
-    view - Waiting, Settings - shared it out and the totals band grew to
+    view - Settings - shared it out and the totals band grew to
     several times its own height, pushing everything under it down. The gaps
     are margins for the same reason: a row that is hidden still has a gap
     after it, and two of them left the runs starting well below the pane
@@ -1252,18 +1252,6 @@
   .lk-axis { display: grid; grid-template-columns: 96px 1fr 120px; gap: var(--space-4); font-size: 0.75rem; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
   .lk-axis > div { display: flex; justify-content: space-between; }
   @media (max-width: 640px) { .lk-day, .lk-axis { grid-template-columns: 1fr; gap: var(--space-1); } .lk-day > p { text-align: left; } }
-
-  /* ==================================================================
-     WAITING — schedules and open tasks
-     ================================================================== */
-  .lk-queue { list-style: none; margin: 0; padding: 0; border: var(--lk-border) solid var(--line); border-radius: var(--radius-md); background: var(--surface-1); overflow: hidden; }
-  .lk-queue-item { display: grid; grid-template-columns: 72px 1fr auto; gap: var(--space-4); align-items: center; padding: var(--space-3) var(--lk-pad); }
-  .lk-queue-item + .lk-queue-item { border-top: var(--lk-border) solid var(--line); }
-  .lk-queue-item time { font-family: var(--font-mono); font-size: 0.875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .lk-queue-item .lk-what b { display: block; font-size: 0.875rem; }
-  .lk-queue-item .lk-what span { font-size: 0.8125rem; color: var(--ink-muted); }
-  .lk-queue-item .lk-why { grid-column: 2 / -1; margin: 0; font-size: 0.8125rem; color: var(--status-fail); display: flex; gap: 6px; align-items: center; }
-  @media (max-width: 640px) { .lk-queue-item { grid-template-columns: 1fr; gap: var(--space-2); } .lk-queue-item .lk-why { grid-column: 1; } }
 
   /* ==================================================================
      METER — what it may spend
@@ -1948,45 +1936,6 @@
   .desk .desk-card b { display: block; font-size: var(--type-body-size); }
   .desk .desk-card .line { display: block; color: var(--ink-muted); }
 
-  /* ---- the waiting area ----
-     One row per thing that has not started: a reception of schedules with
-     their next time, and the tasks sitting behind them. Rows rather than
-     desks, because what somebody reads here is an order - what happens next,
-     then next - and a wrapped grid has no order to read. */
-
-  .queue > li + li { border-top: var(--lk-border) solid var(--line); }
-
-  /* A line that wraps rather than the kit's fixed columns, because a row
-     here may carry art, a Stop button and a reason as well: when, what, the
-     state as a word, then the reason on a line of its own. */
-  .queue .lk-queue-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
-  .queue .lk-what { flex: 1 1 14rem; min-width: 0; }
-  .queue .lk-why { flex-basis: 100%; margin: 0; padding-left: calc(9.5rem + var(--space-4)); }
-
-  /* Held is not a colour. A paused schedule and a blocked task say so in
-     words on the row; the dashes are the second encoding, not the first. */
-  .queue .item.held { outline: var(--lk-border) dashed var(--line-strong); outline-offset: -4px; }
-
-  .queue .who { display: block; font-size: var(--type-body-size); }
-  .queue .why { display: block; font-size: var(--type-small-size); color: var(--ink-muted); }
-  .queue .when { flex: none; width: 9.5rem; font-family: var(--font-mono); font-size: var(--type-small-size); font-weight: 600; }
-  .queue .empty { padding: var(--space-3) var(--lk-pad); color: var(--ink-muted); }
-
-  .queue .sprite.drawn {
-    display: block;
-    width: 2rem;
-    height: 3rem;
-    background-repeat: no-repeat;
-    background-position: center bottom;
-    background-size: contain;
-    image-rendering: pixelated;
-  }
-
-  @media (max-width: 40rem) {
-    .queue .when { width: auto; flex-basis: 100%; }
-    .queue .lk-why { padding-left: 0; }
-  }
-
   /* ---- the terminal ----
      What a node is actually doing, as it does it. The same stream the detail
      pane shows for a node you picked, except this picks the one worth
@@ -2276,10 +2225,6 @@
     .add, .drop, .hunk { color: CanvasText; }
     .bars .bar { background: CanvasText; forced-color-adjust: none; }
 
-    /* Held keeps its dashes here too: in a mode that throws every colour
-       away, the shape of the border is the only thing left carrying it, and
-       the row says "paused" or "blocked" in words regardless. */
-    .queue .item.held { outline: 1px dashed CanvasText; }
     .lk-tab[aria-pressed="true"] { border: 3px solid Highlight; }
     .lk-segment [role="tab"][aria-selected="true"], .papers .lk-btn[aria-pressed="true"] { border-bottom: 3px solid Highlight; }
     .lk-edge { stroke: CanvasText; }
@@ -2373,9 +2318,6 @@
         <button type="button" id="view-office" class="lk-tab" aria-pressed="false">Office</button>
         <button type="button" id="view-graph" class="lk-tab" aria-pressed="false">Graph</button>
         <button type="button" id="view-when" class="lk-tab" aria-pressed="false">Timeline</button>
-        <!-- The count rides on this tab only, and inside its name, so it is
-             read aloud with it: "Waiting 2". -->
-        <button type="button" id="view-waiting" class="lk-tab" aria-pressed="false">Waiting <span class="lk-count" id="waiting-count" hidden></span></button>
         <button type="button" id="view-terminal" class="lk-tab" aria-pressed="false">Terminal</button>
         <button type="button" id="view-board" class="lk-tab" aria-pressed="false">Board</button>
 
@@ -2845,8 +2787,6 @@
 
     <div id="when" hidden></div>
 
-    <ul class="queue lk-queue" id="waiting" hidden></ul>
-
     <div class="terminal lk-terminal" id="terminal" hidden></div>
 
     <details class="lk-disclosure" id="roles">
@@ -2912,11 +2852,6 @@
           <div class="lk-field">
             <label for="set-office" class="lk-label">Office art</label>
             <select id="set-office" class="lk-select"><option value="">squares with names in</option></select>
-          </div>
-
-          <div class="lk-field">
-            <label for="set-waiting" class="lk-label">Waiting area art</label>
-            <select id="set-waiting" class="lk-select"><option value="">a list of words</option></select>
           </div>
 
           <div class="lk-field">
@@ -3993,10 +3928,10 @@
 
             said.hidden = false;
             said.textContent = name + " is scheduled. It fires only while the daemon is running: "
-              + "loadout team daemon. See what is queued under Waiting.";
+              + "loadout team daemon. It waits in the lobby until then.";
 
-            announce(name + " is scheduled. It appears under Waiting.");
-            queued();
+            announce(name + " is scheduled. It waits in the lobby.");
+            towerWaitingAt = 0;
           })
           .catch(function (wrong) {
             go.disabled = false;
@@ -4500,7 +4435,6 @@
     { button: "view-office", box: "office", draw: drawOffice },
     { button: "view-graph", box: "graph", draw: drawGraph },
     { button: "view-when", box: "when", draw: drawWhen },
-    { button: "view-waiting", box: "waiting", draw: drawWaiting },
     { button: "view-terminal", box: "terminal", draw: drawTerminal },
 
     // The board is not here: it is its own thing, shown by showBoard, and it
@@ -4567,7 +4501,6 @@
     office: "Office",
     graph: "Who asked whom",
     when: "Timeline",
-    waiting: "Waiting",
     terminal: "Terminal",
     settings: "Settings"
   };
@@ -4592,7 +4525,7 @@
     "returned" into a panel that is about to be emptied - and emptying a panel
     destroys whatever is inside it, which is the screen itself.
   */
-  var screensHome = document.getElementById("waiting").parentNode;
+  var screensHome = document.getElementById("office").parentNode;
 
   /* Every adopted screen back home and hidden, before anything is emptied. */
   function reclaimScreens() {
@@ -4929,7 +4862,6 @@
       office: "The office",
       graph: "Who asked whom",
       when: "When runs ran",
-      waiting: "Waiting to run",
       terminal: "Terminal"
     }[box] || "Runs on this machine";
   }
@@ -5280,234 +5212,6 @@
     li.appendChild(button);
 
     return li;
-  }
-
-  /*
-    What is queued rather than going.
-
-    Its own source: the office and the timeline both read the runs, and this
-    reads the schedules and the tasks, which are the two things that have not
-    become runs yet. A schedule is the machine's own intention and will fire
-    whether or not anybody remembers; a task is a person's, and nothing will
-    ever fire it. Showing one without the other answers half the question.
-  */
-  var queue = null;
-
-  function queued() {
-    return api("/api/waiting")
-      .then(function (answer) {
-        queue = answer.waiting || [];
-
-        // How many are waiting, on the tab that shows them.
-        var count = document.getElementById("waiting-count");
-
-        if (count) {
-          count.textContent = queue.length;
-          count.hidden = queue.length === 0;
-        }
-
-        if (views[view].box === "waiting") { drawWaiting(); }
-      })
-      .catch(function () {
-        // A dashboard that cannot see either store says so by staying empty,
-        // which is what it should say.
-      });
-  }
-
-  /*
-    Which piece draws one of these.
-
-    A lobby of identical people is a lobby nobody looks at twice, so a set may
-    carry waiting-1, waiting-2 and so on and they are dealt out by the item's
-    own id - the same item gets the same person on every redraw, which matters
-    more than the variety does. Failing that, a piece named after the kind,
-    and failing that the worker everything falls back to.
-  */
-  function queuePieceFor(item) {
-    var many = [];
-
-    for (var i = 1; i <= 24; i += 1) {
-      if (waitingPieces["waiting-" + i]) { many.push("waiting-" + i); }
-    }
-
-    if (many.length > 0) {
-      var sum = 0;
-
-      for (var c = 0; c < item.id.length; c += 1) { sum += item.id.charCodeAt(c); }
-
-      return many[sum % many.length];
-    }
-
-    if (waitingPieces[item.kind]) { return item.kind; }
-
-    return waitingPieces.worker ? "worker" : null;
-  }
-
-  /*
-    When it next comes round, said the way somebody would say it rather than
-    as a timestamp. "Tomorrow at 09:00" is a thing a person can act on; an ISO
-    string is a thing they have to decode first.
-  */
-  function nextTime(due) {
-    if (!due) { return ""; }
-
-    var at = new Date(due);
-    var now = new Date();
-    var days = Math.round((at - now) / 86400000);
-
-    var clock = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-    if (at.toDateString() === now.toDateString()) { return "today at " + clock; }
-
-    if (days >= 0 && days <= 1) { return "tomorrow at " + clock; }
-
-    return at.toLocaleDateString([], { day: "numeric", month: "short" }) + " at " + clock;
-  }
-
-  function drawWaiting() {
-    var box = document.getElementById("waiting");
-
-    box.textContent = "";
-
-    if (queue === null) { return; }
-
-    if (queue.length === 0) {
-      var none = document.createElement("li");
-
-      none.className = "empty";
-      none.textContent =
-        "Nothing is queued. No schedule is waiting to fire and no task is open.";
-      box.appendChild(none);
-
-      return;
-    }
-
-    queue.forEach(function (item) {
-      var li = document.createElement("li");
-      var row = document.createElement("div");
-
-      row.className = "item lk-queue-item" + (item.held ? " held" : "");
-
-      // When first, because the question this screen answers is what happens
-      // next. A task has no time; it is open until somebody does it.
-      var when = document.createElement("span");
-
-      when.className = "when";
-      when.textContent = item.due ? nextTime(item.due) : "open";
-      row.appendChild(when);
-
-      // The waiting area's art, where a set is installed: somebody sitting in
-      // reception. Decorative, and only drawn when there is art to draw.
-      var drawn = queuePieceFor(item);
-
-      if (drawn) {
-        var sprite = document.createElement("span");
-
-        sprite.className = "sprite drawn";
-        sprite.setAttribute("aria-hidden", "true");
-        sprite.style.backgroundImage =
-          "url(\"/waiting/" + encodeURIComponent(drawn) + "?token=" + encodeURIComponent(token) + "\")";
-        row.appendChild(sprite);
-      }
-
-      var body = document.createElement("div");
-
-      body.className = "body lk-what";
-
-      var who = document.createElement("b");
-
-      who.className = "who";
-      who.textContent = item.title || item.id;
-      body.appendChild(who);
-
-      // The kind first, because "schedule" and "task" are the difference
-      // between something that will happen on its own and something that
-      // will not happen until somebody does it. What holds it goes on a line
-      // of its own below, in full: "blocked" alone says nothing about why.
-      var why = document.createElement("span");
-
-      why.className = "why";
-      why.textContent = (item.kind === "schedule"
-        ? (item.team ? item.team : "a team") + (item.project ? " on " + item.project : "")
-        : "task " + item.id + (item.project ? " in " + item.project : ""))
-        + (item.held ? "" : " \u00b7 " + item.because);
-      body.appendChild(why);
-
-      row.appendChild(body);
-
-      // Its state as a word: a schedule is scheduled until somebody pauses
-      // it, and a task is open until something blocks it.
-      row.appendChild(badge(item.kind === "schedule"
-        ? (item.held ? { word: "paused", key: "stopped" } : { word: "scheduled", key: "held" })
-        : (item.held ? { word: "blocked", key: "fail" } : { word: "open", key: "stopped" })));
-
-      if (item.held) {
-        var held = document.createElement("p");
-        var glyph = document.createElement("span");
-
-        held.className = "lk-why";
-        glyph.className = "lk-glyph";
-        glyph.setAttribute("data-state", "fail");
-        glyph.setAttribute("aria-hidden", "true");
-        held.appendChild(glyph);
-        held.appendChild(document.createTextNode(
-          String(item.because || "").replace(/^(blocked|paused)\s*[:-]\s*/i, "")));
-        row.appendChild(held);
-      }
-
-      // Said as one sentence rather than left to whatever a reader makes of
-      // three stacked spans.
-      row.setAttribute("aria-label",
-        (item.title || item.id) + ", " + why.textContent
-        + (item.held ? ", " + item.because : "")
-        + (item.due ? ", " + when.textContent : ""));
-
-      /*
-        Stopping one, where this server can.
-
-        Only a schedule: a task is somebody's record of work and is not this
-        page's to delete. The waiting area is where schedules are already
-        listed, so it is where somebody looks to be rid of one - the
-        alternative was a terminal, which is what made the page able to create
-        something it could not undo.
-      */
-      if (item.kind === "schedule" && plans) {
-        var stop = document.createElement("button");
-
-        stop.type = "button";
-        stop.className = "queue-stop lk-btn lk-btn--sm lk-btn--danger";
-        stop.textContent = "Stop it";
-        // The row's own label says which; this says what, for somebody who
-        // reaches the button without having read the row.
-        stop.setAttribute("aria-label", "Stop scheduling " + (item.title || item.id));
-
-        stop.addEventListener("click", function () {
-          agreed("Stop scheduling " + (item.title || item.id)
-            + "? It will not fire again.", "Stop scheduling it").then(function (yes) {
-            if (!yes) { return; }
-
-            stop.disabled = true;
-
-            plan({ verb: "remove", name: item.id })
-              .then(function () {
-                announce((item.title || item.id) + " will not fire again.");
-                queued();
-              })
-              .catch(function (wrong) {
-                stop.disabled = false;
-                announce(wrong.message);
-              });
-          });
-        });
-
-        var reason = row.querySelector(".lk-why");
-
-        row.insertBefore(stop, reason);
-      }
-
-      li.appendChild(row);
-      box.appendChild(li);
-    });
   }
 
   /*
@@ -8040,7 +7744,7 @@
           lines: items.length ? items.map(function (one) {
             return one.id + " \u00b7 " + (one.held ? "held" : one.due ? "due " + towerWhen(one.due) : one.because || one.kind);
           }) : ["Nothing is waiting."],
-          buttons: [{ label: "Open the waiting list", go: function () { towerShowView("view-waiting"); } }],
+          buttons: towerStopButtons(items, plans),
         };
       case "arrivals":
         var today = new Date().toDateString();
@@ -8125,6 +7829,31 @@
         said: entry.name + " is gone for good.",
       }],
     };
+  }
+
+  /*
+    A button to stop each schedule waiting, where this server can: the waiting
+    list's one action, which came here when the list went. Not a task, which
+    is somebody's record of work and not this page's to delete. Each asks
+    first, and the lobby asks for what is waiting again once it has gone.
+  */
+  function towerStopButtons(items, can) {
+    if (!can) { return []; }
+
+    return items.filter(function (one) { return one.kind === "schedule"; }).map(function (one) {
+      var name = one.title || one.id;
+
+      return {
+        label: "Stop " + name,
+        danger: true,
+        ask: "Stop scheduling " + name + "? It will not fire again.",
+        yes: "Stop scheduling it",
+        go: function () {
+          return plan({ verb: "remove", name: one.id }).then(function () { towerWaitingAt = 0; });
+        },
+        said: name + " will not fire again.",
+      };
+    });
   }
 
   function towerServerPopup() {
@@ -13912,8 +13641,6 @@
 
       artSets("set-office", set.officeSets || [], set.officeSet || "",
         "squares with names in");
-      artSets("set-waiting", set.officeSets || [], set.waitingSet || "",
-        "a list of words");
 
       document.getElementById("set-office-scale").value = set.officeScale || "";
       document.getElementById("set-listen").value = set.webhookListen || "";
@@ -14085,19 +13812,14 @@
         .catch(function (e) { announce(e.message); });
     });
 
-    ["set-office", "set-waiting"].forEach(function (id) {
-      document.getElementById(id).addEventListener("change", function () {
-        settle({
-          what: id === "set-office" ? "office" : "waiting",
-          value: document.getElementById(id).value
-        })
-          .then(function () {
-            announce("The art changed. Reload to see it.");
+    document.getElementById("set-office").addEventListener("change", function () {
+      settle({ what: "office", value: document.getElementById("set-office").value })
+        .then(function () {
+          announce("The art changed. Reload to see it.");
 
-            return fillSettings();
-          })
-          .catch(function (e) { announce(e.message); });
-      });
+          return fillSettings();
+        })
+        .catch(function (e) { announce(e.message); });
     });
 
     document.getElementById("set-office-scale").addEventListener("change", function () {
@@ -15319,7 +15041,6 @@
     built to be.
   */
   var pieces = {};
-  var waitingPieces = {};
 
   // Every set this machine has: its room and its pieces, by name.
   var offices = {};
@@ -15334,7 +15055,6 @@
     return api("/api/office")
       .then(function (answer) {
         (answer.pieces || []).forEach(function (piece) { pieces[piece] = true; });
-        (answer.waitingPieces || []).forEach(function (piece) { waitingPieces[piece] = true; });
         room = answer.room || null;
         offices = answer.offices || {};
         kitScene = answer.kit || null;
@@ -15379,10 +15099,6 @@
   }
 
   function refresh() {
-    // Both, every pass. The waiting area is two small files off a disk and a
-    // schedule made while this is open should appear without a reload.
-    queued();
-
     api("/api/runs")
       .then(function (answer) {
         shown = answer.runs;

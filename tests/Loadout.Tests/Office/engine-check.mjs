@@ -82,14 +82,17 @@ const code = [
   cut("  function towerNoise(n) {", "  function towerSkyDraw("),
   cut("  function towerFacadeModule(facade, level, side, i, bays) {", "  /*\n    Which module a bay of the lobby"),
   cut("  function towerLobbyModule(facade, side, i, bays, long) {", "  // A module drawn over one bay of a wall"),
+  cut("  function towerStopButtons(items, can) {", "  function towerServerPopup() {"),
 ].join("\n");
 
 // The page's own switch for reduced motion: off, so people walk. A picture is
 // anything with a size here: what tileProp draws is recorded, not shown.
-const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n" + code
+const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n"
+  + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule };")();
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons,"
+  + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -704,6 +707,28 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   ];
 
   cases.filter(([row, want]) => describe(row) !== want).forEach(([row, want]) => fault("the lobby's entrance is in the wrong place", `${describe(row)}, not ${want}`));
+}
+
+// ---- stopping a schedule from the lobby ----
+
+// Each schedule waiting has a button to stop it, asking first, and pressing it
+// asks the server to remove that schedule and the lobby to look again; a task
+// has none, and nor does anything on a server that can't change schedules.
+{
+  const waiting = [{ kind: "schedule", id: "nightly", title: "Nightly docs" }, { kind: "task", id: "fix-it" }, { kind: "schedule", id: "weekly" }];
+  const buttons = engine.towerStopButtons(waiting, true);
+
+  if (buttons.length !== 2) { fault("the lobby doesn't offer a stop for each schedule and none for a task", `${buttons.length} buttons`); }
+  if (buttons.some((one) => !one.ask || !one.danger)) { fault("stopping a schedule from the lobby doesn't ask first", "no ask"); }
+  if (buttons[0] && buttons[0].label !== "Stop Nightly docs") { fault("a lobby stop button doesn't say which schedule", buttons[0].label); }
+  if (engine.towerStopButtons(waiting, false).length) { fault("a server that can't change schedules is offered a stop", "can't"); }
+
+  await buttons[1].go();
+
+  const asked = JSON.stringify(engine.planned());
+
+  if (asked !== JSON.stringify([{ verb: "remove", name: "weekly" }])) { fault("stopping a schedule asks the server for the wrong thing", asked); }
+  if (engine.waitingAt() !== 0) { fault("the lobby doesn't look again at what is waiting after a stop", String(engine.waitingAt())); }
 }
 
 // ---- tile pictures that turn with the floor ----

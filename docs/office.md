@@ -113,7 +113,7 @@ with what it holds and what you can do about it:
 | Team rooms, open plan | who's working there and on what | open the run |
 | Kitchen, lounge, roof | who is on a break, and why | - |
 | Reception | who has arrived today | - |
-| Waiting room, lobby screen | what is waiting, and what's scheduled next | open the waiting list |
+| Waiting room, lobby screen | what is waiting, and what's scheduled next | stop a schedule |
 | Mail room | each run's post: what it was asked, how it ended | open the run |
 | Storage | what each run delivered | open the run |
 | Garbage room | what is in the bin, and when each goes | bring one back, delete one for good |
@@ -277,8 +277,8 @@ Stated plainly, so nobody finds out by surprise:
   turned, so shading drawn into a tile, a shadow along a wall's south face say,
   stays where it was drawn. A room drawn from one hand-made picture doesn't
   turn at all.
-- **The painted rooms and the separate Waiting area are still here.** They go
-  once the building has its art.
+- **The painted rooms are still here.** They go once the building has its
+  art.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors
   at a time, and so is everything the server says. What the page draws from
   them was looked at in a browser, not tested.

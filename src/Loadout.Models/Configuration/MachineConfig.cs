@@ -217,17 +217,6 @@ public sealed class MachineTeams
     public string OfficeSet { get; set; } = string.Empty;
 
     /// <summary>
-    /// Which set the waiting area draws with, or empty for none.
-    /// </summary>
-    /// <remarks>
-    /// Kept apart from <see cref="OfficeSet"/> rather than shared: a reception
-    /// of people waiting and a floor of people working are different rooms, and
-    /// the whole reason sets exist is that somebody may want them to look
-    /// different.
-    /// </remarks>
-    public string WaitingSet { get; set; } = string.Empty;
-
-    /// <summary>
     /// How large the office may be drawn, as min-max screen pixels per pixel of
     /// art, or empty for the default of 1-2.
     /// </summary>

@@ -31,7 +31,6 @@ public sealed record TrustedOnThisMachine(string Team, string Remedy, string By,
 /// <param name="NotifyChat">The Telegram chat, meaningless for the others.</param>
 /// <param name="NotifyAddressSet">Whether an address is held. Never the address.</param>
 /// <param name="OfficeSet">Which set of office art the desks are drawn with.</param>
-/// <param name="WaitingSet">Which set the waiting area is drawn with.</param>
 /// <param name="OfficeSets">The art sets this machine actually has, so the page offers real ones.</param>
 /// <param name="WebhookListen">The address the server binds. 127.0.0.1 is this machine only.</param>
 /// <param name="WebhookTeams">What something outside this machine may start, by name.</param>
@@ -44,7 +43,6 @@ public sealed record MachineSettings(
     string NotifyChat,
     bool NotifyAddressSet,
     string OfficeSet,
-    string WaitingSet,
     IReadOnlyList<string> OfficeSets,
     string WebhookListen,
     IReadOnlyList<string> WebhookTeams,

@@ -1215,12 +1215,12 @@ two things axe declines to judge and why.
 Still not done: **no screen reader has been near any of it**, and no
 keyboard-only pass by a person has been recorded.
 
-### Six screens, a board to put them on, and somewhere to set things
+### Five screens, a board to put them on, and somewhere to set things
 
-**List**, **Office**, **Graph**, **Timeline**, **Waiting** and **Terminal**
-across the top of the runs pane. The first four show the same state and differ
-only in how you look at it; the fifth shows what has not become a run yet, and
-the sixth shows what one is doing right now.
+**List**, **Office**, **Graph**, **Timeline** and **Terminal** across the top of
+the runs pane. The first four show the same state and differ only in how you
+look at it, and the fifth shows what one is doing right now. What has not become
+a run yet waits in the office's lobby.
 
 - **List** — dense and complete. The working view, and the default.
 - **Office** — the runs as a building, a floor per run and a desk per node. The
@@ -1234,9 +1234,6 @@ the sixth shows what one is doing right now.
 - **Timeline** — where the minutes and the money went, across the machine
   rather than inside one run. A strip per day with that day's totals, each
   scaled to the hours the day actually used.
-- **Waiting** — what is queued rather than going: schedules that have not
-  fired, and tasks nobody has finished. The one to look at before you go to
-  bed.
 - **Terminal** — what a node is doing, line by line, as it does it. It picks
   the newest running run's most recently active node rather than asking you to,
   because a screen you leave on should not need operating. It follows the tail
@@ -1294,10 +1291,11 @@ token — putting it on another monitor is not a reason for any page in any tab
 to be able to read it. An address naming a screen that does not exist shows the
 whole dashboard rather than an error.
 
-#### The waiting area
+#### What is waiting
 
-The other four views read the runs. This one reads the two things that have not
-become runs: your **schedules** and your **tasks**.
+The views read the runs. The office's lobby also reads the two things that have
+not become runs: your **schedules** and your **tasks**, a person on a sofa for
+each.
 
 Both, because they are not the same kind of thing and showing one without the
 other answers half the question. A schedule is the machine's own intention — it
@@ -1305,20 +1303,22 @@ fires whether or not you remember it. A task is yours, recorded and dated, and
 *nothing* will ever fire it. "Is anything going to start without me, and is
 anything sitting here I said I would do" is one question with two answers.
 
-Soonest first, because what the view is for is what happens next. Anything a
+Soonest first, because what the waiting room is for is what happens next. Anything a
 clock does not decide — a schedule watching for a commit, any task — comes after
 everything a clock does; saying "due at" about those would be a guess dressed as
 a fact. Anything **held** comes last and says what is holding it: a paused
 schedule, a blocked task. Held is not a colour — the row says it in words and
 the dashed border is the second encoding.
 
-Only `open` and `blocked` tasks are here. A task somebody is `doing` is in the
-office, not the waiting area, and `done` and `dropped` are not waiting at all.
-At most twelve tasks are read from any one project, because a waiting area is a
+Only `open` and `blocked` tasks are here. A task somebody is `doing` is on a
+floor, not in the lobby, and `done` and `dropped` are not waiting at all. At
+most twelve tasks are read from any one project, because a waiting room is a
 glance rather than a backlog tool: one project with four hundred open tasks
 would otherwise bury every schedule on the machine underneath it.
 
-It reads and nothing else. Nothing here can fire a schedule or close a task.
+The waiting room's popup can stop a schedule, asking first. Nothing here can
+fire a schedule or close a task: a task is somebody's record of work, not the
+page's to delete.
 
 #### Putting art in the office
 
@@ -1574,24 +1574,6 @@ Several sets can sit side by side and the setting picks one, which is the point
 of a set rather than a folder: an office themed one way on Monday and another
 on Friday is one config change. A name no directory answers to draws squares —
 the same as having no art, rather than something subtly broken.
-
-The waiting area has a set of its own, because a reception of people waiting and
-a floor of people working are different rooms:
-
-```
-<state>/teams/office/lobby/waiting-1.png
-<state>/teams/office/lobby/waiting-2.png
-```
-
-```sh
-loadout config set team-waiting-set "lobby"
-```
-
-Pieces there are named `waiting-1`, `waiting-2` and so on, and are dealt out by
-each item's own identifier — the same schedule gets the same person on every
-redraw, which matters more than the variety does. A set with none of those falls
-back to a piece named after the kind (`schedule` or `task`), then to `worker`,
-then to an empty square.
 
 The images are served by the daemon from that directory, over the same loopback
 address and behind the same token as everything else on the page. Nothing is
@@ -2000,8 +1982,8 @@ and one of three ways to say when — a time of day, an interval, or something t
 watch for. Manual is not offered, because the command refuses it: manual means a
 person at every step and nobody is watching at 23:00.
 
-A schedule made here appears under **Waiting**, which is where schedules were
-already listed and is now where you stop one. **Nothing fires unless the daemon
+A schedule made here waits in the office's lobby, and the waiting room's popup
+is where you stop one. **Nothing fires unless the daemon
 is running**, which the sheet says rather than leaving you to find out at the
 appointed time.
 
@@ -2294,7 +2276,7 @@ hook be what calls it.
 
 The dashboard has a fold, **What this machine is set to**, carrying the settings
 you would otherwise reach through `config set` and the `team` commands: where
-notices go, which art the desks and the waiting area are drawn with, what may be
+notices go, which art the office is drawn with, what may be
 started from outside, whether a trigger token exists, what the server listens on,
 and which remedies are trusted to run unattended.
 
