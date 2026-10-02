@@ -72,7 +72,7 @@ office's lobby.
   one to leave on a spare screen. Click a floor to go in; [the office](../office.md)
   explains the rest.
 
-  ![The office screen. One room per run, two across, each with its team and state beside its name. The docs-crew run's room has a desk for each of its three nodes, each desk a card with a rounded square on it and the node's name and state written under it: done, waiting for you, and left. The one waiting for you is outlined in amber with a dot on its corner.](../images/dashboard-office.png)
+  ![The office screen. The building from its corner, in the Tech office's art: ten floors of blue glass between oak fins, LOADOUT on the roof, the floors in use lit warm, among the neighbourhood's brick and glass blocks. Along the top, the views - corner, aerial, from the street, the lobby - and the buttons to turn and zoom.](../images/dashboard-office.png)
 
 - **Graph** — who asked whom. Reach for it when something is stuck.
 
