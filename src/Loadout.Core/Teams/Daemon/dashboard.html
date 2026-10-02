@@ -6175,11 +6175,16 @@
       } else {
         var person = item.person;
         var feet = iso.at(person.x + 0.5, person.y + 0.5);
+        var straight = person.facing;
 
+        // Facing the diagonal their way turns into from the corner, where
+        // their sheet has it; put back after, as walking and seating read it.
+        person.facing = tileIsoFacing(room.scene, person);
         ctx.save();
         ctx.translate(feet[0] - (person.x + 0.5) * t, feet[1] - (person.y + 0.85) * t);
         tilePerson(room, ctx, person, now);
         ctx.restore();
+        person.facing = straight;
       }
     });
 
@@ -6197,6 +6202,19 @@
 
     room.drawn = now;
     room.dirty = false;
+  }
+
+  /*
+    Which way somebody is drawn from a corner: the diagonal their facing
+    turns towards on the screen, as a piece's front does, where their sheet
+    has the pose that way; their own facing where it hasn't.
+  */
+  function tileIsoFacing(scene, person) {
+    var diagonal = { s: "sw", e: "se", n: "ne", w: "nw" }[person.facing || "s"];
+    var role = ((person.node && person.node.role) || "").replace(/^role\./, "");
+    var sheet = tileSheet(scene, role, person);
+
+    return sheet && sheet.animations && sheet.animations["idle_" + diagonal] ? diagonal : person.facing;
   }
 
   // A wall cell from a corner: its top raised, and the faces towards the
