@@ -1343,12 +1343,17 @@ public sealed class DashboardServer : IDisposable
         if (path.StartsWith("/api/office/floor/", StringComparison.Ordinal))
         {
             // /api/office/floor/<run>/<part>: the run's floor, laid out.
+            // /api/office/floor/<number>: the floor, every team on it.
             var rest = path["/api/office/floor/".Length..].Split('/');
             var scene = rest is [var runId, var partText]
                 && RunJournal.Names(runId)
                 && int.TryParse(partText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var part)
                     ? Floor(runId, part)
-                    : null;
+                    : rest is [var numberText]
+                        && int.TryParse(numberText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number)
+                        && number is >= 1 and <= 500
+                        ? FloorByNumber(number)
+                        : null;
 
             await (scene is null
                 ? WriteAsync(context, 404, "application/json; charset=utf-8", JsonSerializer.Serialize(new { error = "No such floor." }, Json))
@@ -1673,7 +1678,8 @@ public sealed class DashboardServer : IDisposable
                 (kit, rules, used) = (check.Kit!, check.Rules, set);
             }
 
-            var capacity = FloorPlanner.Capacity(kit, rules);
+            // How many a bay seats: the building hands runs bays, three to a floor.
+            var capacity = FloorPlanner.BayCapacity(kit, rules);
 
             _kit = (stamp, kit, rules, capacity, used);
             _floors.Clear();
@@ -1722,26 +1728,55 @@ public sealed class DashboardServer : IDisposable
                 state = floor.State,
                 dark = floor.Dark,
                 nodes = floor.Nodes,
+                bay = floor.Bay,
+                bays = floor.Bays,
             }),
         };
     }
 
-    /// <summary>One floor of a run, laid out, from the cache when nothing about it has changed.</summary>
+    /// <summary>One floor of a run, laid out with every team on it, its desks the run's own.</summary>
     private OfficeScene? Floor(string runId, int part)
     {
-        var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
-        var (kit, rules, capacity, _) = OfficeKitNow();
-        var view = _building.Update(summaries, capacity, rules, DateTimeOffset.UtcNow);
-        var floor = view.Occupied.FirstOrDefault(one => one.Run == runId && one.Part == part);
+        var view = BuildingNow();
+        var mine = view.Occupied.FirstOrDefault(one => one.Run == runId && one.Part == part);
 
-        if (floor is null)
+        if (mine is null || Floor(view, mine.Number) is not { } scene)
         {
             return null;
         }
 
-        // Seeded by the run, and by which of its floors, so a spill floor is not
-        // a copy of the one below; sized for however many sit on it now.
-        var key = $"{runId}#{part}#{floor.People}";
+        var seats = scene.Teams?.FirstOrDefault(team => team.Run == runId && team.Part == part)?.Desks;
+
+        return seats is null ? scene : scene with { Desks = seats };
+    }
+
+    /// <summary>A floor by its number, laid out with every team on it, from the cache when nobody on it has changed.</summary>
+    private OfficeScene? FloorByNumber(int number) => Floor(BuildingNow(), number);
+
+    private BuildingView BuildingNow()
+    {
+        var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
+        var (_, rules, capacity, _) = OfficeKitNow();
+
+        return _building.Update(summaries, capacity, rules, DateTimeOffset.UtcNow);
+    }
+
+    private OfficeScene? Floor(BuildingView view, int number)
+    {
+        var (kit, rules, _, _) = OfficeKitNow();
+        var tenants = view.Occupied
+            .Where(one => one.Number == number)
+            .Select(one => new OfficeTenant(one.Run, one.Part, one.Bay, one.Bays, Math.Max(1, one.People)))
+            .ToList();
+
+        if (tenants.Count == 0)
+        {
+            return null;
+        }
+
+        // Every team on it, where and how many: a team arriving lays the floor
+        // out again, its own bays and the shared rooms, nobody else's desks.
+        var key = $"floor-{number}|" + string.Join("|", tenants.Select(one => $"{one.Run}#{one.Part}#{one.Bay}#{one.Bays}#{one.People}"));
 
         lock (_building)
         {
@@ -1751,7 +1786,7 @@ public sealed class DashboardServer : IDisposable
             }
         }
 
-        var scene = FloorPlanner.Plan(kit, rules, part == 0 ? runId : $"{runId}#floor{part}", Math.Max(1, floor.People)).Scene;
+        var scene = FloorPlanner.Shared(kit, rules, number, tenants).Scene;
 
         lock (_building)
         {

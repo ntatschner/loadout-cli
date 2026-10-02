@@ -387,6 +387,81 @@ public static partial class FloorPlanner
         return built is null ? ["the band did not fit"] : OfficeScenes.Problems(built.Value.Scene, sizeOf: null);
     }
 
+    /// <summary>
+    /// A floor teams share: the band of rooms for everybody on it, and each
+    /// team in its own bays, laid out by the team's own seed so its desks stay
+    /// where they are whoever else comes and goes.
+    /// </summary>
+    /// <param name="kit">The pack's kit, or the built-in one.</param>
+    /// <param name="rules">The rules, with any pack changes already over them.</param>
+    /// <param name="number">The floor's number, which seeds the band.</param>
+    /// <param name="tenants">The teams on it and their bays.</param>
+    public static OfficeFloorPlan Shared(OfficeKit kit, OfficeRules rules, int number, IReadOnlyList<OfficeTenant> tenants)
+    {
+        ArgumentNullException.ThrowIfNull(kit);
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(tenants);
+
+        var parts = new Parts(kit);
+        var people = Math.Max(1, tenants.Sum(one => one.People));
+
+        for (var attempt = 0; attempt < Tries; attempt++)
+        {
+            List<Tenant> Seeded(bool open) =>
+            [
+                .. tenants.Select(one => new Tenant(
+                    one with { People = Math.Max(1, one.People) },
+                    open ? "open" : Layout(rules, $"{one.Run}#{one.Part}", attempt),
+                    new Random(Seed($"{one.Run}#{one.Part}", attempt)))),
+            ];
+
+            var built = Build(parts, rules, new Random(Seed($"floor-{number}", attempt)), people, plain: false, "open", Seeded(open: false));
+
+            // A team room seats fewer; a team it cannot hold has its bays open.
+            if (built is { } walled && walled.Scene.Teams!.Any(team =>
+                team.Desks.Count < Math.Min(Math.Max(1, tenants.First(one => one.Run == team.Run && one.Part == team.Part).People), walled.Capacity)))
+            {
+                built = Build(parts, rules, new Random(Seed($"floor-{number}", attempt)), people, plain: false, "open", Seeded(open: true));
+            }
+
+            if (built is not null && OfficeScenes.Problems(built.Value.Scene, sizeOf: null).Count == 0)
+            {
+                return new OfficeFloorPlan(built.Value.Scene, built.Value.Capacity, attempt);
+            }
+        }
+
+        var plain = tenants.Select(one => new Tenant(one with { People = Math.Max(1, one.People) }, "open", new Random(Seed($"{one.Run}#{one.Part}", -1)))).ToList();
+        var fallback = Build(parts, rules, new Random(Seed($"floor-{number}", -1)), people, plain: true, "open", plain)!.Value;
+
+        return new OfficeFloorPlan(fallback.Scene, fallback.Capacity, -1);
+    }
+
+    /// <summary>
+    /// How many one bay seats, lead included, however it falls: the fewest of
+    /// a dozen layouts, every bay and both corners for the lead's office. One
+    /// sample said nine where the office in the other corner left room for
+    /// seven, and a team the building thought fitted had nowhere to sit.
+    /// </summary>
+    public static int BayCapacity(OfficeKit kit, OfficeRules rules)
+    {
+        var parts = new Parts(kit);
+        var bays = rules.Bays ?? OfficeRules.BayCount;
+        var fewest = int.MaxValue;
+
+        for (var sample = 0; sample < 12; sample++)
+        {
+            var tenant = new Tenant(new OfficeTenant("capacity", 0, sample % bays, 1, 1000), "open", new Random(Seed("capacity", sample)));
+            var built = Build(parts, rules, new Random(Seed("capacity", sample)), 1000, plain: false, "open", [tenant]);
+
+            if (built is { } one)
+            {
+                fewest = Math.Min(fewest, one.Capacity);
+            }
+        }
+
+        return fewest == int.MaxValue ? 1 : Math.Max(1, fewest);
+    }
+
     /// <summary>One seeded attempt's floor as built, before any check: for tests to look at.</summary>
     internal static OfficeScene Attempt(OfficeKit kit, OfficeRules rules, string seed, int team, int attempt) =>
         Build(new Parts(kit), rules, new Random(Seed(seed, attempt)), Math.Max(1, team), plain: false, Layout(rules, seed, attempt))?.Scene

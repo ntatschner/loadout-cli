@@ -392,6 +392,21 @@ public sealed class DashboardServerTests : IAsyncLifetime
         OfficeScenes.Problems(scene, _ => null).Should().BeEmpty();
         scene.Areas!.Should().Contain(area => area.Kind == "lead-office");
 
+        // Where on its floor the run is: a bay of three, the floor shared.
+        first.GetProperty("bay").GetInt32().Should().Be(0);
+        first.GetProperty("bays").GetInt32().Should().Be(1);
+
+        // By number, the floor with every team on it, each with its seats; by
+        // run, the same floor with the run's own seats as its desks.
+        var shared = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/floor/1")).Content.ReadAsStringAsync())!;
+
+        shared.Teams!.Should().ContainSingle(team => team.Run == "20260916-1200-aaaa");
+        shared.Teams!.Single().Desks.Should().Equal(scene.Desks);
+        shared.Areas!.Should().Contain(area => area.Run == "20260916-1200-aaaa");
+        OfficeScenes.Problems(shared, _ => null).Should().BeEmpty();
+        (await GetAsync("/api/office/floor/2")).StatusCode.Should().Be(HttpStatusCode.NotFound, "nobody is on floor 2");
+        (await GetAsync("/api/office/floor/0")).StatusCode.Should().Be(HttpStatusCode.NotFound, "the lobby is a place, not a floor");
+
         (await GetAsync("/api/office/floor/20260916-1200-aaaa/1")).StatusCode.Should().Be(HttpStatusCode.NotFound, "the run has only one floor");
         (await GetAsync("/api/office/floor/no-such-run/0")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await GetAsync("/api/office/floor/20260916-1200-aaaa/x")).StatusCode.Should().Be(HttpStatusCode.NotFound);

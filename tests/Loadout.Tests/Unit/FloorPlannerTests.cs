@@ -198,6 +198,99 @@ public sealed class FloorPlannerTests
         failures.Should().BeEmpty("the office Loadout ships should never need a retry or the fallback");
     }
 
+    // ---- floors teams share ----
+
+    private static readonly OfficeTenant[][] Mixes =
+    [
+        [new("a", 0, 0, 1, 3)],
+        [new("a", 0, 0, 1, 3), new("b", 0, 1, 1, 2), new("c", 0, 2, 1, 1)],
+        [new("a", 0, 0, 2, 9), new("c", 0, 2, 1, 4)],
+        [new("a", 0, 1, 1, 1)],
+        [new("a", 1, 0, 3, 14)],
+        [new("a", 0, 0, 1, 1), new("c", 0, 2, 1, 6)],
+    ];
+
+    [Fact]
+    public void Every_shared_floor_passes_the_scene_check_first_time_and_seats_each_team_in_its_own_bays()
+    {
+        var failures = new List<string>();
+
+        foreach (var kit in new[] { Kit, Tech })
+        {
+            var each = FloorPlanner.BayCapacity(kit, Rules);
+            var bays = FloorPlanner.BayColumns(40, OfficeRules.BayCount);
+
+            // And three full bays side by side, which only fit if each team
+            // keeps to its own: a small team fits in its bay whatever happens.
+            OfficeTenant[] full = [new("a", 0, 0, 1, each), new("b", 0, 1, 1, each), new("c", 0, 2, 1, each)];
+
+            foreach (var number in Enumerable.Range(1, 12))
+            {
+                foreach (var mix in Mixes.Append(full))
+                {
+                    var plan = FloorPlanner.Shared(kit, Rules, number, mix);
+                    var problems = OfficeScenes.Problems(plan.Scene, sizeOf: null);
+                    var called = $"{(kit == Tech ? "tech" : "shapes")} floor {number} [{string.Join(", ", mix.Select(one => $"{one.Run}:{one.People}@{one.Bay}+{one.Bays}"))}]";
+
+                    if (problems.Count > 0 || plan.Attempt != 0)
+                    {
+                        failures.Add($"{called}: attempt {plan.Attempt}: {string.Join(" / ", problems)}");
+                    }
+
+                    foreach (var tenant in mix)
+                    {
+                        var team = plan.Scene.Teams!.Single(one => one.Run == tenant.Run && one.Part == tenant.Part);
+                        var (from, to) = (bays[tenant.Bay].From, bays[tenant.Bay + tenant.Bays - 1].To);
+
+                        if (team.Desks.Count != Math.Min(tenant.People, each * tenant.Bays))
+                        {
+                            failures.Add($"{called}: {tenant.Run} has {team.Desks.Count} desks");
+                        }
+
+                        if (team.Desks.Any(desk => desk.X < from || desk.X > to))
+                        {
+                            failures.Add($"{called}: {tenant.Run} sits outside its bays");
+                        }
+
+                        if (plan.Scene.Areas!.Any(area => area.Run == tenant.Run && (area.X < from || area.X + area.W - 1 > to)))
+                        {
+                            failures.Add($"{called}: {tenant.Run}'s area reaches outside its bays");
+                        }
+                    }
+                }
+            }
+        }
+
+        failures.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_team_s_desks_are_where_they_were_whoever_else_comes_or_goes()
+    {
+        static IEnumerable<string> Own(OfficeScene scene) =>
+            scene.Props!.Where(prop => prop.Id.StartsWith("a#0:", StringComparison.Ordinal)).Select(prop => $"{prop.Id}@{prop.X},{prop.Y}{prop.Facing}");
+
+        foreach (var number in Enumerable.Range(1, 10))
+        {
+            var alone = FloorPlanner.Shared(Tech, Rules, number, [new("a", 0, 1, 1, 4)]).Scene;
+            var crowded = FloorPlanner.Shared(Tech, Rules, number, [new("b", 0, 0, 1, 3), new("a", 0, 1, 1, 4), new("c", 0, 2, 1, 2)]).Scene;
+
+            Own(crowded).Should().Equal(Own(alone), $"floor {number}: neighbours never move a team's furniture");
+            crowded.Teams!.Single(one => one.Run == "a").Desks.Should().Equal(alone.Teams!.Single().Desks);
+        }
+    }
+
+    [Fact]
+    public void Each_team_s_area_says_whose_it_is_and_a_bay_nobody_has_is_bare()
+    {
+        var scene = FloorPlanner.Shared(Tech, Rules, 4, [new("a", 0, 0, 1, 3), new("c", 0, 2, 1, 2)]).Scene;
+
+        scene.Areas!.Where(area => area.Kind is "open-plan" or "team-room" or "lead-office").Select(area => area.Run).Distinct()
+            .Should().BeEquivalentTo(["a", "c"]);
+        scene.Areas!.Should().ContainSingle(area => area.Name == "bay-2" && area.Kind == "vacant" && area.Floor == "concrete");
+        scene.Areas!.Where(area => area.Kind is "kitchen" or "meeting" or "corridor").Should().OnlyContain(area => area.Run == null, "shared rooms are nobody's own");
+    }
+
     [Fact]
     public void Every_room_in_the_band_has_a_door_onto_the_corridor()
     {

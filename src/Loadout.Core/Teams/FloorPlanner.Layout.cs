@@ -37,7 +37,28 @@ public static partial class FloorPlanner
     /// <summary>A room given a place in the band: its columns and the partition round it.</summary>
     private sealed record Placed(Wanted Room, int X, int W, string Walls);
 
-    private static (OfficeScene Scene, int Capacity)? Build(Parts parts, OfficeRules rules, Random random, int team, bool plain, string layout)
+    /// <summary>A team on a shared floor, with the bays it has and its own seeded choices.</summary>
+    private sealed record Tenant(OfficeTenant Who, string Layout, Random Random);
+
+    /// <summary>The columns of each bay of the field: equal, a column's walk between each.</summary>
+    internal static List<(int From, int To)> BayColumns(int width, int count)
+    {
+        var inside = width - 2 - (count - 1);
+        var bays = new List<(int From, int To)>();
+        var x = 1;
+
+        for (var i = 0; i < count; i++)
+        {
+            var w = inside / count + (i < inside % count ? 1 : 0);
+
+            bays.Add((x, x + w - 1));
+            x += w + 1;
+        }
+
+        return bays;
+    }
+
+    private static (OfficeScene Scene, int Capacity)? Build(Parts parts, OfficeRules rules, Random random, int team, bool plain, string layout, IReadOnlyList<Tenant>? tenants = null)
     {
         var (floor, depth, band, coreLeft, coreWidth) = Shell(rules);
         var width = floor.Width;
@@ -64,7 +85,8 @@ public static partial class FloorPlanner
 
         if (!plain)
         {
-            var programme = Programme(rules, team);
+            // The floor's shared rooms are for everybody on it.
+            var programme = Programme(rules, tenants?.Sum(one => one.Who.People) ?? team);
             var arranged = Arrange(programme, rules, random, width, coreLeft, coreWidth);
 
             foreach (var room in arranged)
@@ -127,25 +149,80 @@ public static partial class FloorPlanner
 
         Exits(floor, parts, random, corridorTop + 1, corridorTop);
 
-        var capacity = TeamArea(floor, parts, rules, random, team, fieldTop, fieldBottom, layout, plain, coreLeft + coreWidth / 2);
+        var desks = new List<OfficeSpot>();
+        List<OfficeTeamSeats>? teams = null;
+        int capacity;
+
+        if (tenants is null)
+        {
+            capacity = TeamArea(floor, parts, rules, random, team, fieldTop, fieldBottom, layout, plain, coreLeft + coreWidth / 2, 1, width - 2, "", null);
+
+            if (floor.LeadSeat is { } lead)
+            {
+                desks.Add(lead);
+            }
+
+            // One each: a bench seats four, and a team of five at two benches
+            // leaves three seats empty rather than giving anybody two.
+            desks.AddRange(floor.Seats.Take(Math.Max(0, team - desks.Count)));
+        }
+        else
+        {
+            // Each team in its own bays, laid out by its own seed, so another
+            // team arriving or leaving never moves its desks.
+            var bays = BayColumns(width, rules.Bays ?? OfficeRules.BayCount);
+            var used = new bool[bays.Count];
+
+            teams = [];
+            capacity = 0;
+
+            foreach (var tenant in tenants.OrderBy(one => one.Who.Bay))
+            {
+                var (from, _) = bays[tenant.Who.Bay];
+                var (_, to) = bays[tenant.Who.Bay + tenant.Who.Bays - 1];
+                var before = floor.Seats.Count;
+
+                floor.LeadSeat = null;
+
+                var seats = TeamArea(floor, parts, rules, tenant.Random, tenant.Who.People, fieldTop, fieldBottom, tenant.Layout, plain, (from + to) / 2, from, to, $"{tenant.Who.Run}#{tenant.Who.Part}:", tenant.Who.Run);
+                var mine = new List<OfficeSpot>();
+
+                if (floor.LeadSeat is { } lead)
+                {
+                    mine.Add(lead);
+                }
+
+                mine.AddRange(floor.Seats.Skip(before).Take(Math.Max(0, tenant.Who.People - mine.Count)));
+                teams.Add(new OfficeTeamSeats(tenant.Who.Run, tenant.Who.Part, mine));
+                desks.AddRange(mine);
+                capacity = Math.Max(capacity, seats);
+
+                for (var bay = tenant.Who.Bay; bay < tenant.Who.Bay + tenant.Who.Bays; bay++)
+                {
+                    used[bay] = true;
+                }
+            }
+
+            floor.LeadSeat = null;
+
+            // A bay nobody has: bare floor, for the next team.
+            for (var bay = 0; bay < bays.Count; bay++)
+            {
+                if (!used[bay])
+                {
+                    floor.Areas.Add(new OfficeArea($"bay-{bay + 1}", "vacant", bays[bay].From, fieldTop, bays[bay].To - bays[bay].From + 1, fieldBottom - fieldTop + 1, null));
+                }
+            }
+        }
 
         if (!plain)
         {
             Corridor(floor, parts, random, corridorTop, board);
         }
 
-        var desks = new List<OfficeSpot>();
+        var scene = Scene(parts, rules, "@floor", floor, desks, coreLeft, band);
 
-        if (floor.LeadSeat is { } lead)
-        {
-            desks.Add(lead);
-        }
-
-        // One each: a bench seats four, and a team of five at two benches
-        // leaves three seats empty rather than giving anybody two.
-        desks.AddRange(floor.Seats.Take(Math.Max(0, team - desks.Count)));
-
-        return (Scene(parts, rules, "@floor", floor, desks, coreLeft, band), capacity);
+        return (teams is null ? scene : scene with { Teams = teams }, capacity);
     }
 
     /// <summary>
@@ -367,10 +444,12 @@ public static partial class FloorPlanner
         int bottom,
         string layout,
         bool plain,
-        int middle)
+        int middle,
+        int left,
+        int right,
+        string prefix,
+        string? run)
     {
-        var left = 1;
-        var right = floor.Width - 2;
         // Walls round the team only when there are desks in it: round a lead
         // alone they were a second wall a row outside the office's own.
         var walled = !plain && layout == "corridor" && team > 1;
@@ -409,7 +488,7 @@ public static partial class FloorPlanner
         var areaKind = walled ? "team-room" : "open-plan";
         var function = rules.Rooms is { } named && named.TryGetValue(areaKind, out var areaRule) ? areaRule.Function : null;
 
-        floor.Areas.Add(new OfficeArea(walled ? "team-room-1" : "open-plan", areaKind, x0, areaTop, x1 - x0 + 1, bottom - areaTop + 1, function));
+        floor.Areas.Add(new OfficeArea(prefix + (walled ? "team-room-1" : "open-plan"), areaKind, x0, areaTop, x1 - x0 + 1, bottom - areaTop + 1, function, Run: run));
 
         // A team room has walls and a door. An open plan has nothing round
         // it: its carpet against the bare floor is the edge, and a divider
@@ -444,17 +523,17 @@ public static partial class FloorPlanner
 
         if (x0 - gap > left)
         {
-            floor.Areas.Add(new OfficeArea("vacant-west", "vacant", left, top, x0 - gap - left, bottom - top + 1, null));
+            floor.Areas.Add(new OfficeArea(prefix + "vacant-west", "vacant", left, top, x0 - gap - left, bottom - top + 1, null));
         }
 
         if (x1 + gap < right)
         {
-            floor.Areas.Add(new OfficeArea("vacant-east", "vacant", x1 + gap + 1, top, right - x1 - gap, bottom - top + 1, null));
+            floor.Areas.Add(new OfficeArea(prefix + "vacant-east", "vacant", x1 + gap + 1, top, right - x1 - gap, bottom - top + 1, null));
         }
 
         if (areaTop > top)
         {
-            floor.Areas.Add(new OfficeArea("vacant-north", "vacant", Math.Max(left, x0 - gap), top, Math.Min(right, x1 + gap) - Math.Max(left, x0 - gap) + 1, areaTop - top, null));
+            floor.Areas.Add(new OfficeArea(prefix + "vacant-north", "vacant", Math.Max(left, x0 - gap), top, Math.Min(right, x1 + gap) - Math.Max(left, x0 - gap) + 1, areaTop - top, null));
         }
 
         top = areaTop;
@@ -472,7 +551,7 @@ public static partial class FloorPlanner
             var officeDoor = officeOnLeft ? ox + officeW - 2 : ox + 1;
             var side = officeOnLeft ? ox + officeW : ox - 1;
 
-            floor.Areas.Add(new OfficeArea("lead-office", "lead-office", ox, oy, officeW, officeH, leadRule.Function));
+            floor.Areas.Add(new OfficeArea(prefix + "lead-office", "lead-office", ox, oy, officeW, officeH, leadRule.Function, Run: run));
             floor.Reserve(ox, oy, officeW, officeH);
 
             for (var x = Math.Min(ox, side); x <= Math.Max(ox + officeW - 1, side); x++)
@@ -488,16 +567,16 @@ public static partial class FloorPlanner
                 Edge(floor, parts, random, walls, side, y);
             }
 
-            var lead = Furnish(floor, parts, random, rules, "lead-office", "lead-office", "floor", ox, oy, officeW, officeH, back: "s", entry: (officeDoor, oy), seatsAs: "lead");
+            var lead = Furnish(floor, parts, random, rules, "lead-office", prefix + "lead-office", "floor", ox, oy, officeW, officeH, back: "s", entry: (officeDoor, oy), seatsAs: "lead");
 
             if (!lead)
             {
-                LeadDesk(floor, parts, random, x0, deskTop);
+                LeadDesk(floor, parts, random, x0, deskTop, prefix);
             }
         }
         else
         {
-            LeadDesk(floor, parts, random, x0, deskTop);
+            LeadDesk(floor, parts, random, x0, deskTop, prefix);
         }
 
         var slots = Slots(floor, desk.Piece, x0, x1, deskTop, bottom, officeOnLeft, officeW, officeH, plain);
@@ -521,7 +600,7 @@ public static partial class FloorPlanner
 
             var piece = slot.North ? turned : desk.Piece;
 
-            floor.Put($"desk-{placed + 1}", "desk", piece, slot.X, slot.Y, "desk", slot.North ? "n" : "s");
+            floor.Put($"{prefix}desk-{placed + 1}", "desk", piece, slot.X, slot.Y, "desk", slot.North ? "n" : "s");
 
             foreach (var seat in piece.Seats ?? [])
             {
@@ -542,7 +621,7 @@ public static partial class FloorPlanner
             {
                 if (floor.CanAdd(x, y, 1, 1, true) && !floor.Spots.Values.Any(spot => spot.X == x && spot.Y == y))
                 {
-                    floor.Put($"plant-{++index}", "plant", plant.Piece, x, y);
+                    floor.Put($"{prefix}plant-{++index}", "plant", plant.Piece, x, y);
                 }
             }
         }
@@ -551,11 +630,11 @@ public static partial class FloorPlanner
     }
 
     /// <summary>The lead at a desk of their own in the area's first row, where there is no room for an office.</summary>
-    private static void LeadDesk(Floor floor, Parts parts, Random random, int x, int top)
+    private static void LeadDesk(Floor floor, Parts parts, Random random, int x, int top, string prefix)
     {
         var desk = parts.Pick("exec-desk", random);
 
-        floor.Put("lead-desk", "exec-desk", desk.Piece, x + 1, top + 1, "lead");
+        floor.Put($"{prefix}lead-desk", "exec-desk", desk.Piece, x + 1, top + 1, "lead");
     }
 
     /// <summary>

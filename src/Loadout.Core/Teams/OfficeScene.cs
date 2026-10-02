@@ -149,6 +149,7 @@ public sealed record OfficeAtlas(
 /// <param name="H">Depth in tiles, inside its walls.</param>
 /// <param name="Function">What clicking it offers: questions, controls, summary, idle, and so on; null for none.</param>
 /// <param name="Floor">What it is floored with, a kit material less its <c>floor-</c>; null to be floored like the level around it.</param>
+/// <param name="Run">The run whose it is, on a floor teams share; null for a room everybody on the floor shares.</param>
 public sealed record OfficeArea(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("kind")] string Kind,
@@ -157,7 +158,17 @@ public sealed record OfficeArea(
     [property: JsonPropertyName("w")] int W,
     [property: JsonPropertyName("h")] int H,
     [property: JsonPropertyName("function")] string? Function = null,
-    [property: JsonPropertyName("floor")] string? Floor = null);
+    [property: JsonPropertyName("floor")] string? Floor = null,
+    [property: JsonPropertyName("run")] string? Run = null);
+
+/// <summary>One team's seats on a floor teams share, the lead's first.</summary>
+/// <param name="Run">The run.</param>
+/// <param name="Part">Which of the run's floors this is: 0 its first.</param>
+/// <param name="Desks">Its people's seats, the lead's first.</param>
+public sealed record OfficeTeamSeats(
+    [property: JsonPropertyName("run")] string Run,
+    [property: JsonPropertyName("part")] int Part,
+    [property: JsonPropertyName("desks")] IReadOnlyList<OfficeSpot> Desks);
 
 /// <summary>
 /// A room drawn from tiles, with people who walk about in it.
@@ -186,6 +197,7 @@ public sealed record OfficeArea(
 /// <paramref name="Floor"/> and <paramref name="Walls"/> instead; what blocks is
 /// read from those either way.
 /// </param>
+/// <param name="Teams">On a floor teams share, each team's seats; null on a floor of one run, whose seats are <paramref name="Desks"/>.</param>
 /// <param name="Ground">
 /// What anything in no room is floored with, a kit material less its
 /// <c>floor-</c>; null for the carpet of <paramref name="Surface"/>.
@@ -226,7 +238,8 @@ public sealed record OfficeScene(
     [property: JsonPropertyName("areas")] IReadOnlyList<OfficeArea>? Areas = null,
     [property: JsonPropertyName("cast")] IReadOnlyDictionary<string, IReadOnlyList<string>>? Cast = null,
     [property: JsonPropertyName("surface")] IReadOnlyList<IReadOnlyList<int>>? Surface = null,
-    [property: JsonPropertyName("ground")] string? Ground = null)
+    [property: JsonPropertyName("ground")] string? Ground = null,
+    [property: JsonPropertyName("teams")] IReadOnlyList<OfficeTeamSeats>? Teams = null)
 {
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.office/2";

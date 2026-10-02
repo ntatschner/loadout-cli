@@ -8,7 +8,17 @@ namespace Loadout.Core.Teams;
 /// <param name="State">How the run is doing, for the strip along the floor's edge: waiting, failed, working, quiet or done.</param>
 /// <param name="Dark">Whether its lights are out: the run has finished and the floor is only being kept.</param>
 /// <param name="Nodes">The run's nodes on this floor, lead first: who the page seats here.</param>
-public sealed record BuildingFloor(int Number, string Run, int Part, int People, string State, bool Dark, IReadOnlyList<string> Nodes);
+/// <param name="Bay">Its first bay on the floor, counting from 0 at the west.</param>
+/// <param name="Bays">How many bays it has there, side by side.</param>
+public sealed record BuildingFloor(int Number, string Run, int Part, int People, string State, bool Dark, IReadOnlyList<string> Nodes, int Bay = 0, int Bays = 1);
+
+/// <summary>A run's place on a floor teams share: which bays, and how many people sit there.</summary>
+/// <param name="Run">The run.</param>
+/// <param name="Part">Which of the run's floors: 0 its first.</param>
+/// <param name="Bay">Its first bay, counting from 0 at the west.</param>
+/// <param name="Bays">How many bays, side by side from the first.</param>
+/// <param name="People">How many of its people sit on this floor, lead included.</param>
+public sealed record OfficeTenant(string Run, int Part, int Bay, int Bays, int People);
 
 /// <summary>The building as it stands: how tall, and who is on which floor.</summary>
 /// <param name="Floors">How many floors the tower is drawn with.</param>
@@ -16,22 +26,29 @@ public sealed record BuildingFloor(int Number, string Run, int Part, int People,
 public sealed record BuildingView(int Floors, IReadOnlyList<BuildingFloor> Occupied);
 
 /// <summary>
-/// Which run is on which floor of the building, remembered from one look to
-/// the next.
+/// Which run has which bays on which floor of the building, remembered from
+/// one look to the next.
 /// </summary>
 /// <remarks>
 /// <para>
-/// A run seen for the first time is given as many floors as it needs at once,
-/// lowest free first. After that it moves only after the rules' waits: a team
-/// that has outgrown its floors spills onto another once it has been too big
-/// for <see cref="OfficeMoves.SpillUpSeconds"/>, preferring the floor directly
-/// above so it stays together; one that fits on fewer gives the top one back
-/// once it has for <see cref="OfficeMoves.GiveBackSeconds"/>. The long wait
-/// down and the short one up are so that a run briefing and finishing workers
-/// does not bounce between floors.
+/// A floor's team side is split into bays, three unless the rules say
+/// otherwise, and a run has as many as its people need, side by side where it
+/// can: a small team shares a floor with others, a big one takes a floor or
+/// more. A run seen for the first time is given its bays at once, on the
+/// lowest floor with that many free together.
 /// </para>
 /// <para>
-/// A finished run keeps its floors, lights out, for
+/// After that it moves only after the rules' waits: a team that has outgrown
+/// its bays takes another once it has been too big for
+/// <see cref="OfficeMoves.SpillUpSeconds"/> - the bay beside its own where
+/// that is free, else on the floor above, else the lowest with room - and one
+/// that fits in fewer gives the last back once it has for
+/// <see cref="OfficeMoves.GiveBackSeconds"/>. The long wait down and the short
+/// one up are so that a run briefing and finishing workers does not bounce.
+/// Nobody else's bays move when one team comes, grows or goes.
+/// </para>
+/// <para>
+/// A finished run keeps its bays, lights out, for
 /// <see cref="OfficeMoves.KeptMinutes"/>, so it can still be visited, and then
 /// they are freed for the next run. The tower is never shorter than the rules'
 /// fewest floors.
@@ -48,7 +65,10 @@ public sealed class OfficeBuilding
 
     private sealed class Tenancy
     {
-        public List<int> Floors { get; } = [];
+        /// <summary>Where it is, in order: its first floor's bays first.</summary>
+        public List<(int Floor, int Bay, int Bays)> Places { get; } = [];
+
+        public int Bays => Places.Sum(place => place.Bays);
 
         public DateTimeOffset? OverSince { get; set; }
 
@@ -57,8 +77,8 @@ public sealed class OfficeBuilding
 
     /// <summary>Take in the runs as they are now, and say who is on which floor.</summary>
     /// <param name="runs">Every run the office could show.</param>
-    /// <param name="capacity">How many people a floor seats, lead included.</param>
-    /// <param name="rules">For the fewest floors and the waits.</param>
+    /// <param name="capacity">How many people a bay seats, lead included.</param>
+    /// <param name="rules">For the bays to a floor, the fewest floors and the waits.</param>
     /// <param name="now">The time now.</param>
     public BuildingView Update(IReadOnlyList<RunSummary> runs, int capacity, OfficeRules rules, DateTimeOffset now)
     {
@@ -67,11 +87,12 @@ public sealed class OfficeBuilding
 
         var moves = rules.Moves ?? new OfficeMoves();
         var seat = Math.Max(1, capacity);
+        var perFloor = Math.Max(1, rules.Bays ?? OfficeRules.BayCount);
 
         lock (_gate)
         {
             // Who is still in the building: every run going, and every run
-            // finished within the time a floor is kept for it.
+            // finished within the time its bays are kept for it.
             var present = runs
                 .Where(run => run.Running || (run.Finished is { } ended && now - ended < TimeSpan.FromMinutes(moves.KeptMinutes)))
                 .OrderBy(run => run.Started)
@@ -90,16 +111,12 @@ public sealed class OfficeBuilding
                 if (!_tenants.TryGetValue(run.RunId, out var tenancy))
                 {
                     tenancy = _tenants[run.RunId] = new Tenancy();
-
-                    while (tenancy.Floors.Count < need)
-                    {
-                        tenancy.Floors.Add(Free(tenancy));
-                    }
+                    Grow(tenancy, need, perFloor);
 
                     continue;
                 }
 
-                // A finished run's floors stay as they were until it is gone.
+                // A finished run's bays stay as they were until it is gone.
                 if (!run.Running)
                 {
                     tenancy.OverSince = null;
@@ -108,29 +125,25 @@ public sealed class OfficeBuilding
                     continue;
                 }
 
-                if (need > tenancy.Floors.Count)
+                if (need > tenancy.Bays)
                 {
                     tenancy.UnderSince = null;
                     tenancy.OverSince ??= now;
 
                     if (now - tenancy.OverSince.Value >= TimeSpan.FromSeconds(moves.SpillUpSeconds))
                     {
-                        while (tenancy.Floors.Count < need)
-                        {
-                            tenancy.Floors.Add(Free(tenancy));
-                        }
-
+                        Grow(tenancy, need - tenancy.Bays, perFloor);
                         tenancy.OverSince = null;
                     }
                 }
-                else if (need < tenancy.Floors.Count)
+                else if (need < tenancy.Bays)
                 {
                     tenancy.OverSince = null;
                     tenancy.UnderSince ??= now;
 
                     if (now - tenancy.UnderSince.Value >= TimeSpan.FromSeconds(moves.GiveBackSeconds))
                     {
-                        tenancy.Floors.RemoveRange(need, tenancy.Floors.Count - need);
+                        Shrink(tenancy, need);
                         tenancy.UnderSince = null;
                     }
                 }
@@ -145,48 +158,113 @@ public sealed class OfficeBuilding
 
             foreach (var run in present)
             {
-                var floors = _tenants[run.RunId].Floors;
+                var places = _tenants[run.RunId].Places;
                 var here = Present(run);
                 var state = State(run);
+                var seated = 0;
 
-                for (var part = 0; part < floors.Count; part++)
+                for (var part = 0; part < places.Count; part++)
                 {
-                    // Filled from the first floor up: the lead and the first
-                    // workers downstairs, whoever does not fit above.
-                    var on = part == floors.Count - 1
-                        ? here.Skip(seat * part).ToList()
-                        : here.Skip(seat * part).Take(seat).ToList();
+                    // Filled from the first place on: the lead and the first
+                    // workers there, whoever does not fit after.
+                    var (floor, bay, bays) = places[part];
+                    var on = part == places.Count - 1
+                        ? here.Skip(seated).ToList()
+                        : here.Skip(seated).Take(seat * bays).ToList();
 
-                    occupied.Add(new BuildingFloor(floors[part], run.RunId, part, on.Count, state, !run.Running, on));
+                    seated += on.Count;
+                    occupied.Add(new BuildingFloor(floor, run.RunId, part, on.Count, state, !run.Running, on, bay, bays));
                 }
             }
 
-            occupied.Sort((a, b) => a.Number.CompareTo(b.Number));
+            occupied.Sort((a, b) => a.Number != b.Number ? a.Number.CompareTo(b.Number) : a.Bay.CompareTo(b.Bay));
 
-            var tallest = occupied.Count == 0 ? 0 : occupied[^1].Number;
+            var tallest = occupied.Count == 0 ? 0 : occupied.Max(one => one.Number);
 
             return new BuildingView(Math.Max(rules.MinFloors ?? 10, tallest), occupied);
         }
     }
 
-    /// <summary>The lowest floor nobody has, the one above this tenant's top floor first.</summary>
-    private int Free(Tenancy tenancy)
+    /// <summary>
+    /// More bays for a tenant: the one beside its last where that is free,
+    /// else as many as fit together on the floor above its last, else on the
+    /// lowest floor with room.
+    /// </summary>
+    private void Grow(Tenancy tenancy, int more, int perFloor)
     {
-        var taken = _tenants.Values.SelectMany(one => one.Floors).ToHashSet();
-
-        if (tenancy.Floors.Count > 0 && !taken.Contains(tenancy.Floors[^1] + 1))
+        while (more > 0)
         {
-            return tenancy.Floors[^1] + 1;
+            if (tenancy.Places.Count > 0)
+            {
+                var (floor, bay, bays) = tenancy.Places[^1];
+
+                if (bay + bays < perFloor && Free(floor, bay + bays))
+                {
+                    tenancy.Places[^1] = (floor, bay, bays + 1);
+                    more--;
+
+                    continue;
+                }
+            }
+
+            var take = Math.Min(more, perFloor);
+            var at = Room(tenancy, take, perFloor);
+
+            tenancy.Places.Add((at.Floor, at.Bay, take));
+            more -= take;
+        }
+    }
+
+    /// <summary>Fewer bays: the last one given back first.</summary>
+    private static void Shrink(Tenancy tenancy, int need)
+    {
+        while (tenancy.Bays > Math.Max(1, need))
+        {
+            var (floor, bay, bays) = tenancy.Places[^1];
+
+            if (bays > 1)
+            {
+                tenancy.Places[^1] = (floor, bay, bays - 1);
+            }
+            else
+            {
+                tenancy.Places.RemoveAt(tenancy.Places.Count - 1);
+            }
+        }
+    }
+
+    // Whether nobody has this bay of this floor.
+    private bool Free(int floor, int bay) =>
+        !_tenants.Values.Any(one => one.Places.Any(place => place.Floor == floor && bay >= place.Bay && bay < place.Bay + place.Bays));
+
+    /// <summary>Where a number of bays side by side are free: the floor above the tenant's last first, then the lowest.</summary>
+    private (int Floor, int Bay) Room(Tenancy tenancy, int take, int perFloor)
+    {
+        (int Floor, int Bay)? On(int floor)
+        {
+            for (var bay = 0; bay + take <= perFloor; bay++)
+            {
+                if (Enumerable.Range(bay, take).All(one => Free(floor, one)))
+                {
+                    return (floor, bay);
+                }
+            }
+
+            return null;
         }
 
-        var floor = 1;
-
-        while (taken.Contains(floor))
+        if (tenancy.Places.Count > 0 && On(tenancy.Places[^1].Floor + 1) is { } above)
         {
-            floor++;
+            return above;
         }
 
-        return floor;
+        for (var floor = 1; ; floor++)
+        {
+            if (On(floor) is { } found)
+            {
+                return found;
+            }
+        }
     }
 
     /// <summary>A run's people still in the building, the lead first as the floors seat them.</summary>
@@ -198,8 +276,8 @@ public sealed class OfficeBuilding
             .Select(node => node.Node),
     ];
 
+    // Bays: one for every so many people, never none.
     private static int Need(RunSummary run, int seat) => Math.Max(1, (Present(run).Count + seat - 1) / seat);
-
     /// <summary>The state the floor's strip shows: what most needs seeing first.</summary>
     private static string State(RunSummary run)
     {

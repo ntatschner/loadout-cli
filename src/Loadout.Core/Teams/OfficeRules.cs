@@ -108,6 +108,7 @@ public sealed record OfficeMoves(
 /// <param name="Moves">How long the building waits before moving a team.</param>
 /// <param name="Layouts">The kinds of floor a run may be given, one chosen by its seed: open, corridor.</param>
 /// <param name="Storey">How high a storey is in tiles, or null for <see cref="StoreyTiles"/>.</param>
+/// <param name="Bays">How many bays a floor's team side is split into for teams to share; null for <see cref="BayCount"/>.</param>
 /// <param name="Floors">
 /// What each kind of room is floored with, by the name of a kit material less
 /// its <c>floor-</c>: <c>{"kitchen": "tile", "lounge": "wood"}</c>. The keys
@@ -135,8 +136,15 @@ public sealed record OfficeRules(
     [property: JsonPropertyName("moves")] OfficeMoves? Moves = null,
     [property: JsonPropertyName("layouts")] IReadOnlyList<string>? Layouts = null,
     [property: JsonPropertyName("storey")] int? Storey = null,
-    [property: JsonPropertyName("floors")] IReadOnlyDictionary<string, string>? Floors = null)
+    [property: JsonPropertyName("floors")] IReadOnlyDictionary<string, string>? Floors = null,
+    [property: JsonPropertyName("bays")] int? Bays = null)
 {
+    /// <summary>
+    /// How many bays teams share a floor in where the rules don't say: three,
+    /// a dozen tiles each on the built-in floor, about nine metres.
+    /// </summary>
+    public const int BayCount = 3;
+
     /// <summary>
     /// What a room of this kind is floored with, or what a level is floored
     /// with outside its rooms when given <c>@</c> and the level; null where the
@@ -335,6 +343,7 @@ public sealed record OfficeRules(
             Layouts = changes.Layouts ?? Layouts,
             Storey = changes.Storey ?? Storey,
             Floors = Merge(Floors, changes.Floors),
+            Bays = changes.Bays ?? Bays,
         };
     }
 
@@ -418,6 +427,11 @@ public static class OfficeRuleBook
         if (rules.Floor is not [var width, var depth] || width is < 12 or > 64 || depth is < 8 or > 64)
         {
             problems.Add("floor has to be a width of 12 to 64 tiles and a depth of 8 to 64.");
+        }
+
+        if (rules.Bays is < 1 or > 6)
+        {
+            problems.Add($"bays is {rules.Bays}; a floor is shared in 1 to 6.");
         }
 
         if (rules.Storey is < 3 or > 10)

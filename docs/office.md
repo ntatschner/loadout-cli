@@ -51,15 +51,19 @@ drawn still.
 
 ## Floors
 
-Each running run gets a floor, lowest first. The building is never shorter than
-ten floors and grows past that when it has to. A team too big for one floor
-takes the floor above as well, and gives it back once it has shrunk and stayed
-small for a few minutes, so a team hovering at the edge doesn't flicker between
-one floor and two. When a run finishes, its floor goes dark and stays that way
-for an hour, so you can still go and look, then it's freed.
+Teams share floors. A floor's south side is split into three bays, and each
+running run gets as many as its people need, side by side, on the lowest floor
+with that many free: a small team has neighbours, a big one takes a floor or
+more. The building is never shorter than ten floors and grows past that when it
+has to. A team that outgrows its bays takes the one beside it, or room on the
+floor above, and gives the last back once it has shrunk and stayed small for a
+few minutes, so a team hovering at the edge doesn't flicker. Nobody else's bays
+move when one team comes, grows or goes. When a run finishes, its bays go dark
+and stay that way for an hour, so you can still go and look, then they're freed.
 
-A floor is laid out for its run, from the run's own identifier: the same run
-gets the same floor every time, and two runs get different ones. The core is in
+Each team's bays are laid out from the run's own identifier, so the same run
+gets the same desks every time, whoever its neighbours are, and two runs get
+different ones; the shared rooms are laid out for everybody on the floor. The core is in
 the middle of the north wall, the same place on every level so the lift lines
 up through the tower, with the toilets, a cupboard and the stairs. Either side
 of it, along the north wall, are the floor's rooms: a kitchen, meeting rooms, a
@@ -68,12 +72,12 @@ rules, each room's zone and what it should be near or away from, and each has
 a door onto the corridor that runs the width of the floor. Band left over
 becomes an open nook with a sofa.
 
-The team works along the south windows, in an area as big as the team needs:
+Each team works along the south windows, in an area of its bays as big as it needs:
 the lead's office in its window corner, the lead facing the door, and desks in
 pods facing each other across the monitors. Some floors leave it open, its
 carpet against the bare floor round it; others give it walls and a door, as a
-team room. The rest of the floor is vacant, bare concrete with nobody on it,
-for another team to take. Rooms are furnished from the pieces that say they
+team room. What no team uses is vacant, bare concrete with nobody on it, for
+the next team to take. Rooms are furnished from the pieces that say they
 suit them: the counter in the kitchen with the coffee machine beside it, a
 coffee table in front of the sofa, a visitor's chair across the lead's desk,
 the copier and the water cooler against the corridor wall.
@@ -322,10 +326,12 @@ Stated plainly, so nobody finds out by surprise:
   turned, so shading drawn into a tile, a shadow along a wall's south face say,
   stays where it was drawn. A room drawn from one hand-made picture doesn't
   turn at all.
-- **One team a floor, so far.** A floor is laid out for its run, and the vacant
-  floor round a small team stays empty. Sharing a floor between teams, which is
-  what the vacant floor is for, is next. `scope` and `access` are checked but
-  not used yet, and the lobby, roof and basements are still laid out by hand.
+- **A shared floor shows one team's people at a time.** The floor is laid out
+  with every team on it, but going in from a team's windows shows that team's
+  people; its neighbours' bays are furnished and empty. Seeing everybody on a
+  floor at once, each team labelled, is next. `scope` and `access` are checked
+  but not used yet, and the lobby, roof and basements are still laid out by
+  hand.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors
   at a time, and so is everything the server says. What the page draws from
   them was looked at in a browser, not tested.
