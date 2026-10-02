@@ -1477,6 +1477,48 @@ public static class FloorPlanner
         var lift = floor.Spots.TryGetValue("lift", out var arrival) ? arrival : new OfficeSpot(coreLeft, band + 2, "n");
         var (sheets, cast) = parts.People;
 
+        // Drawn on the dual grid when every tileset is a picture: a tile at
+        // each point where four cells meet, chosen by those four, so a wall
+        // one cell wide is drawn one cell wide. The built-in shapes keep the
+        // grid above, drawn cell by cell in the kit's colours.
+        List<IReadOnlyList<int>>? surface = null;
+
+        if (sets.All(set => set.Picture is not null))
+        {
+            surface = [];
+
+            Cell At(int x, int y) => floor.Cells[Math.Clamp(x, 0, width - 1), Math.Clamp(y, 0, height - 1)];
+
+            for (var vy = 0; vy <= height; vy++)
+            {
+                var row = new int[width + 1];
+
+                for (var vx = 0; vx <= width; vx++)
+                {
+                    row[vx] = offsets[0] + solid.Corners["llll"];
+
+                    // Solid first, where a solid wall and glass meet at a point.
+                    for (var which = 0; which < kinds.Length; which++)
+                    {
+                        var pattern = string.Concat(
+                            At(vx - 1, vy - 1) == kinds[which] ? 'u' : 'l',
+                            At(vx, vy - 1) == kinds[which] ? 'u' : 'l',
+                            At(vx - 1, vy) == kinds[which] ? 'u' : 'l',
+                            At(vx, vy) == kinds[which] ? 'u' : 'l');
+
+                        if (pattern != "llll")
+                        {
+                            row[vx] = offsets[which] + sets[which].Corners[pattern];
+
+                            break;
+                        }
+                    }
+                }
+
+                surface.Add(row);
+            }
+        }
+
         return new OfficeScene(
             OfficeScene.Version,
             parts.Tile,
@@ -1492,7 +1534,8 @@ public static class FloorPlanner
             Sheets: sheets,
             Atlases: atlases,
             Areas: floor.Areas,
-            Cast: cast);
+            Cast: cast,
+            Surface: surface);
     }
 
     // A picture carries its corner patterns so the page can turn it; the

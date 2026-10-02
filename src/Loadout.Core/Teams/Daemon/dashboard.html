@@ -6558,8 +6558,22 @@
 
     ctx.imageSmoothingEnabled = false;
 
+    // The dual grid, where the floor has one and its pictures are here: each
+    // tile centred where four cells meet, so it starts half a tile up and left.
+    var surface = scene.surface && atlases && sheets.every(Boolean) ? scene.surface : null;
+
+    if (surface) {
+      for (var sy = 0; sy <= scene.height; sy += 1) {
+        for (var sx = 0; sx <= scene.width; sx += 1) {
+          var piece = (surface[sy] || [])[sx];
+
+          if (piece !== undefined && piece >= 0) { tileFromAtlases(ctx, c, atlases, sheets, piece, sx - 0.5, sy - 0.5, t, 0); }
+        }
+      }
+    }
+
     [scene.floor, scene.walls].forEach(function (grid, layer) {
-      if (!grid) { return; }
+      if (!grid || surface) { return; }
 
       for (var y = 0; y < scene.height; y += 1) {
         for (var x = 0; x < scene.width; x += 1) {
@@ -8976,6 +8990,27 @@
       return out;
     }
 
+    // The dual grid is one bigger each way: (x, y) of a w + 1 by h + 1 grid goes to (h - y, x).
+    function dual(rows) {
+      if (!rows) { return rows; }
+
+      var out = [];
+
+      for (var y = 0; y <= w; y += 1) {
+        var row = [];
+
+        for (var x = 0; x <= h; x += 1) {
+          var old = (rows[h - x] || [])[y];
+
+          row.push(old === undefined ? -1 : corners(old));
+        }
+
+        out.push(row);
+      }
+
+      return out;
+    }
+
     function spot(one) {
       return one ? Object.assign({}, one, { x: h - 1 - one.y, y: one.x, facing: TURN_FACING[one.facing || "s"] || "s" }) : one;
     }
@@ -8996,6 +9031,7 @@
       height: w,
       floor: grid(scene.floor),
       walls: grid(scene.walls),
+      surface: dual(scene.surface),
       // A prop turns with the floor: its footprint, and which way its front faces.
       props: (scene.props || []).map(function (one) {
         return Object.assign(rect(one), { facing: TURN_FACING[one.facing || "s"] || "s" });

@@ -175,6 +175,15 @@ public sealed record OfficeArea(
 /// <param name="Sheets">The sheets, by name.</param>
 /// <param name="Atlases">Several tile pictures in place of <paramref name="Tiles"/>, numbered one after another; a generated floor has one per wall kind.</param>
 /// <param name="Areas">The rooms of a generated floor, for their popups; none on a hand-made scene.</param>
+/// <param name="Surface">
+/// The floor and walls as drawn, on a grid half a tile off the cells': one more
+/// each way than the room, its tile at each point where four cells meet, drawn
+/// centred there and chosen by those four cells. A wall one cell wide is then
+/// drawn one cell wide, its edges falling inside its own cell, where tiles
+/// chosen cell by cell spread it over half of each neighbour. Null to draw
+/// <paramref name="Floor"/> and <paramref name="Walls"/> instead; what blocks is
+/// read from those either way.
+/// </param>
 /// <param name="Cast">
 /// For each role, the sheets its people are drawn from, in order, with "worker"
 /// for any other: a kit's <see cref="OfficeKit.Skins"/>, carried onto the floors
@@ -209,7 +218,8 @@ public sealed record OfficeScene(
     [property: JsonPropertyName("sheets")] IReadOnlyDictionary<string, OfficeSheet>? Sheets = null,
     [property: JsonPropertyName("atlases")] IReadOnlyList<OfficeAtlas>? Atlases = null,
     [property: JsonPropertyName("areas")] IReadOnlyList<OfficeArea>? Areas = null,
-    [property: JsonPropertyName("cast")] IReadOnlyDictionary<string, IReadOnlyList<string>>? Cast = null)
+    [property: JsonPropertyName("cast")] IReadOnlyDictionary<string, IReadOnlyList<string>>? Cast = null,
+    [property: JsonPropertyName("surface")] IReadOnlyList<IReadOnlyList<int>>? Surface = null)
 {
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.office/2";
@@ -503,11 +513,16 @@ public static class OfficeScenes
             ? Atlases(scene, atlases, sizeOf, problems)
             : Atlas(scene, sizeOf, problems);
 
-        Grid(scene, "floor", scene.Floor, tileCount, problems);
+        Grid(scene, "floor", scene.Floor, scene.Width, scene.Height, tileCount, problems);
 
         if (scene.Walls is not null)
         {
-            Grid(scene, "walls", scene.Walls, tileCount, problems);
+            Grid(scene, "walls", scene.Walls, scene.Width, scene.Height, tileCount, problems);
+        }
+
+        if (scene.Surface is not null)
+        {
+            Grid(scene, "surface", scene.Surface, scene.Width + 1, scene.Height + 1, tileCount, problems);
         }
 
         Props(scene, sizeOf, problems);
@@ -632,21 +647,27 @@ public static class OfficeScenes
         OfficeScene scene,
         string name,
         IReadOnlyList<IReadOnlyList<int>> rows,
+        int width,
+        int height,
         int? tileCount,
         List<string> problems)
     {
-        if (rows.Count != scene.Height)
+        if (rows.Count != height)
         {
-            problems.Add($"{name} has {rows.Count} rows; the room is {scene.Height} tall.");
+            problems.Add(height == scene.Height
+                ? $"{name} has {rows.Count} rows; the room is {scene.Height} tall."
+                : $"{name} has {rows.Count} rows; it is one more than the room, {height}.");
 
             return;
         }
 
         for (var y = 0; y < rows.Count; y++)
         {
-            if (rows[y].Count != scene.Width)
+            if (rows[y].Count != width)
             {
-                problems.Add($"{name} row {y} has {rows[y].Count} tiles; the room is {scene.Width} wide.");
+                problems.Add(width == scene.Width
+                    ? $"{name} row {y} has {rows[y].Count} tiles; the room is {scene.Width} wide."
+                    : $"{name} row {y} has {rows[y].Count} tiles; it is one more than the room, {width}.");
 
                 continue;
             }

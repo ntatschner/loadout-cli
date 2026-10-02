@@ -352,6 +352,77 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void A_floor_of_tile_pictures_is_drawn_on_the_dual_grid_chosen_by_the_four_cells_round_each_point()
+    {
+        // Each tile of the dual grid sits where four cells meet and shows
+        // their corners, so a wall one cell wide is drawn one cell wide. The
+        // expected tiles are worked out here from the scene's own walls.
+        var shuffled = OfficeKit.CornerPatterns.Select((pattern, bits) => (pattern, bits)).ToDictionary(one => one.pattern, one => (one.bits * 5 + 3) % 16);
+        var small = Small();
+        var kit = small with
+        {
+            Tilesets = new Dictionary<string, OfficeTileset>(small.Tilesets)
+            {
+                ["carpet-wall"] = new("walls.png", "carpet", "wall", shuffled),
+                ["carpet-glass"] = new("glass.png", "carpet", "glass", shuffled),
+            },
+        };
+
+        foreach (var (seed, team) in new[] { ("run-a", 3), ("run-b", 8), ("run-c", 14) })
+        {
+            var scene = FloorPlanner.Plan(kit, OfficeRules.Default, seed, team).Scene;
+            var solidTiles = scene.Atlases![0].Tiles;
+
+            // 0 carpet, 1 solid, 2 glass, as the walls say, the edge carried on past it.
+            int Kind(int x, int y)
+            {
+                var tile = scene.Walls![Math.Clamp(y, 0, scene.Height - 1)][Math.Clamp(x, 0, scene.Width - 1)];
+
+                return tile < 0 ? 0 : tile < solidTiles ? 1 : 2;
+            }
+
+            scene.Surface.Should().NotBeNull().And.HaveCount(scene.Height + 1);
+            scene.Surface!.Should().OnlyContain(row => row.Count == scene.Width + 1);
+
+            var wrong = new List<string>();
+
+            for (var y = 0; y <= scene.Height; y++)
+            {
+                for (var x = 0; x <= scene.Width; x++)
+                {
+                    var want = shuffled["llll"];
+
+                    foreach (var (kind, offset) in new[] { (1, 0), (2, solidTiles) })
+                    {
+                        var pattern = string.Concat(
+                            new[] { (x - 1, y - 1), (x, y - 1), (x - 1, y), (x, y) }.Select(at => Kind(at.Item1, at.Item2) == kind ? 'u' : 'l'));
+
+                        if (pattern != "llll")
+                        {
+                            want = offset + shuffled[pattern];
+
+                            break;
+                        }
+                    }
+
+                    if (scene.Surface[y][x] != want)
+                    {
+                        wrong.Add($"{x},{y}");
+                    }
+                }
+            }
+
+            wrong.Should().BeEmpty($"{seed}, team {team}");
+            OfficeScenes.Problems(scene, sizeOf: null).Should().BeEmpty();
+            OfficeScenes.Problems(scene with { Surface = scene.Surface.Skip(1).ToList() }, sizeOf: null).Should()
+                .Contain($"surface has {scene.Height} rows; it is one more than the room, {scene.Height + 1}.");
+        }
+
+        // The built-in shapes are drawn cell by cell, as they always were.
+        FloorPlanner.Plan(OfficeKit.Kit(), OfficeRules.Default, "run-a", 8).Scene.Surface.Should().BeNull();
+    }
+
+    [Fact]
     public void A_tile_past_the_end_of_the_atlas_is_named()
     {
         var corners = OfficeKit.CornerPatterns.ToDictionary(one => one, one => one == "uuuu" ? 16 : 0);

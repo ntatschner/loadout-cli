@@ -696,6 +696,31 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   const unmapped = Object.assign({}, picture, { atlases: [Object.assign({}, picture.atlases[0], { corners: undefined })] });
 
   if (engine.sceneTurns(unmapped)) { fault("a floor turns with a tile picture that doesn't say which tile has which corners", "no corners"); }
+
+  // The dual grid: a tile at every point where four cells meet, chosen by
+  // them. Turned with the floor, it has to be the dual grid of the turned
+  // cells, worked out here from the cells themselves, not from the page.
+  const walls = [[1, 1, 1], [1, 0, 0], [0, 0, 1], [0, 0, 0], [1, 0, 0], [0, 1, 1]];
+  const turnCells = (rows) => rows[0].map((_, y) => rows.map((_, x) => rows[rows.length - 1 - x][y]));
+  const dualOf = (rows) => {
+    const h = rows.length;
+    const w = rows[0].length;
+    const at = (x, y) => rows[Math.min(h - 1, Math.max(0, y))][Math.min(w - 1, Math.max(0, x))] ? "u" : "l";
+
+    return Array.from({ length: h + 1 }, (_, y) => Array.from({ length: w + 1 }, (_, x) =>
+      shuffled[at(x - 1, y - 1) + at(x, y - 1) + at(x - 1, y) + at(x, y)]));
+  };
+  const dualScene = Object.assign({}, picture, { surface: dualOf(walls) });
+  let cellsTurned = walls;
+
+  for (let k = 1; k <= 4; k += 1) {
+    cellsTurned = turnCells(cellsTurned);
+
+    const got = JSON.stringify(engine.turnScene(dualScene, k).surface);
+    const want = JSON.stringify(dualOf(cellsTurned));
+
+    if (got !== want) { fault("a turned floor's dual grid isn't the dual grid of its turned cells", `turn ${k}`); }
+  }
 }
 
 // ---- getting up before walking off ----

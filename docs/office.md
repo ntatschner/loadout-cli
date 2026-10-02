@@ -156,6 +156,12 @@ the same half circle. Floor and wall tiles need
 nothing extra: a tileset already says which tile has which corners, so a turned
 floor is drawn from the tiles whose corners match where the walls now run.
 
+A floor whose tilesets are all pictures is drawn on a grid half a tile off the
+cells: a tile wherever four cells meet, chosen by those four. A wall one cell
+wide is then drawn one cell wide, its face and skirting inside its own cell,
+rather than spreading over half of each neighbour. The built-in shapes are
+still drawn cell by cell.
+
 ```
 loadout config set team-office-set my-office
 loadout team office check my-office
