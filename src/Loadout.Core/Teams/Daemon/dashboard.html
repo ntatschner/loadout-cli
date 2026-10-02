@@ -8733,7 +8733,11 @@
     var scene = plan.turned[facing] || (plan.turned[facing] = turnScene(plan.scene, facing));
     var mine = { towerFloor: { run: floor.run, part: floor.part } };
     var here = Object.assign({}, run, { nodes: towerNodes(mine, run.nodes) });
-    var room = tileRoom("floor|" + floor.run + "|" + floor.part + "|" + facing, here, (towerData && towerData.kit) || "", scene);
+    // The set in the key: a room made before the building said which set it
+    // is drawn from asked for every picture under no set, found none, and was
+    // kept, drawn in shapes, for as long as the page was open.
+    var kit = (towerData && towerData.kit) || "";
+    var room = tileRoom("floor|" + floor.run + "|" + floor.part + "|" + facing + "|" + kit, here, kit, scene);
     var slot = towerHold.querySelector(".tower-slot");
     var holder = towerHold.querySelector(".tower-inside");
 
@@ -8806,7 +8810,9 @@
     var turned = sceneTurns(plan.scene) ? facing : 0;
     var scene = plan.turned[turned] || (plan.turned[turned] = turnScene(plan.scene, turned));
     var run = { id: place, team: place === "lobby" ? "Lobby" : below ? "Basement" : "Roof", running: true, nodes: people };
-    var room = tileRoom(place + "|" + step + "|" + turned, run, (towerData && towerData.kit) || "", scene);
+    // The set in the key, as for a floor.
+    var kit = (towerData && towerData.kit) || "";
+    var room = tileRoom(place + "|" + step + "|" + turned + "|" + kit, run, kit, scene);
 
     room.onPlace = towerClick;
     room.people_ = people.length;
