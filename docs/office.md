@@ -184,7 +184,8 @@ drawn in plain colour with windows.
 The tower's own outside can come from the kit as well, its `facade`: bay pieces
 one tile wide and a storey high, placed `facade`, which each storey picks among
 along its length; a `corner` for each end, mirrored on the right; `lobby` pieces
-two storeys high and an `entrance` for the middle of the long side; a
+two storeys high and an `entrance` for the middle of the long side, across
+the two middle bays if it is twice a bay's width; a
 `basement`; and `windows`, where the glass is in a bay, so the lights and the
 people in them are drawn in the window rather than across the whole bay. A
 facade with a piece that has no picture isn't drawn at all, rather than half in

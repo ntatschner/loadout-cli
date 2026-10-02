@@ -80,7 +80,8 @@ const code = [
   cut("  function sceneTurns(scene) {", "  /*\n    A floor turned a quarter turn"),
   cut("  function tileProp(room, ctx, prop) {", "  // What each of the built-in kit's shapes is"),
   cut("  function towerNoise(n) {", "  function towerSkyDraw("),
-  cut("  function towerFacadeModule(facade, level, side, i, bays) {", "  // A module drawn over one bay of a wall"),
+  cut("  function towerFacadeModule(facade, level, side, i, bays) {", "  /*\n    Which module a bay of the lobby"),
+  cut("  function towerLobbyModule(facade, side, i, bays, long) {", "  // A module drawn over one bay of a wall"),
 ].join("\n");
 
 // The page's own switch for reduced motion: off, so people walk. A picture is
@@ -88,7 +89,7 @@ const code = [
 const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule };")();
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -683,6 +684,26 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   if (JSON.stringify(storey(facade, 4, 1, 8)) !== JSON.stringify(row)) { fault("a storey is drawn differently the second time", "same storey"); }
   if (storey(facade, 4, 1, 2).some((one) => one.module === corner)) { fault("a storey of two bays is given corners", "two bays"); }
   if (storey({ bays: [a, b, c] }, 4, 1, 8).some((one) => !facade.bays.includes(one.module))) { fault("a kit without a corner gets something other than its bays", "no corner"); }
+}
+
+// The lobby: an entrance twice a bay's width spans the two middle bays of a
+// long side, the second skipped, so nothing is drawn under it twice; one a
+// bay wide takes the middle bay alone; a short side has none.
+{
+  const bay = { name: "bay", source: [0, 0, 32, 96] };
+  const lobby = [{ name: "l1", source: [0, 0, 32, 192] }, { name: "l2", source: [32, 0, 32, 192] }];
+  const wide = { name: "door", source: [0, 0, 64, 192] };
+  const narrow = { name: "door", source: [0, 0, 32, 192] };
+  const front = (entrance, long, bays) => Array.from({ length: bays }, (_, i) =>
+    engine.towerLobbyModule({ bays: [bay], lobby, entrance }, 0, i, bays, long));
+  const describe = (row) => row.map((one) => (one.skip ? "-" : one.module.name === "door" ? `door${one.span}` : "l")).join(" ");
+  const cases = [
+    [front(wide, true, 9), "l l l door2 - l l l l"],
+    [front(narrow, true, 9), "l l l l door1 l l l l"],
+    [front(wide, false, 9), "l l l l l l l l l"],
+  ];
+
+  cases.filter(([row, want]) => describe(row) !== want).forEach(([row, want]) => fault("the lobby's entrance is in the wrong place", `${describe(row)}, not ${want}`));
 }
 
 // ---- tile pictures that turn with the floor ----

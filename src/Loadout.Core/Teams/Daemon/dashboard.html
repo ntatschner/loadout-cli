@@ -10203,6 +10203,25 @@
     return { module: facade.bays[Math.floor(towerNoise(level * 97 + side * 31 + i * 7) * n) % n], mirror: false };
   }
 
+  /*
+    Which module a bay of the lobby is drawn with: the entrance in the middle of
+    a long side, across two bays where it is twice a bay's width (the bay it
+    covers is skipped), and the lobby's modules everywhere else, picked as a
+    storey's bays are.
+  */
+  function towerLobbyModule(facade, side, i, bays, long) {
+    var entrance = long && facade.entrance;
+    var wide = entrance && facade.bays.length && facade.entrance.source[2] >= facade.bays[0].source[2] * 2 && bays >= 3;
+    var at = Math.floor(bays / 2) - (wide ? 1 : 0);
+
+    if (entrance && i === at) { return { module: facade.entrance, span: wide ? 2 : 1 }; }
+    if (wide && i === at + 1) { return { skip: true }; }
+
+    var n = facade.lobby.length;
+
+    return { module: facade.lobby[Math.floor(towerNoise(side * 31 + i * 7) * n) % n], span: 1 };
+  }
+
   // A module drawn over one bay of a wall, from z0 up to z1, its top at the top.
   function towerModule(ctx, project, side, a0, a1, z0, z1, module, mirror) {
     var s = module.source;
@@ -10254,10 +10273,11 @@
         for (var bay = 0; bay < bays; bay += 1) {
           var chosen = level > 0 ? towerFacadeModule(art, level, sideIndex, bay, bays)
             : level < 0 ? { module: art.basement, mirror: false }
-            : { module: art.entrance && side.long && bay === Math.floor(bays / 2) ? art.entrance
-              : art.lobby[Math.floor(towerNoise(sideIndex * 31 + bay * 7) * art.lobby.length) % art.lobby.length], mirror: false };
+            : towerLobbyModule(art, sideIndex, bay, bays, side.long);
 
-          towerModule(ctx, project, side, bay / bays, (bay + 1) / bays, z[0], z[1], chosen.module, chosen.mirror);
+          if (chosen.skip) { continue; }
+
+          towerModule(ctx, project, side, bay / bays, (bay + (chosen.span || 1)) / bays, z[0], z[1], chosen.module, chosen.mirror);
         }
       }
 
