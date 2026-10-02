@@ -138,7 +138,13 @@ which partitions each may have, and which layouts to use.
 A piece can give its `sides` as well: where in its picture it is seen with its
 front facing each way, `n`, `e`, `s` and `w`. Turn the floor a quarter and a
 desk that faced you shows its side, not the same picture on its side. A floor
-turns once every picture piece on it has all four. Floor and wall tiles need
+turns once every picture piece on it has all four.
+
+A piece's front is the side away from whoever sits at it. A desk's seat is on
+its north side, so facing `s` its sitter looks at you across it and you see the
+backs of the monitors; a visitor's chair facing `s` is seen from behind. Art
+drawn screen side first gives its north picture as `s`, and the others turned
+the same half circle. Floor and wall tiles need
 nothing extra: a tileset already says which tile has which corners, so a turned
 floor is drawn from the tiles whose corners match where the walls now run.
 
