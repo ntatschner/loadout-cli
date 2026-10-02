@@ -82,9 +82,13 @@ suit them: the counter in the kitchen with the coffee machine beside it, a
 coffee table in front of the sofa, a visitor's chair across the lead's desk,
 the copier and the water cooler against the corridor wall.
 
-Somebody moving between floors walks to the lift and is gone, and turns up from
-the lift on the other one; the arrows beside **Back to the building** go to the
-next floor up or down with a team on it.
+Going in shows the whole floor, everybody on it. The header names the floor's
+teams and each team's area has its name over it. Clicking a team's own office
+or desks is about that run; clicking a room the floor shares, the meeting room
+or the status board, shows each team's part of it under its name, with a way to
+open each run. Somebody moving between floors walks to the lift and is gone,
+and turns up from the lift on the other one; the arrows beside **Back to the
+building** go to the next floor up or down with a team on it.
 
 People walk round anyone standing still, pass behind whoever is sitting at a
 desk, and wait their turn where there's only room for one. If the wait goes on
@@ -326,12 +330,9 @@ Stated plainly, so nobody finds out by surprise:
   turned, so shading drawn into a tile, a shadow along a wall's south face say,
   stays where it was drawn. A room drawn from one hand-made picture doesn't
   turn at all.
-- **A shared floor shows one team's people at a time.** The floor is laid out
-  with every team on it, but going in from a team's windows shows that team's
-  people; its neighbours' bays are furnished and empty. Seeing everybody on a
-  floor at once, each team labelled, is next. `scope` and `access` are checked
-  but not used yet, and the lobby, roof and basements are still laid out by
-  hand.
+- **Some rules are checked but not used yet.** `scope` and `access` are held to
+  their words but the planner doesn't read them, and the lobby, roof and
+  basements are still laid out by hand.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors
   at a time, and so is everything the server says. What the page draws from
   them was looked at in a browser, not tested.

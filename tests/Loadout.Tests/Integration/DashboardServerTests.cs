@@ -288,8 +288,9 @@ public sealed class DashboardServerTests : IAsyncLifetime
         page.Should().NotContain("kitScene");
 
         // Kept by which floor and which way it faces, so a poll re-attaches it
-        // rather than restarting every walk.
-        page.Should().Contain("tileRoom(\"floor|\" + floor.run + \"|\" + floor.part + \"|\" + facing + \"|\" + kit, here, kit, scene)");
+        // rather than restarting every walk: by the floor's number, every team
+        // on it in the one room.
+        page.Should().Contain("tileRoom(\"floor|\" + floor.number + \"|\" + facing + \"|\" + kit, here, kit, scene)");
 
         // Nobody walks when motion is turned down, and nothing is drawn for a
         // room nobody can see.

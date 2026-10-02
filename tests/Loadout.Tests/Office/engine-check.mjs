@@ -72,7 +72,7 @@ const code = [
   cut("  function tileBeside(room, seat) {", "  // Somewhere for somebody with nothing") ,
   cut("  function turnScene(scene, k) {", "  // The tower beyond the floor's glass"),
   cut("  var TILE_PACE", "\n"),
-  cut("  function tileSeat(room, name) {", "  function tileWalk(room, person, toX, toY) {"),
+  cut("  function tileDesks(room, name) {", "  function tileWalk(room, person, toX, toY) {"),
   cut("  function tileWalk(room, person, toX, toY) {", "  // Take in a fresh reading of the run"),
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
   cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
@@ -98,7 +98,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -829,6 +829,38 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   const before = { x: 2, y: 2, facing: "n" };
 
   if (engine.tileDepth({ tile, props: [] }, before, "idle") <= at(2, 1).ground) { fault("somebody in front of a wall is drawn under it", "in front"); }
+}
+
+// On a floor teams share, everybody sits at their own team's desks: two
+// teams' leads are two people, and neither takes the other's desk; and
+// turning the floor turns every team's desks with it.
+{
+  const desk = (x, y) => ({ x, y, facing: "s" });
+  const scene = {
+    tile: 32, width: 12, height: 6,
+    floor: Array.from({ length: 6 }, () => Array(12).fill(0)),
+    walls: Array.from({ length: 6 }, () => Array(12).fill(-1)),
+    props: [], areas: [], door: { x: 6, y: 5, facing: "n" },
+    desks: [desk(1, 1), desk(2, 1), desk(9, 1), desk(10, 1)],
+    teams: [{ run: "a", part: 0, desks: [desk(1, 1), desk(2, 1)] }, { run: "b", part: 0, desks: [desk(9, 1), desk(10, 1)] }],
+  };
+  const room = { scene, seats: {}, people: {} };
+
+  // b's lead asks first, then a's: each still gets their own team's first desk.
+  const bLead = engine.tileSeat(room, "b#0/lead");
+  const aLead = engine.tileSeat(room, "a#0/lead");
+  const aWorker = engine.tileSeat(room, "a#0/worker-1");
+
+  room.seats = { "b#0/lead": bLead, "a#0/lead": aLead, "a#0/worker-1": aWorker };
+
+  if (bLead.x !== 9 || aLead.x !== 1 || aWorker.x !== 2) { fault("somebody sits at another team's desk", `b lead ${bLead.x}, a lead ${aLead.x}, a worker ${aWorker.x}`); }
+  if (engine.tileDesks({ scene }, "lead").length !== 4) { fault("on a floor of one run, everybody may have any desk", "plain name"); }
+
+  const turned = engine.turnScene(scene, 1);
+
+  if (JSON.stringify(turned.teams.map((team) => team.desks)) !== JSON.stringify([[turned.desks[0], turned.desks[1]], [turned.desks[2], turned.desks[3]]])) {
+    fault("turning a shared floor leaves a team's desks where they were", "teams");
+  }
 }
 
 // ---- stopping a schedule from the lobby ----

@@ -4971,6 +4971,19 @@
     swaps seats because somebody else arrived. More people than desks stand
     on the free tiles nearest the door.
   */
+  // The desks somebody may have: their own team's, on a floor teams share.
+  function tileDesks(room, name) {
+    var teams = room.scene.teams;
+    var mark = name.indexOf("/");
+
+    if (!teams || mark < 0) { return room.scene.desks; }
+
+    var key = name.slice(0, mark);
+    var team = teams.filter(function (one) { return one.run + "#" + one.part === key; })[0];
+
+    return team ? team.desks : [];
+  }
+
   function tileSeat(room, name) {
     if (room.seats[name]) { return tileHome(room, name, room.seats[name]); }
 
@@ -4980,7 +4993,7 @@
 
     var seat = null;
 
-    room.scene.desks.some(function (desk) {
+    tileDesks(room, name).some(function (desk) {
       if (used[desk.x + "," + desk.y]) { return false; }
 
       seat = { x: desk.x, y: desk.y, facing: desk.facing || "s", desk: true, sit: !!desk.sit };
@@ -6066,6 +6079,11 @@
       if (item.person) { tilePlate(room, ctx, item.person); }
     });
 
+    // On a floor teams share, each team's name at the top of its area.
+    if (room.teamNames && scene.teams && scene.teams.length > 1) {
+      tileTeamLabels(room, ctx);
+    }
+
     room.drawn = now;
     room.dirty = false;
   }
@@ -6247,6 +6265,34 @@
     });
 
     return y;
+  }
+
+  // A team's name over the corridor end of its area, in a plate like a person's.
+  function tileTeamLabels(room, ctx) {
+    var t = room.scene.tile;
+    var dpr = window.devicePixelRatio || 1;
+    var font = 12 * dpr / room.scale;
+
+    ctx.font = "700 " + font + "px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    (room.scene.areas || []).forEach(function (area) {
+      if (!area.run || (area.kind !== "open-plan" && area.kind !== "team-room")) { return; }
+
+      var name = room.teamNames[area.run];
+
+      if (!name) { return; }
+
+      var x = (area.x + area.w / 2) * t;
+      var y = area.y * t + t * 0.5;
+      var w = ctx.measureText(name).width + font;
+
+      ctx.fillStyle = "rgba(20, 24, 32, 0.78)";
+      ctx.fillRect(x - w / 2, y - font * 0.8, w, font * 1.6);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(name, x, y);
+    });
   }
 
   function tilePose(person) {
@@ -6763,6 +6809,15 @@
         var room = tileRooms[key];
         var fresh = room.run ? byId[room.run.id] : null;
 
+        // A floor of the building: everybody on it, from every run there.
+        if (room.towerFloor && room.towerFloor.number !== undefined) {
+          var floor = towerFloorOf({ floor: room.towerFloor.number });
+
+          if (floor) { tileUpdate(room, Object.assign({}, room.run, { nodes: towerFloorRun(floor).nodes })); }
+
+          return;
+        }
+
         if (fresh) {
           // Everything else about the run stays as the last poll had it; the
           // people are what the stream is for - on a floor of the building,
@@ -6995,10 +7050,12 @@
     var at = towerAt(room, event);
     var function_ = at.area && at.area.function;
     var run = towerRuns[room.run && room.run.id] || room.run;
-    var floorRun = room.towerFloor ? towerRuns[room.towerFloor.run] : null;
+    var tenants = room.towerFloor && room.towerFloor.tenants ? room.towerFloor.tenants : [];
+    var personRun = person && person.node && person.node.origin ? towerRuns[person.node.origin.run] : null;
 
-    if (person && floorRun && !function_) {
-      watch(floorRun);
+    // Somebody: their own run.
+    if (person && personRun && !function_) {
+      watch(personRun);
 
       return;
     }
@@ -7009,9 +7066,51 @@
       return;
     }
 
-    var popup = towerRoomPopup(function_, at, floorRun || run);
+    // A team's own area is that team's; a room the floor shares is the one
+    // team's when there is only one, and every team's otherwise.
+    var owner = at.area && at.area.run ? towerRuns[at.area.run] : tenants.length === 1 ? towerRuns[tenants[0].run] : null;
+    var popup = owner || !tenants.length ? towerRoomPopup(function_, at, owner || run) : towerSharedPopup(function_, at, tenants);
 
     if (popup) { towerPopupOpen(popup, event); }
+  }
+
+  // A room every team on the floor shares: each team's part of it, under its
+  // name, and a way to open each run.
+  function towerSharedPopup(function_, at, tenants) {
+    var seen = {};
+    var popups = [];
+
+    tenants.forEach(function (tenant) {
+      var run = towerRuns[tenant.run];
+
+      if (!run || seen[run.id]) { return; }
+
+      seen[run.id] = true;
+
+      var one = towerRoomPopup(function_, at, run);
+
+      if (one) { popups.push({ run: run, popup: one }); }
+    });
+
+    if (!popups.length) { return null; }
+    if (popups.length === 1) { return popups[0].popup; }
+
+    var lines = [];
+
+    popups.forEach(function (one) {
+      lines.push((one.run.team || one.run.room || one.run.id) + ":");
+      lines = lines.concat((one.popup.lines || []).filter(Boolean).map(function (line) { return "  " + line; }));
+    });
+
+    return {
+      title: popups[0].popup.title,
+      lines: lines,
+      buttons: popups.map(function (one) {
+        var run = one.run;
+
+        return { label: "Open " + (run.team || run.room || run.id), go: function () { watch(run); } };
+      }),
+    };
   }
 
   function towerRoomPopup(function_, at, run) {
@@ -7553,7 +7652,7 @@
       if (!next) { return; }
 
       towerPopupClose();
-      towerView = { mode: "inside", run: next.run, part: next.part };
+      towerView = { mode: "inside", floor: next.number };
       keep("loadout.office.view", towerView);
       towerShow();
 
@@ -7653,8 +7752,29 @@
   // The top of the parapet round the roof: the highest thing drawn.
   function towerTop() { return towerLevelZ(towerFloors() + 1)[0] + towerStorey() * 0.45; }
 
+  /*
+    Everybody on a floor, as one: its teams, how many people in all, dark only
+    when every team on it has finished, and the state that most needs seeing.
+    The first team's run and part stand for the floor where one is wanted.
+  */
   function towerOccupant(number) {
-    return towerData ? (towerData.occupied || []).filter(function (one) { return one.number === number; })[0] || null : null;
+    var tenants = towerData ? (towerData.occupied || []).filter(function (one) { return one.number === number; }) : [];
+
+    if (!tenants.length) { return null; }
+
+    var order = ["waiting", "failed", "working", "quiet", "done"];
+    var lit = tenants.filter(function (one) { return !one.dark; });
+
+    return {
+      number: number,
+      run: tenants[0].run,
+      part: tenants[0].part,
+      tenants: tenants,
+      people: lit.reduce(function (sum, one) { return sum + one.people; }, 0),
+      dark: !lit.length,
+      state: (lit.length ? lit : tenants).map(function (one) { return one.state; })
+        .sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); })[0],
+    };
   }
 
   /*
@@ -7679,10 +7799,62 @@
     return floor ? floor.number : 0;
   }
 
+  // The floor a view is of: by its number, or, kept from before floors were
+  // shared, by the run and part that were on it.
   function towerFloorOf(view) {
-    return towerData ? (towerData.occupied || []).filter(function (one) {
-      return one.run === view.run && one.part === view.part;
-    })[0] || null : null;
+    if (!towerData) { return null; }
+
+    var number = view.floor;
+
+    if (number === undefined && view.run) {
+      var was = (towerData.occupied || []).filter(function (one) { return one.run === view.run && one.part === view.part; })[0];
+
+      number = was ? was.number : undefined;
+    }
+
+    return number === undefined ? null : towerOccupant(number);
+  }
+
+  /*
+    Everybody on a floor as one run for its room: each team's people named
+    run#part/node, so two teams' leads are two people, each knowing whose
+    they are, and sitting at their own team's desks.
+  */
+  function towerFloorRun(floor) {
+    var nodes = [];
+
+    floor.tenants.forEach(function (tenant) {
+      var run = towerRuns[tenant.run];
+
+      if (!run) { return; }
+
+      (run.nodes || []).forEach(function (node) {
+        if (tenant.nodes.indexOf(node.node) < 0 || towerOnBreak(tenant.run, node.node)) { return; }
+
+        nodes.push(Object.assign({}, node, {
+          node: tenant.run + "#" + tenant.part + "/" + node.node,
+          origin: { run: tenant.run, part: tenant.part, node: node.node },
+        }));
+      });
+    });
+
+    var first = towerRuns[floor.tenants[0].run] || { id: floor.tenants[0].run };
+
+    return Object.assign({}, first, { id: "floor-" + floor.number, room: "Floor " + floor.number, nodes: nodes });
+  }
+
+  // The teams on a floor by name, in the order they sit, west to east.
+  function towerTeamNames(floor) {
+    var names = [];
+
+    floor.tenants.slice().sort(function (a, b) { return (a.bay || 0) - (b.bay || 0); }).forEach(function (tenant) {
+      var run = towerRuns[tenant.run] || {};
+      var name = run.team || run.room || tenant.run;
+
+      if (names.indexOf(name) < 0) { names.push(name); }
+    });
+
+    return names;
   }
 
   // The swoop in: close on the floor's windows, then through the glass.
@@ -7693,7 +7865,7 @@
     towerView = hit.lobby ? { mode: "inside", place: "lobby" }
       : hit.roof ? { mode: "inside", place: "roof" }
       : hit.basement ? { mode: "inside", place: "basement-" + hit.basement }
-      : { mode: "inside", run: hit.run, part: hit.part };
+      : { mode: "inside", floor: hit.number };
     towerLook.facing = towerLook.turn;
     keep("loadout.office.view", towerView);
     keep("loadout.office.look", towerLook);
@@ -7832,15 +8004,19 @@
     // Remembered as inside, with the building not yet read: wait for it.
     if (!floor) { return; }
 
-    var run = towerRuns[floor.run] || { id: floor.run, nodes: [] };
+    var names = towerTeamNames(floor);
+    var only = floor.tenants.length === 1 ? towerRuns[floor.tenants[0].run] || {} : null;
 
-    where.textContent = (run.team || "") + (run.room ? " · " + run.room : "") + " · floor " + floor.number;
+    where.textContent = (only ? (only.team || "") + (only.room ? " · " + only.room : "") : names.join(" · ")) + " · floor " + floor.number;
 
-    var key = floor.run + "|" + floor.part + "|" + floor.people;
+    // Laid out again when anybody arrives, leaves or moves bays.
+    var key = "floor-" + floor.number + "|" + floor.tenants.map(function (one) {
+      return one.run + "#" + one.part + "#" + one.bay + "#" + one.bays + "#" + one.people;
+    }).join("|");
     var plan = towerScenes[key];
 
     if (!plan) {
-      api("/api/office/floor/" + encodeURIComponent(floor.run) + "/" + floor.part)
+      api("/api/office/floor/" + floor.number)
         .then(function (answer) {
           towerScenes[key] = { scene: answer, turned: {} };
           towerShow();
@@ -7859,17 +8035,19 @@
     towerHold.querySelector(".tower-right").hidden = !turns;
 
     var scene = plan.turned[facing] || (plan.turned[facing] = turnScene(plan.scene, facing));
-    var mine = { towerFloor: { run: floor.run, part: floor.part } };
-    var here = Object.assign({}, run, { nodes: towerNodes(mine, run.nodes) });
+    var mine = { towerFloor: { number: floor.number, tenants: floor.tenants } };
+    var here = towerFloorRun(floor);
     // The set in the key: a room made before the building said which set it
     // is drawn from asked for every picture under no set, found none, and was
     // kept, drawn in shapes, for as long as the page was open.
     var kit = (towerData && towerData.kit) || "";
-    var room = tileRoom("floor|" + floor.run + "|" + floor.part + "|" + facing + "|" + kit, here, kit, scene);
+    var room = tileRoom("floor|" + floor.number + "|" + facing + "|" + kit, here, kit, scene);
     var slot = towerHold.querySelector(".tower-slot");
     var holder = towerHold.querySelector(".tower-inside");
 
     room.towerFloor = mine.towerFloor;
+    room.teamNames = {};
+    floor.tenants.forEach(function (tenant) { room.teamNames[tenant.run] = (towerRuns[tenant.run] || {}).team || tenant.run; });
     room.onPlace = towerClick;
     towerRoom = room;
     room.fitWidth = Math.max(160, holder.clientWidth - 96);
@@ -8151,6 +8329,7 @@
         return Object.assign(rect(one), { facing: TURN_FACING[one.facing || "s"] || "s" });
       }),
       desks: (scene.desks || []).map(spot),
+      teams: scene.teams ? scene.teams.map(function (team) { return Object.assign({}, team, { desks: (team.desks || []).map(spot) }); }) : scene.teams,
       door: spot(scene.door),
       spots: spots,
       areas: (scene.areas || []).map(rect),
@@ -9696,10 +9875,11 @@
     } else if (towerHover.occupant) {
       var one = towerHover.occupant;
       var run = towerRuns[one.run] || {};
+      var shared = (one.tenants || []).length > 1;
 
       lines = [
-        (run.team || one.run) + (one.part ? " (upstairs)" : ""),
-        "Floor " + one.number + (run.room ? " · " + run.room : ""),
+        shared ? towerTeamNames(one).join(" · ") : (run.team || one.run) + (one.part ? " (upstairs)" : ""),
+        "Floor " + one.number + (shared ? " · shared" : run.room ? " · " + run.room : ""),
         one.dark ? "finished, lights out" : one.people + (one.people === 1 ? " person" : " people") + " · " + one.state,
       ];
     } else {
