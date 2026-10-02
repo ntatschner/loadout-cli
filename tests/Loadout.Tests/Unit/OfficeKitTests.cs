@@ -271,7 +271,7 @@ public sealed class OfficeKitTests : IDisposable
 
         OfficeKits.Problems(kit, pictures).Should().BeEmpty();
         FloorPlanner.Plan(kit, OfficeRules.Default, "run-a", 3).Scene.Props!
-            .Where(prop => prop.Kind == "desk").Should().OnlyContain(prop => prop.Sides != null && prop.Sides.Count == 4 && prop.Facing == "s");
+            .Where(prop => prop.Kind == "desk").Should().OnlyContain(prop => prop.Sides != null && prop.Sides.Count == 4 && (prop.Facing == "s" || prop.Facing == "n"));
 
         var odd = new Dictionary<string, IReadOnlyList<int>>(sides) { ["up"] = [0, 0, 8, 8], ["w"] = [240, 0, 32, 64] };
 

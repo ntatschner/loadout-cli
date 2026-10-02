@@ -61,6 +61,11 @@ public sealed record OfficeRoomRule(
     /// <summary>How many of these rooms a team of this size gets.</summary>
     public int CountFor(int team)
     {
+        if (PerHead is > 0 and var every)
+        {
+            return (Math.Max(1, team) + every - 1) / every;
+        }
+
         if (ByTeam is { Count: > 0 } table)
         {
             var found = 0;
@@ -292,6 +297,10 @@ public sealed record OfficeRules(
             ["reception"] = "wood",
             ["waiting-room"] = "walkway",
             ["entrance"] = "mat",
+
+            // Floor no team has taken yet: bare, so it reads as empty rather
+            // than as a room nobody is in.
+            ["vacant"] = "concrete",
         });
 
     /// <summary>These rules with a pack's changes laid over them.</summary>

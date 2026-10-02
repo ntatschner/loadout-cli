@@ -17,6 +17,18 @@ namespace Loadout.Tests.Unit;
 public sealed class FloorPlannerTests
 {
     private static readonly OfficeKit Kit = OfficeKit.Kit();
+
+    // The office Loadout ships, its pieces saying where they suit.
+    private static readonly OfficeKit Tech = Unpacked();
+
+    private static OfficeKit Unpacked()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "loadout-tech-" + Guid.NewGuid().ToString("N"));
+
+        OfficeArt.Unpack(root);
+
+        return OfficeKits.Check(root, OfficeArt.BuiltIn).Kit!;
+    }
     private static readonly OfficeRules Rules = OfficeRules.Default;
 
     private static OfficeFloorPlan Plan(string seed, int team) => FloorPlanner.Plan(Kit, Rules, seed, team);
@@ -137,21 +149,146 @@ public sealed class FloorPlannerTests
     }
 
     [Fact]
-    public void Every_floor_has_the_lead_office_in_a_corner_a_kitchen_a_core_and_a_status_board()
+    public void Every_floor_has_the_lead_office_in_a_window_corner_of_the_team_area_a_kitchen_a_core_and_a_status_board()
     {
         foreach (var seed in Enumerable.Range(0, 50).Select(one => $"run-{one}"))
         {
             var scene = Plan(seed, 6).Scene;
             var lead = scene.Areas!.Single(area => area.Kind == "lead-office");
+            var team = scene.Areas!.Single(area => area.Kind is "open-plan" or "team-room");
 
-            (lead.X == 1 || lead.X + lead.W == scene.Width - 1).Should().BeTrue($"{seed}: the lead's office is in a corner");
-            lead.Y.Should().Be(1);
+            // Against the south windows, at one end of the team's own area.
+            (lead.Y + lead.H).Should().Be(scene.Height - 1, $"{seed}: the lead's office is against the windows");
+            (lead.X == team.X || lead.X + lead.W == team.X + team.W).Should().BeTrue($"{seed}: the lead's office is in a corner of the team's area");
             scene.Areas.Should().Contain(area => area.Kind == "kitchen")
                 .And.Contain(area => area.Kind == "core")
                 .And.Contain(area => area.Kind == "status-board");
             scene.Props!.Should().Contain(prop => prop.Kind == "lift")
                 .And.Contain(prop => prop.Kind == "exec-desk")
                 .And.Contain(prop => prop.Kind == "coffee");
+        }
+    }
+
+    [Fact]
+    public void Every_floor_of_the_tech_office_passes_the_scene_check_first_time()
+    {
+        var failures = new List<string>();
+
+        foreach (var team in new[] { 1, 2, 3, 5, 8, 12, 20, 30 })
+        {
+            for (var seed = 0; seed < 40; seed++)
+            {
+                var plan = FloorPlanner.Plan(Tech, Rules, $"run-{seed}", team);
+                // Not measuring pictures, as the planner doesn't: the kit's check did.
+                var problems = OfficeScenes.Problems(plan.Scene, sizeOf: null);
+
+                if (problems.Count > 0 || plan.Attempt != 0)
+                {
+                    failures.Add($"team {team} seed {seed}: attempt {plan.Attempt}; first try: {string.Join(" / ", FloorPlanner.Faults(Tech, Rules, $"run-{seed}", team, 0))}; returned: {string.Join(" / ", problems)}");
+                }
+
+                // One desk each, the lead's first: a bench seats four, and nobody gets two.
+                if (plan.Scene.Desks.Count != Math.Min(team, plan.Capacity))
+                {
+                    failures.Add($"team {team} seed {seed}: {plan.Scene.Desks.Count} desks");
+                }
+            }
+        }
+
+        failures.Should().BeEmpty("the office Loadout ships should never need a retry or the fallback");
+    }
+
+    [Fact]
+    public void Every_room_in_the_band_has_a_door_onto_the_corridor()
+    {
+        foreach (var team in new[] { 2, 8, 20 })
+        {
+            foreach (var seed in Enumerable.Range(0, 30).Select(one => $"run-{one}"))
+            {
+                var scene = FloorPlanner.Plan(Tech, Rules, seed, team).Scene;
+                var corridor = scene.Areas!.Single(area => area.Kind == "corridor");
+                var walls = scene.Blocked();
+
+                foreach (var room in scene.Areas!.Where(area => area.Y == 1 && area.Kind is not ("core" or "corridor")))
+                {
+                    // An open cell in the row between the room and the corridor.
+                    Enumerable.Range(room.X, room.W).Should().Contain(x => !walls[x, corridor.Y - 1], $"{seed}, team {team}: {room.Name} has a way in");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void The_team_area_is_as_big_as_the_team_and_the_rest_of_the_floor_is_vacant()
+    {
+        foreach (var seed in Enumerable.Range(0, 20).Select(one => $"run-{one}"))
+        {
+            var small = FloorPlanner.Plan(Tech, Rules, seed, 2).Scene;
+            var big = FloorPlanner.Plan(Tech, Rules, seed, 16).Scene;
+
+            static OfficeArea Team(OfficeScene scene) => scene.Areas!.Single(area => area.Kind is "open-plan" or "team-room");
+
+            Team(small).W.Should().BeLessThan(Team(big).W, $"{seed}: two people need less floor than sixteen");
+            small.Areas!.Should().Contain(area => area.Kind == "vacant", $"{seed}: what two people don't need is left for another team");
+
+            // Nothing stands on vacant floor, and nobody is sent there.
+            foreach (var vacant in small.Areas!.Where(area => area.Kind == "vacant"))
+            {
+                bool Inside(int x, int y) => x >= vacant.X && x < vacant.X + vacant.W && y >= vacant.Y && y < vacant.Y + vacant.H;
+
+                small.Props!.Where(prop => Inside(prop.X, prop.Y)).Should().BeEmpty($"{seed}: {vacant.Name} is bare");
+                small.Spots!.Values.Where(spot => Inside(spot.X, spot.Y)).Should().BeEmpty($"{seed}: nobody goes to {vacant.Name}");
+            }
+        }
+    }
+
+    [Fact]
+    public void Pieces_go_with_what_they_belong_with()
+    {
+        foreach (var seed in Enumerable.Range(0, 30).Select(one => $"run-{one}"))
+        {
+            var scene = FloorPlanner.Plan(Tech, Rules, seed, 6).Scene;
+            var props = scene.Props!;
+
+            static bool Touch(OfficeProp a, OfficeProp b) =>
+                a.X <= b.X + b.W && b.X <= a.X + a.W && a.Y <= b.Y + b.H && b.Y <= a.Y + a.H;
+
+            // The coffee machine at the counter.
+            var counter = props.Single(prop => prop.Id == "kitchen-kitchen");
+
+            props.Where(prop => prop.Kind == "coffee" && !Touch(prop, counter)).Should().BeEmpty($"{seed}: the coffee machine is at the counter");
+
+            // The lead behind the desk, facing the office door, the visitor's
+            // chair across it: the desk turned to face north, the lead's seat
+            // below it, the chair above.
+            var desk = props.Single(prop => prop.Kind == "exec-desk");
+            var lead = scene.Desks[0];
+
+            desk.Facing.Should().Be("n", $"{seed}: the lead faces the door");
+            lead.Y.Should().Be(desk.Y + desk.H, $"{seed}: the lead sits behind the desk");
+            lead.Facing.Should().Be("n");
+
+            foreach (var chair in props.Where(prop => prop.Kind == "visitor-chair" && prop.Id.StartsWith("lead-office", StringComparison.Ordinal)))
+            {
+                (chair.Y + chair.H).Should().Be(desk.Y, $"{seed}: a visitor sits across the desk from the lead");
+            }
+        }
+    }
+
+    [Fact]
+    public void Nothing_stands_in_the_corridor_but_what_belongs_there()
+    {
+        string[] belongs = ["toilet", "cupboard", "lift", "stairs", "exit", "status-board"];
+
+        foreach (var seed in Enumerable.Range(0, 30).Select(one => $"run-{one}"))
+        {
+            var scene = FloorPlanner.Plan(Tech, Rules, seed, 8).Scene;
+            var corridor = scene.Areas!.Single(area => area.Kind == "corridor");
+            var suited = Tech.Pieces.Values.Where(piece => piece.Suits?.Fits("corridor", "floor") == true).SelectMany(piece => piece.Tags).ToHashSet();
+
+            scene.Props!
+                .Where(prop => prop.Y >= corridor.Y && prop.Y < corridor.Y + corridor.H && prop.X >= corridor.X && prop.X < corridor.X + corridor.W)
+                .Should().OnlyContain(prop => belongs.Contains(prop.Kind) || suited.Contains(prop.Kind!), $"{seed}: the corridor is for walking along");
         }
     }
 
@@ -181,7 +318,7 @@ public sealed class FloorPlannerTests
     {
         var kinds = Enumerable.Range(0, 40)
             .Select(one => Plan($"run-{one}", 3).Scene.Areas!)
-            .Select(areas => areas.Any(area => area.Kind == "corridor") ? "corridor" : "open")
+            .Select(areas => areas.Any(area => area.Kind == "team-room") ? "corridor" : "open")
             .ToHashSet();
 
         kinds.Should().BeEquivalentTo(["corridor", "open"]);
@@ -192,7 +329,7 @@ public sealed class FloorPlannerTests
     {
         var plan = Enumerable.Range(0, 40)
             .Select(one => Plan($"run-{one}", 4))
-            .First(one => one.Scene.Areas!.Any(area => area.Kind == "corridor"));
+            .First(one => one.Scene.Areas!.Any(area => area.Kind == "team-room"));
         var rooms = plan.Scene.Areas!.Where(area => area.Kind == "team-room").ToList();
 
         rooms.Should().NotBeEmpty();
@@ -204,19 +341,14 @@ public sealed class FloorPlannerTests
     }
 
     [Fact]
-    public void A_team_too_big_for_a_corridor_floor_gets_open_plan()
+    public void A_corridor_floor_only_ever_goes_to_a_team_it_seats()
     {
-        // Thirty is more than a corridor floor of the 40 x 24 plate seats.
-        Enumerable.Range(0, 40)
-            .Select(one => Plan($"run-{one}", 30).Scene.Areas!)
-            .Should().OnlyContain(areas => !areas.Any(area => area.Kind == "corridor"));
-
-        // And at every size, a corridor floor only ever goes to a team it seats.
+        // A team too big for one is given open plan, which seats more.
         foreach (var team in new[] { 3, 6, 10, 16, 24, 30, 40 })
         {
             foreach (var plan in Enumerable.Range(0, 40).Select(one => Plan($"run-{one}", team)))
             {
-                if (plan.Scene.Areas!.Any(area => area.Kind == "corridor"))
+                if (plan.Scene.Areas!.Any(area => area.Kind == "team-room"))
                 {
                     plan.Capacity.Should().BeGreaterThanOrEqualTo(team);
                 }

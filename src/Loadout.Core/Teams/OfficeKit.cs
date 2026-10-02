@@ -284,8 +284,12 @@ public sealed record OfficeKit(
     /// </remarks>
     public static OfficeKit Kit()
     {
-        static OfficePiece Shape(int w, int h, string[] tags, OfficeSeat[]? seats = null, string place = "floor", bool blocks = true, string depth = "sorted") =>
-            new(null, null, [w, h], tags, blocks, depth, place, seats);
+        static OfficePiece Shape(int w, int h, string[] tags, OfficeSeat[]? seats = null, string place = "floor", bool blocks = true, string depth = "sorted", OfficeSuits? suits = null) =>
+            new(null, null, [w, h], tags, blocks, depth, place, seats, Suits: suits);
+
+        // Where each shape suits, as the Tech set's pieces say, so a floor drawn
+        // in shapes is furnished the way one drawn in art is.
+        static OfficeSuits Suits(string role, string? against, params string[] rooms) => new(rooms, null, role, against);
 
         // Tile n is corner pattern n, so the page, drawing these in the kit's
         // colours with no picture, can tell from a tile's number which corners
@@ -295,25 +299,25 @@ public sealed record OfficeKit(
 
         var pieces = new Dictionary<string, OfficePiece>(StringComparer.Ordinal)
         {
-            ["desk"] = Shape(3, 1, ["desk"], [new(1, -1, "s")]),
-            ["exec-desk"] = Shape(3, 1, ["exec-desk"], [new(1, -1, "s")]),
-            ["visitor-chair"] = Shape(1, 1, ["visitor-chair"], [new(0, 0, "n")], blocks: false),
-            ["meeting-4"] = Shape(2, 2, ["meeting-4"], [new(0, -1, "s"), new(1, -1, "s"), new(0, 2, "n"), new(1, 2, "n")]),
-            ["meeting-6"] = Shape(3, 2, ["meeting-6"], [new(0, -1, "s"), new(1, -1, "s"), new(2, -1, "s"), new(0, 2, "n"), new(1, 2, "n"), new(2, 2, "n")]),
-            ["meeting-10"] = Shape(5, 2, ["meeting-10"], [.. Enumerable.Range(0, 5).SelectMany(x => new OfficeSeat[] { new(x, -1, "s"), new(x, 2, "n") })]),
+            ["desk"] = Shape(3, 1, ["desk"], [new(1, -1, "s")], suits: Suits("main", "free", "open-plan", "team-room")),
+            ["exec-desk"] = Shape(3, 1, ["exec-desk"], [new(1, -1, "s")], suits: Suits("main", "free", "lead-office")),
+            ["visitor-chair"] = Shape(1, 1, ["visitor-chair"], [new(0, 0, "n")], blocks: false, suits: Suits("extra", "free", "lead-office", "reception") with { With = ["exec-desk", "reception"] }),
+            ["meeting-4"] = Shape(2, 2, ["meeting-4"], [new(0, -1, "s"), new(1, -1, "s"), new(0, 2, "n"), new(1, 2, "n")], suits: Suits("main", "free", "meeting")),
+            ["meeting-6"] = Shape(3, 2, ["meeting-6"], [new(0, -1, "s"), new(1, -1, "s"), new(2, -1, "s"), new(0, 2, "n"), new(1, 2, "n"), new(2, 2, "n")], suits: Suits("main", "free", "meeting")),
+            ["meeting-10"] = Shape(5, 2, ["meeting-10"], [.. Enumerable.Range(0, 5).SelectMany(x => new OfficeSeat[] { new(x, -1, "s"), new(x, 2, "n") })], suits: Suits("main", "free", "meeting")),
             ["status-board"] = Shape(3, 1, ["status-board"], place: "wall-north", blocks: false),
-            ["kitchen"] = Shape(3, 1, ["kitchen"]),
-            ["coffee"] = Shape(1, 1, ["coffee"]),
-            ["sofa"] = Shape(2, 1, ["sofa"], [new(0, 0, "s"), new(1, 0, "s")], blocks: false),
+            ["kitchen"] = Shape(3, 1, ["kitchen"], suits: Suits("main", "wall", "kitchen")),
+            ["coffee"] = Shape(1, 1, ["coffee"], suits: Suits("extra", "wall", "kitchen") with { With = ["kitchen"] }),
+            ["sofa"] = Shape(2, 1, ["sofa"], [new(0, 0, "s"), new(1, 0, "s")], blocks: false, suits: Suits("main", "free", "lounge", "waiting-room", "break-area")),
             ["cupboard"] = Shape(1, 1, ["cupboard"]),
-            ["storage"] = Shape(2, 1, ["storage"]),
+            ["storage"] = Shape(2, 1, ["storage"], suits: Suits("main", "wall", "storage", "storage-cupboard")),
             ["lift"] = Shape(2, 1, ["lift"], place: "wall-north"),
             ["stairs"] = Shape(2, 2, ["stairs"], blocks: false, depth: "floor"),
             ["toilet"] = Shape(1, 1, ["toilet"]),
             ["exit"] = Shape(1, 1, ["exit"], place: "wall-any", blocks: false),
-            ["plant"] = Shape(1, 1, ["plant", "decor"]),
-            ["screen"] = Shape(1, 1, ["partition-screen"]),
-            ["planter-box"] = Shape(1, 1, ["partition-planter"]),
+            ["plant"] = Shape(1, 1, ["plant", "decor"], suits: Suits("decor", "wall", "*")),
+            ["screen"] = Shape(1, 1, ["partition-screen"], suits: Suits("divider", null, "open-plan", "team-room", "meeting", "lounge")),
+            ["planter-box"] = Shape(1, 1, ["partition-planter"], suits: Suits("divider", null, "open-plan", "team-room", "lounge")),
             ["reception"] = Shape(3, 1, ["reception"], [new(1, -1, "s")]),
             ["pergola"] = Shape(3, 2, ["pergola"], blocks: false),
             ["mail"] = Shape(3, 1, ["mail"]),

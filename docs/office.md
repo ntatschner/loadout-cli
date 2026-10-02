@@ -59,13 +59,28 @@ one floor and two. When a run finishes, its floor goes dark and stays that way
 for an hour, so you can still go and look, then it's freed.
 
 A floor is laid out for its run, from the run's own identifier: the same run
-gets the same floor every time, and two runs get different ones. Every floor
-has the lead's office in a corner, meeting rooms, a kitchen, the status board,
-and the lift, stairs and toilets in the core, in the same place on every level
-so the lift lines up through the tower. Some floors are open plan; others have
-a corridor with team rooms off it, divided by walls, glass, low screens or
-planters. Somebody moving between floors walks to the lift and is gone, and
-turns up from the lift on the other one.
+gets the same floor every time, and two runs get different ones. The core is in
+the middle of the north wall, the same place on every level so the lift lines
+up through the tower, with the toilets, a cupboard and the stairs. Either side
+of it, along the north wall, are the floor's rooms: a kitchen, meeting rooms, a
+lounge for a bigger team, a storage cupboard. Which goes where comes from the
+rules, each room's zone and what it should be near or away from, and each has
+a door onto the corridor that runs the width of the floor. Band left over
+becomes an open nook with a sofa.
+
+The team works along the south windows, in an area as big as the team needs:
+the lead's office in its window corner, the lead facing the door, and desks in
+pods facing each other across the monitors. Some floors leave it open, its
+carpet against the bare floor round it; others give it walls and a door, as a
+team room. The rest of the floor is vacant, bare concrete with nobody on it,
+for another team to take. Rooms are furnished from the pieces that say they
+suit them: the counter in the kitchen with the coffee machine beside it, a
+coffee table in front of the sofa, a visitor's chair across the lead's desk,
+the copier and the water cooler against the corridor wall.
+
+Somebody moving between floors walks to the lift and is gone, and turns up from
+the lift on the other one; the arrows beside **Back to the building** go to the
+next floor up or down with a team on it.
 
 People walk round anyone standing still, pass behind whoever is sitting at a
 desk, and wait their turn where there's only room for one. If the wait goes on
@@ -307,10 +322,10 @@ Stated plainly, so nobody finds out by surprise:
   turned, so shading drawn into a tile, a shadow along a wall's south face say,
   stays where it was drawn. A room drawn from one hand-made picture doesn't
   turn at all.
-- **The planner doesn't read where pieces suit yet.** `suits`, `scope`, `zone`,
-  `per-head`, `near`, `away` and `access` are checked, and the Tech set gives
-  them all, but floors are still laid out the old way, from tags. The planner
-  that places rooms and furniture by them is next.
+- **One team a floor, so far.** A floor is laid out for its run, and the vacant
+  floor round a small team stays empty. Sharing a floor between teams, which is
+  what the vacant floor is for, is next. `scope` and `access` are checked but
+  not used yet, and the lobby, roof and basements are still laid out by hand.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors
   at a time, and so is everything the server says. What the page draws from
   them was looked at in a browser, not tested.

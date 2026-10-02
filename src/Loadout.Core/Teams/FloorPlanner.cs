@@ -19,14 +19,11 @@ public sealed record OfficeFloorPlan(OfficeScene Scene, int Capacity, int Attemp
 /// yesterday is the floor they see today, and two runs look different.
 /// </para>
 /// <para>
-/// The shape of a floor: glass on three sides and a solid north wall; a band of
-/// rooms along the north - the lead's office in a corner, meeting rooms, the
-/// kitchen - either side of the core, which holds the lift, stairs, toilets and
-/// the broom cupboard in the same place on every floor, so the lift lines up
-/// through the tower; open-plan desks below, back to back in rows with aisles
-/// between; the status board on the band's south face; exits at both ends. A
-/// lounge and a third meeting room take corners of the open plan when the team
-/// is big enough to have them.
+/// The shape of a run's floor - rooms in the band either side of the core,
+/// placed by the rules; the team's area along the windows, as big as the team;
+/// vacant floor round it - is laid out in <c>FloorPlanner.Layout.cs</c>. This
+/// file has what every level shares: the shell, the core, the scene, and the
+/// lobby, the roof and the basements.
 /// </para>
 /// <para>
 /// What comes out is an ordinary scene, and it is put through the scene check
@@ -35,7 +32,7 @@ public sealed record OfficeFloorPlan(OfficeScene Scene, int Capacity, int Attemp
 /// falls back to plain open plan, which always passes.
 /// </para>
 /// </remarks>
-public static class FloorPlanner
+public static partial class FloorPlanner
 {
     private const int Tries = 20;
 
@@ -390,6 +387,11 @@ public static class FloorPlanner
         return built is null ? ["the band did not fit"] : OfficeScenes.Problems(built.Value.Scene, sizeOf: null);
     }
 
+    /// <summary>One seeded attempt's floor as built, before any check: for tests to look at.</summary>
+    internal static OfficeScene Attempt(OfficeKit kit, OfficeRules rules, string seed, int team, int attempt) =>
+        Build(new Parts(kit), rules, new Random(Seed(seed, attempt)), Math.Max(1, team), plain: false, Layout(rules, seed, attempt))?.Scene
+        ?? throw new InvalidOperationException("the floor did not fit");
+
     /// <summary>How many a floor seats, lead included, when the team is large.</summary>
     public static int Capacity(OfficeKit kit, OfficeRules rules) =>
         Build(new Parts(kit), rules, new Random(Seed("capacity", 0)), 1000, plain: false, "open")?.Capacity ?? 1;
@@ -450,6 +452,45 @@ public static class FloorPlanner
                 .ToList();
 
             return named.Count > 0 ? named[random.Next(named.Count)] : null;
+        }
+
+        /*
+            The pieces that suit a kind of room on a level in a role: the set's
+            own that say so, in the order the given tags name them and then the
+            rest; where the set has none, those its pieces or, unless only its
+            own are wanted, the built-in kit's have under those tags.
+        */
+        public List<(string Name, OfficePiece Piece)> Suiting(string kind, string level, string role, IReadOnlyList<string>? tags, bool own = false)
+        {
+            var order = tags ?? [];
+            var suited = _kit.Pieces
+                .Where(one => one.Value.Suits is { } suits && suits.Role == role && suits.Fits(kind, level))
+                .Select(one => (Name: one.Key, Piece: one.Value))
+                .OrderBy(one => order.Select((tag, i) => one.Piece.Tags.Contains(tag) ? i : int.MaxValue).DefaultIfEmpty(int.MaxValue).Min())
+                .ThenBy(one => one.Name, StringComparer.Ordinal)
+                .ToList();
+
+            if (suited.Count > 0 || order.Count == 0)
+            {
+                return suited;
+            }
+
+            // By tag only for a kit whose pieces say nothing of where they suit:
+            // one that does has said, and a meeting table is not a meeting
+            // room's extra however it is tagged.
+            foreach (var kit in (own ? new[] { _kit } : new[] { _kit, _builtIn }).Where(one => !one.Pieces.Values.Any(piece => piece.Suits is not null) || one == _builtIn && role == "main"))
+            {
+                var tagged = order.SelectMany(tag => kit.Tagged(tag).Select(name => (Name: name, Piece: kit.Pieces[name])))
+                    .DistinctBy(one => one.Name)
+                    .ToList();
+
+                if (tagged.Count > 0)
+                {
+                    return tagged;
+                }
+            }
+
+            return [];
         }
 
         public bool Has(string tag, Func<OfficePiece, bool> fits) =>
@@ -661,8 +702,18 @@ public static class FloorPlanner
             }
         }
 
-        public void Put(string id, string tag, OfficePiece piece, int x, int y, string? seatsAs = null)
+        public void Put(string id, string tag, OfficePiece piece, int x, int y, string? seatsAs = null, string facing = "s")
         {
+            // A second piece of a kind in one room is numbered: ids are unique.
+            var called = id;
+
+            for (var n = 2; Props.Any(prop => prop.Id == called); n++)
+            {
+                called = $"{id}-{n}";
+            }
+
+            id = called;
+
             Props.Add(new OfficeProp(
                 id,
                 piece.Picture,
@@ -674,7 +725,8 @@ public static class FloorPlanner
                 piece.Blocks,
                 piece.Depth,
                 tag,
-                piece.Sides));
+                piece.Sides,
+                facing));
 
             if (piece.Blocks)
             {
@@ -743,143 +795,6 @@ public static class FloorPlanner
         }
 
         return (floor, depth, band, coreLeft, coreWidth);
-    }
-
-    private static (OfficeScene Scene, int Capacity)? Build(Parts parts, OfficeRules rules, Random random, int team, bool plain, string layout)
-    {
-        var (floor, depth, band, coreLeft, coreWidth) = Shell(rules);
-        var width = floor.Width;
-        var height = floor.Height;
-        var rooms = rules.Rooms ?? new Dictionary<string, OfficeRoomRule>();
-
-        var meetings = rooms.TryGetValue("meeting", out var meetingRule) ? meetingRule.CountFor(team) : 1;
-        var lounges = rooms.TryGetValue("lounge", out var loungeRule) ? loungeRule.CountFor(team) : 0;
-        var leadOnLeft = random.Next(2) == 0;
-        var placedMeetings = 0;
-        var placedLounge = false;
-
-        if (!plain)
-        {
-            var leftWidth = coreLeft - 1;
-            var rightLeft = coreLeft + coreWidth;
-            var rightWidth = width - 1 - rightLeft;
-
-            // Each side: a corner room and one beside the core, a wall between.
-            var cornerWidth = Math.Clamp((leftWidth - 1) / 2 + 1, 3, 6);
-            var innerWidth = leftWidth - 1 - cornerWidth;
-
-            if (innerWidth < 2)
-            {
-                return null;
-            }
-
-            var leadWalls = Walls(rules, "lead-office", random);
-            var meetingWalls = Walls(rules, "meeting", random);
-
-            // Lead's side: the lead's office in the corner, a meeting room by the core.
-            var (leadX, leadMeetX) = leadOnLeft
-                ? (1, 1 + cornerWidth + 1)
-                : (rightLeft + innerWidth + 1, rightLeft);
-
-            // Other side: the kitchen in the corner, the second meeting room (or,
-            // for a team with one, a quiet room with a sofa) by the core.
-            var (kitchenX, otherX) = leadOnLeft
-                ? (rightLeft + innerWidth + 1, rightLeft)
-                : (1, 1 + cornerWidth + 1);
-
-            Room(floor, "lead-office", "lead-office", leadX, 1, cornerWidth, depth, band, leadWalls, rooms, parts, random);
-            LeadOffice(floor, parts, random, leadX, cornerWidth, depth);
-
-            Room(floor, "meeting-1", "meeting", leadMeetX, 1, innerWidth, depth, band, meetingWalls, rooms, parts, random);
-            placedMeetings += Meeting(floor, parts, random, rules, "meeting-1", leadMeetX, 1, innerWidth, depth) ? 1 : 0;
-
-            Room(floor, "kitchen", "kitchen", kitchenX, 1, cornerWidth, depth, band, "solid", rooms, parts, random);
-            Kitchen(floor, parts, random, rules, kitchenX, cornerWidth, depth);
-
-            if (meetings >= 2)
-            {
-                Room(floor, "meeting-2", "meeting", otherX, 1, innerWidth, depth, band, meetingWalls, rooms, parts, random);
-                placedMeetings += Meeting(floor, parts, random, rules, "meeting-2", otherX, 1, innerWidth, depth) ? 1 : 0;
-            }
-            else
-            {
-                Room(floor, "quiet-room", "lounge", otherX, 1, innerWidth, depth, band, Walls(rules, "lounge", random), rooms, parts, random);
-                Lounge(floor, parts, random, rules, "quiet-room", otherX, 1, innerWidth, depth);
-                placedLounge = true;
-            }
-
-            // The wall between each pair of band rooms: the lead's office's kind
-            // on the lead's side, solid on the kitchen's. Down to the rooms'
-            // south wall and joining it: stopping short of it left each
-            // room's south wall a piece on its own, drawn as a stub.
-            foreach (var between in new[] { 1 + cornerWidth, rightLeft + innerWidth })
-            {
-                var onLeadSide = (between == 1 + cornerWidth) == leadOnLeft;
-
-                for (var y = 1; y <= band; y++)
-                {
-                    Edge(floor, parts, random, onLeadSide ? leadWalls : "solid", between, y);
-                }
-            }
-        }
-        else
-        {
-            // Plain: the band is open floor, with the lead's desk in a corner.
-            var desk = parts.Pick("exec-desk", random);
-
-            floor.Put("lead-desk", "exec-desk", desk.Piece, 2, 2, "lead");
-            floor.Areas.Add(new OfficeArea("lead-office", "lead-office", 1, 1, 5, depth, Function(rules, "lead-office")));
-        }
-
-        Core(floor, parts, random, coreLeft, coreWidth, band);
-
-        var aisleTop = band + 2;
-
-        // A lounge and a third meeting room take corners of the open plan when
-        // the team is big enough for them.
-        var corridor = !plain && layout == "corridor" && height - 2 - aisleTop >= 6;
-
-        if (!plain && !corridor && meetings >= 3 && height - 2 - aisleTop >= 5)
-        {
-            var roomTop = height - 2 - 3;
-            var x = leadOnLeft ? 1 : width - 1 - 4;
-
-            Room(floor, "meeting-3", "meeting", x, roomTop, 4, 4, roomTop + 4, Walls(rules, "meeting", random), rooms, parts, random, above: true);
-            placedMeetings += Meeting(floor, parts, random, rules, "meeting-3", x, roomTop, 4, 4) ? 1 : 0;
-        }
-
-        if (!plain && !corridor && !placedLounge && lounges > 0 && height - 2 - aisleTop >= 4)
-        {
-            var x = leadOnLeft ? width - 1 - 4 : 1;
-            var y = height - 2 - 1;
-
-            if (floor.Free(x, y, 4, 2))
-            {
-                floor.Areas.Add(new OfficeArea("lounge", "lounge", x, y, 4, 2, Function(rules, "lounge")));
-                floor.Reserve(x, y, 4, 2);
-                Lounge(floor, parts, random, rules, "lounge", x, y, 4, 2);
-            }
-        }
-
-        StatusBoard(floor, parts, random, rules, band, coreLeft, coreWidth);
-        Exits(floor, parts, random, aisleTop, corridor ? aisleTop : Math.Min(aisleTop + 1, height - 2));
-
-        var capacity = 1 + (corridor
-            ? CorridorRooms(floor, parts, random, rules, band, aisleTop, team - 1, meetings >= 3, !placedLounge && lounges > 0)
-            : OpenPlan(floor, parts, random, rules, aisleTop, team - 1));
-
-        Decorate(floor, parts, random, aisleTop);
-
-        var desks = new List<OfficeSpot>();
-
-        if (floor.LeadSeat is { } lead)
-        {
-            desks.Add(lead);
-        }
-
-        desks.AddRange(floor.Seats);
-
-        return (Scene(parts, rules, "@floor", floor, desks, coreLeft, band), capacity);
     }
 
     /// <summary>Which partition a room gets, chosen from those its rule allows.</summary>
@@ -1000,155 +915,6 @@ public static class FloorPlanner
         }
     }
 
-    private static void LeadOffice(Floor floor, Parts parts, Random random, int x, int w, int h)
-    {
-        var desk = parts.Pick("exec-desk", random, one => one.Footprint[0] <= w && one.Footprint[1] <= h - 2);
-        var deskX = x + Math.Max(0, (w - desk.Piece.Footprint[0]) / 2);
-
-        // The desk faces the door, with the lead behind it: in the room's
-        // second row, so the chair has the first.
-        floor.Put("lead-desk", "exec-desk", desk.Piece, deskX, 2, "lead");
-
-        if (parts.Has("plant", one => one.Footprint[0] == 1 && one.Footprint[1] == 1))
-        {
-            var plant = parts.Pick("plant", random, one => one.Footprint[0] == 1 && one.Footprint[1] == 1);
-
-            // The front corner on the building's outside: not the back, where it
-            // would close the way round the desk to the chair, and not the
-            // door's column.
-            var corner = x == 1 ? x : x + w - 1;
-
-            if (corner != x + w / 2 && floor.Clear(corner, h))
-            {
-                floor.Put("lead-plant", "plant", plant.Piece, corner, h);
-            }
-        }
-    }
-
-    private static bool Meeting(Floor floor, Parts parts, Random random, OfficeRules rules, string name, int x, int y, int w, int h)
-    {
-        // The largest table that fits with a seat row either side and an aisle
-        // down one end: a table as wide as its room walls its far row off.
-        foreach (var size in new[] { "meeting-10", "meeting-6", "meeting-4" })
-        {
-            bool Fits(OfficePiece one) => one.Footprint[0] <= w - 1 && one.Footprint[1] + 2 <= h;
-
-            if (!parts.Has(size, Fits))
-            {
-                continue;
-            }
-
-            var table = parts.Pick(size, random, Fits);
-            var tableX = x + (w - table.Piece.Footprint[0]) / 2;
-            var tableY = y + (h - table.Piece.Footprint[1]) / 2;
-
-            floor.Put($"{name}-table", size, table.Piece, tableX, tableY, name);
-            Extras(floor, parts, random, rules, "meeting", name, x, y, w, h);
-
-            return true;
-        }
-
-        return false;
-    }
-
-    private static void Kitchen(Floor floor, Parts parts, Random random, OfficeRules rules, int x, int w, int h)
-    {
-        var counter = parts.Pick("kitchen", random, one => one.Footprint[0] <= w - 1 && one.Footprint[1] == 1);
-
-        floor.Put("kitchen-counter", "kitchen", counter.Piece, x, 1);
-
-        var coffee = parts.Pick("coffee", random, one => one.Footprint[0] == 1 && one.Footprint[1] == 1);
-        var coffeeX = x + counter.Piece.Footprint[0];
-
-        if (coffeeX < x + w)
-        {
-            floor.Put("kitchen-coffee", "coffee", coffee.Piece, coffeeX, 1);
-        }
-
-        // Somewhere to stand with a cup: the room's back row, clear of the door.
-        for (var xx = x; xx < x + w; xx++)
-        {
-            floor.Spots[$"kitchen-{xx - x + 1}"] = new OfficeSpot(xx, h - 1, "n");
-        }
-
-        // The whole room: the front row too, where a table can stand clear of
-        // the counter. What keeps the way in clear is the check every extra
-        // passes, that the room can still be walked into.
-        Extras(floor, parts, random, rules, "kitchen", "kitchen", x, 1, w, h);
-    }
-
-    private static void Lounge(Floor floor, Parts parts, Random random, OfficeRules rules, string name, int x, int y, int w, int h)
-    {
-        var sofa = parts.Pick("sofa", random, one => one.Footprint[0] <= w && one.Footprint[1] <= h);
-
-        floor.Put($"{name}-sofa", "sofa", sofa.Piece, x + (w - sofa.Piece.Footprint[0]) / 2, y, name);
-        Extras(floor, parts, random, rules, "lounge", name, x, y, w, h);
-    }
-
-    /*
-        What a room takes as well as its own piece, from the rule's extras: a
-        fridge and a cafe table in the kitchen, an armchair in the lounge. Only
-        from the set's kit - the built-in one has none, so a building drawn in
-        its shapes is planned as before - and only where one fits: inside the
-        room, off every seat and place to stand, against the back wall first,
-        and, for one in the way, without cutting anywhere off from anywhere
-        else. One that fits nowhere is left out.
-
-        Placed once the floor is otherwise finished: a wall built after a room
-        is furnished - the lead's office beside a meeting room, say - can close
-        the way round an extra that was open when it went in.
-    */
-    private static void Extras(Floor floor, Parts parts, Random random, OfficeRules rules, string kind, string name, int x, int y, int w, int h)
-    {
-        if (rules.Rooms is not { } rooms || !rooms.TryGetValue(kind, out var rule) || rule.Extras is not { Count: > 0 } extras)
-        {
-            return;
-        }
-
-        floor.Last.Add(() => Extras(floor, parts, random, extras, name, x, y, w, h));
-    }
-
-    private static void Extras(Floor floor, Parts parts, Random random, IReadOnlyList<string> extras, string name, int x, int y, int w, int h)
-    {
-        var index = 0;
-
-        foreach (var tag in extras)
-        {
-            if (parts.Own(tag, random, one => one.Footprint[0] <= w && one.Footprint[1] <= h) is not { } extra)
-            {
-                continue;
-            }
-
-            var (ew, eh) = (extra.Piece.Footprint[0], extra.Piece.Footprint[1]);
-            var places = new List<(int X, int Y, int Rank, int Shuffle)>();
-
-            // A picture taller than its place reaches up into the rows behind
-            // it, so those have to be clear of other pieces too, or a cafe
-            // table stands in the kitchen counter it is in front of.
-            var rise = extra.Piece.Source is [_, _, _, var tall] && parts.Tile > 0
-                ? Math.Max(0, (tall - eh * parts.Tile + parts.Tile - 1) / parts.Tile)
-                : 0;
-
-            for (var py = y; py + eh <= y + h; py++)
-            {
-                for (var px = x; px + ew <= x + w; px++)
-                {
-                    places.Add((px, py, (py == y ? 0 : 2) + (px == x || px + ew == x + w ? 0 : 1), random.Next()));
-                }
-            }
-
-            foreach (var (px, py, _, _) in places.OrderBy(one => one.Rank).ThenBy(one => one.Shuffle))
-            {
-                if (floor.CanAdd(px, py, ew, eh, extra.Piece.Blocks) && !floor.Behind(px, py, ew, rise))
-                {
-                    floor.Put($"{name}-{tag}-{++index}", tag, extra.Piece, px, py);
-
-                    break;
-                }
-            }
-        }
-    }
-
     private static void Core(Floor floor, Parts parts, Random random, int left, int width, int band, bool doors = true)
     {
         // Along the core's south face, from the left: the toilets' door, the
@@ -1188,7 +954,7 @@ public static class FloorPlanner
         floor.Areas.Add(new OfficeArea("core", "core", left, 1, width, band, null));
     }
 
-    private static void StatusBoard(Floor floor, Parts parts, Random random, OfficeRules rules, int band, int coreLeft, int coreWidth)
+    private static (int X, int W)? StatusBoard(Floor floor, Parts parts, Random random, OfficeRules rules, int band, int coreLeft, int coreWidth)
     {
         // On the band's south face, over the open plan, where everyone can see it.
         var board = parts.Pick("status-board", random);
@@ -1202,9 +968,11 @@ public static class FloorPlanner
                 floor.Areas.Add(new OfficeArea("status-board", "status-board", x, band + 1, w, 1, Function(rules, "status-board")));
                 floor.Spots["status-board"] = new OfficeSpot(x + w / 2, band + 2, "n");
 
-                return;
+                return (x, w);
             }
         }
+
+        return null;
     }
 
     private static void Exits(Floor floor, Parts parts, Random random, int row, int standing)
@@ -1218,189 +986,6 @@ public static class FloorPlanner
         // is the rooms' edge.
         floor.Spots["window-west"] = new OfficeSpot(1, standing, "w");
         floor.Spots["window-east"] = new OfficeSpot(floor.Width - 2, standing, "e");
-    }
-
-    /// <summary>
-    /// A corridor floor's south half: rooms off the corridor, each with its
-    /// own desks, a meeting room and a lounge among them when the team has
-    /// them; returns how many it could seat.
-    /// </summary>
-    private static int CorridorRooms(
-        Floor floor,
-        Parts parts,
-        Random random,
-        OfficeRules rules,
-        int band,
-        int corridorRow,
-        int wanted,
-        bool meeting,
-        bool lounge)
-    {
-        var rooms = rules.Rooms ?? new Dictionary<string, OfficeRoomRule>();
-        var roomTop = corridorRow + 2;
-        var h = floor.Height - 1 - roomTop;
-        var kinds = new List<string> { "team-room", "team-room" };
-
-        if (meeting)
-        {
-            kinds.Add("meeting");
-        }
-
-        if (lounge)
-        {
-            kinds.Add("lounge");
-        }
-
-        var min = rooms.TryGetValue("team-room", out var rule) && rule.Min is [var mw, _] ? mw : 6;
-        var fits = Math.Max(1, (floor.Width - 1) / (min + 1));
-
-        kinds = [.. kinds.Take(fits)];
-
-        var inside = floor.Width - 2 - (kinds.Count - 1);
-        var x = 1;
-        var slots = 0;
-        var placed = 0;
-        var teamRooms = 0;
-
-        floor.Areas.Add(new OfficeArea("corridor", "corridor", 1, band + 1, floor.Width - 2, corridorRow - band, null));
-
-        for (var i = 0; i < kinds.Count; i++)
-        {
-            var w = inside / kinds.Count + (i < inside % kinds.Count ? 1 : 0);
-            var kind = kinds[i];
-            var name = kind == "team-room" ? $"team-room-{++teamRooms}" : kind == "meeting" ? "meeting-3" : "lounge";
-            var walls = Walls(rules, kind, random);
-
-            // The door at the room's left column, which stays clear as its aisle.
-            Room(floor, name, kind, x, roomTop, w, h, roomTop - 1, walls, rooms, parts, random, northDoor: x);
-
-            if (i < kinds.Count - 1)
-            {
-                for (var yy = roomTop - 1; yy < roomTop + h; yy++)
-                {
-                    Edge(floor, parts, random, walls, x + w, yy);
-                }
-            }
-
-            switch (kind)
-            {
-                case "team-room":
-                    var (seats, sat) = TeamRoomDesks(floor, parts, random, x, roomTop, w, h, wanted - placed);
-
-                    slots += seats;
-                    placed += sat;
-                    break;
-                case "meeting":
-                    Meeting(floor, parts, random, rules, name, x + 1, roomTop, w - 1, Math.Min(h, 4));
-                    break;
-                default:
-                    Lounge(floor, parts, random, rules, name, x + 1, roomTop + 1, w - 1, 2);
-                    break;
-            }
-
-            x += w + 1;
-        }
-
-        return slots;
-    }
-
-    /// <summary>Desks in a team room, back to back, the room's left column kept as its aisle.</summary>
-    private static (int Slots, int Placed) TeamRoomDesks(Floor floor, Parts parts, Random random, int x, int y, int w, int h, int wanted)
-    {
-        var desk = parts.Pick("desk", random, one => one.Footprint[1] == 1 && one.Seats is { Count: > 0 });
-        var dw = desk.Piece.Footprint[0];
-        var seat = desk.Piece.Seats![0];
-        var slots = new List<(int X, int Y)>();
-
-        // First row after the door row is the first seat row; the room's last
-        // row stays free to walk along.
-        for (var seatRow = y + 1; seatRow + 1 <= y + h - 2; seatRow += 2)
-        {
-            for (var dx = x + 1; dx + dw <= x + w; dx += dw + 1)
-            {
-                var deskY = seatRow - seat.Y;
-
-                if (floor.Clear(dx, deskY) && floor.Clear(dx + seat.X, seatRow))
-                {
-                    slots.Add((dx, deskY));
-                }
-            }
-        }
-
-        var placed = 0;
-
-        foreach (var (dx, dy) in slots.Take(Math.Max(0, wanted)))
-        {
-            floor.Put($"desk-{floor.Seats.Count + 1}", "desk", desk.Piece, dx, dy, "desk");
-            floor.Take(dx + seat.X, dy + seat.Y, 1, 1);
-            placed++;
-        }
-
-        return (slots.Count, placed);
-    }
-
-    /// <summary>Rows of desks, back to back, aisles between blocks; returns how many it could seat.</summary>
-    private static int OpenPlan(Floor floor, Parts parts, Random random, OfficeRules rules, int top, int wanted)
-    {
-        var desk = parts.Pick("desk", random, one => one.Footprint[1] == 1 && one.Seats is { Count: > 0 });
-        var w = desk.Piece.Footprint[0];
-        var seatDy = desk.Piece.Seats![0].Y;
-
-        // A seat row then a desk row, repeated, leaving the last interior row
-        // free as an aisle; blocks of desks with a one-tile aisle between.
-        var slots = new List<(int X, int Y)>();
-
-        for (var seatRow = top + 1; seatRow + 1 <= floor.Height - 3; seatRow += 2)
-        {
-            for (var x = 2; x + w <= floor.Width - 2; x += w + 1)
-            {
-                var y = seatRow - seatDy;
-
-                if (floor.Free(x, y, w, 1) && floor.Free(x + desk.Piece.Seats[0].X, seatRow, 1, 1))
-                {
-                    slots.Add((x, y));
-                }
-            }
-        }
-
-        var placed = 0;
-
-        foreach (var (x, y) in slots)
-        {
-            if (placed >= wanted)
-            {
-                break;
-            }
-
-            floor.Put($"desk-{placed + 1}", "desk", desk.Piece, x, y, "desk");
-            floor.Take(x + desk.Piece.Seats[0].X, y + seatDy, 1, 1);
-            placed++;
-        }
-
-        floor.Areas.Add(new OfficeArea("open-plan", "open-plan", 1, top, floor.Width - 2, floor.Height - 1 - top, Function(rules, "open-plan")));
-
-        return slots.Count;
-    }
-
-    private static void Decorate(Floor floor, Parts parts, Random random, int top)
-    {
-        if (!parts.Has("plant", one => one.Footprint[0] == 1 && one.Footprint[1] == 1))
-        {
-            return;
-        }
-
-        var plant = parts.Pick("plant", random, one => one.Footprint[0] == 1 && one.Footprint[1] == 1);
-        var corners = new[] { (1, floor.Height - 2), (floor.Width - 2, floor.Height - 2) };
-        var index = 0;
-
-        foreach (var (x, y) in corners)
-        {
-            // Never on a spot somebody is sent to stand at.
-            if (floor.Free(x, y, 1, 1) && !floor.Spots.Values.Any(spot => spot.X == x && spot.Y == y))
-            {
-                floor.Put($"plant-{++index}", "plant", plant.Piece, x, y);
-            }
-        }
     }
 
     private static OfficeScene Scene(Parts parts, OfficeRules rules, string level, Floor floor, List<OfficeSpot> desks, int coreLeft, int band)
