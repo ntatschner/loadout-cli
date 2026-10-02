@@ -132,8 +132,14 @@ The building is made from a **kit**, the parts, and **rules**, the decisions. A
 set in the office folder can bring its own `kit.json`: tilesets for the floors
 and walls, and pieces (desks, sofas, the lift, pigeonholes) each with a
 footprint, where it can go and where people sit at it. A `rules.json` beside it
-changes the decisions: the size of a floor, which rooms there are and how many,
-which partitions each may have, and which layouts to use.
+changes the decisions: the size of a floor, how high a storey is, which rooms
+there are and how many, which partitions each may have, and which layouts to
+use.
+
+Everything is on one scale, the one the people are drawn to: a tile is three
+quarters of a metre. A floor is 40 by 24 tiles, 30 by 18 metres, and a storey is
+5 tiles, 3.75 metres floor to floor, so a facade bay or a material tile is 32
+pixels wide and 160 high.
 
 A room is furnished one piece for each of its tags, picked at random from the
 pieces that have it, so give a fridge its own tag rather than `kitchen`, or it
@@ -177,7 +183,7 @@ drawn in plain colour with windows.
 
 ```json
 "materials": {
-  "facade-brick": { "picture": "brick.png", "size": [64, 96], "night": "brick-night.png" }
+  "facade-brick": { "picture": "brick.png", "size": [64, 160], "night": "brick-night.png" }
 }
 ```
 

@@ -1695,8 +1695,11 @@ public sealed class DashboardServer : IDisposable
 
             // Every floor's size in tiles, and a tile's in pixels, so the page
             // draws the tower as wide as the floors inside it.
-            plate = rules.Floor ?? [24, 16],
+            plate = rules.Floor ?? [40, 24],
             tile = kit.Tile,
+
+            // How high a storey is, in tiles, on the same scale as the plate.
+            storey = rules.Storey ?? OfficeRules.StoreyTiles,
 
             // The smallest and largest the page may draw it, in CSS pixels per
             // pixel of art; it picks whole device-pixel steps in between.

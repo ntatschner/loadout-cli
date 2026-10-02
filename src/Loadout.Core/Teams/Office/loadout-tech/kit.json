@@ -2969,7 +2969,7 @@
     0,
     0,
     32,
-    81
+    160
    ],
    "footprint": [
     1,
@@ -2987,7 +2987,7 @@
     0,
     0,
     32,
-    192
+    320
    ],
    "footprint": [
     1,
@@ -3005,7 +3005,7 @@
     0,
     0,
     64,
-    192
+    320
    ],
    "footprint": [
     1,
@@ -3023,7 +3023,7 @@
    "picture": "brick.png",
    "size": [
     64,
-    96
+    160
    ],
    "night": "brick-night.png"
   },
@@ -3031,7 +3031,7 @@
    "picture": "glass.png",
    "size": [
     64,
-    96
+    160
    ],
    "night": "glass-night.png"
   },
@@ -3039,7 +3039,7 @@
    "picture": "concrete.png",
    "size": [
     64,
-    96
+    160
    ],
    "night": "concrete-night.png"
   },
@@ -11892,7 +11892,7 @@
     1,
     11,
     30,
-    68
+    147
    ]
   ],
   "lobby": [

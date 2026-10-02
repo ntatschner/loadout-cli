@@ -81,6 +81,7 @@ public sealed record OfficeMoves(
 /// <param name="Use">Which room a person goes to in each state: working, lead-waiting, briefing, review, merge-gate, failed, free, done.</param>
 /// <param name="Moves">How long the building waits before moving a team.</param>
 /// <param name="Layouts">The kinds of floor a run may be given, one chosen by its seed: open, corridor.</param>
+/// <param name="Storey">How high a storey is in tiles, or null for <see cref="StoreyTiles"/>.</param>
 /// <remarks>
 /// <para>
 /// Built in, from the decisions of 30 Sep 2026 recorded in the specification,
@@ -100,8 +101,16 @@ public sealed record OfficeRules(
     [property: JsonPropertyName("rooms")] IReadOnlyDictionary<string, OfficeRoomRule>? Rooms = null,
     [property: JsonPropertyName("use")] IReadOnlyDictionary<string, string>? Use = null,
     [property: JsonPropertyName("moves")] OfficeMoves? Moves = null,
-    [property: JsonPropertyName("layouts")] IReadOnlyList<string>? Layouts = null)
+    [property: JsonPropertyName("layouts")] IReadOnlyList<string>? Layouts = null,
+    [property: JsonPropertyName("storey")] int? Storey = null)
 {
+    /// <summary>
+    /// How high a storey is, in tiles, where the rules don't say: five, so 3.75
+    /// metres floor to floor at three quarters of a metre a tile, which is the
+    /// scale the people are drawn to. Three was lower than a person can stand.
+    /// </summary>
+    public const int StoreyTiles = 5;
+
     /// <summary>What <see cref="Schema"/> has to say.</summary>
     public const string Version = "loadout.rules/1";
 
@@ -133,7 +142,7 @@ public sealed record OfficeRules(
     /// <summary>The rules as decided, before any pack changes them.</summary>
     public static OfficeRules Default { get; } = new(
         Version,
-        [24, 16],
+        [40, 24],
         10,
         new Dictionary<string, OfficeRoomRule>(StringComparer.Ordinal)
         {
@@ -215,6 +224,7 @@ public sealed record OfficeRules(
             Use = use,
             Moves = changes.Moves ?? Moves,
             Layouts = changes.Layouts ?? Layouts,
+            Storey = changes.Storey ?? Storey,
         };
     }
 
@@ -279,6 +289,11 @@ public static class OfficeRuleBook
         if (rules.Floor is not [var width, var depth] || width is < 12 or > 64 || depth is < 8 or > 64)
         {
             problems.Add("floor has to be a width of 12 to 64 tiles and a depth of 8 to 64.");
+        }
+
+        if (rules.Storey is < 3 or > 10)
+        {
+            problems.Add($"storey is {rules.Storey} tiles; it has to be 3 to 10.");
         }
 
         if (rules.MinFloors is < 1 or > 200)

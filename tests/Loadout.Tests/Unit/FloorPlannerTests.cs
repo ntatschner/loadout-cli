@@ -163,7 +163,8 @@ public sealed class FloorPlannerTests
             foreach (var seed in Enumerable.Range(0, 40).Select(one => $"run-{one}"))
             {
                 var scene = Plan(seed, team).Scene;
-                var rooms = scene.Areas!.Where(area => area.Kind is not ("open-plan" or "core" or "status-board")).ToList();
+                // A team room off a corridor is where its desks belong.
+                var rooms = scene.Areas!.Where(area => area.Kind is not ("open-plan" or "core" or "status-board" or "team-room")).ToList();
 
                 foreach (var desk in scene.Props!.Where(prop => prop.Kind == "desk"))
                 {
@@ -205,9 +206,22 @@ public sealed class FloorPlannerTests
     [Fact]
     public void A_team_too_big_for_a_corridor_floor_gets_open_plan()
     {
+        // Thirty is more than a corridor floor of the 40 x 24 plate seats.
         Enumerable.Range(0, 40)
-            .Select(one => Plan($"run-{one}", 12).Scene.Areas!)
+            .Select(one => Plan($"run-{one}", 30).Scene.Areas!)
             .Should().OnlyContain(areas => !areas.Any(area => area.Kind == "corridor"));
+
+        // And at every size, a corridor floor only ever goes to a team it seats.
+        foreach (var team in new[] { 3, 6, 10, 16, 24, 30, 40 })
+        {
+            foreach (var plan in Enumerable.Range(0, 40).Select(one => Plan($"run-{one}", team)))
+            {
+                if (plan.Scene.Areas!.Any(area => area.Kind == "corridor"))
+                {
+                    plan.Capacity.Should().BeGreaterThanOrEqualTo(team);
+                }
+            }
+        }
     }
 
     [Fact]

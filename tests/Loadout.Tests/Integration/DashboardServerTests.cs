@@ -370,8 +370,12 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         root.GetProperty("floors").GetInt32().Should().Be(10);
         root.GetProperty("tile").GetInt32().Should().Be(32, "the built-in kit's tile, which the page draws the tower in");
-        root.GetProperty("plate")[0].GetInt32().Should().Be(24);
-        root.GetProperty("plate")[1].GetInt32().Should().Be(16);
+        root.GetProperty("plate")[0].GetInt32().Should().Be(40);
+        root.GetProperty("plate")[1].GetInt32().Should().Be(24);
+
+        // A storey five tiles high: a tile is three quarters of a metre, so
+        // 3.75 metres floor to floor, which a person stands in.
+        root.GetProperty("storey").GetInt32().Should().Be(5);
         root.GetProperty("scale").GetProperty("min").GetDouble().Should().Be(1);
         root.GetProperty("scale").GetProperty("max").GetDouble().Should().Be(2);
         root.GetProperty("kit").ValueKind.Should().Be(JsonValueKind.Null, "no kit is configured, so the built-in one is used");

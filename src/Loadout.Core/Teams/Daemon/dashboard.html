@@ -7417,7 +7417,8 @@
   }
 
   function towerTile() { return (towerData && towerData.tile) || 32; }
-  function towerStorey() { return towerTile() * 3; }
+  // Five tiles unless the rules say otherwise: 3.75 m at the people's scale.
+  function towerStorey() { return towerTile() * ((towerData && towerData.storey) || 5); }
   function towerWidth() { return ((towerData && towerData.plate && towerData.plate[0]) || 24) * towerTile(); }
   function towerDepth() { return ((towerData && towerData.plate && towerData.plate[1]) || 16) * towerTile(); }
   function towerFloors() { return (towerData && towerData.floors) || 10; }

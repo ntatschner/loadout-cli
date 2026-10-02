@@ -50,11 +50,26 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void A_storey_is_five_tiles_unless_a_set_says_otherwise_and_never_one_nobody_could_stand_in()
+    {
+        // Three quarters of a metre a tile, so five is 3.75 metres floor to floor.
+        OfficeRules.Default.Storey.Should().BeNull();
+        OfficeRules.StoreyTiles.Should().Be(5);
+
+        // A set's own height is kept when its rules are laid over the built-in ones.
+        OfficeRules.Default.With(OfficeRules.Default with { Storey = 6 }).Storey.Should().Be(6);
+        OfficeRules.Default.With(new OfficeRules(OfficeRules.Version)).Storey.Should().BeNull();
+
+        OfficeRuleBook.Problems(OfficeRules.Default with { Storey = 2 }).Should().Contain("storey is 2 tiles; it has to be 3 to 10.");
+        OfficeRuleBook.Problems(OfficeRules.Default with { Storey = 7 }).Should().BeEmpty();
+    }
+
+    [Fact]
     public void The_built_in_rules_are_the_decisions_made()
     {
         var rules = OfficeRules.Default;
 
-        rules.Floor.Should().Equal(24, 16);
+        rules.Floor.Should().Equal(40, 24);
         rules.MinFloors.Should().Be(10);
         rules.Moves.Should().Be(new OfficeMoves(20, 300, 60));
         rules.Rooms!["mail-room"].Level.Should().Be("basement-1");
@@ -96,7 +111,7 @@ public sealed class OfficeKitTests : IDisposable
         merged.Rooms["meeting"].Should().Be(OfficeRules.Default.Rooms!["meeting"]);
         merged.Use!["free"].Should().Be("kitchen");
         merged.Use["done"].Should().Be("lift");
-        merged.Floor.Should().Equal(24, 16);
+        merged.Floor.Should().Equal(40, 24);
     }
 
     [Fact]
