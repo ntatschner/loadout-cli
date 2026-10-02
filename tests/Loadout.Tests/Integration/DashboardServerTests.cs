@@ -555,6 +555,62 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_building_carries_the_kits_facade_with_its_pictures_and_none_for_the_built_in_kit()
+    {
+        using (var plain = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync()))
+        {
+            plain.RootElement.GetProperty("facade").ValueKind.Should().Be(JsonValueKind.Null);
+        }
+
+        Directory.CreateDirectory(Path.Combine(_art, "front"));
+
+        // Enough of a PNG for its size to be read: the signature, then IHDR with 96 by 192.
+        byte[] header = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0, 0, 0, 96, 0, 0, 0, 192];
+
+        File.WriteAllBytes(Path.Combine(_art, "front", "facade.png"), header);
+
+        var kit = OfficeKit.Kit();
+        var pieces = new Dictionary<string, OfficePiece>(kit.Pieces, StringComparer.Ordinal)
+        {
+            ["bay-a"] = new("facade.png", [0, 0, 32, 96], [1, 1], ["facade-bay"], Place: "facade"),
+            ["bay-b"] = new("facade.png", [32, 0, 32, 96], [1, 1], ["facade-bay"], Place: "facade"),
+            ["lobby-a"] = new("facade.png", [64, 0, 32, 192], [1, 1], ["facade-lobby"], Place: "facade"),
+        };
+
+        File.WriteAllText(Path.Combine(_art, "front", OfficeKit.FileName), JsonSerializer.Serialize(kit with
+        {
+            Pieces = pieces,
+            Facade = new OfficeFacade(["bay-a", "bay-b"], Lobby: ["lobby-a"], Windows: [[4, 10, 24, 70]]),
+        }));
+        _server.OfficeSet = "front";
+
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+        var facade = building.RootElement.GetProperty("facade");
+
+        facade.GetProperty("bays").GetArrayLength().Should().Be(2);
+        facade.GetProperty("bays")[1].GetProperty("picture").GetString().Should().Be("facade.png");
+        facade.GetProperty("bays")[1].GetProperty("source")[0].GetInt32().Should().Be(32);
+        facade.GetProperty("lobby")[0].GetProperty("source")[3].GetInt32().Should().Be(192);
+        facade.GetProperty("windows")[0][2].GetInt32().Should().Be(24);
+        facade.GetProperty("corner").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void A_facade_naming_a_piece_with_no_picture_is_not_drawn_half_in_art()
+    {
+        var kit = OfficeKit.Kit();
+        var pieces = new Dictionary<string, OfficePiece>(kit.Pieces, StringComparer.Ordinal)
+        {
+            ["bay-a"] = new("facade.png", [0, 0, 32, 96], [1, 1], ["facade-bay"], Place: "facade"),
+            ["bay-b"] = new(null, null, [1, 1], ["facade-bay"], Place: "facade"),
+        };
+
+        OfficeFacadeArt.For(kit with { Pieces = pieces, Facade = new OfficeFacade(["bay-a"]) }).Should().NotBeNull();
+        OfficeFacadeArt.For(kit with { Pieces = pieces, Facade = new OfficeFacade(["bay-a", "bay-b"]) }).Should().BeNull();
+        OfficeFacadeArt.For(kit).Should().BeNull("the built-in kit has no facade");
+    }
+
+    [Fact]
     public async Task A_configured_kit_is_the_one_the_building_is_made_from()
     {
         Directory.CreateDirectory(Path.Combine(_art, "tower"));

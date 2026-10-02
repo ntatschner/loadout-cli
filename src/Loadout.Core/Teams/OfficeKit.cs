@@ -90,6 +90,79 @@ public sealed record OfficeFacade(
     [property: JsonPropertyName("basement")] string? Basement = null,
     [property: JsonPropertyName("windows")] IReadOnlyList<IReadOnlyList<int>>? Windows = null);
 
+/// <summary>One module of the tower's outside as the page draws it: the picture and where in it.</summary>
+/// <param name="Picture">The image, in the set.</param>
+/// <param name="Source">Where the module is in it: x, y, width and height.</param>
+public sealed record OfficeFacadeModule(
+    [property: JsonPropertyName("picture")] string Picture,
+    [property: JsonPropertyName("source")] IReadOnlyList<int> Source);
+
+/// <summary>
+/// A kit's facade with its pieces looked up, for the page: what to draw each
+/// storey of the tower with, rather than the names of the pieces to find it in.
+/// </summary>
+/// <param name="Bays">The storeys' modules, at least one.</param>
+/// <param name="Corner">The module at each end of a storey, or null for a bay there too.</param>
+/// <param name="Lobby">The lobby's modules, or null for the page's own lobby front.</param>
+/// <param name="Entrance">The lobby's entrance, or null.</param>
+/// <param name="Crown">The top of the tower, or null.</param>
+/// <param name="Basement">A storey below the street, or null.</param>
+/// <param name="Windows">Where the glass is in a bay module, for lit windows and silhouettes.</param>
+public sealed record OfficeFacadeArt(
+    [property: JsonPropertyName("bays")] IReadOnlyList<OfficeFacadeModule> Bays,
+    [property: JsonPropertyName("corner")] OfficeFacadeModule? Corner,
+    [property: JsonPropertyName("lobby")] IReadOnlyList<OfficeFacadeModule>? Lobby,
+    [property: JsonPropertyName("entrance")] OfficeFacadeModule? Entrance,
+    [property: JsonPropertyName("crown")] OfficeFacadeModule? Crown,
+    [property: JsonPropertyName("basement")] OfficeFacadeModule? Basement,
+    [property: JsonPropertyName("windows")] IReadOnlyList<IReadOnlyList<int>>? Windows)
+{
+    /// <summary>
+    /// The kit's facade with each piece's picture, or null where it has none, or
+    /// where any piece it names has no picture to draw: half a facade drawn in
+    /// art and half in shapes looks worse than either.
+    /// </summary>
+    public static OfficeFacadeArt? For(OfficeKit kit)
+    {
+        ArgumentNullException.ThrowIfNull(kit);
+
+        if (kit.Facade is not { Bays.Count: > 0 } facade)
+        {
+            return null;
+        }
+
+        var missing = false;
+
+        OfficeFacadeModule? Module(string? name)
+        {
+            if (name is null)
+            {
+                return null;
+            }
+
+            if (kit.Pieces.TryGetValue(name, out var piece) && piece.Picture is { } picture && piece.Source is { Count: 4 } source)
+            {
+                return new OfficeFacadeModule(picture, source);
+            }
+
+            missing = true;
+
+            return null;
+        }
+
+        var art = new OfficeFacadeArt(
+            [.. facade.Bays.Select(Module).OfType<OfficeFacadeModule>()],
+            Module(facade.Corner),
+            facade.Lobby is { } lobby ? [.. lobby.Select(Module).OfType<OfficeFacadeModule>()] : null,
+            Module(facade.Entrance),
+            Module(facade.Crown),
+            Module(facade.Basement),
+            facade.Windows);
+
+        return missing ? null : art;
+    }
+}
+
 /// <summary>
 /// A box of parts the building is generated from.
 /// </summary>

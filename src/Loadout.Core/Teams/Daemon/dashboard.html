@@ -10152,6 +10152,73 @@
   }
 
   /*
+    The kit's facade with its pictures loaded: null where the kit has none, or
+    while any of them is still on its way, and the storeys are drawn in code.
+  */
+  function towerFacade() {
+    var facade = towerData && towerData.facade;
+    var set = towerData && towerData.kit;
+
+    if (!facade || !set || !facade.bays || !facade.bays.length) { return null; }
+
+    var waiting = false;
+
+    function load(module) {
+      if (!module) { return null; }
+
+      var picture = tilePicture(set, module.picture);
+
+      if (!picture) { waiting = true; }
+
+      return { picture: picture, source: module.source };
+    }
+
+    var loaded = {
+      bays: facade.bays.map(load),
+      corner: load(facade.corner),
+      lobby: (facade.lobby || []).map(load),
+      entrance: load(facade.entrance),
+      basement: load(facade.basement),
+      windows: facade.windows || [],
+    };
+
+    return waiting ? null : loaded;
+  }
+
+  /*
+    Which module a bay of a storey is drawn with: a corner at each end where the
+    kit has one and the storey is wide enough for ends and a middle, the right
+    end mirrored; otherwise one of the bays, picked by level, side and place, so
+    the facade varies along a storey and from one storey to the next but holds
+    still from one drawing to the next.
+  */
+  function towerFacadeModule(facade, level, side, i, bays) {
+    var ends = facade.corner && bays > 2;
+
+    if (ends && i === 0) { return { module: facade.corner, mirror: false }; }
+    if (ends && i === bays - 1) { return { module: facade.corner, mirror: true }; }
+
+    var n = facade.bays.length;
+
+    return { module: facade.bays[Math.floor(towerNoise(level * 97 + side * 31 + i * 7) * n) % n], mirror: false };
+  }
+
+  // A module drawn over one bay of a wall, from z0 up to z1, its top at the top.
+  function towerModule(ctx, project, side, a0, a1, z0, z1, module, mirror) {
+    var s = module.source;
+    var left = mirror ? a1 : a0;
+    var right = mirror ? a0 : a1;
+    var p00 = project(towerOn(side, left, z1));
+    var p10 = project(towerOn(side, right, z1));
+    var p01 = project(towerOn(side, left, z0));
+
+    ctx.save();
+    ctx.transform((p10[0] - p00[0]) / s[2], (p10[1] - p00[1]) / s[2], (p01[0] - p00[0]) / s[3], (p01[1] - p00[1]) / s[3], p00[0], p00[1]);
+    ctx.drawImage(module.picture, s[0], s[1], s[2], s[3], 0, 0, s[2], s[3]);
+    ctx.restore();
+  }
+
+  /*
     One level of the tower on each wall facing the eye: glass, bronze fins,
     windows lit by how many are on the floor with somebody in each, the slab
     with its strip. The lobby is taller and all glass; a basement is concrete
@@ -10168,7 +10235,12 @@
 
     ctx.globalAlpha = level < 0 ? 0.55 : 1;
 
-    sides.forEach(function (side) {
+    // The kit's facade where it has one for this level: the bays above the
+    // lobby, the lobby's own modules, the basement's.
+    var facade = seeThrough ? null : towerFacade();
+    var art = facade && (level > 0 || (level === 0 && facade.lobby.length) || (level < 0 && facade.basement)) ? facade : null;
+
+    sides.forEach(function (side, sideIndex) {
       var length = Math.hypot(side.to[0] - side.from[0], side.to[1] - side.from[1]);
       var bays = Math.max(1, Math.round(length / tile));
       var lit = people ? Math.max(1, Math.min(bays, Math.round(people / capacity * bays * 1.4))) : 0;
@@ -10178,7 +10250,22 @@
         : level < 0 ? "#2a2d31" : level === 0 ? "#24344a" : towerLight ? towerLight.glass : "#1c2a3a";
       ctx.fill();
 
-      if (level === 0 && !seeThrough) {
+      if (art) {
+        for (var bay = 0; bay < bays; bay += 1) {
+          var chosen = level > 0 ? towerFacadeModule(art, level, sideIndex, bay, bays)
+            : level < 0 ? { module: art.basement, mirror: false }
+            : { module: art.entrance && side.long && bay === Math.floor(bays / 2) ? art.entrance
+              : art.lobby[Math.floor(towerNoise(sideIndex * 31 + bay * 7) * art.lobby.length) % art.lobby.length], mirror: false };
+
+          towerModule(ctx, project, side, bay / bays, (bay + 1) / bays, z[0], z[1], chosen.module, chosen.mirror);
+        }
+      }
+
+      // Where the glass is in a bay: the kit's window, or the bay less a margin.
+      var pane = art && art.windows.length && level > 0 ? art.windows[0] : null;
+      var paneSize = pane ? art.bays[0].source : null;
+
+      if (level === 0 && !seeThrough && !art) {
         towerQuad(ctx, project, towerOn(side, 0.04, z[0] + slab), towerOn(side, 0.96, z[0] + slab), towerOn(side, 0.96, z[1] - 10), towerOn(side, 0.04, z[1] - 10));
         ctx.fillStyle = "rgba(255, 226, 170, 0.5)";
         ctx.fill();
@@ -10196,11 +10283,13 @@
 
           if (!on) { continue; }
 
-          var a = (i + 0.12) / bays;
-          var e = (i + 0.88) / bays;
+          var a = (i + (pane ? pane[0] / paneSize[2] : 0.12)) / bays;
+          var e = (i + (pane ? (pane[0] + pane[2]) / paneSize[2] : 0.88)) / bays;
+          var sill = pane ? z[1] - (pane[1] + pane[3]) / paneSize[3] * (z[1] - z[0]) : z[0] + slab + 2;
+          var head = pane ? z[1] - pane[1] / paneSize[3] * (z[1] - z[0]) : z[1] - 4;
 
-          towerQuad(ctx, project, towerOn(side, a, z[0] + slab + 2), towerOn(side, e, z[0] + slab + 2), towerOn(side, e, z[1] - 4), towerOn(side, a, z[1] - 4));
-          ctx.fillStyle = "rgba(255, 214, 140, 0.85)";
+          towerQuad(ctx, project, towerOn(side, a, sill), towerOn(side, e, sill), towerOn(side, e, head), towerOn(side, a, head));
+          ctx.fillStyle = art ? "rgba(255, 214, 140, 0.55)" : "rgba(255, 214, 140, 0.85)";
           ctx.fill();
 
           // Somebody in the window, bobbing a little unless motion is off.
@@ -10210,25 +10299,26 @@
             var halfW = 0.16 / bays;
 
             towerQuad(ctx, project,
-              towerOn(side, mid - halfW, z[0] + slab + 2),
-              towerOn(side, mid + halfW, z[0] + slab + 2),
-              towerOn(side, mid + halfW * 0.7, z[0] + slab + tile * 1.25 + bob),
-              towerOn(side, mid - halfW * 0.7, z[0] + slab + tile * 1.25 + bob));
+              towerOn(side, mid - halfW, sill),
+              towerOn(side, mid + halfW, sill),
+              towerOn(side, mid + halfW * 0.7, sill + tile * 1.25 + bob),
+              towerOn(side, mid - halfW * 0.7, sill + tile * 1.25 + bob));
             ctx.fillStyle = "rgba(30, 30, 40, 0.8)";
             ctx.fill();
 
-            var head = project(towerOn(side, mid, z[0] + slab + tile * 1.55 + bob));
-            var head2 = project(towerOn(side, mid + halfW * 0.8, z[0] + slab + tile * 1.55 + bob));
+            var crown = project(towerOn(side, mid, sill + tile * 1.55 + bob));
+            var crown2 = project(towerOn(side, mid + halfW * 0.8, sill + tile * 1.55 + bob));
 
             ctx.beginPath();
-            ctx.arc(head[0], head[1], Math.max(1, Math.hypot(head2[0] - head[0], head2[1] - head[1])), 0, Math.PI * 2);
+            ctx.arc(crown[0], crown[1], Math.max(1, Math.hypot(crown2[0] - crown[0], crown2[1] - crown[1])), 0, Math.PI * 2);
             ctx.fill();
             sofar += 1;
           }
         }
       }
 
-      if (level >= 0) {
+      // The facade's own fins and slab, where it has them, in place of these.
+      if (level >= 0 && !art) {
         ctx.strokeStyle = "#9c7a4a";
         ctx.lineWidth = 1.5;
 
@@ -10244,9 +10334,11 @@
       }
 
       // The slab, and the strip along it saying how the floor is doing.
-      towerQuad(ctx, project, towerOn(side, 0, z[1] - slab), towerOn(side, 1, z[1] - slab), towerOn(side, 1, z[1]), towerOn(side, 0, z[1]));
-      ctx.fillStyle = "#5a5f66";
-      ctx.fill();
+      if (!art) {
+        towerQuad(ctx, project, towerOn(side, 0, z[1] - slab), towerOn(side, 1, z[1] - slab), towerOn(side, 1, z[1]), towerOn(side, 0, z[1]));
+        ctx.fillStyle = "#5a5f66";
+        ctx.fill();
+      }
 
       if (occupant && !occupant.dark) {
         towerQuad(ctx, project, towerOn(side, 0, z[0]), towerOn(side, 1, z[0]), towerOn(side, 1, z[0] + 3), towerOn(side, 0, z[0] + 3));

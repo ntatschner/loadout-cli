@@ -79,6 +79,8 @@ const code = [
   cut("  function tilePose(person) {", "  // part \"upper\" draws only"),
   cut("  function sceneTurns(scene) {", "  /*\n    A floor turned a quarter turn"),
   cut("  function tileProp(room, ctx, prop) {", "  // What each of the built-in kit's shapes is"),
+  cut("  function towerNoise(n) {", "  function towerSkyDraw("),
+  cut("  function towerFacadeModule(facade, level, side, i, bays) {", "  // A module drawn over one bay of a wall"),
 ].join("\n");
 
 // The page's own switch for reduced motion: off, so people walk. A picture is
@@ -86,7 +88,7 @@ const code = [
 const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation };")();
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -659,6 +661,28 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   ];
 
   drawing.filter(([, got, want]) => got !== want).forEach(([what, got, want]) => fault("a person in a seat is drawn with the wrong pose", `${what}: ${got}, not ${want}`));
+}
+
+// ---- the tower's facade ----
+
+// A storey wide enough for ends and a middle has the corner at each end, the
+// right one mirrored, and the kit's bays between, more than one of them along
+// a storey; the same storey is drawn the same every time; a storey of two bays,
+// or a kit without a corner, is bays all along.
+{
+  const [a, b, c, corner] = ["a", "b", "c", "corner"].map((name) => ({ name }));
+  const facade = { bays: [a, b, c], corner };
+  const storey = (one, level, side, bays) => Array.from({ length: bays }, (_, i) => engine.towerFacadeModule(one, level, side, i, bays));
+  const row = storey(facade, 4, 1, 8);
+  const middle = row.slice(1, -1);
+
+  if (row[0].module !== corner || row[0].mirror) { fault("a storey doesn't start with the kit's corner", JSON.stringify(row[0])); }
+  if (row[7].module !== corner || !row[7].mirror) { fault("a storey doesn't end with the kit's corner mirrored", JSON.stringify(row[7])); }
+  if (middle.some((one) => one.module === corner || one.mirror)) { fault("a corner or a mirrored module in the middle of a storey", "middle"); }
+  if (new Set(middle.map((one) => one.module.name)).size < 2) { fault("a storey's bays are all one module", middle.map((one) => one.module.name).join(" ")); }
+  if (JSON.stringify(storey(facade, 4, 1, 8)) !== JSON.stringify(row)) { fault("a storey is drawn differently the second time", "same storey"); }
+  if (storey(facade, 4, 1, 2).some((one) => one.module === corner)) { fault("a storey of two bays is given corners", "two bays"); }
+  if (storey({ bays: [a, b, c] }, 4, 1, 8).some((one) => !facade.bays.includes(one.module))) { fault("a kit without a corner gets something other than its bays", "no corner"); }
 }
 
 // ---- tile pictures that turn with the floor ----

@@ -1757,6 +1757,9 @@ public sealed class DashboardServer : IDisposable
             // The images a kit lays over the neighbourhood the page generates;
             // empty for the built-in kit, which draws it in code.
             materials = set.Length > 0 ? kit.Materials ?? new Dictionary<string, OfficeMaterial>() : new Dictionary<string, OfficeMaterial>(),
+
+            // What the tower's own outside is drawn with, or null to draw it in code.
+            facade = set.Length > 0 ? OfficeFacadeArt.For(kit) : null,
             capacity,
             kit = set.Length > 0 ? set : null,
             occupied = view.Occupied.Select(floor => new
