@@ -166,7 +166,7 @@ public static class FloorPlanner
         {
             floor.Put($"sofa-{++placed}", "sofa", sofa.Piece, x, y);
             floor.Take(x, y, sw, 1);
-            seats.AddRange(sofa.Piece.Seats.Select(seat => new OfficeSpot(x + seat.X, y + seat.Y, seat.Facing)));
+            seats.AddRange(sofa.Piece.Seats.Select(seat => new OfficeSpot(x + seat.X, y + seat.Y, seat.Facing, Sit: true)));
         }
 
         if (placed > 0)
@@ -254,7 +254,7 @@ public static class FloorPlanner
 
             floor.Put($"bench-{++placed}", "sofa", bench.Piece, x, y);
             floor.Take(x, y, bench.Piece.Footprint[0], 1);
-            spots.AddRange(bench.Piece.Seats.Select(seat => new OfficeSpot(x + seat.X, y + seat.Y, seat.Facing)));
+            spots.AddRange(bench.Piece.Seats.Select(seat => new OfficeSpot(x + seat.X, y + seat.Y, seat.Facing, Sit: true)));
         }
 
         floor.Areas.Add(new OfficeArea("break-area", "break-area", 1, 1, width - 2, height - 2, Function(rules, "break-area") ?? "idle"));
@@ -692,7 +692,8 @@ public static class FloorPlanner
                 }
                 else if (seatsAs is { } prefix)
                 {
-                    Spots[$"{prefix}-{++index}"] = spot;
+                    // A meeting table's chairs, a sofa's places: somewhere to sit.
+                    Spots[$"{prefix}-{++index}"] = spot with { Sit = true };
                 }
             }
         }

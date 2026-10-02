@@ -200,6 +200,27 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void Seats_on_sofas_benches_and_at_tables_are_for_sitting_and_desks_and_standing_places_are_not()
+    {
+        // The page sits somebody with nothing to do in a seat that says so,
+        // rather than standing them in front of a sofa. A desk's seat leaves it
+        // to what its sitter is doing; a place to stand stays a place to stand.
+        var kit = OfficeKit.Kit();
+        var rules = OfficeRules.Default;
+        var lobby = FloorPlanner.Lobby(kit, rules, 6).Scene;
+        var roof = FloorPlanner.Roof(kit, rules, 6).Scene;
+        var floor = FloorPlanner.Plan(kit, rules, "run-a", 8).Scene;
+
+        lobby.Desks.Should().NotBeEmpty().And.OnlyContain(seat => seat.Sit, "the lobby's seats are its sofas");
+        roof.Desks.Should().NotBeEmpty().And.OnlyContain(seat => seat.Sit, "the roof's seats are its benches");
+        floor.Desks.Should().NotBeEmpty().And.OnlyContain(seat => !seat.Sit);
+        floor.Spots!.Where(spot => spot.Key.StartsWith("meeting-", StringComparison.Ordinal)).Should().NotBeEmpty()
+            .And.OnlyContain(spot => spot.Value.Sit, "a meeting table's places are chairs");
+        floor.Spots!.Where(spot => spot.Key.StartsWith("kitchen-", StringComparison.Ordinal)).Should().NotBeEmpty()
+            .And.OnlyContain(spot => !spot.Value.Sit, "the kitchen's places are for standing with a cup");
+    }
+
+    [Fact]
     public void A_room_takes_its_extras_from_the_sets_kit_where_they_fit_and_never_in_anybodys_way()
     {
         // The kitchen's fridge and cooler and the lounge's armchair are extras:

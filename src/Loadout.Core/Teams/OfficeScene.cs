@@ -8,10 +8,17 @@ namespace Loadout.Core.Teams;
 /// <param name="X">Tiles across from the left.</param>
 /// <param name="Y">Tiles down from the top.</param>
 /// <param name="Facing">n, e, s or w.</param>
+/// <param name="Sit">
+/// Whether somebody here sits: a seat of a sofa, a meeting table or a chair,
+/// rather than a place to stand. Somebody waiting there sits rather than
+/// standing at it. A desk's seat says false, because what its sitter is doing
+/// decides how they are.
+/// </param>
 public sealed record OfficeSpot(
     [property: JsonPropertyName("x")] int X,
     [property: JsonPropertyName("y")] int Y,
-    [property: JsonPropertyName("facing")] string Facing = "s");
+    [property: JsonPropertyName("facing")] string Facing = "s",
+    [property: JsonPropertyName("sit")] bool Sit = false);
 
 /// <summary>Something standing in a scene: a desk, a plant, a cabinet.</summary>
 /// <param name="Id">Its name, unique in the scene.</param>

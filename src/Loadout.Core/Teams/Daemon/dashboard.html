@@ -6120,7 +6120,7 @@
     on the free tiles nearest the door.
   */
   function tileSeat(room, name) {
-    if (room.seats[name]) { return room.seats[name]; }
+    if (room.seats[name]) { return tileHome(room, name, room.seats[name]); }
 
     var used = {};
 
@@ -6131,7 +6131,7 @@
     room.scene.desks.some(function (desk) {
       if (used[desk.x + "," + desk.y]) { return false; }
 
-      seat = { x: desk.x, y: desk.y, facing: desk.facing || "s", desk: true };
+      seat = { x: desk.x, y: desk.y, facing: desk.facing || "s", desk: true, sit: !!desk.sit };
 
       return true;
     });
@@ -6177,6 +6177,13 @@
     }
 
     room.seats[name] = seat;
+
+    return tileHome(room, name, seat);
+  }
+
+  // Somebody's seat, kept on them too, so how they are can tell whether they are in it.
+  function tileHome(room, name, seat) {
+    if (room.people[name]) { room.people[name].home = seat; }
 
     return seat;
   }
@@ -6962,7 +6969,7 @@
 
     var spot = spots[Math.floor(tileRandom(person) * spots.length)];
 
-    return busy[spot.x + "," + spot.y] ? null : { x: spot.x, y: spot.y, facing: spot.facing || "s" };
+    return busy[spot.x + "," + spot.y] ? null : { x: spot.x, y: spot.y, facing: spot.facing || "s", sit: !!spot.sit };
   }
 
   /*
@@ -7024,7 +7031,7 @@
         return;
       }
 
-      person.errand = { visit: false, stage: "going", stay: 2500 + tileRandom(person) * 3500, facing: to.facing };
+      person.errand = { visit: false, stage: "going", stay: 2500 + tileRandom(person) * 3500, facing: to.facing, sit: !!to.sit };
       tileWalk(room, person, to.x, to.y);
     });
   }
@@ -7186,10 +7193,18 @@
   function tilePose(person) {
     if (person.path.length) { return "walk"; }
 
-    // Away from their desk, whatever they would be doing at it.
-    if (person.errand) { return "idle"; }
+    // Away from their desk, whatever they would be doing at it: sitting if
+    // where they went is a seat - a sofa, a chair at a meeting table.
+    if (person.errand) { return person.errand.stage === "staying" && person.errand.sit ? "sit" : "idle"; }
 
-    return (person.intent && person.intent.pose) || "idle";
+    var pose = (person.intent && person.intent.pose) || "idle";
+    var home = person.home;
+
+    // Nothing to do, in a seat that is for sitting in - waiting on a sofa in
+    // the lobby, say - they sit rather than stand at it.
+    if (pose === "idle" && home && home.sit && person.x === home.x && person.y === home.y) { return "sit"; }
+
+    return pose;
   }
 
   /*

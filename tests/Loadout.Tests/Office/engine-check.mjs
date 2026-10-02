@@ -86,7 +86,7 @@ const code = [
 const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp };")();
+  + " sceneTurns, tileProp, tilePose };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
 const faults = new Map();
@@ -587,6 +587,48 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   const short = Object.assign({}, scene, { props: [Object.assign({}, scene.props[0], { sides: { s: sides.s, n: sides.n } })] });
 
   if (engine.sceneTurns(short)) { fault("a floor turns with a picture that has only some of its sides", "two sides"); }
+}
+
+// ---- sitting in seats that are for sitting in ----
+
+// Somebody with nothing to do, in a seat that says it's for sitting - a sofa
+// in the lobby - sits; in one that doesn't, they stand. Doing something, they
+// do it; out of the seat or on their way, they don't sit; and on an errand they
+// sit only once they've got to a seat and are staying.
+{
+  const scene = {
+    width: 6, height: 4, tile: 32, floor: [], walls: null, props: [], spots: {}, door: { x: 0, y: 3, facing: "n" },
+    desks: [{ x: 2, y: 1, facing: "s", sit: true }, { x: 4, y: 1, facing: "s" }],
+  };
+  const room = {
+    scene, seats: {},
+    people: { a: { x: 2, y: 1, path: [], intent: { pose: "idle" } }, b: { x: 4, y: 1, path: [], intent: { pose: "idle" } } },
+  };
+  const a = room.people.a;
+  const b = room.people.b;
+  const checks = [];
+
+  engine.tileSeat(room, "a");
+  engine.tileSeat(room, "b");
+  checks.push(["idle in a sofa seat", engine.tilePose(a), "sit"]);
+  checks.push(["idle at a seat that isn't for sitting", engine.tilePose(b), "idle"]);
+  a.intent = { pose: "type" };
+  checks.push(["typing in a sofa seat", engine.tilePose(a), "type"]);
+  a.intent = { pose: "idle" };
+  a.x = 3;
+  checks.push(["idle beside the seat", engine.tilePose(a), "idle"]);
+  a.x = 2;
+  a.path = [{ x: 3, y: 1 }];
+  checks.push(["walking from the seat", engine.tilePose(a), "walk"]);
+  a.path = [];
+  b.errand = { stage: "going", sit: true };
+  checks.push(["arriving at a seat on an errand", engine.tilePose(b), "idle"]);
+  b.errand.stage = "staying";
+  checks.push(["staying in a seat on an errand", engine.tilePose(b), "sit"]);
+  b.errand.sit = false;
+  checks.push(["staying where people stand", engine.tilePose(b), "idle"]);
+
+  checks.filter(([, got, want]) => got !== want).forEach(([what, got, want]) => fault("a person's pose in a seat is wrong", `${what}: ${got}, not ${want}`));
 }
 
 // ---- tile pictures that turn with the floor ----
