@@ -281,17 +281,33 @@ public sealed class FloorPlannerTests
     }
 
     [Fact]
-    public void Each_team_s_area_says_whose_it_is_and_a_bay_nobody_has_is_bare()
+    public void Each_team_s_area_says_whose_it_is_and_every_bay_is_fitted_out()
     {
         var scene = FloorPlanner.Shared(Tech, Rules, 4, [new("a", 0, 0, 1, 3), new("c", 0, 2, 1, 2)]).Scene;
+        var bays = FloorPlanner.BayColumns(scene.Width, OfficeRules.BayCount);
 
-        scene.Areas!.Where(area => area.Kind is "open-plan" or "team-room" or "lead-office").Select(area => area.Run).Distinct()
-            .Should().BeEquivalentTo(["a", "c"]);
-        scene.Areas!.Should().ContainSingle(area => area.Name == "bay-2" && area.Kind == "vacant" && area.Floor == "concrete");
+        // A team's areas carry its run; the rooms the floor shares carry none.
+        scene.Areas!.Where(area => area.Kind is "team-room" or "lead-office" || area.Kind == "open-plan" && area.Run != null)
+            .Select(area => area.Run).Distinct().Should().BeEquivalentTo(["a", "c"]);
         scene.Areas!.Where(area => area.Kind is "kitchen" or "meeting" or "corridor").Should().OnlyContain(area => area.Run == null, "shared rooms are nobody's own");
-    }
 
-    // ---- facilities ----
+        // Every bay is fitted out: a team's with more desks than it has people,
+        // the bay nobody has with desks nobody is given - a part-let office,
+        // not bare concrete.
+        foreach (var (from, to) in bays)
+        {
+            scene.Props!.Count(prop => prop.Kind == "desk" && prop.X >= from && prop.X <= to).Should().BeGreaterThan(2, $"the bay at {from}-{to} has desks");
+        }
+
+        scene.Areas!.Should().NotContain(area => area.Kind == "vacant" && area.W * area.H > 12, "no bay is left bare");
+
+        var spare = bays[1];
+
+        scene.Desks.Should().NotContain(seat => seat.X >= spare.From && seat.X <= spare.To, "nobody is given a desk in the bay nobody has");
+        scene.Teams!.Single(team => team.Run == "a").Desks.Should().HaveCount(3);
+        scene.Teams!.Single(team => team.Run == "c").Desks.Should().HaveCount(2);
+        OfficeScenes.Problems(scene, sizeOf: null).Should().BeEmpty();
+    }
 
     [Fact]
     public void The_building_has_its_facilities_each_with_the_piece_that_makes_it()

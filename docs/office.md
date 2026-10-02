@@ -74,12 +74,13 @@ rules, each room's zone and what it should be near or away from, and each has
 a door onto the corridor that runs the width of the floor. Band left over
 becomes an open nook with a sofa.
 
-Each team works along the south windows, in an area of its bays as big as it needs:
+Each team works along the south windows, in its own bays, fitted out whole:
 the lead's office in its window corner, the lead facing the door, and desks in
 pods facing each other across the monitors. Some floors leave it open, its
 carpet against the bare floor round it; others give it walls and a door, as a
-team room. What no team uses is vacant, bare concrete with nobody on it, for
-the next team to take. Rooms are furnished from the pieces that say they
+team room. A team's people sit at the desks nearest the windows and the rest of its bays
+are empty desks, and a bay nobody has is fitted out the same way, hot desks
+waiting for the next team: a part-let office rather than bare floor. Rooms are furnished from the pieces that say they
 suit them: the counter in the kitchen with the coffee machine beside it, a
 coffee table in front of the sofa, a visitor's chair across the lead's desk,
 the copier and the water cooler against the corridor wall.
@@ -111,8 +112,9 @@ whole step, which is why zoom isn't limited to the range.
 
 ## The lobby, the roof and the basements
 
-**The lobby** has the entrance in the street-side glass, reception, and a
-waiting room with a seat for everything that hasn't started yet: each scheduled
+**The lobby** has the entrance in the street-side glass, reception just inside
+it facing the door, and beside it a waiting lounge, sofas in pairs facing each
+other across a coffee table, with a seat for everything that hasn't started yet: each scheduled
 run and each task still to do is somebody on a sofa, and their card says what
 it is and when. When a run starts, its lead walks in off the street and takes
 the lift up. IT help has a desk in the band east of the lift.

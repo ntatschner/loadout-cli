@@ -184,7 +184,7 @@ public static partial class FloorPlanner
 
                 floor.LeadSeat = null;
 
-                var seats = TeamArea(floor, parts, rules, tenant.Random, tenant.Who.People, fieldTop, fieldBottom, tenant.Layout, plain, (from + to) / 2, from, to, $"{tenant.Who.Run}#{tenant.Who.Part}:", tenant.Who.Run);
+                var seats = TeamArea(floor, parts, rules, tenant.Random, tenant.Who.People, fieldTop, fieldBottom, tenant.Layout, plain, (from + to) / 2, from, to, $"{tenant.Who.Run}#{tenant.Who.Part}:", tenant.Who.Run, fill: !plain);
                 var mine = new List<OfficeSpot>();
 
                 if (floor.LeadSeat is { } lead)
@@ -205,13 +205,28 @@ public static partial class FloorPlanner
 
             floor.LeadSeat = null;
 
-            // A bay nobody has: bare floor, for the next team.
+            // A bay nobody has: fitted out with desks nobody sits at, ready for
+            // the next team, as a part-let floor is; bare only on a plain floor.
             for (var bay = 0; bay < bays.Count; bay++)
             {
-                if (!used[bay])
+                if (used[bay])
+                {
+                    continue;
+                }
+
+                if (plain)
                 {
                     floor.Areas.Add(new OfficeArea($"bay-{bay + 1}", "vacant", bays[bay].From, fieldTop, bays[bay].To - bays[bay].From + 1, fieldBottom - fieldTop + 1, null));
+
+                    continue;
                 }
+
+                var before = floor.Seats.Count;
+
+                TeamArea(floor, parts, rules, new Random(Seed($"bay-{bay}", 0)), 1, fieldTop, fieldBottom, "open", plain, (bays[bay].From + bays[bay].To) / 2, bays[bay].From, bays[bay].To, $"bay-{bay + 1}:", null, fill: true, hot: true);
+
+                // Empty desks: seats nobody is given.
+                floor.Seats.RemoveRange(before, floor.Seats.Count - before);
             }
         }
 
@@ -451,7 +466,9 @@ public static partial class FloorPlanner
         int left,
         int right,
         string prefix,
-        string? run)
+        string? run,
+        bool fill = false,
+        bool hot = false)
     {
         // Walls round the team only when there are desks in it: round a lead
         // alone they were a second wall a row outside the office's own.
@@ -475,7 +492,9 @@ public static partial class FloorPlanner
             orderby w * h, Math.Abs(w - 2 * h)
             select (W: w, H: h);
 
-        foreach (var (w, h) in plain ? [] : sizes)
+        // A team's bays are fitted out whole, its people at the desks nearest
+        // the windows and the rest empty, as a real office half-full is.
+        foreach (var (w, h) in plain || fill ? [] : sizes)
         {
             var from = Math.Clamp(middle - w / 2, left, right - w + 1);
             var upTo = bottom - h + 1;
@@ -491,7 +510,7 @@ public static partial class FloorPlanner
         var areaKind = walled ? "team-room" : "open-plan";
         var function = rules.Rooms is { } named && named.TryGetValue(areaKind, out var areaRule) ? areaRule.Function : null;
 
-        floor.Areas.Add(new OfficeArea(prefix + (walled ? "team-room-1" : "open-plan"), areaKind, x0, areaTop, x1 - x0 + 1, bottom - areaTop + 1, function, Run: run));
+        floor.Areas.Add(new OfficeArea(prefix + (walled ? "team-room-1" : "open-plan"), areaKind, x0, areaTop, x1 - x0 + 1, bottom - areaTop + 1, hot ? null : function, Run: run));
 
         // A team room has walls and a door. An open plan has nothing round
         // it: its carpet against the bare floor is the edge, and a divider
@@ -548,7 +567,11 @@ public static partial class FloorPlanner
         var ox = officeOnLeft ? x0 : x1 - officeW + 1;
         var oy = bottom - officeH + 1;
 
-        if (!plain && x1 - x0 + 1 >= officeW && oy - 1 > deskTop)
+        if (hot)
+        {
+            // Nobody's: no lead, no office, only desks.
+        }
+        else if (!plain && x1 - x0 + 1 >= officeW && oy - 1 > deskTop)
         {
             var walls = Partition(rules, "lead-office", random);
             var officeDoor = officeOnLeft ? ox + officeW - 2 : ox + 1;
@@ -582,7 +605,7 @@ public static partial class FloorPlanner
             LeadDesk(floor, parts, random, x0, deskTop, prefix);
         }
 
-        var slots = Slots(floor, desk.Piece, x0, x1, deskTop, bottom, officeOnLeft, officeW, officeH, plain);
+        var slots = Slots(floor, desk.Piece, x0, x1, deskTop, bottom, officeOnLeft, officeW, officeH, plain || hot);
         var turned = Turned(desk.Piece);
         var placed = 0;
 
@@ -596,7 +619,7 @@ public static partial class FloorPlanner
             .ThenBy(one => Math.Abs(one.X - (x0 + x1) / 2))
             .ThenBy(one => one.North))
         {
-            if (placed >= team - 1)
+            if (placed >= team - 1 && !fill)
             {
                 break;
             }
