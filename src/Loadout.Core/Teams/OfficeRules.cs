@@ -18,6 +18,12 @@ namespace Loadout.Core.Teams;
 /// <param name="Core">Whether it belongs to the building's core, in the same place on every floor.</param>
 /// <param name="Walls">Wall kinds the planner may choose between: glass, solid.</param>
 /// <param name="Function">What the room is for on the dashboard, for its popups: mail, storage, bin, server, questions, controls, summary, arrivals, waiting, schedules, idle.</param>
+/// <param name="Extras">
+/// Kinds of piece the room takes as well as its own, in order, when the set's
+/// kit has them and they fit; the built-in kit has none. A room is furnished
+/// from its tags one piece per kind, picked at random, so a fridge counted as a
+/// kitchen would sometimes be the whole kitchen: it is an extra instead.
+/// </param>
 public sealed record OfficeRoomRule(
     [property: JsonPropertyName("tags")] IReadOnlyList<string>? Tags = null,
     [property: JsonPropertyName("min")] IReadOnlyList<int>? Min = null,
@@ -28,7 +34,8 @@ public sealed record OfficeRoomRule(
     [property: JsonPropertyName("where")] string? Where = null,
     [property: JsonPropertyName("core")] bool Core = false,
     [property: JsonPropertyName("walls")] IReadOnlyList<string>? Walls = null,
-    [property: JsonPropertyName("function")] string? Function = null)
+    [property: JsonPropertyName("function")] string? Function = null,
+    [property: JsonPropertyName("extras")] IReadOnlyList<string>? Extras = null)
 {
     /// <summary>How many of these rooms a team of this size gets.</summary>
     public int CountFor(int team)
@@ -141,8 +148,8 @@ public sealed record OfficeRules(
                 Where: "near-open-plan",
                 Walls: ["glass", "solid", "screen"],
                 Function: "questions"),
-            ["kitchen"] = new(["kitchen", "coffee"], Min: [3, 3], Count: 1, Function: "idle"),
-            ["lounge"] = new(["sofa", "partition-planter"], Min: [3, 3], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Walls: ["planters", "open", "screen"], Function: "idle"),
+            ["kitchen"] = new(["kitchen", "coffee"], Min: [3, 3], Count: 1, Function: "idle", Extras: ["fridge", "cooler", "kitchen-table"]),
+            ["lounge"] = new(["sofa", "partition-planter"], Min: [3, 3], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Walls: ["planters", "open", "screen"], Function: "idle", Extras: ["armchair", "coffee-table", "beanbag"]),
 
             // A corridor floor's rooms off the corridor, each with its own desks.
             ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "screen", "planters", "open"], Function: "work"),

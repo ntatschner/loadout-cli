@@ -200,6 +200,81 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void A_room_takes_its_extras_from_the_sets_kit_where_they_fit_and_never_in_anybodys_way()
+    {
+        // The kitchen's fridge and cooler and the lounge's armchair are extras:
+        // the room's own piece first, then each extra the set has, inside the
+        // room, off every seat and place to stand. The scene check walks the
+        // floor from the door, so a floor planned from a seeded try (not the
+        // fallback) has every place still reachable.
+        var kit = Small(
+            ("fridge", new OfficePiece(null, null, [1, 1], ["fridge"])),
+            ("cooler", new OfficePiece(null, null, [1, 1], ["cooler"])),
+            ("armchair", new OfficePiece(null, null, [1, 1], ["armchair"])));
+        var lounges = 0;
+
+        foreach (var team in new[] { 3, 5, 8, 12 })
+        {
+            foreach (var seed in new[] { "run-a", "run-b", "run-c", "run-d" })
+            {
+                var scene = FloorPlanner.Plan(kit, OfficeRules.Default, seed, team) is var plan && plan.Attempt >= 0
+                    ? plan.Scene
+                    : throw new InvalidOperationException($"team {team}, {seed} came out plain");
+                var kitchen = scene.Areas!.Single(area => area.Kind == "kitchen");
+                var places = scene.Spots!.Values.Concat(scene.Desks).ToList();
+
+                bool In(OfficeProp prop, OfficeArea area) =>
+                    prop.X >= area.X && prop.Y >= area.Y && prop.X + prop.W <= area.X + area.W && prop.Y + prop.H <= area.Y + area.H;
+
+                var extras = scene.Props!.Where(prop => prop.Kind == "fridge" || prop.Kind == "cooler" || prop.Kind == "armchair").ToList();
+
+                extras.Count(prop => prop.Kind != "armchair").Should().Be(2, $"team {team}, {seed}");
+                extras.Where(prop => prop.Kind != "armchair").All(prop => In(prop, kitchen)).Should().BeTrue($"team {team}, {seed}: in the kitchen");
+                extras.Any(prop => places.Any(place => place.X >= prop.X && place.X < prop.X + prop.W && place.Y >= prop.Y && place.Y < prop.Y + prop.H))
+                    .Should().BeFalse($"team {team}, {seed}: on somebody's place");
+
+                foreach (var lounge in scene.Areas!.Where(area => area.Kind == "lounge"))
+                {
+                    lounges++;
+                    extras.Any(prop => prop.Kind == "armchair" && In(prop, lounge)).Should().BeTrue($"team {team}, {seed}: an armchair in {lounge.Name}");
+                }
+            }
+        }
+
+        lounges.Should().BePositive("some of these floors have a lounge to put an armchair in");
+
+        // A kitchen asked for more fridges than it has room for takes what fits
+        // and no more: none where somebody stands, and the floor still planned
+        // from a seeded try, so every place in it is still reachable from the door.
+        var crowded = OfficeRules.Default with
+        {
+            Rooms = new Dictionary<string, OfficeRoomRule>(OfficeRules.Default.Rooms!)
+            {
+                ["kitchen"] = OfficeRules.Default.Rooms!["kitchen"] with { Extras = [.. Enumerable.Repeat("fridge", 20)] },
+
+                // Its seats are round the table, away from the door: packed in
+                // without a care, the fridges would wall them off.
+                ["meeting"] = OfficeRules.Default.Rooms!["meeting"] with { Extras = [.. Enumerable.Repeat("fridge", 20)] },
+            },
+        };
+
+        foreach (var seed in new[] { "run-a", "run-b", "run-c", "run-d" })
+        {
+            var plan = FloorPlanner.Plan(kit, crowded, seed, 5);
+            var places = plan.Scene.Spots!.Values.Concat(plan.Scene.Desks).ToList();
+            var fridges = plan.Scene.Props!.Where(prop => prop.Kind == "fridge").ToList();
+
+            plan.Attempt.Should().BeGreaterThanOrEqualTo(0, $"{seed} came out plain");
+            fridges.Count.Should().BeGreaterThan(2, $"{seed}: a crowded kitchen still takes what fits");
+            fridges.Any(prop => places.Any(place => place.X == prop.X && place.Y == prop.Y)).Should().BeFalse($"{seed}: a fridge where somebody stands");
+        }
+
+        // The built-in kit has no extras: its floors are as they were.
+        FloorPlanner.Plan(OfficeKit.Kit(), OfficeRules.Default, "run-a", 8).Scene.Props!
+            .Select(prop => prop.Kind).Should().NotIntersectWith(["fridge", "cooler", "kitchen-table", "armchair", "coffee-table", "beanbag"]);
+    }
+
+    [Fact]
     public void A_kit_of_pictures_is_planned_as_the_built_in_one_is_rather_than_falling_back_to_open_plan()
     {
         // The planner has no pictures to measure; the kit check measured them.

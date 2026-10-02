@@ -135,6 +135,14 @@ footprint, where it can go and where people sit at it. A `rules.json` beside it
 changes the decisions: the size of a floor, which rooms there are and how many,
 which partitions each may have, and which layouts to use.
 
+A room is furnished one piece for each of its tags, picked at random from the
+pieces that have it, so give a fridge its own tag rather than `kitchen`, or it
+will sometimes be the whole kitchen. A room's `extras` are what it takes as
+well: the kitchen's are `fridge`, `cooler` and `kitchen-table`, the lounge's
+`armchair`, `coffee-table` and `beanbag`. Each goes in if the set has a piece
+for it and there's room, inside the room, off every seat and place to stand,
+and never cutting a way through off. The built-in shapes have none of them.
+
 A piece can give its `sides` as well: where in its picture it is seen with its
 front facing each way, `n`, `e`, `s` and `w`. Turn the floor a quarter and a
 desk that faced you shows its side, not the same picture on its side. A floor
