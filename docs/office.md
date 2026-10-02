@@ -66,8 +66,10 @@ gets the same desks every time, whoever its neighbours are, and two runs get
 different ones; the shared rooms are laid out for everybody on the floor. The core is in
 the middle of the north wall, the same place on every level so the lift lines
 up through the tower, with the toilets, a cupboard and the stairs. Either side
-of it, along the north wall, are the floor's rooms: a kitchen, meeting rooms, a
-lounge for a bigger team, a storage cupboard. Which goes where comes from the
+of it, along the north wall, are the floor's rooms: a kitchen and meeting rooms
+first, then a lounge for a bigger team, and as room allows a library, a print
+corner, phone booths (one for every eight people), a wellness room and a
+training room for the biggest teams, a storage cupboard. Which goes where comes from the
 rules, each room's zone and what it should be near or away from, and each has
 a door onto the corridor that runs the width of the floor. Band left over
 becomes an open nook with a sofa.
@@ -111,17 +113,18 @@ whole step, which is why zoom isn't limited to the range.
 waiting room with a seat for everything that hasn't started yet: each scheduled
 run and each task still to do is somebody on a sofa, and their card says what
 it is and when. When a run starts, its lead walks in off the street and takes
-the lift up.
+the lift up. IT help has a desk in the band east of the lift.
 
 **The roof** is where people go on a break. Somebody with nothing asked of them
 for a minute leaves their floor by the lift and turns up here, wandering
 between the benches and the edge. The minute stops a node between two steps
-from bouncing up and down.
+from bouncing up and down. Behind glass west of the lift there is a gym.
 
 **The basements** hold the building's plumbing. The first has the mail room,
 where every run's post is kept (what it was asked, and how it ended), and
-storage, where what it delivered is shelved. The second has the garbage room,
-which is the bin, and the server room, which is the daemon.
+storage, where what it delivered is shelved, and in its band a bike store and
+showers. The second has the garbage room, which is the bin, and the server
+room, which is the daemon.
 
 ## The rooms do things
 

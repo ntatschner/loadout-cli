@@ -323,6 +323,16 @@ public sealed record OfficeKit(
             ["mail"] = Shape(3, 1, ["mail"]),
             ["bin"] = Shape(2, 1, ["bin"]),
             ["server"] = Shape(1, 1, ["server"]),
+            ["phone-booth"] = Shape(2, 2, ["phone-booth"], [new(0, 1, "s")], suits: Suits("main", "wall", "phone-booth")),
+            ["reading-chair"] = Shape(1, 1, ["reading-chair"], [new(0, 0, "s")], blocks: false, suits: Suits("main", "free", "library")),
+            ["stationery"] = Shape(1, 1, ["stationery"], suits: Suits("main", "wall", "print-corner")),
+            ["copier"] = Shape(2, 1, ["copier"], suits: Suits("extra", "wall", "print-corner")),
+            ["yoga-mat"] = Shape(2, 1, ["yoga-mat"], blocks: false, depth: "floor", suits: Suits("main", "free", "wellness-room")),
+            ["training-desk"] = Shape(3, 1, ["training-desk"], [new(0, 1, "n"), new(2, 1, "n")], suits: Suits("main", "free", "training-room")),
+            ["bike-rack"] = Shape(3, 1, ["bike-rack"], suits: Suits("main", "wall", "bike-store")),
+            ["shower"] = Shape(1, 1, ["shower"], suits: Suits("main", "wall", "showers")),
+            ["treadmill"] = Shape(1, 2, ["treadmill"], suits: Suits("main", "free", "gym")),
+            ["help-desk"] = Shape(3, 1, ["help-desk"], [new(1, -1, "s")], suits: Suits("main", "free", "it-help")),
         };
 
         // Thirty-two pixel tiles, the resolution the building's art is made at:

@@ -449,6 +449,7 @@
    },
    "suits": {
     "rooms": [
+     "print-corner",
      "open-plan",
      "corridor"
     ],
@@ -3527,6 +3528,670 @@
    ],
    "blocks": true,
    "place": "facade"
+  },
+  "tech-phone-booth": {
+   "picture": "tech-phone-booth.png",
+   "source": [
+    88,
+    0,
+    59,
+    75
+   ],
+   "footprint": [
+    2,
+    2
+   ],
+   "tags": [
+    "phone-booth"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     1,
+     55,
+     74
+    ],
+    "e": [
+     55,
+     1,
+     33,
+     74
+    ],
+    "s": [
+     88,
+     0,
+     59,
+     75
+    ],
+    "w": [
+     147,
+     1,
+     33,
+     74
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "phone-booth"
+    ],
+    "role": "main",
+    "against": "wall"
+   }
+  },
+  "tech-reading-chair": {
+   "picture": "tech-reading-chair.png",
+   "source": [
+    76,
+    6,
+    47,
+    48
+   ],
+   "footprint": [
+    2,
+    1
+   ],
+   "tags": [
+    "reading-chair"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     11,
+     49,
+     43
+    ],
+    "e": [
+     49,
+     0,
+     27,
+     54
+    ],
+    "s": [
+     76,
+     6,
+     47,
+     48
+    ],
+    "w": [
+     123,
+     0,
+     27,
+     54
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "library",
+     "lounge"
+    ],
+    "role": "main",
+    "against": "wall"
+   }
+  },
+  "tech-stationery": {
+   "picture": "tech-stationery.png",
+   "source": [
+    53,
+    3,
+    36,
+    56
+   ],
+   "footprint": [
+    1,
+    1
+   ],
+   "tags": [
+    "stationery"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     5,
+     35,
+     54
+    ],
+    "e": [
+     35,
+     0,
+     18,
+     59
+    ],
+    "s": [
+     53,
+     3,
+     36,
+     56
+    ],
+    "w": [
+     89,
+     2,
+     16,
+     57
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "print-corner"
+    ],
+    "role": "main",
+    "against": "wall"
+   }
+  },
+  "tech-yoga-mat": {
+   "picture": "tech-yoga-mat.png",
+   "source": [
+    112,
+    0,
+    64,
+    60
+   ],
+   "footprint": [
+    2,
+    2
+   ],
+   "tags": [
+    "yoga-mat"
+   ],
+   "blocks": false,
+   "depth": "floor",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     9,
+     45,
+     51
+    ],
+    "e": [
+     45,
+     17,
+     67,
+     43
+    ],
+    "s": [
+     112,
+     0,
+     64,
+     60
+    ],
+    "w": [
+     176,
+     24,
+     60,
+     36
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "wellness-room"
+    ],
+    "role": "main",
+    "against": "free"
+   }
+  },
+  "tech-floor-cushion": {
+   "picture": "tech-floor-cushion.png",
+   "source": [
+    79,
+    1,
+    40,
+    34
+   ],
+   "footprint": [
+    1,
+    1
+   ],
+   "tags": [
+    "floor-cushion"
+   ],
+   "blocks": false,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     0,
+     40,
+     35
+    ],
+    "e": [
+     40,
+     0,
+     39,
+     35
+    ],
+    "s": [
+     79,
+     1,
+     40,
+     34
+    ],
+    "w": [
+     119,
+     0,
+     39,
+     35
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "wellness-room",
+     "library"
+    ],
+    "role": "extra",
+    "against": "free"
+   }
+  },
+  "tech-training-desk": {
+   "picture": "tech-training-desk.png",
+   "source": [
+    113,
+    20,
+    76,
+    61
+   ],
+   "footprint": [
+    3,
+    1
+   ],
+   "tags": [
+    "training-desk"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     24,
+     76,
+     57
+    ],
+    "e": [
+     76,
+     0,
+     37,
+     81
+    ],
+    "s": [
+     113,
+     20,
+     76,
+     61
+    ],
+    "w": [
+     189,
+     0,
+     37,
+     81
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "training-room"
+    ],
+    "role": "main",
+    "against": "free"
+   },
+   "seats": [
+    {
+     "x": 0,
+     "y": -1,
+     "facing": "s"
+    },
+    {
+     "x": 2,
+     "y": -1,
+     "facing": "s"
+    }
+   ]
+  },
+  "tech-bike-rack": {
+   "picture": "tech-bike-rack.png",
+   "source": [
+    158,
+    0,
+    74,
+    70
+   ],
+   "footprint": [
+    3,
+    1
+   ],
+   "tags": [
+    "bike-rack"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     1,
+     74,
+     69
+    ],
+    "e": [
+     74,
+     8,
+     84,
+     62
+    ],
+    "s": [
+     158,
+     0,
+     74,
+     70
+    ],
+    "w": [
+     232,
+     8,
+     84,
+     62
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "bike-store"
+    ],
+    "levels": [
+     "basement-1"
+    ],
+    "role": "main",
+    "against": "wall"
+   }
+  },
+  "tech-shower": {
+   "picture": "tech-shower.png",
+   "source": [
+    64,
+    3,
+    38,
+    56
+   ],
+   "footprint": [
+    1,
+    1
+   ],
+   "tags": [
+    "shower"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     2,
+     37,
+     57
+    ],
+    "e": [
+     37,
+     0,
+     27,
+     59
+    ],
+    "s": [
+     64,
+     3,
+     38,
+     56
+    ],
+    "w": [
+     102,
+     0,
+     27,
+     59
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "showers"
+    ],
+    "levels": [
+     "basement-1"
+    ],
+    "role": "main",
+    "against": "wall"
+   }
+  },
+  "tech-lockers": {
+   "picture": "tech-lockers.png",
+   "source": [
+    99,
+    14,
+    76,
+    65
+   ],
+   "footprint": [
+    3,
+    1
+   ],
+   "tags": [
+    "lockers"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     18,
+     74,
+     61
+    ],
+    "e": [
+     74,
+     0,
+     25,
+     79
+    ],
+    "s": [
+     99,
+     14,
+     76,
+     65
+    ],
+    "w": [
+     175,
+     0,
+     25,
+     79
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "showers",
+     "bike-store"
+    ],
+    "levels": [
+     "basement-1"
+    ],
+    "role": "extra",
+    "against": "wall"
+   }
+  },
+  "tech-treadmill": {
+   "picture": "tech-treadmill.png",
+   "source": [
+    91,
+    0,
+    31,
+    59
+   ],
+   "footprint": [
+    1,
+    2
+   ],
+   "tags": [
+    "treadmill"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     12,
+     33,
+     47
+    ],
+    "e": [
+     33,
+     14,
+     58,
+     45
+    ],
+    "s": [
+     91,
+     0,
+     31,
+     59
+    ],
+    "w": [
+     122,
+     14,
+     59,
+     45
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "gym"
+    ],
+    "levels": [
+     "roof"
+    ],
+    "role": "main",
+    "against": "free"
+   }
+  },
+  "tech-weights-bench": {
+   "picture": "tech-weights-bench.png",
+   "source": [
+    148,
+    0,
+    52,
+    63
+   ],
+   "footprint": [
+    2,
+    1
+   ],
+   "tags": [
+    "weights-bench"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     8,
+     72,
+     55
+    ],
+    "e": [
+     72,
+     15,
+     76,
+     48
+    ],
+    "s": [
+     148,
+     0,
+     52,
+     63
+    ],
+    "w": [
+     200,
+     15,
+     76,
+     48
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "gym"
+    ],
+    "levels": [
+     "roof"
+    ],
+    "role": "extra",
+    "against": "free"
+   }
+  },
+  "tech-help-desk": {
+   "picture": "tech-help-desk.png",
+   "source": [
+    105,
+    13,
+    72,
+    60
+   ],
+   "footprint": [
+    3,
+    1
+   ],
+   "tags": [
+    "help-desk"
+   ],
+   "blocks": true,
+   "depth": "sorted",
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     23,
+     72,
+     50
+    ],
+    "e": [
+     72,
+     0,
+     33,
+     73
+    ],
+    "s": [
+     105,
+     13,
+     72,
+     60
+    ],
+    "w": [
+     177,
+     0,
+     33,
+     73
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "it-help"
+    ],
+    "levels": [
+     "lobby"
+    ],
+    "role": "main",
+    "against": "free"
+   },
+   "seats": [
+    {
+     "x": 1,
+     "y": -1,
+     "facing": "s"
+    }
+   ]
   }
  },
  "materials": {

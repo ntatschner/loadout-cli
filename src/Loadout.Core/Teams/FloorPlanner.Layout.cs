@@ -249,10 +249,13 @@ public static partial class FloorPlanner
 
             for (var i = 0; i < count; i++)
             {
-                // The kitchen and a first meeting room before anything else,
-                // then the rest in the order they come, the second of a kind after
-                // the first of every other.
-                var priority = kind switch { "kitchen" => 0, "meeting" when i == 0 => 1, _ => 2 + i };
+                // What goes first when the band is short of room: the kitchen
+                // and the meeting rooms the team's size calls for, then the
+                // lounge, then the facilities, then storage; a kind the rules
+                // add after all of these.
+                var order = new[] { "kitchen", "meeting", "lounge", "library", "print-corner", "phone-booth", "wellness-room", "training-room", "storage-cupboard" };
+                var rank = Array.IndexOf(order, kind) is >= 0 and var at ? at : order.Length;
+                var priority = kind == "meeting" ? 1 + i : rank * 10 + i;
 
                 wanted.Add(new Wanted(count > 1 || kind == "meeting" ? $"{kind}-{i + 1}" : kind, kind, rule, min, max, priority));
             }

@@ -218,7 +218,10 @@ public sealed record OfficeRules(
                 Access: "corridor"),
             ["meeting"] = new(
                 ["meeting-4", "meeting-6", "meeting-10"],
-                Min: [3, 3],
+
+                // Room for the smallest table and the way in beside it: at
+                // three columns a chair always landed inside the door.
+                Min: [4, 3],
                 ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 1, ["5"] = 2, ["10"] = 3 },
                 Where: "near-open-plan",
                 Walls: ["glass", "solid", "screen"],
@@ -230,7 +233,10 @@ public sealed record OfficeRules(
                 Access: "corridor"),
             ["kitchen"] = new(
                 ["kitchen", "coffee"],
-                Min: [3, 3],
+
+                // Wide enough for the counter and what stands beside it: three
+                // columns was a counter wall to wall, the coffee machine nowhere.
+                Min: [5, 3],
                 Count: 1,
                 Function: "idle",
                 Extras: ["fridge", "cooler", "kitchen-table"],
@@ -260,6 +266,14 @@ public sealed record OfficeRules(
             ["toilets"] = new(["toilet"], Count: 1, Core: true, Where: "core", Scope: "floor", Zone: "core"),
             ["exit"] = new(["exit"], Count: 2, Where: "ends"),
 
+            // Facilities, sharing the band with the rooms above as space allows:
+            // somewhere to take a call, to read, to print, to stretch, to train.
+            ["phone-booth"] = new(["phone-booth"], Min: [2, 2], Max: [3, 4], PerHead: 8, Walls: ["open"], Function: "idle", Scope: "floor", Zone: "interior", Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 2 }),
+            ["library"] = new(["reading-chair"], Min: [4, 3], Max: [6, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Walls: ["glass", "solid"], Function: "idle", Extras: ["storage", "plant"], Scope: "floor", Zone: "interior", Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 3, ["meeting"] = 1 }),
+            ["print-corner"] = new(["stationery"], Min: [3, 3], Max: [4, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["4"] = 1 }, Walls: ["open"], Extras: ["copier", "storage"], Scope: "floor", Zone: "core", Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["core"] = 2 }),
+            ["wellness-room"] = new(["yoga-mat"], Min: [4, 3], Max: [5, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["10"] = 1 }, Walls: ["solid"], Function: "idle", Extras: ["floor-cushion", "plant"], Scope: "floor", Zone: "perimeter", Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 3, ["meeting"] = 2 }),
+            ["training-room"] = new(["training-desk"], Min: [5, 3], Max: [8, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["12"] = 1 }, Walls: ["glass", "solid"], Function: "questions", Extras: ["whiteboard", "decor"], Scope: "floor", Zone: "interior", Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["meeting"] = 2 }),
+
             // The rest of the building.
             ["reception"] = new(["reception"], Level: "lobby", Count: 1, Function: "arrivals"),
             ["waiting-room"] = new(["sofa"], Level: "lobby", Count: 1, Function: "waiting"),
@@ -269,6 +283,13 @@ public sealed record OfficeRules(
             ["storage"] = new(["storage"], Level: "basement-1", Count: 1, Function: "storage"),
             ["garbage"] = new(["bin"], Level: "basement-2", Count: 1, Function: "bin"),
             ["server-room"] = new(["server"], Level: "basement-2", Count: 1, Function: "server"),
+
+            // Below and above the floors: somewhere to leave a bike and shower,
+            // a gym on the roof, IT help by the front door.
+            ["bike-store"] = new(["bike-rack"], Level: "basement-1", Count: 1),
+            ["showers"] = new(["shower"], Level: "basement-1", Count: 1, Extras: ["lockers"]),
+            ["gym"] = new(["treadmill"], Level: "roof", Count: 1, Function: "idle", Extras: ["weights-bench"]),
+            ["it-help"] = new(["help-desk"], Level: "lobby", Count: 1, Function: "arrivals", Extras: ["visitor-chair"]),
         },
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -305,6 +326,11 @@ public sealed record OfficeRules(
             ["reception"] = "wood",
             ["waiting-room"] = "walkway",
             ["entrance"] = "mat",
+            ["library"] = "wood",
+            ["wellness-room"] = "wood",
+            ["training-room"] = "walkway",
+            ["showers"] = "tile",
+            ["gym"] = "concrete",
 
             // Floor no team has taken yet: bare, so it reads as empty rather
             // than as a room nobody is in.

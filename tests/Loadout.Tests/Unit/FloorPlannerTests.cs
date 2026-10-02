@@ -291,27 +291,105 @@ public sealed class FloorPlannerTests
         scene.Areas!.Where(area => area.Kind is "kitchen" or "meeting" or "corridor").Should().OnlyContain(area => area.Run == null, "shared rooms are nobody's own");
     }
 
+    // ---- facilities ----
+
+    [Fact]
+    public void The_building_has_its_facilities_each_with_the_piece_that_makes_it()
+    {
+        foreach (var kit in new[] { Kit, Tech })
+        {
+            var name = kit == Tech ? "tech" : "shapes";
+            var lobby = FloorPlanner.Lobby(kit, Rules, 4).Scene;
+            var roof = FloorPlanner.Roof(kit, Rules, 4).Scene;
+            var basement = FloorPlanner.Basement(kit, Rules, 1).Scene;
+
+            void Has(OfficeScene scene, string kind, string tag)
+            {
+                var area = scene.Areas!.Should().ContainSingle(one => one.Kind == kind, $"{name}: there is a {kind}").Subject;
+
+                scene.Props!.Should().Contain(
+                    prop => prop.Kind == tag && prop.X >= area.X && prop.X < area.X + area.W && prop.Y >= area.Y && prop.Y < area.Y + area.H,
+                    $"{name}: the {kind} has its {tag}");
+                OfficeScenes.Problems(scene, sizeOf: null).Should().BeEmpty($"{name}: the {kind}'s level still passes");
+            }
+
+            Has(lobby, "it-help", "help-desk");
+            Has(roof, "gym", "treadmill");
+            Has(basement, "bike-store", "bike-rack");
+            Has(basement, "showers", "shower");
+
+            FloorPlanner.Basement(kit, Rules, 2).Scene.Areas!.Should().NotContain(one => one.Kind == "bike-store", "bikes are on the first level down");
+        }
+    }
+
+    [Fact]
+    public void A_big_team_s_floor_has_facilities_furnished_and_meeting_rooms_come_first()
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var seed in Enumerable.Range(0, 30).Select(one => $"run-{one}"))
+        {
+            var scene = FloorPlanner.Plan(Tech, Rules, seed, 12).Scene;
+            var rooms = scene.Areas!.Where(area => area.Y == 1 && area.Kind is not ("core" or "corridor")).ToList();
+            var meetings = rooms.Count(area => area.Kind == "meeting");
+
+            // A team of twelve has three meeting rooms by the rules, before any facility.
+            if (rooms.Any(area => area.Kind is "library" or "print-corner" or "phone-booth" or "wellness-room" or "training-room"))
+            {
+                meetings.Should().Be(3, $"{seed}: a facility never takes a meeting room's place");
+            }
+
+            string[] facilities = ["library", "print-corner", "phone-booth", "wellness-room", "training-room"];
+            string[] makes = ["reading-chair", "stationery", "phone-booth", "yoga-mat", "training-desk"];
+
+            foreach (var room in rooms.Where(area => facilities.Contains(area.Kind)))
+            {
+                var tag = makes[Array.IndexOf(facilities, room.Kind)];
+
+                scene.Props!.Should().Contain(
+                    prop => prop.Kind == tag && prop.X >= room.X && prop.X < room.X + room.W && prop.Y >= room.Y && prop.Y < room.Y + room.H,
+                    $"{seed}: the {room.Kind} has its {tag}");
+                seen.Add(room.Kind);
+            }
+        }
+
+        seen.Should().NotBeEmpty("some floor of a team of twelve has room for a facility");
+    }
+
     // ---- the outside, from the floor ----
 
     [Fact]
     public void A_storey_s_outside_is_solid_where_the_floor_has_a_wall_and_lit_where_a_team_is_in()
     {
+        var wallsMet = 0;
+
         foreach (var number in Enumerable.Range(1, 10))
         {
             var scene = FloorPlanner.Shared(Tech, Rules, number, [new("a", 0, 0, 1, 3), new("c", 0, 2, 1, 2)]).Scene;
             var strips = OfficeFacadePlan.For(scene, run => run == "a");
-            var band = scene.Areas!.Single(area => area.Kind == "corridor").Y - 1;
 
             // One letter a bay: the long sides the floor's width, the short its depth.
             new[] { strips.S, strips.N, strips.LitS, strips.LitN }.Should().OnlyContain(one => one.Length == scene.Width);
             new[] { strips.E, strips.W, strips.LitE, strips.LitW }.Should().OnlyContain(one => one.Length == scene.Height);
 
             // The north wall is solid all along; the windows are glass between
-            // the corners, and the band's wall where it meets the side glass is
-            // solid there too, so a room's wall is not glass from outside.
+            // the corners, and wherever a wall inside meets the side glass the
+            // bay is solid too, so a room's wall is not glass from outside.
             strips.N.Should().MatchRegex("^s+$", $"floor {number}: the north wall is solid");
             strips.S[1..^1].Should().Contain("g");
-            strips.W[band].Should().Be('s', $"floor {number}: the band's wall meets the west glass");
+
+            var first = scene.Atlases![0].Tiles;
+
+            for (var y = 1; y < scene.Height - 1; y++)
+            {
+                var inside = scene.Walls![y][1];
+
+                if (inside >= 0 && inside < first)
+                {
+                    strips.W[y].Should().Be('s', $"floor {number}: a wall meets the west glass at row {y}");
+                    wallsMet++;
+                }
+            }
 
             // Lit behind team a's own area, never behind team c's, whose run is
             // not in, nor behind solid wall.
@@ -336,6 +414,8 @@ public sealed class FloorPlannerTests
             strips.LitS.Should().Contain("1", $"floor {number}: team a is in");
             OfficeFacadePlan.For(scene, _ => false).LitS.Should().MatchRegex("^0+$", "nobody is in");
         }
+
+        wallsMet.Should().BePositive("some floor has a wall meeting the west glass, or the check above proved nothing");
     }
 
     [Fact]

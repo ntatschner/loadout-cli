@@ -125,6 +125,9 @@ public static partial class FloorPlanner
         floor.Put("lobby-screen", "lobby-screen", screen.Piece with { Blocks = false }, screenX, 1);
         floor.Areas.Add(new OfficeArea("lobby-screen", "lobby-screen", screenX, 1, screen.Piece.Footprint[0], 1, Function(rules, "lobby-screen") ?? "schedules"));
 
+        // IT help in the band east of the core, open to the lobby.
+        Facility(floor, parts, random, rules, "it-help", "lobby", coreLeft + coreWidth + 1, 7, band, "open");
+
         // Reception, east of the way in, facing the door, the receptionist behind.
         var desk = parts.Pick("reception", random, one => one.Seats is { Count: > 0 });
         var deskX = coreLeft + coreWidth + 2;
@@ -219,6 +222,9 @@ public static partial class FloorPlanner
 
         // Out of the lift and straight on to the south edge stays clear.
         floor.Reserve(coreLeft, band + 2, coreWidth, height - 2 - band - 1);
+
+        // A gym in the band west of the core, behind glass.
+        Facility(floor, parts, random, rules, "gym", "roof", coreLeft - 9, 8, band, "glass");
 
         // Pergolas in the band either side of the core, a bench under each.
         var pergola = parts.Pick("pergola", random);
@@ -347,6 +353,13 @@ public static partial class FloorPlanner
             floor.Wall(middle, y, Cell.Solid);
         }
 
+        // On the first level, a bike store and showers in the band east of the core.
+        if (level == 1)
+        {
+            Facility(floor, parts, random, rules, "bike-store", "basement-1", coreLeft + coreWidth + 1, 8, band, "solid");
+            Facility(floor, parts, random, rules, "showers", "basement-1", coreLeft + coreWidth + 10, Math.Min(7, width - 2 - (coreLeft + coreWidth + 10)), band, "solid");
+        }
+
         // A desk in the band for whoever works down here: the post on the
         // first level, the machines on the second.
         var desk = parts.Pick("desk", random, one => one.Footprint[1] == 1 && one.Seats is { Count: > 0 });
@@ -354,6 +367,47 @@ public static partial class FloorPlanner
         floor.Put("keeper-desk", "desk", desk.Piece, 2, 2, "desk");
 
         return new OfficeFloorPlan(Scene(parts, rules, "@basement", floor, [.. floor.Seats], coreLeft, band), 0, 0);
+    }
+
+    /// <summary>
+    /// A facility in a level's band - the help desk, the gym, the bike store -
+    /// as the rules have it: its area, its south wall with a door where its
+    /// partition is a wall, and what suits it on that level. Nothing where the
+    /// rules leave it out.
+    /// </summary>
+    private static void Facility(Floor floor, Parts parts, Random random, OfficeRules rules, string kind, string level, int x, int w, int band, string walls)
+    {
+        if (rules.Rooms is not { } rooms || !rooms.TryGetValue(kind, out var rule) || rule.CountFor(1) < 1 || w < 3)
+        {
+            return;
+        }
+
+        var depth = band - 1;
+        var door = x + w / 2;
+
+        floor.Areas.Add(new OfficeArea(kind, kind, x, 1, w, depth, rule.Function));
+        floor.Reserve(x, 1, w, depth);
+
+        if (walls != "open")
+        {
+            for (var xx = x - 1; xx <= x + w; xx++)
+            {
+                if (xx != door)
+                {
+                    Edge(floor, parts, random, walls, xx, band);
+                }
+            }
+
+            foreach (var side in new[] { x - 1, x + w })
+            {
+                for (var y = 1; y < band; y++)
+                {
+                    Edge(floor, parts, random, walls, side, y);
+                }
+            }
+        }
+
+        floor.Last.Add(() => Furnish(floor, parts, random, rules, kind, kind, level, x, 1, w, depth, back: "n", entry: (door, depth)));
     }
 
     /// <summary>
