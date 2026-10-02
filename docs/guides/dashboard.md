@@ -237,9 +237,8 @@ nothing. The ideas are still there to read.
 ## What this doesn't do
 
 - It fetches nothing from the internet. Its typeface, Atkinson Hyperlegible,
-  and the Loadout icon are carried inside the page. Without a set of office art
-  on your machine, the building is drawn in plain shapes, because Loadout ships
-  none.
+  and the Loadout icon are carried inside the page. The office's art ships with
+  Loadout and is served from your own machine.
 - Only the dashboard's own machine can reach it by default.
 - No screen reader has been used with it, and no keyboard-only pass by a person
   has been recorded. [Setting up accessibility](accessibility.md) has what was

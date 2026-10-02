@@ -230,9 +230,9 @@ public sealed record OfficeKit(
     /// tag the built-in rules use, each a shape in the kit's colours.
     /// </summary>
     /// <remarks>
-    /// No pictures at all, for the reason <see cref="OfficeArt"/> gives: Loadout
-    /// ships no art. Footprints and seats are real, so what the planner lays out
-    /// with these is what it lays out with any pack.
+    /// No pictures at all: what the building is drawn with where no set can be
+    /// used, not even the built-in one. Footprints and seats are real, so what
+    /// the planner lays out with these is what it lays out with any pack.
     /// </remarks>
     public static OfficeKit Kit()
     {

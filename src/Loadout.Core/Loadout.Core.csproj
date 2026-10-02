@@ -31,6 +31,11 @@
          stylesheet from somewhere would not work on the machine it is most
          wanted on, which is one with no network. -->
     <EmbeddedResource Include="Teams\Daemon\dashboard.html" />
+
+    <!-- The office Loadout ships, made for it, so it is Loadout's to give away
+         rather than an asset pack's. Unpacked into the office folder at start
+         (OfficeArt.Unpack), where everything that reads a set finds it. -->
+    <EmbeddedResource Include="Teams\Office\loadout-tech\*" LogicalName="office/loadout-tech/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Loadout.Tests" />

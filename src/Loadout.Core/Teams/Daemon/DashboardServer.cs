@@ -143,9 +143,8 @@ public sealed class DashboardServer : IDisposable
     /// Where the office art lives on this machine, or null for none.
     /// </summary>
     /// <remarks>
-    /// Null is the ordinary case and draws what the office always drew: a
-    /// square with the node's name in it. Loadout ships no art, so this points
-    /// at a directory somebody filled themselves.
+    /// The office folder, where the built-in set is unpacked and anybody's own
+    /// sets sit beside it. Null draws the building in its own shapes.
     /// </remarks>
     public string? OfficeRoot { get; set; }
 

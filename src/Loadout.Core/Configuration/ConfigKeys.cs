@@ -365,13 +365,13 @@ public static class ConfigKeys
             WhenUnset: "nothing, which Telegram refuses"),
 
         new("team-office-set",
-            "Which set of office art the dashboard draws desks with",
+            "Which set of office art the dashboard's building is drawn from",
             (_, m) => m.Teams.OfficeSet,
             (_, m, v) => m.Teams.OfficeSet = v.Trim(),
             true,
             Sample: "open-office",
             Group: Groups.Machine,
-            WhenUnset: "a desk is a square with the node's name in it, which is what it has always been"),
+            WhenUnset: "the Tech office Loadout ships with (loadout-tech)"),
 
         new("team-office-scale",
             "How large the office may be drawn: the smallest and largest screen pixels per pixel of art, as min-max",

@@ -139,7 +139,7 @@ public sealed class OfficeArtTests : IDisposable
     }
 
     [Fact]
-    public void A_set_that_is_not_installed_draws_nothing_rather_than_half_a_thing()
+    public void A_set_that_is_not_installed_draws_the_built_in_office_rather_than_half_a_thing()
     {
         Set("open-office", "lead.png");
 
@@ -147,14 +147,67 @@ public sealed class OfficeArtTests : IDisposable
 
         OfficeArt.Chosen(paths, "open-office").Set.Should().Be("open-office");
 
-        // A misspelt name comes back as no set. An office drawn as squares is
+        // A misspelt name comes back as the built-in set. The Tech office is
         // what an unconfigured Loadout looks like, and it should be what a
         // misspelt one looks like too - rather than a page that serves a 404
-        // for every desk on it.
-        OfficeArt.Chosen(paths, "open-offcie").Set.Should().BeEmpty();
-        OfficeArt.Chosen(paths, "../elsewhere").Set.Should().BeEmpty();
-        OfficeArt.Chosen(paths, "").Set.Should().BeEmpty();
+        // for every picture on it.
+        OfficeArt.Chosen(paths, "open-offcie").Set.Should().Be(OfficeArt.BuiltIn);
+        OfficeArt.Chosen(paths, "../elsewhere").Set.Should().Be(OfficeArt.BuiltIn);
+        OfficeArt.Chosen(paths, "").Set.Should().Be(OfficeArt.BuiltIn);
+        OfficeArt.Chosen(paths, null).Set.Should().Be(OfficeArt.BuiltIn);
+    }
+
+    [Fact]
+    public void The_built_in_office_is_unpacked_whole_and_passes_the_kit_check()
+    {
+        OfficeArt.Unpack(Office).Should().BeTrue();
+
+        // A kit the building can be made from, every picture it names in the
+        // folder: the art Loadout ships has to pass the check a person's own
+        // does.
+        var check = OfficeKits.Check(Office, OfficeArt.BuiltIn);
+
+        check.Problems.Should().BeEmpty();
+        check.Fit.Should().BeTrue();
+        check.Kit!.Facade.Should().NotBeNull();
+        check.Kit.Sheets.Should().NotBeEmpty();
+
+        // And a second start finds it already there and touches nothing.
+        var written = File.GetLastWriteTimeUtc(Path.Combine(Office, OfficeArt.BuiltIn, OfficeKit.FileName));
+
+        OfficeArt.Unpack(Office).Should().BeTrue();
+        File.GetLastWriteTimeUtc(Path.Combine(Office, OfficeArt.BuiltIn, OfficeKit.FileName)).Should().Be(written);
+    }
+
+    [Fact]
+    public void A_folder_of_that_name_somebody_made_is_never_written_over()
+    {
+        Set(OfficeArt.BuiltIn, "lead.png");
+
+        OfficeArt.Unpack(Office).Should().BeFalse("it is not the built-in set's to write over");
+        Directory.EnumerateFiles(Path.Combine(Office, OfficeArt.BuiltIn)).Select(Path.GetFileName).Should().Equal("lead.png");
+
+        // Asked for by name it is that person's set; it is not the default.
+        var paths = new StubPaths(_root);
+
+        OfficeArt.Chosen(paths, OfficeArt.BuiltIn).Set.Should().Be(OfficeArt.BuiltIn);
         OfficeArt.Chosen(paths, null).Set.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Older_built_in_art_is_brought_up_to_date_and_what_it_dropped_goes()
+    {
+        var folder = Path.Combine(Office, OfficeArt.BuiltIn);
+
+        OfficeArt.Unpack(Office).Should().BeTrue();
+        File.WriteAllText(Path.Combine(folder, ".loadout-built-in"), "an older build");
+        File.WriteAllBytes(Path.Combine(folder, "dropped.png"), [1, 2, 3]);
+        File.WriteAllText(Path.Combine(folder, OfficeKit.FileName), "{}");
+
+        OfficeArt.Unpack(Office).Should().BeTrue();
+
+        File.Exists(Path.Combine(folder, "dropped.png")).Should().BeFalse();
+        OfficeKits.Check(Office, OfficeArt.BuiltIn).Fit.Should().BeTrue();
     }
 
     [Theory]
@@ -177,7 +230,7 @@ public sealed class OfficeArtTests : IDisposable
         // one, any of them - and the page could not even list them to offer a
         // choice.
         chosen.Root.Should().Be(Office);
-        OfficeArt.Sets(chosen.Root).Should().Equal("newsroom", "open-office");
+        OfficeArt.Sets(chosen.Root).Should().Equal(OfficeArt.BuiltIn, "newsroom", "open-office");
     }
 
     /// <summary>Paths whose state directory is the one this test wrote into.</summary>

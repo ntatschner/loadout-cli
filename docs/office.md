@@ -269,9 +269,9 @@ that list empty: inside, the office is meant to be pixel art throughout.
 
 Stated plainly, so nobody finds out by surprise:
 
-- **The built-in shapes are a stand-in.** Without a set, the inside of the
-  building is drawn in flat coloured shapes. The pixel-art pack that replaces
-  them is being made.
+- **One office ships, the Tech one.** Loadout comes with it and draws the
+  building from it unless you choose another set. The other themes are being
+  made. The basement's front is still drawn in plain shapes.
 - **Floors of art turn only once their pictures allow it.** A pack's pieces
   turn once they give all four sides. Tiles are picked by their corners, not
   turned, so shading drawn into a tile, a shadow along a wall's south face say,

@@ -314,10 +314,9 @@ public sealed record OfficeScene(
     /// The room drawn when no set is installed, in the kit's own colours.
     /// </summary>
     /// <remarks>
-    /// Loadout ships no art, for the reason <see cref="OfficeArt"/> gives. This
-    /// is not art: it names no picture, so the page draws every tile, desk and
-    /// person as the kit's shapes. It exists so the office works, and can be
-    /// tested and shown, on a machine where nobody has installed anything.
+    /// This is not art: it names no picture, so the page draws every tile, desk
+    /// and person as the kit's shapes. It exists so a scene can be tested
+    /// without any pictures to hand.
     /// Twelve desks in two rows, which seats every team shipped so far; a larger
     /// team stands its extra people in the spare row the page already has.
     /// </remarks>

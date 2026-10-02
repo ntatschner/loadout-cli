@@ -1314,12 +1314,14 @@ page's to delete.
 
 #### Art for the office
 
-Out of the box the building is drawn in its own shapes. **Loadout ships no
-art.** Pixel-art asset packs are generally sold under licences that let you use
-the files inside a finished project and forbid redistributing the originals,
-and a public source repository hands everything in it to anybody who clones. So
-the art lives on your machine, in a set under `<state>/teams/office/`, and
-Loadout only draws it. A set that is a **kit** - floor and wall tiles, furniture,
+Out of the box the building is drawn from the **Tech office**, the art Loadout
+ships, made for it. It is unpacked into `<state>/teams/office/loadout-tech/`
+when the dashboard or the daemon starts, and brought up to date when Loadout
+is. Copy it to a name of your own to change it: the built-in folder is written
+over on an update. Any other set is your own, under `<state>/teams/office/`,
+and stays there. Asset packs are generally sold under licences that let you
+use the files inside a finished project and forbid redistributing the
+originals, so Loadout ships none of those, only draws them. A set that is a **kit** - floor and wall tiles, furniture,
 people, the outside - is what the building is made from; [the office](office.md)
 says what goes in one and how `loadout team office check` reads it.
 

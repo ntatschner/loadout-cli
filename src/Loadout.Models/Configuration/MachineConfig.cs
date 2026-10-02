@@ -205,14 +205,14 @@ public sealed class MachineTeams
     public string NotifyChat { get; set; } = string.Empty;
 
     /// <summary>
-    /// Which set of office art the dashboard draws desks with, or empty for
-    /// none.
+    /// Which set of office art the dashboard's building is drawn from, or empty
+    /// for the one Loadout ships.
     /// </summary>
     /// <remarks>
-    /// Machine-local because the art is: Loadout ships none of it, and a set is
-    /// a directory somebody filled on this computer from packs they bought. A
-    /// name here that no directory answers to draws nothing, which is the same
-    /// as drawing nothing.
+    /// Machine-local because sets are: apart from the built-in one, a set is a
+    /// directory somebody filled on this computer, often from packs they bought.
+    /// A name here that no directory answers to draws the built-in set, the same
+    /// as leaving it empty.
     /// </remarks>
     public string OfficeSet { get; set; } = string.Empty;
 

@@ -15,12 +15,14 @@ namespace Loadout.Core.Teams;
 /// files are left where they are, and nothing draws them any more.
 /// </para>
 /// <para>
-/// <strong>Nothing here is in the repository or the installer.</strong> Pixel
-/// art asset packs are sold under licences that permit using the files inside a
-/// finished project and forbid redistributing the originals, and a public
-/// source repository redistributes everything in it to anybody who clones. So
-/// the art lives in a directory on the machine that bought it, Loadout ships
-/// none of it, and a build with no art draws exactly what it drew before.
+/// <strong>One set ships with Loadout: <see cref="BuiltIn"/>, the Tech
+/// office</strong>, made for it and so Loadout's to give away. It is embedded
+/// in the build and unpacked into the office folder, where it is drawn unless
+/// another set is chosen. Anything else is somebody's own: asset packs are sold
+/// under licences that allow using the files in a finished project and forbid
+/// redistributing the originals, and a public source repository redistributes
+/// everything in it, so those live on the machine that bought them and nowhere
+/// else.
 /// </para>
 /// <para>
 /// A set is a directory; a piece is a file in it. Which sets exist is whatever
@@ -31,6 +33,128 @@ namespace Loadout.Core.Teams;
 /// </remarks>
 public static class OfficeArt
 {
+    /// <summary>The set Loadout ships, which the building is drawn from unless another is chosen.</summary>
+    public const string BuiltIn = "loadout-tech";
+
+    // In the built-in set's folder, saying which art it holds: a folder of that
+    // name without one is somebody's own and is never written over, and one
+    // holding older art is refreshed. A leading dot, so no set or piece name
+    // can reach it.
+    private const string Marker = ".loadout-built-in";
+
+    private const string Resources = "office/" + BuiltIn + "/";
+
+    /// <summary>
+    /// Puts the built-in set in the office folder, or brings it up to date,
+    /// and says whether it is there to draw from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Unpacked rather than read from the build where it lies, so the set is an
+    /// ordinary directory to everything that reads one - the kit check, the
+    /// picture route, the stamps - and nothing needs to know it is special.
+    /// </para>
+    /// <para>
+    /// Written over only where it says it is the built-in set: a folder called
+    /// <see cref="BuiltIn"/> that somebody made themselves is left alone, and
+    /// then the built-in set is not offered. Emptied before it is written, the
+    /// marker last of all, so a picture the newer art dropped is not left
+    /// behind, and an unpacking cut short is finished at the next start rather
+    /// than taken for somebody's own.
+    /// </para>
+    /// </remarks>
+    public static bool Unpack(string root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+
+        var assembly = typeof(OfficeArt).Assembly;
+        var names = assembly.GetManifestResourceNames()
+            .Where(name => name.StartsWith(Resources, StringComparison.Ordinal))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+        if (names.Count == 0)
+        {
+            return false;
+        }
+
+        var directory = Path.Combine(root, BuiltIn);
+        var marker = Path.Combine(directory, Marker);
+
+        try
+        {
+            var stamp = ArtStamp(assembly, names);
+
+            if (Directory.Exists(directory))
+            {
+                if (!File.Exists(marker))
+                {
+                    return false;
+                }
+
+                if (File.ReadAllText(marker).Trim() == stamp)
+                {
+                    return true;
+                }
+
+                foreach (var file in Directory.EnumerateFiles(directory).Where(one => Path.GetFileName(one) != Marker))
+                {
+                    File.Delete(file);
+                }
+            }
+
+            Directory.CreateDirectory(directory);
+
+            if (!File.Exists(marker))
+            {
+                File.WriteAllText(marker, string.Empty);
+            }
+
+            foreach (var name in names)
+            {
+                var target = Path.Combine(directory, name[Resources.Length..]);
+                var part = target + "." + Guid.NewGuid().ToString("N") + ".part";
+
+                using (var from = assembly.GetManifestResourceStream(name)!)
+                using (var to = File.Create(part))
+                {
+                    from.CopyTo(to);
+                }
+
+                File.Move(part, target, overwrite: true);
+            }
+
+            File.WriteAllText(marker, stamp);
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A folder that cannot be written: drawn from what is there, if it
+            // is the built-in set at all.
+            return File.Exists(marker);
+        }
+    }
+
+    // Which art the build carries, from every file's name and bytes.
+    private static string ArtStamp(System.Reflection.Assembly assembly, IReadOnlyList<string> names)
+    {
+        using var hash = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
+
+        foreach (var name in names)
+        {
+            hash.AppendData(System.Text.Encoding.UTF8.GetBytes(name + "\n"));
+
+            using var stream = assembly.GetManifestResourceStream(name)!;
+            using var copy = new MemoryStream();
+
+            stream.CopyTo(copy);
+            hash.AppendData(copy.ToArray());
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset())[..16];
+    }
+
     /// <summary>Where sets live: one directory per set.</summary>
     public static string Root(IPlatformPaths paths)
     {
@@ -45,11 +169,11 @@ public static class OfficeArt
     /// </summary>
     /// <remarks>
     /// <para>
-    /// A configured name that no directory answers to comes back as no set,
-    /// rather than as one that serves 404s for every piece. The difference
-    /// matters to whoever is reading the page: an office drawn as squares is
-    /// what an unconfigured Loadout looks like, and it should also be what a
-    /// misspelt one looks like, rather than something subtly broken.
+    /// A configured name that no directory answers to comes back as the built-in
+    /// set, rather than as one that serves 404s for every piece: the Tech office
+    /// is what an unconfigured Loadout looks like, and it should also be what a
+    /// misspelt one looks like, rather than something subtly broken. Where the
+    /// built-in set cannot be unpacked, no set, and the building's own shapes.
     /// </para>
     /// <para>
     /// The root comes back either way, and that is the point. It used to be
@@ -66,15 +190,16 @@ public static class OfficeArt
         ArgumentNullException.ThrowIfNull(paths);
 
         var root = Root(paths);
+        var fallback = Unpack(root) ? BuiltIn : string.Empty;
 
         if (set is not { Length: > 0 } wanted || !Names(wanted))
         {
-            return (root, string.Empty);
+            return (root, fallback);
         }
 
         return Directory.Exists(Path.Combine(root, wanted))
             ? (root, wanted)
-            : (root, string.Empty);
+            : (root, fallback);
     }
 
     /// <summary>
