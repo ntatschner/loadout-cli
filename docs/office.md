@@ -9,15 +9,19 @@ picture, and isn't built to be read aloud.
 
 ## Outside
 
-You start outside, looking at the tower from above a corner. **Corner**,
-**Aerial** and **From the street** change where you're standing; the turn
-buttons (or Q and E) walk you round it a quarter at a time. At the first zoom
-the whole building fits. Zoom in (the + button, Ctrl and the wheel, or a pinch)
-and you can scroll up and down it, starting at the floors in use.
+You start outside, looking at the tower from above a corner. Outside is pixel
+art like the floors, each view at a fixed angle so the art lands on the screen
+pixel for pixel: **Corner** is isometric, two pixels across for one down along
+a wall; **Aerial** is top-down, north up, the way the floors are drawn, walls
+standing at half height; **From the street** is square on to a wall, at its
+own size. The turn buttons (or Q and E) walk you round a quarter at a time. At
+the first zoom the whole building fits; each zoom (the + button, Ctrl and the
+wheel, or a pinch) doubles it, and you can scroll up and down it, starting at
+the floors in use. Shrunk, the art keeps its own colours rather than blurring.
 
-**The lobby** is the close-up: across the street from the entrance, looking in
-through the glass at the receptionist behind the desk and everyone waiting on
-the sofas, each with the name of what they're waiting for over them. They're the
+**The lobby** is the close-up: across the street from the entrance, square on,
+looking in through the glass at the room's own pixel art, its floor laid back
+at a slant, the receptionist behind the desk and everyone waiting on the sofas, each with the name of what they're waiting for over them. They're the
 same people the lobby shows from inside, doing the same things, so a run that
 starts has its lead walk in off the street while you watch. Point at somebody to
 see what they are and when it's due; click to go in. The turn buttons take you
@@ -25,22 +29,24 @@ round to the lobby's other sides.
 
 What you can read from out here:
 
-- **Lit windows** on a floor in use, more of them the fuller it is, with
-  somebody in the first few.
+- **Lit windows** on a floor in use, where somebody sits behind them, with
+  somebody in the first few, and **solid wall** where the floor has a wall
+  against the outside.
 - **A strip along the floor's slab** in its run's colour: working, waiting on
   you, or failed.
 - **The name on the crown**, lit in the colour of whatever most needs seeing
   anywhere in the building.
 - **The lobby** at street level, **the roof** on top and **two basements**
-  showing faintly through the street.
+  showing faintly through the street from above.
 
 Hover over a floor to see whose it is; click it to go in.
 
 Round the tower is a neighbourhood: blocks of other buildings, parks and roads,
-made in the page as 3D shapes and drawn through the same camera, so it turns
+made in the page as 3D shapes and drawn at the same fixed angle, so it turns
 and zooms with the tower. It's the same neighbourhood for everybody and doesn't
 rearrange itself, every building in it is lower than the tower, and anything
-standing between you and the tower is faded so it never hides it.
+standing between you and the tower is faded so it never hides it, or square on
+left out, as a side-on view leaves out what is behind the eye.
 
 The street round the tower changes with your clock: day, dusk, night and dawn,
 with the lamps and headlights on after dark. Some days it rains, and in winter

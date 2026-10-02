@@ -8144,7 +8144,7 @@
 
   // A quarter turn outside, eased over a moment unless motion is off.
   function towerYawFor() {
-    return (towerLook.view === "lobby" ? 0 : Math.PI / 4) + towerLook.turn * Math.PI / 2;
+    return (towerLook.view === "corner" ? Math.PI / 4 : 0) + towerLook.turn * Math.PI / 2;
   }
 
   function towerSpin() {
@@ -8632,72 +8632,117 @@
     street the camera stands at the corner at head height and looks up, and
     scrolling tips its gaze up or down instead.
   */
+  /*
+    Each view at a fixed pixel-art angle rather than through a lens, so the
+    art lands on the screen pixel for pixel as the floors' does:
+
+      corner  2:1 isometric: along a wall, two pixels across for one down,
+              and a storey straight up at its own height;
+      aerial  top-down with north up, as the floors are, walls standing up
+              at half their height;
+      street  square on to a wall, at its own size;
+      lobby   the same, close on the two storeys of the lobby.
+
+    u runs across the screen and v up it; whatever lies along the line of
+    sight lands on one point. The eye is a long way back along that line, so
+    which walls face it and what is nearest are worked out as before.
+  */
+  function towerProjector(view, yaw) {
+    var right = [Math.cos(yaw), -Math.sin(yaw)];
+    var fwd = [Math.sin(yaw), Math.cos(yaw)];
+    var k = view === "corner" ? Math.SQRT2 : 1;
+    var along = view === "corner" ? Math.SQRT1_2 : view === "aerial" ? 1 : 0;
+    var lift = view === "aerial" ? 0.5 : 1;
+    var ahead = [fwd[0] * lift, fwd[1] * lift, -along];
+    var length = Math.hypot(ahead[0], ahead[1], ahead[2]);
+
+    return {
+      ahead: [ahead[0] / length, ahead[1] / length, ahead[2] / length],
+      u: function (p) { return (p[0] * right[0] + p[1] * right[1]) * k; },
+      v: function (p) { return (p[0] * fwd[0] + p[1] * fwd[1]) * along + p[2] * lift; },
+    };
+  }
+
+  // The building's box in a view's u and v, at one canvas pixel per unit.
+  function towerBounds(view, yaw) {
+    var proj = towerProjector(view, yaw);
+    var w = towerWidth();
+    var d = towerDepth();
+    var low = view === "lobby" ? 0 : -towerBasements() * towerStorey() * 0.5;
+    var high = view === "lobby" ? towerStorey() * 2 : towerTop();
+    var us = [];
+    var vs = [];
+
+    [[0, 0], [w, 0], [w, d], [0, d]].forEach(function (corner) {
+      [low, high].forEach(function (z) {
+        var p = [corner[0], corner[1], z];
+
+        us.push(proj.u(p));
+        vs.push(proj.v(p));
+      });
+    });
+
+    return { u0: Math.min.apply(null, us), u1: Math.max.apply(null, us), v0: Math.min.apply(null, vs), v1: Math.max.apply(null, vs) };
+  }
+
+  /*
+    Canvas pixels to a unit of the building, in whole halvings and doublings
+    so the art is drawn at its own size, at half, at a quarter: the whole
+    building fits at the first zoom and each zoom after doubles it; the lobby
+    starts as big as its width allows.
+  */
+  function towerStepFor(view, yaw, canvasWidth, canvasHeight, zoom) {
+    var box = towerBounds(view, yaw);
+    var fit = Math.min(canvasWidth / ((box.u1 - box.u0) * 1.06), canvasHeight / ((box.v1 - box.v0) * 1.06));
+    var whole = Math.pow(2, Math.floor(Math.log2(Math.max(fit, 1 / 64))));
+
+    return Math.min(4, whole * Math.pow(2, Math.max(0, zoom || 0)));
+  }
+
   function towerCamera(canvasWidth, canvasHeight, step) {
     var width = towerWidth();
     var depth = towerDepth();
-    var yaw = towerYaw === null ? Math.PI / 4 : towerYaw;
-    var top = towerTop();
+    var yaw = towerYaw === null ? towerYawFor() : towerYaw;
     var view = towerLook.view;
-    var pitch = view === "aerial" ? 1.05 : view === "ground" ? -(0.3 + Math.max(0, Math.min(1, towerScroll / top)) * 0.45)
-      : view === "lobby" ? -0.03 : 0.45;
-    var far = view === "ground" ? Math.hypot(width, depth) * 1.6 : 8000;
-    var target = view === "ground"
-      ? null
-      : [width / 2, depth / 2, (towerZoom.outside || 0) <= 0
-        ? (top - towerBasements() * towerStorey() * 0.5) / 2
-        : Math.max(-towerBasements() * towerStorey(), Math.min(top, towerScroll))];
+    var proj = towerProjector(view, yaw);
+    var box = towerBounds(view, yaw);
+    var ahead = proj.ahead;
 
-    // Looking from the south-west corner at turn 0, round clockwise with each turn.
-    var ahead = [Math.sin(yaw) * Math.cos(pitch), Math.cos(yaw) * Math.cos(pitch), -Math.sin(pitch)];
-    var eye;
+    // What sits in the middle of the canvas: the whole building at the first
+    // zoom, the lobby in the lobby view, and wherever it is scrolled to after.
+    var middle = [width / 2, depth / 2, 0];
+    var cu = proj.u(middle);
+    var cv = (box.v0 + box.v1) / 2;
 
-    if (view === "ground") {
-      eye = [width / 2 - Math.sin(yaw) * far, depth / 2 - Math.cos(yaw) * far, 26];
-    } else if (view === "lobby") {
-      // Square on to a face of the lobby, far enough back to take in its whole width.
-      var across = Math.abs(Math.sin(yaw)) > 0.5 ? depth : width;
-      var behind = Math.abs(Math.sin(yaw)) > 0.5 ? width / 2 : depth / 2;
-
-      // Close enough that the lobby's two storeys fill most of the view,
-      // at the height of somebody on the far pavement.
-      far = behind + across * 0.4;
-      eye = [width / 2 - Math.sin(yaw) * far, depth / 2 - Math.cos(yaw) * far, towerTile() * 2.6];
-    } else {
-      eye = [target[0] - ahead[0] * far, target[1] - ahead[1] * far, target[2] - ahead[2] * far];
+    if (view === "lobby") {
+      // The street a fifth of the way up, the lobby's two storeys above it.
+      cv = canvasHeight * 0.3 / step;
+    } else if ((towerZoom.outside || 0) > 0) {
+      cv = proj.v([width / 2, depth / 2, Math.max(-towerBasements() * towerStorey(), Math.min(towerTop(), towerScroll))]);
     }
 
-    var right = [Math.cos(yaw), -Math.sin(yaw), 0];
-    var up = [
-      right[1] * ahead[2] - right[2] * ahead[1],
-      right[2] * ahead[0] - right[0] * ahead[2],
-      right[0] * ahead[1] - right[1] * ahead[0],
-    ];
-    var focal = view === "ground" ? canvasHeight / step * 0.75
-      : view === "lobby" ? canvasWidth / step * 0.52 * Math.pow(1.25, towerZoom.outside || 0)
-      : far;
+    var far = 1e5;
+    var eye = [middle[0] - ahead[0] * far, middle[1] - ahead[1] * far, towerStorey() - ahead[2] * far];
 
     return {
       eye: eye,
       ahead: ahead,
       street: view === "ground" || view === "lobby",
       lobby: view === "lobby",
+      elevation: view === "ground" || view === "lobby",
+      step: step,
       depth: function (p) {
         return (p[0] - eye[0]) * ahead[0] + (p[1] - eye[1]) * ahead[1] + (p[2] - eye[2]) * ahead[2];
       },
+      // On whole canvas pixels, so edges and the art fall on the pixel grid.
       project: function (p) {
-        var dx = p[0] - eye[0];
-        var dy = p[1] - eye[1];
-        var dz = p[2] - eye[2];
-        var f = Math.max(1, dx * ahead[0] + dy * ahead[1] + dz * ahead[2]);
-        var u = dx * right[0] + dy * right[1] + dz * right[2];
-        var v = dx * up[0] + dy * up[1] + dz * up[2];
-
-        return [canvasWidth / 2 + u * focal / f * step, canvasHeight * (view === "ground" ? 0.6 : view === "lobby" ? 0.48 : 0.5) - v * focal / f * step];
+        return [Math.round(canvasWidth / 2 + (proj.u(p) - cu) * step), Math.round(canvasHeight / 2 - (proj.v(p) - cv) * step)];
       },
     };
   }
 
   /*
+    The four walls of the tower, each with its outward direction  /*
     The four walls of the tower, each with its outward direction and its run
     along the ground. One of them is the front, with the way in: the long wall
     seen first, at turn 0. It stays where it is as the view turns, so the other
@@ -8731,23 +8776,29 @@
     var canvas = towerHold.querySelector(".tower-outside");
     var dpr = window.devicePixelRatio || 1;
     var across = canvas.parentNode.clientWidth || 800;
-    // The tower is drawn in code rather than from pixel art, so it has no
-    // whole steps to keep to: at the first zoom the whole building fits, and
-    // each zoom after is a quarter more, scrolled up and down it.
     var cssWidth = across;
     var cssHeight = Math.max(320, Math.round(window.innerHeight * 0.7));
-    var extent = towerExtent();
-    var fit = Math.min(across * dpr / (extent[0] * 1.08), cssHeight * dpr / (extent[1] * 1.08));
-    var step = fit * Math.pow(1.25, Math.max(0, towerZoom.outside || 0));
 
-    canvas._scale = step;
+    // Drawn as pixel art: at low resolution, each of the canvas's pixels
+    // shown as a square block of the screen's, as big as a pixel of the
+    // floors' art is at the office's size; the browser scales it up with hard
+    // edges.
+    var limits = (towerData && towerData.scale) || { min: 1, max: 2 };
+    var block = Math.max(1, Math.round(dpr * limits.min));
+    var lowWidth = Math.max(1, Math.ceil(cssWidth * dpr / block));
+    var lowHeight = Math.max(1, Math.ceil(cssHeight * dpr / block));
+    var step = towerStepFor(towerLook.view, towerYaw === null ? towerYawFor() : towerYaw, lowWidth, lowHeight, towerZoom.outside);
 
-    if (canvas.width !== Math.round(cssWidth * dpr) || canvas.height !== Math.round(cssHeight * dpr)) {
-      canvas.width = Math.round(cssWidth * dpr);
-      canvas.height = Math.round(cssHeight * dpr);
-      canvas.style.width = cssWidth + "px";
-      canvas.style.height = cssHeight + "px";
+    towerBlock = block;
+    canvas._scale = step * block;
+
+    if (canvas.width !== lowWidth || canvas.height !== lowHeight) {
+      canvas.width = lowWidth;
+      canvas.height = lowHeight;
     }
+
+    canvas.style.width = cssWidth + "px";
+    canvas.style.height = cssHeight + "px";
 
     var top = towerTop();
 
@@ -8792,8 +8843,9 @@
 
     towerFaces = [];
 
-    // Under the street: the basements, seen through it faintly.
-    for (var b = towerBasements(); b >= 1; b -= 1) {
+    // Under the street: the basements, seen through it faintly; not square on,
+    // where they would be a box standing in the road.
+    for (var b = camera.elevation ? 0 : towerBasements(); b >= 1; b -= 1) {
       towerStorey3d(ctx, c, project, sides, -b, null, false, now, "B" + b);
     }
 
@@ -8839,6 +8891,9 @@
     looking at one without waiting for it.
   */
   var towerLight = null;
+
+  // Screen pixels to one of the outside's: its pixel-art block.
+  var towerBlock = 1;
   var TOWER_SKIES = {
     night: { top: "#04060c", low: "#16203a", cloud: "rgba(120, 130, 160, 0.22)", glass: "#0e1722", ground: "rgba(22, 25, 30, 0.9)", lamps: true },
     dawn: { top: "#34426e", low: "#f0b27a", cloud: "rgba(255, 210, 180, 0.55)", glass: "#243750", ground: "rgba(44, 46, 54, 0.85)", lamps: true },
@@ -9378,7 +9433,9 @@
       var points = face.c.map(project);
       var faded = which === "near" && cityOverlaps(points, hideBox);
 
-      if (faded && camera.lobby) { return; }
+      // Square on, a building across the street would stand in front of the
+      // tower and hide it: left out, as a side-on view leaves it out.
+      if (faded && camera.elevation) { return; }
 
       g.globalAlpha = faded ? 0.28 : 1;
       cityFace(g, face, points, project, scene, night);
@@ -9471,11 +9528,14 @@
           var p00 = at(a0, b0);
           var p10 = at(a1, b0);
           var p01 = at(a0, b1);
+          var drawn = Math.max(Math.hypot(p10[0] - p00[0], p10[1] - p00[1]) / tile.width, Math.hypot(p01[0] - p00[0], p01[1] - p00[1]) / tile.height);
+          var halvings = drawn > 0 ? Math.max(0, Math.min(5, Math.floor(Math.log2(1 / drawn)))) : 0;
+          var small = towerMip(tile, halvings);
 
           g.save();
-          g.setTransform((p10[0] - p00[0]) / tile.width, (p10[1] - p00[1]) / tile.width,
-            (p01[0] - p00[0]) / tile.height, (p01[1] - p00[1]) / tile.height, p00[0], p00[1]);
-          g.drawImage(tile, 0, 0);
+          g.setTransform((p10[0] - p00[0]) / small.width, (p10[1] - p00[1]) / small.width,
+            (p01[0] - p00[0]) / small.height, (p01[1] - p00[1]) / small.height, p00[0], p00[1]);
+          g.drawImage(small, 0, 0);
           g.restore();
 
           if (dayArt) {
@@ -9526,6 +9586,12 @@
 
   function towerLobbyInside(ctx, c, project, camera, now) {
     towerSeen = [];
+
+    if (camera.elevation) {
+      towerLobbySideOn(ctx, project, camera, now);
+
+      return;
+    }
 
     var room = towerPlaceRoom("lobby", 0);
 
@@ -9658,15 +9724,6 @@
     items.forEach(function (item) { item.draw(); });
   }
 
-  // How wide and tall the whole building draws at one device pixel per unit, seen from above a corner.
-  function towerExtent() {
-    var pitch = towerLook.view === "aerial" ? 1.05 : 0.45;
-    var across = (towerWidth() + towerDepth()) * Math.SQRT1_2;
-    var high = towerTop() + towerBasements() * towerStorey() * 0.5;
-
-    return [across, high * Math.cos(pitch) + across * Math.sin(pitch)];
-  }
-
   function towerQuad(ctx, project, a, b, c2, d) {
     var p = [project(a), project(b), project(c2), project(d)];
 
@@ -9785,10 +9842,177 @@
       half.width = w;
       half.height = h;
       half.getContext("2d").drawImage(last, 0, 0, w, h);
+      towerPalette(picture, half);
       made.push(half);
     }
 
     return made[halvings];
+  }
+
+  /*
+    A halved picture put back into its picture's own colours: averaging two
+    by two makes colours the art never had, and soft edges, which is what
+    makes a picture shrunk look shrunk rather than drawn at that size. Each
+    pixel becomes the nearest of the picture's commonest colours, and is
+    either there or not.
+  */
+  var towerPalettes = new WeakMap();
+
+  function towerPalette(picture, canvas) {
+    var colours = towerPalettes.get(picture);
+
+    try {
+      if (!colours) {
+        var source = document.createElement("canvas");
+
+        source.width = picture.width;
+        source.height = picture.height;
+        source.getContext("2d").drawImage(picture, 0, 0);
+
+        var data = source.getContext("2d").getImageData(0, 0, source.width, source.height).data;
+        var counts = {};
+
+        for (var i = 0; i < data.length; i += 4) {
+          if (data[i + 3] < 128) { continue; }
+
+          var key = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+
+          counts[key] = (counts[key] || 0) + 1;
+        }
+
+        colours = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 48)
+          .map(function (key) { var n = Number(key); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; });
+        towerPalettes.set(picture, colours);
+      }
+
+      if (!colours.length) { return; }
+
+      var g = canvas.getContext("2d");
+      var image = g.getImageData(0, 0, canvas.width, canvas.height);
+      var px = image.data;
+      var near = {};
+
+      for (var j = 0; j < px.length; j += 4) {
+        if (px[j + 3] < 128) {
+          px[j + 3] = 0;
+
+          continue;
+        }
+
+        var at = (px[j] << 16) | (px[j + 1] << 8) | px[j + 2];
+        var best = near[at];
+
+        if (best === undefined) {
+          var bestDistance = Infinity;
+
+          for (var c = 0; c < colours.length; c += 1) {
+            var dr = colours[c][0] - px[j];
+            var dg = colours[c][1] - px[j + 1];
+            var db = colours[c][2] - px[j + 2];
+            var distance = dr * dr + dg * dg + db * db;
+
+            if (distance < bestDistance) { bestDistance = distance; best = c; }
+          }
+
+          near[at] = best;
+        }
+
+        px[j] = colours[best][0];
+        px[j + 1] = colours[best][1];
+        px[j + 2] = colours[best][2];
+        px[j + 3] = 255;
+      }
+
+      g.putImageData(image, 0, 0);
+    } catch (e) {
+      // A picture the page may not read back: kept averaged.
+    }
+  }
+
+  /*
+    The lobby seen square on through its glass, in its own pixel art: the
+    room turned so the side looked through is at its foot, its floor laid
+    back at a slant, and the furniture and people standing on it at their
+    own size, the back of the room highest and drawn first. A top-down room
+    seen exactly side on would be one line, everybody standing on it.
+  */
+  var TOWER_SLANT = 0.35;
+
+  function towerLobbySideOn(ctx, project, camera, now) {
+    var turn = ((towerLook.turn || 0) % 4 + 4) % 4;
+    var room = towerPlaceRoom("lobby", (4 - turn) % 4);
+
+    if (!room) { return; }
+
+    tileStep(room, now);
+    tileAmbient(room, now);
+
+    var scene = room.scene;
+    var t = scene.tile;
+    var step = camera.step;
+    var near = towerSides().filter(function (side) { return towerFacing(side) === (turn + 2) % 4 || towerFacing(side) === turn; })
+      .filter(function (side) { return (side.out[0] * camera.ahead[0] + side.out[1] * camera.ahead[1]) < 0; })[0];
+
+    if (!near) { return; }
+
+    var ends = [project([near.from[0], near.from[1], 0]), project([near.to[0], near.to[1], 0])];
+    var left = Math.min(ends[0][0], ends[1][0]);
+    var floorY = ends[0][1];
+    var high = project([near.from[0], near.from[1], towerStorey() * 2])[1];
+    var rows = scene.height;
+
+    // Where a row of the room's floor meets the glass, raised by how far back it is.
+    function rowY(y) { return floorY - (rows - y) * t * step * TOWER_SLANT; }
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left, high, Math.abs(ends[1][0] - ends[0][0]), floorY - high);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = false;
+
+    if (!room.baked) {
+      room.colours = room.colours || tileColours();
+      room.baked = tileBake(room);
+    }
+
+    if (room.baked) {
+      ctx.setTransform(step, 0, 0, step * TOWER_SLANT, left, rowY(0));
+      ctx.drawImage(room.baked, 0, 0);
+    }
+
+    var items = [];
+
+    (scene.props || []).forEach(function (prop) {
+      if (prop.depth !== "floor") { items.push({ y: prop.y + (prop.h || 1), prop: prop }); }
+    });
+
+    Object.keys(room.people).forEach(function (name) {
+      var person = room.people[name];
+
+      if (!person.gone) { items.push({ y: person.y + 0.85, person: person }); }
+    });
+
+    items.sort(function (a, b) { return a.y - b.y; });
+
+    items.forEach(function (item) {
+      var foot = rowY(item.y);
+
+      ctx.setTransform(step, 0, 0, step, left, foot - step * item.y * t);
+
+      if (item.prop) {
+        tileProp(room, ctx, item.prop);
+
+        return;
+      }
+
+      tilePerson(room, ctx, item.person, now);
+
+      var x = left + (item.person.x + 0.5) * t * step;
+
+      towerSeen.push({ x0: x - 0.4 * t * step, x1: x + 0.4 * t * step, y0: foot - 1.6 * t * step, y1: foot, person: item.person });
+    });
+
+    ctx.restore();
   }
 
   // A module drawn over one bay of a wall, from z0 up to z1, its top at the top.
@@ -9972,7 +10196,7 @@
         var spot = project(towerOn(side, 0.06, (z[0] + z[1]) / 2));
 
         ctx.fillStyle = c.muted;
-        ctx.font = "600 " + Math.round(12 * (window.devicePixelRatio || 1)) + "px system-ui, sans-serif";
+        ctx.font = "600 " + Math.max(7, Math.round(12 * (window.devicePixelRatio || 1) / towerBlock)) + "px system-ui, sans-serif";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
         ctx.fillText(label, spot[0], spot[1]);
@@ -10005,11 +10229,11 @@
     // From the street the far side of the street is behind the camera, and a
     // corner behind it cannot be drawn: the ground is the band below the
     // horizon instead.
-    if (camera.street) {
-      var far = project([camera.eye[0] + camera.ahead[0] * 1e5, camera.eye[1] + camera.ahead[1] * 1e5, camera.eye[2]]);
+    if (camera.elevation) {
+      var base = project([w / 2, d / 2, 0]);
 
       ctx.fillStyle = "rgba(40, 44, 50, 0.95)";
-      ctx.fillRect(0, far[1], ctx.canvas.width, ctx.canvas.height - far[1]);
+      ctx.fillRect(0, base[1], ctx.canvas.width, ctx.canvas.height - base[1]);
     } else {
       towerQuad(ctx, project, [-reach, -reach, 0], [w + reach, -reach, 0], [w + reach, d + reach, 0], [-reach, d + reach, 0]);
       ctx.fillStyle = towerLight && towerLight.weather === "snow" ? "rgba(214, 220, 230, 0.9)" : towerLight ? towerLight.ground : "rgba(40, 44, 50, 0.82)";

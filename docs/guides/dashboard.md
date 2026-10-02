@@ -73,7 +73,7 @@ office's lobby.
   everybody on it, square on or from a corner; [the office](../office.md)
   explains the rest.
 
-  ![The office screen. The building from its corner, in the Tech office's art: ten floors of blue glass, LOADOUT on the roof, the first floor lit warm where its two teams sit, among the neighbourhood's brick and glass blocks. Along the top, the views - corner, aerial, from the street, the lobby - and the buttons to turn and zoom.](../images/dashboard-office.png)
+  ![The office screen. The building from its corner in pixel art, isometric: ten floors of blue glass, LOADOUT on the roof, the first floor lit warm where its two teams sit, among the neighbourhood's brick and glass blocks, parks and roads. Along the top, the views - corner, aerial, from the street, the lobby - and the buttons to turn and zoom.](../images/dashboard-office.png)
 
 - **Graph** — who asked whom. Reach for it when something is stuck.
 

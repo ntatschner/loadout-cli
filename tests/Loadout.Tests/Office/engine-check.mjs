@@ -75,6 +75,7 @@ const code = [
   cut("  function tileDesks(room, name) {", "  function tileWalk(room, person, toX, toY) {"),
   cut("  function tileIso(scene) {", "  /*\n    The floor from a corner."),
   cut("  function zoomSteps(dpr) {", "  /*\n    A floor seen from a corner:"),
+  cut("  function towerProjector(view, yaw) {", "  function towerCamera(canvasWidth, canvasHeight, step) {"),
   cut("  function tileWalk(room, person, toX, toY) {", "  // Take in a fresh reading of the run"),
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
   cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
@@ -99,10 +100,11 @@ const code = [
 const engine = new Function("function tilesStill() { return false; }\nfunction tilePicture() { return { width: 512, height: 512 }; }\n"
   + "var towerData = { scale: { min: 1, max: 2 } };\n"
   + "function towerWidth() { return 1280; } function towerDepth() { return 768; }\n"
+  + "function towerStorey() { return 160; } function towerBasements() { return 2; } function towerTop() { return 13 * 160 + 72; }\n"
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -929,6 +931,49 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 
     if (!ok(step)) { fault("a floor is the wrong size for its space", `${what}: ${step}`); }
   });
+}
+
+// Outside, each view lands the art pixel for pixel: from the corner a step
+// of a tile along either wall is a tile across and half a tile down, and a
+// storey goes straight up at its own height; from above a wall's foot is a
+// tile a tile and a storey stands at half height; square on a wall is its own
+// size. The step is a whole halving or doubling, and grows with the zoom.
+{
+  const t = 32;
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  const corner = engine.towerProjector("corner", Math.PI / 4);
+  const at = (proj, p) => [proj.u(p), proj.v(p)];
+  const step = (proj, a, b) => { const p = at(proj, a); const q = at(proj, b); return [q[0] - p[0], q[1] - p[1]]; };
+  const cases = [
+    ["corner, along the front", step(corner, [0, 0, 0], [t, 0, 0]), [t, t / 2]],
+    ["corner, along the side", step(corner, [0, 0, 0], [0, t, 0]), [-t, t / 2]],
+    ["corner, up a storey", step(corner, [0, 0, 0], [0, 0, 160]), [0, 160]],
+    ["above, along the front", step(engine.towerProjector("aerial", 0), [0, 0, 0], [t, 0, 0]), [t, 0]],
+    ["above, northwards", step(engine.towerProjector("aerial", 0), [0, 0, 0], [0, t, 0]), [0, t]],
+    ["above, up a storey", step(engine.towerProjector("aerial", 0), [0, 0, 0], [0, 0, 160]), [0, 80]],
+    ["square on, along the front", step(engine.towerProjector("ground", 0), [0, 0, 0], [t, 0, 0]), [t, 0]],
+    ["square on, up a storey", step(engine.towerProjector("lobby", 0), [0, 0, 0], [0, 0, 160]), [0, 160]],
+    ["square on, back to front", step(engine.towerProjector("ground", 0), [0, 0, 0], [0, t, 0]), [0, 0]],
+    // Turned a quarter, north is towards the eye: a step along the side wall is
+    // a tile to the left and half a tile down the screen, still exactly 2:1.
+    ["corner turned, along the side", step(engine.towerProjector("corner", Math.PI / 4 + Math.PI / 2), [0, 0, 0], [0, t, 0]), [-t, -t / 2]],
+  ];
+
+  cases.filter(([, got, want]) => !near(got[0], want[0]) || !near(got[1], want[1]))
+    .forEach(([what, got, want]) => fault("the outside does not land the art pixel for pixel", `${what}: ${got}, not ${want}`));
+
+  ["corner", "aerial", "ground", "lobby"].forEach((view) => {
+    const first = engine.towerStepFor(view, view === "corner" ? Math.PI / 4 : 0, 760, 430, 0);
+    const zoomed = engine.towerStepFor(view, view === "corner" ? Math.PI / 4 : 0, 760, 430, 1);
+
+    if (!near(Math.log2(first), Math.round(Math.log2(first)))) { fault("the outside is drawn at a step that is no whole halving", `${view}: ${first}`); }
+    if (!near(zoomed, Math.min(4, first * 2))) { fault("zooming in on the outside does not double it", `${view}: ${first} then ${zoomed}`); }
+  });
+
+  // The first step fits the building: square on, the whole tower's height.
+  const fit = engine.towerStepFor("ground", 0, 760, 430, 0);
+
+  if ((13 * 160 + 72 + 160) * fit > 430) { fault("the whole building does not fit at the first zoom", `${fit}`); }
 }
 
 // ---- stopping a schedule from the lobby ----
