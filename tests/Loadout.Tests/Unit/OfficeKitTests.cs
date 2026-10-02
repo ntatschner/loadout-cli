@@ -221,6 +221,37 @@ public sealed class OfficeKitTests : IDisposable
     }
 
     [Fact]
+    public void An_extra_drawn_taller_than_its_place_stands_clear_of_the_pieces_behind_it()
+    {
+        // A cafe table 58 pixels tall on a 32 pixel row is drawn up into the
+        // row behind it; put in front of the kitchen counter, it stood in the
+        // counter. The row its picture reaches has to have no piece in it.
+        var table = new OfficePiece("table.png", [0, 0, 64, 58], [2, 1], ["kitchen-table"]);
+        var kit = Small(("kitchen-table", table));
+        var placed = 0;
+
+        foreach (var team in new[] { 3, 5, 8, 12 })
+        {
+            foreach (var seed in new[] { "run-a", "run-b", "run-c", "run-d", "run-e" })
+            {
+                var plan = FloorPlanner.Plan(kit, OfficeRules.Default, seed, team);
+                var props = plan.Scene.Props!;
+
+                plan.Attempt.Should().BeGreaterThanOrEqualTo(0, $"team {team}, {seed} came out plain");
+
+                foreach (var one in props.Where(prop => prop.Kind == "kitchen-table"))
+                {
+                    placed++;
+                    props.Where(other => other != one && other.X < one.X + one.W && other.X + other.W > one.X && other.Y < one.Y && other.Y + other.H > one.Y - 1)
+                        .Select(other => other.Id).Should().BeEmpty($"team {team}, {seed}: the table at {one.X},{one.Y} is drawn over them");
+                }
+            }
+        }
+
+        placed.Should().BePositive("a kitchen has room for a table somewhere clear of its counter");
+    }
+
+    [Fact]
     public void A_room_takes_its_extras_from_the_sets_kit_where_they_fit_and_never_in_anybodys_way()
     {
         // The kitchen's fridge and cooler and the lounge's armchair are extras:
@@ -392,17 +423,17 @@ public sealed class OfficeKitTests : IDisposable
                 {
                     var want = shuffled["llll"];
 
-                    foreach (var (kind, offset) in new[] { (1, 0), (2, solidTiles) })
+                    // Solid where any of the four is, glass counting as wall
+                    // with it; glass only where there is no solid.
+                    var four = new[] { (x - 1, y - 1), (x, y - 1), (x - 1, y), (x, y) }.Select(at => Kind(at.Item1, at.Item2)).ToList();
+
+                    if (four.Contains(1))
                     {
-                        var pattern = string.Concat(
-                            new[] { (x - 1, y - 1), (x, y - 1), (x - 1, y), (x, y) }.Select(at => Kind(at.Item1, at.Item2) == kind ? 'u' : 'l'));
-
-                        if (pattern != "llll")
-                        {
-                            want = offset + shuffled[pattern];
-
-                            break;
-                        }
+                        want = shuffled[string.Concat(four.Select(kind => kind != 0 ? 'u' : 'l'))];
+                    }
+                    else if (four.Contains(2))
+                    {
+                        want = solidTiles + shuffled[string.Concat(four.Select(kind => kind == 2 ? 'u' : 'l'))];
                     }
 
                     if (scene.Surface[y][x] != want)

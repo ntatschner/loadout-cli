@@ -45,6 +45,66 @@ public sealed class FloorPlannerTests
         failures.Should().BeEmpty("the built-in kit should never need a retry or the fallback");
     }
 
+    [Fact]
+    public void No_piece_of_wall_stands_on_its_own()
+    {
+        // Every wall joins another: a scrap of wall left over where two rooms'
+        // walls failed to meet is drawn as a stub on its own. Pieces of three
+        // cells or fewer, joined only side by side, are looked for on every
+        // team size.
+        var stubs = new List<string>();
+
+        for (var team = 1; team <= 30; team++)
+        {
+            for (var seed = 0; seed < 20; seed++)
+            {
+                var scene = Plan($"run-{seed}", team).Scene;
+                var seen = new bool[scene.Width, scene.Height];
+
+                bool Wall(int x, int y) => x >= 0 && y >= 0 && x < scene.Width && y < scene.Height && scene.Walls![y][x] >= 0;
+
+                for (var sy = 0; sy < scene.Height; sy++)
+                {
+                    for (var sx = 0; sx < scene.Width; sx++)
+                    {
+                        if (seen[sx, sy] || !Wall(sx, sy))
+                        {
+                            continue;
+                        }
+
+                        var cells = new List<(int X, int Y)>();
+                        var queue = new Queue<(int X, int Y)>([(sx, sy)]);
+
+                        seen[sx, sy] = true;
+
+                        while (queue.Count > 0)
+                        {
+                            var (cx, cy) = queue.Dequeue();
+
+                            cells.Add((cx, cy));
+
+                            foreach (var (nx, ny) in new[] { (cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1) })
+                            {
+                                if (Wall(nx, ny) && !seen[nx, ny])
+                                {
+                                    seen[nx, ny] = true;
+                                    queue.Enqueue((nx, ny));
+                                }
+                            }
+                        }
+
+                        if (cells.Count <= 3)
+                        {
+                            stubs.Add($"team {team} seed {seed}: {string.Join(" ", cells.Select(cell => $"{cell.X},{cell.Y}"))}");
+                        }
+                    }
+                }
+            }
+        }
+
+        stubs.Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(5)]

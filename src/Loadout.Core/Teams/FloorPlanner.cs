@@ -581,6 +581,11 @@ public static class FloorPlanner
             return Pockets(x, y, w, h) <= Pockets(0, 0, 0, 0);
         }
 
+        // Whether any piece is in the rows just behind a place, which a picture
+        // taller than its place would be drawn over.
+        public bool Behind(int x, int y, int w, int rows) =>
+            Props.Any(prop => prop.X < x + w && prop.X + prop.W > x && prop.Y < y && prop.Y + prop.H > y - rows);
+
         /*
             How many separate stretches of floor there are to walk on, with a
             piece in the given place as well. Walked as the scene check walks
@@ -804,12 +809,14 @@ public static class FloorPlanner
             }
 
             // The wall between each pair of band rooms: the lead's office's kind
-            // on the lead's side, solid on the kitchen's.
+            // on the lead's side, solid on the kitchen's. Down to the rooms'
+            // south wall and joining it: stopping short of it left each
+            // room's south wall a piece on its own, drawn as a stub.
             foreach (var between in new[] { 1 + cornerWidth, rightLeft + innerWidth })
             {
                 var onLeadSide = (between == 1 + cornerWidth) == leadOnLeft;
 
-                for (var y = 1; y <= depth; y++)
+                for (var y = 1; y <= band; y++)
                 {
                     Edge(floor, parts, random, onLeadSide ? leadWalls : "solid", between, y);
                 }
@@ -1064,7 +1071,10 @@ public static class FloorPlanner
             floor.Spots[$"kitchen-{xx - x + 1}"] = new OfficeSpot(xx, h - 1, "n");
         }
 
-        Extras(floor, parts, random, rules, "kitchen", "kitchen", x, 1, w, h - 1);
+        // The whole room: the front row too, where a table can stand clear of
+        // the counter. What keeps the way in clear is the check every extra
+        // passes, that the room can still be walked into.
+        Extras(floor, parts, random, rules, "kitchen", "kitchen", x, 1, w, h);
     }
 
     private static void Lounge(Floor floor, Parts parts, Random random, OfficeRules rules, string name, int x, int y, int w, int h)
@@ -1112,6 +1122,13 @@ public static class FloorPlanner
             var (ew, eh) = (extra.Piece.Footprint[0], extra.Piece.Footprint[1]);
             var places = new List<(int X, int Y, int Rank, int Shuffle)>();
 
+            // A picture taller than its place reaches up into the rows behind
+            // it, so those have to be clear of other pieces too, or a cafe
+            // table stands in the kitchen counter it is in front of.
+            var rise = extra.Piece.Source is [_, _, _, var tall] && parts.Tile > 0
+                ? Math.Max(0, (tall - eh * parts.Tile + parts.Tile - 1) / parts.Tile)
+                : 0;
+
             for (var py = y; py + eh <= y + h; py++)
             {
                 for (var px = x; px + ew <= x + w; px++)
@@ -1122,7 +1139,7 @@ public static class FloorPlanner
 
             foreach (var (px, py, _, _) in places.OrderBy(one => one.Rank).ThenBy(one => one.Shuffle))
             {
-                if (floor.CanAdd(px, py, ew, eh, extra.Piece.Blocks))
+                if (floor.CanAdd(px, py, ew, eh, extra.Piece.Blocks) && !floor.Behind(px, py, ew, rise))
                 {
                     floor.Put($"{name}-{tag}-{++index}", tag, extra.Piece, px, py);
 
@@ -1497,21 +1514,24 @@ public static class FloorPlanner
                 {
                     row[vx] = offsets[0] + solid.Corners["llll"];
 
-                    // Solid first, where a solid wall and glass meet at a point.
+                    // Solid first, where a solid wall and glass meet at a point, and
+                    // reaching over the glass there: with glass counted as floor,
+                    // a solid wall ended in a cap short of the glass it joins and
+                    // was drawn as a stub on its own.
                     for (var which = 0; which < kinds.Length; which++)
                     {
-                        var pattern = string.Concat(
-                            At(vx - 1, vy - 1) == kinds[which] ? 'u' : 'l',
-                            At(vx, vy - 1) == kinds[which] ? 'u' : 'l',
-                            At(vx - 1, vy) == kinds[which] ? 'u' : 'l',
-                            At(vx, vy) == kinds[which] ? 'u' : 'l');
+                        var corners = new[] { At(vx - 1, vy - 1), At(vx, vy - 1), At(vx - 1, vy), At(vx, vy) };
 
-                        if (pattern != "llll")
+                        if (!corners.Contains(kinds[which]))
                         {
-                            row[vx] = offsets[which] + sets[which].Corners[pattern];
-
-                            break;
+                            continue;
                         }
+
+                        var pattern = string.Concat(corners.Select(cell => cell == kinds[which] || (which == 0 && cell != Cell.Carpet) ? 'u' : 'l'));
+
+                        row[vx] = offsets[which] + sets[which].Corners[pattern];
+
+                        break;
                     }
                 }
 
