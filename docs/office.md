@@ -162,11 +162,35 @@ the same half circle. Floor and wall tiles need
 nothing extra: a tileset already says which tile has which corners, so a turned
 floor is drawn from the tiles whose corners match where the walls now run.
 
-A floor whose tilesets are all pictures is drawn on a grid half a tile off the
-cells: a tile wherever four cells meet, chosen by those four. A wall one cell
-wide is then drawn one cell wide, its face and skirting inside its own cell,
-rather than spreading over half of each neighbour. The built-in shapes are
-still drawn cell by cell.
+Each kind of room has a floor of its own, from the rules' `floors`: wood in the
+lead office and the lounge, tiles in the kitchen, a darker walkway in the
+corridor and the meeting rooms, carpet tiles where people work, stone in the
+core and the lobby. `@floor`, `@lobby`, `@roof` and `@basement` say what
+anything on that level that is in no room is floored with, decking on the roof
+and concrete below ground. A floor is a kit material called `floor-` and its
+name, a tile 128 pixels square that repeats every four cells; a cell is floored
+by the smallest room over it that names one.
+
+Where the kit has floors, walls stand up off them: a face about a metre high,
+pale with a skirting for a solid wall and framed for glass, under a top raised
+above it that joins the walls beside it. They're drawn in among the people and
+furniture by where they meet the floor, so somebody behind one is hidden by it.
+A kit with no floors is drawn as before, its walls flat from its tilesets.
+
+A piece can say where it **suits**: which rooms (`*` for any) and levels, what
+it is to the room (`main`, the piece that makes the room that room; `extra`;
+`divider`, for marking a room off without a wall; `decor`; `clutter`), what its
+back goes to (`wall`, `window` or `free`), and which pieces it is grouped `with`.
+A room's rules can say whose it is (`scope`: the `floor`'s, shared, or each
+`team`'s), where it belongs (`zone`: core, perimeter, interior, corner, entrance
+or any), one for every so many people (`per-head`), what it should be `near` or
+`away` from and how much that matters, from 1 to 10, and how it is reached
+(`access`: corridor, open or through). The check holds all of these to the names
+it knows, so a misspelt room isn't quietly ignored.
+
+```json
+"tech-armchair": { "suits": { "rooms": ["lounge", "waiting-room"], "role": "extra", "against": "free", "with": ["coffee-table"] } }
+```
 
 ```
 loadout config set team-office-set my-office
@@ -190,8 +214,8 @@ drawn in plain colour with windows.
 The tower's own outside can come from the kit as well, its `facade`: bay pieces
 one tile wide and a storey high, placed `facade`, which each storey picks among
 along its length; a `corner` for each end, mirrored on the right; `lobby` pieces
-two storeys high and an `entrance` for the middle of the long side, across
-the two middle bays if it is twice a bay's width; a
+two storeys high and an `entrance` for the middle of the front, the long side
+seen first, across the two middle bays if it is twice a bay's width; a
 `basement`; and `windows`, where the glass is in a bay, so the lights and the
 people in them are drawn in the window rather than across the whole bay. A
 facade with a piece that has no picture isn't drawn at all, rather than half in
@@ -283,6 +307,10 @@ Stated plainly, so nobody finds out by surprise:
   turned, so shading drawn into a tile, a shadow along a wall's south face say,
   stays where it was drawn. A room drawn from one hand-made picture doesn't
   turn at all.
+- **The planner doesn't read where pieces suit yet.** `suits`, `scope`, `zone`,
+  `per-head`, `near`, `away` and `access` are checked, and the Tech set gives
+  them all, but floors are still laid out the old way, from tags. The planner
+  that places rooms and furniture by them is next.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors
   at a time, and so is everything the server says. What the page draws from
   them was looked at in a browser, not tested.

@@ -41,7 +41,88 @@ public sealed class OfficeKitTests : IDisposable
             Pieces = pieces.ToDictionary(one => one.Name, one => one.Piece, StringComparer.Ordinal),
         };
 
+    // ---- where pieces suit ----
+
+    [Fact]
+    public void A_piece_suits_the_rooms_and_levels_it_names_and_any_where_it_names_none()
+    {
+        var sofa = new OfficeSuits(["lounge", "waiting-room"], ["floor", "lobby"], "main");
+
+        sofa.Fits("lounge", "floor").Should().BeTrue();
+        sofa.Fits("waiting-room", "lobby").Should().BeTrue();
+        sofa.Fits("kitchen", "floor").Should().BeFalse("it names the rooms it suits");
+        sofa.Fits("lounge", "roof").Should().BeFalse("it names the levels it suits");
+
+        new OfficeSuits(["*"]).Fits("kitchen", "basement-2").Should().BeTrue("* is any room, and no levels any level");
+        new OfficeSuits(["kitchen"], ["*"]).Fits("kitchen", "roof").Should().BeTrue();
+    }
+
+    [Fact]
+    public void Where_a_piece_suits_is_checked_by_name()
+    {
+        static OfficePiece Suiting(OfficeSuits suits) => new(null, null, [1, 1], ["thing"], Suits: suits);
+
+        var kit = Small(
+            ("good", Suiting(new OfficeSuits(["kitchen", "corridor", "*"], ["floor", "*"], "extra", "wall", ["kitchen"]))),
+            ("odd-role", Suiting(new OfficeSuits(["kitchen"], Role: "hero"))),
+            ("odd-back", Suiting(new OfficeSuits(["kitchen"], Against: "ceiling"))),
+            ("no-rooms", Suiting(new OfficeSuits([]))),
+            ("misspelt", Suiting(new OfficeSuits(["kitchenn"], ["attic"]))));
+
+        OfficeKits.Problems(kit, NoPictures).Should().BeEquivalentTo(
+            "piece 'odd-role' suits a room as 'hero'; it has to be one of main, extra, divider, decor, clutter.",
+            "piece 'odd-back' stands against 'ceiling'; it has to be one of wall, window, free.",
+            "piece 'no-rooms' suits no room; give it rooms, or * for any.");
+
+        // Room and level names are the rules', so they are checked against them.
+        OfficeKits.Unsuited(kit, OfficeRules.Default).Should().Equal(
+            "piece 'misspelt' suits room 'kitchenn', which the rules have no room called.",
+            "piece 'misspelt' suits level 'attic'; it has to be one of floor, lobby, roof, basement-1, basement-2, or *.");
+
+        // A room a set's own rules add is one a piece may suit.
+        var added = OfficeRules.Default.With(new OfficeRules(OfficeRules.Version, Rooms: new Dictionary<string, OfficeRoomRule>(StringComparer.Ordinal)
+        {
+            ["kitchenn"] = new(["thing"]),
+        }));
+
+        OfficeKits.Unsuited(kit, added).Should().Equal(
+            "piece 'misspelt' suits level 'attic'; it has to be one of floor, lobby, roof, basement-1, basement-2, or *.");
+    }
+
     // ---- rules ----
+
+    [Fact]
+    public void A_rooms_place_on_the_floor_is_checked_by_name()
+    {
+        var rules = OfficeRules.Default.With(new OfficeRules(OfficeRules.Version, Rooms: new Dictionary<string, OfficeRoomRule>(StringComparer.Ordinal)
+        {
+            ["booth"] = new(
+                ["booth"],
+                PerHead: 0,
+                Scope: "everyone",
+                Zone: "basement",
+                Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["open-plan"] = 3, ["atrium"] = 2, ["corridor"] = 11 },
+                Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 0 },
+                Access: "window"),
+            ["quiet"] = new(
+                ["booth"],
+                PerHead: 6,
+                Scope: "floor",
+                Zone: "interior",
+                Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["core"] = 1 },
+                Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 10 },
+                Access: "through"),
+        }));
+
+        OfficeRuleBook.Problems(rules).Should().BeEquivalentTo(
+            "room 'booth' per-head is 0; it has to be one room for every 1 or more people.",
+            "room 'booth' scope is 'everyone'; it has to be one of floor, team.",
+            "room 'booth' zone is 'basement'; it has to be one of core, perimeter, interior, corner, entrance, any.",
+            "room 'booth' access is 'window'; it has to be one of corridor, open, through.",
+            "room 'booth' near names 'atrium', which is no room.",
+            "room 'booth' near gives 'corridor' 11; it has to be 1 to 10.",
+            "room 'booth' away gives 'kitchen' 0; it has to be 1 to 10.");
+    }
 
     [Fact]
     public void The_built_in_rules_are_sound()

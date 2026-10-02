@@ -32,6 +32,40 @@ public sealed record OfficePieceAnimation(
     [property: JsonPropertyName("frames")] IReadOnlyList<IReadOnlyList<int>> Frames,
     [property: JsonPropertyName("fps")] double Fps = 4);
 
+/// <summary>
+/// Where a piece belongs and what it is for there, so a room is furnished from
+/// what suits it rather than from whatever shares a tag.
+/// </summary>
+/// <param name="Rooms">The kinds of room it may stand in, or * for any.</param>
+/// <param name="Levels">The levels it may be on (floor, lobby, roof, basement-1, basement-2), or * or null for any.</param>
+/// <param name="Role">
+/// What it is to the room: main (what makes the room that room - the meeting
+/// table, the kitchen counter), extra (goes with the main piece where it
+/// fits), divider (what a room may be marked off with instead of a wall),
+/// decor (a plant, a picture) or clutter (on a desk or the floor, never in
+/// anybody's way).
+/// </param>
+/// <param name="Against">What its back goes to: wall, window, or free for standing in the room.</param>
+/// <param name="With">Pieces, by tag, it is grouped round where both are in a room: an armchair with the coffee table.</param>
+public sealed record OfficeSuits(
+    [property: JsonPropertyName("rooms")] IReadOnlyList<string>? Rooms = null,
+    [property: JsonPropertyName("levels")] IReadOnlyList<string>? Levels = null,
+    [property: JsonPropertyName("role")] string Role = "extra",
+    [property: JsonPropertyName("against")] string? Against = null,
+    [property: JsonPropertyName("with")] IReadOnlyList<string>? With = null)
+{
+    /// <summary>The parts a piece can play in a room.</summary>
+    public static readonly IReadOnlyList<string> Roles = ["main", "extra", "divider", "decor", "clutter"];
+
+    /// <summary>What a piece can stand with its back to.</summary>
+    public static readonly IReadOnlyList<string> Backs = ["wall", "window", "free"];
+
+    /// <summary>Whether it may go in a room of this kind on this level.</summary>
+    public bool Fits(string room, string level) =>
+        (Rooms is null || Rooms.Contains("*") || Rooms.Contains(room))
+        && (Levels is null || Levels.Contains("*") || Levels.Contains(level));
+}
+
 /// <summary>One part the building is furnished from.</summary>
 /// <param name="Picture">The picture it is cut from, or null to draw it in the kit's shapes.</param>
 /// <param name="Source">Where in the picture: x, y, width, height.</param>
@@ -42,6 +76,7 @@ public sealed record OfficePieceAnimation(
 /// <param name="Place">floor, wall-north, wall-any, desk-top, ceiling or facade.</param>
 /// <param name="Seats">Where people sit at it, if they do.</param>
 /// <param name="Animation">Its frames, if it moves.</param>
+/// <param name="Suits">Where it belongs and what it is for there; null to be found by its tags alone.</param>
 /// <param name="Sides">
 /// Where in the picture it is seen with its front facing each way (n, e, s, w):
 /// what a floor turned a quarter at a time needs. The south side is the one
@@ -58,7 +93,8 @@ public sealed record OfficePiece(
     [property: JsonPropertyName("place")] string Place = "floor",
     [property: JsonPropertyName("seats")] IReadOnlyList<OfficeSeat>? Seats = null,
     [property: JsonPropertyName("animation")] OfficePieceAnimation? Animation = null,
-    [property: JsonPropertyName("sides")] IReadOnlyDictionary<string, IReadOnlyList<int>>? Sides = null);
+    [property: JsonPropertyName("sides")] IReadOnlyDictionary<string, IReadOnlyList<int>>? Sides = null,
+    [property: JsonPropertyName("suits")] OfficeSuits? Suits = null);
 
 /// <summary>
 /// A pixel-art image laid over the faces of the neighbourhood the page
@@ -354,8 +390,45 @@ public static class OfficeKits
         var problems = new List<string>(ruleProblems);
 
         problems.AddRange(Problems(kit, piece => OfficeScenes.PictureSize(OfficeArt.FileOf(root, set, piece))));
+        problems.AddRange(Unsuited(kit, rules));
 
         return new(kit, rules, problems, Missing(kit, rules));
+    }
+
+    /// <summary>
+    /// The rooms and levels pieces say they suit that the rules have no room or
+    /// level called: a misspelt room would otherwise leave the piece unused,
+    /// with nothing said.
+    /// </summary>
+    public static IReadOnlyList<string> Unsuited(OfficeKit kit, OfficeRules rules)
+    {
+        ArgumentNullException.ThrowIfNull(kit);
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var rooms = (rules.Rooms?.Keys ?? []).Concat(OfficeRules.Structural).Append("*").ToHashSet(StringComparer.Ordinal);
+        var levels = OfficeRules.Levels.Append("*").ToHashSet(StringComparer.Ordinal);
+        var problems = new List<string>();
+
+        foreach (var (name, piece) in kit.Pieces.OrderBy(one => one.Key, StringComparer.Ordinal))
+        {
+            foreach (var room in piece.Suits?.Rooms ?? [])
+            {
+                if (!rooms.Contains(room))
+                {
+                    problems.Add($"piece '{name}' suits room '{room}', which the rules have no room called.");
+                }
+            }
+
+            foreach (var level in piece.Suits?.Levels ?? [])
+            {
+                if (!levels.Contains(level))
+                {
+                    problems.Add($"piece '{name}' suits level '{level}'; it has to be one of {string.Join(", ", OfficeRules.Levels)}, or *.");
+                }
+            }
+        }
+
+        return problems;
     }
 
     /// <summary>The tags the rules furnish from that a kit has no part for.</summary>
@@ -506,6 +579,24 @@ public static class OfficeKits
         if (!OfficeKit.Places.Contains(piece.Place))
         {
             problems.Add($"{called} is placed '{piece.Place}'; it has to be one of {string.Join(", ", OfficeKit.Places)}.");
+        }
+
+        if (piece.Suits is { } suits)
+        {
+            if (!OfficeSuits.Roles.Contains(suits.Role))
+            {
+                problems.Add($"{called} suits a room as '{suits.Role}'; it has to be one of {string.Join(", ", OfficeSuits.Roles)}.");
+            }
+
+            if (suits.Against is { } back && !OfficeSuits.Backs.Contains(back))
+            {
+                problems.Add($"{called} stands against '{back}'; it has to be one of {string.Join(", ", OfficeSuits.Backs)}.");
+            }
+
+            if (suits.Rooms is { Count: 0 })
+            {
+                problems.Add($"{called} suits no room; give it rooms, or * for any.");
+            }
         }
 
         foreach (var seat in piece.Seats ?? [])

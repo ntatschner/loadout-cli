@@ -24,6 +24,12 @@ namespace Loadout.Core.Teams;
 /// from its tags one piece per kind, picked at random, so a fridge counted as a
 /// kitchen would sometimes be the whole kitchen: it is an extra instead.
 /// </param>
+/// <param name="PerHead">One of these rooms for every so many people on the floor: 6 is a phone booth for every six. Wins over Count and ByTeam.</param>
+/// <param name="Scope">Whose it is: floor (one set shared by every team on the floor) or team (each team its own).</param>
+/// <param name="Zone">Where on the floor it belongs: core, perimeter (daylight), interior, corner, entrance or any.</param>
+/// <param name="Near">Kinds of room it does well beside, with how much that matters: <c>{"open-plan": 3}</c>.</param>
+/// <param name="Away">Kinds of room it does badly beside, the same way: a quiet room away from the kitchen.</param>
+/// <param name="Access">How it is reached: corridor, open (from the open plan) or through (through another room).</param>
 public sealed record OfficeRoomRule(
     [property: JsonPropertyName("tags")] IReadOnlyList<string>? Tags = null,
     [property: JsonPropertyName("min")] IReadOnlyList<int>? Min = null,
@@ -35,8 +41,23 @@ public sealed record OfficeRoomRule(
     [property: JsonPropertyName("core")] bool Core = false,
     [property: JsonPropertyName("walls")] IReadOnlyList<string>? Walls = null,
     [property: JsonPropertyName("function")] string? Function = null,
-    [property: JsonPropertyName("extras")] IReadOnlyList<string>? Extras = null)
+    [property: JsonPropertyName("extras")] IReadOnlyList<string>? Extras = null,
+    [property: JsonPropertyName("per-head")] int? PerHead = null,
+    [property: JsonPropertyName("scope")] string? Scope = null,
+    [property: JsonPropertyName("zone")] string? Zone = null,
+    [property: JsonPropertyName("near")] IReadOnlyDictionary<string, int>? Near = null,
+    [property: JsonPropertyName("away")] IReadOnlyDictionary<string, int>? Away = null,
+    [property: JsonPropertyName("access")] string? Access = null)
 {
+    /// <summary>Whose a room is.</summary>
+    public static readonly IReadOnlyList<string> Scopes = ["floor", "team"];
+
+    /// <summary>Where on a floor a room can belong.</summary>
+    public static readonly IReadOnlyList<string> Zones = ["core", "perimeter", "interior", "corner", "entrance", "any"];
+
+    /// <summary>How a room can be reached.</summary>
+    public static readonly IReadOnlyList<string> Accesses = ["corridor", "open", "through"];
+
     /// <summary>How many of these rooms a team of this size gets.</summary>
     public int CountFor(int team)
     {
@@ -145,6 +166,12 @@ public sealed record OfficeRules(
     /// </summary>
     public static readonly IReadOnlyList<string> Partitions = ["solid", "glass", "screen", "planters", "open"];
 
+    /// <summary>
+    /// The parts of a floor that are not rooms the rules list but that pieces
+    /// may still suit: the corridor, the core round the lift, the way in.
+    /// </summary>
+    public static readonly IReadOnlyList<string> Structural = ["corridor", "core", "entrance"];
+
     /// <summary>The levels a room can be on.</summary>
     public static readonly IReadOnlyList<string> Levels = ["floor", "lobby", "roof", "basement-1", "basement-2"];
 
@@ -162,26 +189,62 @@ public sealed record OfficeRules(
         new Dictionary<string, OfficeRoomRule>(StringComparer.Ordinal)
         {
             // Every run's floor.
-            ["open-plan"] = new(["desk"], Min: [8, 5], Count: 1),
-            ["status-board"] = new(["status-board"], Count: 1, Where: "north-wall", Function: "summary"),
-            ["lead-office"] = new(["exec-desk"], Min: [4, 3], Max: [6, 4], Count: 1, Where: "corner", Walls: ["glass", "solid"], Function: "controls"),
+            ["open-plan"] = new(["desk"], Min: [8, 5], Count: 1, Scope: "team", Zone: "perimeter"),
+            ["status-board"] = new(["status-board"], Count: 1, Where: "north-wall", Function: "summary", Scope: "floor", Zone: "core"),
+            ["lead-office"] = new(
+                ["exec-desk"],
+                Min: [4, 3],
+                Max: [6, 4],
+                Count: 1,
+                Where: "corner",
+                Walls: ["glass", "solid"],
+                Function: "controls",
+                Scope: "team",
+                Zone: "corner",
+                Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["open-plan"] = 3 },
+                Access: "corridor"),
             ["meeting"] = new(
                 ["meeting-4", "meeting-6", "meeting-10"],
                 Min: [3, 3],
                 ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 1, ["5"] = 2, ["10"] = 3 },
                 Where: "near-open-plan",
                 Walls: ["glass", "solid", "screen"],
-                Function: "questions"),
-            ["kitchen"] = new(["kitchen", "coffee"], Min: [3, 3], Count: 1, Function: "idle", Extras: ["fridge", "cooler", "kitchen-table"]),
-            ["lounge"] = new(["sofa", "partition-planter"], Min: [3, 3], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Walls: ["planters", "open", "screen"], Function: "idle", Extras: ["armchair", "coffee-table", "beanbag"]),
+                Function: "questions",
+                Scope: "floor",
+                Zone: "interior",
+                Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["open-plan"] = 3 },
+                Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 2 },
+                Access: "corridor"),
+            ["kitchen"] = new(
+                ["kitchen", "coffee"],
+                Min: [3, 3],
+                Count: 1,
+                Function: "idle",
+                Extras: ["fridge", "cooler", "kitchen-table"],
+                Scope: "floor",
+                Zone: "perimeter",
+                Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["core"] = 2, ["lounge"] = 3 },
+                Access: "open"),
+            ["lounge"] = new(
+                ["sofa", "partition-planter"],
+                Min: [3, 3],
+                ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 },
+                Walls: ["planters", "open", "screen"],
+                Function: "idle",
+                Extras: ["armchair", "coffee-table", "beanbag"],
+                Scope: "floor",
+                Zone: "perimeter",
+                Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 3 },
+                Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["meeting"] = 1 },
+                Access: "open"),
 
             // A corridor floor's rooms off the corridor, each with its own desks.
-            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "screen", "planters", "open"], Function: "work"),
-            ["cupboard"] = new(["cupboard"], Min: [1, 1], Max: [2, 2], Count: 1),
-            ["storage-cupboard"] = new(["storage"], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["8"] = 1 }),
-            ["lift"] = new(["lift"], Count: 1, Core: true, Where: "core"),
-            ["stairs"] = new(["stairs"], Count: 1, Core: true, Where: "core"),
-            ["toilets"] = new(["toilet"], Count: 1, Core: true, Where: "core"),
+            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "screen", "planters", "open"], Function: "work", Scope: "team", Zone: "perimeter", Access: "corridor"),
+            ["cupboard"] = new(["cupboard"], Min: [1, 1], Max: [2, 2], Count: 1, Scope: "floor", Zone: "interior"),
+            ["storage-cupboard"] = new(["storage"], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["8"] = 1 }, Scope: "floor", Zone: "interior"),
+            ["lift"] = new(["lift"], Count: 1, Core: true, Where: "core", Scope: "floor", Zone: "core"),
+            ["stairs"] = new(["stairs"], Count: 1, Core: true, Where: "core", Scope: "floor", Zone: "core"),
+            ["toilets"] = new(["toilet"], Count: 1, Core: true, Where: "core", Scope: "floor", Zone: "core"),
             ["exit"] = new(["exit"], Count: 2, Where: "ends"),
 
             // The rest of the building.
@@ -435,6 +498,42 @@ public static class OfficeRuleBook
                 if (!OfficeRules.Partitions.Contains(wall))
                 {
                     problems.Add($"{called} has walls '{wall}'; they have to be one of {string.Join(", ", OfficeRules.Partitions)}.");
+                }
+            }
+
+            if (room.PerHead is < 1)
+            {
+                problems.Add($"{called} per-head is {room.PerHead}; it has to be one room for every 1 or more people.");
+            }
+
+            if (room.Scope is { } scope && !OfficeRoomRule.Scopes.Contains(scope))
+            {
+                problems.Add($"{called} scope is '{scope}'; it has to be one of {string.Join(", ", OfficeRoomRule.Scopes)}.");
+            }
+
+            if (room.Zone is { } zone && !OfficeRoomRule.Zones.Contains(zone))
+            {
+                problems.Add($"{called} zone is '{zone}'; it has to be one of {string.Join(", ", OfficeRoomRule.Zones)}.");
+            }
+
+            if (room.Access is { } access && !OfficeRoomRule.Accesses.Contains(access))
+            {
+                problems.Add($"{called} access is '{access}'; it has to be one of {string.Join(", ", OfficeRoomRule.Accesses)}.");
+            }
+
+            foreach (var (word, weights) in new[] { ("near", room.Near), ("away", room.Away) })
+            {
+                foreach (var (other, weight) in weights ?? new Dictionary<string, int>())
+                {
+                    if (!rooms.ContainsKey(other) && !OfficeRules.Structural.Contains(other))
+                    {
+                        problems.Add($"{called} {word} names '{other}', which is no room.");
+                    }
+
+                    if (weight is < 1 or > 10)
+                    {
+                        problems.Add($"{called} {word} gives '{other}' {weight}; it has to be 1 to 10.");
+                    }
                 }
             }
         }

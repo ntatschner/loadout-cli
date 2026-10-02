@@ -180,6 +180,31 @@ public sealed class OfficeArtTests : IDisposable
     }
 
     [Fact]
+    public void Every_room_the_built_in_rules_lay_out_has_a_piece_of_the_built_in_office_to_be_it()
+    {
+        OfficeArt.Unpack(Office).Should().BeTrue();
+
+        var check = OfficeKits.Check(Office, OfficeArt.BuiltIn);
+        var rules = check.Rules;
+
+        // What makes each room that room, from the pieces that say so, on the
+        // room's own level: a kitchen with no counter is a corridor.
+        foreach (var (room, rule) in rules.Rooms!)
+        {
+            check.Kit!.Pieces.Values
+                .Where(piece => piece.Suits is { Role: "main" } suits && suits.Fits(room, rule.Level))
+                .Should().NotBeEmpty($"room '{room}' on {rule.Level} needs a main piece");
+        }
+
+        // And every piece that can stand in a room says where.
+        check.Kit!.Pieces
+            .Where(one => one.Value.Place != "facade" && !one.Key.StartsWith("shared-door", StringComparison.Ordinal))
+            .Where(one => one.Value.Suits is null)
+            .Select(one => one.Key)
+            .Should().BeEmpty();
+    }
+
+    [Fact]
     public void A_folder_of_that_name_somebody_made_is_never_written_over()
     {
         Set(OfficeArt.BuiltIn, "lead.png");
