@@ -73,6 +73,7 @@ const code = [
   cut("  function turnScene(scene, k) {", "  // The tower beyond the floor's glass"),
   cut("  var TILE_PACE", "\n"),
   cut("  function tileDesks(room, name) {", "  function tileWalk(room, person, toX, toY) {"),
+  cut("  function tileIso(scene) {", "  /*\n    The floor from a corner."),
   cut("  function tileWalk(room, person, toX, toY) {", "  // Take in a fresh reading of the run"),
   cut("  /*\n    People in the way, as extra cost", "  // The next of somebody's own choices"),
   cut("  var CITY_MATERIALS = {", "  function cityFor() {"),
@@ -99,7 +100,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -874,6 +875,38 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   if (JSON.stringify(facings) !== "[0,1,2,3]") { fault("a side of the tower reads another side's outside", JSON.stringify(facings)); }
   if (engine.towerFacing(sides.find((side) => side.front)) !== 0) { fault("the front does not read the south of the floor", "front"); }
   if (JSON.stringify(sides.slice().reverse().map(engine.towerFacing)) !== "[3,2,1,0]") { fault("a side's outside depends on the order the sides are drawn in", "reversed"); }
+}
+
+// From a corner, a point of the floor goes to the diamond and back to the
+// same point; the whole floor fits the canvas; and a piece shows the diagonal
+// its front turns towards where the kit has that side, its own side where not.
+{
+  const scene = { tile: 32, width: 40, height: 24 };
+  const iso = engine.tileIso(scene);
+  const points = [[0, 0], [40, 0], [0, 24], [40, 24], [13.5, 7.25], [39, 1]];
+
+  points.forEach(([gx, gy]) => {
+    const [px, py] = iso.at(gx, gy);
+    const [bx, by] = iso.cell(px, py);
+
+    if (Math.abs(bx - gx) > 1e-6 || Math.abs(by - gy) > 1e-6) { fault("a point of the floor from a corner does not come back to itself", `${gx},${gy} -> ${bx},${by}`); }
+    if (px < -1e-6 || px > iso.wide + 1e-6 || py < 0 || py > iso.tall) { fault("the floor from a corner runs off its canvas", `${gx},${gy} at ${px},${py}`); }
+  });
+
+  // The back corner is the top of the diamond, the front corner its bottom.
+  if (!(iso.at(0, 0)[1] < iso.at(40, 24)[1])) { fault("the floor from a corner is upside down", "back and front"); }
+
+  const sides = { n: [0, 0, 1, 1], e: [1, 0, 1, 1], s: [2, 0, 1, 1], w: [3, 0, 1, 1] };
+  const cases = [
+    [{ facing: "s", sides: { ...sides, sw: [4, 0, 1, 1] } }, "sw"],
+    [{ facing: "e", sides: { ...sides, se: [4, 0, 1, 1] } }, "se"],
+    [{ facing: "e", sides }, "e"],
+    [{ facing: "n" }, "n"],
+    [{}, "s"],
+  ];
+
+  cases.filter(([prop, want]) => engine.tileIsoSide(prop) !== want)
+    .forEach(([prop, want]) => fault("a piece from a corner shows the wrong side", `${prop.facing}: ${engine.tileIsoSide(prop)}, not ${want}`));
 }
 
 // ---- stopping a schedule from the lobby ----

@@ -5343,6 +5343,25 @@
     var t = room.scene.tile;
     var found = null;
 
+    // From a corner, somebody is where their feet are drawn on the diamond.
+    if (room.iso) {
+      var iso = tileIso(room.scene);
+
+      Object.keys(room.people).forEach(function (name) {
+        var person = room.people[name];
+
+        if (person.gone) { return; }
+
+        var feet = iso.at(person.x + 0.5, person.y + 0.5);
+
+        if (x >= feet[0] - 0.4 * t && x <= feet[0] + 0.4 * t && y >= feet[1] - 1.25 * t && y <= feet[1] + 0.1 * t) {
+          if (!found || person.x + person.y > found.x + found.y) { found = person; }
+        }
+      });
+
+      return found;
+    }
+
     Object.keys(room.people).forEach(function (name) {
       var person = room.people[name];
 
@@ -5946,6 +5965,13 @@
   }
 
   function tileSize(room) {
+    // From a corner the drawing sizes its own canvas: the diamond, not the square.
+    if (room.iso) {
+      room.dirty = true;
+
+      return;
+    }
+
     var scene = room.scene;
     var wide = scene.width * scene.tile;
     var tall = scene.height * scene.tile;
@@ -6014,7 +6040,188 @@
     return steps[Math.max(0, Math.min(steps.length - 1, at))];
   }
 
+  /*
+    A floor seen from a corner: the grid turned 45 degrees and halved in
+    height, a cell's corners at (x - y) half-widths across and (x + y)
+    half-heights down from the top. hw is a cell's half-width there, a tile
+    over root two, so a cell covers as much screen as it does seen square on;
+    the top leaves room for what stands up from the back row.
+  */
+  function tileIso(scene) {
+    var t = scene.tile;
+    var hw = Math.round(t / Math.SQRT2);
+    var hh = hw / 2;
+    var top = t * 3;
+
+    return {
+      hw: hw,
+      hh: hh,
+      top: top,
+      wide: (scene.width + scene.height) * hw,
+      tall: (scene.width + scene.height) * hh + top + t,
+      // A point of the floor, in cells, to where it is drawn.
+      at: function (gx, gy) { return [(gx - gy + scene.height) * hw, top + (gx + gy) * hh]; },
+      // And back: where on the floor, in cells, a drawn point is.
+      cell: function (px, py) {
+        var a = px / hw - scene.height;
+        var b = (py - top) / hh;
+
+        return [(a + b) / 2, (b - a) / 2];
+      },
+    };
+  }
+
+  // Which side of a piece a corner view shows: the diagonal its front turns
+  // towards on the screen where the kit has it, the side it faces otherwise.
+  function tileIsoSide(prop) {
+    var diagonal = { s: "sw", e: "se", n: "ne", w: "nw" }[prop.facing || "s"];
+
+    return prop.sides && prop.sides[diagonal] ? diagonal : prop.facing || "s";
+  }
+
+  /*
+    The floor from a corner. The floor and what lies on it are the square
+    view's own picture, laid on the diamond; walls stand up from it as
+    blocks; pieces and people are drawn upright by the same code as square
+    on, each moved to its place on the diamond, furthest first.
+  */
+  function tileDrawIso(room, now) {
+    var scene = room.scene;
+    var t = scene.tile;
+    var iso = tileIso(scene);
+    var dpr = window.devicePixelRatio || 1;
+
+    if (!room.colours) { room.colours = tileColours(); }
+    if (!room.baked) { room.baked = tileBake(room); }
+
+    var across = room.fitWidth || room.floor.clientWidth || iso.wide;
+    var scale = zoomStep(iso.wide, across, dpr, room.zoom || 0, iso.tall, room.fitHeight);
+
+    if (scale !== room.scale || room.canvas.width !== Math.round(iso.wide * scale)) {
+      room.scale = scale;
+      room.canvas.width = Math.round(iso.wide * scale);
+      room.canvas.height = Math.round(iso.tall * scale);
+      room.canvas.style.width = room.canvas.width / dpr + "px";
+      room.canvas.style.height = room.canvas.height / dpr + "px";
+    }
+
+    var ctx = room.canvas.getContext("2d");
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, room.canvas.width, room.canvas.height);
+    ctx.imageSmoothingEnabled = false;
+
+    // The floor: the square picture through the diamond's transform.
+    if (room.baked) {
+      var origin = iso.at(0, 0);
+
+      ctx.setTransform(scale * iso.hw / t, scale * iso.hh / t, -scale * iso.hw / t, scale * iso.hh / t, scale * origin[0], scale * origin[1]);
+      ctx.drawImage(room.baked, 0, 0);
+    }
+
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+
+    if (room.wallsOf !== scene) {
+      room.wallsOf = scene;
+      room.wallList = tileWalls(scene);
+    }
+
+    // What stands up, furthest first: along the diagonal, the cell's far side
+    // nearest the viewer deciding.
+    var items = [];
+
+    (room.standing ? room.wallList : []).forEach(function (wall) { items.push({ d: wall.x + wall.y + 1.5, wall: wall }); });
+
+    (scene.props || []).forEach(function (prop) {
+      if (prop.depth !== "floor") { items.push({ d: prop.x + (prop.w || 1) + prop.y + (prop.h || 1) - 0.5, prop: prop }); }
+    });
+
+    Object.keys(room.people).forEach(function (name) {
+      var person = room.people[name];
+
+      if (!person.gone) { items.push({ d: person.x + person.y + 1.6, person: person }); }
+    });
+
+    items.sort(function (a, b) { return a.d - b.d; });
+
+    items.forEach(function (item) {
+      if (item.wall) {
+        tileIsoWall(ctx, iso, item.wall, t);
+      } else if (item.prop) {
+        var prop = item.prop;
+        var w = prop.w || 1;
+        var h = prop.h || 1;
+        var front = iso.at(prop.x + w, prop.y + h);
+        var middle = iso.at(prop.x + w / 2, prop.y + h / 2);
+
+        // Moved so the bottom middle of its square-on footprint lands on the
+        // front of its diamond, beneath its middle.
+        ctx.save();
+        ctx.translate(middle[0] - (prop.x + w / 2) * t, front[1] - iso.hh * 0.5 - (prop.y + h) * t);
+        tileProp(room, ctx, Object.assign({}, prop, { facing: tileIsoSide(prop) }));
+        ctx.restore();
+      } else {
+        var person = item.person;
+        var feet = iso.at(person.x + 0.5, person.y + 0.5);
+
+        ctx.save();
+        ctx.translate(feet[0] - (person.x + 0.5) * t, feet[1] - (person.y + 0.85) * t);
+        tilePerson(room, ctx, person, now);
+        ctx.restore();
+      }
+    });
+
+    items.forEach(function (item) {
+      if (!item.person) { return; }
+
+      var person = item.person;
+      var feet = iso.at(person.x + 0.5, person.y + 0.5);
+
+      ctx.save();
+      ctx.translate(feet[0] - (person.x + 0.5) * t, feet[1] - (person.y + 0.85) * t);
+      tilePlate(room, ctx, person);
+      ctx.restore();
+    });
+
+    room.drawn = now;
+    room.dirty = false;
+  }
+
+  // A wall cell from a corner: its top raised, and the faces towards the
+  // viewer where no wall carries on in front of them.
+  function tileIsoWall(ctx, iso, wall, t) {
+    var high = Math.round(t * TILE_WALL_HIGH);
+    var p = function (gx, gy, up) { var at = iso.at(gx, gy); return [at[0], at[1] - (up ? high : 0)]; };
+    var x = wall.x;
+    var y = wall.y;
+    var face = wall.glass ? "rgba(170, 205, 235, 0.42)" : "#d8d3cb";
+    var shade = wall.glass ? "rgba(140, 180, 215, 0.42)" : "#c4beb4";
+    var top = wall.glass ? "#59606c" : "#45454f";
+
+    function quad(a, b, c, d, fill) {
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]);
+      ctx.lineTo(d[0], d[1]);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+
+    if (!wall.down) { quad(p(x, y + 1, false), p(x + 1, y + 1, false), p(x + 1, y + 1, true), p(x, y + 1, true), face); }
+    if (!wall.right) { quad(p(x + 1, y, false), p(x + 1, y + 1, false), p(x + 1, y + 1, true), p(x + 1, y, true), shade); }
+
+    quad(p(x, y, true), p(x + 1, y, true), p(x + 1, y + 1, true), p(x, y + 1, true), top);
+  }
+
   function tileDraw(room, now) {
+    if (room.iso) {
+      tileDrawIso(room, now);
+
+      return;
+    }
+
     var colours = tileColours();
 
     if (!room.colours || room.colours.key !== colours.key) {
@@ -7028,8 +7235,11 @@
   function towerAt(room, event) {
     var box = room.canvas.getBoundingClientRect();
     var t = room.scene.tile;
-    var x = Math.floor((event.clientX - box.left) * (room.canvas.width / box.width) / room.scale / t);
-    var y = Math.floor((event.clientY - box.top) * (room.canvas.height / box.height) / room.scale / t);
+    var px = (event.clientX - box.left) * (room.canvas.width / box.width) / room.scale;
+    var py = (event.clientY - box.top) * (room.canvas.height / box.height) / room.scale;
+    var cell = room.iso ? tileIso(room.scene).cell(px, py) : [px / t, py / t];
+    var x = Math.floor(cell[0]);
+    var y = Math.floor(cell[1]);
     var within = function (one) { return x >= one.x && x < one.x + (one.w || 1) && y >= one.y && y < one.y + (one.h || 1); };
     var areas = (room.scene.areas || []).filter(within);
 
@@ -7667,7 +7877,12 @@
       var by = which === "left" ? 3 : 1;
 
       if (towerView.mode === "inside") {
-        towerLook.facing = (towerLook.facing + by) % 4;
+        // Eight views inside, a corner between each pair of straight ones:
+        // even steps square on, odd ones from the corner after.
+        var step = ((towerLook.facing || 0) * 2 + (towerLook.corner ? 1 : 0) + (which === "left" ? 7 : 1)) % 8;
+
+        towerLook.facing = Math.floor(step / 2);
+        towerLook.corner = step % 2 === 1;
         keep("loadout.office.look", towerLook);
         towerShow();
       } else {
@@ -8041,7 +8256,10 @@
     // is drawn from asked for every picture under no set, found none, and was
     // kept, drawn in shapes, for as long as the page was open.
     var kit = (towerData && towerData.kit) || "";
-    var room = tileRoom("floor|" + floor.number + "|" + facing + "|" + kit, here, kit, scene);
+    var corner = !!(turns && towerLook.corner);
+    var room = tileRoom("floor|" + floor.number + "|" + facing + (corner ? "c" : "") + "|" + kit, here, kit, scene);
+
+    room.iso = corner;
     var slot = towerHold.querySelector(".tower-slot");
     var holder = towerHold.querySelector(".tower-inside");
 
