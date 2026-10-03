@@ -153,6 +153,49 @@ public sealed class LobbyAndRoofTests
     }
 
     [Fact]
+    public void The_roof_deck_is_a_terrace_and_still_seats_exactly_who_is_free()
+    {
+        var failures = new List<string>();
+
+        for (var seats = 0; seats <= 48; seats += 4)
+        {
+            var scene = FloorPlanner.Roof(Tech, Rules, seats).Scene;
+            var reached = scene.Reachable();
+            var middle = scene.Width / 2;
+            var loungers = scene.Props!.Where(prop => prop.Kind == "lounger").ToList();
+            var beds = scene.Props!.Where(prop => prop.Kind == "terrace-planter").ToList();
+
+            // Loungers west of the way from the lift, beds east of it.
+            if (loungers.Count < 4 || loungers.Any(one => one.X >= middle))
+            {
+                failures.Add($"{seats}: {loungers.Count} loungers, {loungers.Count(one => one.X >= middle)} east of the middle");
+            }
+
+            if (beds.Count < 4 || beds.Any(one => one.X < middle))
+            {
+                failures.Add($"{seats}: {beds.Count} beds, {beds.Count(one => one.X < middle)} west of the middle");
+            }
+
+            // The decor is no seat: a bench for every two free, as before.
+            if (scene.Desks.Count != Math.Max(2, (seats + 1) / 2) * 2)
+            {
+                failures.Add($"{seats}: {scene.Desks.Count} seats");
+            }
+
+            var stranded = scene.Desks.Concat(scene.Spots!.Values).Where(spot => !reached[spot.X, spot.Y]).ToList();
+
+            if (stranded.Count > 0)
+            {
+                failures.Add($"{seats}: {stranded.Count} places cannot be walked to, the first at {stranded[0].X},{stranded[0].Y}");
+            }
+
+            failures.AddRange(OfficeScenes.Problems(scene, sizeOf: null).Select(problem => $"{seats}: {problem}"));
+        }
+
+        failures.Should().BeEmpty();
+    }
+
+    [Fact]
     public void The_same_number_always_gets_the_same_lobby()
     {
         string Json(int seats) => JsonSerializer.Serialize(FloorPlanner.Lobby(Kit, Rules, seats).Scene);

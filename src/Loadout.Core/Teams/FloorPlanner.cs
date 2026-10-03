@@ -376,6 +376,8 @@ public static partial class FloorPlanner
 
         floor.Areas.Add(new OfficeArea("break-area", "break-area", 1, 1, width - 2, height - 2, Function(rules, "break-area") ?? "idle"));
 
+        Deck(floor, parts, random, band, height - 4);
+
         // Somewhere to stand at the balustrade, looking out.
         var edge = 0;
 
@@ -402,6 +404,75 @@ public static partial class FloorPlanner
         }
 
         return new OfficeFloorPlan(Scene(parts, rules, "@roof", floor, spots, coreLeft, band), spots.Count, 0);
+    }
+
+    /// <summary>
+    /// The open deck south of the band, once the benches have their places: a
+    /// sun deck west of the way from the lift - loungers in pairs facing the
+    /// view, a plant between the pairs - and garden beds of terrace planters east
+    /// of it, a row every few cells with walkable decking between. None of it
+    /// is a seat, so the roof still seats exactly who is free; it is there so
+    /// the roof reads as a terrace rather than a bare floor.
+    /// </summary>
+    private static void Deck(Floor floor, Parts parts, Random random, int band, int bottom)
+    {
+        var lounger = parts.Has("lounger", one => one.Footprint is [1, 1]) ? parts.Pick("lounger", random, one => one.Footprint is [1, 1]).Piece : null;
+        var bed = parts.Has("terrace-planter", one => one.Footprint is [2, 1]) ? parts.Pick("terrace-planter", random, one => one.Footprint is [2, 1]).Piece : null;
+        var plant = parts.Has("plant", one => one.Footprint is [1, 1]) ? parts.Pick("plant", random, one => one.Footprint is [1, 1]).Piece : null;
+        var middle = floor.Width / 2;
+
+        for (var y = band + 4; y <= bottom; y += 4)
+        {
+            // The runs of free decking along the row, either side of the way
+            // from the lift, a cell clear at each end so the row can be walked
+            // round.
+            for (var x = 2; x < floor.Width - 2;)
+            {
+                if (!floor.Free(x, y, 1, 1))
+                {
+                    x++;
+                    continue;
+                }
+
+                var from = x;
+
+                while (x < floor.Width - 2 && floor.Free(x, y, 1, 1))
+                {
+                    x++;
+                }
+
+                var west = x <= middle;
+                var (start, end) = (from + 1, x - 2);
+
+                if (west && lounger is not null)
+                {
+                    // Loungers in pairs facing south, a plant a cell beyond each
+                    // pair and a cell of decking either side of it.
+                    for (var at = start; at + 1 <= end; at += 5)
+                    {
+                        floor.Put("lounger", "lounger", lounger, at, y);
+                        floor.Put("lounger", "lounger", lounger, at + 1, y);
+                        floor.Take(at, y, 2, 1);
+
+                        if (plant is not null && at + 3 <= end)
+                        {
+                            floor.Put("deck-plant", "plant", plant, at + 3, y);
+                            floor.Take(at + 3, y, 1, 1);
+                        }
+                    }
+                }
+                else if (!west && bed is not null)
+                {
+                    // Beds of two planters end to end, a two-cell path between.
+                    for (var at = start; at + 3 <= end; at += 6)
+                    {
+                        floor.Put("terrace-planter", "terrace-planter", bed, at, y);
+                        floor.Put("terrace-planter", "terrace-planter", bed, at + 2, y);
+                        floor.Take(at, y, 4, 1);
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
