@@ -6251,9 +6251,65 @@
     return sheet && sheet.animations && sheet.animations["idle_" + diagonal] ? diagonal : person.facing;
   }
 
+  /*
+    A glass wall cell from a corner: not a block but a pane, standing along
+    the line the wall runs - through the middle of its cell, out to the
+    cells it joins - with a rail along its foot and top and a post where it
+    ends. Thin as the frame is, it is drawn as a plane.
+  */
+  function tileIsoGlass(ctx, iso, wall, t) {
+    var high = Math.round(t * (wall.outer ? TILE_WALL_HIGH : TILE_GLASS_HIGH));
+    var x = wall.x;
+    var y = wall.y;
+    var runs = [];
+    var across = wall.left || wall.right || !(wall.up || wall.down);
+
+    if (across) { runs.push([wall.left ? x : x + 0.5, y + 0.5, wall.right ? x + 1 : x + 0.5, y + 0.5]); }
+    if (wall.up || wall.down) { runs.push([x + 0.5, wall.up ? y : y + 0.5, x + 0.5, wall.down ? y + 1 : y + 0.5]); }
+
+    runs.forEach(function (run) {
+      var a = iso.at(run[0], run[1]);
+      var b = iso.at(run[2], run[3]);
+
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(b[0], b[1] - high);
+      ctx.lineTo(a[0], a[1] - high);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(170, 205, 235, 0.38)";
+      ctx.fill();
+
+      ctx.strokeStyle = "#59606c";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.moveTo(a[0], a[1] - high);
+      ctx.lineTo(b[0], b[1] - high);
+      ctx.stroke();
+    });
+
+    // A post where the run ends or turns: at the cell's middle when it ends
+    // there, and at every second cell along a run for the mullions.
+    var mid = iso.at(x + 0.5, y + 0.5);
+    var ends = !(wall.left && wall.right) && !(wall.up && wall.down);
+
+    if (ends || (wall.left && wall.right && x % 2 === 0) || (wall.up && wall.down && y % 2 === 0)) {
+      ctx.fillStyle = "#59606c";
+      ctx.fillRect(Math.round(mid[0]) - 1, Math.round(mid[1]) - high, 2, high);
+    }
+  }
+
   // A wall cell from a corner: its top raised, and the faces towards the
   // viewer where no wall carries on in front of them.
   function tileIsoWall(ctx, iso, wall, t) {
+    if (wall.glass) {
+      tileIsoGlass(ctx, iso, wall, t);
+
+      return;
+    }
+
     var high = Math.round(t * TILE_WALL_HIGH);
     var p = function (gx, gy, up) { var at = iso.at(gx, gy); return [at[0], at[1] - (up ? high : 0)]; };
     var x = wall.x;
@@ -6429,6 +6485,9 @@
           x: x,
           y: y,
           glass: glass,
+          // The building's own edge, cut low like the side of a doll's house
+          // so the floor can be seen into; a partition inside stands full height.
+          outer: x === 0 || y === 0 || x === scene.width - 1 || y === scene.height - 1,
           thick: thick,
           left: wall(x - 1, y),
           right: wall(x + 1, y),
@@ -6448,12 +6507,16 @@
     return walls;
   }
 
-  // How thick a wall is, and how high it stands, in tiles: a solid wall about
-  // 22 cm, glass 15, both about a metre of face (enough to read as a wall
-  // without hiding the room behind it).
+  // How thick a wall is, and how high it stands, in tiles of 75 cm. A solid
+  // wall is about 22 cm thick and drawn a metre high, enough to read as a wall
+  // without hiding the room behind it. Glass is drawn as it is built: a pane
+  // in a frame about 5 cm deep, standing 2.25 m, door height and a rail - it
+  // hides nothing, so it can be its real height, where a block a metre high
+  // and 15 cm thick read as a low counter rather than a partition.
   var TILE_SOLID = 0.3;
-  var TILE_GLASS = 0.2;
+  var TILE_GLASS = 0.07;
   var TILE_WALL_HIGH = 1.4;
+  var TILE_GLASS_HIGH = 3;
 
   /*
     One wall cell standing up: its face, where nothing of the wall continues
@@ -6462,7 +6525,7 @@
     to the walls beside it.
   */
   function tileWall(ctx, wall, t) {
-    var high = Math.round(t * TILE_WALL_HIGH);
+    var high = Math.round(t * (wall.glass && !wall.outer ? TILE_GLASS_HIGH : TILE_WALL_HIGH));
     var th = wall.thick;
     var x0 = wall.x * t;
     var y0 = wall.y * t;

@@ -786,15 +786,25 @@ public sealed class FloorPlannerTests
     }
 
     [Fact]
-    public void Rooms_can_be_partitioned_by_screens_and_planters_as_well_as_walls()
+    public void Rooms_can_be_partitioned_by_planters_as_well_as_walls_and_by_screens_where_a_pack_says()
     {
-        var kinds = Enumerable.Range(0, 60)
-            .SelectMany(one => new[] { Plan($"run-{one}", 3), Plan($"run-{one}", 8) })
+        HashSet<string> Kinds(OfficeRules rules) => Enumerable.Range(0, 60)
+            .SelectMany(one => new[] { FloorPlanner.Plan(Kit, rules, $"run-{one}", 3), FloorPlanner.Plan(Kit, rules, $"run-{one}", 8) })
             .SelectMany(plan => plan.Scene.Props!)
-            .Select(prop => prop.Kind)
+            .Select(prop => prop.Kind!)
             .ToHashSet();
 
-        kinds.Should().Contain("partition-screen").And.Contain("partition-planter");
+        // The built-in rooms partition with planters, never screens: the Tech
+        // set's screen is one panel on legs, and a row of them read as seats.
+        Kinds(Rules).Should().Contain("partition-planter").And.NotContain("partition-screen");
+
+        // A pack whose screens join up can still have them.
+        var screened = Rules.With(new OfficeRules(OfficeRules.Version, Rooms: new Dictionary<string, OfficeRoomRule>(StringComparer.Ordinal)
+        {
+            ["meeting"] = Rules.Rooms!["meeting"] with { Walls = ["screen"] },
+        }));
+
+        Kinds(screened).Should().Contain("partition-screen");
     }
 
     [Fact]

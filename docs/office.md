@@ -224,10 +224,17 @@ and concrete below ground. A floor is a kit material called `floor-` and its
 name, a tile 128 pixels square that repeats every four cells; a cell is floored
 by the smallest room over it that names one.
 
-Where the kit has floors, walls stand up off them: a face about a metre high,
-pale with a skirting for a solid wall and framed for glass, under a top raised
-above it that joins the walls beside it. They're drawn in among the people and
-furniture by where they meet the floor, so somebody behind one is hidden by it.
+Where the kit has floors, walls stand up off them. A solid wall is a pale face
+about a metre high with a skirting, under a top raised above it that joins the
+walls beside it, kept low so it doesn't hide the room behind. Glass is drawn at
+its real size, because it hides nothing: a pane in a frame about 5 cm deep,
+standing 2.25 m with a mullion every 1.5 m, from either view. The building's own
+glass at the edge of the floor is cut low instead, like the side of a doll's
+house, so you can see in. The built-in rooms are walled in glass, solid wall,
+planters or nothing, never screens: the Tech set's screen is a single panel on
+legs, and a row of them looked like a row of seats. Walls are drawn in among the
+people and furniture by where they meet the floor, so somebody behind one is
+hidden by it.
 A kit with no floors is drawn as before, its walls flat from its tilesets.
 
 A piece can say where it **suits**: which rooms (`*` for any) and levels, what

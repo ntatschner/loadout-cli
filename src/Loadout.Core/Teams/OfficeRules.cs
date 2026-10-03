@@ -232,7 +232,12 @@ public sealed record OfficeRules(
                 Min: [4, 3],
                 ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 1, ["5"] = 2, ["10"] = 3 },
                 Where: "near-open-plan",
-                Walls: ["glass", "solid", "screen"],
+
+                // No screens for walls, here or in any built-in room: the Tech
+                // set's screen is one framed panel on legs, and a row of them
+                // read as a row of seats. A pack whose screen joins up can
+                // still name one.
+                Walls: ["glass", "solid"],
                 Function: "questions",
                 Scope: "floor",
                 Zone: "interior",
@@ -256,7 +261,7 @@ public sealed record OfficeRules(
                 ["sofa", "partition-planter"],
                 Min: [3, 3],
                 ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 },
-                Walls: ["planters", "open", "screen"],
+                Walls: ["planters", "open"],
                 Function: "idle",
                 Extras: ["armchair", "coffee-table", "beanbag"],
                 Scope: "floor",
@@ -266,7 +271,7 @@ public sealed record OfficeRules(
                 Access: "everyone"),
 
             // A corridor floor's rooms off the corridor, each with its own desks.
-            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "screen", "planters", "open"], Function: "work", Scope: "team", Zone: "perimeter", Access: "team"),
+            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "planters", "open"], Function: "work", Scope: "team", Zone: "perimeter", Access: "team"),
             ["cupboard"] = new(["cupboard"], Min: [1, 1], Max: [2, 2], Count: 1, Scope: "floor", Zone: "interior"),
             ["storage-cupboard"] = new(["storage"], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["8"] = 1 }, Scope: "floor", Zone: "interior"),
             ["lift"] = new(["lift"], Count: 1, Core: true, Where: "core", Scope: "floor", Zone: "core"),

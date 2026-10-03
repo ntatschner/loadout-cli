@@ -975,6 +975,32 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   if (engine.towerDisc(10, 10, 0, 5, 1).length !== 0) { fault("a shape with no width has pixels", "rx 0"); }
 }
 
+// Glass is drawn at its real size: a pane in a frame about 5 cm deep, much
+// thinner than a solid wall, standing full height inside the floor; the
+// building's own edge is cut low, so the floor can be seen into.
+{
+  // A tile is 75 cm; at 32 pixels a tile, 5 cm is about two pixels.
+  const t = 32;
+  const row = (cells) => cells.map((one) => one);
+  const scene = {
+    tile: t, width: 6, height: 4,
+    atlases: [{ tiles: 10 }],
+    walls: [
+      row([0, 0, 0, 0, 0, 0]),
+      row([0, -1, 12, 12, -1, 0]),
+      row([0, -1, 0, 0, -1, 12]),
+      row([12, 12, 12, 12, 12, 12]),
+    ],
+  };
+  const walls = engine.tileWalls(scene);
+  const at = (x, y) => walls.find((one) => one.x === x && one.y === y);
+
+  if (at(2, 1).thick > Math.round(t * 0.1)) { fault("a glass partition is drawn thicker than its frame", `${at(2, 1).thick}px at ${t}px a tile`); }
+  if (!(at(2, 1).thick < at(2, 2).thick)) { fault("glass is not thinner than a solid wall", `${at(2, 1).thick} against ${at(2, 2).thick}`); }
+  if (at(2, 1).outer) { fault("a partition inside the floor is cut low as if it were the building's edge", "2,1"); }
+  if (!at(2, 3).outer || !at(5, 2).outer || !at(0, 0).outer) { fault("the building's edge is not cut low", "the south row, the east side and a corner"); }
+}
+
 // A floor starts as big as fits in whole steps of the office's range; one too
 // big for that at its smallest is shrunk until the whole of it shows, rather
 // than cut off at the edges; zooming in goes in whole steps again. A floor
