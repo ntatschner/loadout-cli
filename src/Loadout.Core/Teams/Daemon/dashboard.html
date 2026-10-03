@@ -8846,6 +8846,7 @@
     var step = towerStepFor(towerLook.view, towerYaw === null ? towerYawFor() : towerYaw, lowWidth, lowHeight, towerZoom.outside);
 
     towerBlock = block;
+    towerUnit = Math.max(1, Math.round(step));
     canvas._scale = step * block;
 
     if (canvas.width !== lowWidth || canvas.height !== lowHeight) {
@@ -8950,6 +8951,11 @@
 
   // Screen pixels to one of the outside's: its pixel-art block.
   var towerBlock = 1;
+
+  // One of the building's art pixels in the outside canvas's pixels: the sky,
+  // the weather and the lamps are drawn in squares this size, so they are the
+  // same pixel art as the tower rather than smooth shapes beside it.
+  var towerUnit = 1;
   var TOWER_SKIES = {
     night: { top: "#04060c", low: "#16203a", cloud: "rgba(120, 130, 160, 0.22)", glass: "#0e1722", ground: "rgba(22, 25, 30, 0.9)", lamps: true },
     dawn: { top: "#34426e", low: "#f0b27a", cloud: "rgba(255, 210, 180, 0.55)", glass: "#243750", ground: "rgba(44, 46, 54, 0.85)", lamps: true },
@@ -8978,21 +8984,98 @@
     return x - Math.floor(x);
   }
 
+  /*
+    A sky in bands rather than a smooth gradient, the way pixel art paints
+    one: a few flat colours from the top down, each band's edge on the art
+    pixel grid. Returns each band's top, height and colour.
+  */
+  function towerBands(top, low, height, unit, count) {
+    var bands = [];
+    var rows = Math.max(1, Math.ceil(height / unit));
+    var n = Math.max(1, Math.min(count, rows));
+
+    function rgb(hex) {
+      var v = parseInt(hex.slice(1), 16);
+
+      return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+    }
+
+    var a = rgb(top);
+    var b = rgb(low);
+
+    for (var i = 0; i < n; i += 1) {
+      var from = Math.round(rows * i / n) * unit;
+      var to = Math.min(height, Math.round(rows * (i + 1) / n) * unit);
+      var t = n === 1 ? 0 : i / (n - 1);
+
+      bands.push({
+        y: from,
+        h: to - from,
+        colour: "rgb(" + a.map(function (one, k) { return Math.round(one + (b[k] - one) * t); }).join(", ") + ")",
+      });
+    }
+
+    return bands;
+  }
+
+  /*
+    The art pixels an ellipse covers: each a square of the given size on the
+    grid, in where its middle falls inside. A shape made of these has hard
+    stepped edges like the tower's, and moves a whole pixel at a time.
+  */
+  function towerDisc(cx, cy, rx, ry, unit) {
+    var cells = [];
+
+    if (rx <= 0 || ry <= 0) { return cells; }
+
+    var left = Math.floor((cx - rx) / unit);
+    var right = Math.ceil((cx + rx) / unit);
+    var upper = Math.floor((cy - ry) / unit);
+    var lower = Math.ceil((cy + ry) / unit);
+
+    for (var gy = upper; gy <= lower; gy += 1) {
+      for (var gx = left; gx <= right; gx += 1) {
+        var dx = (gx + 0.5) * unit - cx;
+        var dy = (gy + 0.5) * unit - cy;
+
+        if ((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1) { cells.push([gx * unit, gy * unit]); }
+      }
+    }
+
+    return cells;
+  }
+
+  // Fills art pixels once each, however many shapes cover them: overlapping
+  // puffs of one cloud are one flat colour, not darker where they meet.
+  function towerCells(ctx, cells, unit) {
+    var done = {};
+
+    cells.forEach(function (cell) {
+      var key = cell[0] + "," + cell[1];
+
+      if (done[key]) { return; }
+
+      done[key] = true;
+      ctx.fillRect(cell[0], cell[1], unit, unit);
+    });
+  }
+
   function towerSkyDraw(ctx, canvas, scene, clock) {
-    var sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    var unit = towerUnit;
 
-    sky.addColorStop(0, scene.top);
-    sky.addColorStop(1, scene.low);
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    towerBands(scene.top, scene.low, canvas.height, unit, 8).forEach(function (band) {
+      ctx.fillStyle = band.colour;
+      ctx.fillRect(0, band.y, canvas.width, band.h);
+    });
 
-    // Stars at night, clouds otherwise dimmer at night and heavier in bad weather.
+    // Stars at night, a pixel each; clouds otherwise, dimmer at night and
+    // heavier in bad weather.
     if (scene.sky === "night" && scene.weather === "clear") {
       for (var s = 0; s < 70; s += 1) {
         var twinkle = 0.4 + 0.6 * Math.abs(Math.sin(clock * (0.5 + towerNoise(s + 7)) + s));
 
         ctx.fillStyle = "rgba(230, 236, 255, " + (0.7 * twinkle).toFixed(2) + ")";
-        ctx.fillRect(towerNoise(s) * canvas.width, towerNoise(s + 100) * canvas.height * 0.5, 2, 2);
+        ctx.fillRect(Math.floor(towerNoise(s) * canvas.width / unit) * unit, Math.floor(towerNoise(s + 100) * canvas.height * 0.5 / unit) * unit, unit, unit);
       }
     }
 
@@ -9005,31 +9088,34 @@
       var speed = canvas.width * (0.004 + towerNoise(i + 40) * 0.006);
       var x = ((towerNoise(i) * (canvas.width + w * 2) + clock * speed) % (canvas.width + w * 2)) - w;
       var y = canvas.height * (0.04 + towerNoise(i + 60) * 0.3);
+      var cells = [];
 
-      // Each puff its own shape: in one path they are joined by a line, and filled as a wedge.
+      // Three puffs, drawn as one shape of art pixels.
       [[0, 0, 2, 7], [-0.22, 1 / 18, 4, 9], [0.2, 1 / 20, 4.5, 10]].forEach(function (puff) {
-        ctx.beginPath();
-        ctx.ellipse(x + w * puff[0], y + w * puff[1], w / puff[2], w / puff[3], 0, 0, Math.PI * 2);
-        ctx.fill();
+        cells = cells.concat(towerDisc(x + w * puff[0], y + w * puff[1], w / puff[2], w / puff[3], unit));
       });
+
+      towerCells(ctx, cells, unit);
     }
   }
 
   function towerWeatherDraw(ctx, canvas, scene, clock) {
     var dpr = window.devicePixelRatio || 1;
 
+    var unit = towerUnit;
+    var snap = function (v) { return Math.floor(v / unit) * unit; };
+
+    // Rain as short slanting runs of art pixels, snow as single ones.
     if (scene.weather === "rain") {
-      ctx.strokeStyle = "rgba(180, 200, 230, 0.45)";
-      ctx.lineWidth = dpr;
+      ctx.fillStyle = "rgba(180, 200, 230, 0.45)";
 
       for (var r = 0; r < 160; r += 1) {
-        var x = (towerNoise(r) * canvas.width + clock * 90 * dpr) % canvas.width;
-        var y = (towerNoise(r + 300) * canvas.height + clock * 900 * dpr) % canvas.height;
+        var x = snap((towerNoise(r) * canvas.width + clock * 90 * dpr) % canvas.width);
+        var y = snap((towerNoise(r + 300) * canvas.height + clock * 900 * dpr) % canvas.height);
 
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - 3 * dpr, y + 12 * dpr);
-        ctx.stroke();
+        for (var k = 0; k < 3; k += 1) {
+          ctx.fillRect(x - k * unit, y + k * 2 * unit, unit, 2 * unit);
+        }
       }
     }
 
@@ -9037,12 +9123,11 @@
       ctx.fillStyle = "rgba(245, 248, 255, 0.85)";
 
       for (var f = 0; f < 110; f += 1) {
-        var fy = (towerNoise(f + 500) * canvas.height + clock * (30 + towerNoise(f) * 30) * dpr) % canvas.height;
-        var fx = towerNoise(f + 700) * canvas.width + Math.sin(clock + f) * 8 * dpr;
+        var fy = snap((towerNoise(f + 500) * canvas.height + clock * (30 + towerNoise(f) * 30) * dpr) % canvas.height);
+        var fx = snap(towerNoise(f + 700) * canvas.width + Math.sin(clock + f) * 8 * dpr);
+        var size = towerNoise(f + 900) > 0.7 ? 2 * unit : unit;
 
-        ctx.beginPath();
-        ctx.arc(fx, fy, (1 + towerNoise(f + 900)) * dpr, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(fx, fy, size, size);
       }
     }
   }
@@ -9144,9 +9229,7 @@
             var spot = project(glow);
 
             ctx.fillStyle = "rgba(255, 240, 180, 0.9)";
-            ctx.beginPath();
-            ctx.arc(spot[0], spot[1], Math.max(1.5, (window.devicePixelRatio || 1) * 1.5), 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillRect(Math.floor(spot[0] / towerUnit) * towerUnit, Math.floor(spot[1] / towerUnit) * towerUnit, towerUnit, towerUnit);
           }
         }
       }
@@ -9163,24 +9246,27 @@
         var pf = project(foot);
         var ph = project(head);
 
-        ctx.strokeStyle = "#3b4048";
-        ctx.lineWidth = Math.max(1, (window.devicePixelRatio || 1));
-        ctx.beginPath();
-        ctx.moveTo(pf[0], pf[1]);
-        ctx.lineTo(ph[0], ph[1]);
-        ctx.stroke();
+        // A post a pixel wide, standing straight up, in art pixels.
+        var unit = towerUnit;
+        var postX = Math.floor(ph[0] / unit) * unit;
+        var postTop = Math.floor(Math.min(pf[1], ph[1]) / unit) * unit;
+        var postFoot = Math.ceil(Math.max(pf[1], ph[1]) / unit) * unit;
+
+        ctx.fillStyle = "#3b4048";
+        ctx.fillRect(postX, postTop, unit, Math.max(unit, postFoot - postTop));
 
         if (scene.lamps) {
-          var radius = Math.max(4, Math.hypot(ph[0] - pf[0], ph[1] - pf[1]) * 0.35);
-          var halo = ctx.createRadialGradient(ph[0], ph[1], 0, ph[0], ph[1], radius);
+          // The glow in two flat rings, brighter in the middle, rather than a
+          // smooth fade the rest of the street does not have.
+          var radius = Math.max(3 * unit, Math.hypot(ph[0] - pf[0], ph[1] - pf[1]) * 0.35);
           var flicker = 0.75 + 0.1 * Math.sin(clock * 3 + lamp);
 
-          halo.addColorStop(0, "rgba(255, 220, 150, " + flicker.toFixed(2) + ")");
-          halo.addColorStop(1, "rgba(255, 220, 150, 0)");
-          ctx.fillStyle = halo;
-          ctx.beginPath();
-          ctx.arc(ph[0], ph[1], radius, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillStyle = "rgba(255, 220, 150, " + (flicker * 0.25).toFixed(2) + ")";
+          towerCells(ctx, towerDisc(postX + unit / 2, postTop + unit / 2, radius, radius, unit), unit);
+          ctx.fillStyle = "rgba(255, 220, 150, " + (flicker * 0.45).toFixed(2) + ")";
+          towerCells(ctx, towerDisc(postX + unit / 2, postTop + unit / 2, radius / 2, radius / 2, unit), unit);
+          ctx.fillStyle = "rgba(255, 240, 200, " + flicker.toFixed(2) + ")";
+          ctx.fillRect(postX, postTop, unit, unit);
         }
       }
     });

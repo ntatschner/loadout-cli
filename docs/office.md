@@ -126,18 +126,32 @@ it facing the door, and beside it a waiting lounge, sofas in pairs facing each
 other across a coffee table, with a seat for everything that hasn't started yet: each scheduled
 run and each task still to do is somebody on a sofa, and their card says what
 it is and when. When a run starts, its lead walks in off the street and takes
-the lift up. IT help has a desk in the band east of the lift.
+the lift up. IT help has a desk in the band beside the lift. The middle of the
+lobby has armchairs round coffee tables either side of the walk to the lift.
 
 **The roof** is where people go on a break. Somebody with nothing asked of them
 for a minute leaves their floor by the lift and turns up here, wandering
 between the benches and the edge. The minute stops a node between two steps
-from bouncing up and down. Behind glass west of the lift there is a gym.
+from bouncing up and down. Behind glass beside the lift there is a gym, and the
+deck has loungers on one side of the way out of the lift and garden beds on the
+other.
 
 **The basements** hold the building's plumbing. The first has the mail room,
 where every run's post is kept (what it was asked, and how it ended), and
 storage, where what it delivered is shelved, and in its band a bike store and
 showers. The second has the garbage room, which is the bin, and the server
 room, which is the daemon.
+
+All of these come from the rules, as a floor's rooms do, so a pack can move a
+room to another level, add one or take one away. A room on one of these levels
+says where on it it goes (`where`): `band`, the row along the north wall beside
+the lift, arranged the way a floor's band is; `entrance`, by the front door,
+which is where reception and the waiting room are; `south`, one of the rooms
+off a basement's corridor, which share its width between them and are filled
+in rows with the room's first tag; or `open`, the open floor, which is the
+roof's break area. One that says nothing goes in the band. What stays fixed is
+what the building needs: the door, the lift and stairs, and the way between
+them. Below the street a wall is never glass, whatever a room asks for.
 
 ## The rooms do things
 
@@ -356,8 +370,10 @@ Stated plainly, so nobody finds out by surprise:
   its plain desk; its people have only four facings so far, so somebody seen
   from a corner is drawn facing straight. The floor's own pictures are the
   square view's, laid on the diamond.
-- **The lobby, roof and basements are still laid out by hand**, not from the
-  rules the floors follow.
+- **Some of the lobby and roof is still fixed.** Their rooms come from the
+  rules, but the lobby's armchairs and the roof's loungers and garden beds are
+  laid out by code, and reception and the waiting room always take the same
+  places by the door.
 - **A building's room is somewhere only its floor's people go.** The library on
   the first floor is used by whoever sits on the first floor; nobody takes the
   lift from another floor to reach it.

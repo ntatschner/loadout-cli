@@ -293,9 +293,9 @@ public static partial class FloorPlanner
     /// many seeded arrangements, scored on the rules. Rooms that cannot all
     /// fit are left out from the least important.
     /// </summary>
-    private static List<Placed> Arrange(List<Wanted> programme, OfficeRules rules, Random random, int width, int coreLeft, int coreWidth)
+    private static List<Placed> Arrange(List<Wanted> programme, OfficeRules rules, Random random, int width, int coreLeft, int coreWidth, int westFrom = 1)
     {
-        var segments = new[] { (From: 1, To: coreLeft - 1), (From: coreLeft + coreWidth, To: width - 2) };
+        var segments = new[] { (From: westFrom, To: coreLeft - 1), (From: coreLeft + coreWidth, To: width - 2) };
         var room = segments.Sum(one => one.To - one.From + 1);
 
         // Leave out from the end until what is left fits, walls and all.
