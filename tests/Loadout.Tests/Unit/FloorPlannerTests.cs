@@ -389,6 +389,108 @@ public sealed class FloorPlannerTests
         seen.Should().NotBeEmpty("some floor of a team of twelve has room for a facility");
     }
 
+    // ---- where things go ----
+
+    // Every scene worth checking a placement rule on: floors of every size,
+    // floors teams share, the lobby, the roof and both basements.
+    private static IEnumerable<(string Name, OfficeScene Scene)> Everywhere()
+    {
+        for (var team = 1; team <= 20; team += 3)
+        {
+            for (var seed = 0; seed < 5; seed++)
+            {
+                yield return ($"team {team} seed {seed}", FloorPlanner.Plan(Tech, Rules, $"run-{seed}", team).Scene);
+            }
+        }
+
+        foreach (var number in new[] { 1, 2, 3 })
+        {
+            yield return ($"shared floor {number}", FloorPlanner.Shared(Tech, Rules, number, [new("a", 0, 0, 1, 5), new("b", 0, 1, 1, 3), new("c", 0, 2, 1, 4)]).Scene);
+        }
+
+        yield return ("lobby", FloorPlanner.Lobby(Tech, Rules, 8).Scene);
+        yield return ("roof", FloorPlanner.Roof(Tech, Rules, 8).Scene);
+        yield return ("basement 1", FloorPlanner.Basement(Tech, Rules, 1).Scene);
+        yield return ("basement 2", FloorPlanner.Basement(Tech, Rules, 2).Scene);
+    }
+
+    private static bool WallAt(OfficeScene scene, int x, int y) =>
+        x < 0 || y < 0 || x >= scene.Width || y >= scene.Height || scene.Walls![y][x] >= 0;
+
+    [Fact]
+    public void A_piece_made_to_hang_on_a_wall_has_a_wall_behind_it_all_the_way_across()
+    {
+        // The status board and the lift stood loose in the corridor, in front
+        // of an open lounge and of a core with no face, though their art is of
+        // things fixed to a wall.
+        var places = Tech.Pieces.Values.Where(piece => piece.Picture is not null).GroupBy(piece => piece.Picture!).ToDictionary(group => group.Key, group => group.First().Place);
+        var loose = new List<string>();
+
+        foreach (var (name, scene) in Everywhere())
+        {
+            foreach (var prop in scene.Props!.Where(prop => prop.Piece is { } picture && places.GetValueOrDefault(picture) == "wall-north"))
+            {
+                if (!Enumerable.Range(prop.X, prop.W).All(x => WallAt(scene, x, prop.Y - 1)))
+                {
+                    loose.Add($"{name}: {prop.Id} at {prop.X},{prop.Y}");
+                }
+            }
+        }
+
+        loose.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Every_lead_s_office_is_closed_with_one_door()
+    {
+        // An office at its bay's edge was open on the side away from its
+        // door, onto the next team.
+        var open = new List<string>();
+
+        foreach (var (name, scene) in Everywhere())
+        {
+            foreach (var office in scene.Areas!.Where(area => area.Kind == "lead-office"))
+            {
+                var west = Enumerable.Range(office.Y, office.H).Count(y => !WallAt(scene, office.X - 1, y));
+                var east = Enumerable.Range(office.Y, office.H).Count(y => !WallAt(scene, office.X + office.W, y));
+                var north = Enumerable.Range(office.X, office.W).Count(x => !WallAt(scene, x, office.Y - 1));
+                var south = Enumerable.Range(office.X, office.W).Count(x => !WallAt(scene, x, office.Y + office.H));
+
+                if (west + east + north + south != 1)
+                {
+                    open.Add($"{name}: {office.Name} has {west} open on the west, {east} east, {north} north, {south} south");
+                }
+            }
+        }
+
+        open.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void The_core_s_face_is_a_wall_with_its_doors_in_it_and_the_lift_against_it()
+    {
+        // The toilets were cubicles standing in the corridor and the lift a
+        // box beside them, in front of a core with no face.
+        foreach (var (name, scene) in Everywhere())
+        {
+            var core = scene.Areas!.Single(area => area.Kind == "core");
+            var face = core.Y + core.H - 1;
+            var doors = scene.Props!.Where(prop => prop.Kind is "toilet" or "cupboard" && prop.Id.StartsWith("core-", StringComparison.Ordinal)).ToList();
+            var lift = scene.Props!.Single(prop => prop.Kind == "lift");
+
+            foreach (var x in Enumerable.Range(core.X, core.W))
+            {
+                var door = doors.FirstOrDefault(prop => prop.X == x && prop.Y == face);
+
+                (door is null ? WallAt(scene, x, face) : !WallAt(scene, x, face))
+                    .Should().BeTrue($"{name}: the core's face at {x} is {(door is null ? "wall" : "a doorway with its door")}");
+            }
+
+            doors.Should().NotContain(prop => prop.Y != face, $"{name}: the core's doors are in its face, not in the corridor");
+            Enumerable.Range(lift.X, lift.W).Should().OnlyContain(x => WallAt(scene, x, lift.Y - 1), $"{name}: the lift stands against the core");
+        }
+    }
+
     // ---- the building's own rooms ----
 
     // Three floors of three, laid out bottom to top the way the server does it:

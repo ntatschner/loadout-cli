@@ -81,7 +81,9 @@ public static partial class FloorPlanner
         }
         Core(floor, parts, random, coreLeft, coreWidth, band);
 
-        var board = StatusBoard(floor, parts, random, rules, band, coreLeft, coreWidth);
+        // The status board hangs on the band's wall, so it waits for the band
+        // to be built; a plain floor, with no band, has it beside the core.
+        var board = plain ? StatusBoard(floor, parts, random, rules, band, coreLeft, coreWidth) : null;
 
         if (!plain)
         {
@@ -145,6 +147,12 @@ public static partial class FloorPlanner
                     }
                 }
             }
+
+            // Now the band is built, the status board on its wall: it stood
+            // loose in front of an open lounge or print corner when it was
+            // placed before anything behind it was.
+            board = WallBoard(floor, parts, random, rules, band, coreLeft, coreWidth)
+                ?? StatusBoard(floor, parts, random, rules, band, coreLeft, coreWidth);
         }
 
         Exits(floor, parts, random, corridorTop + 1, corridorTop);
@@ -600,6 +608,22 @@ public static partial class FloorPlanner
             for (var y = oy; y <= bottom; y++)
             {
                 Edge(floor, parts, random, walls, side, y);
+            }
+
+            // And the outer side, where the office ends at its bay's edge
+            // rather than at the building's glass: on a floor teams share it
+            // stands beside the next team, and was open to it.
+            var outer = officeOnLeft ? ox - 1 : ox + officeW;
+
+            if (outer >= 1 && outer < floor.Width - 1)
+            {
+                for (var y = oy - 1; y <= bottom; y++)
+                {
+                    if (floor.Cells[outer, y] == Cell.Carpet)
+                    {
+                        Edge(floor, parts, random, walls, outer, y);
+                    }
+                }
             }
 
             var lead = Furnish(floor, parts, random, rules, "lead-office", prefix + "lead-office", "floor", ox, oy, officeW, officeH, back: "s", entry: (officeDoor, oy), seatsAs: "lead");

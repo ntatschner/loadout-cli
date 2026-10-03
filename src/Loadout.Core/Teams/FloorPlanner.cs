@@ -1352,10 +1352,27 @@ public static partial class FloorPlanner
 
     private static void Core(Floor floor, Parts parts, Random random, int left, int width, int band, bool doors = true)
     {
-        // Along the core's south face, from the left: the toilets' door, the
-        // broom cupboard's, the lift, the stairs. The roof has only the last two.
+        // The core's south face is a wall, in line with the fronts of the
+        // rooms either side of it, and what the core holds is set into it,
+        // from the left: the toilets' door, the broom cupboard's, then the
+        // lift against it. The roof has only the
+        // last two. Pieces drawn as a room rather than a door - a set's toilet
+        // cubicles - are not put in a doorway a cell wide; the set's door is.
+        // The stairs stand in front of it beside the lift.
+        var face = band;
         var row = band + 1;
-        var x = left;
+
+        // In from the core's corner: the rooms either side take the core as
+        // their wall, and a doorway at its very edge cut a room's front off
+        // from anything to join.
+        var x = left + 1;
+
+        for (var col = left; col < left + width; col++)
+        {
+            floor.Wall(col, face, Cell.Solid);
+        }
+
+        var door = parts.Has("door-wood", one => one.Footprint is [1, 1]) ? parts.Pick("door-wood", random, one => one.Footprint is [1, 1]).Piece : null;
 
         foreach (var tag in new[] { "toilet", "cupboard" })
         {
@@ -1363,22 +1380,27 @@ public static partial class FloorPlanner
             // lift is where it is on every other level.
             if (doors)
             {
-                var piece = parts.Pick(tag, random, one => one.Footprint[0] == 1);
+                var piece = door ?? parts.Pick(tag, random, one => one.Footprint[0] == 1).Piece;
 
-                floor.Put($"core-{tag}", tag, piece.Piece, x, row);
-                floor.Spots[tag] = new OfficeSpot(x, row + 1, "n");
+                floor.Wall(x, face, Cell.Carpet);
+                floor.Put($"core-{tag}", tag, piece with { Blocks = false }, x, face);
+                floor.Spots[tag] = new OfficeSpot(x, row, "n");
             }
 
             x++;
         }
 
-        // Whatever is left of the core's face after the two doors.
+        // Whatever is left of the core's face after the two doors: the lift
+        // standing against the wall, its doors facing the corridor.
         var lift = parts.Pick("lift", random, one => one.Footprint[0] <= width - 2);
 
         floor.Put("core-lift", "lift", lift.Piece with { Blocks = false }, x, row);
         floor.Spots["lift"] = new OfficeSpot(x, row + 1, "n");
         x += lift.Piece.Footprint[0];
 
+        // The stairs beside the lift, against the same wall. Not cut into
+        // the core: it is solid, and the rooms either side take it as their
+        // wall.
         if (x < left + width)
         {
             var stairs = parts.Pick("stairs", random);
@@ -1387,6 +1409,38 @@ public static partial class FloorPlanner
         }
 
         floor.Areas.Add(new OfficeArea("core", "core", left, 1, width, band, null));
+    }
+
+    /// <summary>
+    /// The status board on the band's wall: the stretch of a room's front,
+    /// or the core's, that is wall all the way across the board and has the
+    /// corridor clear in front of it, the nearest the core first. Null where
+    /// the band has no such stretch.
+    /// </summary>
+    private static (int X, int W)? WallBoard(Floor floor, Parts parts, Random random, OfficeRules rules, int band, int coreLeft, int coreWidth)
+    {
+        var board = parts.Pick("status-board", random);
+        var w = board.Piece.Footprint[0];
+        var middle = coreLeft + coreWidth / 2.0;
+
+        var at = Enumerable.Range(1, Math.Max(0, floor.Width - 1 - w))
+            .Where(x => Enumerable.Range(x, w).All(col => floor.Cells[col, band] != Cell.Carpet && floor.Clear(col, band + 1)
+                && !floor.Spots.Values.Any(spot => spot.X == col && spot.Y == band + 1)
+                && !floor.Props.Any(prop => col >= prop.X && col < prop.X + prop.W && band + 1 >= prop.Y && band + 1 < prop.Y + prop.H)))
+            .OrderBy(x => Math.Abs(x + w / 2.0 - middle))
+            .Cast<int?>()
+            .FirstOrDefault();
+
+        if (at is not { } x0)
+        {
+            return null;
+        }
+
+        floor.Put("status-board", "status-board", board.Piece with { Blocks = false }, x0, band + 1);
+        floor.Areas.Add(new OfficeArea("status-board", "status-board", x0, band + 1, w, 1, Function(rules, "status-board")));
+        floor.Spots["status-board"] = new OfficeSpot(x0 + w / 2, band + 2, "n");
+
+        return (x0, w);
     }
 
     private static (int X, int W)? StatusBoard(Floor floor, Parts parts, Random random, OfficeRules rules, int band, int coreLeft, int coreWidth)

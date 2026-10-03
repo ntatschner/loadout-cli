@@ -8651,28 +8651,21 @@
     var height = backdrop.height / (dpr * k);
 
     for (var y = height / 2 - storey * 3; y < height; y += storey) {
-      towerFlatStorey(ctx, c, 0, y, width, storey, towerOccupant(number + Math.round((height / 2 - y) / storey)));
+      towerFlatStorey(ctx, c, 0, y, width, storey);
     }
 
     ctx.globalAlpha = 1;
   }
 
-  // One storey face-on, for the backdrop behind a floor.
-  function towerFlatStorey(ctx, c, x, y, width, height, occupant) {
+  // One storey face-on, for the backdrop behind a floor: the wall and its
+  // fins, no lit windows. Faded behind the floor, a lit bay read as a stray
+  // panel standing in the room rather than a window in the storey beyond.
+  function towerFlatStorey(ctx, c, x, y, width, height) {
     var tile = towerTile();
     var bays = Math.max(1, Math.round(width / tile));
-    var lit = occupant && !occupant.dark ? Math.min(bays, occupant.people * 2) : 0;
 
     ctx.fillStyle = "#1c2a3a";
     ctx.fillRect(x, y, width, height);
-    ctx.fillStyle = "rgba(255, 214, 140, 0.85)";
-
-    for (var i = 0; i < lit; i += 1) {
-      var bay = Math.floor((i + 0.5) * bays / lit);
-
-      ctx.fillRect(x + bay * tile + 3, y + 6, tile - 6, height - 14);
-    }
-
     ctx.fillStyle = "#9c7a4a";
 
     for (var fin = 0; fin <= bays; fin += 1) { ctx.fillRect(x + fin * tile - 1, y, 3, height - 8); }
