@@ -100,7 +100,8 @@ or desks is about that run; clicking a room the floor shares, the meeting room
 or the status board, shows each team's part of it under its name, with a way to
 open each run. Somebody moving between floors walks to the lift and is gone,
 and turns up from the lift on the other one; the arrows beside **Back to the
-building** go to the next floor up or down with a team on it.
+building** step a level up or down: through the basements, the lobby, the floors
+with a team on them and the roof.
 
 People walk round anyone standing still, pass behind whoever is sitting at a
 desk, and wait their turn where there's only room for one. If the wait goes on
@@ -227,10 +228,12 @@ by the smallest room over it that names one.
 Where the kit has floors, walls stand up off them. A solid wall is a pale face
 about a metre high with a skirting, under a top raised above it that joins the
 walls beside it, kept low so it doesn't hide the room behind. Glass is drawn at
-its real size, because it hides nothing: a pane in a frame about 5 cm deep,
-standing 2.25 m with a mullion every 1.5 m, from either view. The building's own
-glass at the edge of the floor is cut low instead, like the side of a doll's
-house, so you can see in. The built-in rooms are walled in glass, solid wall,
+its real size: a pane in a frame about 5 cm deep, standing 2.25 m with a
+mullion every 1.5 m, seen from a corner. Square on, a wall's height is drawn up
+the screen over whatever stands behind it, so there glass is cut down to the
+solid walls' height, still thin. The building's own glass at the edge of the
+floor is cut low in every view, like the side of a doll's house, so you can see
+in. The built-in rooms are walled in glass, solid wall,
 planters or nothing, never screens: the Tech set's screen is a single panel on
 legs, and a row of them looked like a row of seats. Walls are drawn in among the
 people and furniture by where they meet the floor, so somebody behind one is

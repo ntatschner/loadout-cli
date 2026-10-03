@@ -6277,7 +6277,7 @@
       ctx.lineTo(b[0], b[1] - high);
       ctx.lineTo(a[0], a[1] - high);
       ctx.closePath();
-      ctx.fillStyle = "rgba(170, 205, 235, 0.38)";
+      ctx.fillStyle = "rgba(170, 205, 235, 0.22)";
       ctx.fill();
 
       ctx.strokeStyle = "#59606c";
@@ -6525,7 +6525,11 @@
     to the walls beside it.
   */
   function tileWall(ctx, wall, t) {
-    var high = Math.round(t * (wall.glass && !wall.outer ? TILE_GLASS_HIGH : TILE_WALL_HIGH));
+    // Seen square on, a wall's height is drawn up the screen over whatever
+    // stands behind it, so full-height glass stacked tinted boxes over the
+    // rooms and desks beyond; here it is cut down to the solid walls'
+    // height, thin as it is. From a corner it stands its full height.
+    var high = Math.round(t * TILE_WALL_HIGH);
     var th = wall.thick;
     var x0 = wall.x * t;
     var y0 = wall.y * t;
@@ -7865,8 +7869,8 @@
 
     controls.appendChild(views);
     towerButtonFor(controls, "back", "Back to the building");
-    towerButtonFor(controls, "below", "↓", "The next floor down with a team on it");
-    towerButtonFor(controls, "above", "↑", "The next floor up with a team on it");
+    towerButtonFor(controls, "below", "↓", "The level below: a floor with a team on it, the lobby or a basement");
+    towerButtonFor(controls, "above", "↑", "The level above: a floor with a team on it, the lobby or the roof");
     towerButtonFor(controls, "left", "⟲", "Turn left");
     towerButtonFor(controls, "right", "⟳", "Turn right");
     towerButtonFor(controls, "out", "−", "Zoom out");
