@@ -1362,6 +1362,11 @@ public sealed partial class TeamRunner : ITeamRunner
 
         cost += afterwards.Sum();
 
+        // The watch stops before the ending is written, so its last look -
+        // an answer given just before the end - goes down ahead of it, where
+        // somebody following the journal still reads it.
+        await watching.StopAsync().ConfigureAwait(false);
+
         await journal.WriteAsync(
             "run.finished", null, new { ended, outcome = Filed(ended), cost, rounds, merged }, ct).ConfigureAwait(false);
 
@@ -2755,8 +2760,11 @@ public sealed partial class TeamRunner : ITeamRunner
 
                     var answer = await console.PermitAsync(ask, ct).ConfigureAwait(false);
 
-                    await NodePermissions.AnswerAsync(directory, ask.Id, answer, ct).ConfigureAwait(false);
-
+                    // Written down before the node is told, not after: the
+                    // answer releases it, and a node that finished at once
+                    // could end the run - and stop this watcher - before the
+                    // entry was made, leaving an answer acted on and never
+                    // recorded.
                     await journal
                         .WriteAsync(
                             "node.answered",
@@ -2764,29 +2772,12 @@ public sealed partial class TeamRunner : ITeamRunner
                             new { tool = ask.Tool, allowed = answer.Allowed, chosen = answer.Chosen },
                             ct)
                         .ConfigureAwait(false);
+
+                    await NodePermissions.AnswerAsync(directory, ask.Id, answer, ct).ConfigureAwait(false);
                 }
 
-                // Whatever has been answered since the last glance. Pending
-                // stops returning a question once its answer is there, so what
-                // has gone from that list is what somebody decided - and it is
-                // their answer that gets journalled, not one made up here.
-                foreach (var (id, ask) in outstanding.ToList())
-                {
-                    if (NodePermissions.Answered(directory, id) is not { } said)
-                    {
-                        continue;
-                    }
-
-                    outstanding.Remove(id);
-
-                    await journal
-                        .WriteAsync(
-                            "node.answered",
-                            ask.Node,
-                            new { tool = ask.Tool, allowed = said.Allowed, reason = said.Reason, chosen = said.Chosen },
-                            ct)
-                        .ConfigureAwait(false);
-                }
+                // Whatever has been answered since the last glance.
+                await NoteAnsweredAsync(directory, outstanding, journal, ct).ConfigureAwait(false);
 
                 await Task.Delay(NodePermissions.Glance, _time, ct).ConfigureAwait(false);
             }
@@ -2795,6 +2786,46 @@ public sealed partial class TeamRunner : ITeamRunner
         {
             // The run ended. Anything still waiting is answered by the
             // answerer's own patience running out, which says so.
+        }
+
+        // One last look, whatever stopped the watch: an answer given since the
+        // last glance released a node that may have finished the run before
+        // the next one, and what it acted on still goes down. Not cancellable,
+        // because the run being over is exactly when this matters.
+        await NoteAnsweredAsync(directory, outstanding, journal, CancellationToken.None).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Journals every outstanding question somebody has answered in the run
+    /// directory since the last look, and forgets it.
+    /// </summary>
+    /// <remarks>
+    /// Pending stops returning a question once its answer is there, so what
+    /// has gone from that list is what somebody decided - and it is their
+    /// answer that gets journalled, not one made up here.
+    /// </remarks>
+    private static async Task NoteAnsweredAsync(
+        string directory,
+        Dictionary<string, PendingAsk> outstanding,
+        Journal journal,
+        CancellationToken ct)
+    {
+        foreach (var (id, ask) in outstanding.ToList())
+        {
+            if (NodePermissions.Answered(directory, id) is not { } said)
+            {
+                continue;
+            }
+
+            outstanding.Remove(id);
+
+            await journal
+                .WriteAsync(
+                    "node.answered",
+                    ask.Node,
+                    new { tool = ask.Tool, allowed = said.Allowed, reason = said.Reason, chosen = said.Chosen },
+                    ct)
+                .ConfigureAwait(false);
         }
     }
 
@@ -2825,9 +2856,13 @@ public sealed partial class TeamRunner : ITeamRunner
             return new Watching(stop, wanted ? watch(stop.Token) : Task.CompletedTask);
         }
 
-        public async ValueTask DisposeAsync()
+        /// <summary>Stops the watch and waits for it to finish; again does nothing more.</summary>
+        public async Task StopAsync()
         {
-            await _stop.CancelAsync().ConfigureAwait(false);
+            if (!_stop.IsCancellationRequested)
+            {
+                await _stop.CancelAsync().ConfigureAwait(false);
+            }
 
             try
             {
@@ -2836,6 +2871,11 @@ public sealed partial class TeamRunner : ITeamRunner
             catch (OperationCanceledException)
             {
             }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await StopAsync().ConfigureAwait(false);
 
             _stop.Dispose();
         }

@@ -556,13 +556,28 @@ public static partial class NodePermissions
         ArgumentNullException.ThrowIfNull(answer);
 
         // Written beside, then moved into place, so the waiting side never
-        // reads half an answer and treats it as no answer.
+        // reads half an answer and treats it as no answer. The side file is
+        // this answer's own: two people answering at once (the dashboard and
+        // the terminal) used to share one, and whichever moved it first took
+        // the other's away, which failed as a missing file.
         var settled = AnswerPath(directory, id);
-        var writing = settled + ".writing";
+        var writing = $"{settled}.{Guid.NewGuid():N}.writing";
 
         await File.WriteAllTextAsync(writing, JsonSerializer.Serialize(answer), ct).ConfigureAwait(false);
 
-        File.Move(writing, settled, overwrite: true);
+        // The first answer to arrive stands, as the timed default already
+        // assumes by checking before it answers: the node may have read it and
+        // acted already, and a second one landing on top would say otherwise
+        // about a decision that has been made. Two moves replacing one file at
+        // the same instant are also refused outright on Windows.
+        try
+        {
+            File.Move(writing, settled, overwrite: false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && File.Exists(settled))
+        {
+            File.Delete(writing);
+        }
     }
 
     /// <summary>A node name as a file name: instance names carry a slash.</summary>
