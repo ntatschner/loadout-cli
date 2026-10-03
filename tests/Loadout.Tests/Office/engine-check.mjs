@@ -105,7 +105,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse, towerBands, towerDisc,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -943,6 +943,36 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 
   cases.filter(([name, x, y, want]) => engine.tileMayUse(room, name, x, y) !== want)
     .forEach(([name, x, y, want, what]) => fault("somebody is sent where they may not go, or kept from where they may", `${what}: ${name} at ${x},${y} gave ${!want}`));
+}
+
+// The sky and what is drawn in it are the tower's pixel art too: the sky in
+// a few flat bands whose edges sit on the art pixel grid, darkest at the top;
+// a cloud or a lamp's glow made of whole art pixels on that grid, each once.
+{
+  for (const [unit, height] of [[1, 430], [2, 430], [4, 433], [3, 7]]) {
+    const bands = engine.towerBands("#5f9fd6", "#cfe3f4", height, unit, 8);
+    const sum = bands.reduce((total, band) => total + band.h, 0);
+    const shade = (band) => band.colour.match(/\d+/g).map(Number).reduce((a, b) => a + b, 0);
+
+    if (bands.length < 1 || bands.length > 8) { fault("the sky is not in a few bands", `unit ${unit}, height ${height}: ${bands.length}`); }
+    if (sum !== height || bands[0].y !== 0) { fault("the sky's bands do not cover it", `unit ${unit}, height ${height}: ${sum} from ${bands[0].y}`); }
+    if (bands.slice(0, -1).some((band) => (band.y + band.h) % unit !== 0)) { fault("a band of sky ends off the art pixel grid", `unit ${unit}`); }
+    if (bands.some((band, i) => i > 0 && shade(band) < shade(bands[i - 1]))) { fault("the sky does not lighten towards the horizon", `unit ${unit}`); }
+    if (bands.some((band) => band.h <= 0)) { fault("a band of sky has no height", `unit ${unit}, height ${height}`); }
+  }
+
+  for (const [cx, cy, rx, ry, unit] of [[50, 40, 20, 8, 2], [13.3, 7.7, 5, 5, 1], [100, 100, 9, 9, 3]]) {
+    const cells = engine.towerDisc(cx, cy, rx, ry, unit);
+    const keys = new Set(cells.map((cell) => cell.join(",")));
+    const area = Math.PI * rx * ry / (unit * unit);
+
+    if (cells.some(([x, y]) => x % unit !== 0 || y % unit !== 0)) { fault("a shape in the sky is off the art pixel grid", `${cx},${cy} by ${unit}`); }
+    if (keys.size !== cells.length) { fault("a shape in the sky has a pixel twice", `${cx},${cy}`); }
+    if (Math.abs(cells.length - area) > area * 0.35 + 4) { fault("a shape in the sky is the wrong size", `${cx},${cy}: ${cells.length} pixels for an area of ${area.toFixed(1)}`); }
+    if (cells.some(([x, y]) => Math.abs(x + unit / 2 - cx) > rx + unit || Math.abs(y + unit / 2 - cy) > ry + unit)) { fault("a shape in the sky reaches past its ellipse", `${cx},${cy}`); }
+  }
+
+  if (engine.towerDisc(10, 10, 0, 5, 1).length !== 0) { fault("a shape with no width has pixels", "rx 0"); }
 }
 
 // A floor starts as big as fits in whole steps of the office's range; one too
