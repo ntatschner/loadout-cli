@@ -1944,16 +1944,28 @@ public sealed class TeamRunnerTests : IDisposable
     /// here until the suite's own timeout, minutes later and nowhere near the
     /// cause.
     /// </remarks>
-    private static async Task Until(string what, Func<bool> done)
+    private static async Task Until(string what, Func<bool> done, TimeSpan? every = null)
     {
-        for (var i = 0; i < 300; i++)
+        // Thirty seconds either way; with no pause, looking as often as the
+        // machine allows, for a test that has to catch a moment.
+        var pause = every ?? TimeSpan.FromMilliseconds(100);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+
+        while (DateTime.UtcNow < deadline)
         {
             if (done())
             {
                 return;
             }
 
-            await Task.Delay(100);
+            if (pause == TimeSpan.Zero)
+            {
+                await Task.Yield();
+            }
+            else
+            {
+                await Task.Delay(pause);
+            }
         }
 
         throw new Xunit.Sdk.XunitException($"Gave up waiting: {what}.");
@@ -2018,6 +2030,82 @@ public sealed class TeamRunnerTests : IDisposable
         // The person's own reason is what goes down, not one made up here.
         Read(Path.Combine(outcome.Directory!, "journal.jsonl")).Should().Contain(l =>
             l.Contains("\"kind\":\"node.answered\"") && l.Contains("because somebody said so"));
+    }
+
+    [Fact]
+    public async Task An_answer_given_at_the_console_is_written_down_before_the_node_can_act_on_it()
+    {
+        // The answer released the node before it was journalled, so a node that
+        // finished at once could end the run first; stopping the watcher then
+        // cancelled the entry, and "somebody allowed it" was never written. It
+        // failed on a busy CI machine now and then. Here the node looks for its
+        // answer as fast as it can and reads the journal the moment it sees one.
+        var directory = string.Empty;
+        var recorded = (bool?)null;
+
+        _launcher.BeforeStart = where => directory = where;
+
+        _console.Confirm = _ => true;
+
+        _launcher.Hold("role.project-lead", async () =>
+        {
+            await NodePermissions.PutAsync(
+                directory,
+                new PendingAsk("lead-1", "lead", "role.project-lead", "Bash", "dotnet test", DateTimeOffset.UtcNow));
+
+            var journal = Path.Combine(directory, "journal.jsonl");
+
+            await Until("the question was never answered", () => NodePermissions.Answered(directory, "lead-1") is not null, every: TimeSpan.Zero);
+
+            recorded = Read(journal).Any(l => l.Contains("\"kind\":\"node.answered\""));
+        });
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        await RunAsync();
+
+        recorded.Should().BeTrue("the answer is on record before the node can act on it");
+    }
+
+    [Fact]
+    public async Task An_answer_given_on_the_dashboard_just_before_the_run_ends_is_still_written_down()
+    {
+        // The dashboard answers in the run directory and the watcher notices on
+        // its next look, a quarter of a second later. A node that went on and
+        // finished in that quarter second ended the run first, and the answer
+        // it acted on was never journalled.
+        var directory = string.Empty;
+
+        _launcher.BeforeStart = where => directory = where;
+
+        _console.AnswersInPlace = true;
+
+        _launcher.Hold("role.project-lead", async () =>
+        {
+            await NodePermissions.PutAsync(
+                directory,
+                new PendingAsk("lead-1", "lead", "role.project-lead", "Bash", "dotnet test", DateTimeOffset.UtcNow));
+
+            var journal = Path.Combine(directory, "journal.jsonl");
+
+            await Until(
+                "the watcher never noted the question",
+                () => File.Exists(journal) && Read(journal).Any(l => l.Contains("node.asked")));
+
+            // Answered, and straight on without waiting for anybody to notice.
+            await NodePermissions.AnswerAsync(directory, "lead-1", new AskAnswer(true, "because somebody said so"));
+        });
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.05m));
+
+        var outcome = (await RunAsync()).Value!;
+        var lines = Read(Path.Combine(outcome.Directory!, "journal.jsonl")).ToList();
+        var answered = lines.FindIndex(l => l.Contains("\"kind\":\"node.answered\"") && l.Contains("because somebody said so"));
+
+        answered.Should().BeGreaterThanOrEqualTo(0, "the answer the node acted on is on record");
+
+        // Ahead of the ending, where somebody following the journal stops reading.
+        answered.Should().BeLessThan(lines.FindIndex(l => l.Contains("\"kind\":\"run.finished\"")));
     }
 
     /// <summary>A file something else is still writing.</summary>
