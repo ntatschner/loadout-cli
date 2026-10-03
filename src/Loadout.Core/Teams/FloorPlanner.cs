@@ -1161,7 +1161,8 @@ public static partial class FloorPlanner
                 piece.Depth,
                 tag,
                 piece.Sides,
-                facing));
+                facing,
+                piece.Place.StartsWith("wall", StringComparison.Ordinal)));
 
             if (piece.Blocks)
             {
@@ -1218,7 +1219,9 @@ public static partial class FloorPlanner
         // The band of rooms along the north, and the core in its middle.
         var depth = height >= 14 ? 4 : 3;
         var band = depth + 1;
-        var coreWidth = width >= 22 ? 6 : 4;
+        // Wide enough on a full plate for two doors, the lift and a well for
+        // the stairs between its corners.
+        var coreWidth = width >= 32 ? 8 : width >= 22 ? 6 : 4;
         var coreLeft = (width - coreWidth) / 2;
 
         for (var x = coreLeft; x < coreLeft + coreWidth; x++)
@@ -1354,11 +1357,13 @@ public static partial class FloorPlanner
     {
         // The core's south face is a wall, in line with the fronts of the
         // rooms either side of it, and what the core holds is set into it,
-        // from the left: the toilets' door, the broom cupboard's, then the
-        // lift against it. The roof has only the
-        // last two. Pieces drawn as a room rather than a door - a set's toilet
-        // cubicles - are not put in a doorway a cell wide; the set's door is.
-        // The stairs stand in front of it beside the lift.
+        // from the left: the toilets' door and the broom cupboard's, the lift
+        // in the wall itself, its doors flush with the face, and the stairs
+        // in a well cut into the core, open to the corridor. The roof has only
+        // the lift and the stairs. Pieces drawn as a room rather than a door -
+        // a set's toilet cubicles - are not put in a doorway a cell wide; the
+        // set's door is. A core too narrow for the well has its stairs in
+        // front of it, beside the lift.
         var face = band;
         var row = band + 1;
 
@@ -1390,25 +1395,96 @@ public static partial class FloorPlanner
             x++;
         }
 
-        // Whatever is left of the core's face after the two doors: the lift
-        // standing against the wall, its doors facing the corridor.
-        var lift = parts.Pick("lift", random, one => one.Footprint[0] <= width - 2);
+        // The lift in the face: its art is a lift's doors in a wall, and stood
+        // in front of the wall it was a box sticking out into the corridor.
+        // Room left for the doors and the well where the core has it; a narrow
+        // core takes whatever lift fits beside the doors.
+        var lift = parts.Has("lift", one => one.Footprint[0] <= width - 4)
+            ? parts.Pick("lift", random, one => one.Footprint[0] <= width - 4)
+            : parts.Pick("lift", random, one => one.Footprint[0] <= Math.Max(1, width - 2));
+        var lw = lift.Piece.Footprint[0];
 
-        floor.Put("core-lift", "lift", lift.Piece with { Blocks = false }, x, row);
-        floor.Spots["lift"] = new OfficeSpot(x, row + 1, "n");
-        x += lift.Piece.Footprint[0];
-
-        // The stairs beside the lift, against the same wall. Not cut into
-        // the core: it is solid, and the rooms either side take it as their
-        // wall.
-        if (x < left + width)
+        for (var col = x; col < x + lw; col++)
         {
-            var stairs = parts.Pick("stairs", random);
+            floor.Wall(col, face, Cell.Carpet);
+        }
 
+        floor.Put("core-lift", "lift", lift.Piece with { Blocks = false }, x, face);
+        floor.Spots["lift"] = new OfficeSpot(x, row, "n");
+        x += lw;
+
+        var stairs = parts.Pick("stairs", random);
+        var (sw, sh) = (stairs.Piece.Footprint[0], stairs.Piece.Footprint[1]);
+
+        if (x + sw <= left + width - 1)
+        {
+            // A well in the core for the stairs, open on the corridor side and
+            // walled on the others by the core, the corner column kept.
+            for (var col = x; col < x + sw; col++)
+            {
+                for (var y = face - sh + 1; y <= face; y++)
+                {
+                    floor.Wall(col, y, Cell.Carpet);
+                }
+            }
+
+            floor.Put("core-stairs", "stairs", stairs.Piece with { Blocks = false }, x, face - sh + 1);
+        }
+        else if (x < left + width)
+        {
             floor.Put("core-stairs", "stairs", stairs.Piece with { Blocks = false }, x, row);
         }
 
         floor.Areas.Add(new OfficeArea("core", "core", left, 1, width, band, null));
+    }
+
+    /// <summary>
+    /// A door in every doorway: each opening a cell wide in a run of wall,
+    /// glass where the wall either side is glass and wood where it is solid,
+    /// turned to the wall it is in. Doorways were left as gaps, so a room's
+    /// way in read as a missing piece of wall. Nobody is kept out: a door is
+    /// walked through. Openings already holding something - the core's doors,
+    /// the lift, the stairs - and sets with no doors are left as they are.
+    /// </summary>
+    private static void Doors(Floor floor, Parts parts)
+    {
+        bool Wall(int x, int y) => x < 0 || y < 0 || x >= floor.Width || y >= floor.Height || floor.Cells[x, y] != Cell.Carpet;
+
+        bool Holds(int x, int y) => floor.Props.Any(prop => x >= prop.X && x < prop.X + prop.W && y >= prop.Y && y < prop.Y + prop.H);
+
+        var random = new Random(Seed("doors", floor.Width * 1000 + floor.Height));
+
+        for (var y = 1; y < floor.Height - 1; y++)
+        {
+            for (var x = 1; x < floor.Width - 1; x++)
+            {
+                if (Wall(x, y) || Holds(x, y))
+                {
+                    continue;
+                }
+
+                var across = Wall(x - 1, y) && Wall(x + 1, y) && !Wall(x, y - 1) && !Wall(x, y + 1);
+                var along = Wall(x, y - 1) && Wall(x, y + 1) && !Wall(x - 1, y) && !Wall(x + 1, y);
+
+                if (!across && !along)
+                {
+                    continue;
+                }
+
+                var (ax, ay, bx, by) = across ? (x - 1, y, x + 1, y) : (x, y - 1, x, y + 1);
+                var glass = floor.Cells[ax, ay] == Cell.Glass || floor.Cells[bx, by] == Cell.Glass;
+                var tag = glass ? "door-glass" : "door-wood";
+
+                if (!parts.Has(tag, one => one.Footprint is [1, 1]))
+                {
+                    continue;
+                }
+
+                var door = parts.Pick(tag, random, one => one.Footprint is [1, 1]).Piece;
+
+                floor.Put($"door-{x}-{y}", "door", door with { Blocks = false }, x, y, null, across ? "s" : "e");
+            }
+        }
     }
 
     /// <summary>
@@ -1488,6 +1564,8 @@ public static partial class FloorPlanner
         {
             later();
         }
+
+        Doors(floor, parts);
 
         floor.Last.Clear();
 

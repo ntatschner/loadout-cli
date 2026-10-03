@@ -42,6 +42,7 @@ public sealed record OfficeSpot(
 /// same picture on its side; null for a piece with one picture.
 /// </param>
 /// <param name="Facing">Which way its front faces: s, towards the viewer, unless a floor has been turned.</param>
+/// <param name="Hung">Whether it is made to hang on a wall behind it - a board, a lift's doors - so a view that draws it standing can put it against the wall rather than in the middle of its cell.</param>
 public sealed record OfficeProp(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("piece")] string? Piece,
@@ -54,7 +55,8 @@ public sealed record OfficeProp(
     [property: JsonPropertyName("depth")] string Depth = "sorted",
     [property: JsonPropertyName("kind")] string? Kind = null,
     [property: JsonPropertyName("sides")] IReadOnlyDictionary<string, IReadOnlyList<int>>? Sides = null,
-    [property: JsonPropertyName("facing")] string Facing = "s");
+    [property: JsonPropertyName("facing")] string Facing = "s",
+    [property: JsonPropertyName("hung")] bool Hung = false);
 
 /// <summary>One animation in a sprite sheet.</summary>
 /// <param name="Frames">Frame numbers, left to right and top to bottom across the sheet.</param>

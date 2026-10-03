@@ -467,28 +467,75 @@ public sealed class FloorPlannerTests
     }
 
     [Fact]
-    public void The_core_s_face_is_a_wall_with_its_doors_in_it_and_the_lift_against_it()
+    public void The_core_s_face_is_a_wall_with_its_doors_the_lift_and_the_stairs_set_into_it()
     {
-        // The toilets were cubicles standing in the corridor and the lift a
-        // box beside them, in front of a core with no face.
+        // The toilets were cubicles standing in the corridor, the lift a box
+        // standing out from the core, and the stairs a hole in the corridor
+        // floor, in front of a core with no face.
         foreach (var (name, scene) in Everywhere())
         {
             var core = scene.Areas!.Single(area => area.Kind == "core");
             var face = core.Y + core.H - 1;
-            var doors = scene.Props!.Where(prop => prop.Kind is "toilet" or "cupboard" && prop.Id.StartsWith("core-", StringComparison.Ordinal)).ToList();
-            var lift = scene.Props!.Single(prop => prop.Kind == "lift");
+            var inFace = scene.Props!.Where(prop => prop.Id.StartsWith("core-", StringComparison.Ordinal)).ToList();
+            var lift = inFace.Single(prop => prop.Kind == "lift");
+            var stairs = inFace.Single(prop => prop.Kind == "stairs");
 
+            // Wall all along, but for the openings that hold a door, the lift
+            // or the stairs - and nothing of the core out in the corridor.
             foreach (var x in Enumerable.Range(core.X, core.W))
             {
-                var door = doors.FirstOrDefault(prop => prop.X == x && prop.Y == face);
+                var held = inFace.Any(prop => x >= prop.X && x < prop.X + prop.W && face >= prop.Y && face < prop.Y + prop.H);
 
-                (door is null ? WallAt(scene, x, face) : !WallAt(scene, x, face))
-                    .Should().BeTrue($"{name}: the core's face at {x} is {(door is null ? "wall" : "a doorway with its door")}");
+                (held ? !WallAt(scene, x, face) : WallAt(scene, x, face))
+                    .Should().BeTrue($"{name}: the core's face at {x} is {(held ? "an opening with what it holds" : "wall")}");
             }
 
-            doors.Should().NotContain(prop => prop.Y != face, $"{name}: the core's doors are in its face, not in the corridor");
-            Enumerable.Range(lift.X, lift.W).Should().OnlyContain(x => WallAt(scene, x, lift.Y - 1), $"{name}: the lift stands against the core");
+            inFace.Should().NotContain(prop => prop.Y + prop.H - 1 != face, $"{name}: what the core holds is in its face, not in the corridor");
+
+            // The lift's doors in the wall, the core behind them; the stairs
+            // in a well the core walls on each side.
+            lift.Y.Should().Be(face, $"{name}: the lift is in the face");
+            Enumerable.Range(lift.X, lift.W).Should().OnlyContain(x => WallAt(scene, x, face - 1), $"{name}: the core is behind the lift");
+            WallAt(scene, stairs.X - 1, stairs.Y).Should().BeTrue($"{name}: the stairs' well is walled on its west");
+            WallAt(scene, stairs.X + stairs.W, stairs.Y).Should().BeTrue($"{name}: the stairs' well is walled on its east");
+            Enumerable.Range(stairs.X, stairs.W).Should().OnlyContain(x => WallAt(scene, x, stairs.Y - 1), $"{name}: the stairs' well is walled behind");
         }
+    }
+
+    [Fact]
+    public void Every_doorway_has_a_door_in_it_and_wall_pieces_say_they_hang()
+    {
+        // Doorways were gaps, and a room's way in read as a missing piece of
+        // wall. Each opening a cell wide in a run of wall now holds a door -
+        // or, in the core's face, the core's own doors, the lift or the stairs.
+        var empty = new List<string>();
+
+        foreach (var (name, scene) in Everywhere())
+        {
+            for (var y = 1; y < scene.Height - 1; y++)
+            {
+                for (var x = 1; x < scene.Width - 1; x++)
+                {
+                    if (WallAt(scene, x, y))
+                    {
+                        continue;
+                    }
+
+                    var across = WallAt(scene, x - 1, y) && WallAt(scene, x + 1, y) && !WallAt(scene, x, y - 1) && !WallAt(scene, x, y + 1);
+                    var along = WallAt(scene, x, y - 1) && WallAt(scene, x, y + 1) && !WallAt(scene, x - 1, y) && !WallAt(scene, x + 1, y);
+
+                    if ((across || along) && !scene.Props!.Any(prop => x >= prop.X && x < prop.X + prop.W && y >= prop.Y && y < prop.Y + prop.H))
+                    {
+                        empty.Add($"{name}: {x},{y}");
+                    }
+                }
+            }
+
+            scene.Props!.Where(prop => prop.Kind is "status-board" or "lift" or "lobby-screen").Should().NotContain(prop => !prop.Hung, $"{name}: pieces made for a wall say so");
+            scene.Props!.Where(prop => prop.Kind is "desk" or "sofa").Should().NotContain(prop => prop.Hung, $"{name}: furniture stands on the floor");
+        }
+
+        empty.Should().BeEmpty();
     }
 
     // ---- the building's own rooms ----

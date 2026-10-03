@@ -6197,8 +6197,11 @@
         var prop = item.prop;
         var w = prop.w || 1;
         var h = prop.h || 1;
-        var front = iso.at(prop.x + w, prop.y + h);
-        var middle = iso.at(prop.x + w / 2, prop.y + h / 2);
+        // Something made to hang on a wall is drawn back against it, half a
+        // cell behind its front, not standing out in the middle of its cell.
+        var back = prop.hung ? { s: [0, -0.5], n: [0, 0.5], e: [-0.5, 0], w: [0.5, 0] }[prop.facing || "s"] || [0, 0] : [0, 0];
+        var front = iso.at(prop.x + w + back[0], prop.y + h + back[1]);
+        var middle = iso.at(prop.x + w / 2 + back[0], prop.y + h / 2 + back[1]);
 
         // Moved so the bottom middle of its square-on footprint lands on the
         // front of its diamond, beneath its middle.
@@ -6474,6 +6477,13 @@
       return tile !== undefined && tile >= 0;
     }
 
+    // A wall reaches into the doorway beside it: an opening a cell wide with
+    // wall on its far side. Its arm stopped at the middle of its own cell, so
+    // every doorway looked two cells wide and its door stood in a gap.
+    function toward(x, y, dx, dy) {
+      return wall(x + dx, y + dy) || wall(x + 2 * dx, y + 2 * dy);
+    }
+
     for (var y = 0; y < scene.height; y += 1) {
       for (var x = 0; x < scene.width; x += 1) {
         if (!wall(x, y)) { continue; }
@@ -6489,10 +6499,10 @@
           // so the floor can be seen into; a partition inside stands full height.
           outer: x === 0 || y === 0 || x === scene.width - 1 || y === scene.height - 1,
           thick: thick,
-          left: wall(x - 1, y),
-          right: wall(x + 1, y),
-          up: wall(x, y - 1),
-          down: wall(x, y + 1),
+          left: toward(x, y, -1, 0),
+          right: toward(x, y, 1, 0),
+          up: toward(x, y, 0, -1),
+          down: toward(x, y, 0, 1),
           // Corners, so a block of wall - the core - is one solid top rather
           // than posts and arms with the floor showing between them.
           upLeft: wall(x - 1, y - 1) && wall(x - 1, y) && wall(x, y - 1),
@@ -6622,8 +6632,12 @@
 
       if (!name) { return; }
 
+      // Over the end of the area the team's office is not at: turned round,
+      // the top row was where the office stood, and the name sat on it.
+      var office = (room.scene.areas || []).filter(function (one) { return one.kind === "lead-office" && one.run === area.run; })[0];
+      var atTop = !office || office.y > area.y + 1;
       var x = (area.x + area.w / 2) * t;
-      var y = area.y * t + t * 0.5;
+      var y = (atTop ? area.y : area.y + area.h - 1) * t + t * 0.5;
       var w = ctx.measureText(name).width + font;
 
       ctx.fillStyle = "rgba(20, 24, 32, 0.78)";
