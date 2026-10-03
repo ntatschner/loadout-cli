@@ -20,6 +20,15 @@ public sealed record BuildingFloor(int Number, string Run, int Part, int People,
 /// <param name="People">How many of its people sit on this floor, lead included.</param>
 public sealed record OfficeTenant(string Run, int Part, int Bay, int Bays, int People);
 
+/// <summary>
+/// The building's own rooms a floor is offered: those the rules give the whole
+/// tower rather than every floor, such as a library, that no floor below has
+/// taken. The floor takes what fits in its band.
+/// </summary>
+/// <param name="Kinds">The kinds of room on offer.</param>
+/// <param name="People">Everybody in the building, which they are counted from.</param>
+public sealed record OfficeBuildingRooms(IReadOnlyCollection<string> Kinds, int People);
+
 /// <summary>The building as it stands: how tall, and who is on which floor.</summary>
 /// <param name="Floors">How many floors the tower is drawn with.</param>
 /// <param name="Occupied">Every floor with a run on it, lowest first.</param>

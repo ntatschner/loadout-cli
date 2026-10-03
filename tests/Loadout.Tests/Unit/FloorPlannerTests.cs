@@ -389,6 +389,80 @@ public sealed class FloorPlannerTests
         seen.Should().NotBeEmpty("some floor of a team of twelve has room for a facility");
     }
 
+    // ---- the building's own rooms ----
+
+    // Three floors of three, laid out bottom to top the way the server does it:
+    // each offered the building's rooms no floor below took.
+    private static Dictionary<int, OfficeScene> Tower(int people, Func<int, OfficeBuildingRooms?, OfficeBuildingRooms?>? offer = null)
+    {
+        var floors = new Dictionary<int, OfficeScene>();
+        int[] numbers = [1, 2, 3];
+
+        foreach (var number in numbers)
+        {
+            var offered = FloorPlanner.BuildingRooms(Rules, number, numbers, people, below => floors.GetValueOrDefault(below));
+
+            floors[number] = FloorPlanner.Shared(Tech, Rules, number, [new($"run-{number}", 0, 0, 1, 3)], offer is null ? offered : offer(number, offered)).Scene;
+        }
+
+        return floors;
+    }
+
+    [Fact]
+    public void The_building_s_own_rooms_are_on_one_floor_each_the_lowest_with_room()
+    {
+        string[] own = ["library", "training-room", "wellness-room"];
+        string[] makes = ["reading-chair", "training-desk", "yoga-mat"];
+        var floors = Tower(people: 30);
+
+        // Thirty in the building call for one of each; three on a floor would call for none.
+        foreach (var kind in own)
+        {
+            var on = floors.Where(one => one.Value.Areas!.Any(area => area.Kind == kind)).Select(one => one.Key).ToList();
+
+            on.Should().ContainSingle($"the building has one {kind}, not one a floor");
+
+            // Every floor below it was offered it and had no room: one with room took it.
+            var room = floors[on[0]].Areas!.Single(area => area.Kind == kind);
+            var tag = makes[Array.IndexOf(own, kind)];
+
+            floors[on[0]].Props!.Should().Contain(prop => prop.Kind == tag && prop.X >= room.X && prop.X < room.X + room.W && prop.Y >= room.Y && prop.Y < room.Y + room.H, $"the {kind} has its {tag}");
+        }
+
+        floors[1].Areas!.Should().Contain(area => own.Contains(area.Kind), "the first floor takes what fits before any floor above");
+
+        foreach (var scene in floors.Values)
+        {
+            OfficeScenes.Problems(scene, sizeOf: null).Should().BeEmpty();
+        }
+    }
+
+    [Fact]
+    public void A_floor_offered_none_of_the_building_s_rooms_has_none_however_many_are_in()
+    {
+        var scene = FloorPlanner.Shared(Tech, Rules, 1, [new("a", 0, 0, 1, 9), new("b", 0, 1, 1, 9), new("c", 0, 2, 1, 9)]).Scene;
+
+        scene.Areas!.Should().NotContain(area => area.Kind == "library" || area.Kind == "training-room" || area.Kind == "wellness-room", "they are the building's, offered by it");
+        scene.Areas!.Should().Contain(area => area.Kind == "meeting", "the floor's own rooms are still counted from everybody on it");
+    }
+
+    [Fact]
+    public void A_room_the_building_has_is_offered_only_to_floors_above_the_one_that_took_it()
+    {
+        // A first floor offered the library alone, which takes it.
+        var floors = new Dictionary<int, OfficeScene>
+        {
+            [1] = FloorPlanner.Shared(Tech, Rules, 1, [new("a", 0, 0, 1, 3)], new OfficeBuildingRooms(["library"], 30)).Scene,
+        };
+
+        floors[1].Areas!.Should().Contain(area => area.Kind == "library");
+
+        FloorPlanner.BuildingRooms(Rules, 1, [1, 2, 4], 30, floors.GetValueOrDefault)!.Kinds.Should().BeEquivalentTo(["library", "training-room", "wellness-room"], "nothing below the first floor");
+        FloorPlanner.BuildingRooms(Rules, 2, [1, 2, 4], 30, floors.GetValueOrDefault)!.Kinds.Should().BeEquivalentTo(["training-room", "wellness-room"], "the first floor took the library");
+        FloorPlanner.BuildingRooms(Rules, 4, [1, 2, 4], 30, floors.GetValueOrDefault)!.People.Should().Be(30, "counted from everybody in the building");
+        FloorPlanner.BuildingRooms(Rules with { Rooms = new Dictionary<string, OfficeRoomRule>(StringComparer.Ordinal) }, 1, [1], 30, floors.GetValueOrDefault).Should().BeNull("rules with no building rooms offer nothing");
+    }
+
     // ---- the outside, from the floor ----
 
     [Fact]

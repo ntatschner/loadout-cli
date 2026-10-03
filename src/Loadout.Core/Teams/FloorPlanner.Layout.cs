@@ -58,7 +58,7 @@ public static partial class FloorPlanner
         return bays;
     }
 
-    private static (OfficeScene Scene, int Capacity)? Build(Parts parts, OfficeRules rules, Random random, int team, bool plain, string layout, IReadOnlyList<Tenant>? tenants = null)
+    private static (OfficeScene Scene, int Capacity)? Build(Parts parts, OfficeRules rules, Random random, int team, bool plain, string layout, IReadOnlyList<Tenant>? tenants = null, OfficeBuildingRooms? building = null)
     {
         var (floor, depth, band, coreLeft, coreWidth) = Shell(rules);
         var width = floor.Width;
@@ -86,7 +86,7 @@ public static partial class FloorPlanner
         if (!plain)
         {
             // The floor's shared rooms are for everybody on it.
-            var programme = Programme(rules, tenants?.Sum(one => one.Who.People) ?? team);
+            var programme = Programme(rules, tenants?.Sum(one => one.Who.People) ?? team, building);
             var arranged = Arrange(programme, rules, random, width, coreLeft, coreWidth);
 
             foreach (var room in arranged)
@@ -244,9 +244,11 @@ public static partial class FloorPlanner
     /// The rooms the floor's band holds, from the rules: every room on this
     /// level that is not the core's, the team's own area or a place on a wall,
     /// as many of each as the rules give a team this size, the ones that
-    /// matter most first so they are the last to be left out.
+    /// matter most first so they are the last to be left out. A room the rules
+    /// give the whole building comes only when the floor is offered it, as
+    /// many as the building's people call for.
     /// </summary>
-    private static List<Wanted> Programme(OfficeRules rules, int team)
+    private static List<Wanted> Programme(OfficeRules rules, int team, OfficeBuildingRooms? building = null)
     {
         string[] notBand = ["open-plan", "team-room", "status-board", "exit", "cupboard", "lead-office", "lift", "stairs", "toilets"];
         var wanted = new List<Wanted>();
@@ -258,7 +260,14 @@ public static partial class FloorPlanner
                 continue;
             }
 
-            var count = rule.CountFor(team);
+            var whole = rule.Scope == "building";
+
+            if (whole && building?.Kinds.Contains(kind) != true)
+            {
+                continue;
+            }
+
+            var count = rule.CountFor(whole ? building!.People : team);
             var min = rule.Min is [var mw, _] ? Math.Max(2, mw) : 3;
             var max = rule.Max is [var xw, _] ? Math.Max(min, xw) : 9;
 

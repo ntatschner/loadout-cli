@@ -73,9 +73,12 @@ different ones; the shared rooms are laid out for everybody on the floor. The co
 the middle of the north wall, the same place on every level so the lift lines
 up through the tower, with the toilets, a cupboard and the stairs. Either side
 of it, along the north wall, are the floor's rooms: a kitchen and meeting rooms
-first, then a lounge for a bigger team, and as room allows a library, a print
-corner, phone booths (one for every eight people), a wellness room and a
-training room for the biggest teams, a storage cupboard. Which goes where comes from the
+first, then a lounge for a bigger team, and as room allows a print corner,
+phone booths (one for every eight people) and a storage cupboard. A library, a
+wellness room and a training room are the building's rather than every
+floor's: there is one of each for the whole tower, once enough people are in
+it, on the lowest floor with room for it, and the next floor up takes it when
+that one is too full. Which goes where comes from the
 rules, each room's zone and what it should be near or away from, and each has
 a door onto the corridor that runs the width of the floor. Band left over
 becomes an open nook with a sofa.
@@ -217,8 +220,10 @@ A piece can say where it **suits**: which rooms (`*` for any) and levels, what
 it is to the room (`main`, the piece that makes the room that room; `extra`;
 `divider`, for marking a room off without a wall; `decor`; `clutter`), what its
 back goes to (`wall`, `window` or `free`), and which pieces it is grouped `with`.
-A room's rules can say whose it is (`scope`: the `floor`'s, shared, or each
-`team`'s), where it belongs (`zone`: core, perimeter, interior, corner, entrance
+A room's rules can say whose it is (`scope`: each `team`'s; the `floor`'s,
+shared by everybody on it; or the `building`'s, one for the whole tower,
+counted from everybody in it; a room in the lobby, on the roof or in a basement
+is the building's whatever it says), where it belongs (`zone`: core, perimeter, interior, corner, entrance
 or any), one for every so many people (`per-head`), what it should be `near` or
 `away` from and how much that matters, from 1 to 10, and who may use it
 (`access`: `everyone`, the default; `team`, the team whose room it is; or `lead`,
@@ -351,9 +356,11 @@ Stated plainly, so nobody finds out by surprise:
   its plain desk; its people have only four facings so far, so somebody seen
   from a corner is drawn facing straight. The floor's own pictures are the
   square view's, laid on the diamond.
-- **Some rules are checked but not used yet.** `scope` is held to its words but
-  the planner doesn't read it, and the lobby, roof and basements are still laid
-  out by hand.
+- **The lobby, roof and basements are still laid out by hand**, not from the
+  rules the floors follow.
+- **A building's room is somewhere only its floor's people go.** The library on
+  the first floor is used by whoever sits on the first floor; nobody takes the
+  lift from another floor to reach it.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors
   at a time, and so is everything the server says. What the page draws from
   them was looked at in a browser, not tested.

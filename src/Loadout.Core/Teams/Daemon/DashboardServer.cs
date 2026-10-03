@@ -1800,9 +1800,14 @@ public sealed class DashboardServer : IDisposable
             return null;
         }
 
+        var building = BuildingRooms(view, number, rules);
+
         // Every team on it, where and how many: a team arriving lays the floor
-        // out again, its own bays and the shared rooms, nobody else's desks.
-        var key = $"floor-{number}|" + string.Join("|", tenants.Select(one => $"{one.Run}#{one.Part}#{one.Bay}#{one.Bays}#{one.People}"));
+        // out again, its own bays and the shared rooms, nobody else's desks;
+        // and the building's rooms it is offered, which move up when a floor
+        // below takes them.
+        var key = $"floor-{number}|" + string.Join("|", tenants.Select(one => $"{one.Run}#{one.Part}#{one.Bay}#{one.Bays}#{one.People}"))
+            + (building is null ? "" : $"|building:{string.Join(",", building.Kinds)}#{building.People}");
 
         lock (_building)
         {
@@ -1812,7 +1817,7 @@ public sealed class DashboardServer : IDisposable
             }
         }
 
-        var scene = FloorPlanner.Shared(kit, rules, number, tenants).Scene;
+        var scene = FloorPlanner.Shared(kit, rules, number, tenants, building).Scene;
 
         lock (_building)
         {
@@ -1821,6 +1826,15 @@ public sealed class DashboardServer : IDisposable
 
         return scene;
     }
+
+    // The building's own rooms this floor is offered: what no occupied floor below took.
+    private OfficeBuildingRooms? BuildingRooms(BuildingView view, int number, OfficeRules rules) =>
+        FloorPlanner.BuildingRooms(
+            rules,
+            number,
+            view.Occupied.Select(one => one.Number),
+            view.Occupied.Sum(one => Math.Max(1, one.People)),
+            below => Floor(view, below));
 
     /// <summary>
     /// The lobby or the roof, laid out for a number of seats rounded up to the

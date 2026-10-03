@@ -25,7 +25,7 @@ namespace Loadout.Core.Teams;
 /// kitchen would sometimes be the whole kitchen: it is an extra instead.
 /// </param>
 /// <param name="PerHead">One of these rooms for every so many people on the floor: 6 is a phone booth for every six. Wins over Count and ByTeam.</param>
-/// <param name="Scope">Whose it is: floor (one set shared by every team on the floor) or team (each team its own).</param>
+/// <param name="Scope">Whose it is: team (each team its own), floor (one set shared by every team on the floor) or building (one for the whole tower, on the lowest floor with room for it, counted from everybody in the building). A room on the lobby, roof or a basement is the building's whatever it says.</param>
 /// <param name="Zone">Where on the floor it belongs: core, perimeter (daylight), interior, corner, entrance or any.</param>
 /// <param name="Near">Kinds of room it does well beside, with how much that matters: <c>{"open-plan": 3}</c>.</param>
 /// <param name="Away">Kinds of room it does badly beside, the same way: a quiet room away from the kitchen.</param>
@@ -50,7 +50,7 @@ public sealed record OfficeRoomRule(
     [property: JsonPropertyName("access")] string? Access = null)
 {
     /// <summary>Whose a room is.</summary>
-    public static readonly IReadOnlyList<string> Scopes = ["floor", "team"];
+    public static readonly IReadOnlyList<string> Scopes = ["team", "floor", "building"];
 
     /// <summary>Where on a floor a room can belong.</summary>
     public static readonly IReadOnlyList<string> Zones = ["core", "perimeter", "interior", "corner", "entrance", "any"];
@@ -269,10 +269,10 @@ public sealed record OfficeRules(
             // Facilities, sharing the band with the rooms above as space allows:
             // somewhere to take a call, to read, to print, to stretch, to train.
             ["phone-booth"] = new(["phone-booth"], Min: [2, 2], Max: [3, 4], PerHead: 8, Walls: ["open"], Function: "idle", Scope: "floor", Zone: "interior", Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 2 }),
-            ["library"] = new(["reading-chair"], Min: [4, 3], Max: [6, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Walls: ["glass", "solid"], Function: "idle", Extras: ["storage", "plant"], Scope: "floor", Zone: "interior", Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 3, ["meeting"] = 1 }),
+            ["library"] = new(["reading-chair"], Min: [4, 3], Max: [6, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 }, Walls: ["glass", "solid"], Function: "idle", Extras: ["storage", "plant"], Scope: "building", Zone: "interior", Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 3, ["meeting"] = 1 }),
             ["print-corner"] = new(["stationery"], Min: [3, 3], Max: [4, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["4"] = 1 }, Walls: ["open"], Extras: ["copier", "storage"], Scope: "floor", Zone: "core", Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["core"] = 2 }),
-            ["wellness-room"] = new(["yoga-mat"], Min: [4, 3], Max: [5, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["10"] = 1 }, Walls: ["solid"], Function: "idle", Extras: ["floor-cushion", "plant"], Scope: "floor", Zone: "perimeter", Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 3, ["meeting"] = 2 }),
-            ["training-room"] = new(["training-desk"], Min: [5, 3], Max: [8, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["12"] = 1 }, Walls: ["glass", "solid"], Function: "questions", Extras: ["whiteboard", "decor"], Scope: "floor", Zone: "interior", Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["meeting"] = 2 }),
+            ["wellness-room"] = new(["yoga-mat"], Min: [4, 3], Max: [5, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["10"] = 1 }, Walls: ["solid"], Function: "idle", Extras: ["floor-cushion", "plant"], Scope: "building", Zone: "perimeter", Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 3, ["meeting"] = 2 }),
+            ["training-room"] = new(["training-desk"], Min: [5, 3], Max: [8, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["12"] = 1 }, Walls: ["glass", "solid"], Function: "questions", Extras: ["whiteboard", "decor"], Scope: "building", Zone: "interior", Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["meeting"] = 2 }),
 
             // The rest of the building.
             ["reception"] = new(["reception"], Level: "lobby", Count: 1, Function: "arrivals"),
@@ -559,6 +559,10 @@ public static class OfficeRuleBook
             if (room.Scope is { } scope && !OfficeRoomRule.Scopes.Contains(scope))
             {
                 problems.Add($"{called} scope is '{scope}'; it has to be one of {string.Join(", ", OfficeRoomRule.Scopes)}.");
+            }
+            else if (room.Scope is "team" or "floor" && room.Level != "floor")
+            {
+                problems.Add($"{called} is on level '{room.Level}' with scope '{room.Scope}'; a room off the floors is the building's, so its scope can only be building.");
             }
 
             if (room.Zone is { } zone && !OfficeRoomRule.Zones.Contains(zone))

@@ -640,7 +640,8 @@ public static partial class FloorPlanner
     /// <param name="rules">The rules, with any pack changes already over them.</param>
     /// <param name="number">The floor's number, which seeds the band.</param>
     /// <param name="tenants">The teams on it and their bays.</param>
-    public static OfficeFloorPlan Shared(OfficeKit kit, OfficeRules rules, int number, IReadOnlyList<OfficeTenant> tenants)
+    /// <param name="building">The building's own rooms it is offered, if any: the lowest floor with room takes them.</param>
+    public static OfficeFloorPlan Shared(OfficeKit kit, OfficeRules rules, int number, IReadOnlyList<OfficeTenant> tenants, OfficeBuildingRooms? building = null)
     {
         ArgumentNullException.ThrowIfNull(kit);
         ArgumentNullException.ThrowIfNull(rules);
@@ -659,13 +660,13 @@ public static partial class FloorPlanner
                     new Random(Seed($"{one.Run}#{one.Part}", attempt)))),
             ];
 
-            var built = Build(parts, rules, new Random(Seed($"floor-{number}", attempt)), people, plain: false, "open", Seeded(open: false));
+            var built = Build(parts, rules, new Random(Seed($"floor-{number}", attempt)), people, plain: false, "open", Seeded(open: false), building);
 
             // A team room seats fewer; a team it cannot hold has its bays open.
             if (built is { } walled && walled.Scene.Teams!.Any(team =>
                 team.Desks.Count < Math.Min(Math.Max(1, tenants.First(one => one.Run == team.Run && one.Part == team.Part).People), walled.Capacity)))
             {
-                built = Build(parts, rules, new Random(Seed($"floor-{number}", attempt)), people, plain: false, "open", Seeded(open: true));
+                built = Build(parts, rules, new Random(Seed($"floor-{number}", attempt)), people, plain: false, "open", Seeded(open: true), building);
             }
 
             if (built is not null && OfficeScenes.Problems(built.Value.Scene, sizeOf: null).Count == 0)
@@ -678,6 +679,51 @@ public static partial class FloorPlanner
         var fallback = Build(parts, rules, new Random(Seed($"floor-{number}", -1)), people, plain: true, "open", plain)!.Value;
 
         return new OfficeFloorPlan(fallback.Scene, fallback.Capacity, -1);
+    }
+
+    /// <summary>
+    /// The building's own rooms a floor is offered: every room the rules give
+    /// the whole tower that no occupied floor below took, counted from
+    /// everybody in the building. The lowest floor with room in its band takes
+    /// each, so a library sits on the first floor until that floor is too full
+    /// for it, then the next.
+    /// </summary>
+    /// <param name="rules">The rules, with any pack changes already over them.</param>
+    /// <param name="number">The floor being laid out.</param>
+    /// <param name="occupied">The numbers of every floor anybody is on.</param>
+    /// <param name="people">Everybody in the building.</param>
+    /// <param name="floorAt">A floor below as it is laid out, or null for one with nobody on it.</param>
+    /// <returns>What is on offer, or null when the rules give the building no rooms of its own.</returns>
+    public static OfficeBuildingRooms? BuildingRooms(OfficeRules rules, int number, IEnumerable<int> occupied, int people, Func<int, OfficeScene?> floorAt)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        ArgumentNullException.ThrowIfNull(occupied);
+        ArgumentNullException.ThrowIfNull(floorAt);
+
+        var kinds = (rules.Rooms ?? new Dictionary<string, OfficeRoomRule>())
+            .Where(one => one.Value.Scope == "building" && one.Value.Level == "floor")
+            .Select(one => one.Key)
+            .OrderBy(one => one, StringComparer.Ordinal)
+            .ToList();
+
+        if (kinds.Count == 0)
+        {
+            return null;
+        }
+
+        foreach (var below in occupied.Where(one => one < number).Distinct().Order())
+        {
+            if (kinds.Count == 0)
+            {
+                break;
+            }
+
+            var taken = floorAt(below)?.Areas?.Select(area => area.Kind).ToHashSet(StringComparer.Ordinal) ?? [];
+
+            kinds.RemoveAll(taken.Contains);
+        }
+
+        return new OfficeBuildingRooms(kinds, Math.Max(1, people));
     }
 
     /// <summary>
