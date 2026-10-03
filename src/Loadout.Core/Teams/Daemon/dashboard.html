@@ -8325,7 +8325,7 @@
     the glass from the street, so the people in it are the same people doing
     the same things. Null until its layout has come.
   */
-  function towerPlaceRoom(place, facing) {
+  function towerPlaceRoom(place, facing, corner) {
     if (place === "lobby" && Date.now() - towerWaitingAt > 15000) {
       towerWaitingAt = Date.now();
       api("/api/waiting")
@@ -8366,8 +8366,12 @@
     var run = { id: place, team: place === "lobby" ? "Lobby" : below ? "Basement" : "Roof", running: true, nodes: people };
     // The set in the key, as for a floor.
     var kit = (towerData && towerData.kit) || "";
-    var room = tileRoom(place + "|" + step + "|" + turned + "|" + kit, run, kit, scene);
+    // From a corner only looking from inside, and only where the set can
+    // turn: through the glass from the street the lobby is always square on.
+    var iso = !!(corner && sceneTurns(plan.scene));
+    var room = tileRoom(place + "|" + step + "|" + turned + (iso ? "c" : "") + "|" + kit, run, kit, scene);
 
+    room.iso = iso;
     room.onPlace = towerClick;
     room.people_ = people.length;
     tileUpdate(room, run);
@@ -8407,7 +8411,7 @@
     var holder = towerHold.querySelector(".tower-inside");
     var where = towerHold.querySelector(".tower-where");
     var below = place.indexOf("basement-") === 0;
-    var room = towerPlaceRoom(place, towerLook.facing);
+    var room = towerPlaceRoom(place, towerLook.facing, towerLook.corner);
     var waiting = towerWaiting.length;
 
     where.textContent = place === "lobby" ? "Lobby \u00b7 " + waiting + " waiting"
