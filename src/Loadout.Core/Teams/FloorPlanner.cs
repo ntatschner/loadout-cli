@@ -530,7 +530,7 @@ public static partial class FloorPlanner
             var door = x + w / 2;
 
             Room(floor, name, name, x, top, w, h, top - 1, "solid", rooms, parts, random, northDoor: door);
-            Fill(floor, parts, random, tag, x, top, w, h);
+            Fill(floor, parts, random, tag, name, $"basement-{level}", x, top, w, h);
         }
 
         for (var y = top - 1; y < height - 1; y++)
@@ -599,10 +599,15 @@ public static partial class FloorPlanner
     /// Rows of one kind of piece in a room, a row between each and one clear
     /// along the top, so every piece can be walked to from the door.
     /// </summary>
-    private static void Fill(Floor floor, Parts parts, Random random, string tag, int x, int y, int w, int h)
+    private static void Fill(Floor floor, Parts parts, Random random, string tag, string kind, string level, int x, int y, int w, int h)
     {
-        var piece = parts.Pick(tag, random, one => one.Footprint[1] == 1 && one.Footprint[0] <= Math.Max(1, (w - 1) / 2));
-        var pw = piece.Piece.Footprint[0];
+        bool Fits(OfficePiece one) => one.Footprint[1] == 1 && one.Footprint[0] <= Math.Max(1, (w - 1) / 2);
+
+        // What the set says is this room's main piece, where it says: a copier
+        // is tagged storage too, and a storeroom of copiers is not a storeroom.
+        var suited = parts.Suiting(kind, level, "main", [tag]).Where(one => Fits(one.Piece)).ToList();
+        var piece = suited.Count > 0 ? suited[random.Next(suited.Count)].Piece : parts.Pick(tag, random, Fits).Piece;
+        var pw = piece.Footprint[0];
         var index = 0;
 
         for (var row = y + 1; row <= y + h - 1; row += 2)
@@ -612,7 +617,7 @@ public static partial class FloorPlanner
                 // The room reserved its own area, so free here means clear.
                 if (Enumerable.Range(at, pw).All(cx => floor.Clear(cx, row)))
                 {
-                    floor.Put($"{tag}-{++index}", tag, piece.Piece, at, row);
+                    floor.Put($"{tag}-{++index}", tag, piece, at, row);
                 }
             }
         }

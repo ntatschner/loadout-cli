@@ -13,6 +13,18 @@ public sealed class BasementTests
     private static readonly OfficeKit Kit = OfficeKit.Kit();
     private static readonly OfficeRules Rules = OfficeRules.Default;
 
+    // The office Loadout ships, whose pieces say which room they are the main piece of.
+    private static readonly OfficeKit Tech = Unpacked();
+
+    private static OfficeKit Unpacked()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "loadout-tech-" + Guid.NewGuid().ToString("N"));
+
+        OfficeArt.Unpack(root);
+
+        return OfficeKits.Check(root, OfficeArt.BuiltIn).Kit!;
+    }
+
     [Theory]
     [InlineData(1, "mail-room", "mail", "storage", "storage", "storage")]
     [InlineData(2, "garbage", "bin", "server-room", "server", "server")]
@@ -30,6 +42,26 @@ public sealed class BasementTests
         scene.Props!.Count(prop => prop.Kind == westFunction && Inside(westArea, prop)).Should().BeGreaterThanOrEqualTo(6,
             "a room full of pigeonholes or bins, not one of them");
         scene.Props!.Should().Contain(prop => prop.Kind == eastPiece);
+    }
+
+    [Theory]
+    [InlineData(1, "mail-room", "mail")]
+    [InlineData(1, "storage", "storage")]
+    [InlineData(2, "garbage", "bin")]
+    [InlineData(2, "server-room", "server")]
+    public void Each_room_is_filled_with_the_piece_the_set_says_is_its_own(int level, string room, string tag)
+    {
+        // A copier is tagged storage too; a storeroom full of copiers is not a storeroom.
+        var scene = FloorPlanner.Basement(Tech, Rules, level).Scene;
+        var area = scene.Areas!.Single(one => one.Kind == room);
+        var own = Tech.Pieces.Values
+            .Where(piece => piece.Suits is { Role: "main", Rooms: { } rooms } && rooms.Contains(room))
+            .Select(piece => piece.Picture)
+            .ToList();
+        var filled = scene.Props!.Where(prop => prop.Kind == tag && Inside(area, prop)).ToList();
+
+        own.Should().NotBeEmpty($"the Tech set has a main piece for the {room}");
+        filled.Should().NotBeEmpty().And.OnlyContain(prop => own.Contains(prop.Piece), $"the {room} holds only its own pieces");
     }
 
     [Theory]
