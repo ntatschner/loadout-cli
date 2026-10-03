@@ -62,15 +62,18 @@ asking for the rich page isn't asking for more movement.
 
 ### 4. Move between the screens
 
-Across the top of the runs pane are six screens. The first four show the same
-runs in different ways; *Waiting* shows what hasn't become a run yet, and
-*Terminal* shows what a node is doing now.
+Across the top of the runs pane are five screens. The first four show the same
+runs in different ways, and *Terminal* shows what a node is doing now. What
+hasn't become a run yet, the schedules and the open tasks, waits in the
+office's lobby.
 
 - **List** — dense and complete. The default.
-- **Office** — one room per run, a desk per node. The one to leave on a spare
-  screen.
+- **Office** — the runs as a building, teams sharing its floors and a desk per
+  node. The one to leave on a spare screen. Click a floor to go in and see
+  everybody on it, square on or from a corner; [the office](../office.md)
+  explains the rest.
 
-  ![The office screen. One room per run, two across, each with its team and state beside its name. The docs-crew run's room has a desk for each of its three nodes, each desk a card with a rounded square on it and the node's name and state written under it: done, waiting for you, and left. The one waiting for you is outlined in amber with a dot on its corner.](../images/dashboard-office.png)
+  ![The office screen. The building from its corner in pixel art, isometric: ten floors of blue glass, LOADOUT on the roof, the first floor lit warm where its two teams sit, among the neighbourhood's brick and glass blocks, parks and roads. Along the top, the views - corner, aerial, from the street, the lobby - and the buttons to turn and zoom.](../images/dashboard-office.png)
 
 - **Graph** — who asked whom. Reach for it when something is stuck.
 
@@ -79,11 +82,6 @@ runs in different ways; *Waiting* shows what hasn't become a run yet, and
 - **Timeline** — where the time and money went, a strip per day.
 
   ![The timeline screen. Two days, each a single track with a bar for every run, runs that overlapped on lanes of their own, and the day's runs, time and cost beside it. A running run's bar is striped and a finished one is solid.](../images/dashboard-timeline.png)
-
-- **Waiting** — schedules that haven't fired and tasks nobody has finished.
-  Anything held says what's holding it, in words.
-
-  ![The waiting screen. One scheduled team run, due at 07:00, then two open tasks. The last one says "blocked" in words, and why.](../images/dashboard-waiting.png)
 
 - **Terminal** — a node's output, line by line, as it happens.
 
@@ -240,9 +238,8 @@ nothing. The ideas are still there to read.
 ## What this doesn't do
 
 - It fetches nothing from the internet. Its typeface, Atkinson Hyperlegible,
-  and the Loadout icon are carried inside the page. Office desks are drawn as
-  rounded squares with names written under them, because Loadout ships no
-  office art.
+  and the Loadout icon are carried inside the page. The office's art ships with
+  Loadout and is served from your own machine.
 - Only the dashboard's own machine can reach it by default.
 - No screen reader has been used with it, and no keyboard-only pass by a person
   has been recorded. [Setting up accessibility](accessibility.md) has what was

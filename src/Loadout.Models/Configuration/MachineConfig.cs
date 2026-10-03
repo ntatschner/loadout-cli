@@ -205,27 +205,37 @@ public sealed class MachineTeams
     public string NotifyChat { get; set; } = string.Empty;
 
     /// <summary>
-    /// Which set of office art the dashboard draws desks with, or empty for
-    /// none.
+    /// Which set of office art the dashboard's building is drawn from, or empty
+    /// for the one Loadout ships.
     /// </summary>
     /// <remarks>
-    /// Machine-local because the art is: Loadout ships none of it, and a set is
-    /// a directory somebody filled on this computer from packs they bought. A
-    /// name here that no directory answers to draws nothing, which is the same
-    /// as drawing nothing.
+    /// Machine-local because sets are: apart from the built-in one, a set is a
+    /// directory somebody filled on this computer, often from packs they bought.
+    /// A name here that no directory answers to draws the built-in set, the same
+    /// as leaving it empty.
     /// </remarks>
     public string OfficeSet { get; set; } = string.Empty;
 
     /// <summary>
-    /// Which set the waiting area draws with, or empty for none.
+    /// How large the office may be drawn, as min-max screen pixels per pixel of
+    /// art, or empty for the default of 1-2.
     /// </summary>
     /// <remarks>
-    /// Kept apart from <see cref="OfficeSet"/> rather than shared: a reception
-    /// of people waiting and a floor of people working are different rooms, and
-    /// the whole reason sets exist is that somebody may want them to look
-    /// different.
+    /// Machine-local because it is about this machine's screen: the same office
+    /// wants a different range on a laptop and on a wall display.
     /// </remarks>
-    public string WaitingSet { get; set; } = string.Empty;
+    public string OfficeScale { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Who in the office kit's cast plays which role, as role=person pairs
+    /// ("project-lead=analyst, reviewer=tester"), or empty to let the office
+    /// choose.
+    /// </summary>
+    /// <remarks>
+    /// Machine-local, like the set it names people from: a pin for somebody
+    /// the kit in use doesn't have is simply ignored.
+    /// </remarks>
+    public string OfficeCast { get; set; } = string.Empty;
 
     /// <summary>
     /// How many days a removed run or team stays in the bin before it is

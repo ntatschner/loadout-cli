@@ -54,7 +54,7 @@ public sealed class SettingsContractTests
         {
             "notify" => "slack",
             "office" => "open-office",
-            "waiting" => "lobby",
+            "office-scale" => "1-3",
             "listen" => "127.0.0.1",
             "webhook-teams" => "docs-crew, bug-hunt",
             "remedy" => "restart-the-daemon",

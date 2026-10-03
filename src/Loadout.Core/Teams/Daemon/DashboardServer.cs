@@ -50,6 +50,9 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>How long the office stream stays silent before saying it is still there.</summary>
+    private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(15);
+
     /// <summary>The segments under a run that only ever read.</summary>
     /// <remarks>
     /// Named rather than assumed. The right default for a segment nobody has
@@ -109,28 +112,62 @@ public sealed class DashboardServer : IDisposable
     {
         _journal = journal;
         _git = git;
+        _office = new OfficeFeed(OfficeSnapshot, Interval);
     }
+
+    /// <summary>What the office shows, read once for every page listening.</summary>
+    private readonly OfficeFeed _office;
+
+    /// <summary>
+    /// Each run's summary, with what its files looked like when it was read.
+    /// </summary>
+    /// <remarks>
+    /// The office feed reads every run twice a second while a page listens,
+    /// and nearly all of them have not changed since the last look. A run is
+    /// read again only when its journal or its directory has: a question
+    /// arrives as a file beside the journal, not a line in it, and adding a
+    /// file changes the directory.
+    /// </remarks>
+    private readonly Dictionary<string, (string Stamp, RunSummary Summary)> _summaries = new(StringComparer.Ordinal);
+
+    /// <summary>Who is on which floor, remembered between looks so moves wait as the rules say.</summary>
+    private readonly OfficeBuilding _building = new();
+
+    /// <summary>The kit in use and what it was read from, re-read when the set changes on disk.</summary>
+    private (string Stamp, OfficeKit Kit, OfficeRules Rules, int Capacity, string Set)? _kit;
+
+    /// <summary>Floors already laid out, by run, which of its floors, and how many sit there.</summary>
+    private readonly Dictionary<string, OfficeScene> _floors = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Where the office art lives on this machine, or null for none.
     /// </summary>
     /// <remarks>
-    /// Null is the ordinary case and draws what the office always drew: a
-    /// square with the node's name in it. Loadout ships no art, so this points
-    /// at a directory somebody filled themselves.
+    /// The office folder, where the built-in set is unpacked and anybody's own
+    /// sets sit beside it. Null draws the building in its own shapes.
     /// </remarks>
     public string? OfficeRoot { get; set; }
 
     /// <summary>Which set in that directory to draw with, or empty for none.</summary>
     public string OfficeSet { get; set; } = string.Empty;
 
-    /// <summary>Which set the waiting area draws with, or empty for none.</summary>
-    /// <remarks>
-    /// Its own, because a reception full of people waiting and an office full
-    /// of people working are different rooms and somebody may well want them
-    /// to look different.
-    /// </remarks>
-    public string WaitingSet { get; set; } = string.Empty;
+    /// <summary>Who in the kit's cast plays which role, from team-office-cast; empty lets the office choose.</summary>
+    public IReadOnlyDictionary<string, string> OfficeCastPins { get; set; } = new Dictionary<string, string>();
+
+    /// <summary>Whether this server is the daemon's, for the server room to say so.</summary>
+    public bool IsDaemon { get; set; }
+
+    /// <summary>Whether the daemon's schedules are held, for the server room; null where nothing can say.</summary>
+    public Func<bool>? DaemonPaused { get; set; }
+
+    /// <summary>The bin, for the garbage room to show; null where nothing gave this server one.</summary>
+    public TeamBin? Bin { get; set; }
+
+    /// <summary>How many days the bin keeps things, from team-bin-days, so the page can say when each goes.</summary>
+    public int BinDays { get; set; } = TeamBin.DefaultDays;
+
+    /// <summary>How large the office may be drawn, from team-office-scale; the default when unset or unreadable.</summary>
+    public OfficeScale OfficeScale { get; set; } = OfficeScale.Default;
 
     /// <summary>
     /// What is queued rather than going, or null where nothing can say.
@@ -1239,41 +1276,117 @@ public sealed class DashboardServer : IDisposable
         // What art there is, if any, so the page knows which desks it can
         // draw and which it has to leave as a square. Answered even with
         // nothing installed, because "none" is an answer the page acts on.
-        if (path == "/api/office")
+        if (path == "/api/office/building")
         {
-            var root = OfficeRoot;
+            var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(Building(summaries), Json))
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        // The daemon as the server room shows it: whether this is it, and
+        // whether its schedules are held.
+        if (path == "/api/daemon")
+        {
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { daemon = IsDaemon, paused = DaemonPaused?.Invoke() }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        // What is in the bin, for the garbage room. Read, never changed, here:
+        // bringing something back or deleting it is a verb, through a command.
+        if (path == "/api/bin")
+        {
+            var entries = Bin?.List() ?? [];
 
             await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
                 new
                 {
-                    set = root is null ? string.Empty : OfficeSet,
-                    sets = root is null ? [] : OfficeArt.Sets(root),
-                    pieces = root is null || OfficeSet.Length == 0
-                        ? []
-                        : OfficeArt.Pieces(root, OfficeSet),
-                    room = root is null || OfficeSet.Length == 0
-                        ? null
-                        : OfficeArt.Room(root, OfficeSet),
+                    days = BinDays,
+                    entries = entries.Select(one => new
+                    {
+                        kind = one.KindWord,
+                        name = one.Name,
+                        team = one.Team,
+                        binned = one.Removed,
 
-                    // Every set this machine has, each with its own room and
-                    // its own pieces. A viewer showing four teams at once
-                    // draws four different offices, and it cannot ask for
-                    // them one page load at a time.
+                        // Null where the bin keeps things until it is emptied by hand.
+                        goes = one.Expires(BinDays),
+                        unmerged = one.Unmerged,
+                        bytes = one.Bytes,
+                    }),
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (path.StartsWith("/api/office/place/", StringComparison.Ordinal))
+        {
+            // /api/office/place/<lobby|roof>/<seats>: the lobby or the roof, laid out to seat that many;
+            // /api/office/place/<basement-1|basement-2>/0: a basement, which seats nobody.
+            var rest = path["/api/office/place/".Length..].Split('/');
+            var scene = rest is [var name and ("lobby" or "roof" or "basement-1" or "basement-2"), var seatsText]
+                && int.TryParse(seatsText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var seats)
+                    ? Place(name, seats)
+                    : null;
+
+            await (scene is null
+                ? WriteAsync(context, 404, "application/json; charset=utf-8", JsonSerializer.Serialize(new { error = "No such place." }, Json))
+                : WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(scene, Json))).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (path.StartsWith("/api/office/floor/", StringComparison.Ordinal))
+        {
+            // /api/office/floor/<run>/<part>: the run's floor, laid out.
+            // /api/office/floor/<number>: the floor, every team on it.
+            var rest = path["/api/office/floor/".Length..].Split('/');
+            var scene = rest is [var runId, var partText]
+                && RunJournal.Names(runId)
+                && int.TryParse(partText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var part)
+                    ? Floor(runId, part)
+                    : rest is [var numberText]
+                        && int.TryParse(numberText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number)
+                        && number is >= 1 and <= 500
+                        ? FloorByNumber(number)
+                        : null;
+
+            await (scene is null
+                ? WriteAsync(context, 404, "application/json; charset=utf-8", JsonSerializer.Serialize(new { error = "No such floor." }, Json))
+                : WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(scene, Json))).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (path == "/api/office/events")
+        {
+            await OfficeStreamAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (path == "/api/office")
+        {
+            var root = OfficeRoot;
+
+            // The art sets this machine has, each with when it last changed,
+            // for the page to put in its pictures' addresses: a rebuilt set
+            // must not be drawn from sheets cached before it was. The building
+            // itself comes from /api/office/building.
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    sets = root is null ? [] : OfficeArt.Sets(root),
                     offices = root is null
                         ? new Dictionary<string, object>()
                         : OfficeArt.Sets(root).ToDictionary(
                             one => one,
-                            one => (object)new
-                            {
-                                room = OfficeArt.Room(root, one),
-                                pieces = OfficeArt.Pieces(root, one),
-                            },
+                            one => (object)new { stamp = OfficeScenes.Stamp(root, one) },
                             StringComparer.Ordinal),
-
-                    waitingSet = root is null ? string.Empty : WaitingSet,
-                    waitingPieces = root is null || WaitingSet.Length == 0
-                        ? []
-                        : OfficeArt.Pieces(root, WaitingSet),
                 }, Json)).ConfigureAwait(false);
 
             return;
@@ -1283,10 +1396,8 @@ public sealed class DashboardServer : IDisposable
         {
             var rest = path["/office/".Length..];
 
-            // /office/<set>/<piece> for a page drawing several offices at
-            // once, and /office/<piece> for one drawing the configured one.
-            // Two forms rather than a flag, because the caller knows which
-            // question it is asking.
+            // /office/<set>/<piece>, which is what the page asks for, and
+            // /office/<piece> from the configured set.
             var cut = rest.IndexOf('/', StringComparison.Ordinal);
 
             await (cut > 0
@@ -1296,15 +1407,9 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
-        if (path.StartsWith("/waiting/", StringComparison.Ordinal))
-        {
-            await PieceAsync(context, WaitingSet, path["/waiting/".Length..]).ConfigureAwait(false);
-
-            return;
-        }
-
-        // What is queued rather than going. Answered even when nothing can
-        // say, because an empty waiting area is an answer somebody acts on.
+        // What is queued rather than going, for the lobby's waiting room.
+        // Answered even when nothing can say, because an empty lobby is an
+        // answer somebody acts on.
         if (path == "/api/waiting")
         {
             var waiting = WaitingFor is null
@@ -1473,7 +1578,7 @@ public sealed class DashboardServer : IDisposable
                 one.Succeeded ? 200 : 404,
                 "application/json; charset=utf-8",
                 one.Succeeded
-                    ? JsonSerializer.Serialize(Describe(one.Value!), Json)
+                    ? JsonSerializer.Serialize(Describe(one.Value!, OfficeKitNow().Kit, OfficeCastPins), Json)
                     : JsonSerializer.Serialize(new { error = one.Error }, Json)).ConfigureAwait(false);
 
             return;
@@ -1485,10 +1590,11 @@ public sealed class DashboardServer : IDisposable
     /// <summary>Every run this machine knows about, newest first.</summary>
     private string Runs()
     {
+        var kit = OfficeKitNow().Kit;
         var runs = _journal.List(40)
             .Select(_journal.Summarise)
             .Where(read => read.Succeeded)
-            .Select(read => Describe(read.Value!))
+            .Select(read => Describe(read.Value!, kit, OfficeCastPins))
             .ToList();
 
         // Whether this server can do anything about any of them. The page
@@ -1511,6 +1617,380 @@ public sealed class DashboardServer : IDisposable
     }
 
     /// <summary>
+    /// Only what the office draws, for every run: who is in each room and
+    /// what each should be doing.
+    /// </summary>
+    /// <remarks>
+    /// Much smaller than the runs list, and with nothing in it that changes on
+    /// its own - no elapsed time, no countdown - so two reads of an unchanged
+    /// machine are the same text and the feed sends nothing.
+    /// </remarks>
+    private string OfficeSnapshot()
+    {
+        var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
+        var kit = OfficeKitNow().Kit;
+        var runs = summaries
+            .Select(run => (run, cast: OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)), OfficeCastPins)))
+            .Select(one => new
+            {
+                id = one.run.RunId,
+                one.run.Running,
+                nodes = one.run.Nodes.Select(node => new
+                {
+                    node.Node,
+                    node.Role,
+                    node.State,
+                    activity = one.run.Activity(node),
+                    node.Doing,
+                    person = DeskNames.For(one.run.RunId, node.Node, OfficeCast.GenderOf(kit, one.cast.GetValueOrDefault(node.Node))),
+                    personFull = DeskNames.Full(one.run.RunId, node.Node, OfficeCast.GenderOf(kit, one.cast.GetValueOrDefault(node.Node))),
+                    cast = one.cast.GetValueOrDefault(node.Node),
+                    office = Office(OfficeIntent.For(one.run, node)),
+                }),
+            })
+            .ToList();
+
+        // Who is on which floor, so a spill or a floor given back shows on the
+        // page the moment it happens rather than at the next poll.
+        return JsonSerializer.Serialize(new { runs, building = Building(summaries) }, Json);
+    }
+
+    /// <summary>The building's kit and rules: the configured set when it is a usable kit, the built-in one otherwise.</summary>
+    private (OfficeKit Kit, OfficeRules Rules, int Capacity, string Set) OfficeKitNow()
+    {
+        var root = OfficeRoot;
+        var set = OfficeSet;
+        var stamp = root is { } found && set.Length > 0 && OfficeKits.Has(found, set)
+            ? set + "|" + OfficeScenes.Stamp(found, set)
+            : string.Empty;
+
+        lock (_building)
+        {
+            if (_kit is { } kept && kept.Stamp == stamp)
+            {
+                return (kept.Kit, kept.Rules, kept.Capacity, kept.Set);
+            }
+
+            var (kit, rules, used) = (OfficeKit.Kit(), OfficeRules.Default, string.Empty);
+
+            if (stamp.Length > 0 && OfficeKits.Check(root!, set) is { Fit: true } check)
+            {
+                (kit, rules, used) = (check.Kit!, check.Rules, set);
+            }
+
+            // How many a bay seats: the building hands runs bays, three to a floor.
+            var capacity = FloorPlanner.BayCapacity(kit, rules);
+
+            _kit = (stamp, kit, rules, capacity, used);
+            _floors.Clear();
+
+            return (kit, rules, capacity, used);
+        }
+    }
+
+    /// <summary>Who is on which floor now, as the page reads it.</summary>
+    private object Building(IReadOnlyList<RunSummary> runs)
+    {
+        var (kit, rules, capacity, set) = OfficeKitNow();
+        var view = _building.Update(runs, capacity, rules, DateTimeOffset.UtcNow);
+
+        return new
+        {
+            floors = view.Floors,
+            basements = 2,
+
+            // Every floor's size in tiles, and a tile's in pixels, so the page
+            // draws the tower as wide as the floors inside it.
+            plate = rules.Floor ?? [40, 24],
+            tile = kit.Tile,
+
+            // How high a storey is, in tiles, on the same scale as the plate.
+            storey = rules.Storey ?? OfficeRules.StoreyTiles,
+
+            // The smallest and largest the page may draw it, in CSS pixels per
+            // pixel of art; it picks whole device-pixel steps in between.
+            scale = new { min = OfficeScale.Min, max = OfficeScale.Max },
+
+            // The images a kit lays over the neighbourhood the page generates;
+            // empty for the built-in kit, which draws it in code.
+            materials = set.Length > 0 ? kit.Materials ?? new Dictionary<string, OfficeMaterial>() : new Dictionary<string, OfficeMaterial>(),
+
+            // What the tower's own outside is drawn with, or null to draw it in code.
+            facade = set.Length > 0 ? OfficeFacadeArt.For(kit) : null,
+            capacity,
+            kit = set.Length > 0 ? set : null,
+            occupied = view.Occupied.Select(floor => new
+            {
+                number = floor.Number,
+                run = floor.Run,
+                part = floor.Part,
+                people = floor.People,
+                state = floor.State,
+                dark = floor.Dark,
+                nodes = floor.Nodes,
+                bay = floor.Bay,
+                bays = floor.Bays,
+            }),
+
+            // Each occupied storey's outside, from its floor: solid and glass
+            // bays, and which are lit. A storey nobody is on is drawn plain.
+            facades = Facades(view),
+        };
+    }
+
+    /// <summary>One floor of a run, laid out with every team on it, its desks the run's own.</summary>
+    private OfficeScene? Floor(string runId, int part)
+    {
+        var view = BuildingNow();
+        var mine = view.Occupied.FirstOrDefault(one => one.Run == runId && one.Part == part);
+
+        if (mine is null || Floor(view, mine.Number) is not { } scene)
+        {
+            return null;
+        }
+
+        var seats = scene.Teams?.FirstOrDefault(team => team.Run == runId && team.Part == part)?.Desks;
+
+        return seats is null ? scene : scene with { Desks = seats };
+    }
+
+    /// <summary>A floor by its number, laid out with every team on it, from the cache when nobody on it has changed.</summary>
+    private OfficeScene? FloorByNumber(int number) => Floor(BuildingNow(), number);
+
+    private BuildingView BuildingNow()
+    {
+        var summaries = _journal.List(40).Select(Summary).OfType<RunSummary>().ToList();
+        var (_, rules, capacity, _) = OfficeKitNow();
+
+        return _building.Update(summaries, capacity, rules, DateTimeOffset.UtcNow);
+    }
+
+    private Dictionary<string, OfficeFacadeStrips> Facades(BuildingView view)
+    {
+        var facades = new Dictionary<string, OfficeFacadeStrips>(StringComparer.Ordinal);
+
+        foreach (var number in view.Occupied.Select(one => one.Number).Distinct())
+        {
+            if (Floor(view, number) is not { } scene)
+            {
+                continue;
+            }
+
+            var here = view.Occupied.Where(one => one.Number == number).ToList();
+            var anyone = here.Any(one => !one.Dark && one.People > 0);
+
+            facades[number.ToString(System.Globalization.CultureInfo.InvariantCulture)] = OfficeFacadePlan.For(
+                scene,
+                run => run is null ? anyone : here.Any(one => one.Run == run && !one.Dark && one.People > 0));
+        }
+
+        return facades;
+    }
+
+    private OfficeScene? Floor(BuildingView view, int number)
+    {
+        var (kit, rules, _, _) = OfficeKitNow();
+        var tenants = view.Occupied
+            .Where(one => one.Number == number)
+            .Select(one => new OfficeTenant(one.Run, one.Part, one.Bay, one.Bays, Math.Max(1, one.People)))
+            .ToList();
+
+        if (tenants.Count == 0)
+        {
+            return null;
+        }
+
+        var building = BuildingRooms(view, number, rules);
+
+        // Every team on it, where and how many: a team arriving lays the floor
+        // out again, its own bays and the shared rooms, nobody else's desks;
+        // and the building's rooms it is offered, which move up when a floor
+        // below takes them.
+        var key = $"floor-{number}|" + string.Join("|", tenants.Select(one => $"{one.Run}#{one.Part}#{one.Bay}#{one.Bays}#{one.People}"))
+            + (building is null ? "" : $"|building:{string.Join(",", building.Kinds)}#{building.People}");
+
+        lock (_building)
+        {
+            if (_floors.TryGetValue(key, out var kept))
+            {
+                return kept;
+            }
+        }
+
+        var scene = FloorPlanner.Shared(kit, rules, number, tenants, building).Scene;
+
+        lock (_building)
+        {
+            _floors[key] = scene;
+        }
+
+        return scene;
+    }
+
+    // The building's own rooms this floor is offered: what no occupied floor below took.
+    private OfficeBuildingRooms? BuildingRooms(BuildingView view, int number, OfficeRules rules) =>
+        FloorPlanner.BuildingRooms(
+            rules,
+            number,
+            view.Occupied.Select(one => one.Number),
+            view.Occupied.Sum(one => Math.Max(1, one.People)),
+            below => Floor(view, below));
+
+    /// <summary>
+    /// The lobby or the roof, laid out for a number of seats rounded up to the
+    /// next four, so one more thing waiting does not rearrange the furniture;
+    /// never more than 48, which is more than either can hold anyway.
+    /// </summary>
+    private OfficeScene Place(string name, int seats)
+    {
+        var (kit, rules, _, _) = OfficeKitNow();
+        var step = Math.Min(48, (Math.Max(0, seats) + 3) / 4 * 4);
+        var key = $"{name}#{step}";
+
+        lock (_building)
+        {
+            if (_floors.TryGetValue(key, out var kept))
+            {
+                return kept;
+            }
+        }
+
+        var scene = (name switch
+        {
+            "lobby" => FloorPlanner.Lobby(kit, rules, step),
+            "roof" => FloorPlanner.Roof(kit, rules, step),
+            "basement-1" => FloorPlanner.Basement(kit, rules, 1),
+            _ => FloorPlanner.Basement(kit, rules, 2),
+        }).Scene;
+
+        lock (_building)
+        {
+            _floors[key] = scene;
+        }
+
+        return scene;
+    }
+
+    /// <summary>One run's summary, read again only when its files have changed.</summary>
+    private RunSummary? Summary(string runId)
+    {
+        var directory = _journal.DirectoryOf(runId);
+        var journal = new FileInfo(Path.Combine(directory, "journal.jsonl"));
+        var stamp = string.Create(
+            CultureInfo.InvariantCulture,
+            $"{(journal.Exists ? journal.Length : -1)}|{(journal.Exists ? journal.LastWriteTimeUtc.Ticks : 0)}|{Directory.GetLastWriteTimeUtc(directory).Ticks}");
+
+        lock (_summaries)
+        {
+            if (_summaries.TryGetValue(runId, out var kept) && kept.Stamp == stamp)
+            {
+                return kept.Summary;
+            }
+        }
+
+        var read = _journal.Summarise(runId);
+
+        if (read.Failed)
+        {
+            return null;
+        }
+
+        lock (_summaries)
+        {
+            _summaries[runId] = (stamp, read.Value!);
+        }
+
+        return read.Value;
+    }
+
+    /// <summary>
+    /// The office as it changes, one whole snapshot per message.
+    /// </summary>
+    /// <remarks>
+    /// Each message is complete, so a page that reconnects needs nothing but
+    /// the next one and nothing is lost between them. The id is the feed's
+    /// sequence number, which the browser sends back as Last-Event-ID; a
+    /// page already holding the latest waits for the one after it.
+    /// </remarks>
+    private async Task OfficeStreamAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        var response = context.Response;
+
+        response.StatusCode = 200;
+        response.ContentType = "text/event-stream; charset=utf-8";
+        response.Headers["Cache-Control"] = "no-cache";
+        response.SendChunked = true;
+
+        var had = long.TryParse(context.Request.Headers["Last-Event-ID"], NumberStyles.None, CultureInfo.InvariantCulture, out var last)
+            ? last
+            : 0;
+
+        try
+        {
+            // Said at once, because nothing goes to the browser - not even
+            // the headers - until something is written. A page reconnecting
+            // with the latest already in hand would otherwise hear nothing,
+            // not even that it had connected, until the first heartbeat.
+            await response.OutputStream.WriteAsync(": open\n\n"u8.ToArray(), ct).ConfigureAwait(false);
+            await response.OutputStream.FlushAsync(ct).ConfigureAwait(false);
+
+            while (!ct.IsCancellationRequested)
+            {
+                string message;
+
+                // Nothing tells this server a page has closed; a write to it
+                // fails, and nothing else does. So a quiet office still writes
+                // a comment now and then, which finds a page that has gone and
+                // lets the feed stop reading for it.
+                using (var beat = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    beat.CancelAfter(Heartbeat);
+
+                    try
+                    {
+                        var (sequence, snapshot) = await _office.NextAsync(had, beat.Token).ConfigureAwait(false);
+
+                        message = string.Create(CultureInfo.InvariantCulture, $"id: {sequence}\nevent: office\ndata: {snapshot}\n\n");
+                        had = sequence;
+                    }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        message = ": still here\n\n";
+                    }
+                }
+
+                var bytes = Encoding.UTF8.GetBytes(message);
+
+                await response.OutputStream.WriteAsync(bytes, ct).ConfigureAwait(false);
+                await response.OutputStream.FlushAsync(ct).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or HttpListenerException or IOException or ObjectDisposedException)
+        {
+            // The page went, or the server is stopping. Either way there is
+            // nobody left to write to.
+        }
+
+        try
+        {
+            response.Close();
+        }
+        catch (Exception ex) when (ex is HttpListenerException or ObjectDisposedException or InvalidOperationException)
+        {
+            // Already gone with the connection.
+        }
+    }
+
+    /// <summary>What the office shows for a node, as the page reads it.</summary>
+    private static object Office(OfficeIntent intent) => new
+    {
+        lamp = intent.Lamp.ToString().ToLowerInvariant(),
+        place = intent.Place.ToString().ToLowerInvariant(),
+        pose = intent.Pose.ToString().ToLowerInvariant(),
+        intent.Bubble,
+    };
+
+    /// <summary>
     /// One run, as the page needs it.
     /// </summary>
     /// <remarks>
@@ -1518,7 +1998,10 @@ public sealed class DashboardServer : IDisposable
     /// a contract that does not move when the summary grows a field, and so
     /// what is sent is only what the page shows.
     /// </remarks>
-    private static object Describe(RunSummary run) => new
+    private static object Describe(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> pins) =>
+        Described(run, kit, OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)), pins));
+
+    private static object Described(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> cast) => new
     {
         id = run.RunId,
 
@@ -1628,6 +2111,11 @@ public sealed class DashboardServer : IDisposable
             // another node, done. The state above is what it last reported,
             // and stays for the page's own logic.
             activity = run.Activity(node),
+
+            // The picture of the same thing: the light on the desk, where the
+            // person is and how they sit. Worked out here, beside the words,
+            // so that the office and the badges cannot disagree about a node.
+            office = Office(OfficeIntent.For(run, node)),
             node.Turns,
             cost = node.CostUsd,
             node.Branch,
@@ -1646,8 +2134,11 @@ public sealed class DashboardServer : IDisposable
             // room on the machine; this points at exactly one node of exactly
             // one run, which is what a person needs to say a week later. The
             // technical name is still right there beside it.
-            person = DeskNames.For(run.RunId, node.Node),
-            personFull = DeskNames.Full(run.RunId, node.Node),
+            person = DeskNames.For(run.RunId, node.Node, OfficeCast.GenderOf(kit, cast.GetValueOrDefault(node.Node))),
+            personFull = DeskNames.Full(run.RunId, node.Node, OfficeCast.GenderOf(kit, cast.GetValueOrDefault(node.Node))),
+
+            // Which of the office kit's people draws them, so the name above fits the face.
+            cast = cast.GetValueOrDefault(node.Node),
         }),
 
         // Every exchange, one by one, rather than only each node's total. Two
@@ -2784,5 +3275,9 @@ public sealed class DashboardServer : IDisposable
         return reader.ReadToEnd();
     }
 
-    public void Dispose() => Discard();
+    public void Dispose()
+    {
+        _office.Dispose();
+        Discard();
+    }
 }

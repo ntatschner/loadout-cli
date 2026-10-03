@@ -59,14 +59,10 @@ public sealed class DashboardServerTests : IAsyncLifetime
         _server.OfficeRoot = _art;
         _server.OfficeSet = "open-office";
 
-        // A second set, because the waiting area draws with its own: a
-        // reception of people waiting and a floor of people working are
-        // different rooms.
+        // A second set, so the page is told of more than the one in use.
         Directory.CreateDirectory(Path.Combine(_art, "lobby"));
         File.WriteAllBytes(
             Path.Combine(_art, "lobby", "waiting-1.png"), [0x89, 0x50, 0x4E, 0x47]);
-
-        _server.WaitingSet = "lobby";
 
         _server.WaitingFor = _ => Task.FromResult<IReadOnlyList<Waiting>>(
         [
@@ -237,21 +233,21 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_waiting_area_draws_from_its_own_set()
+    public async Task The_waiting_area_has_no_art_of_its_own_any_more()
     {
-        var answer = await GetAsync("/waiting/waiting-1");
+        // The lobby's waiting room took over from the waiting list, and draws
+        // with the building's kit: the waiting list's own set and its route
+        // went with it.
+        (await GetAsync("/waiting/waiting-1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
 
-        answer.StatusCode.Should().Be(HttpStatusCode.OK);
-        answer.Content.Headers.ContentType!.MediaType.Should().Be("image/png");
+        using var read = JsonDocument.Parse(await (await GetAsync("/api/office")).Content.ReadAsStringAsync());
 
-        // And the two rooms do not reach into each other: the office set has
-        // no waiting-1 and the lobby has no lead.
-        (await GetAsync("/office/waiting-1")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await GetAsync("/waiting/lead")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        read.RootElement.TryGetProperty("waitingSet", out _).Should().BeFalse();
+        read.RootElement.TryGetProperty("waitingPieces", out _).Should().BeFalse();
     }
 
     [Fact]
-    public async Task The_page_is_told_what_art_there_is_to_draw_with()
+    public async Task The_page_is_told_what_art_there_is_with_when_each_set_changed()
     {
         var answer = await GetAsync("/api/office");
 
@@ -259,19 +255,404 @@ public sealed class DashboardServerTests : IAsyncLifetime
 
         using var read = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
 
-        read.RootElement.GetProperty("set").GetString().Should().Be("open-office");
-
-        read.RootElement.GetProperty("pieces").EnumerateArray()
-            .Select(one => one.GetString()).Should().Equal("lead");
-
-        // Both sets in one answer, so the page asks once.
-        read.RootElement.GetProperty("waitingSet").GetString().Should().Be("lobby");
-
-        read.RootElement.GetProperty("waitingPieces").EnumerateArray()
-            .Select(one => one.GetString()).Should().Equal("waiting-1");
-
         read.RootElement.GetProperty("sets").EnumerateArray()
             .Select(one => one.GetString()).Should().Contain("lobby").And.Contain("open-office");
+
+        // Each with its stamp, for its pictures' addresses, so a set rebuilt
+        // while the page is open is fetched again rather than drawn from what
+        // the browser kept.
+        read.RootElement.GetProperty("offices").GetProperty("open-office").TryGetProperty("stamp", out _).Should().BeTrue();
+
+        // And nothing about the painted rooms, which the office no longer
+        // draws, or the per-run rooms the building replaced.
+        foreach (var gone in new[] { "set", "pieces", "room", "kit" })
+        {
+            read.RootElement.TryGetProperty(gone, out _).Should().BeFalse("{0} was the painted rooms'", gone);
+        }
+
+        read.RootElement.GetProperty("offices").GetProperty("open-office").TryGetProperty("room", out _).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The page draws the building's rooms on a canvas kept between polls, and
+    /// only while something in it moves.
+    /// </summary>
+    [Fact]
+    public async Task The_page_draws_tile_rooms_on_a_canvas_that_outlives_the_poll()
+    {
+        var page = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        // No painted rooms and no room per run: the building is the office.
+        page.Should().NotContain("office.room");
+        page.Should().NotContain("function roomOf(");
+        page.Should().NotContain("kitScene");
+
+        // Kept by which floor and which way it faces, so a poll re-attaches it
+        // rather than restarting every walk: by the floor's number, every team
+        // on it in the one room, and whether it is seen from a corner.
+        page.Should().Contain("tileRoom(\"floor|\" + floor.number + \"|\" + facing + (corner ? \"c\" : \"\") + \"|\" + kit, here, kit, scene)");
+
+        // Nobody walks when motion is turned down, and nothing is drawn for a
+        // room nobody can see.
+        page.Should().Contain("person.path = tilesStill() ? [] : tilePath(room, fromX, fromY, toX, toY, tileCrowd(room, person));");
+
+        // Routes take the fewest turns among the shortest: a staircase across a
+        // diagonal turned the walker's head on every tile. The last term is
+        // other people in the way (OfficeEngineTests walks them).
+        page.Should().Contain("var nextCost = cost + 100 + (entered !== 4 && entered !== d ? 1 : 0) + (extra && extra[tile] || 0);");
+        page.Should().Contain("if (document.hidden || (holder && holder.classList.contains(\"unwatched\"))) { return; }");
+
+        // People move on the office stream while it is live, and the poll
+        // stops moving them, so an answer read just before a change cannot
+        // walk anybody back.
+        page.Should().Contain("new EventSource(\"/api/office/events?token=\"");
+        page.Should().Contain("if (officeLive) {");
+
+        // Closed once no tile room can be seen: switching view hides the rooms
+        // rather than removing them, and a stream left open keeps the daemon
+        // reading twice a second for nobody.
+        page.Should().Contain("return tileRooms[key].floor.offsetParent !== null;");
+
+        // Only somebody nothing is asking anything of wanders, an errand ends
+        // the moment that changes, and nobody wanders with motion turned down.
+        page.Should().Contain("if (still || intent.place !== \"free\" || person.path.length) { return; }");
+        page.Should().Contain("if (person.errand && !(person.errand.visit ? intent.lamp === \"quiet\" : intent.place === \"free\")) {");
+
+        // The lead goes over to somebody newly briefed, only while its own
+        // light is quiet.
+        page.Should().Contain("if (lead && (lead.intent || {}).lamp === \"quiet\" && !(lead.errand && lead.errand.visit)) {");
+    }
+
+    /// <summary>
+    /// The office stream sends every run's people and what each should be
+    /// doing, numbered, and a page already holding the latest is not sent it
+    /// again.
+    /// </summary>
+    [Fact]
+    public async Task The_office_streams_who_is_in_each_room_and_does_not_repeat_itself()
+    {
+        var url = new Uri(_root.TrimEnd('/') + "/api/office/events?token=" + _server.Token);
+
+        using var first = await _client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+        first.Content.Headers.ContentType!.MediaType.Should().Be("text/event-stream");
+
+        var (id, data) = await NextEvent(first).WaitAsync(TimeSpan.FromSeconds(10));
+        var run = JsonDocument.Parse(data).RootElement.GetProperty("runs")[0];
+
+        run.GetProperty("id").GetString().Should().Be("20260916-1200-aaaa");
+        run.GetProperty("nodes")[0].GetProperty("office").GetProperty("lamp").GetString().Should().Be("working");
+        run.GetProperty("nodes")[0].GetProperty("person").GetString().Should().NotBeNullOrEmpty();
+
+        // Reconnecting with the id it had: nothing has changed, so nothing comes.
+        using var again = new HttpRequestMessage(HttpMethod.Get, url);
+
+        again.Headers.Add("Last-Event-ID", id);
+
+        // And it is told at once that it is connected, rather than hearing
+        // nothing at all until the first heartbeat.
+        using var second = await _client.SendAsync(again, HttpCompletionOption.ResponseHeadersRead)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+        var repeat = NextEvent(second);
+
+        (await Task.WhenAny(repeat, Task.Delay(1500))).Should().NotBe(repeat, "the page already has the latest");
+    }
+
+    /// <summary>
+    /// The building says how tall it is and who is on which floor, and each
+    /// run's floor comes back laid out, checked, with the lead's office in it.
+    /// </summary>
+    [Fact]
+    public async Task The_building_puts_each_run_on_a_floor_and_lays_the_floor_out()
+    {
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+        var root = building.RootElement;
+        var first = root.GetProperty("occupied")[0];
+
+        root.GetProperty("floors").GetInt32().Should().Be(10);
+        root.GetProperty("tile").GetInt32().Should().Be(32, "the built-in kit's tile, which the page draws the tower in");
+        root.GetProperty("plate")[0].GetInt32().Should().Be(40);
+        root.GetProperty("plate")[1].GetInt32().Should().Be(24);
+
+        // A storey five tiles high: a tile is three quarters of a metre, so
+        // 3.75 metres floor to floor, which a person stands in.
+        root.GetProperty("storey").GetInt32().Should().Be(5);
+        root.GetProperty("scale").GetProperty("min").GetDouble().Should().Be(1);
+        root.GetProperty("scale").GetProperty("max").GetDouble().Should().Be(2);
+        root.GetProperty("kit").ValueKind.Should().Be(JsonValueKind.Null, "no kit is configured, so the built-in one is used");
+        first.GetProperty("run").GetString().Should().Be("20260916-1200-aaaa");
+        first.GetProperty("number").GetInt32().Should().Be(1);
+        first.GetProperty("nodes").GetArrayLength().Should().Be(1);
+
+        var floor = await GetAsync("/api/office/floor/20260916-1200-aaaa/0");
+
+        floor.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var scene = JsonSerializer.Deserialize<OfficeScene>(await floor.Content.ReadAsStringAsync())!;
+
+        OfficeScenes.Problems(scene, _ => null).Should().BeEmpty();
+        scene.Areas!.Should().Contain(area => area.Kind == "lead-office");
+
+        // Its storey's outside, read from the floor: a letter a bay a side.
+        var facade = root.GetProperty("facades").GetProperty("1");
+
+        facade.GetProperty("s").GetString()!.Length.Should().Be(40);
+        facade.GetProperty("e").GetString()!.Length.Should().Be(24);
+        facade.GetProperty("n").GetString().Should().MatchRegex("^s+$");
+        facade.GetProperty("litS").GetString().Should().MatchRegex("^[01]{40}$");
+
+        // Where on its floor the run is: a bay of three, the floor shared.
+        first.GetProperty("bay").GetInt32().Should().Be(0);
+        first.GetProperty("bays").GetInt32().Should().Be(1);
+
+        // By number, the floor with every team on it, each with its seats; by
+        // run, the same floor with the run's own seats as its desks.
+        var shared = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/floor/1")).Content.ReadAsStringAsync())!;
+
+        shared.Teams!.Should().ContainSingle(team => team.Run == "20260916-1200-aaaa");
+        shared.Teams!.Single().Desks.Should().Equal(scene.Desks);
+        shared.Areas!.Should().Contain(area => area.Run == "20260916-1200-aaaa");
+        OfficeScenes.Problems(shared, _ => null).Should().BeEmpty();
+        (await GetAsync("/api/office/floor/2")).StatusCode.Should().Be(HttpStatusCode.NotFound, "nobody is on floor 2");
+        (await GetAsync("/api/office/floor/0")).StatusCode.Should().Be(HttpStatusCode.NotFound, "the lobby is a place, not a floor");
+
+        (await GetAsync("/api/office/floor/20260916-1200-aaaa/1")).StatusCode.Should().Be(HttpStatusCode.NotFound, "the run has only one floor");
+        (await GetAsync("/api/office/floor/no-such-run/0")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetAsync("/api/office/floor/20260916-1200-aaaa/x")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task The_lobby_and_the_roof_are_laid_out_for_the_seats_asked_for_in_steps_of_four()
+    {
+        var lobby = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/place/lobby/5")).Content.ReadAsStringAsync())!;
+        var roof = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/place/roof/1")).Content.ReadAsStringAsync())!;
+
+        lobby.Desks.Should().HaveCount(8, "five waiting is asked for as eight seats");
+        roof.Desks.Should().HaveCount(4);
+        OfficeScenes.Problems(lobby, _ => null).Should().BeEmpty();
+        lobby.Areas!.Should().Contain(area => area.Kind == "reception");
+        roof.Areas!.Should().Contain(area => area.Kind == "break-area");
+
+        (await GetAsync("/api/office/place/basement/4")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetAsync("/api/office/place/lobby/many")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetAsync("/api/office/place/lobby")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task The_basements_are_served_and_nothing_below_them()
+    {
+        var one = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/place/basement-1/0")).Content.ReadAsStringAsync())!;
+        var two = JsonSerializer.Deserialize<OfficeScene>(await (await GetAsync("/api/office/place/basement-2/0")).Content.ReadAsStringAsync())!;
+
+        one.Areas!.Should().Contain(area => area.Kind == "mail-room");
+        two.Areas!.Should().Contain(area => area.Kind == "garbage");
+        (await GetAsync("/api/office/place/basement-3/0")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task The_bin_is_read_with_when_each_thing_in_it_goes()
+    {
+        var state = Path.Combine(_art, "bin-state");
+        var paths = new Loadout.Platform.Linux.LinuxPaths(
+            new Loadout.Tests.Fakes.FakeEnvironmentProvider(
+                Path.Combine(state, "home"),
+                new Dictionary<string, string>
+                {
+                    ["XDG_CONFIG_HOME"] = Path.Combine(state, "config"),
+                    ["XDG_DATA_HOME"] = Path.Combine(state, "data"),
+                    ["XDG_STATE_HOME"] = Path.Combine(state, "state"),
+                    ["XDG_CACHE_HOME"] = Path.Combine(state, "cache"),
+                }),
+            new Loadout.Tests.Fakes.NoOpFilePermissions(),
+            new Loadout.Models.Platform.HostPlatform(
+                Loadout.Models.Platform.HostOperatingSystem.Linux,
+                System.Runtime.InteropServices.Architecture.X64, "test", "TEST"));
+
+        paths.EnsureDirectoriesExist();
+
+        var file = Path.Combine(state, "night-shift.yaml");
+
+        File.WriteAllText(file, "name: night-shift");
+
+        var bin = new TeamBin(paths);
+        var binned = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
+
+        bin.PutTeam("night-shift", file, binned);
+        _server.Bin = bin;
+        _server.BinDays = 7;
+
+        using var read = JsonDocument.Parse(await (await GetAsync("/api/bin")).Content.ReadAsStringAsync());
+        var entry = read.RootElement.GetProperty("entries")[0];
+
+        read.RootElement.GetProperty("days").GetInt32().Should().Be(7);
+        entry.GetProperty("kind").GetString().Should().Be("team");
+        entry.GetProperty("name").GetString().Should().Be("night-shift");
+        entry.GetProperty("goes").GetDateTimeOffset().Should().Be(binned.AddDays(7));
+    }
+
+    [Fact]
+    public async Task The_server_room_is_told_whether_this_is_the_daemon_and_whether_it_is_held()
+    {
+        using var plain = JsonDocument.Parse(await (await GetAsync("/api/daemon")).Content.ReadAsStringAsync());
+
+        plain.RootElement.GetProperty("daemon").GetBoolean().Should().BeFalse();
+        plain.RootElement.GetProperty("paused").ValueKind.Should().Be(JsonValueKind.Null, "nothing here can say");
+
+        _server.IsDaemon = true;
+        _server.DaemonPaused = () => true;
+
+        using var daemon = JsonDocument.Parse(await (await GetAsync("/api/daemon")).Content.ReadAsStringAsync());
+
+        daemon.RootElement.GetProperty("daemon").GetBoolean().Should().BeTrue();
+        daemon.RootElement.GetProperty("paused").GetBoolean().Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task A_server_given_no_bin_says_it_is_empty()
+    {
+        using var read = JsonDocument.Parse(await (await GetAsync("/api/bin")).Content.ReadAsStringAsync());
+
+        read.RootElement.GetProperty("entries").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task The_building_carries_this_machines_office_size()
+    {
+        _server.OfficeScale = new OfficeScale(1.5, 3);
+
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+        var scale = building.RootElement.GetProperty("scale");
+
+        scale.GetProperty("min").GetDouble().Should().Be(1.5);
+        scale.GetProperty("max").GetDouble().Should().Be(3);
+    }
+
+    [Fact]
+    public async Task The_building_carries_the_kits_materials_for_the_neighbourhood()
+    {
+        Directory.CreateDirectory(Path.Combine(_art, "street"));
+
+        // Enough of a PNG for its size to be read: the signature, then IHDR with 64 by 96.
+        byte[] header = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0, 0, 0, 64, 0, 0, 0, 96];
+
+        File.WriteAllBytes(Path.Combine(_art, "street", "brick.png"), header);
+        File.WriteAllText(Path.Combine(_art, "street", OfficeKit.FileName), JsonSerializer.Serialize(OfficeKit.Kit() with
+        {
+            Materials = new Dictionary<string, OfficeMaterial>(StringComparer.Ordinal)
+            {
+                ["facade-brick"] = new("brick.png", [64, 96]),
+            },
+        }));
+        _server.OfficeSet = "street";
+
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+        var brick = building.RootElement.GetProperty("materials").GetProperty("facade-brick");
+
+        building.RootElement.GetProperty("kit").GetString().Should().Be("street");
+        brick.GetProperty("picture").GetString().Should().Be("brick.png");
+        brick.GetProperty("size")[1].GetInt32().Should().Be(96);
+    }
+
+    [Fact]
+    public async Task The_building_carries_the_kits_facade_with_its_pictures_and_none_for_the_built_in_kit()
+    {
+        using (var plain = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync()))
+        {
+            plain.RootElement.GetProperty("facade").ValueKind.Should().Be(JsonValueKind.Null);
+        }
+
+        Directory.CreateDirectory(Path.Combine(_art, "front"));
+
+        // Enough of a PNG for its size to be read: the signature, then IHDR with 96 by 192.
+        byte[] header = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0, 0, 0, 96, 0, 0, 0, 192];
+
+        File.WriteAllBytes(Path.Combine(_art, "front", "facade.png"), header);
+
+        var kit = OfficeKit.Kit();
+        var pieces = new Dictionary<string, OfficePiece>(kit.Pieces, StringComparer.Ordinal)
+        {
+            ["bay-a"] = new("facade.png", [0, 0, 32, 96], [1, 1], ["facade-bay"], Place: "facade"),
+            ["bay-b"] = new("facade.png", [32, 0, 32, 96], [1, 1], ["facade-bay"], Place: "facade"),
+            ["lobby-a"] = new("facade.png", [64, 0, 32, 192], [1, 1], ["facade-lobby"], Place: "facade"),
+        };
+
+        File.WriteAllText(Path.Combine(_art, "front", OfficeKit.FileName), JsonSerializer.Serialize(kit with
+        {
+            Pieces = pieces,
+            Facade = new OfficeFacade(["bay-a", "bay-b"], Lobby: ["lobby-a"], Windows: [[4, 10, 24, 70]]),
+        }));
+        _server.OfficeSet = "front";
+
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+        var facade = building.RootElement.GetProperty("facade");
+
+        facade.GetProperty("bays").GetArrayLength().Should().Be(2);
+        facade.GetProperty("bays")[1].GetProperty("picture").GetString().Should().Be("facade.png");
+        facade.GetProperty("bays")[1].GetProperty("source")[0].GetInt32().Should().Be(32);
+        facade.GetProperty("lobby")[0].GetProperty("source")[3].GetInt32().Should().Be(192);
+        facade.GetProperty("windows")[0][2].GetInt32().Should().Be(24);
+        facade.GetProperty("corner").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public void A_facade_naming_a_piece_with_no_picture_is_not_drawn_half_in_art()
+    {
+        var kit = OfficeKit.Kit();
+        var pieces = new Dictionary<string, OfficePiece>(kit.Pieces, StringComparer.Ordinal)
+        {
+            ["bay-a"] = new("facade.png", [0, 0, 32, 96], [1, 1], ["facade-bay"], Place: "facade"),
+            ["bay-b"] = new(null, null, [1, 1], ["facade-bay"], Place: "facade"),
+        };
+
+        OfficeFacadeArt.For(kit with { Pieces = pieces, Facade = new OfficeFacade(["bay-a"]) }).Should().NotBeNull();
+        OfficeFacadeArt.For(kit with { Pieces = pieces, Facade = new OfficeFacade(["bay-a", "bay-b"]) }).Should().BeNull();
+        OfficeFacadeArt.For(kit).Should().BeNull("the built-in kit has no facade");
+    }
+
+    [Fact]
+    public async Task A_configured_kit_is_the_one_the_building_is_made_from()
+    {
+        Directory.CreateDirectory(Path.Combine(_art, "tower"));
+        File.WriteAllText(Path.Combine(_art, "tower", OfficeKit.FileName), JsonSerializer.Serialize(OfficeKit.Kit()));
+        _server.OfficeSet = "tower";
+
+        using var building = JsonDocument.Parse(await (await GetAsync("/api/office/building")).Content.ReadAsStringAsync());
+
+        building.RootElement.GetProperty("kit").GetString().Should().Be("tower");
+    }
+
+    [Fact]
+    public async Task The_office_stream_carries_the_building()
+    {
+        var url = new Uri(_root.TrimEnd('/') + "/api/office/events?token=" + _server.Token);
+
+        using var stream = await _client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+        var (_, data) = await NextEvent(stream).WaitAsync(TimeSpan.FromSeconds(10));
+
+        JsonDocument.Parse(data).RootElement.GetProperty("building").GetProperty("occupied")[0]
+            .GetProperty("run").GetString().Should().Be("20260916-1200-aaaa");
+    }
+
+    /// <summary>The next office event on a stream: its id and its data.</summary>
+    private static async Task<(string Id, string Data)> NextEvent(HttpResponseMessage response)
+    {
+        using var reader = new StreamReader(await response.Content.ReadAsStreamAsync());
+        string? id = null;
+
+        while (await reader.ReadLineAsync() is { } line)
+        {
+            if (line.StartsWith("id: ", StringComparison.Ordinal))
+            {
+                id = line["id: ".Length..];
+            }
+            else if (line.StartsWith("data: ", StringComparison.Ordinal) && id is not null)
+            {
+                return (id, line["data: ".Length..]);
+            }
+        }
+
+        throw new InvalidOperationException("The stream ended without an event.");
     }
 
     [Fact]
@@ -1202,24 +1583,6 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task An_office_with_no_art_still_holds_its_desks()
-    {
-        // With no office pack installed - the default - every room's floor is
-        // bare, and a bare floor has no picture to take its height from. It
-        // was still a size container, which sizes itself without its
-        // contents, so it came out 26 pixels tall and its desks hung below
-        // it over the next room.
-        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
-
-        text.Should().Contain(".room .floor.bare { padding: 0.75rem; container-type: normal; }");
-
-        // And the desk's hover card had the same class as a run's card, so
-        // the rich view's rule for run cards showed every desk's card at once.
-        text.Should().Contain("card.className = \"desk-card\";");
-        text.Should().NotContain(".desk .card");
-    }
-
-    [Fact]
     public async Task Every_id_on_the_page_is_used_once()
     {
         // The Settings page and the "What this machine is set to" fold were both
@@ -1464,6 +1827,26 @@ public sealed class DashboardServerTests : IAsyncLifetime
         run.GetProperty("running").GetBoolean().Should().BeTrue();
         run.GetProperty("nodes").GetArrayLength().Should().Be(1);
         run.GetProperty("nodes")[0].GetProperty("doing").GetString().Should().Be("Read docs/commands.md");
+    }
+
+    /// <summary>
+    /// Each node carries what the office shows for it, worked out on the
+    /// server, and the page's desks and badges both read their key from it.
+    /// </summary>
+    [Fact]
+    public async Task Each_node_carries_what_the_office_shows_for_it()
+    {
+        var json = JsonDocument.Parse(await (await GetAsync("/api/runs")).Content.ReadAsStringAsync());
+        var office = json.RootElement.GetProperty("runs")[0].GetProperty("nodes")[0].GetProperty("office");
+
+        office.GetProperty("lamp").GetString().Should().Be("working");
+        office.GetProperty("place").GetString().Should().Be("desk");
+        office.GetProperty("pose").GetString().Should().Be("type");
+        office.GetProperty("bubble").ValueKind.Should().Be(JsonValueKind.Null);
+
+        var page = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        page.Should().Contain("var lamp = (node.office || {}).lamp;");
     }
 
     /// <summary>Gives the stub a real directory with the papers named in it.</summary>
@@ -2150,20 +2533,22 @@ public sealed class DashboardServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task There_are_six_screens_and_a_board_to_put_them_on()
+    public async Task There_are_five_screens_and_a_board_to_put_them_on()
     {
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
-        // "Where to go" rather than "How to look at them": six of these are
+        // "Where to go" rather than "How to look at them": five of these are
         // ways of looking at the runs, and settings is not one of them.
         text.Should().Contain("<nav class=\"views\" aria-label=\"Where to go\">");
 
-        // Four read the runs, one reads what has not become one yet, and one
-        // is the output of whatever is running.
-        foreach (var view in new[] { "list", "office", "graph", "when", "waiting", "terminal" })
+        // Four read the runs and one is the output of whatever is running.
+        // What has not become a run yet waits in the office's lobby.
+        foreach (var view in new[] { "list", "office", "graph", "when", "terminal" })
         {
             text.Should().Contain($"id=\"view-{view}\"");
         }
+
+        text.Should().NotContain("id=\"view-waiting\"");
 
         // And the board, which shows several of them at once.
         text.Should().Contain("id=\"view-board\"");
@@ -2176,12 +2561,12 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("id=\"view-settings\"");
 
         // One of them is on and the rest are not. A group where every button
-        // claims to be pressed announces as nine pressed buttons.
+        // claims to be pressed announces as eight pressed buttons.
         //
-        // Nine rather than eight: the button that switches between the two
+        // Eight rather than seven: the button that switches between the two
         // presentations carries aria-pressed too, and starts off.
         System.Text.RegularExpressions.Regex.Matches(text, "aria-pressed=\"false\"")
-            .Should().HaveCount(9);
+            .Should().HaveCount(8);
     }
 
     [Fact]
@@ -2217,7 +2602,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         // business. A name the page does not know shows the whole dashboard
         // rather than an error, which is the right way round for an address
         // somebody typed.
-        foreach (var screen in new[] { "office", "terminal", "waiting", "nonsense" })
+        foreach (var screen in new[] { "office", "terminal", "nonsense" })
         {
             var answer = await GetAsync("/screen/" + screen);
 
@@ -2304,7 +2689,6 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("<ul class=\"rooms lk-rooms\" id=\"office\" hidden></ul>");
         text.Should().Contain("<div id=\"graph\" hidden></div>");
         text.Should().Contain("<div id=\"when\" hidden></div>");
-        text.Should().Contain("<ul class=\"queue lk-queue\" id=\"waiting\" hidden></ul>");
         text.Should().Contain("<div class=\"terminal lk-terminal\" id=\"terminal\" hidden></div>");
     }
 

@@ -28,8 +28,8 @@ public sealed class SettingsPaneTests
         Line(new SettingsChange("office", "open-office"))
             .Should().Be("config set team-office-set open-office");
 
-        Line(new SettingsChange("waiting", "lobby"))
-            .Should().Be("config set team-waiting-set lobby");
+        Line(new SettingsChange("office-scale", "1-3"))
+            .Should().Be("config set team-office-scale 1-3");
 
         Line(new SettingsChange("listen", "0.0.0.0"))
             .Should().Be("config set team-webhook-listen 0.0.0.0");

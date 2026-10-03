@@ -42,7 +42,7 @@ internal static partial class DashboardActions
     /// </remarks>
     internal static readonly string[] Settings =
     [
-        "notify", "office", "waiting", "listen", "webhook-teams", "webhook", "remedy", "team-budget",
+        "notify", "office", "office-scale", "listen", "webhook-teams", "webhook", "remedy", "team-budget",
     ];
 
     /// <summary>
@@ -83,7 +83,7 @@ internal static partial class DashboardActions
             "notify" => ("team notify set", Notify(change)),
 
             "office" => ("config set", ["team-office-set", change.Value ?? string.Empty]),
-            "waiting" => ("config set", ["team-waiting-set", change.Value ?? string.Empty]),
+            "office-scale" => ("config set", ["team-office-scale", change.Value ?? string.Empty]),
             "listen" => ("config set", ["team-webhook-listen", change.Value ?? string.Empty]),
             "team-budget" => ("config set", ["team-budget", change.Value ?? string.Empty]),
             "webhook-teams" => ("config set", ["team-webhook-teams", change.Value ?? string.Empty]),
@@ -129,6 +129,8 @@ internal static partial class DashboardActions
     internal static readonly string[] Verbs =
     [
         "gate", "gates", "message", "stop", "forget", "pause", "resume", "name", "pr", "say", "budget", "pickup",
+        "restore", "purge", "restore-team", "purge-team",
+        "daemon-pause", "daemon-resume", "daemon-restart",
     ];
 
     /// <summary>
@@ -168,6 +170,20 @@ internal static partial class DashboardActions
             // the answers they are waiting on — and the command refuses it
             // whatever the page thinks it is looking at.
             "forget" => ("team runs remove", [action.Run]),
+
+            // The garbage room's: out of the bin, or out of it for good. The
+            // page asks before a purge; --yes is the command's own way of
+            // being told somebody already has.
+            "restore" => ("team runs restore", [action.Run]),
+            "purge" => ("team bin empty", [action.Run, "--yes"]),
+            "restore-team" => ("team restore", [action.Run]),
+            "purge-team" => ("team bin empty", [action.Run, "--yes"]),
+
+            // The server room's. Not about a run at all, so the run is not
+            // passed; the page asks before each, by what it will do.
+            "daemon-pause" => ("team daemon pause", []),
+            "daemon-resume" => ("team daemon resume", []),
+            "daemon-restart" => ("team daemon restart", []),
 
             "pause" => ("team halt", [action.Run, "--pause"]),
             "resume" => ("team halt", [action.Run, "--resume"]),
@@ -230,10 +246,10 @@ internal static partial class DashboardActions
             NotifyChat: teams?.NotifyChat ?? string.Empty,
             NotifyAddressSet: held.Value is { Length: > 0 },
             OfficeSet: teams?.OfficeSet ?? string.Empty,
-            WaitingSet: teams?.WaitingSet ?? string.Empty,
             OfficeSets: OfficeArt.Sets(OfficeArt.Chosen(paths, null).Root),
             WebhookListen: Webhook.Listen(teams),
             TeamBudget: teams?.Budget ?? string.Empty,
+            OfficeScale: teams?.OfficeScale ?? string.Empty,
             WebhookTeams: teams?.WebhookTeams ?? [],
             WebhookTokenSet: await Webhook.TokenAsync(secrets, ct).ConfigureAwait(false) is not null,
             Trusted:

@@ -285,10 +285,10 @@ loadout team dashboard --watch-only
 `team dashboard` serves a page on this machine, at a loopback address behind a
 token that changes every start. Runs are grouped by what they want from you —
 *Needs you* first, then *Running*, then *Finished* — because the run waiting on
-you is the one most easily missed further down a list. There are six screens:
-List, Office, Graph, Timeline, Waiting and Terminal. None of them can change
-anything; every control is in the detail pane, and each one runs the command you
-would have typed.
+you is the one most easily missed further down a list. There are five screens:
+List, Office, Graph, Timeline and Terminal; what hasn't become a run yet waits
+in the office's lobby. The controls are in the detail pane and in the office's
+rooms, and each one runs the command you would have typed.
 
 It fetches nothing: no webfont, no stylesheet, no image. A dashboard that pulled
 a typeface from the internet would not work on a machine with no network, which

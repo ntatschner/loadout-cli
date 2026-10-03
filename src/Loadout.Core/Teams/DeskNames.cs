@@ -50,6 +50,48 @@ public static class DeskNames
     ];
 
     /// <summary>
+    /// First names for somebody drawn as a woman, as a man, or as neither, when
+    /// the office's cast says which: a name that does not fit the face it is
+    /// under reads as a mistake. Each list is only its own: a woman drawn with a
+    /// name that could be anybody's looks, on the page, like the mapping failed.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Firsts"/>, which stays as it was for a node with
+    /// no cast behind it, so nobody already named is renamed by this.
+    /// </remarks>
+    private static readonly string[] Women =
+    [
+        "Ada", "Bex", "Cleo", "Faye", "Hana", "Ines", "Lena", "Nell", "Pia", "Sena",
+        "Uma", "Dot", "Elif", "Gita", "Ida", "Juno", "Liv", "Mina", "Orla", "Priya",
+        "Suki", "Ursa", "Vera", "Amara", "Noor",
+    ];
+
+    private static readonly string[] Men =
+    [
+        "Ebo", "Gus", "Kofi", "Omar", "Rhys", "Vik", "Zane", "Arjun", "Huw", "Niko",
+        "Theo", "Wes", "Cai", "Ade", "Hugo", "Luca", "Ravi", "Tomas", "Yusuf", "Dev",
+        "Kenji", "Jonah", "Malik", "Sami", "Ivo",
+    ];
+
+    private static readonly string[] Neutral =
+    [
+        "Jae", "Quinn", "Tam", "Wren", "Xan", "Bo", "Fen", "Kit", "Rune", "Dara",
+        "Yuki", "Mo", "Sol", "Ash", "Robin",
+    ];
+
+    /// <summary>Who somebody is drawn as, for picking a name that fits them.</summary>
+    public static readonly IReadOnlyList<string> Genders = ["woman", "man", "nonbinary"];
+
+    /// <summary>The first names somebody drawn as <paramref name="gender"/> may be given.</summary>
+    internal static string[] FirstsFor(string? gender) => gender switch
+    {
+        "woman" => Women,
+        "man" => Men,
+        "nonbinary" => Neutral,
+        _ => Firsts,
+    };
+
+    /// <summary>
     /// Surnames, so two Adas in one office are still two people.
     /// </summary>
     /// <remarks>
@@ -74,17 +116,18 @@ public static class DeskNames
     /// <summary>The person at a node's desk, first name only.</summary>
     /// <param name="runId">The run, so the same node of another run is somebody else.</param>
     /// <param name="node">The node, as the run named it.</param>
-    public static string For(string? runId, string? node) => Both(runId, node).First;
+    /// <param name="gender">Who the office draws them as, one of <see cref="Genders"/>, or null when nothing says.</param>
+    public static string For(string? runId, string? node, string? gender = null) => Both(runId, node, gender).First;
 
     /// <summary>The person at a node's desk, in full.</summary>
-    public static string Full(string? runId, string? node)
+    public static string Full(string? runId, string? node, string? gender = null)
     {
-        var (first, last) = Both(runId, node);
+        var (first, last) = Both(runId, node, gender);
 
         return first.Length == 0 ? string.Empty : first + " " + last;
     }
 
-    private static (string First, string Last) Both(string? runId, string? node)
+    private static (string First, string Last) Both(string? runId, string? node, string? gender)
     {
         if (string.IsNullOrWhiteSpace(node))
         {
@@ -95,9 +138,10 @@ public static class DeskNames
         // per process: the same node would be a different person every time
         // the dashboard restarted, which is worse than having no name at all.
         var digest = SHA256.HashData(Encoding.UTF8.GetBytes((runId ?? string.Empty) + "/" + node));
+        var firsts = FirstsFor(gender);
 
         return (
-            Firsts[BitConverter.ToUInt32(digest, 0) % (uint)Firsts.Length],
+            firsts[BitConverter.ToUInt32(digest, 0) % (uint)firsts.Length],
             Lasts[BitConverter.ToUInt32(digest, 4) % (uint)Lasts.Length]);
     }
 }
