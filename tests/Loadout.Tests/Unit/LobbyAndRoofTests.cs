@@ -14,6 +14,18 @@ public sealed class LobbyAndRoofTests
     private static readonly OfficeKit Kit = OfficeKit.Kit();
     private static readonly OfficeRules Rules = OfficeRules.Default;
 
+    // The office Loadout ships, with the armchairs and tables the shapes lack.
+    private static readonly OfficeKit Tech = Unpacked();
+
+    private static OfficeKit Unpacked()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "loadout-tech-" + Guid.NewGuid().ToString("N"));
+
+        OfficeArt.Unpack(root);
+
+        return OfficeKits.Check(root, OfficeArt.BuiltIn).Kit!;
+    }
+
     [Fact]
     public void Every_lobby_and_roof_passes_the_scene_check()
     {
@@ -82,6 +94,37 @@ public sealed class LobbyAndRoofTests
         scene.Areas!.Should().Contain(area => area.Kind == "reception" && area.Function == "arrivals");
         scene.Areas!.Should().Contain(area => area.Kind == "lobby-screen" && area.Function == "schedules");
         scene.Props!.Should().Contain(prop => prop.Kind == "lobby-screen");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(8)]
+    [InlineData(16)]
+    public void The_open_floor_between_the_lift_and_the_door_is_furnished_either_side_of_the_walk(int waiting)
+    {
+        var plan = FloorPlanner.Lobby(Tech, Rules, waiting);
+        var scene = plan.Scene;
+        var islands = scene.Areas!.Where(area => area.Kind == "seating").ToList();
+        var walk = scene.Door.X;
+
+        // Somewhere to sit west of the way in and east of it, not one empty hall.
+        islands.Should().Contain(area => area.X + area.W <= walk);
+        islands.Should().Contain(area => area.X > walk + 1);
+
+        // In each, two armchairs facing each other across the table.
+        foreach (var island in islands)
+        {
+            var chairs = scene.Props!.Where(prop => prop.Kind == "armchair" && prop.X >= island.X && prop.X < island.X + island.W && prop.Y >= island.Y && prop.Y < island.Y + island.H).ToList();
+
+            chairs.Select(chair => chair.Facing).Should().BeEquivalentTo(["e", "w"], $"{island.Name} has a chair either side of its table");
+            chairs.Single(chair => chair.Facing == "e").X.Should().BeLessThan(chairs.Single(chair => chair.Facing == "w").X, "they face each other, not away");
+            scene.Props!.Count(prop => prop.Kind == "plant" && prop.X >= island.X && prop.X < island.X + island.W && prop.Y >= island.Y && prop.Y < island.Y + island.H)
+                .Should().Be(2, $"{island.Name} has a plant at two corners");
+        }
+
+        // And the way from the street to the lift is still open.
+        OfficeScenes.Problems(scene, sizeOf: null).Should().BeEmpty();
+        scene.Reachable()[scene.Spots!["lift"].X, scene.Spots["lift"].Y].Should().BeTrue();
     }
 
     [Fact]

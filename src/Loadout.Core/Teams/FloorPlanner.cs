@@ -192,6 +192,8 @@ public static partial class FloorPlanner
             floor.Areas.Add(new OfficeArea("waiting-room", "waiting-room", left, top, right - left, bottom - top, Function(rules, "waiting-room") ?? "waiting"));
         }
 
+        Atrium(floor, parts, random, band, height - 8);
+
         // Planters either side of the way in, in the band's corners and round
         // the atrium's walls: the big ones where the set has them.
         var big = parts.Has("planter-large", one => one.Footprint[0] == 1 && one.Footprint[1] == 1) ? "planter-large" : "plant";
@@ -220,6 +222,95 @@ public static partial class FloorPlanner
         var scene = Scene(parts, rules, "@lobby", floor, seats, coreLeft, band) with { Door = new OfficeSpot(door, height - 2, "n") };
 
         return new OfficeFloorPlan(scene, seats.Count, 0);
+    }
+
+    /// <summary>
+    /// The open floor between the core and the way in: islands of two
+    /// armchairs facing each other across a coffee table on a rug, centred in
+    /// each half either side of the walk, as many rows as fit above the
+    /// waiting lounge and reception. Nobody is sent to sit in them; they are
+    /// there so the lobby reads as somewhere people pass through, not a hall.
+    /// </summary>
+    private static void Atrium(Floor floor, Parts parts, Random random, int band, int bottom)
+    {
+        if (!parts.Has("armchair", one => one.Footprint is [1, 1]) || !parts.Has("coffee-table", one => one.Footprint is [2, 1]))
+        {
+            return;
+        }
+
+        var chair = parts.Pick("armchair", random, one => one.Footprint is [1, 1]).Piece;
+        var table = parts.Pick("coffee-table", random, one => one.Footprint is [2, 1]).Piece;
+        var plant = parts.Has("plant", one => one.Footprint is [1, 1]) ? parts.Pick("plant", random, one => one.Footprint is [1, 1]).Piece : null;
+
+        // An island is the chairs and the table, a cell of rug round them, and
+        // three cells of floor between one island and the next.
+        const int Wide = 6, Deep = 3, Gap = 3;
+        var island = 0;
+
+        for (var top = band + 3; top + Deep <= bottom; top += Deep + 2)
+        {
+            // Each half is the run of free cells along the row's middle, west
+            // of the walk and east of it.
+            var middle = top + 1;
+            var runs = new List<(int From, int To)>();
+
+            for (var x = 1; x < floor.Width - 1;)
+            {
+                if (!floor.Free(x, middle, 1, 1))
+                {
+                    x++;
+                    continue;
+                }
+
+                var from = x;
+
+                while (x < floor.Width - 1 && floor.Free(x, middle, 1, 1))
+                {
+                    x++;
+                }
+
+                runs.Add((from, x - 1));
+            }
+
+            foreach (var (from, to) in runs)
+            {
+                // Clear of the wall planters and the walk: a cell either end.
+                var span = to - from + 1 - 2;
+                var count = (span + Gap) / (Wide + Gap);
+
+                if (count == 0)
+                {
+                    continue;
+                }
+
+                var left = from + 1 + (span - (count * Wide + (count - 1) * Gap)) / 2;
+
+                for (var i = 0; i < count; i++)
+                {
+                    var x = left + i * (Wide + Gap);
+
+                    if (!floor.Free(x, top, Wide, Deep))
+                    {
+                        continue;
+                    }
+
+                    var name = $"seating-{++island}";
+
+                    floor.Put($"{name}-chair", "armchair", chair, x + 1, middle, null, "e");
+                    floor.Put($"{name}-table", "coffee-table", table, x + 2, middle);
+                    floor.Put($"{name}-chair", "armchair", chair, x + 4, middle, null, "w");
+
+                    if (plant is not null)
+                    {
+                        floor.Put($"{name}-plant", "plant", plant, x, top);
+                        floor.Put($"{name}-plant", "plant", plant, x + Wide - 1, top + Deep - 1);
+                    }
+
+                    floor.Take(x, top, Wide, Deep);
+                    floor.Areas.Add(new OfficeArea(name, "seating", x, top, Wide, Deep, null));
+                }
+            }
+        }
     }
 
     /// <summary>

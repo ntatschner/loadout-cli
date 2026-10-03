@@ -325,6 +325,7 @@ public sealed record OfficeRules(
             ["lounge"] = "wood",
             ["reception"] = "wood",
             ["waiting-room"] = "walkway",
+            ["seating"] = "wood",
             ["entrance"] = "mat",
             ["library"] = "wood",
             ["wellness-room"] = "wood",
