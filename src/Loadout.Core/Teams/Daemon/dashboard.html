@@ -7984,12 +7984,12 @@
     if (which === "back") { towerLeave(); return; }
 
     if (which === "above" || which === "below") {
-      var next = towerNextFloor(towerData ? towerData.occupied : [], towerHere(), which === "above" ? 1 : -1);
+      var next = towerNextFloor(towerLevels(towerData ? towerData.occupied : [], towerFloors(), towerBasements()), towerHere(), which === "above" ? 1 : -1);
 
       if (!next) { return; }
 
       towerPopupClose();
-      towerView = { mode: "inside", floor: next.number };
+      towerView = next.view;
       keep("loadout.office.view", towerView);
       towerShow();
 
@@ -8128,6 +8128,33 @@
     return (occupied || [])
       .filter(function (one) { return by > 0 ? one.number > from : one.number < from; })
       .sort(function (a, b) { return (a.number - b.number) * by; })[0] || null;
+  }
+
+  /*
+    Every level the arrows step through, each with the view that shows it:
+    the basements, the lobby, the floors anybody is on, and the roof. The
+    arrows stepped through the occupied floors alone, so from inside there
+    was no way to the lobby, the roof or the basements - and from outside the
+    basements are drawn, and so can be clicked, only from the street.
+  */
+  function towerLevels(occupied, floors, basements) {
+    var levels = [];
+
+    for (var b = basements; b >= 1; b -= 1) {
+      levels.push({ number: -b, view: { mode: "inside", place: "basement-" + b } });
+    }
+
+    levels.push({ number: 0, view: { mode: "inside", place: "lobby" } });
+
+    (occupied || []).forEach(function (one) {
+      if (!levels.some(function (level) { return level.number === one.number; })) {
+        levels.push({ number: one.number, view: { mode: "inside", floor: one.number } });
+      }
+    });
+
+    levels.push({ number: floors + 1, view: { mode: "inside", place: "roof" } });
+
+    return levels;
   }
 
   // The level the floor view is showing: a team's floor, the lobby (0), the roof or a basement.
@@ -8310,7 +8337,7 @@
       var button = towerHold.querySelector(".tower-" + one);
 
       button.hidden = !inside;
-      button.disabled = !inside || !towerNextFloor(towerData ? towerData.occupied : [], towerHere(), one === "above" ? 1 : -1);
+      button.disabled = !inside || !towerNextFloor(towerLevels(towerData ? towerData.occupied : [], towerFloors(), towerBasements()), towerHere(), one === "above" ? 1 : -1);
     });
     towerHold.querySelector(".tower-views").hidden = inside;
     ["up", "down"].forEach(function (one) {

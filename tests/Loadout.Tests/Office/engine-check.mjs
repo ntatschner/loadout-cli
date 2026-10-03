@@ -105,7 +105,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse, towerBands, towerDisc,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse, towerBands, towerDisc, towerLevels,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -734,6 +734,25 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 // The floor view's arrows step to the nearest floor with a team on it, over
 // empty floors, either way, from a floor or from the lobby, roof or a
 // basement, and go nowhere past the last.
+// The arrows inside go through every level, not only the floors with a team
+// on them: from the basements up through the lobby and the occupied floors to
+// the roof, and no further either way.
+{
+  const levels = engine.towerLevels([{ number: 7 }, { number: 2 }, { number: 4 }], 10, 2);
+  const view = (from, by) => {
+    const next = engine.towerNextFloor(levels, from, by);
+
+    return next ? (next.view.place || "floor " + next.view.floor) : "none";
+  };
+  const cases = [
+    [0, -1, "basement-1"], [-1, -1, "basement-2"], [-2, -1, "none"], [-2, 1, "basement-1"],
+    [-1, 1, "lobby"], [0, 1, "floor 2"], [7, 1, "roof"], [11, 1, "none"], [11, -1, "floor 7"], [2, -1, "lobby"],
+  ];
+
+  cases.filter(([from, by, want]) => view(from, by) !== want)
+    .forEach(([from, by, want]) => fault("the floor arrows skip a level or go past the building", `from ${from} by ${by}: ${view(from, by)}, not ${want}`));
+}
+
 {
   const occupied = [{ number: 7, run: "c" }, { number: 2, run: "a" }, { number: 4, run: "b" }];
   const step = (from, by) => (engine.towerNextFloor(occupied, from, by) || { run: "none" }).run;
