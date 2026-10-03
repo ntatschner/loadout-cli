@@ -915,13 +915,17 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 
 // A floor starts as big as fits in whole steps of the office's range; one too
 // big for that at its smallest is shrunk until the whole of it shows, rather
-// than cut off at the edges; zooming in goes in whole steps again.
+// than cut off at the edges; zooming in goes in whole steps again. A floor
+// taller than it is wide - turned a quarter - fits across and scrolls down,
+// like a long page, rather than shrinking to a strip in the middle.
 {
   const cases = [
     // wide, across, dpr, zoom, tall, down
     [[600, 1500, 1, 0, 400, 1000], (s) => s === 2, "a small floor takes the range's largest step"],
     [[1280, 1000, 1, 0, 768, 900], (s) => s < 1 && 1280 * s <= 1000.5, "a floor wider than the space shrinks below 1x to fit across"],
-    [[768, 1500, 1, 0, 1280, 954], (s) => s < 1 && 1280 * s <= 954.5, "a floor taller than the space shrinks to fit down"],
+    [[1280, 3000, 1, 0, 768, 500], (s) => s < 1 && 768 * s <= 500.5, "a wide floor taller than the space shrinks to fit down"],
+    [[768, 1500, 1, 0, 1280, 954], (s) => s >= 1 && 768 * s <= 1500.5 && 1280 * s > 954, "a floor turned a quarter fits across and scrolls down"],
+    [[768, 1600, 1, 0, 1280, 954], (s) => s === 2, "a floor turned a quarter takes the range's largest step that fits across"],
     [[1280, 1000, 2, 0, 768, 900], (s) => s === 1, "on a 2x screen it takes the half step that fits, whole device pixels"],
     [[1280, 1000, 1, 1, 768, 900], (s) => s >= 1 && Number.isInteger(s), "zooming in from a shrunk floor goes back to whole steps"],
   ];

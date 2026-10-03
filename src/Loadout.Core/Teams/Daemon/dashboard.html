@@ -6022,6 +6022,12 @@
   function zoomStep(wide, across, dpr, zoom, tall, down) {
     var limits = (towerData && towerData.scale) || { min: 1, max: 2 };
     var steps = zoomSteps(dpr);
+
+    // A floor taller than it is wide - turned a quarter - fits across and
+    // scrolls down like a long page; fitting its height too would shrink it to
+    // a strip in the middle of a wide window.
+    if (tall > wide) { down = 0; }
+
     var within = steps.filter(function (step) { return step / dpr >= limits.min - 1e-9 && step / dpr <= limits.max + 1e-9; });
 
     // A range too narrow to hold a whole step at this screen's scaling starts at the step nearest its bottom.
