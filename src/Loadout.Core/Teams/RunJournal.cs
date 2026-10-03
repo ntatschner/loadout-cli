@@ -517,7 +517,8 @@ public interface IRunJournal
     string DirectoryOf(string runId);
 
     /// <summary>
-    /// Forget one run: everything it wrote down, gone from this machine.
+    /// Forget one run: everything it wrote down, moved to the bin, where it can
+    /// be restored until the bin's retention runs out.
     /// </summary>
     /// <param name="runId">The run.</param>
     /// <param name="force">
@@ -526,7 +527,7 @@ public interface IRunJournal
     /// gates arrive as files appearing in it, so deleting it under a live run
     /// leaves processes waiting on answers that can no longer be given.
     /// </param>
-    /// <returns>What was forgotten, so a caller can say what went.</returns>
+    /// <returns>What was forgotten, so a caller can say what went and where.</returns>
     OperationResult<RunForgotten> Forget(string runId, bool force = false);
 }
 
@@ -538,6 +539,7 @@ public interface IRunJournal
 /// <param name="Unmerged">
 /// Branches the run made and never got merged.
 /// </param>
+/// <param name="Bin">Where in the bin it went.</param>
 /// <remarks>
 /// <para>
 /// <paramref name="Unmerged"/> is the part worth printing. Nothing here
@@ -547,20 +549,37 @@ public interface IRunJournal
 /// branch called <c>teams/20260917-1116-ed59/implementer-1</c> is a name with
 /// nothing on this machine left to explain it.
 /// </para>
+/// <para>
+/// <paramref name="Bin"/> is null only from a dry run, which moves nothing.
+/// </para>
 /// </remarks>
 public sealed record RunForgotten(
     string RunId,
     string Team,
     long Bytes,
     int Files,
-    IReadOnlyList<string> Unmerged);
+    IReadOnlyList<string> Unmerged,
+    string? Bin = null);
 
 /// <inheritdoc />
 public sealed class RunJournal : IRunJournal
 {
     private readonly Platform.Abstractions.IPlatformPaths _paths;
+    private readonly TeamBin _bin;
+    private readonly TimeProvider _time;
 
-    public RunJournal(Platform.Abstractions.IPlatformPaths paths) => _paths = paths;
+    /// <param name="paths">Where the state directory is.</param>
+    /// <param name="time">
+    /// The clock a forgotten run is dated by in the bin, and so the clock that
+    /// decides when it goes for good. Optional so that the many callers that
+    /// only read runs need not supply one.
+    /// </param>
+    public RunJournal(Platform.Abstractions.IPlatformPaths paths, TimeProvider? time = null)
+    {
+        _paths = paths;
+        _bin = new TeamBin(paths);
+        _time = time ?? TimeProvider.System;
+    }
 
     private string Root => Path.Combine(_paths.Paths.State, "teams", "runs");
 
@@ -777,10 +796,16 @@ public sealed class RunJournal : IRunJournal
     /// <inheritdoc />
     /// <remarks>
     /// <para>
-    /// The summary is read before anything is deleted, for two reasons. It is
+    /// The summary is read before anything is moved, for two reasons. It is
     /// what refuses a run that has not finished, and it is what the caller
     /// prints afterwards — a directory that has gone cannot be asked what was
     /// in it.
+    /// </para>
+    /// <para>
+    /// Moved to the bin rather than deleted. This used to delete, and the
+    /// journal is the only record of what a run did, so an identifier pasted
+    /// wrongly while clearing up took the wrong run with no way back. See
+    /// <see cref="TeamBin"/>.
     /// </para>
     /// <para>
     /// Deliberately only this directory. A run's branches, its working trees
@@ -830,18 +855,15 @@ public sealed class RunJournal : IRunJournal
             .Where(branch => !run.Merged.Contains(branch, StringComparer.Ordinal))
             .ToList();
 
-        try
+        var binned = _bin.PutRun(directory, runId, run.Team, unmerged, _time.GetUtcNow());
+
+        if (binned.Failed)
         {
-            Directory.Delete(directory, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return OperationResult<RunForgotten>.Fail(
-                $"'{runId}' could not be forgotten: {ex.Message}");
+            return OperationResult<RunForgotten>.Fail(binned.Error!, binned.ExitCode);
         }
 
         return OperationResult<RunForgotten>.Ok(
-            new RunForgotten(runId, run.Team, bytes, files, unmerged));
+            new RunForgotten(runId, run.Team, bytes, files, unmerged, binned.Value));
     }
 
     /// <summary>

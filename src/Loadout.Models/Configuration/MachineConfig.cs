@@ -226,6 +226,18 @@ public sealed class MachineTeams
     /// different.
     /// </remarks>
     public string WaitingSet { get; set; } = string.Empty;
+
+    /// <summary>
+    /// How many days a removed run or team stays in the bin before it is
+    /// deleted for good, or null for the default of thirty.
+    /// </summary>
+    /// <remarks>
+    /// Zero keeps things until the bin is emptied by hand. Machine-local
+    /// because the bin is: it is a directory on this computer, and how long
+    /// somebody wants a second chance is about them and their disk rather than
+    /// about any team.
+    /// </remarks>
+    public int? BinDays { get; set; }
 }
 
 /// <summary>This machine's view of one project.</summary>

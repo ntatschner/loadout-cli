@@ -84,6 +84,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     private readonly Loadout.Agents.IAgentRegistry _agents;
     private readonly IProcessLauncher _launcher;
     private readonly Loadout.Core.Tools.IToolNominationPass _nominations;
+    private readonly TeamBin _bin;
 
     /// <summary>
     /// Every command this daemon runs, counted while it runs.
@@ -118,8 +119,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         IProcessLauncher launcher,
         Loadout.Core.Tools.IToolNominationPass nominations,
         Loadout.Core.Ideas.IIdeaService ideas,
-        Loadout.Core.Ideas.IIdeaDumps dumps)
+        Loadout.Core.Ideas.IIdeaDumps dumps,
+        TeamBin bin)
     {
+        _bin = bin;
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;
@@ -1117,6 +1120,48 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         }
     }
 
+    /// <summary>When the bin was last looked at, so it is looked at hourly rather than every minute.</summary>
+    private DateTimeOffset _binSwept = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// Deletes what has been in the bin longer than this machine keeps things.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On the loop that already runs, for the reason notices are: a second
+    /// timer is a second thing to reason about when one of them stops. Hourly
+    /// rather than every pass, because retention is counted in days and
+    /// reading every entry's record sixty times an hour would learn nothing
+    /// new fifty-nine times.
+    /// </para>
+    /// <para>
+    /// Removing something also sweeps, so a machine that never runs the daemon
+    /// still clears its bin; this is what clears it on one where nobody has
+    /// removed anything for a while.
+    /// </para>
+    /// </remarks>
+    private async Task EmptyBinAsync(CommandOutput output, CancellationToken ct)
+    {
+        var now = _time.GetUtcNow();
+
+        if (now - _binSwept < TimeSpan.FromHours(1))
+        {
+            return;
+        }
+
+        _binSwept = now;
+
+        var days = await Binning.DaysAsync(_configuration, ct).ConfigureAwait(false);
+        var gone = _bin.Sweep(now, days);
+
+        if (gone.Count > 0)
+        {
+            output.WriteLine(
+                $"[dim]{now.ToLocalTime():HH:mm}[/] emptied {gone.Count} thing(s) from the bin "
+                + $"after {days} day(s)");
+        }
+    }
+
     /// <summary>Where the dashboard is, so a notice can point at it.</summary>
     /// <remarks>
     /// A notice that says something is wrong and leaves somebody to find it is
@@ -1153,6 +1198,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         while (!ct.IsCancellationRequested)
         {
             await NoticeAsync(output, _sendTo, ct).ConfigureAwait(false);
+            await EmptyBinAsync(output, ct).ConfigureAwait(false);
 
             var now = _time.GetUtcNow();
 

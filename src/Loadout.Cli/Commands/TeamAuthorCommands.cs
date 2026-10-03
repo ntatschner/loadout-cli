@@ -352,7 +352,12 @@ public sealed class TeamEditCommand : AsyncCommand<TeamEditCommand.Settings>
 }
 
 /// <summary>Forgetting a team of yours.</summary>
-[Description("Delete a team you wrote. The ones that ship and the ones from packs are refused.")]
+/// <remarks>
+/// Moves the file to the bin rather than deleting it. The workspace's Git
+/// history was the only way back before, and only for a file that had been
+/// saved; a team written this morning and removed this afternoon had none.
+/// </remarks>
+[Description("Remove a team you wrote, to the bin. The ones that ship and the ones from packs are refused.")]
 [CommandMeta(CommandCategory.Start,
     Intent = "team remove delete forget drop get rid of team", Mutates = true)]
 public sealed class TeamRemoveCommand : AsyncCommand<TeamRemoveCommand.Settings>
@@ -361,6 +366,9 @@ public sealed class TeamRemoveCommand : AsyncCommand<TeamRemoveCommand.Settings>
     private readonly ISpecialistLibrary _library;
     private readonly IWorkspaceManager _workspace;
     private readonly IProjectService _projects;
+    private readonly TeamBin _bin;
+    private readonly Loadout.Core.Configuration.IConfigurationService _configuration;
+    private readonly TimeProvider _time;
     private readonly IAnsiConsole _console;
 
     public TeamRemoveCommand(
@@ -368,19 +376,43 @@ public sealed class TeamRemoveCommand : AsyncCommand<TeamRemoveCommand.Settings>
         ISpecialistLibrary library,
         IWorkspaceManager workspace,
         IProjectService projects,
+        TeamBin bin,
+        Loadout.Core.Configuration.IConfigurationService configuration,
+        TimeProvider time,
         IAnsiConsole console)
     {
         _teams = teams;
         _library = library;
         _workspace = workspace;
         _projects = projects;
+        _bin = bin;
+        _configuration = configuration;
+        _time = time;
         _console = console;
+    }
+
+    /// <summary>
+    /// Whether a team's file is in the workspace, whose changes are only kept
+    /// once somebody saves them.
+    /// </summary>
+    internal static bool InWorkspace(IWorkspaceManager workspace, string? path)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+
+        if (path is not { Length: > 0 } || workspace.LocalPath is not { Length: > 0 } root)
+        {
+            return false;
+        }
+
+        return Path.GetFullPath(path).StartsWith(
+            Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     public sealed class Settings : TeamSettings
     {
         [CommandArgument(0, "<team>")]
-        [Description("The team to delete.")]
+        [Description("The team to remove.")]
         public string Name { get; init; } = string.Empty;
 
         [CommandOption("--yes")]
@@ -417,12 +449,13 @@ public sealed class TeamRemoveCommand : AsyncCommand<TeamRemoveCommand.Settings>
         }
 
         var path = source!;
+        var days = await Binning.DaysAsync(_configuration, cancellationToken).ConfigureAwait(false);
 
         if (settings.DryRun)
         {
-            output.WriteLine($"[dim]Would delete[/] {Markup.Escape(path)}");
+            output.WriteLine($"[dim]Would move to the bin[/] {Markup.Escape(path)}");
             output.WriteBlankLine();
-            output.WriteLine("[dim]Nothing was deleted.[/]");
+            output.WriteLine("[dim]Nothing was moved.[/]");
 
             return CommandOutput.Success();
         }
@@ -437,37 +470,63 @@ public sealed class TeamRemoveCommand : AsyncCommand<TeamRemoveCommand.Settings>
             if (!settings.AllowsPrompting)
             {
                 return output.Fail(
-                    $"Deleting '{settings.Name}' needs agreeing to, and nobody is here to agree. "
+                    $"Removing '{settings.Name}' needs agreeing to, and nobody is here to agree. "
                     + "Pass --yes.",
                     ExitCode.InvalidArguments);
             }
 
-            if (!_console.Confirm($"Delete the team '{settings.Name}'?", false))
+            if (!_console.Confirm(
+                $"Move the team '{settings.Name}' to the bin? It is kept {Binning.Kept(days)}", false))
             {
-                output.WriteLine("[dim]Nothing was deleted.[/]");
+                output.WriteLine("[dim]Nothing was moved.[/]");
 
                 return CommandOutput.Success();
             }
         }
 
-        try
+        var binned = _bin.PutTeam(settings.Name, path, _time.GetUtcNow());
+
+        if (binned.Failed)
         {
-            File.Delete(path);
+            return output.Fail(binned);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return output.Fail($"'{path}' could not be deleted: {ex.Message}");
-        }
+
+        Binning.Sweep(_bin, _time, days);
+
+        var workspace = InWorkspace(_workspace, path);
 
         if (output.IsJson)
         {
-            output.WriteJson(new { team = settings.Name, deleted = path });
+            // 'deleted' is kept, naming the file that is no longer there, so a
+            // script written against the old output still reads it.
+            output.WriteJson(new
+            {
+                team = settings.Name,
+                deleted = path,
+                bin = binned.Value!.Directory,
+                keptDays = days,
+                workspaceChange = workspace,
+            });
 
             return CommandOutput.Success();
         }
 
-        output.WriteLine($"[green]+[/] Deleted [bold]{Markup.Escape(settings.Name)}[/]");
+        output.WriteLine($"[green]+[/] Moved [bold]{Markup.Escape(settings.Name)}[/] to the bin");
         output.WriteLine($"  [dim]{Markup.Escape(path)}[/]");
+        output.WriteBlankLine();
+        output.WriteLine(
+            $"[dim]The bin keeps it {Binning.Kept(days)}. Get it back with:[/] "
+            + $"loadout team restore {Markup.Escape(settings.Name)}");
+
+        // The file's going is a change in the workspace like any other, and
+        // like any other it is only kept - or shared with another machine -
+        // once saved. Saying so stops the next save looking like a surprise.
+        if (workspace)
+        {
+            output.WriteLine(
+                "[dim]The workspace has the file's removal as a change, saved like any other with:[/] "
+                + "loadout workspace save");
+        }
 
         return CommandOutput.Success();
     }

@@ -486,7 +486,8 @@ public sealed class DaemonControlTests : IDisposable
             launcher ?? new StubProcessLauncher(string.Empty),
             nominations: nominations!,
             ideas: null!,
-            dumps: null!);
+            dumps: null!,
+            bin: null!);
 
     /// <summary>A nomination pass whose folders cannot be read.</summary>
     private sealed class ThrowingPass : Loadout.Core.Tools.IToolNominationPass

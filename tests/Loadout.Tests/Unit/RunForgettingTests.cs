@@ -16,7 +16,8 @@ namespace Loadout.Tests.Unit;
 /// Against a real directory rather than a double, because what is being
 /// asserted is that files are gone from a disk, and a double that said they
 /// were would be asserting its own opinion. The journal is the only copy of
-/// what a run did; there is no undo behind this.
+/// what a run did; forgetting moves it to the bin, whose own rules are
+/// <see cref="TeamBinTests"/>'s.
 /// </para>
 /// <para>
 /// The refusal matters more than the deletion. A run's directory is not only a
