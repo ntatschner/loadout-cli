@@ -5883,6 +5883,47 @@
     });
   }
 
+  /*
+    Where a piece in a wall's line is drawn, and whether it is seen. A door
+    in a doorway, or what the core holds in its face, stands in the wall's
+    line through the middle of its cell, not on the front of the cell where
+    furniture stands; a piece made to hang on a wall is drawn back against
+    it (from a corner, where it would otherwise stand off it). And either,
+    with a wall at its back, is on the far side of that wall when its front
+    faces away - the lift and the core's doors seen from behind the core, a
+    board seen from behind its wall - so it is not drawn. A door in a
+    doorway has open floor either side and is seen from both.
+    corner: whether the view is from a corner, where a front facing north or
+    west faces away; square on, only north does.
+  */
+  function tileWallSet(scene, prop, corner) {
+    var walls = scene.walls || [];
+    var wall = function (x, y) { var row = walls[y]; return !!row && row[x] !== undefined && row[x] >= 0; };
+    var w = prop.w || 1;
+    var h = prop.h || 1;
+    var facing = prop.facing || "s";
+    var inLine = !!prop.set
+      || (h === 1 && wall(prop.x - 1, prop.y) && wall(prop.x + w, prop.y))
+      || (w === 1 && wall(prop.x, prop.y - 1) && wall(prop.x, prop.y + h));
+    var back = { s: [0, -1], n: [0, 1], e: [-1, 0], w: [1, 0] }[facing] || [0, -1];
+    var behindX = back[0] < 0 ? prop.x - 1 : back[0] > 0 ? prop.x + w : prop.x;
+    var behindY = back[1] < 0 ? prop.y - 1 : back[1] > 0 ? prop.y + h : prop.y;
+    var against = wall(behindX, behindY);
+    var away = facing === "n" || (corner && facing === "w");
+    var moved = inLine || (corner && prop.hung);
+
+    // In a wall's line it goes to the middle of its cell whichever way it
+    // faces - a door's two sides are both in the doorway; hung in front of a
+    // wall it goes back towards that wall.
+    var across = facing === "s" || facing === "n";
+
+    return {
+      dx: inLine ? (across ? 0 : -0.5) : moved ? back[0] * 0.5 : 0,
+      dy: inLine ? (across ? -0.5 : 0) : moved ? back[1] * 0.5 : 0,
+      hidden: !!((inLine || prop.hung) && against && away),
+    };
+  }
+
   function tileErrand(room, name, person) {
     var busy = {};
 
@@ -6197,11 +6238,14 @@
         var prop = item.prop;
         var w = prop.w || 1;
         var h = prop.h || 1;
-        // Something made to hang on a wall is drawn back against it, half a
-        // cell behind its front, not standing out in the middle of its cell.
-        var back = prop.hung ? { s: [0, -0.5], n: [0, 0.5], e: [-0.5, 0], w: [0.5, 0] }[prop.facing || "s"] || [0, 0] : [0, 0];
-        var front = iso.at(prop.x + w + back[0], prop.y + h + back[1]);
-        var middle = iso.at(prop.x + w / 2 + back[0], prop.y + h / 2 + back[1]);
+        // In a wall's line, or hung on a wall, it is drawn there - and not
+        // at all from behind the wall it is set against.
+        var set = tileWallSet(scene, prop, true);
+
+        if (set.hidden) { return; }
+
+        var front = iso.at(prop.x + w + set.dx, prop.y + h + set.dy);
+        var middle = iso.at(prop.x + w / 2 + set.dx, prop.y + h / 2 + set.dy);
 
         // Moved so the bottom middle of its square-on footprint lands on the
         // front of its diamond, beneath its middle.
@@ -6261,7 +6305,7 @@
     ends. Thin as the frame is, it is drawn as a plane.
   */
   function tileIsoGlass(ctx, iso, wall, t) {
-    var high = Math.round(t * (wall.outer ? TILE_WALL_HIGH : TILE_GLASS_HIGH));
+    var high = Math.round(t * (wall.near || wall.nearSide ? TILE_NEAR_HIGH : wall.outer ? TILE_WALL_HIGH : TILE_GLASS_HIGH));
     var x = wall.x;
     var y = wall.y;
     var runs = [];
@@ -6313,7 +6357,7 @@
       return;
     }
 
-    var high = Math.round(t * TILE_WALL_HIGH);
+    var high = Math.round(t * (wall.near || wall.nearSide ? TILE_NEAR_HIGH : TILE_WALL_HIGH));
     var p = function (gx, gy, up) { var at = iso.at(gx, gy); return [at[0], at[1] - (up ? high : 0)]; };
     var x = wall.x;
     var y = wall.y;
@@ -6334,6 +6378,23 @@
 
     if (!wall.down) { quad(p(x, y + 1, false), p(x + 1, y + 1, false), p(x + 1, y + 1, true), p(x, y + 1, true), face); }
     if (!wall.right) { quad(p(x + 1, y, false), p(x + 1, y + 1, false), p(x + 1, y + 1, true), p(x + 1, y, true), shade); }
+
+    // A skirting along the foot of each face it shows, a lighter edge under
+    // its top, and a seam where one cell's face meets the next: a run of
+    // solid wall was one flat beige band from some angles.
+    var skirt = Math.max(2, Math.round(t * 0.12));
+    var drop = function (point, by) { return [point[0], point[1] - by]; };
+
+    if (!wall.down) {
+      quad(p(x, y + 1, false), p(x + 1, y + 1, false), drop(p(x + 1, y + 1, false), skirt), drop(p(x, y + 1, false), skirt), "#9c968c");
+      quad(drop(p(x, y + 1, true), -2), drop(p(x + 1, y + 1, true), -2), p(x + 1, y + 1, true), p(x, y + 1, true), "#ece8e1");
+      quad(p(x, y + 1, false), drop(p(x, y + 1, false), 0), p(x, y + 1, true), drop(p(x, y + 1, true), -1), "rgba(120, 112, 100, 0.35)");
+    }
+
+    if (!wall.right) {
+      quad(p(x + 1, y, false), p(x + 1, y + 1, false), drop(p(x + 1, y + 1, false), skirt), drop(p(x + 1, y, false), skirt), "#8c867c");
+      quad(drop(p(x + 1, y, true), -2), drop(p(x + 1, y + 1, true), -2), p(x + 1, y + 1, true), p(x + 1, y, true), "#e0dbd2");
+    }
 
     quad(p(x, y, true), p(x + 1, y, true), p(x + 1, y + 1, true), p(x, y + 1, true), top);
   }
@@ -6397,7 +6458,12 @@
       if (item.wall) {
         tileWall(ctx, item.wall, t);
       } else if (item.prop) {
-        tileProp(room, ctx, item.prop);
+        var set = tileWallSet(scene, item.prop, false);
+
+        if (!set.hidden) {
+          tileProp(room, ctx, set.dx || set.dy ? Object.assign({}, item.prop, { x: item.prop.x + set.dx, y: item.prop.y + set.dy }) : item.prop);
+        }
+
         tileAtDesk(room, item.prop).forEach(function (person) { tilePerson(room, ctx, person, now, "upper"); });
       } else {
         tilePerson(room, ctx, item.person, now);
@@ -6498,6 +6564,12 @@
           // The building's own edge, cut low like the side of a doll's house
           // so the floor can be seen into; a partition inside stands full height.
           outer: x === 0 || y === 0 || x === scene.width - 1 || y === scene.height - 1,
+          // The building's sides nearest the viewer, cut lower still and
+          // whatever they are made of: square on, the bottom row; from a
+          // corner, the right-hand side too. Seen from the north, the solid
+          // north wall stood in front of the rooms as a blank band.
+          near: y === scene.height - 1,
+          nearSide: x === scene.width - 1,
           thick: thick,
           left: toward(x, y, -1, 0),
           right: toward(x, y, 1, 0),
@@ -6527,6 +6599,7 @@
   var TILE_GLASS = 0.07;
   var TILE_WALL_HIGH = 1.4;
   var TILE_GLASS_HIGH = 3;
+  var TILE_NEAR_HIGH = 0.35;
 
   /*
     One wall cell standing up: its face, where nothing of the wall continues
@@ -6539,7 +6612,7 @@
     // stands behind it, so full-height glass stacked tinted boxes over the
     // rooms and desks beyond; here it is cut down to the solid walls'
     // height, thin as it is. From a corner it stands its full height.
-    var high = Math.round(t * TILE_WALL_HIGH);
+    var high = Math.round(t * (wall.near ? TILE_NEAR_HIGH : TILE_WALL_HIGH));
     var th = wall.thick;
     var x0 = wall.x * t;
     var y0 = wall.y * t;

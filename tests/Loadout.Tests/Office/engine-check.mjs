@@ -105,7 +105,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse, towerBands, towerDisc, towerLevels,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse, towerBands, towerDisc, towerLevels, tileWallSet,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -994,6 +994,50 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   if (engine.towerDisc(10, 10, 0, 5, 1).length !== 0) { fault("a shape with no width has pixels", "rx 0"); }
 }
 
+// A door in a doorway stands in the wall's line, not on the front of its
+// cell, and is seen from either side; what is set into a wall with the wall
+// at its back - the lift in the core - or hung on one is not drawn from the
+// far side of that wall; a piece hung in front of a wall is drawn against it
+// from a corner.
+{
+  // Row 1: a wall with a doorway at x 2; row 3: the core's face, solid behind
+  // it in row 2, with the lift at x 5-6; a board hung at 1,4 below wall 1,3.
+  const W = 1;
+  const _ = -1;
+  const scene = {
+    walls: [
+      [_, _, _, _, _, _, _, _, _],
+      [W, W, _, W, W, _, _, _, _],
+      [_, _, _, _, W, W, W, W, _],
+      [W, W, _, _, W, _, _, W, _],
+      [_, _, _, _, _, _, _, _, _],
+    ],
+  };
+  const door = (facing) => ({ x: 2, y: 1, w: 1, h: 1, facing });
+  const lift = (facing) => ({ x: 5, y: 3, w: 2, h: 1, facing, hung: true });
+  const board = (facing) => ({ x: 1, y: 4, w: 1, h: 1, facing, hung: true });
+  const cases = [
+    ["a door, square on", engine.tileWallSet(scene, door("s"), false), { dx: 0, dy: -0.5, hidden: false }],
+    ["a door seen from its other side", engine.tileWallSet(scene, door("n"), false), { dx: 0, dy: -0.5, hidden: false }],
+    ["a door in a wall running north to south", engine.tileWallSet({ walls: [[_, W, _], [_, _, _], [_, W, _]] }, { x: 1, y: 1, w: 1, h: 1, facing: "e" }, true), { dx: -0.5, dy: 0, hidden: false }],
+    ["the lift from the corridor", engine.tileWallSet(scene, lift("s"), false), { dx: 0, dy: -0.5, hidden: false }],
+    // Turned half round, the core turns with it: the lift faces north with
+    // the core to its south, so its back is still against the core.
+    ["the lift from behind the core", engine.tileWallSet({ walls: scene.walls.slice().reverse() }, { x: 5, y: 1, w: 2, h: 1, facing: "n", hung: true }, false), { hidden: true }],
+    ["the lift from behind the core, from a corner", engine.tileWallSet({ walls: scene.walls.slice().reverse() }, { x: 5, y: 1, w: 2, h: 1, facing: "n", hung: true }, true), { hidden: true }],
+    ["a board, square on", engine.tileWallSet(scene, board("s"), false), { dx: 0, dy: 0, hidden: false }],
+    ["a board from a corner", engine.tileWallSet(scene, board("s"), true), { dx: 0, dy: -0.5, hidden: false }],
+    ["a board from behind its wall", engine.tileWallSet(scene, board("n"), true), { hidden: false }],
+    ["a desk", engine.tileWallSet(scene, { x: 2, y: 4, w: 2, h: 1, facing: "n" }, true), { dx: 0, dy: 0, hidden: false }],
+  ];
+
+  cases.forEach(([what, got, want]) => {
+    const wrong = Object.keys(want).filter((key) => got[key] !== want[key]);
+
+    if (wrong.length) { fault("a piece in a wall's line is drawn in the wrong place, or seen through its wall", `${what}: ${JSON.stringify(got)}`); }
+  });
+}
+
 // Glass is drawn at its real size: a pane in a frame about 5 cm deep, much
 // thinner than a solid wall, standing full height inside the floor; the
 // building's own edge is cut low, so the floor can be seen into.
@@ -1018,6 +1062,8 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
   if (!(at(2, 1).thick < at(2, 2).thick)) { fault("glass is not thinner than a solid wall", `${at(2, 1).thick} against ${at(2, 2).thick}`); }
   if (at(2, 1).outer) { fault("a partition inside the floor is cut low as if it were the building's edge", "2,1"); }
   if (!at(2, 3).outer || !at(5, 2).outer || !at(0, 0).outer) { fault("the building's edge is not cut low", "the south row, the east side and a corner"); }
+  if (!at(2, 3).near || at(0, 0).near || at(2, 1).near) { fault("the side nearest the viewer is not the one cut lowest", "the bottom row only, square on"); }
+  if (!at(5, 2).nearSide || at(0, 2) && at(0, 2).nearSide) { fault("from a corner, the right-hand side is not cut lowest with the bottom row", "the east side"); }
 }
 
 // A floor starts as big as fits in whole steps of the office's range; one too

@@ -533,6 +533,9 @@ public sealed class FloorPlannerTests
 
             scene.Props!.Where(prop => prop.Kind is "status-board" or "lift" or "lobby-screen").Should().NotContain(prop => !prop.Hung, $"{name}: pieces made for a wall say so");
             scene.Props!.Where(prop => prop.Kind is "desk" or "sofa").Should().NotContain(prop => prop.Hung, $"{name}: furniture stands on the floor");
+            scene.Props!.Where(prop => prop.Kind == "door" || prop.Kind == "lift" || prop.Id is "core-toilet" or "core-cupboard")
+                .Should().NotContain(prop => !prop.Set, $"{name}: what stands in a wall's line says so");
+            scene.Props!.Where(prop => prop.Kind is "desk" or "sofa" or "status-board").Should().NotContain(prop => prop.Set, $"{name}: what stands on the floor or hangs in front of a wall is not in its line");
         }
 
         empty.Should().BeEmpty();

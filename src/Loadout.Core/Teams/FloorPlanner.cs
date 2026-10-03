@@ -1137,6 +1137,12 @@ public static partial class FloorPlanner
             }
         }
 
+        // The piece placed last, marked as set into a wall's line.
+        public void SetInWall()
+        {
+            Props[^1] = Props[^1] with { Set = true };
+        }
+
         public void Put(string id, string tag, OfficePiece piece, int x, int y, string? seatsAs = null, string facing = "s")
         {
             // A second piece of a kind in one room is numbered: ids are unique.
@@ -1389,6 +1395,7 @@ public static partial class FloorPlanner
 
                 floor.Wall(x, face, Cell.Carpet);
                 floor.Put($"core-{tag}", tag, piece with { Blocks = false }, x, face);
+                floor.SetInWall();
                 floor.Spots[tag] = new OfficeSpot(x, row, "n");
             }
 
@@ -1410,6 +1417,7 @@ public static partial class FloorPlanner
         }
 
         floor.Put("core-lift", "lift", lift.Piece with { Blocks = false }, x, face);
+        floor.SetInWall();
         floor.Spots["lift"] = new OfficeSpot(x, row, "n");
         x += lw;
 
@@ -1483,6 +1491,7 @@ public static partial class FloorPlanner
                 var door = parts.Pick(tag, random, one => one.Footprint is [1, 1]).Piece;
 
                 floor.Put($"door-{x}-{y}", "door", door with { Blocks = false }, x, y, null, across ? "s" : "e");
+                floor.SetInWall();
             }
         }
     }
