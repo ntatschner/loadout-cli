@@ -29,7 +29,7 @@ namespace Loadout.Core.Teams;
 /// <param name="Zone">Where on the floor it belongs: core, perimeter (daylight), interior, corner, entrance or any.</param>
 /// <param name="Near">Kinds of room it does well beside, with how much that matters: <c>{"open-plan": 3}</c>.</param>
 /// <param name="Away">Kinds of room it does badly beside, the same way: a quiet room away from the kitchen.</param>
-/// <param name="Access">How it is reached: corridor, open (from the open plan) or through (through another room).</param>
+/// <param name="Access">Who may use it: everyone (the default), team (the team whose room it is) or lead (that team's lead). People are sent only to rooms they may use; how a room is reached is its walls' and doors' business.</param>
 public sealed record OfficeRoomRule(
     [property: JsonPropertyName("tags")] IReadOnlyList<string>? Tags = null,
     [property: JsonPropertyName("min")] IReadOnlyList<int>? Min = null,
@@ -55,8 +55,8 @@ public sealed record OfficeRoomRule(
     /// <summary>Where on a floor a room can belong.</summary>
     public static readonly IReadOnlyList<string> Zones = ["core", "perimeter", "interior", "corner", "entrance", "any"];
 
-    /// <summary>How a room can be reached.</summary>
-    public static readonly IReadOnlyList<string> Accesses = ["corridor", "open", "through"];
+    /// <summary>Who may use a room.</summary>
+    public static readonly IReadOnlyList<string> Accesses = ["everyone", "team", "lead"];
 
     /// <summary>How many of these rooms a team of this size gets.</summary>
     public int CountFor(int team)
@@ -202,7 +202,7 @@ public sealed record OfficeRules(
         new Dictionary<string, OfficeRoomRule>(StringComparer.Ordinal)
         {
             // Every run's floor.
-            ["open-plan"] = new(["desk"], Min: [8, 5], Count: 1, Scope: "team", Zone: "perimeter"),
+            ["open-plan"] = new(["desk"], Min: [8, 5], Count: 1, Scope: "team", Zone: "perimeter", Access: "team"),
             ["status-board"] = new(["status-board"], Count: 1, Where: "north-wall", Function: "summary", Scope: "floor", Zone: "core"),
             ["lead-office"] = new(
                 ["exec-desk"],
@@ -215,7 +215,7 @@ public sealed record OfficeRules(
                 Scope: "team",
                 Zone: "corner",
                 Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["open-plan"] = 3 },
-                Access: "corridor"),
+                Access: "lead"),
             ["meeting"] = new(
                 ["meeting-4", "meeting-6", "meeting-10"],
 
@@ -230,7 +230,7 @@ public sealed record OfficeRules(
                 Zone: "interior",
                 Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["open-plan"] = 3 },
                 Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 2 },
-                Access: "corridor"),
+                Access: "everyone"),
             ["kitchen"] = new(
                 ["kitchen", "coffee"],
 
@@ -243,7 +243,7 @@ public sealed record OfficeRules(
                 Scope: "floor",
                 Zone: "perimeter",
                 Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["core"] = 2, ["lounge"] = 3 },
-                Access: "open"),
+                Access: "everyone"),
             ["lounge"] = new(
                 ["sofa", "partition-planter"],
                 Min: [3, 3],
@@ -255,10 +255,10 @@ public sealed record OfficeRules(
                 Zone: "perimeter",
                 Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 3 },
                 Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["meeting"] = 1 },
-                Access: "open"),
+                Access: "everyone"),
 
             // A corridor floor's rooms off the corridor, each with its own desks.
-            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "screen", "planters", "open"], Function: "work", Scope: "team", Zone: "perimeter", Access: "corridor"),
+            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "screen", "planters", "open"], Function: "work", Scope: "team", Zone: "perimeter", Access: "team"),
             ["cupboard"] = new(["cupboard"], Min: [1, 1], Max: [2, 2], Count: 1, Scope: "floor", Zone: "interior"),
             ["storage-cupboard"] = new(["storage"], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["8"] = 1 }, Scope: "floor", Zone: "interior"),
             ["lift"] = new(["lift"], Count: 1, Core: true, Where: "core", Scope: "floor", Zone: "core"),

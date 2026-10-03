@@ -5858,6 +5858,31 @@
 
   // Somewhere for somebody with nothing to do to go: one of the room's
   // named spots, or over to a colleague. Null where nowhere is free.
+  /*
+    Whether somebody may go to a tile: a room the rules give to a team is its
+    own people's, and a lead's office its lead's, the lead being whoever has
+    the team's first desk. A room naming no team, and a floor with one team on
+    it, are everybody's.
+  */
+  function tileMayUse(room, name, x, y) {
+    var areas = room.scene.areas || [];
+    var mark = name.indexOf("#");
+    var mine = mark < 0 ? null : name.slice(0, mark);
+
+    return areas.every(function (area) {
+      if (!area.access || !area.run || mine === null) { return true; }
+      if (x < area.x || y < area.y || x >= area.x + area.w || y >= area.y + area.h) { return true; }
+      if (area.run !== mine) { return false; }
+      if (area.access !== "lead") { return true; }
+
+      var team = (room.scene.teams || []).filter(function (one) { return name.indexOf(one.run + "#" + one.part + "/") === 0; })[0];
+      var first = team && team.desks[0];
+      var seat = room.seats[name];
+
+      return !!(first && seat && seat.x === first.x && seat.y === first.y);
+    });
+  }
+
   function tileErrand(room, name, person) {
     var busy = {};
 
@@ -5874,10 +5899,13 @@
     if (colleagues.length && tileRandom(person) < 0.35) {
       var beside = tileBeside(room, tileSeat(room, colleagues[Math.floor(tileRandom(person) * colleagues.length)]));
 
-      if (beside && !busy[beside.x + "," + beside.y]) { return beside; }
+      if (beside && !busy[beside.x + "," + beside.y] && tileMayUse(room, name, beside.x, beside.y)) { return beside; }
     }
 
     var spots = room.scene.spots ? Object.keys(room.scene.spots).map(function (key) { return room.scene.spots[key]; }) : [];
+
+    // Only somewhere they may go: not another team's room or another lead's office.
+    spots = spots.filter(function (spot) { return tileMayUse(room, name, spot.x, spot.y); });
 
     if (!spots.length) { return null; }
 

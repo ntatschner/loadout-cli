@@ -1307,6 +1307,11 @@ public static partial class FloorPlanner
         floor.Spots["window-east"] = new OfficeSpot(floor.Width - 2, standing, "e");
     }
 
+    // Who may use a kind of room, as the scene says it: null for everyone, so a
+    // scene only names the rooms somebody may not wander into.
+    private static string? AccessFor(OfficeRules rules, string kind) =>
+        rules.Rooms is { } rooms && rooms.TryGetValue(kind, out var rule) && rule.Access is "team" or "lead" ? rule.Access : null;
+
     private static OfficeScene Scene(Parts parts, OfficeRules rules, string level, Floor floor, List<OfficeSpot> desks, int coreLeft, int band)
     {
         foreach (var later in floor.Last)
@@ -1459,7 +1464,7 @@ public static partial class FloorPlanner
             Atlases: atlases,
             // Each room floored as the rules say for its kind, and anything in no
             // room as they say for the level.
-            Areas: [.. floor.Areas.Select(area => area with { Floor = area.Floor ?? rules.FloorFor(area.Kind) })],
+            Areas: [.. floor.Areas.Select(area => area with { Floor = area.Floor ?? rules.FloorFor(area.Kind), Access = area.Access ?? AccessFor(rules, area.Kind) })],
             Cast: cast,
             Surface: surface,
             Ground: rules.FloorFor(level));

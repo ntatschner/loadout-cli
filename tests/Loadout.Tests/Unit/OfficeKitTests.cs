@@ -111,14 +111,14 @@ public sealed class OfficeKitTests : IDisposable
                 Zone: "interior",
                 Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["core"] = 1 },
                 Away: new Dictionary<string, int>(StringComparer.Ordinal) { ["kitchen"] = 10 },
-                Access: "through"),
+                Access: "lead"),
         }));
 
         OfficeRuleBook.Problems(rules).Should().BeEquivalentTo(
             "room 'booth' per-head is 0; it has to be one room for every 1 or more people.",
             "room 'booth' scope is 'everyone'; it has to be one of floor, team.",
             "room 'booth' zone is 'basement'; it has to be one of core, perimeter, interior, corner, entrance, any.",
-            "room 'booth' access is 'window'; it has to be one of corridor, open, through.",
+            "room 'booth' access is 'window'; it has to be one of everyone, team, lead.",
             "room 'booth' near names 'atrium', which is no room.",
             "room 'booth' near gives 'corridor' 11; it has to be 1 to 10.",
             "room 'booth' away gives 'kitchen' 0; it has to be 1 to 10.");

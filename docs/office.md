@@ -220,9 +220,12 @@ back goes to (`wall`, `window` or `free`), and which pieces it is grouped `with`
 A room's rules can say whose it is (`scope`: the `floor`'s, shared, or each
 `team`'s), where it belongs (`zone`: core, perimeter, interior, corner, entrance
 or any), one for every so many people (`per-head`), what it should be `near` or
-`away` from and how much that matters, from 1 to 10, and how it is reached
-(`access`: corridor, open or through). The check holds all of these to the names
-it knows, so a misspelt room isn't quietly ignored.
+`away` from and how much that matters, from 1 to 10, and who may use it
+(`access`: `everyone`, the default; `team`, the team whose room it is; or `lead`,
+that team's lead). Somebody with a moment free wanders only into rooms they may
+use, so nobody drifts into another team's room or another lead's office. The
+check holds all of these to the names it knows, so a misspelt room isn't quietly
+ignored.
 
 ```json
 "tech-armchair": { "suits": { "rooms": ["lounge", "waiting-room"], "role": "extra", "against": "free", "with": ["coffee-table"] } }
@@ -348,9 +351,9 @@ Stated plainly, so nobody finds out by surprise:
   its plain desk; its people have only four facings so far, so somebody seen
   from a corner is drawn facing straight. The floor's own pictures are the
   square view's, laid on the diamond.
-- **Some rules are checked but not used yet.** `scope` and `access` are held to
-  their words but the planner doesn't read them, and the lobby, roof and
-  basements are still laid out by hand.
+- **Some rules are checked but not used yet.** `scope` is held to its words but
+  the planner doesn't read it, and the lobby, roof and basements are still laid
+  out by hand.
 - **The drawing is checked by eye.** The layouts are tested, thousands of floors
   at a time, and so is everything the server says. What the page draws from
   them was looked at in a browser, not tested.

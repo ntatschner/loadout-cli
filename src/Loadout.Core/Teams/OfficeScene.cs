@@ -150,6 +150,7 @@ public sealed record OfficeAtlas(
 /// <param name="Function">What clicking it offers: questions, controls, summary, idle, and so on; null for none.</param>
 /// <param name="Floor">What it is floored with, a kit material less its <c>floor-</c>; null to be floored like the level around it.</param>
 /// <param name="Run">The run whose it is, on a floor teams share; null for a room everybody on the floor shares.</param>
+/// <param name="Access">Who may use it: team (its run's people) or lead (its run's lead); null for everyone.</param>
 public sealed record OfficeArea(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("kind")] string Kind,
@@ -159,7 +160,8 @@ public sealed record OfficeArea(
     [property: JsonPropertyName("h")] int H,
     [property: JsonPropertyName("function")] string? Function = null,
     [property: JsonPropertyName("floor")] string? Floor = null,
-    [property: JsonPropertyName("run")] string? Run = null);
+    [property: JsonPropertyName("run")] string? Run = null,
+    [property: JsonPropertyName("access")] string? Access = null);
 
 /// <summary>One team's seats on a floor teams share, the lead's first.</summary>
 /// <param name="Run">The run.</param>

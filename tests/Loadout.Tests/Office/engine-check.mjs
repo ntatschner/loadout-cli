@@ -93,6 +93,7 @@ const code = [
   cut("  function towerFacing(side) {", "  function towerDraw() {"),
   cut("  function towerNextFloor(occupied, from, by) {", "  // The level the floor view is showing"),
   cut("  function towerStopButtons(items, can) {", "  function towerServerPopup() {"),
+  cut("  function tileMayUse(room, name, x, y) {", "  function tileErrand(room, name, person) {"),
 ].join("\n");
 
 // The page's own switch for reduced motion: off, so people walk. A picture is
@@ -104,7 +105,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -911,6 +912,37 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 
   cases.filter(([prop, want]) => engine.tileIsoSide(prop) !== want)
     .forEach(([prop, want]) => fault("a piece from a corner shows the wrong side", `${prop.facing}: ${engine.tileIsoSide(prop)}, not ${want}`));
+}
+
+// Somebody free goes only where they may: another team's room is its own
+// people's, a lead's office its lead's - whoever has the team's first desk -
+// and a room naming no team, or a floor with a single team, is everybody's.
+{
+  const room = {
+    scene: {
+      areas: [
+        { name: "a:open-plan", kind: "open-plan", x: 0, y: 0, w: 10, h: 10, run: "a", access: "team" },
+        { name: "a:lead-office", kind: "lead-office", x: 10, y: 0, w: 4, h: 4, run: "a", access: "lead" },
+        { name: "kitchen", kind: "kitchen", x: 20, y: 0, w: 5, h: 3 },
+        { name: "bay-3:open-plan", kind: "open-plan", x: 30, y: 0, w: 5, h: 5, access: "team" },
+      ],
+      teams: [{ run: "a", part: 0, desks: [{ x: 11, y: 1 }, { x: 2, y: 2 }] }, { run: "b", part: 0, desks: [{ x: 40, y: 1 }] }],
+    },
+    seats: { "a#0/lead": { x: 11, y: 1 }, "a#0/worker": { x: 2, y: 2 }, "b#0/lead": { x: 40, y: 1 } },
+  };
+  const cases = [
+    ["a#0/worker", 3, 3, true, "a team's own room"],
+    ["b#0/lead", 3, 3, false, "another team's room"],
+    ["a#0/lead", 11, 2, true, "the lead's own office"],
+    ["a#0/worker", 11, 2, false, "the lead's office, for somebody who is not the lead"],
+    ["b#0/lead", 11, 2, false, "another team's lead's office"],
+    ["b#0/lead", 21, 1, true, "the kitchen, which names no team"],
+    ["b#0/lead", 31, 1, true, "an empty bay, which is nobody's"],
+    ["worker", 3, 3, true, "a floor with a single team"],
+  ];
+
+  cases.filter(([name, x, y, want]) => engine.tileMayUse(room, name, x, y) !== want)
+    .forEach(([name, x, y, want, what]) => fault("somebody is sent where they may not go, or kept from where they may", `${what}: ${name} at ${x},${y} gave ${!want}`));
 }
 
 // A floor starts as big as fits in whole steps of the office's range; one too

@@ -281,6 +281,23 @@ public sealed class FloorPlannerTests
     }
 
     [Fact]
+    public void A_team_s_rooms_say_who_may_use_them_and_the_shared_rooms_say_nothing()
+    {
+        var scene = FloorPlanner.Shared(Tech, Rules, 4, [new("a", 0, 0, 1, 3), new("c", 0, 2, 1, 2)]).Scene;
+
+        // The rules give the open plan and team rooms to the team, the office to
+        // its lead; the page keeps everybody else out of them.
+        scene.Areas!.Where(area => area.Run != null && area.Kind is "open-plan" or "team-room")
+            .Should().NotBeEmpty().And.OnlyContain(area => area.Access == "team");
+        scene.Areas!.Where(area => area.Kind == "lead-office")
+            .Should().NotBeEmpty().And.OnlyContain(area => area.Access == "lead" && area.Run != null);
+
+        // Rooms everybody may use name no access, so the scene only marks what is kept.
+        scene.Areas!.Where(area => area.Kind is "kitchen" or "meeting" or "corridor" or "lounge")
+            .Should().NotBeEmpty().And.OnlyContain(area => area.Access == null);
+    }
+
+    [Fact]
     public void Each_team_s_area_says_whose_it_is_and_every_bay_is_fitted_out()
     {
         var scene = FloorPlanner.Shared(Tech, Rules, 4, [new("a", 0, 0, 1, 3), new("c", 0, 2, 1, 2)]).Scene;
