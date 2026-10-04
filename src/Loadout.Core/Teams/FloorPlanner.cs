@@ -1553,8 +1553,10 @@ public static partial class FloorPlanner
     {
         var exit = parts.Pick("exit", random, one => one.Footprint[0] == 1);
 
-        floor.Put("exit-west", "exit", exit.Piece with { Blocks = false }, 1, row);
-        floor.Put("exit-east", "exit", exit.Piece with { Blocks = false }, floor.Width - 2, row);
+        // In the end walls, facing into the floor, not standing face on in the
+        // corridor beside them.
+        floor.Put("exit-west", "exit", exit.Piece with { Blocks = false }, 1, row, null, "e");
+        floor.Put("exit-east", "exit", exit.Piece with { Blocks = false }, floor.Width - 2, row, null, "w");
         // Beside each exit, inside the glass: the row after it on an open
         // floor, the exit's own row on a corridor floor, where the row after
         // is the rooms' edge.
