@@ -81,7 +81,9 @@ public static partial class FloorPlanner
         }
         Core(floor, parts, random, coreLeft, coreWidth, band);
 
-        var board = StatusBoard(floor, parts, random, rules, band, coreLeft, coreWidth);
+        // The status board hangs on the band's wall, so it waits for the band
+        // to be built; a plain floor, with no band, has it beside the core.
+        var board = plain ? StatusBoard(floor, parts, random, rules, band, coreLeft, coreWidth) : null;
 
         if (!plain)
         {
@@ -145,6 +147,12 @@ public static partial class FloorPlanner
                     }
                 }
             }
+
+            // Now the band is built, the status board on its wall: it stood
+            // loose in front of an open lounge or print corner when it was
+            // placed before anything behind it was.
+            board = WallBoard(floor, parts, random, rules, band, coreLeft, coreWidth)
+                ?? StatusBoard(floor, parts, random, rules, band, coreLeft, coreWidth);
         }
 
         Exits(floor, parts, random, corridorTop + 1, corridorTop);
@@ -293,18 +301,41 @@ public static partial class FloorPlanner
     /// many seeded arrangements, scored on the rules. Rooms that cannot all
     /// fit are left out from the least important.
     /// </summary>
-    private static List<Placed> Arrange(List<Wanted> programme, OfficeRules rules, Random random, int width, int coreLeft, int coreWidth)
+    private static List<Placed> Arrange(List<Wanted> programme, OfficeRules rules, Random random, int width, int coreLeft, int coreWidth, int westFrom = 1)
     {
-        var segments = new[] { (From: 1, To: coreLeft - 1), (From: coreLeft + coreWidth, To: width - 2) };
+        var segments = new[] { (From: westFrom, To: coreLeft - 1), (From: coreLeft + coreWidth, To: width - 2) };
         var room = segments.Sum(one => one.To - one.From + 1);
 
-        // Leave out from the end until what is left fits, walls and all.
+        // Leave out from the end until what is left fits, walls and all: a
+        // wall between neighbours, none where a run meets the core or the
+        // glass, so two fewer than rooms across the two sides. Counting one
+        // for every room left a facility out of a band with room for it.
         var fitting = programme.ToList();
 
-        while (fitting.Count > 0 && fitting.Sum(one => one.Min + 1) > room)
+        while (fitting.Count > 0 && fitting.Sum(one => one.Min + 1) - Math.Min(2, fitting.Count) > room)
         {
             fitting.RemoveAt(fitting.Count - 1);
         }
+
+        // Fitting in total is not fitting on each side; where no split of
+        // them does, the last is left out too.
+        while (fitting.Count > 0)
+        {
+            var arranged = ArrangeAll(fitting, rules, random, width, coreLeft, coreWidth, segments);
+
+            if (arranged is not null)
+            {
+                return arranged;
+            }
+
+            fitting.RemoveAt(fitting.Count - 1);
+        }
+
+        return [];
+    }
+
+    private static List<Placed>? ArrangeAll(List<Wanted> fitting, OfficeRules rules, Random random, int width, int coreLeft, int coreWidth, (int From, int To)[] segments)
+    {
 
         List<Placed>? best = null;
         var bestScore = double.MinValue;
@@ -349,6 +380,16 @@ public static partial class FloorPlanner
                     }
                 }
 
+                // Too little left over for a nook goes to the room at the
+                // outer end, so the run meets the side wall: three columns or
+                // fewer were left as open band with nothing in it, unwalled
+                // at the end of the floor.
+                if (spare is > 0 and < 4 && rooms.Count > 0)
+                {
+                    widths[side == 0 ? 0 : rooms.Count - 1] += spare;
+                    spare = 0;
+                }
+
                 var x = from + (spare > 0 && random.Next(2) == 0 ? spare : 0);
 
                 for (var i = 0; i < rooms.Count; i++)
@@ -371,7 +412,7 @@ public static partial class FloorPlanner
             }
         }
 
-        return best ?? [];
+        return best;
     }
 
     /// <summary>
@@ -602,6 +643,22 @@ public static partial class FloorPlanner
                 Edge(floor, parts, random, walls, side, y);
             }
 
+            // And the outer side, where the office ends at its bay's edge
+            // rather than at the building's glass: on a floor teams share it
+            // stands beside the next team, and was open to it.
+            var outer = officeOnLeft ? ox - 1 : ox + officeW;
+
+            if (outer >= 1 && outer < floor.Width - 1)
+            {
+                for (var y = oy - 1; y <= bottom; y++)
+                {
+                    if (floor.Cells[outer, y] == Cell.Carpet)
+                    {
+                        Edge(floor, parts, random, walls, outer, y);
+                    }
+                }
+            }
+
             var lead = Furnish(floor, parts, random, rules, "lead-office", prefix + "lead-office", "floor", ox, oy, officeW, officeH, back: "s", entry: (officeDoor, oy), seatsAs: "lead");
 
             if (!lead)
@@ -710,9 +767,15 @@ public static partial class FloorPlanner
         // row and its seats; one desk row and its seats where desks don't turn.
         var height = pods ? 4 : 2;
 
+        // As many desks across as fit, a column between them, centred: packed
+        // from the west, what was left over all lay along the east side.
+        var span = x1 - x0 - 1;
+        var across = Math.Max(0, (span + 1) / (w + 1));
+        var start = x0 + 1 + Math.Max(0, span - (across * (w + 1) - 1)) / 2;
+
         for (var y = top + 1; y + height - 1 <= bottom; y += height + 1)
         {
-            for (var x = x0 + 1; x + w - 1 <= x1 - 1; x += w + 1)
+            for (var x = start; x + w - 1 <= x1 - 1; x += w + 1)
             {
                 var south = (X: x, Y: y - seat.Y);
 

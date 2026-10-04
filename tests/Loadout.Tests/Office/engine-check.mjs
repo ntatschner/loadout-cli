@@ -82,6 +82,7 @@ const code = [
   cut("  function tileFloorOf(scene, x, y) {", "  // How thick a wall is"),
   cut("  var TILE_SOLID = ", "\n"),
   cut("  var TILE_GLASS = ", "\n"),
+  cut("  var TILE_WALL_HIGH = ", "\n"),
   cut("  function tileDepth(scene, person, pose) {", "  function tilePose(person) {"),
   cut("  function tilePose(person) {", "  // part \"upper\" draws only"),
   cut("  function sceneTurns(scene) {", "  /*\n    A floor turned a quarter turn"),
@@ -105,7 +106,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse, towerBands, towerDisc, towerLevels, tileWallSet, tileFlatInWall,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -734,6 +735,25 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 // The floor view's arrows step to the nearest floor with a team on it, over
 // empty floors, either way, from a floor or from the lobby, roof or a
 // basement, and go nowhere past the last.
+// The arrows inside go through every level, not only the floors with a team
+// on them: from the basements up through the lobby and the occupied floors to
+// the roof, and no further either way.
+{
+  const levels = engine.towerLevels([{ number: 7 }, { number: 2 }, { number: 4 }], 10, 2);
+  const view = (from, by) => {
+    const next = engine.towerNextFloor(levels, from, by);
+
+    return next ? (next.view.place || "floor " + next.view.floor) : "none";
+  };
+  const cases = [
+    [0, -1, "basement-1"], [-1, -1, "basement-2"], [-2, -1, "none"], [-2, 1, "basement-1"],
+    [-1, 1, "lobby"], [0, 1, "floor 2"], [7, 1, "roof"], [11, 1, "none"], [11, -1, "floor 7"], [2, -1, "lobby"],
+  ];
+
+  cases.filter(([from, by, want]) => view(from, by) !== want)
+    .forEach(([from, by, want]) => fault("the floor arrows skip a level or go past the building", `from ${from} by ${by}: ${view(from, by)}, not ${want}`));
+}
+
 {
   const occupied = [{ number: 7, run: "c" }, { number: 2, run: "a" }, { number: 4, run: "b" }];
   const step = (from, by) => (engine.towerNextFloor(occupied, from, by) || { run: "none" }).run;
@@ -943,6 +963,157 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 
   cases.filter(([name, x, y, want]) => engine.tileMayUse(room, name, x, y) !== want)
     .forEach(([name, x, y, want, what]) => fault("somebody is sent where they may not go, or kept from where they may", `${what}: ${name} at ${x},${y} gave ${!want}`));
+}
+
+// The sky and what is drawn in it are the tower's pixel art too: the sky in
+// a few flat bands whose edges sit on the art pixel grid, darkest at the top;
+// a cloud or a lamp's glow made of whole art pixels on that grid, each once.
+{
+  for (const [unit, height] of [[1, 430], [2, 430], [4, 433], [3, 7]]) {
+    const bands = engine.towerBands("#5f9fd6", "#cfe3f4", height, unit, 8);
+    const sum = bands.reduce((total, band) => total + band.h, 0);
+    const shade = (band) => band.colour.match(/\d+/g).map(Number).reduce((a, b) => a + b, 0);
+
+    if (bands.length < 1 || bands.length > 8) { fault("the sky is not in a few bands", `unit ${unit}, height ${height}: ${bands.length}`); }
+    if (sum !== height || bands[0].y !== 0) { fault("the sky's bands do not cover it", `unit ${unit}, height ${height}: ${sum} from ${bands[0].y}`); }
+    if (bands.slice(0, -1).some((band) => (band.y + band.h) % unit !== 0)) { fault("a band of sky ends off the art pixel grid", `unit ${unit}`); }
+    if (bands.some((band, i) => i > 0 && shade(band) < shade(bands[i - 1]))) { fault("the sky does not lighten towards the horizon", `unit ${unit}`); }
+    if (bands.some((band) => band.h <= 0)) { fault("a band of sky has no height", `unit ${unit}, height ${height}`); }
+  }
+
+  for (const [cx, cy, rx, ry, unit] of [[50, 40, 20, 8, 2], [13.3, 7.7, 5, 5, 1], [100, 100, 9, 9, 3]]) {
+    const cells = engine.towerDisc(cx, cy, rx, ry, unit);
+    const keys = new Set(cells.map((cell) => cell.join(",")));
+    const area = Math.PI * rx * ry / (unit * unit);
+
+    if (cells.some(([x, y]) => x % unit !== 0 || y % unit !== 0)) { fault("a shape in the sky is off the art pixel grid", `${cx},${cy} by ${unit}`); }
+    if (keys.size !== cells.length) { fault("a shape in the sky has a pixel twice", `${cx},${cy}`); }
+    if (Math.abs(cells.length - area) > area * 0.35 + 4) { fault("a shape in the sky is the wrong size", `${cx},${cy}: ${cells.length} pixels for an area of ${area.toFixed(1)}`); }
+    if (cells.some(([x, y]) => Math.abs(x + unit / 2 - cx) > rx + unit || Math.abs(y + unit / 2 - cy) > ry + unit)) { fault("a shape in the sky reaches past its ellipse", `${cx},${cy}`); }
+  }
+
+  if (engine.towerDisc(10, 10, 0, 5, 1).length !== 0) { fault("a shape with no width has pixels", "rx 0"); }
+}
+
+// A door in a doorway stands in the wall's line, not on the front of its
+// cell, and is seen from either side; what is set into a wall with the wall
+// at its back - the lift in the core - or hung on one is not drawn from the
+// far side of that wall; a piece hung in front of a wall is drawn against it
+// from a corner.
+{
+  // Row 1: a wall with a doorway at x 2; row 3: the core's face, solid behind
+  // it in row 2, with the lift at x 5-6; a board hung at 1,4 below wall 1,3.
+  const W = 1;
+  const _ = -1;
+  const scene = {
+    walls: [
+      [_, _, _, _, _, _, _, _, _],
+      [W, W, _, W, W, _, _, _, _],
+      [_, _, _, _, W, W, W, W, _],
+      [W, W, _, _, W, _, _, W, _],
+      [_, _, _, _, _, _, _, _, _],
+    ],
+  };
+  const door = (facing) => ({ x: 2, y: 1, w: 1, h: 1, facing });
+  const lift = (facing) => ({ x: 5, y: 3, w: 2, h: 1, facing, hung: true });
+  const board = (facing) => ({ x: 1, y: 4, w: 1, h: 1, facing, hung: true });
+  const cases = [
+    ["a door, square on", engine.tileWallSet(scene, door("s"), false), { dx: 0, dy: -0.5, hidden: false, line: true }],
+    ["a door seen from its other side", engine.tileWallSet(scene, door("n"), false), { dx: 0, dy: -0.5, hidden: false }],
+    ["a door in a wall running north to south", engine.tileWallSet({ walls: [[_, W, _], [_, _, _], [_, W, _]] }, { x: 1, y: 1, w: 1, h: 1, facing: "e" }, true), { dx: -0.5, dy: 0, hidden: false }],
+    ["the lift from the corridor", engine.tileWallSet(scene, lift("s"), false), { dx: 0, dy: -0.5, hidden: false }],
+    // Turned half round, the core turns with it: the lift faces north with
+    // the core to its south, so its back is still against the core.
+    ["the lift from behind the core", engine.tileWallSet({ walls: scene.walls.slice().reverse() }, { x: 5, y: 1, w: 2, h: 1, facing: "n", hung: true }, false), { hidden: true }],
+    ["the lift from behind the core, from a corner", engine.tileWallSet({ walls: scene.walls.slice().reverse() }, { x: 5, y: 1, w: 2, h: 1, facing: "n", hung: true }, true), { hidden: true }],
+    ["a board, square on", engine.tileWallSet(scene, board("s"), false), { dx: 0, dy: -1.45, hidden: false }],
+    ["a board from a corner", engine.tileWallSet(scene, board("s"), true), { dx: 0, dy: -0.5, hidden: false, line: false }],
+    // An exit hung on the west wall, square on: against the wall's line, not
+    // stepped as far as up a north wall's face, which put it outside the glass.
+    ["an exit on a west wall, square on", engine.tileWallSet({ walls: [[W, _, _], [W, _, _], [W, _, _]] }, { x: 1, y: 1, w: 1, h: 1, facing: "e", hung: true }, false), { dx: -0.75, dy: 0, hidden: false }],
+    ["a board from behind its wall", engine.tileWallSet(scene, board("n"), true), { hidden: false }],
+    ["a desk", engine.tileWallSet(scene, { x: 2, y: 4, w: 2, h: 1, facing: "n" }, true), { dx: 0, dy: 0, hidden: false }],
+  ];
+
+  cases.forEach(([what, got, want]) => {
+    const wrong = Object.keys(want).filter((key) => got[key] !== want[key]);
+
+    if (wrong.length) { fault("a piece in a wall's line is drawn in the wrong place, or seen through its wall", `${what}: ${JSON.stringify(got)}`); }
+  });
+}
+
+// Square on, a door or board in a wall running away from the eye is drawn
+// along the wall's line in the cells it takes: it stood at its full height,
+// a cell and more past its doorway, and hung off the wall.
+{
+  const W = 1;
+  const _ = -1;
+  const t = 32;
+  const drawn = [];
+  const ctx = { drawImage: (...args) => drawn.push(args.slice(5)) };
+  const room = { set: {} };
+  const tall = [0, 0, 14, 72];
+  // A wall down column 1 with a doorway at row 2; another down column 4.
+  const scene = { walls: [[_, W, _, _, W], [_, W, _, _, W], [_, _, _, _, W], [_, W, _, _, W], [_, W, _, _, W]] };
+  const door = { x: 1, y: 2, w: 1, h: 1, facing: "e", piece: "door", sides: { e: tall } };
+  const board = { x: 3, y: 1, w: 1, h: 2, facing: "w", hung: true, piece: "board", sides: { w: [0, 0, 20, 60] } };
+
+  engine.tileFlatInWall(room, ctx, scene, door, engine.tileWallSet(scene, door, false), t);
+  engine.tileFlatInWall(room, ctx, scene, board, engine.tileWallSet(scene, board, false), t);
+
+  const [doorAt, boardAt] = drawn;
+
+  if (!doorAt || doorAt[1] !== 2 * t || doorAt[3] !== t || Math.abs(doorAt[0] + 7 - 1.5 * t) > 1) {
+    fault("a door in a wall running away from the eye is not in its doorway", JSON.stringify(doorAt));
+  }
+
+  if (!boardAt || boardAt[1] !== t || boardAt[3] !== 2 * t || Math.abs(boardAt[0] + 20 - (4.5 * t - Math.round(t * 0.3) / 2)) > 1) {
+    fault("a board hung on a wall running away from the eye is not against it", JSON.stringify(boardAt));
+  }
+
+  // A lift set in its own cells with the core behind it, as in the lift
+  // lobby: against the core, not floating in the middle of its cells.
+  const core = { walls: [[_, _, _, W], [_, _, _, W], [_, _, _, W], [_, _, _, W]] };
+  const lift = { x: 2, y: 1, w: 1, h: 2, facing: "w", hung: true, set: true, piece: "lift", sides: { w: [0, 0, 14, 72] } };
+
+  drawn.length = 0;
+  engine.tileFlatInWall(room, ctx, core, lift, engine.tileWallSet(core, lift, false), t);
+
+  if (!drawn[0] || Math.abs(drawn[0][0] + 14 - 3.5 * t) > 6 || drawn[0][3] !== 2 * t) {
+    fault("a lift in a wall running away from the eye is not against the core behind it", JSON.stringify(drawn[0]));
+  }
+
+  if (engine.tileFlatInWall(room, ctx, scene, { x: 2, y: 2, w: 1, h: 1, facing: "s", piece: "desk" }, { line: false }, t)) {
+    fault("a piece standing free is drawn flat into a wall", "");
+  }
+}
+
+// Glass is drawn at its real size: a pane in a frame about 5 cm deep, much
+// thinner than a solid wall, standing full height inside the floor; the
+// building's own edge is cut low, so the floor can be seen into.
+{
+  // A tile is 75 cm; at 32 pixels a tile, 5 cm is about two pixels.
+  const t = 32;
+  const row = (cells) => cells.map((one) => one);
+  const scene = {
+    tile: t, width: 6, height: 4,
+    atlases: [{ tiles: 10 }],
+    walls: [
+      row([0, 0, 0, 0, 0, 0]),
+      row([0, -1, 12, 12, -1, 0]),
+      row([0, -1, 0, 0, -1, 12]),
+      row([12, 12, 12, 12, 12, 12]),
+    ],
+  };
+  const walls = engine.tileWalls(scene);
+  const at = (x, y) => walls.find((one) => one.x === x && one.y === y);
+
+  if (at(2, 1).thick > Math.round(t * 0.1)) { fault("a glass partition is drawn thicker than its frame", `${at(2, 1).thick}px at ${t}px a tile`); }
+  if (!(at(2, 1).thick < at(2, 2).thick)) { fault("glass is not thinner than a solid wall", `${at(2, 1).thick} against ${at(2, 2).thick}`); }
+  if (at(2, 1).outer) { fault("a partition inside the floor is cut low as if it were the building's edge", "2,1"); }
+  if (!at(2, 3).outer || !at(5, 2).outer || !at(0, 0).outer) { fault("the building's edge is not cut low", "the south row, the east side and a corner"); }
+  if (!at(2, 3).near || at(0, 0).near || at(2, 1).near) { fault("the side nearest the viewer is not the one cut lowest", "the bottom row only, square on"); }
+  if (!at(5, 2).nearSide || at(0, 2) && at(0, 2).nearSide) { fault("from a corner, the right-hand side is not cut lowest with the bottom row", "the east side"); }
 }
 
 // A floor starts as big as fits in whole steps of the office's range; one too
