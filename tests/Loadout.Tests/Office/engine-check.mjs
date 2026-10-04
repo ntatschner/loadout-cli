@@ -82,6 +82,7 @@ const code = [
   cut("  function tileFloorOf(scene, x, y) {", "  // How thick a wall is"),
   cut("  var TILE_SOLID = ", "\n"),
   cut("  var TILE_GLASS = ", "\n"),
+  cut("  var TILE_WALL_HIGH = ", "\n"),
   cut("  function tileDepth(scene, person, pose) {", "  function tilePose(person) {"),
   cut("  function tilePose(person) {", "  // part \"upper\" draws only"),
   cut("  function sceneTurns(scene) {", "  /*\n    A floor turned a quarter turn"),
@@ -105,7 +106,7 @@ const engine = new Function("function tilesStill() { return false; }\nfunction t
   + "var towerWaitingAt = 1; var planned = []; function plan(change) { planned.push(change); return Promise.resolve(); }\n" + code
   + "; return { tileBlocked, tilePath, tileBeside, turnScene, tileSeat, tileWalk, tileStep, cityMake,"
   + " tileCastPlace, tileSheet, tileSideDesk, tileAtDesk, tileExpression, tileFace, TILE_MOOD_EVERY, TILE_MOOD_FOR, TILE_RISE,"
-  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse, towerBands, towerDisc, towerLevels, tileWallSet,"
+  + " sceneTurns, tileProp, tilePose, tileAnimation, towerFacadeModule, towerLobbyModule, towerStopButtons, towerSides, towerNextFloor, tileDepth, tileFloorOf, tileWalls, tileDesks, towerFacing, tileIso, tileIsoSide, zoomStep, towerProjector, towerStepFor, tileMayUse, towerBands, towerDisc, towerLevels, tileWallSet, tileFlatInWall,"
   + " planned: () => planned, waitingAt: () => towerWaitingAt };")();
 
 const lines = readline.createInterface({ input: fs.createReadStream(process.argv[2]) });
@@ -1039,6 +1040,40 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
 
     if (wrong.length) { fault("a piece in a wall's line is drawn in the wrong place, or seen through its wall", `${what}: ${JSON.stringify(got)}`); }
   });
+}
+
+// Square on, a door or board in a wall running away from the eye is drawn
+// along the wall's line in the cells it takes: it stood at its full height,
+// a cell and more past its doorway, and hung off the wall.
+{
+  const W = 1;
+  const _ = -1;
+  const t = 32;
+  const drawn = [];
+  const ctx = { drawImage: (...args) => drawn.push(args.slice(5)) };
+  const room = { set: {} };
+  const tall = [0, 0, 14, 72];
+  // A wall down column 1 with a doorway at row 2; another down column 4.
+  const scene = { walls: [[_, W, _, _, W], [_, W, _, _, W], [_, _, _, _, W], [_, W, _, _, W], [_, W, _, _, W]] };
+  const door = { x: 1, y: 2, w: 1, h: 1, facing: "e", piece: "door", sides: { e: tall } };
+  const board = { x: 3, y: 1, w: 1, h: 2, facing: "w", hung: true, piece: "board", sides: { w: [0, 0, 20, 60] } };
+
+  engine.tileFlatInWall(room, ctx, scene, door, engine.tileWallSet(scene, door, false), t);
+  engine.tileFlatInWall(room, ctx, scene, board, engine.tileWallSet(scene, board, false), t);
+
+  const [doorAt, boardAt] = drawn;
+
+  if (!doorAt || doorAt[1] !== 2 * t || doorAt[3] !== t || Math.abs(doorAt[0] + 7 - 1.5 * t) > 1) {
+    fault("a door in a wall running away from the eye is not in its doorway", JSON.stringify(doorAt));
+  }
+
+  if (!boardAt || boardAt[1] !== t || boardAt[3] !== 2 * t || Math.abs(boardAt[0] + 20 - (4.5 * t - Math.round(t * 0.3) / 2)) > 1) {
+    fault("a board hung on a wall running away from the eye is not against it", JSON.stringify(boardAt));
+  }
+
+  if (engine.tileFlatInWall(room, ctx, scene, { x: 2, y: 2, w: 1, h: 1, facing: "s", piece: "desk" }, { line: false }, t)) {
+    fault("a piece standing free is drawn flat into a wall", "");
+  }
 }
 
 // Glass is drawn at its real size: a pane in a frame about 5 cm deep, much
