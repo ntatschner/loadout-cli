@@ -6782,6 +6782,12 @@
       }
     });
 
+    // What is drawn flat in a wall running away from the eye goes on after
+    // everything else: that wall's arm reaches into the doorway beside it
+    // and, drawn later, covered most of the door.
+    var flats = [];
+    var flatCtx = { drawImage: function () { flats.push(Array.prototype.slice.call(arguments)); } };
+
     items.forEach(function (item) {
       if (item.wall) {
         tileWall(ctx, item.wall, t);
@@ -6791,7 +6797,7 @@
         // Square on, a door across the view moves up to its wall's line; one
         // in a wall running away from the eye is drawn side on, already in
         // the middle of its cell. A piece hung on a wall goes back onto it.
-        if (!set.hidden && tileFlatInWall(room, ctx, scene, item.prop, set, t)) {
+        if (!set.hidden && tileFlatInWall(room, flatCtx, scene, item.prop, set, t)) {
           // Drawn flat along its wall's line.
         } else if (!set.hidden) {
           var dx = set.line ? 0 : set.dx;
@@ -6819,6 +6825,8 @@
         tilePerson(room, ctx, item.person, now);
       }
     });
+
+    flats.forEach(function (args) { ctx.drawImage.apply(ctx, args); });
 
     // Names last, over everything, so furniture never hides who somebody is.
     items.forEach(function (item) {
