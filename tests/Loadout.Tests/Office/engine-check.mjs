@@ -1071,6 +1071,18 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
     fault("a board hung on a wall running away from the eye is not against it", JSON.stringify(boardAt));
   }
 
+  // A lift set in its own cells with the core behind it, as in the lift
+  // lobby: against the core, not floating in the middle of its cells.
+  const core = { walls: [[_, _, _, W], [_, _, _, W], [_, _, _, W], [_, _, _, W]] };
+  const lift = { x: 2, y: 1, w: 1, h: 2, facing: "w", hung: true, set: true, piece: "lift", sides: { w: [0, 0, 14, 72] } };
+
+  drawn.length = 0;
+  engine.tileFlatInWall(room, ctx, core, lift, engine.tileWallSet(core, lift, false), t);
+
+  if (!drawn[0] || Math.abs(drawn[0][0] + 14 - 3.5 * t) > 6 || drawn[0][3] !== 2 * t) {
+    fault("a lift in a wall running away from the eye is not against the core behind it", JSON.stringify(drawn[0]));
+  }
+
   if (engine.tileFlatInWall(room, ctx, scene, { x: 2, y: 2, w: 1, h: 1, facing: "s", piece: "desk" }, { line: false }, t)) {
     fault("a piece standing free is drawn flat into a wall", "");
   }

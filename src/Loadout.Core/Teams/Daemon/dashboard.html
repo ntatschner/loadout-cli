@@ -6034,9 +6034,15 @@
     var h = prop.h || 1;
     var cut = tileWallCut(scene, prop, set, t);
     var th = cut ? cut.th : 2;
+    var walls = scene.walls || [];
+    var behind = facing === "e" ? prop.x - 1 : prop.x + w;
+    // The lift stands in cells of its own with the core behind it: drawn in
+    // the middle of them it floated in the lobby, so a piece made to hang
+    // goes back against the wall behind it even where it is set in the line.
+    var against = !!prop.hung && Array.from({ length: h }, function (_, i) { var row = walls[prop.y + i]; return !!row && row[behind] >= 0; }).every(Boolean);
     var left;
 
-    if (set.line) {
+    if (set.line && !against) {
       left = prop.x * t + (w * t - side[2]) / 2;
     } else {
       // Hung facing east, its wall is to the west, the line down the middle
@@ -6046,9 +6052,89 @@
       left = facing === "e" ? line + th / 2 : line - th / 2 - side[2];
     }
 
-    ctx.drawImage(picture, side[0], side[1], side[2], side[3], Math.round(left), prop.y * t, side[2], h * t);
+    var straight = tileStraightSide(picture, side);
+
+    ctx.drawImage(straight.image, straight.x, straight.y, straight.w, straight.h, Math.round(left), prop.y * t, straight.w, h * t);
 
     return true;
+  }
+
+  /*
+    A side picture straightened to stand in a wall's line. The kit draws a
+    door's side at an angle, its near edge longer than its far, so fitted to
+    a doorway it looked to tip; this keeps the rows where the piece is at its
+    full width and closes them top and bottom with its own outline. Made
+    once a picture and side; without a document to draw on, the picture as
+    it is.
+  */
+  var tileStraightened = {};
+
+  function tileStraightSide(picture, side) {
+    var key = (picture.src || "") + "|" + side.join(",");
+
+    if (tileStraightened[key]) { return tileStraightened[key]; }
+
+    var plain = { image: picture, x: side[0], y: side[1], w: side[2], h: side[3] };
+
+    if (typeof document === "undefined" || !picture.complete) { return plain; }
+
+    try {
+      var sw = side[2];
+      var sh = side[3];
+      var from = document.createElement("canvas");
+
+      from.width = sw;
+      from.height = sh;
+
+      var fctx = from.getContext("2d");
+
+      fctx.drawImage(picture, side[0], side[1], sw, sh, 0, 0, sw, sh);
+
+      var data = fctx.getImageData(0, 0, sw, sh).data;
+      var widths = [];
+      var outline = null;
+
+      for (var y = 0; y < sh; y += 1) {
+        var n = 0;
+
+        for (var x = 0; x < sw; x += 1) {
+          var i = (y * sw + x) * 4;
+
+          if (data[i + 3] > 0) {
+            n += 1;
+
+            if (!outline || data[i] + data[i + 1] + data[i + 2] < outline[0] + outline[1] + outline[2]) { outline = [data[i], data[i + 1], data[i + 2]]; }
+          }
+        }
+
+        widths.push(n);
+      }
+
+      var widest = Math.max.apply(null, widths);
+      var rows = [];
+
+      widths.forEach(function (n, y) { if (n >= widest * 0.9) { rows.push(y); } });
+
+      if (rows.length < 4) { return (tileStraightened[key] = plain); }
+
+      var top = rows[0];
+      var bottom = rows[rows.length - 1];
+      var out = document.createElement("canvas");
+
+      out.width = sw;
+      out.height = bottom - top + 3;
+
+      var octx = out.getContext("2d");
+
+      octx.drawImage(from, 0, top, sw, bottom - top + 1, 0, 1, sw, bottom - top + 1);
+      octx.fillStyle = "rgb(" + outline.join(",") + ")";
+      octx.fillRect(0, 0, sw, 1);
+      octx.fillRect(0, out.height - 1, sw, 1);
+
+      return (tileStraightened[key] = { image: out, x: 0, y: 0, w: sw, h: out.height });
+    } catch (error) {
+      return (tileStraightened[key] = plain);
+    }
   }
 
   // The wall's top run across an opening, square on: its cap, in the wall's
