@@ -258,6 +258,7 @@ specialists:
   preferred: []
   excluded: []
   mode: ''
+  style: ''
 symbols:
   ignore: []
   extensions: {}
@@ -365,6 +366,7 @@ profiles](../first-run.md#environments-and-security-profiles).
 | `preferred` | Specialists this project expects to be relevant, such as `database.postgresql`. A hint, not an instruction: one still loads only when the task points that way. |
 | `excluded` | Specialists that must never load here. Honoured; only naming one on the command line overrides it. |
 | `mode` | The mode a session starts in when none is given, such as `review`. |
+| `style` | The named coding style in force here, such as `work`. Set with `loadout style use <name>`. A profile that doesn't name one keeps the project's. See [Coding styles](../specialists.md#coding-styles). |
 
 A manifest written by an older Loadout may carry `is_empty` under `specialists`.
 Nothing reads it, and it can be deleted. See [Specialists and

@@ -66,17 +66,52 @@ not a fact about the code; the task records that.
 Read `project.yaml` with `loadout_project_settings`, then propose changes with
 `loadout_propose_settings` rather than editing the file: pass the whole file as it
 should be, and a reason for each change. The person reviews it with `loadout
-project proposal <slug>` and applies it. Identity, the repository, `environment`
-and `environments` cannot be proposed at all. Consider:
+project proposal <slug>` and applies it.
+
+Every setting in the file falls into one of three groups, and only the first is
+yours to propose.
+
+**Worth considering**, each only where what you found argues for it:
 
 - `specialists.preferred` and `specialists.excluded`, from what `instructions explain`
   chose and what it got wrong. Confirm each id with `loadout_specialist` before
   naming it: a proposal naming a specialist that does not exist is refused.
-- `profiles`, where one part of the code — a database, a frontend — needs context
-  the rest never does.
+- `specialists.mode`, when nearly all the work here is one kind: `advise`,
+  `investigate`, `implement` or `review`. Empty leaves the launcher's default,
+  implement.
+- `specialists.style`, a named coding style such as `work`, when the person keeps
+  one for this kind of work. Name only a style `loadout style list` shows. Nothing
+  checks the name when you propose it. A misspelt one is accepted, and every launch
+  then carries on without it. If the repository has conventions of its own worth writing down, say so
+  and leave `loadout instructions new style.codebase --project <slug>` for the person.
+- `context.project` and `context.global`, naming instruction files in the workspace.
+  `context.project` paths are relative to the project's directory in the workspace,
+  not to the repository. Name only files that exist. If a file is worth writing,
+  describe what it should hold in your report.
+- `context.tasks`, when the project keeps its open work in `tasks.yaml` and every
+  session should see it.
 - `context.code_map`, only for a codebase big enough that a session spends real
   effort finding things. It is paid for on every launch.
+- `profiles`, where one part of the code — a database, a frontend — needs context
+  the rest never does. A profile's `specialists` replace the project's when set.
 - `symbols`, for generated code to ignore or a language the index does not read.
+- `name`, if the name the launcher shows is wrong.
+
+`agents.default`, `agents.model` and `agents.model_by_mode` choose which agent and
+model the person pays for. Propose them only when the person has said what they
+want. Write a model name the way the agent spells it, because the launcher passes
+the name through unchanged.
+
+**Refused.** `schema_version`, `id`, `slug`, `repository`, `environment` and
+`environments` cannot be proposed at all. They decide which project this is and
+which credentials and sandbox a session gets. If one looks wrong, report it.
+
+**Read by nothing yet.** Changing these changes nothing, so leave them alone:
+`agents.enabled`, `agents.settings`, `launch.working_directory`,
+`workspace.sync_on_launch` and `workspace.save_on_exit`. The same goes for
+`aliases`. Names are resolved from the workspace registry, which copies a
+project's aliases only when it is registered, so an alias added to the manifest
+later never resolves. If the project needs another name, say so in your report.
 
 Give the reason beside every change. A setting nobody can account for gets
 removed by the next person to read the file.
