@@ -5911,9 +5911,10 @@
     var against = wall(behindX, behindY);
     var away = facing === "n" || (corner && facing === "w");
     // Hung in front of a wall: from a corner back to the wall; square on,
-    // back onto the wall's face, which is drawn rising up the screen from
-    // its foot, so it hangs on the wall rather than standing below it.
-    var hungBack = prop.hung && !inLine ? (corner ? 0.5 : 0.75) : 0;
+    // up onto the wall's face, which is drawn rising up the screen from its
+    // foot, its bottom just above that foot so it hangs inside the face
+    // rather than below it on the floor.
+    var hungBack = prop.hung && !inLine ? (corner ? 0.5 : 1.45) : 0;
     var moved = inLine || hungBack > 0;
 
     // In a wall's line it goes to the middle of its cell whichever way it
@@ -5927,6 +5928,92 @@
       dy: inLine ? (across ? -0.5 : 0) : moved ? back[1] * hungBack : 0,
       hidden: !!((inLine || prop.hung) && against && away),
     };
+  }
+
+  /*
+    The walls are a cutaway, cut off about a metre up; the art of a door, the
+    lift or a board is drawn whole, so a door stood half again as tall as
+    its wall and a board hung below it. What is set into a wall or hung on
+    one is cut where its wall is cut, and an opening gets a lintel - the
+    wall's top running across it - so the wall reads as one wall with the
+    door in it. Returns the wall's kind and, square on, the screen height of
+    the top of its face where the piece is; null for a piece no wall holds.
+  */
+  function tileWallCut(scene, prop, set, t) {
+    if (!set.line && !prop.hung) { return null; }
+
+    var walls = scene.walls || [];
+    var first = scene.atlases && scene.atlases[0] ? scene.atlases[0].tiles : Infinity;
+    var at = function (x, y) { var row = walls[y]; return row && row[x] !== undefined ? row[x] : -1; };
+    var w = prop.w || 1;
+    var h = prop.h || 1;
+    var facing = prop.facing || "s";
+    var across = facing === "s" || facing === "n";
+    var tile;
+
+    if (set.line) {
+      // The nearest wall along its line either way, past any opening beside
+      // it - the core's doors and the lift stand next to one another.
+      var reach = function (dx, dy) {
+        for (var i = 1; i <= 6; i += 1) {
+          var tileAt = at(prop.x + (dx < 0 ? -i : dx > 0 ? w - 1 + i : 0), prop.y + (dy < 0 ? -i : dy > 0 ? h - 1 + i : 0));
+
+          if (tileAt >= 0) { return tileAt; }
+        }
+
+        return -1;
+      };
+
+      tile = across ? Math.max(reach(-1, 0), reach(1, 0)) : Math.max(reach(0, -1), reach(0, 1));
+    } else {
+      var back = { s: [0, -1], n: [0, 1], e: [-1, 0], w: [1, 0] }[facing] || [0, -1];
+
+      tile = at(prop.x + (back[0] > 0 ? w : back[0]), prop.y + (back[1] > 0 ? h : back[1]));
+    }
+
+    if (tile < 0) { return null; }
+
+    var glass = tile >= first;
+    var th = Math.round(t * (glass ? TILE_GLASS : TILE_SOLID));
+    var high = Math.round(t * TILE_WALL_HIGH);
+    // The row whose wall it is, square on: its own for a door across the
+    // view, the one behind for a board hung on the wall in front of it.
+    var row = set.line ? prop.y : prop.y - 1;
+    var foot = across ? row * t + (t + th) / 2 : prop.y * t + (t + th) / 2;
+
+    return { glass: glass, th: th, high: high, top: foot - high, across: across };
+  }
+
+  // The wall's top run across an opening, square on: its cap, in the wall's
+  // own colour, over the door, the lift or the stairs.
+  function tileLintel(ctx, cut, x, w, t) {
+    ctx.fillStyle = cut.glass ? "#59606c" : "#45454f";
+    ctx.fillRect(x * t, Math.round(cut.top - cut.th), w * t, cut.th);
+  }
+
+  /*
+    Which pieces cast a shadow on the floor: anything standing on it - not
+    what lies flat in it (a rug, the stairs' opening), not what hangs on or
+    is set into a wall. Without one, every piece sat on the floor like a
+    sticker; the art was drawn on its own, a few pieces with a shadow
+    painted in and most without.
+  */
+  function tileCastsShadow(prop) {
+    return prop.depth !== "floor" && !prop.hung && !prop.set && prop.kind !== "door" && prop.kind !== "lift";
+  }
+
+  // A soft shadow square on: a band under the front of the footprint, the
+  // ends stepped in, in pixel art's flat colour.
+  function tileShadow(ctx, x, y, w, h, t) {
+    var left = x * t;
+    var width = w * t;
+    var foot = (y + h) * t;
+    var deep = Math.max(3, Math.round(t * Math.min(0.5, 0.18 + h * 0.12)));
+    var step = Math.max(1, Math.round(t * 0.08));
+
+    ctx.fillStyle = "rgba(24, 28, 38, 0.16)";
+    ctx.fillRect(left + step * 2, foot - deep, width - step * 4, deep + step);
+    ctx.fillRect(left + step, foot - deep + step, width - step * 2, deep - step);
   }
 
   function tileErrand(room, name, person) {
@@ -6236,6 +6323,32 @@
 
     items.sort(function (a, b) { return a.d - b.d; });
 
+    // Shadows first: the footprint's diamond drawn in a little, on the floor
+    // under everything that stands.
+    var shade = function (x, y, w, h, inset) {
+      var a = iso.at(x + inset, y + inset);
+      var b = iso.at(x + w - inset, y + inset);
+      var c = iso.at(x + w - inset, y + h - inset);
+      var d = iso.at(x + inset, y + h - inset);
+
+      ctx.beginPath();
+      ctx.moveTo(Math.round(a[0]), Math.round(a[1]));
+      ctx.lineTo(Math.round(b[0]), Math.round(b[1]));
+      ctx.lineTo(Math.round(c[0]), Math.round(c[1]));
+      ctx.lineTo(Math.round(d[0]), Math.round(d[1]));
+      ctx.closePath();
+      ctx.fillStyle = "rgba(24, 28, 38, 0.16)";
+      ctx.fill();
+    };
+
+    items.forEach(function (item) {
+      if (item.prop && tileCastsShadow(item.prop)) {
+        shade(item.prop.x, item.prop.y, item.prop.w || 1, item.prop.h || 1, 0.08);
+      } else if (item.person && !item.person.gone) {
+        shade(item.person.x + 0.15, item.person.y + 0.15, 0.7, 0.7, 0.1);
+      }
+    });
+
     items.forEach(function (item) {
       if (item.wall) {
         tileIsoWall(ctx, iso, item.wall, t);
@@ -6255,12 +6368,57 @@
         var front = iso.at(prop.x + w + set.dx, prop.y + h + set.dy);
         var middle = set.line ? iso.at(prop.x + w / 2, prop.y + h / 2) : iso.at(prop.x + w / 2 + set.dx, prop.y + h / 2 + set.dy);
 
+        // Cut along the top of the wall that holds it, as the wall itself
+        // is cut: the line through the cells it stands in, raised by the
+        // wall's height, run out past both ends.
+        var cut = tileWallCut(scene, prop, set, t);
+        var line = null;
+
+        if (cut) {
+          var along = !cut.across;
+          var a = set.line
+            ? (along ? [prop.x + 0.5, prop.y] : [prop.x, prop.y + 0.5])
+            : ({ s: [prop.x, prop.y], n: [prop.x, prop.y + h], e: [prop.x, prop.y], w: [prop.x + w, prop.y] }[prop.facing || "s"]);
+          var b = set.line
+            ? (along ? [prop.x + 0.5, prop.y + h] : [prop.x + w, prop.y + 0.5])
+            : ({ s: [prop.x + w, prop.y], n: [prop.x + w, prop.y + h], e: [prop.x, prop.y + h], w: [prop.x + w, prop.y + h] }[prop.facing || "s"]);
+          var pa = iso.at(a[0], a[1]);
+          var pb = iso.at(b[0], b[1]);
+
+          line = [[pa[0], pa[1] - cut.high], [pb[0], pb[1] - cut.high]];
+
+          var ex = [(line[1][0] - line[0][0]) * 3, (line[1][1] - line[0][1]) * 3];
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(line[0][0] - ex[0], line[0][1] - ex[1]);
+          ctx.lineTo(line[1][0] + ex[0], line[1][1] + ex[1]);
+          ctx.lineTo(line[1][0] + ex[0], line[1][1] + ex[1] + 1e4);
+          ctx.lineTo(line[0][0] - ex[0], line[0][1] - ex[1] + 1e4);
+          ctx.closePath();
+          ctx.clip();
+        }
+
         // Moved so the bottom middle of its square-on footprint lands on the
         // front of its diamond, beneath its middle.
         ctx.save();
         ctx.translate(middle[0] - (prop.x + w / 2) * t, front[1] - iso.hh * 0.5 - (prop.y + h) * t);
         tileProp(room, ctx, Object.assign({}, prop, { facing: tileIsoSide(prop) }));
         ctx.restore();
+
+        if (cut) {
+          ctx.restore();
+
+          // The wall's top across the opening.
+          if (set.line) {
+            ctx.strokeStyle = cut.glass ? "#59606c" : "#45454f";
+            ctx.lineWidth = Math.max(2, cut.th);
+            ctx.beginPath();
+            ctx.moveTo(line[0][0], line[0][1]);
+            ctx.lineTo(line[1][0], line[1][1]);
+            ctx.stroke();
+          }
+        }
       } else {
         var person = item.person;
         var feet = iso.at(person.x + 0.5, person.y + 0.5);
@@ -6462,6 +6620,15 @@
 
     items.sort(function (a, b) { return a.y - b.y; });
 
+    // Shadows first, on the floor under everything that stands.
+    items.forEach(function (item) {
+      if (item.prop && tileCastsShadow(item.prop)) {
+        tileShadow(ctx, item.prop.x, item.prop.y, item.prop.w || 1, item.prop.h || 1, t);
+      } else if (item.person && !item.person.gone) {
+        tileShadow(ctx, item.person.x + 0.2, item.person.y + 0.45, 0.6, 0.5, t);
+      }
+    });
+
     items.forEach(function (item) {
       if (item.wall) {
         tileWall(ctx, item.wall, t);
@@ -6473,8 +6640,23 @@
         // the middle of its cell. A piece hung on a wall goes back onto it.
         if (!set.hidden) {
           var dx = set.line ? 0 : set.dx;
+          var cut = tileWallCut(scene, item.prop, set, t);
+
+          // Cut where its wall is cut, the wall's top over an opening.
+          if (cut) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-1e4, Math.round(cut.top), 1e5, 1e5);
+            ctx.clip();
+          }
 
           tileProp(room, ctx, set.dy || dx ? Object.assign({}, item.prop, { x: item.prop.x + dx, y: item.prop.y + set.dy }) : item.prop);
+
+          if (cut) {
+            ctx.restore();
+
+            if (set.line && cut.across) { tileLintel(ctx, cut, item.prop.x, item.prop.w || 1, t); }
+          }
         }
 
         tileAtDesk(room, item.prop).forEach(function (person) { tilePerson(room, ctx, person, now, "upper"); });

@@ -1025,7 +1025,7 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
     // the core to its south, so its back is still against the core.
     ["the lift from behind the core", engine.tileWallSet({ walls: scene.walls.slice().reverse() }, { x: 5, y: 1, w: 2, h: 1, facing: "n", hung: true }, false), { hidden: true }],
     ["the lift from behind the core, from a corner", engine.tileWallSet({ walls: scene.walls.slice().reverse() }, { x: 5, y: 1, w: 2, h: 1, facing: "n", hung: true }, true), { hidden: true }],
-    ["a board, square on", engine.tileWallSet(scene, board("s"), false), { dx: 0, dy: -0.75, hidden: false }],
+    ["a board, square on", engine.tileWallSet(scene, board("s"), false), { dx: 0, dy: -1.45, hidden: false }],
     ["a board from a corner", engine.tileWallSet(scene, board("s"), true), { dx: 0, dy: -0.5, hidden: false, line: false }],
     ["a board from behind its wall", engine.tileWallSet(scene, board("n"), true), { hidden: false }],
     ["a desk", engine.tileWallSet(scene, { x: 2, y: 4, w: 2, h: 1, facing: "n" }, true), { dx: 0, dy: 0, hidden: false }],
