@@ -189,7 +189,15 @@ public sealed record OfficeRules(
     public static readonly IReadOnlyList<string> Levels = ["floor", "lobby", "roof", "basement-1", "basement-2"];
 
     /// <summary>The placement hints the planner understands.</summary>
-    public static readonly IReadOnlyList<string> Placements = ["corner", "ends", "core", "north-wall", "near-open-plan"];
+    /// <remarks>
+    /// The last four are for the lobby, roof and basements: <c>band</c>, in the
+    /// row of rooms along the north wall beside the core, arranged the way a
+    /// floor's band is; <c>entrance</c>, by the front door; <c>south</c>, one of
+    /// the rooms off a basement's corridor, which share the space between them;
+    /// <c>open</c>, the open floor. A room on one of those levels that says none
+    /// goes in the band.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> Placements = ["corner", "ends", "core", "north-wall", "near-open-plan", "band", "entrance", "south", "open"];
 
     /// <summary>The states a person can be in, as <see cref="Use"/> names them.</summary>
     public static readonly IReadOnlyList<string> States = ["working", "lead-waiting", "briefing", "review", "merge-gate", "failed", "asks-you", "free", "done"];
@@ -224,7 +232,12 @@ public sealed record OfficeRules(
                 Min: [4, 3],
                 ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 1, ["5"] = 2, ["10"] = 3 },
                 Where: "near-open-plan",
-                Walls: ["glass", "solid", "screen"],
+
+                // No screens for walls, here or in any built-in room: the Tech
+                // set's screen is one framed panel on legs, and a row of them
+                // read as a row of seats. A pack whose screen joins up can
+                // still name one.
+                Walls: ["glass", "solid"],
                 Function: "questions",
                 Scope: "floor",
                 Zone: "interior",
@@ -248,7 +261,7 @@ public sealed record OfficeRules(
                 ["sofa", "partition-planter"],
                 Min: [3, 3],
                 ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["6"] = 1 },
-                Walls: ["planters", "open", "screen"],
+                Walls: ["planters", "open"],
                 Function: "idle",
                 Extras: ["armchair", "coffee-table", "beanbag"],
                 Scope: "floor",
@@ -258,7 +271,7 @@ public sealed record OfficeRules(
                 Access: "everyone"),
 
             // A corridor floor's rooms off the corridor, each with its own desks.
-            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "screen", "planters", "open"], Function: "work", Scope: "team", Zone: "perimeter", Access: "team"),
+            ["team-room"] = new(["desk", "partition-screen"], Min: [6, 5], Walls: ["glass", "solid", "planters", "open"], Function: "work", Scope: "team", Zone: "perimeter", Access: "team"),
             ["cupboard"] = new(["cupboard"], Min: [1, 1], Max: [2, 2], Count: 1, Scope: "floor", Zone: "interior"),
             ["storage-cupboard"] = new(["storage"], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["8"] = 1 }, Scope: "floor", Zone: "interior"),
             ["lift"] = new(["lift"], Count: 1, Core: true, Where: "core", Scope: "floor", Zone: "core"),
@@ -275,21 +288,21 @@ public sealed record OfficeRules(
             ["training-room"] = new(["training-desk"], Min: [5, 3], Max: [8, 4], ByTeam: new Dictionary<string, int>(StringComparer.Ordinal) { ["1"] = 0, ["12"] = 1 }, Walls: ["glass", "solid"], Function: "questions", Extras: ["whiteboard", "decor"], Scope: "building", Zone: "interior", Near: new Dictionary<string, int>(StringComparer.Ordinal) { ["meeting"] = 2 }),
 
             // The rest of the building.
-            ["reception"] = new(["reception"], Level: "lobby", Count: 1, Function: "arrivals"),
-            ["waiting-room"] = new(["sofa"], Level: "lobby", Count: 1, Function: "waiting"),
+            ["reception"] = new(["reception"], Level: "lobby", Count: 1, Where: "entrance", Function: "arrivals"),
+            ["waiting-room"] = new(["sofa"], Level: "lobby", Count: 1, Where: "entrance", Function: "waiting"),
             ["lobby-screen"] = new(["status-board"], Level: "lobby", Count: 1, Where: "north-wall", Function: "schedules"),
-            ["break-area"] = new(["pergola", "sofa"], Level: "roof", Count: 1, Function: "idle"),
-            ["mail-room"] = new(["mail"], Level: "basement-1", Count: 1, Function: "mail"),
-            ["storage"] = new(["storage"], Level: "basement-1", Count: 1, Function: "storage"),
-            ["garbage"] = new(["bin"], Level: "basement-2", Count: 1, Function: "bin"),
-            ["server-room"] = new(["server"], Level: "basement-2", Count: 1, Function: "server"),
+            ["break-area"] = new(["pergola", "sofa"], Level: "roof", Count: 1, Where: "open", Function: "idle"),
+            ["mail-room"] = new(["mail"], Level: "basement-1", Count: 1, Where: "south", Function: "mail"),
+            ["storage"] = new(["storage"], Level: "basement-1", Count: 1, Where: "south", Function: "storage"),
+            ["garbage"] = new(["bin"], Level: "basement-2", Count: 1, Where: "south", Function: "bin"),
+            ["server-room"] = new(["server"], Level: "basement-2", Count: 1, Where: "south", Function: "server"),
 
             // Below and above the floors: somewhere to leave a bike and shower,
             // a gym on the roof, IT help by the front door.
-            ["bike-store"] = new(["bike-rack"], Level: "basement-1", Count: 1),
-            ["showers"] = new(["shower"], Level: "basement-1", Count: 1, Extras: ["lockers"]),
-            ["gym"] = new(["treadmill"], Level: "roof", Count: 1, Function: "idle", Extras: ["weights-bench"]),
-            ["it-help"] = new(["help-desk"], Level: "lobby", Count: 1, Function: "arrivals", Extras: ["visitor-chair"]),
+            ["bike-store"] = new(["bike-rack"], Min: [6, 3], Max: [8, 4], Level: "basement-1", Count: 1, Where: "band", Walls: ["solid"], Zone: "core"),
+            ["showers"] = new(["shower"], Min: [5, 3], Max: [7, 4], Level: "basement-1", Count: 1, Where: "band", Walls: ["solid"], Extras: ["lockers"]),
+            ["gym"] = new(["treadmill"], Min: [6, 3], Max: [8, 4], Level: "roof", Count: 1, Where: "band", Walls: ["glass"], Function: "idle", Extras: ["weights-bench"], Zone: "core"),
+            ["it-help"] = new(["help-desk"], Min: [5, 3], Max: [7, 4], Level: "lobby", Count: 1, Where: "band", Walls: ["open"], Function: "arrivals", Extras: ["visitor-chair"], Zone: "core"),
         },
         new Dictionary<string, string>(StringComparer.Ordinal)
         {

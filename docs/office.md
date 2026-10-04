@@ -100,7 +100,8 @@ or desks is about that run; clicking a room the floor shares, the meeting room
 or the status board, shows each team's part of it under its name, with a way to
 open each run. Somebody moving between floors walks to the lift and is gone,
 and turns up from the lift on the other one; the arrows beside **Back to the
-building** go to the next floor up or down with a team on it.
+building** step a level up or down: through the basements, the lobby, the floors
+with a team on them and the roof.
 
 People walk round anyone standing still, pass behind whoever is sitting at a
 desk, and wait their turn where there's only room for one. If the wait goes on
@@ -126,18 +127,32 @@ it facing the door, and beside it a waiting lounge, sofas in pairs facing each
 other across a coffee table, with a seat for everything that hasn't started yet: each scheduled
 run and each task still to do is somebody on a sofa, and their card says what
 it is and when. When a run starts, its lead walks in off the street and takes
-the lift up. IT help has a desk in the band east of the lift.
+the lift up. IT help has a desk in the band beside the lift. The middle of the
+lobby has armchairs round coffee tables either side of the walk to the lift.
 
 **The roof** is where people go on a break. Somebody with nothing asked of them
 for a minute leaves their floor by the lift and turns up here, wandering
 between the benches and the edge. The minute stops a node between two steps
-from bouncing up and down. Behind glass west of the lift there is a gym.
+from bouncing up and down. Behind glass beside the lift there is a gym, and the
+deck has loungers on one side of the way out of the lift and garden beds on the
+other.
 
 **The basements** hold the building's plumbing. The first has the mail room,
 where every run's post is kept (what it was asked, and how it ended), and
 storage, where what it delivered is shelved, and in its band a bike store and
 showers. The second has the garbage room, which is the bin, and the server
 room, which is the daemon.
+
+All of these come from the rules, as a floor's rooms do, so a pack can move a
+room to another level, add one or take one away. A room on one of these levels
+says where on it it goes (`where`): `band`, the row along the north wall beside
+the lift, arranged the way a floor's band is; `entrance`, by the front door,
+which is where reception and the waiting room are; `south`, one of the rooms
+off a basement's corridor, which share its width between them and are filled
+in rows with the room's first tag; or `open`, the open floor, which is the
+roof's break area. One that says nothing goes in the band. What stays fixed is
+what the building needs: the door, the lift and stairs, and the way between
+them. Below the street a wall is never glass, whatever a room asks for.
 
 ## The rooms do things
 
@@ -210,10 +225,24 @@ and concrete below ground. A floor is a kit material called `floor-` and its
 name, a tile 128 pixels square that repeats every four cells; a cell is floored
 by the smallest room over it that names one.
 
-Where the kit has floors, walls stand up off them: a face about a metre high,
-pale with a skirting for a solid wall and framed for glass, under a top raised
-above it that joins the walls beside it. They're drawn in among the people and
-furniture by where they meet the floor, so somebody behind one is hidden by it.
+Where the kit has floors, walls stand up off them. A solid wall is a pale face
+about a metre high with a skirting, under a top raised above it that joins the
+walls beside it, kept low so it doesn't hide the room behind. Glass is drawn at
+its real size: a pane in a frame about 5 cm deep, standing 2.25 m with a
+mullion every 1.5 m, seen from a corner. Square on, a wall's height is drawn up
+the screen over whatever stands behind it, so there glass is cut down to the
+solid walls' height, still thin. The building's own glass at the edge of the
+floor is cut low in every view, like the side of a doll's house, so you can see
+in. The built-in rooms are walled in glass, solid wall,
+planters or nothing, never screens: the Tech set's screen is a single panel on
+legs, and a row of them looked like a row of seats. Every doorway has a door in
+it, glass in a glass wall and wood in a solid one, and the walls either side run
+right up to it. The core's face is a wall too, with the toilets' and cupboard's
+doors in it, the lift's doors flush with it, and the stairs in a well cut into
+it. Pieces made to hang on a wall, the status board and the lobby screen among
+them, are drawn against it from a corner. Walls are drawn in among the
+people and furniture by where they meet the floor, so somebody behind one is
+hidden by it.
 A kit with no floors is drawn as before, its walls flat from its tilesets.
 
 A piece can say where it **suits**: which rooms (`*` for any) and levels, what
@@ -356,8 +385,10 @@ Stated plainly, so nobody finds out by surprise:
   its plain desk; its people have only four facings so far, so somebody seen
   from a corner is drawn facing straight. The floor's own pictures are the
   square view's, laid on the diamond.
-- **The lobby, roof and basements are still laid out by hand**, not from the
-  rules the floors follow.
+- **Some of the lobby and roof is still fixed.** Their rooms come from the
+  rules, but the lobby's armchairs and the roof's loungers and garden beds are
+  laid out by code, and reception and the waiting room always take the same
+  places by the door.
 - **A building's room is somewhere only its floor's people go.** The library on
   the first floor is used by whoever sits on the first floor; nobody takes the
   lift from another floor to reach it.

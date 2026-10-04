@@ -5455,11 +5455,36 @@
     room.standing = !!floors;
 
     if (floors) {
+      var walled = function (x, y) { var tile = ((scene.walls || [])[y] || [])[x]; return tile !== undefined && tile >= 0; };
+      var inside = function (x, y) { return x >= 0 && y >= 0 && x < scene.width && y < scene.height && !walled(x, y); };
+      var half = t / 2;
+
       for (var fy = 0; fy < scene.height; fy += 1) {
         for (var fx = 0; fx < scene.width; fx += 1) {
-          var picture = floors[tileFloorOf(scene, fx, fy)] || floors.carpet;
+          if (!walled(fx, fy)) {
+            var picture = floors[tileFloorOf(scene, fx, fy)] || floors.carpet;
 
-          ctx.drawImage(picture, (fx * t) % picture.width, (fy * t) % picture.height, t, t, fx * t, fy * t, t, t);
+            ctx.drawImage(picture, (fx * t) % picture.width, (fy * t) % picture.height, t, t, fx * t, fy * t, t, t);
+
+            continue;
+          }
+
+          // A wall stands down the middle of its cell, so each quarter of the
+          // cell is floored as the room on that side of it: the rooms' floors
+          // stopped at the edge of their cells, and a strip of bare floor ran
+          // between every room and the outer walls.
+          for (var q = 0; q < 4; q += 1) {
+            var qx = q % 2;
+            var qy = q >> 1;
+            var sx = qx ? 1 : -1;
+            var sy = qy ? 1 : -1;
+            var from = inside(fx + sx, fy) ? [fx + sx, fy] : inside(fx, fy + sy) ? [fx, fy + sy] : inside(fx + sx, fy + sy) ? [fx + sx, fy + sy] : null;
+            var under = floors[from ? tileFloorOf(scene, from[0], from[1]) : tileFloorOf(scene, fx, fy)] || floors.carpet;
+            var px = fx * t + qx * half;
+            var py = fy * t + qy * half;
+
+            ctx.drawImage(under, px % under.width, py % under.height, half, half, px, py, half, half);
+          }
         }
       }
     } else if (surface) {
@@ -5883,6 +5908,267 @@
     });
   }
 
+  /*
+    Where a piece in a wall's line is drawn, and whether it is seen. A door
+    in a doorway, or what the core holds in its face, stands in the wall's
+    line through the middle of its cell, not on the front of the cell where
+    furniture stands; a piece made to hang on a wall is drawn back against
+    it (from a corner, where it would otherwise stand off it). And either,
+    with a wall at its back, is on the far side of that wall when its front
+    faces away - the lift and the core's doors seen from behind the core, a
+    board seen from behind its wall - so it is not drawn. A door in a
+    doorway has open floor either side and is seen from both.
+    corner: whether the view is from a corner, where a front facing north or
+    west faces away; square on, only north does.
+  */
+  function tileWallSet(scene, prop, corner) {
+    var walls = scene.walls || [];
+    var wall = function (x, y) { var row = walls[y]; return !!row && row[x] !== undefined && row[x] >= 0; };
+    var w = prop.w || 1;
+    var h = prop.h || 1;
+    var facing = prop.facing || "s";
+    var inLine = !!prop.set
+      || (h === 1 && wall(prop.x - 1, prop.y) && wall(prop.x + w, prop.y))
+      || (w === 1 && wall(prop.x, prop.y - 1) && wall(prop.x, prop.y + h));
+    var back = { s: [0, -1], n: [0, 1], e: [-1, 0], w: [1, 0] }[facing] || [0, -1];
+    var behindX = back[0] < 0 ? prop.x - 1 : back[0] > 0 ? prop.x + w : prop.x;
+    var behindY = back[1] < 0 ? prop.y - 1 : back[1] > 0 ? prop.y + h : prop.y;
+    var against = wall(behindX, behindY);
+    var away = facing === "n" || (corner && facing === "w");
+    // Hung in front of a wall: from a corner back to the wall; square on,
+    // on a wall across the view, up onto the wall's face, which is drawn
+    // rising up the screen from its foot, its bottom just above that foot so
+    // it hangs inside the face rather than below it on the floor; on a wall
+    // running away from the eye, sideways against its line - stepped as far
+    // as a wall across the view, it went through the glass and hung outside.
+    var hungBack = prop.hung && !inLine ? (corner ? 0.5 : facing === "e" || facing === "w" ? 0.75 : 1.45) : 0;
+    var moved = inLine || hungBack > 0;
+
+    // In a wall's line it goes to the middle of its cell whichever way it
+    // faces - a door's two sides are both in the doorway; hung in front of a
+    // wall it goes back towards that wall.
+    var across = facing === "s" || facing === "n";
+
+    return {
+      line: inLine,
+      dx: inLine ? (across ? 0 : -0.5) : moved ? back[0] * hungBack : 0,
+      dy: inLine ? (across ? -0.5 : 0) : moved ? back[1] * hungBack : 0,
+      hidden: !!((inLine || prop.hung) && against && away),
+    };
+  }
+
+  /*
+    The walls are a cutaway, cut off about a metre up; the art of a door, the
+    lift or a board is drawn whole, so a door stood half again as tall as
+    its wall and a board hung below it. What is set into a wall or hung on
+    one is cut where its wall is cut, and an opening gets a lintel - the
+    wall's top running across it - so the wall reads as one wall with the
+    door in it. Returns the wall's kind and, square on, the screen height of
+    the top of its face where the piece is; null for a piece no wall holds.
+  */
+  function tileWallCut(scene, prop, set, t) {
+    if (!set.line && !prop.hung) { return null; }
+
+    var walls = scene.walls || [];
+    var first = scene.atlases && scene.atlases[0] ? scene.atlases[0].tiles : Infinity;
+    var at = function (x, y) { var row = walls[y]; return row && row[x] !== undefined ? row[x] : -1; };
+    var w = prop.w || 1;
+    var h = prop.h || 1;
+    var facing = prop.facing || "s";
+    var across = facing === "s" || facing === "n";
+    var tile;
+
+    if (set.line) {
+      // The nearest wall along its line either way, past any opening beside
+      // it - the core's doors and the lift stand next to one another.
+      var reach = function (dx, dy) {
+        for (var i = 1; i <= 6; i += 1) {
+          var tileAt = at(prop.x + (dx < 0 ? -i : dx > 0 ? w - 1 + i : 0), prop.y + (dy < 0 ? -i : dy > 0 ? h - 1 + i : 0));
+
+          if (tileAt >= 0) { return tileAt; }
+        }
+
+        return -1;
+      };
+
+      tile = across ? Math.max(reach(-1, 0), reach(1, 0)) : Math.max(reach(0, -1), reach(0, 1));
+    } else {
+      var back = { s: [0, -1], n: [0, 1], e: [-1, 0], w: [1, 0] }[facing] || [0, -1];
+
+      tile = at(prop.x + (back[0] > 0 ? w : back[0]), prop.y + (back[1] > 0 ? h : back[1]));
+    }
+
+    if (tile < 0) { return null; }
+
+    var glass = tile >= first;
+    var th = Math.round(t * (glass ? TILE_GLASS : TILE_SOLID));
+    var high = Math.round(t * TILE_WALL_HIGH);
+    // The row whose wall it is, square on: its own for a door across the
+    // view, the one behind for a board hung on the wall in front of it.
+    var row = set.line ? prop.y : prop.y - 1;
+    var foot = across ? row * t + (t + th) / 2 : prop.y * t + (t + th) / 2;
+
+    return { glass: glass, th: th, high: high, top: foot - high, across: across };
+  }
+
+  /*
+    Square on, a wall running away from the eye is drawn as its top along
+    its cells, with no height; a door or board in it was drawn standing at
+    its full height side on, so it ran a cell and more past its doorway and
+    hung off the wall's line. Drawn as that wall is: its side picture fitted
+    to the cells it takes along the wall, in the wall's line - the middle of
+    the cell for one set into it, its back against the line for one hung on
+    it. Returns false for anything else, which is drawn as it always was.
+  */
+  function tileFlatInWall(room, ctx, scene, prop, set, t) {
+    var facing = prop.facing || "s";
+
+    if (!prop.piece || (facing !== "e" && facing !== "w") || (!set.line && !prop.hung)) { return false; }
+
+    var picture = tilePicture(room.set, prop.piece);
+    var side = (prop.sides && prop.sides[facing]) || prop.source;
+
+    if (!picture || !side) { return false; }
+
+    var w = prop.w || 1;
+    var h = prop.h || 1;
+    var cut = tileWallCut(scene, prop, set, t);
+    var th = cut ? cut.th : 2;
+    var walls = scene.walls || [];
+    var behind = facing === "e" ? prop.x - 1 : prop.x + w;
+    // The lift stands in cells of its own with the core behind it: drawn in
+    // the middle of them it floated in the lobby, so a piece made to hang
+    // goes back against the wall behind it even where it is set in the line.
+    var against = !!prop.hung && Array.from({ length: h }, function (_, i) { var row = walls[prop.y + i]; return !!row && row[behind] >= 0; }).every(Boolean);
+    var left;
+
+    if (set.line && !against) {
+      left = prop.x * t + (w * t - side[2]) / 2;
+    } else {
+      // Hung facing east, its wall is to the west, the line down the middle
+      // of that wall's cell; facing west, to the east.
+      var line = facing === "e" ? (prop.x - 0.5) * t : (prop.x + w + 0.5) * t;
+
+      left = facing === "e" ? line + th / 2 : line - th / 2 - side[2];
+    }
+
+    var straight = tileStraightSide(picture, side);
+
+    ctx.drawImage(straight.image, straight.x, straight.y, straight.w, straight.h, Math.round(left), prop.y * t, straight.w, h * t);
+
+    return true;
+  }
+
+  /*
+    A side picture straightened to stand in a wall's line. The kit draws a
+    door's side at an angle, its near edge longer than its far, so fitted to
+    a doorway it looked to tip; this keeps the rows where the piece is at its
+    full width and closes them top and bottom with its own outline. Made
+    once a picture and side; without a document to draw on, the picture as
+    it is.
+  */
+  var tileStraightened = {};
+
+  function tileStraightSide(picture, side) {
+    var key = (picture.src || "") + "|" + side.join(",");
+
+    if (tileStraightened[key]) { return tileStraightened[key]; }
+
+    var plain = { image: picture, x: side[0], y: side[1], w: side[2], h: side[3] };
+
+    if (typeof document === "undefined" || !picture.complete) { return plain; }
+
+    try {
+      var sw = side[2];
+      var sh = side[3];
+      var from = document.createElement("canvas");
+
+      from.width = sw;
+      from.height = sh;
+
+      var fctx = from.getContext("2d");
+
+      fctx.drawImage(picture, side[0], side[1], sw, sh, 0, 0, sw, sh);
+
+      var data = fctx.getImageData(0, 0, sw, sh).data;
+      var widths = [];
+      var outline = null;
+
+      for (var y = 0; y < sh; y += 1) {
+        var n = 0;
+
+        for (var x = 0; x < sw; x += 1) {
+          var i = (y * sw + x) * 4;
+
+          if (data[i + 3] > 0) {
+            n += 1;
+
+            if (!outline || data[i] + data[i + 1] + data[i + 2] < outline[0] + outline[1] + outline[2]) { outline = [data[i], data[i + 1], data[i + 2]]; }
+          }
+        }
+
+        widths.push(n);
+      }
+
+      var widest = Math.max.apply(null, widths);
+      var rows = [];
+
+      widths.forEach(function (n, y) { if (n >= widest * 0.9) { rows.push(y); } });
+
+      if (rows.length < 4) { return (tileStraightened[key] = plain); }
+
+      var top = rows[0];
+      var bottom = rows[rows.length - 1];
+      var out = document.createElement("canvas");
+
+      out.width = sw;
+      out.height = bottom - top + 3;
+
+      var octx = out.getContext("2d");
+
+      octx.drawImage(from, 0, top, sw, bottom - top + 1, 0, 1, sw, bottom - top + 1);
+      octx.fillStyle = "rgb(" + outline.join(",") + ")";
+      octx.fillRect(0, 0, sw, 1);
+      octx.fillRect(0, out.height - 1, sw, 1);
+
+      return (tileStraightened[key] = { image: out, x: 0, y: 0, w: sw, h: out.height });
+    } catch (error) {
+      return (tileStraightened[key] = plain);
+    }
+  }
+
+  // The wall's top run across an opening, square on: its cap, in the wall's
+  // own colour, over the door, the lift or the stairs.
+  function tileLintel(ctx, cut, x, w, t) {
+    ctx.fillStyle = cut.glass ? "#59606c" : "#45454f";
+    ctx.fillRect(x * t, Math.round(cut.top - cut.th), w * t, cut.th);
+  }
+
+  /*
+    Which pieces cast a shadow on the floor: anything standing on it - not
+    what lies flat in it (a rug, the stairs' opening), not what hangs on or
+    is set into a wall. Without one, every piece sat on the floor like a
+    sticker; the art was drawn on its own, a few pieces with a shadow
+    painted in and most without.
+  */
+  function tileCastsShadow(prop) {
+    return prop.depth !== "floor" && !prop.hung && !prop.set && prop.kind !== "door" && prop.kind !== "lift";
+  }
+
+  // A soft shadow square on: a band under the front of the footprint, the
+  // ends stepped in, in pixel art's flat colour.
+  function tileShadow(ctx, x, y, w, h, t) {
+    var left = x * t;
+    var width = w * t;
+    var foot = (y + h) * t;
+    var deep = Math.max(3, Math.round(t * Math.min(0.5, 0.18 + h * 0.12)));
+    var step = Math.max(1, Math.round(t * 0.08));
+
+    ctx.fillStyle = "rgba(24, 28, 38, 0.16)";
+    ctx.fillRect(left + step * 2, foot - deep, width - step * 4, deep + step);
+    ctx.fillRect(left + step, foot - deep + step, width - step * 2, deep - step);
+  }
+
   function tileErrand(room, name, person) {
     var busy = {};
 
@@ -6190,6 +6476,32 @@
 
     items.sort(function (a, b) { return a.d - b.d; });
 
+    // Shadows first: the footprint's diamond drawn in a little, on the floor
+    // under everything that stands.
+    var shade = function (x, y, w, h, inset) {
+      var a = iso.at(x + inset, y + inset);
+      var b = iso.at(x + w - inset, y + inset);
+      var c = iso.at(x + w - inset, y + h - inset);
+      var d = iso.at(x + inset, y + h - inset);
+
+      ctx.beginPath();
+      ctx.moveTo(Math.round(a[0]), Math.round(a[1]));
+      ctx.lineTo(Math.round(b[0]), Math.round(b[1]));
+      ctx.lineTo(Math.round(c[0]), Math.round(c[1]));
+      ctx.lineTo(Math.round(d[0]), Math.round(d[1]));
+      ctx.closePath();
+      ctx.fillStyle = "rgba(24, 28, 38, 0.16)";
+      ctx.fill();
+    };
+
+    items.forEach(function (item) {
+      if (item.prop && tileCastsShadow(item.prop)) {
+        shade(item.prop.x, item.prop.y, item.prop.w || 1, item.prop.h || 1, 0.08);
+      } else if (item.person && !item.person.gone) {
+        shade(item.person.x + 0.15, item.person.y + 0.15, 0.7, 0.7, 0.1);
+      }
+    });
+
     items.forEach(function (item) {
       if (item.wall) {
         tileIsoWall(ctx, iso, item.wall, t);
@@ -6197,8 +6509,48 @@
         var prop = item.prop;
         var w = prop.w || 1;
         var h = prop.h || 1;
-        var front = iso.at(prop.x + w, prop.y + h);
-        var middle = iso.at(prop.x + w / 2, prop.y + h / 2);
+        // In a wall's line, or hung on a wall, it is drawn there - and not
+        // at all from behind the wall it is set against.
+        var set = tileWallSet(scene, prop, true);
+
+        if (set.hidden) { return; }
+
+        // In a wall's line its middle is already the middle of its cell, and
+        // only its foot moves, to the line; hung in front of a wall, the
+        // whole of it goes back.
+        var front = iso.at(prop.x + w + set.dx, prop.y + h + set.dy);
+        var middle = set.line ? iso.at(prop.x + w / 2, prop.y + h / 2) : iso.at(prop.x + w / 2 + set.dx, prop.y + h / 2 + set.dy);
+
+        // Cut along the top of the wall that holds it, as the wall itself
+        // is cut: the line through the cells it stands in, raised by the
+        // wall's height, run out past both ends.
+        var cut = tileWallCut(scene, prop, set, t);
+        var line = null;
+
+        if (cut) {
+          var along = !cut.across;
+          var a = set.line
+            ? (along ? [prop.x + 0.5, prop.y] : [prop.x, prop.y + 0.5])
+            : ({ s: [prop.x, prop.y], n: [prop.x, prop.y + h], e: [prop.x, prop.y], w: [prop.x + w, prop.y] }[prop.facing || "s"]);
+          var b = set.line
+            ? (along ? [prop.x + 0.5, prop.y + h] : [prop.x + w, prop.y + 0.5])
+            : ({ s: [prop.x + w, prop.y], n: [prop.x + w, prop.y + h], e: [prop.x, prop.y + h], w: [prop.x + w, prop.y + h] }[prop.facing || "s"]);
+          var pa = iso.at(a[0], a[1]);
+          var pb = iso.at(b[0], b[1]);
+
+          line = [[pa[0], pa[1] - cut.high], [pb[0], pb[1] - cut.high]];
+
+          var ex = [(line[1][0] - line[0][0]) * 3, (line[1][1] - line[0][1]) * 3];
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(line[0][0] - ex[0], line[0][1] - ex[1]);
+          ctx.lineTo(line[1][0] + ex[0], line[1][1] + ex[1]);
+          ctx.lineTo(line[1][0] + ex[0], line[1][1] + ex[1] + 1e4);
+          ctx.lineTo(line[0][0] - ex[0], line[0][1] - ex[1] + 1e4);
+          ctx.closePath();
+          ctx.clip();
+        }
 
         // Moved so the bottom middle of its square-on footprint lands on the
         // front of its diamond, beneath its middle.
@@ -6206,6 +6558,20 @@
         ctx.translate(middle[0] - (prop.x + w / 2) * t, front[1] - iso.hh * 0.5 - (prop.y + h) * t);
         tileProp(room, ctx, Object.assign({}, prop, { facing: tileIsoSide(prop) }));
         ctx.restore();
+
+        if (cut) {
+          ctx.restore();
+
+          // The wall's top across the opening.
+          if (set.line) {
+            ctx.strokeStyle = cut.glass ? "#59606c" : "#45454f";
+            ctx.lineWidth = Math.max(2, cut.th);
+            ctx.beginPath();
+            ctx.moveTo(line[0][0], line[0][1]);
+            ctx.lineTo(line[1][0], line[1][1]);
+            ctx.stroke();
+          }
+        }
       } else {
         var person = item.person;
         var feet = iso.at(person.x + 0.5, person.y + 0.5);
@@ -6251,10 +6617,66 @@
     return sheet && sheet.animations && sheet.animations["idle_" + diagonal] ? diagonal : person.facing;
   }
 
+  /*
+    A glass wall cell from a corner: not a block but a pane, standing along
+    the line the wall runs - through the middle of its cell, out to the
+    cells it joins - with a rail along its foot and top and a post where it
+    ends. Thin as the frame is, it is drawn as a plane.
+  */
+  function tileIsoGlass(ctx, iso, wall, t) {
+    var high = Math.round(t * (wall.near || wall.nearSide ? TILE_NEAR_HIGH : wall.outer ? TILE_WALL_HIGH : TILE_GLASS_HIGH));
+    var x = wall.x;
+    var y = wall.y;
+    var runs = [];
+    var across = wall.left || wall.right || !(wall.up || wall.down);
+
+    if (across) { runs.push([wall.left ? x : x + 0.5, y + 0.5, wall.right ? x + 1 : x + 0.5, y + 0.5]); }
+    if (wall.up || wall.down) { runs.push([x + 0.5, wall.up ? y : y + 0.5, x + 0.5, wall.down ? y + 1 : y + 0.5]); }
+
+    runs.forEach(function (run) {
+      var a = iso.at(run[0], run[1]);
+      var b = iso.at(run[2], run[3]);
+
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(b[0], b[1] - high);
+      ctx.lineTo(a[0], a[1] - high);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(170, 205, 235, 0.22)";
+      ctx.fill();
+
+      ctx.strokeStyle = "#59606c";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]);
+      ctx.lineTo(b[0], b[1]);
+      ctx.moveTo(a[0], a[1] - high);
+      ctx.lineTo(b[0], b[1] - high);
+      ctx.stroke();
+    });
+
+    // A post where the run ends or turns: at the cell's middle when it ends
+    // there, and at every second cell along a run for the mullions.
+    var mid = iso.at(x + 0.5, y + 0.5);
+    var ends = !(wall.left && wall.right) && !(wall.up && wall.down);
+
+    if (ends || (wall.left && wall.right && x % 2 === 0) || (wall.up && wall.down && y % 2 === 0)) {
+      ctx.fillStyle = "#59606c";
+      ctx.fillRect(Math.round(mid[0]) - 1, Math.round(mid[1]) - high, 2, high);
+    }
+  }
+
   // A wall cell from a corner: its top raised, and the faces towards the
   // viewer where no wall carries on in front of them.
   function tileIsoWall(ctx, iso, wall, t) {
-    var high = Math.round(t * TILE_WALL_HIGH);
+    if (wall.glass) {
+      tileIsoGlass(ctx, iso, wall, t);
+
+      return;
+    }
+
+    var high = Math.round(t * (wall.near || wall.nearSide ? TILE_NEAR_HIGH : TILE_WALL_HIGH));
     var p = function (gx, gy, up) { var at = iso.at(gx, gy); return [at[0], at[1] - (up ? high : 0)]; };
     var x = wall.x;
     var y = wall.y;
@@ -6275,6 +6697,23 @@
 
     if (!wall.down) { quad(p(x, y + 1, false), p(x + 1, y + 1, false), p(x + 1, y + 1, true), p(x, y + 1, true), face); }
     if (!wall.right) { quad(p(x + 1, y, false), p(x + 1, y + 1, false), p(x + 1, y + 1, true), p(x + 1, y, true), shade); }
+
+    // A skirting along the foot of each face it shows, a lighter edge under
+    // its top, and a seam where one cell's face meets the next: a run of
+    // solid wall was one flat beige band from some angles.
+    var skirt = Math.max(2, Math.round(t * 0.12));
+    var drop = function (point, by) { return [point[0], point[1] - by]; };
+
+    if (!wall.down) {
+      quad(p(x, y + 1, false), p(x + 1, y + 1, false), drop(p(x + 1, y + 1, false), skirt), drop(p(x, y + 1, false), skirt), "#9c968c");
+      quad(drop(p(x, y + 1, true), -2), drop(p(x + 1, y + 1, true), -2), p(x + 1, y + 1, true), p(x, y + 1, true), "#ece8e1");
+      quad(p(x, y + 1, false), drop(p(x, y + 1, false), 0), p(x, y + 1, true), drop(p(x, y + 1, true), -1), "rgba(120, 112, 100, 0.35)");
+    }
+
+    if (!wall.right) {
+      quad(p(x + 1, y, false), p(x + 1, y + 1, false), drop(p(x + 1, y + 1, false), skirt), drop(p(x + 1, y, false), skirt), "#8c867c");
+      quad(drop(p(x + 1, y, true), -2), drop(p(x + 1, y + 1, true), -2), p(x + 1, y + 1, true), p(x + 1, y, true), "#e0dbd2");
+    }
 
     quad(p(x, y, true), p(x + 1, y, true), p(x + 1, y + 1, true), p(x, y + 1, true), top);
   }
@@ -6334,16 +6773,60 @@
 
     items.sort(function (a, b) { return a.y - b.y; });
 
+    // Shadows first, on the floor under everything that stands.
+    items.forEach(function (item) {
+      if (item.prop && tileCastsShadow(item.prop)) {
+        tileShadow(ctx, item.prop.x, item.prop.y, item.prop.w || 1, item.prop.h || 1, t);
+      } else if (item.person && !item.person.gone) {
+        tileShadow(ctx, item.person.x + 0.2, item.person.y + 0.45, 0.6, 0.5, t);
+      }
+    });
+
+    // What is drawn flat in a wall running away from the eye goes on after
+    // everything else: that wall's arm reaches into the doorway beside it
+    // and, drawn later, covered most of the door.
+    var flats = [];
+    var flatCtx = { drawImage: function () { flats.push(Array.prototype.slice.call(arguments)); } };
+
     items.forEach(function (item) {
       if (item.wall) {
         tileWall(ctx, item.wall, t);
       } else if (item.prop) {
-        tileProp(room, ctx, item.prop);
+        var set = tileWallSet(scene, item.prop, false);
+
+        // Square on, a door across the view moves up to its wall's line; one
+        // in a wall running away from the eye is drawn side on, already in
+        // the middle of its cell. A piece hung on a wall goes back onto it.
+        if (!set.hidden && tileFlatInWall(room, flatCtx, scene, item.prop, set, t)) {
+          // Drawn flat along its wall's line.
+        } else if (!set.hidden) {
+          var dx = set.line ? 0 : set.dx;
+          var cut = tileWallCut(scene, item.prop, set, t);
+
+          // Cut where its wall is cut, the wall's top over an opening.
+          if (cut) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-1e4, Math.round(cut.top), 1e5, 1e5);
+            ctx.clip();
+          }
+
+          tileProp(room, ctx, set.dy || dx ? Object.assign({}, item.prop, { x: item.prop.x + dx, y: item.prop.y + set.dy }) : item.prop);
+
+          if (cut) {
+            ctx.restore();
+
+            if (set.line && cut.across) { tileLintel(ctx, cut, item.prop.x, item.prop.w || 1, t); }
+          }
+        }
+
         tileAtDesk(room, item.prop).forEach(function (person) { tilePerson(room, ctx, person, now, "upper"); });
       } else {
         tilePerson(room, ctx, item.person, now);
       }
     });
+
+    flats.forEach(function (args) { ctx.drawImage.apply(ctx, args); });
 
     // Names last, over everything, so furniture never hides who somebody is.
     items.forEach(function (item) {
@@ -6418,6 +6901,13 @@
       return tile !== undefined && tile >= 0;
     }
 
+    // A wall reaches into the doorway beside it: an opening a cell wide with
+    // wall on its far side. Its arm stopped at the middle of its own cell, so
+    // every doorway looked two cells wide and its door stood in a gap.
+    function toward(x, y, dx, dy) {
+      return wall(x + dx, y + dy) || wall(x + 2 * dx, y + 2 * dy);
+    }
+
     for (var y = 0; y < scene.height; y += 1) {
       for (var x = 0; x < scene.width; x += 1) {
         if (!wall(x, y)) { continue; }
@@ -6429,11 +6919,20 @@
           x: x,
           y: y,
           glass: glass,
+          // The building's own edge, cut low like the side of a doll's house
+          // so the floor can be seen into; a partition inside stands full height.
+          outer: x === 0 || y === 0 || x === scene.width - 1 || y === scene.height - 1,
+          // The building's sides nearest the viewer, cut lower still and
+          // whatever they are made of: square on, the bottom row; from a
+          // corner, the right-hand side too. Seen from the north, the solid
+          // north wall stood in front of the rooms as a blank band.
+          near: y === scene.height - 1,
+          nearSide: x === scene.width - 1,
           thick: thick,
-          left: wall(x - 1, y),
-          right: wall(x + 1, y),
-          up: wall(x, y - 1),
-          down: wall(x, y + 1),
+          left: toward(x, y, -1, 0),
+          right: toward(x, y, 1, 0),
+          up: toward(x, y, 0, -1),
+          down: toward(x, y, 0, 1),
           // Corners, so a block of wall - the core - is one solid top rather
           // than posts and arms with the floor showing between them.
           upLeft: wall(x - 1, y - 1) && wall(x - 1, y) && wall(x, y - 1),
@@ -6448,12 +6947,17 @@
     return walls;
   }
 
-  // How thick a wall is, and how high it stands, in tiles: a solid wall about
-  // 22 cm, glass 15, both about a metre of face (enough to read as a wall
-  // without hiding the room behind it).
+  // How thick a wall is, and how high it stands, in tiles of 75 cm. A solid
+  // wall is about 22 cm thick and drawn a metre high, enough to read as a wall
+  // without hiding the room behind it. Glass is drawn as it is built: a pane
+  // in a frame about 5 cm deep, standing 2.25 m, door height and a rail - it
+  // hides nothing, so it can be its real height, where a block a metre high
+  // and 15 cm thick read as a low counter rather than a partition.
   var TILE_SOLID = 0.3;
-  var TILE_GLASS = 0.2;
+  var TILE_GLASS = 0.07;
   var TILE_WALL_HIGH = 1.4;
+  var TILE_GLASS_HIGH = 3;
+  var TILE_NEAR_HIGH = 0.35;
 
   /*
     One wall cell standing up: its face, where nothing of the wall continues
@@ -6462,7 +6966,11 @@
     to the walls beside it.
   */
   function tileWall(ctx, wall, t) {
-    var high = Math.round(t * TILE_WALL_HIGH);
+    // Seen square on, a wall's height is drawn up the screen over whatever
+    // stands behind it, so full-height glass stacked tinted boxes over the
+    // rooms and desks beyond; here it is cut down to the solid walls'
+    // height, thin as it is. From a corner it stands its full height.
+    var high = Math.round(t * (wall.near ? TILE_NEAR_HIGH : TILE_WALL_HIGH));
     var th = wall.thick;
     var x0 = wall.x * t;
     var y0 = wall.y * t;
@@ -6555,8 +7063,12 @@
 
       if (!name) { return; }
 
+      // Over the end of the area the team's office is not at: turned round,
+      // the top row was where the office stood, and the name sat on it.
+      var office = (room.scene.areas || []).filter(function (one) { return one.kind === "lead-office" && one.run === area.run; })[0];
+      var atTop = !office || office.y > area.y + 1;
       var x = (area.x + area.w / 2) * t;
-      var y = area.y * t + t * 0.5;
+      var y = (atTop ? area.y : area.y + area.h - 1) * t + t * 0.5;
       var w = ctx.measureText(name).width + font;
 
       ctx.fillStyle = "rgba(20, 24, 32, 0.78)";
@@ -7802,8 +8314,8 @@
 
     controls.appendChild(views);
     towerButtonFor(controls, "back", "Back to the building");
-    towerButtonFor(controls, "below", "↓", "The next floor down with a team on it");
-    towerButtonFor(controls, "above", "↑", "The next floor up with a team on it");
+    towerButtonFor(controls, "below", "↓", "The level below: a floor with a team on it, the lobby or a basement");
+    towerButtonFor(controls, "above", "↑", "The level above: a floor with a team on it, the lobby or the roof");
     towerButtonFor(controls, "left", "⟲", "Turn left");
     towerButtonFor(controls, "right", "⟳", "Turn right");
     towerButtonFor(controls, "out", "−", "Zoom out");
@@ -7921,12 +8433,12 @@
     if (which === "back") { towerLeave(); return; }
 
     if (which === "above" || which === "below") {
-      var next = towerNextFloor(towerData ? towerData.occupied : [], towerHere(), which === "above" ? 1 : -1);
+      var next = towerNextFloor(towerLevels(towerData ? towerData.occupied : [], towerFloors(), towerBasements()), towerHere(), which === "above" ? 1 : -1);
 
       if (!next) { return; }
 
       towerPopupClose();
-      towerView = { mode: "inside", floor: next.number };
+      towerView = next.view;
       keep("loadout.office.view", towerView);
       towerShow();
 
@@ -8065,6 +8577,33 @@
     return (occupied || [])
       .filter(function (one) { return by > 0 ? one.number > from : one.number < from; })
       .sort(function (a, b) { return (a.number - b.number) * by; })[0] || null;
+  }
+
+  /*
+    Every level the arrows step through, each with the view that shows it:
+    the basements, the lobby, the floors anybody is on, and the roof. The
+    arrows stepped through the occupied floors alone, so from inside there
+    was no way to the lobby, the roof or the basements - and from outside the
+    basements are drawn, and so can be clicked, only from the street.
+  */
+  function towerLevels(occupied, floors, basements) {
+    var levels = [];
+
+    for (var b = basements; b >= 1; b -= 1) {
+      levels.push({ number: -b, view: { mode: "inside", place: "basement-" + b } });
+    }
+
+    levels.push({ number: 0, view: { mode: "inside", place: "lobby" } });
+
+    (occupied || []).forEach(function (one) {
+      if (!levels.some(function (level) { return level.number === one.number; })) {
+        levels.push({ number: one.number, view: { mode: "inside", floor: one.number } });
+      }
+    });
+
+    levels.push({ number: floors + 1, view: { mode: "inside", place: "roof" } });
+
+    return levels;
   }
 
   // The level the floor view is showing: a team's floor, the lobby (0), the roof or a basement.
@@ -8247,7 +8786,7 @@
       var button = towerHold.querySelector(".tower-" + one);
 
       button.hidden = !inside;
-      button.disabled = !inside || !towerNextFloor(towerData ? towerData.occupied : [], towerHere(), one === "above" ? 1 : -1);
+      button.disabled = !inside || !towerNextFloor(towerLevels(towerData ? towerData.occupied : [], towerFloors(), towerBasements()), towerHere(), one === "above" ? 1 : -1);
     });
     towerHold.querySelector(".tower-views").hidden = inside;
     ["up", "down"].forEach(function (one) {
@@ -8651,28 +9190,21 @@
     var height = backdrop.height / (dpr * k);
 
     for (var y = height / 2 - storey * 3; y < height; y += storey) {
-      towerFlatStorey(ctx, c, 0, y, width, storey, towerOccupant(number + Math.round((height / 2 - y) / storey)));
+      towerFlatStorey(ctx, c, 0, y, width, storey);
     }
 
     ctx.globalAlpha = 1;
   }
 
-  // One storey face-on, for the backdrop behind a floor.
-  function towerFlatStorey(ctx, c, x, y, width, height, occupant) {
+  // One storey face-on, for the backdrop behind a floor: the wall and its
+  // fins, no lit windows. Faded behind the floor, a lit bay read as a stray
+  // panel standing in the room rather than a window in the storey beyond.
+  function towerFlatStorey(ctx, c, x, y, width, height) {
     var tile = towerTile();
     var bays = Math.max(1, Math.round(width / tile));
-    var lit = occupant && !occupant.dark ? Math.min(bays, occupant.people * 2) : 0;
 
     ctx.fillStyle = "#1c2a3a";
     ctx.fillRect(x, y, width, height);
-    ctx.fillStyle = "rgba(255, 214, 140, 0.85)";
-
-    for (var i = 0; i < lit; i += 1) {
-      var bay = Math.floor((i + 0.5) * bays / lit);
-
-      ctx.fillRect(x + bay * tile + 3, y + 6, tile - 6, height - 14);
-    }
-
     ctx.fillStyle = "#9c7a4a";
 
     for (var fin = 0; fin <= bays; fin += 1) { ctx.fillRect(x + fin * tile - 1, y, 3, height - 8); }
@@ -8846,6 +9378,7 @@
     var step = towerStepFor(towerLook.view, towerYaw === null ? towerYawFor() : towerYaw, lowWidth, lowHeight, towerZoom.outside);
 
     towerBlock = block;
+    towerUnit = Math.max(1, Math.round(step));
     canvas._scale = step * block;
 
     if (canvas.width !== lowWidth || canvas.height !== lowHeight) {
@@ -8950,6 +9483,11 @@
 
   // Screen pixels to one of the outside's: its pixel-art block.
   var towerBlock = 1;
+
+  // One of the building's art pixels in the outside canvas's pixels: the sky,
+  // the weather and the lamps are drawn in squares this size, so they are the
+  // same pixel art as the tower rather than smooth shapes beside it.
+  var towerUnit = 1;
   var TOWER_SKIES = {
     night: { top: "#04060c", low: "#16203a", cloud: "rgba(120, 130, 160, 0.22)", glass: "#0e1722", ground: "rgba(22, 25, 30, 0.9)", lamps: true },
     dawn: { top: "#34426e", low: "#f0b27a", cloud: "rgba(255, 210, 180, 0.55)", glass: "#243750", ground: "rgba(44, 46, 54, 0.85)", lamps: true },
@@ -8978,21 +9516,98 @@
     return x - Math.floor(x);
   }
 
+  /*
+    A sky in bands rather than a smooth gradient, the way pixel art paints
+    one: a few flat colours from the top down, each band's edge on the art
+    pixel grid. Returns each band's top, height and colour.
+  */
+  function towerBands(top, low, height, unit, count) {
+    var bands = [];
+    var rows = Math.max(1, Math.ceil(height / unit));
+    var n = Math.max(1, Math.min(count, rows));
+
+    function rgb(hex) {
+      var v = parseInt(hex.slice(1), 16);
+
+      return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+    }
+
+    var a = rgb(top);
+    var b = rgb(low);
+
+    for (var i = 0; i < n; i += 1) {
+      var from = Math.round(rows * i / n) * unit;
+      var to = Math.min(height, Math.round(rows * (i + 1) / n) * unit);
+      var t = n === 1 ? 0 : i / (n - 1);
+
+      bands.push({
+        y: from,
+        h: to - from,
+        colour: "rgb(" + a.map(function (one, k) { return Math.round(one + (b[k] - one) * t); }).join(", ") + ")",
+      });
+    }
+
+    return bands;
+  }
+
+  /*
+    The art pixels an ellipse covers: each a square of the given size on the
+    grid, in where its middle falls inside. A shape made of these has hard
+    stepped edges like the tower's, and moves a whole pixel at a time.
+  */
+  function towerDisc(cx, cy, rx, ry, unit) {
+    var cells = [];
+
+    if (rx <= 0 || ry <= 0) { return cells; }
+
+    var left = Math.floor((cx - rx) / unit);
+    var right = Math.ceil((cx + rx) / unit);
+    var upper = Math.floor((cy - ry) / unit);
+    var lower = Math.ceil((cy + ry) / unit);
+
+    for (var gy = upper; gy <= lower; gy += 1) {
+      for (var gx = left; gx <= right; gx += 1) {
+        var dx = (gx + 0.5) * unit - cx;
+        var dy = (gy + 0.5) * unit - cy;
+
+        if ((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1) { cells.push([gx * unit, gy * unit]); }
+      }
+    }
+
+    return cells;
+  }
+
+  // Fills art pixels once each, however many shapes cover them: overlapping
+  // puffs of one cloud are one flat colour, not darker where they meet.
+  function towerCells(ctx, cells, unit) {
+    var done = {};
+
+    cells.forEach(function (cell) {
+      var key = cell[0] + "," + cell[1];
+
+      if (done[key]) { return; }
+
+      done[key] = true;
+      ctx.fillRect(cell[0], cell[1], unit, unit);
+    });
+  }
+
   function towerSkyDraw(ctx, canvas, scene, clock) {
-    var sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    var unit = towerUnit;
 
-    sky.addColorStop(0, scene.top);
-    sky.addColorStop(1, scene.low);
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    towerBands(scene.top, scene.low, canvas.height, unit, 8).forEach(function (band) {
+      ctx.fillStyle = band.colour;
+      ctx.fillRect(0, band.y, canvas.width, band.h);
+    });
 
-    // Stars at night, clouds otherwise dimmer at night and heavier in bad weather.
+    // Stars at night, a pixel each; clouds otherwise, dimmer at night and
+    // heavier in bad weather.
     if (scene.sky === "night" && scene.weather === "clear") {
       for (var s = 0; s < 70; s += 1) {
         var twinkle = 0.4 + 0.6 * Math.abs(Math.sin(clock * (0.5 + towerNoise(s + 7)) + s));
 
         ctx.fillStyle = "rgba(230, 236, 255, " + (0.7 * twinkle).toFixed(2) + ")";
-        ctx.fillRect(towerNoise(s) * canvas.width, towerNoise(s + 100) * canvas.height * 0.5, 2, 2);
+        ctx.fillRect(Math.floor(towerNoise(s) * canvas.width / unit) * unit, Math.floor(towerNoise(s + 100) * canvas.height * 0.5 / unit) * unit, unit, unit);
       }
     }
 
@@ -9005,31 +9620,34 @@
       var speed = canvas.width * (0.004 + towerNoise(i + 40) * 0.006);
       var x = ((towerNoise(i) * (canvas.width + w * 2) + clock * speed) % (canvas.width + w * 2)) - w;
       var y = canvas.height * (0.04 + towerNoise(i + 60) * 0.3);
+      var cells = [];
 
-      // Each puff its own shape: in one path they are joined by a line, and filled as a wedge.
+      // Three puffs, drawn as one shape of art pixels.
       [[0, 0, 2, 7], [-0.22, 1 / 18, 4, 9], [0.2, 1 / 20, 4.5, 10]].forEach(function (puff) {
-        ctx.beginPath();
-        ctx.ellipse(x + w * puff[0], y + w * puff[1], w / puff[2], w / puff[3], 0, 0, Math.PI * 2);
-        ctx.fill();
+        cells = cells.concat(towerDisc(x + w * puff[0], y + w * puff[1], w / puff[2], w / puff[3], unit));
       });
+
+      towerCells(ctx, cells, unit);
     }
   }
 
   function towerWeatherDraw(ctx, canvas, scene, clock) {
     var dpr = window.devicePixelRatio || 1;
 
+    var unit = towerUnit;
+    var snap = function (v) { return Math.floor(v / unit) * unit; };
+
+    // Rain as short slanting runs of art pixels, snow as single ones.
     if (scene.weather === "rain") {
-      ctx.strokeStyle = "rgba(180, 200, 230, 0.45)";
-      ctx.lineWidth = dpr;
+      ctx.fillStyle = "rgba(180, 200, 230, 0.45)";
 
       for (var r = 0; r < 160; r += 1) {
-        var x = (towerNoise(r) * canvas.width + clock * 90 * dpr) % canvas.width;
-        var y = (towerNoise(r + 300) * canvas.height + clock * 900 * dpr) % canvas.height;
+        var x = snap((towerNoise(r) * canvas.width + clock * 90 * dpr) % canvas.width);
+        var y = snap((towerNoise(r + 300) * canvas.height + clock * 900 * dpr) % canvas.height);
 
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - 3 * dpr, y + 12 * dpr);
-        ctx.stroke();
+        for (var k = 0; k < 3; k += 1) {
+          ctx.fillRect(x - k * unit, y + k * 2 * unit, unit, 2 * unit);
+        }
       }
     }
 
@@ -9037,12 +9655,11 @@
       ctx.fillStyle = "rgba(245, 248, 255, 0.85)";
 
       for (var f = 0; f < 110; f += 1) {
-        var fy = (towerNoise(f + 500) * canvas.height + clock * (30 + towerNoise(f) * 30) * dpr) % canvas.height;
-        var fx = towerNoise(f + 700) * canvas.width + Math.sin(clock + f) * 8 * dpr;
+        var fy = snap((towerNoise(f + 500) * canvas.height + clock * (30 + towerNoise(f) * 30) * dpr) % canvas.height);
+        var fx = snap(towerNoise(f + 700) * canvas.width + Math.sin(clock + f) * 8 * dpr);
+        var size = towerNoise(f + 900) > 0.7 ? 2 * unit : unit;
 
-        ctx.beginPath();
-        ctx.arc(fx, fy, (1 + towerNoise(f + 900)) * dpr, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(fx, fy, size, size);
       }
     }
   }
@@ -9144,9 +9761,7 @@
             var spot = project(glow);
 
             ctx.fillStyle = "rgba(255, 240, 180, 0.9)";
-            ctx.beginPath();
-            ctx.arc(spot[0], spot[1], Math.max(1.5, (window.devicePixelRatio || 1) * 1.5), 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fillRect(Math.floor(spot[0] / towerUnit) * towerUnit, Math.floor(spot[1] / towerUnit) * towerUnit, towerUnit, towerUnit);
           }
         }
       }
@@ -9163,24 +9778,27 @@
         var pf = project(foot);
         var ph = project(head);
 
-        ctx.strokeStyle = "#3b4048";
-        ctx.lineWidth = Math.max(1, (window.devicePixelRatio || 1));
-        ctx.beginPath();
-        ctx.moveTo(pf[0], pf[1]);
-        ctx.lineTo(ph[0], ph[1]);
-        ctx.stroke();
+        // A post a pixel wide, standing straight up, in art pixels.
+        var unit = towerUnit;
+        var postX = Math.floor(ph[0] / unit) * unit;
+        var postTop = Math.floor(Math.min(pf[1], ph[1]) / unit) * unit;
+        var postFoot = Math.ceil(Math.max(pf[1], ph[1]) / unit) * unit;
+
+        ctx.fillStyle = "#3b4048";
+        ctx.fillRect(postX, postTop, unit, Math.max(unit, postFoot - postTop));
 
         if (scene.lamps) {
-          var radius = Math.max(4, Math.hypot(ph[0] - pf[0], ph[1] - pf[1]) * 0.35);
-          var halo = ctx.createRadialGradient(ph[0], ph[1], 0, ph[0], ph[1], radius);
+          // The glow in two flat rings, brighter in the middle, rather than a
+          // smooth fade the rest of the street does not have.
+          var radius = Math.max(3 * unit, Math.hypot(ph[0] - pf[0], ph[1] - pf[1]) * 0.35);
           var flicker = 0.75 + 0.1 * Math.sin(clock * 3 + lamp);
 
-          halo.addColorStop(0, "rgba(255, 220, 150, " + flicker.toFixed(2) + ")");
-          halo.addColorStop(1, "rgba(255, 220, 150, 0)");
-          ctx.fillStyle = halo;
-          ctx.beginPath();
-          ctx.arc(ph[0], ph[1], radius, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.fillStyle = "rgba(255, 220, 150, " + (flicker * 0.25).toFixed(2) + ")";
+          towerCells(ctx, towerDisc(postX + unit / 2, postTop + unit / 2, radius, radius, unit), unit);
+          ctx.fillStyle = "rgba(255, 220, 150, " + (flicker * 0.45).toFixed(2) + ")";
+          towerCells(ctx, towerDisc(postX + unit / 2, postTop + unit / 2, radius / 2, radius / 2, unit), unit);
+          ctx.fillStyle = "rgba(255, 240, 200, " + flicker.toFixed(2) + ")";
+          ctx.fillRect(postX, postTop, unit, unit);
         }
       }
     });
