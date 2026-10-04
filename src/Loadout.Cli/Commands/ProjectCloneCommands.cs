@@ -42,7 +42,7 @@ public sealed class ProjectCloneCommand : AsyncCommand<ProjectCloneCommand.Setti
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -121,7 +121,7 @@ public sealed class ProjectRelocateCommand : AsyncCommand<ProjectRelocateCommand
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -180,7 +180,7 @@ public sealed class ProjectShowCommand : AsyncCommand<ProjectShowCommand.Setting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

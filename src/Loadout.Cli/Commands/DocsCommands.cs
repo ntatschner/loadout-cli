@@ -62,7 +62,7 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -266,7 +266,7 @@ public sealed class DocsExportCommand : AsyncCommand<DocsExportCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -476,7 +476,7 @@ public sealed class DocsFindCommand : AsyncCommand<DocsFindCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -660,7 +660,7 @@ public sealed class DocsRefreshCommand : AsyncCommand<DocsRefreshCommand.Setting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -899,7 +899,7 @@ public sealed class DocsCiCommand : AsyncCommand<DocsCiCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

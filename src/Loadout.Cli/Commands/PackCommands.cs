@@ -33,7 +33,7 @@ public sealed class PackListCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -116,7 +116,7 @@ public sealed class PackAddCommand : AsyncCommand<PackAddCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -188,7 +188,7 @@ public sealed class PackApproveCommand : AsyncCommand<PackApproveCommand.Setting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -241,7 +241,7 @@ public sealed class PackUpdateCommand : AsyncCommand<PackApproveCommand.Settings
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         PackApproveCommand.Settings settings,
         CancellationToken cancellationToken)
@@ -297,7 +297,7 @@ public sealed class PackRemoveCommand : AsyncCommand<PackApproveCommand.Settings
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         PackApproveCommand.Settings settings,
         CancellationToken cancellationToken)

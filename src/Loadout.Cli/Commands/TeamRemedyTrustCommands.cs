@@ -67,7 +67,7 @@ public sealed class TeamRemedyTrustCommand : AsyncCommand<TeamRemedyTrustCommand
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -254,7 +254,7 @@ public sealed class TeamRemedyRequestsCommand : AsyncCommand<TeamRemedyRequestsC
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

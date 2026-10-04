@@ -42,7 +42,7 @@ public sealed class TeamCapabilitiesCommand : AsyncCommand<TeamSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         TeamSettings settings,
         CancellationToken cancellationToken)

@@ -119,7 +119,7 @@ public sealed class ProjectContextCommand : AsyncCommand<ProjectContextCommand.S
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

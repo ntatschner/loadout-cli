@@ -45,7 +45,7 @@ public sealed class TelemetryServeCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, GlobalSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -137,7 +137,7 @@ public sealed class TelemetryStatusCommand : AsyncCommand<TelemetryStatusSetting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         TelemetryStatusSettings settings,
         CancellationToken cancellationToken)

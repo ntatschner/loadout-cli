@@ -105,7 +105,7 @@ public sealed class IdeaDumpAddCommand : AsyncCommand<IdeaDumpAddCommand.Setting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -261,7 +261,7 @@ public sealed class IdeaDumpListCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -325,7 +325,7 @@ public sealed class IdeaDumpShowCommand : AsyncCommand<IdeaDumpShowCommand.Setti
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -392,7 +392,7 @@ public sealed class IdeaDumpSplitCommand : AsyncCommand<IdeaDumpSplitCommand.Set
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -477,7 +477,7 @@ public sealed class IdeaDumpApplyCommand : AsyncCommand<IdeaDumpApplyCommand.Set
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

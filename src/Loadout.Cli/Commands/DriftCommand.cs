@@ -69,7 +69,7 @@ public sealed class DriftCommand : AsyncCommand<DriftSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, DriftSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, DriftSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

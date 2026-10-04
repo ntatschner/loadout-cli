@@ -69,7 +69,7 @@ public sealed class InstructionsStatsCommand : AsyncCommand<InstructionsStatsSet
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         InstructionsStatsSettings settings,
         CancellationToken cancellationToken)

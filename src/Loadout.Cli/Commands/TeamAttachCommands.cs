@@ -50,7 +50,7 @@ public sealed class TeamAttachSetCommand : AsyncCommand<TeamAttachSetCommand.Set
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -128,7 +128,7 @@ public sealed class TeamAttachClearCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -167,7 +167,7 @@ public sealed class TeamAttachShowCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -229,7 +229,7 @@ public sealed class TeamSayCommand : AsyncCommand<TeamSayCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

@@ -110,7 +110,7 @@ public sealed class IdeaAddCommand : AsyncCommand<IdeaAddCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -222,7 +222,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -303,7 +303,7 @@ public sealed class IdeaShowCommand : AsyncCommand<IdeaSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         IdeaSettings settings,
         CancellationToken cancellationToken)
@@ -368,7 +368,7 @@ public sealed class IdeaRefineCommand : AsyncCommand<IdeaRefineCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -487,7 +487,7 @@ public sealed class IdeaAnswerCommand : AsyncCommand<IdeaAnswerCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -536,7 +536,7 @@ public sealed class IdeaChooseCommand : AsyncCommand<IdeaChooseCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -576,7 +576,7 @@ public sealed class IdeaKeepCommand : AsyncCommand<IdeaPiecesSettings>
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         IdeaPiecesSettings settings,
         CancellationToken cancellationToken)
@@ -605,7 +605,7 @@ public sealed class IdeaDropCommand : AsyncCommand<IdeaPiecesSettings>
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         IdeaPiecesSettings settings,
         CancellationToken cancellationToken)
@@ -649,7 +649,7 @@ public sealed class IdeaImproveCommand : AsyncCommand<IdeaImproveCommand.Setting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -712,7 +712,7 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -847,7 +847,7 @@ public sealed class IdeaRemoveCommand : AsyncCommand<IdeaSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         IdeaSettings settings,
         CancellationToken cancellationToken)

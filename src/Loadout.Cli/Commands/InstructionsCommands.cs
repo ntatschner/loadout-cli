@@ -142,7 +142,7 @@ public sealed class InstructionsListCommand : InstructionsCommandBase<Instructio
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, InstructionsListSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, InstructionsListSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -269,7 +269,7 @@ public sealed class InstructionsShowCommand : InstructionsCommandBase<Instructio
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, InstructionsShowSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, InstructionsShowSettings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -555,7 +555,7 @@ public sealed class InstructionsExplainCommand : InstructionsCommandBase<Instruc
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         InstructionsExplainSettings settings,
         CancellationToken cancellationToken)
@@ -890,7 +890,7 @@ public sealed class InstructionsValidateCommand : InstructionsCommandBase<Instru
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         InstructionsValidateSettings settings,
         CancellationToken cancellationToken)
@@ -1032,7 +1032,7 @@ public sealed class InstructionsNewCommand : InstructionsCommandBase<Instruction
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         InstructionsNewSettings settings,
         CancellationToken cancellationToken)
@@ -1227,7 +1227,7 @@ public sealed class InstructionsAuditCommand : InstructionsCommandBase<Instructi
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         InstructionsAuditSettings settings,
         CancellationToken cancellationToken)

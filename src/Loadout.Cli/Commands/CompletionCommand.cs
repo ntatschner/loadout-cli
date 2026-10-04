@@ -59,7 +59,7 @@ public sealed class CompletionCommand : Command<CompletionCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

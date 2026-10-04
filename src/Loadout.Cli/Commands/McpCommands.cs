@@ -51,7 +51,7 @@ public sealed class McpListCommand : AsyncCommand<McpSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, McpSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, McpSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -192,7 +192,7 @@ public sealed class McpAddCommand : AsyncCommand<McpAddSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, McpAddSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, McpAddSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -294,7 +294,7 @@ public sealed class McpRemoveCommand : AsyncCommand<McpRemoveSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, McpRemoveSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, McpRemoveSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

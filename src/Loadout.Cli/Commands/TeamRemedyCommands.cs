@@ -53,7 +53,7 @@ public sealed class TeamRemediesCommand : AsyncCommand<RemedySettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         RemedySettings settings,
         CancellationToken cancellationToken)
@@ -223,7 +223,7 @@ public sealed class TeamRemedyShowCommand : AsyncCommand<TeamRemedyShowCommand.S
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

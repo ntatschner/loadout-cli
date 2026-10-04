@@ -47,7 +47,7 @@ public sealed class TeamWebhookEnableCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -134,7 +134,7 @@ public sealed class TeamWebhookDisableCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -186,7 +186,7 @@ public sealed class TeamWebhookShowCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)

@@ -46,7 +46,7 @@ public sealed class StyleListCommand : InstructionsCommandBase<StyleListSettings
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         StyleListSettings settings,
         CancellationToken cancellationToken)
@@ -175,7 +175,7 @@ public sealed class StyleShowCommand : InstructionsCommandBase<StyleShowSettings
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         StyleShowSettings settings,
         CancellationToken cancellationToken)
@@ -314,7 +314,7 @@ public sealed class StyleUseCommand : InstructionsCommandBase<StyleUseSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         StyleUseSettings settings,
         CancellationToken cancellationToken)

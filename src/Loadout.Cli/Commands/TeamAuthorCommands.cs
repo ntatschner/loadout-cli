@@ -74,7 +74,7 @@ public sealed class TeamNewCommand : AsyncCommand<TeamNewCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -284,7 +284,7 @@ public sealed class TeamEditCommand : AsyncCommand<TeamEditCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -421,7 +421,7 @@ public sealed class TeamRemoveCommand : AsyncCommand<TeamRemoveCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

@@ -202,7 +202,7 @@
       "loadout.agents": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Core": "[0.50.0, )",
+          "Loadout.Core": "[0.54.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
@@ -210,8 +210,8 @@
       "loadout.core": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.50.0, )",
-          "Loadout.Platform": "[0.50.0, )",
+          "Loadout.Models": "[0.54.0, )",
+          "Loadout.Platform": "[0.54.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
           "YamlDotNet": "[16.3.0, )"
@@ -223,7 +223,7 @@
       "loadout.platform": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.50.0, )",
+          "Loadout.Models": "[0.54.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
