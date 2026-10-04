@@ -5455,11 +5455,36 @@
     room.standing = !!floors;
 
     if (floors) {
+      var walled = function (x, y) { var tile = ((scene.walls || [])[y] || [])[x]; return tile !== undefined && tile >= 0; };
+      var inside = function (x, y) { return x >= 0 && y >= 0 && x < scene.width && y < scene.height && !walled(x, y); };
+      var half = t / 2;
+
       for (var fy = 0; fy < scene.height; fy += 1) {
         for (var fx = 0; fx < scene.width; fx += 1) {
-          var picture = floors[tileFloorOf(scene, fx, fy)] || floors.carpet;
+          if (!walled(fx, fy)) {
+            var picture = floors[tileFloorOf(scene, fx, fy)] || floors.carpet;
 
-          ctx.drawImage(picture, (fx * t) % picture.width, (fy * t) % picture.height, t, t, fx * t, fy * t, t, t);
+            ctx.drawImage(picture, (fx * t) % picture.width, (fy * t) % picture.height, t, t, fx * t, fy * t, t, t);
+
+            continue;
+          }
+
+          // A wall stands down the middle of its cell, so each quarter of the
+          // cell is floored as the room on that side of it: the rooms' floors
+          // stopped at the edge of their cells, and a strip of bare floor ran
+          // between every room and the outer walls.
+          for (var q = 0; q < 4; q += 1) {
+            var qx = q % 2;
+            var qy = q >> 1;
+            var sx = qx ? 1 : -1;
+            var sy = qy ? 1 : -1;
+            var from = inside(fx + sx, fy) ? [fx + sx, fy] : inside(fx, fy + sy) ? [fx, fy + sy] : inside(fx + sx, fy + sy) ? [fx + sx, fy + sy] : null;
+            var under = floors[from ? tileFloorOf(scene, from[0], from[1]) : tileFloorOf(scene, fx, fy)] || floors.carpet;
+            var px = fx * t + qx * half;
+            var py = fy * t + qy * half;
+
+            ctx.drawImage(under, px % under.width, py % under.height, half, half, px, py, half, half);
+          }
         }
       }
     } else if (surface) {
@@ -5911,10 +5936,12 @@
     var against = wall(behindX, behindY);
     var away = facing === "n" || (corner && facing === "w");
     // Hung in front of a wall: from a corner back to the wall; square on,
-    // up onto the wall's face, which is drawn rising up the screen from its
-    // foot, its bottom just above that foot so it hangs inside the face
-    // rather than below it on the floor.
-    var hungBack = prop.hung && !inLine ? (corner ? 0.5 : 1.45) : 0;
+    // on a wall across the view, up onto the wall's face, which is drawn
+    // rising up the screen from its foot, its bottom just above that foot so
+    // it hangs inside the face rather than below it on the floor; on a wall
+    // running away from the eye, sideways against its line - stepped as far
+    // as a wall across the view, it went through the glass and hung outside.
+    var hungBack = prop.hung && !inLine ? (corner ? 0.5 : facing === "e" || facing === "w" ? 0.75 : 1.45) : 0;
     var moved = inLine || hungBack > 0;
 
     // In a wall's line it goes to the middle of its cell whichever way it

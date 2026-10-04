@@ -541,6 +541,50 @@ public sealed class FloorPlannerTests
     }
 
     [Fact]
+    public void The_band_s_rooms_run_to_the_side_walls_and_the_desks_are_centred()
+    {
+        // Three columns or fewer left over at the end of the band were open
+        // floor with nothing in them, unwalled against the side glass; and the
+        // desks were packed from the west, all the slack along the east side.
+        foreach (var seed in Enumerable.Range(0, 20))
+        {
+            foreach (var team in new[] { 4, 8, 12 })
+            {
+                var name = $"team {team} seed {seed}";
+                var scene = FloorPlanner.Plan(Tech, Rules, $"run-{seed}", team).Scene;
+                var band = scene.Areas!.Where(area => area.Y == 1 && area.Kind != "core").ToList();
+                var core = scene.Areas!.Single(area => area.Kind == "core");
+                var west = band.Where(area => area.X < core.X).ToList();
+                var east = band.Where(area => area.X > core.X).ToList();
+
+                if (west.Count > 0)
+                {
+                    west.Min(area => area.X).Should().Be(1, $"{name}: the band's west end is a room");
+                }
+
+                if (east.Count > 0)
+                {
+                    east.Max(area => area.X + area.W).Should().Be(scene.Width - 1, $"{name}: the band's east end is a room");
+                }
+
+                foreach (var area in scene.Areas!.Where(area => area.Kind is "open-plan" or "team-room"))
+                {
+                    var desks = scene.Props!.Where(prop => prop.Kind == "desk" && prop.X >= area.X && prop.X + prop.W <= area.X + area.W && prop.Y >= area.Y && prop.Y < area.Y + area.H).ToList();
+                    var row = desks.Count == 0 ? [] : desks.Where(prop => prop.Y == desks.Min(one => one.Y)).ToList();
+
+                    if (row.Count > 1)
+                    {
+                        var before = row.Min(prop => prop.X) - area.X;
+                        var after = area.X + area.W - row.Max(prop => prop.X + prop.W);
+
+                        Math.Abs(before - after).Should().BeLessThanOrEqualTo(1, $"{name}: the desks in {area.Name} are centred, {before} columns west and {after} east");
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
     public void Every_doorway_has_a_door_in_it_and_wall_pieces_say_they_hang()
     {
         // Doorways were gaps, and a room's way in read as a missing piece of

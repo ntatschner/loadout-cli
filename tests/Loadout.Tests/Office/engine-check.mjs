@@ -1027,6 +1027,9 @@ console.log(`face layer: ${drawn} pixels across every expression and trait, none
     ["the lift from behind the core, from a corner", engine.tileWallSet({ walls: scene.walls.slice().reverse() }, { x: 5, y: 1, w: 2, h: 1, facing: "n", hung: true }, true), { hidden: true }],
     ["a board, square on", engine.tileWallSet(scene, board("s"), false), { dx: 0, dy: -1.45, hidden: false }],
     ["a board from a corner", engine.tileWallSet(scene, board("s"), true), { dx: 0, dy: -0.5, hidden: false, line: false }],
+    // An exit hung on the west wall, square on: against the wall's line, not
+    // stepped as far as up a north wall's face, which put it outside the glass.
+    ["an exit on a west wall, square on", engine.tileWallSet({ walls: [[W, _, _], [W, _, _], [W, _, _]] }, { x: 1, y: 1, w: 1, h: 1, facing: "e", hung: true }, false), { dx: -0.75, dy: 0, hidden: false }],
     ["a board from behind its wall", engine.tileWallSet(scene, board("n"), true), { hidden: false }],
     ["a desk", engine.tileWallSet(scene, { x: 2, y: 4, w: 2, h: 1, facing: "n" }, true), { dx: 0, dy: 0, hidden: false }],
   ];

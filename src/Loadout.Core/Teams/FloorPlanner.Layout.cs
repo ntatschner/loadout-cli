@@ -380,6 +380,16 @@ public static partial class FloorPlanner
                     }
                 }
 
+                // Too little left over for a nook goes to the room at the
+                // outer end, so the run meets the side wall: three columns or
+                // fewer were left as open band with nothing in it, unwalled
+                // at the end of the floor.
+                if (spare is > 0 and < 4 && rooms.Count > 0)
+                {
+                    widths[side == 0 ? 0 : rooms.Count - 1] += spare;
+                    spare = 0;
+                }
+
                 var x = from + (spare > 0 && random.Next(2) == 0 ? spare : 0);
 
                 for (var i = 0; i < rooms.Count; i++)
@@ -757,9 +767,15 @@ public static partial class FloorPlanner
         // row and its seats; one desk row and its seats where desks don't turn.
         var height = pods ? 4 : 2;
 
+        // As many desks across as fit, a column between them, centred: packed
+        // from the west, what was left over all lay along the east side.
+        var span = x1 - x0 - 1;
+        var across = Math.Max(0, (span + 1) / (w + 1));
+        var start = x0 + 1 + Math.Max(0, span - (across * (w + 1) - 1)) / 2;
+
         for (var y = top + 1; y + height - 1 <= bottom; y += height + 1)
         {
-            for (var x = x0 + 1; x + w - 1 <= x1 - 1; x += w + 1)
+            for (var x = start; x + w - 1 <= x1 - 1; x += w + 1)
             {
                 var south = (X: x, Y: y - seat.Y);
 
