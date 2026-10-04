@@ -114,7 +114,9 @@ public static partial class FloorPlanner
         Core(floor, parts, random, coreLeft, coreWidth, band);
 
         // The way from the entrance to the lift stays clear.
-        floor.Reserve(coreLeft, band + 2, coreWidth, height - 2 - band - 1);
+        var (walk, walkWidth) = CoreWalk(coreLeft, coreWidth);
+
+        floor.Reserve(walk, band + 2, walkWidth, height - 2 - band - 1);
         floor.Reserve(door, band + 2, 2, height - 2 - band - 1);
 
         // The band's rooms, from the rules: IT help by the core, open to the lobby.
@@ -347,7 +349,9 @@ public static partial class FloorPlanner
         Core(floor, parts, random, coreLeft, coreWidth, band, doors: false);
 
         // Out of the lift and straight on to the south edge stays clear.
-        floor.Reserve(coreLeft, band + 2, coreWidth, height - 2 - band - 1);
+        var (walk, walkWidth) = CoreWalk(coreLeft, coreWidth);
+
+        floor.Reserve(walk, band + 2, walkWidth, height - 2 - band - 1);
 
         // The band's rooms, from the rules: a gym by the core, behind glass.
         LevelBand(floor, parts, rules, "roof", band, coreLeft, coreWidth, seats);
@@ -1225,9 +1229,10 @@ public static partial class FloorPlanner
         // The band of rooms along the north, and the core in its middle.
         var depth = height >= 14 ? 4 : 3;
         var band = depth + 1;
-        // Wide enough on a full plate for two doors, the lift and a well for
-        // the stairs between its corners.
-        var coreWidth = width >= 32 ? 8 : width >= 22 ? 6 : 4;
+        // On a full plate, wide enough for its corners, the toilets' and the
+        // cupboard's doors, a lobby for two lifts and a stairwell; narrower,
+        // the doors, a lift and the stairs in its face.
+        var coreWidth = width >= 32 ? LobbyCore : width >= 22 ? 6 : 4;
         var coreLeft = (width - coreWidth) / 2;
 
         for (var x = coreLeft; x < coreLeft + coreWidth; x++)
@@ -1359,23 +1364,27 @@ public static partial class FloorPlanner
         }
     }
 
+    // The width of a core with a lift lobby and a stairwell.
+    private const int LobbyCore = 11;
+
+    // The strip in front of the core kept clear to walk to the lift: the lift
+    // lobby's mouth, or the whole of a narrow core's face.
+    private static (int X, int Width) CoreWalk(int left, int width) => width >= LobbyCore ? (left + 3, 4) : (left, width);
+
     private static void Core(Floor floor, Parts parts, Random random, int left, int width, int band, bool doors = true)
     {
-        // The core's south face is a wall, in line with the fronts of the
-        // rooms either side of it, and what the core holds is set into it,
-        // from the left: the toilets' door and the broom cupboard's, the lift
-        // in the wall itself, its doors flush with the face, and the stairs
-        // in a well cut into the core, open to the corridor. The roof has only
-        // the lift and the stairs. Pieces drawn as a room rather than a door -
-        // a set's toilet cubicles - are not put in a doorway a cell wide; the
-        // set's door is. A core too narrow for the well has its stairs in
-        // front of it, beside the lift.
+        if (width >= LobbyCore && band >= 4)
+        {
+            LobbyCoreLayout(floor, parts, random, left, band, doors);
+
+            return;
+        }
+
+        // A narrow core: its south face is a wall in line with the rooms
+        // either side, and in it, from a cell in from the corner, the
+        // toilets' and the cupboard's doors, the lift, and the stairs in front.
         var face = band;
         var row = band + 1;
-
-        // In from the core's corner: the rooms either side take the core as
-        // their wall, and a doorway at its very edge cut a room's front off
-        // from anything to join.
         var x = left + 1;
 
         for (var col = left; col < left + width; col++)
@@ -1383,29 +1392,8 @@ public static partial class FloorPlanner
             floor.Wall(col, face, Cell.Solid);
         }
 
-        var door = parts.Has("door-wood", one => one.Footprint is [1, 1]) ? parts.Pick("door-wood", random, one => one.Footprint is [1, 1]).Piece : null;
+        CoreDoors(floor, parts, random, ref x, face, row, doors);
 
-        foreach (var tag in new[] { "toilet", "cupboard" })
-        {
-            // On the roof the doors are not there but their places are, so the
-            // lift is where it is on every other level.
-            if (doors)
-            {
-                var piece = door ?? parts.Pick(tag, random, one => one.Footprint[0] == 1).Piece;
-
-                floor.Wall(x, face, Cell.Carpet);
-                floor.Put($"core-{tag}", tag, piece with { Blocks = false }, x, face);
-                floor.SetInWall();
-                floor.Spots[tag] = new OfficeSpot(x, row, "n");
-            }
-
-            x++;
-        }
-
-        // The lift in the face: its art is a lift's doors in a wall, and stood
-        // in front of the wall it was a box sticking out into the corridor.
-        // Room left for the doors and the well where the core has it; a narrow
-        // core takes whatever lift fits beside the doors.
         var lift = parts.Has("lift", one => one.Footprint[0] <= width - 4)
             ? parts.Pick("lift", random, one => one.Footprint[0] <= width - 4)
             : parts.Pick("lift", random, one => one.Footprint[0] <= Math.Max(1, width - 2));
@@ -1421,29 +1409,119 @@ public static partial class FloorPlanner
         floor.Spots["lift"] = new OfficeSpot(x, row, "n");
         x += lw;
 
-        var stairs = parts.Pick("stairs", random);
-        var (sw, sh) = (stairs.Piece.Footprint[0], stairs.Piece.Footprint[1]);
-
-        if (x + sw <= left + width - 1)
+        if (x < left + width)
         {
-            // A well in the core for the stairs, open on the corridor side and
-            // walled on the others by the core, the corner column kept.
-            for (var col = x; col < x + sw; col++)
-            {
-                for (var y = face - sh + 1; y <= face; y++)
-                {
-                    floor.Wall(col, y, Cell.Carpet);
-                }
-            }
+            var stairs = parts.Pick("stairs", random);
 
-            floor.Put("core-stairs", "stairs", stairs.Piece with { Blocks = false }, x, face - sh + 1);
-        }
-        else if (x < left + width)
-        {
             floor.Put("core-stairs", "stairs", stairs.Piece with { Blocks = false }, x, row);
         }
 
         floor.Areas.Add(new OfficeArea("core", "core", left, 1, width, band, null));
+    }
+
+    // The toilets' door and the cupboard's, side by side in the core's face
+    // from x, advancing x past them; on the roof their places are kept empty.
+    private static void CoreDoors(Floor floor, Parts parts, Random random, ref int x, int face, int row, bool doors)
+    {
+        var door = parts.Has("door-wood", one => one.Footprint is [1, 1]) ? parts.Pick("door-wood", random, one => one.Footprint is [1, 1]).Piece : null;
+
+        foreach (var tag in new[] { "toilet", "cupboard" })
+        {
+            if (doors)
+            {
+                // Pieces drawn as a room rather than a door - a set's toilet
+                // cubicles - are not put in a doorway a cell wide; the set's door is.
+                var piece = door ?? parts.Pick(tag, random, one => one.Footprint[0] == 1).Piece;
+
+                floor.Wall(x, face, Cell.Carpet);
+                floor.Put($"core-{tag}", tag, piece with { Blocks = false }, x, face);
+                floor.SetInWall();
+                floor.Spots[tag] = new OfficeSpot(x, row, "n");
+            }
+
+            x++;
+        }
+    }
+
+    /*
+        A core the width of LobbyCore, as an office's core is built:
+
+          corner | toilets | cupboard | lift lobby, 4 wide | wall | stairwell, 2 wide | corner
+
+        The toilets' and cupboard's doors are in its face. The lobby is cut
+        three cells into the core and open to the corridor, with two lifts
+        flush in its back wall. The stairwell is walled, entered by a door in
+        the face, with the stairs inside and a landing behind the door. The
+        lifts and the stairs were in the face itself before: the lift stood
+        out as a box beside an opening, and the stairs were a hole in the
+        corridor floor.
+    */
+    private static void LobbyCoreLayout(Floor floor, Parts parts, Random random, int left, int band, bool doors)
+    {
+        var face = band;
+        var row = band + 1;
+        var x = left + 1;
+
+        CoreDoors(floor, parts, random, ref x, face, row, doors);
+
+        // The lift lobby: four cells wide, three deep, open to the corridor.
+        var lobbyLeft = left + 3;
+        var lobbyDeep = Math.Min(3, band - 2);
+        var back = face - lobbyDeep;
+
+        for (var col = lobbyLeft; col < lobbyLeft + 4; col++)
+        {
+            for (var y = back + 1; y <= face; y++)
+            {
+                floor.Wall(col, y, Cell.Carpet);
+            }
+        }
+
+        // Two lifts flush in its back wall, their doors facing the corridor.
+        var lift = parts.Pick("lift", random, one => one.Footprint[0] == 2);
+
+        foreach (var (name, at) in new[] { ("core-lift", lobbyLeft), ("core-lift-2", lobbyLeft + 2) })
+        {
+            floor.Wall(at, back, Cell.Carpet);
+            floor.Wall(at + 1, back, Cell.Carpet);
+            floor.Put(name, "lift", lift.Piece with { Blocks = false }, at, back);
+            floor.SetInWall();
+        }
+
+        floor.Spots["lift"] = new OfficeSpot(lobbyLeft, back + 1, "n");
+        floor.Areas.Add(new OfficeArea("lift-lobby", "lift-lobby", lobbyLeft, back + 1, 4, lobbyDeep, null));
+
+        // The stairwell: two cells wide, from the core's back to its face,
+        // the wall between it and the lobby kept, a door in the face, the
+        // stairs at the back and a landing inside the door.
+        var well = left + 8;
+
+        for (var col = well; col < well + 2; col++)
+        {
+            for (var y = 1; y < face; y++)
+            {
+                floor.Wall(col, y, Cell.Carpet);
+            }
+        }
+
+        var stairs = parts.Pick("stairs", random);
+        var depth = Math.Min(stairs.Piece.Footprint[1], face - 2);
+
+        floor.Put("core-stairs", "stairs", stairs.Piece with { Blocks = false }, well, face - 1 - depth);
+
+        var door = parts.Has("door-wood", one => one.Footprint is [1, 1]) ? parts.Pick("door-wood", random, one => one.Footprint is [1, 1]).Piece : null;
+
+        floor.Wall(well, face, Cell.Carpet);
+
+        if (door is not null)
+        {
+            floor.Put("core-stairs-door", "door", door with { Blocks = false }, well, face);
+            floor.SetInWall();
+        }
+
+        floor.Spots["stairs"] = new OfficeSpot(well, face - 1, "n");
+        floor.Areas.Add(new OfficeArea("stairwell", "stairwell", well, 1, 2, face - 1, null));
+        floor.Areas.Add(new OfficeArea("core", "core", left, 1, LobbyCore, band, null));
     }
 
     /// <summary>

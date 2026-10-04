@@ -3518,85 +3518,6 @@
     "against": "wall"
    }
   },
-  "shared-stairs": {
-   "picture": "shared-stairs.png",
-   "source": [
-    106,
-    8,
-    53,
-    60
-   ],
-   "footprint": [
-    2,
-    2
-   ],
-   "tags": [
-    "stairs"
-   ],
-   "blocks": false,
-   "place": "floor",
-   "sides": {
-    "n": [
-     0,
-     0,
-     63,
-     68
-    ],
-    "e": [
-     63,
-     2,
-     43,
-     66
-    ],
-    "s": [
-     106,
-     8,
-     53,
-     60
-    ],
-    "w": [
-     159,
-     2,
-     44,
-     66
-    ],
-    "sw": [
-     203,
-     2,
-     65,
-     66
-    ],
-    "se": [
-     268,
-     2,
-     65,
-     66
-    ],
-    "ne": [
-     333,
-     10,
-     65,
-     58
-    ],
-    "nw": [
-     398,
-     9,
-     65,
-     59
-    ]
-   },
-   "depth": "floor",
-   "suits": {
-    "rooms": [
-     "stairs"
-    ],
-    "levels": [
-     "*"
-    ],
-    "role": "main",
-    "against": "wall"
-   }
-  },
   "shared-toilet": {
    "picture": "shared-toilet.png",
    "source": [
@@ -5968,6 +5889,84 @@
      "facing": "s"
     }
    ]
+  },
+  "tech-stairs": {
+   "picture": "tech-stairs.png",
+   "source": [
+    142,
+    8,
+    68,
+    66
+   ],
+   "footprint": [
+    2,
+    3
+   ],
+   "tags": [
+    "stairs"
+   ],
+   "blocks": false,
+   "place": "floor",
+   "sides": {
+    "n": [
+     0,
+     24,
+     74,
+     50
+    ],
+    "e": [
+     74,
+     4,
+     68,
+     70
+    ],
+    "s": [
+     142,
+     8,
+     68,
+     66
+    ],
+    "w": [
+     210,
+     4,
+     70,
+     70
+    ],
+    "sw": [
+     280,
+     0,
+     77,
+     74
+    ],
+    "se": [
+     357,
+     0,
+     78,
+     74
+    ],
+    "ne": [
+     435,
+     15,
+     77,
+     59
+    ],
+    "nw": [
+     512,
+     15,
+     76,
+     59
+    ]
+   },
+   "suits": {
+    "rooms": [
+     "stairs"
+    ],
+    "levels": [
+     "*"
+    ],
+    "role": "main",
+    "against": "wall"
+   }
   }
  },
  "materials": {

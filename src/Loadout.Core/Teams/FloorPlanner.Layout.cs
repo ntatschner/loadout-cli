@@ -306,13 +306,36 @@ public static partial class FloorPlanner
         var segments = new[] { (From: westFrom, To: coreLeft - 1), (From: coreLeft + coreWidth, To: width - 2) };
         var room = segments.Sum(one => one.To - one.From + 1);
 
-        // Leave out from the end until what is left fits, walls and all.
+        // Leave out from the end until what is left fits, walls and all: a
+        // wall between neighbours, none where a run meets the core or the
+        // glass, so two fewer than rooms across the two sides. Counting one
+        // for every room left a facility out of a band with room for it.
         var fitting = programme.ToList();
 
-        while (fitting.Count > 0 && fitting.Sum(one => one.Min + 1) > room)
+        while (fitting.Count > 0 && fitting.Sum(one => one.Min + 1) - Math.Min(2, fitting.Count) > room)
         {
             fitting.RemoveAt(fitting.Count - 1);
         }
+
+        // Fitting in total is not fitting on each side; where no split of
+        // them does, the last is left out too.
+        while (fitting.Count > 0)
+        {
+            var arranged = ArrangeAll(fitting, rules, random, width, coreLeft, coreWidth, segments);
+
+            if (arranged is not null)
+            {
+                return arranged;
+            }
+
+            fitting.RemoveAt(fitting.Count - 1);
+        }
+
+        return [];
+    }
+
+    private static List<Placed>? ArrangeAll(List<Wanted> fitting, OfficeRules rules, Random random, int width, int coreLeft, int coreWidth, (int From, int To)[] segments)
+    {
 
         List<Placed>? best = null;
         var bestScore = double.MinValue;
@@ -379,7 +402,7 @@ public static partial class FloorPlanner
             }
         }
 
-        return best ?? [];
+        return best;
     }
 
     /// <summary>

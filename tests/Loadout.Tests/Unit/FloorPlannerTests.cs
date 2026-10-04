@@ -472,13 +472,53 @@ public sealed class FloorPlannerTests
         // The toilets were cubicles standing in the corridor, the lift a box
         // standing out from the core, and the stairs a hole in the corridor
         // floor, in front of a core with no face.
+        var lobbies = 0;
+
         foreach (var (name, scene) in Everywhere())
         {
             var core = scene.Areas!.Single(area => area.Kind == "core");
             var face = core.Y + core.H - 1;
             var inFace = scene.Props!.Where(prop => prop.Id.StartsWith("core-", StringComparison.Ordinal)).ToList();
-            var lift = inFace.Single(prop => prop.Kind == "lift");
+            var lifts = inFace.Where(prop => prop.Kind == "lift").ToList();
             var stairs = inFace.Single(prop => prop.Kind == "stairs");
+            var lobby = scene.Areas!.SingleOrDefault(area => area.Kind == "lift-lobby");
+
+            if (lobby is not null)
+            {
+                lobbies++;
+
+                // A full plate's core: a lobby open to the corridor with two
+                // lifts in its back wall, and the stairs in a walled stairwell
+                // entered by a door in the face.
+                var well = scene.Areas!.Single(area => area.Kind == "stairwell");
+                var back = lobby.Y - 1;
+
+                lifts.Should().HaveCount(2, $"{name}: two lifts");
+                lifts.Should().OnlyContain(lift => lift.Y == back && lift.X >= lobby.X && lift.X + lift.W <= lobby.X + lobby.W, $"{name}: the lifts are in the lobby's back wall");
+                lifts.SelectMany(lift => Enumerable.Range(lift.X, lift.W)).Should().OnlyContain(x => WallAt(scene, x, back - 1), $"{name}: the core is behind the lifts");
+                Enumerable.Range(lobby.Y, lobby.H - 1).Should().OnlyContain(y => WallAt(scene, lobby.X - 1, y) && WallAt(scene, lobby.X + lobby.W, y), $"{name}: the lobby is walled each side");
+                Enumerable.Range(lobby.X, lobby.W).Should().OnlyContain(x => !WallAt(scene, x, face), $"{name}: the lobby is open to the corridor");
+
+                stairs.X.Should().BeInRange(well.X, well.X + well.W - 1, $"{name}: the stairs are in the stairwell");
+                stairs.Y.Should().BeGreaterThanOrEqualTo(well.Y, $"{name}: the stairs are in the stairwell");
+                Enumerable.Range(well.Y, well.H).Should().OnlyContain(y => WallAt(scene, well.X - 1, y) && WallAt(scene, well.X + well.W, y), $"{name}: the stairwell is walled each side");
+                inFace.Should().Contain(prop => prop.Kind == "door" && prop.Y == face && prop.X >= well.X && prop.X < well.X + well.W, $"{name}: the stairwell has a door in the face");
+
+                // The rest of the face is wall, but for the doors in it.
+                foreach (var x in Enumerable.Range(core.X, core.W).Where(x => x < lobby.X || x >= lobby.X + lobby.W))
+                {
+                    var held = inFace.Any(prop => x >= prop.X && x < prop.X + prop.W && prop.Y == face);
+
+                    (held ? !WallAt(scene, x, face) : WallAt(scene, x, face))
+                        .Should().BeTrue($"{name}: the core's face at {x} is {(held ? "a doorway with its door" : "wall")}");
+                }
+
+                inFace.Should().NotContain(prop => prop.Y > face, $"{name}: nothing of the core is out in the corridor");
+
+                continue;
+            }
+
+            var lift = lifts.Single();
 
             // Wall all along, but for the openings that hold a door, the lift
             // or the stairs - and nothing of the core out in the corridor.
@@ -490,16 +530,14 @@ public sealed class FloorPlannerTests
                     .Should().BeTrue($"{name}: the core's face at {x} is {(held ? "an opening with what it holds" : "wall")}");
             }
 
-            inFace.Should().NotContain(prop => prop.Y + prop.H - 1 != face, $"{name}: what the core holds is in its face, not in the corridor");
+            inFace.Where(prop => prop.Kind != "stairs").Should().NotContain(prop => prop.Y + prop.H - 1 != face, $"{name}: what the core holds is in its face, not in the corridor");
 
-            // The lift's doors in the wall, the core behind them; the stairs
-            // in a well the core walls on each side.
+            // The lift's doors in the wall, the core behind them.
             lift.Y.Should().Be(face, $"{name}: the lift is in the face");
             Enumerable.Range(lift.X, lift.W).Should().OnlyContain(x => WallAt(scene, x, face - 1), $"{name}: the core is behind the lift");
-            WallAt(scene, stairs.X - 1, stairs.Y).Should().BeTrue($"{name}: the stairs' well is walled on its west");
-            WallAt(scene, stairs.X + stairs.W, stairs.Y).Should().BeTrue($"{name}: the stairs' well is walled on its east");
-            Enumerable.Range(stairs.X, stairs.W).Should().OnlyContain(x => WallAt(scene, x, stairs.Y - 1), $"{name}: the stairs' well is walled behind");
         }
+
+        lobbies.Should().BePositive("a full plate's core has a lift lobby");
     }
 
     [Fact]
