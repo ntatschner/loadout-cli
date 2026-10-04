@@ -5918,6 +5918,7 @@
     var across = facing === "s" || facing === "n";
 
     return {
+      line: inLine,
       dx: inLine ? (across ? 0 : -0.5) : moved ? back[0] * 0.5 : 0,
       dy: inLine ? (across ? -0.5 : 0) : moved ? back[1] * 0.5 : 0,
       hidden: !!((inLine || prop.hung) && against && away),
@@ -6244,8 +6245,11 @@
 
         if (set.hidden) { return; }
 
+        // In a wall's line its middle is already the middle of its cell, and
+        // only its foot moves, to the line; hung in front of a wall, the
+        // whole of it goes back.
         var front = iso.at(prop.x + w + set.dx, prop.y + h + set.dy);
-        var middle = iso.at(prop.x + w / 2 + set.dx, prop.y + h / 2 + set.dy);
+        var middle = set.line ? iso.at(prop.x + w / 2, prop.y + h / 2) : iso.at(prop.x + w / 2 + set.dx, prop.y + h / 2 + set.dy);
 
         // Moved so the bottom middle of its square-on footprint lands on the
         // front of its diamond, beneath its middle.
@@ -6460,8 +6464,11 @@
       } else if (item.prop) {
         var set = tileWallSet(scene, item.prop, false);
 
+        // Square on, only a door across the view moves, up to its wall's
+        // line; one in a wall running away from the eye is drawn side on,
+        // already in the middle of its cell.
         if (!set.hidden) {
-          tileProp(room, ctx, set.dx || set.dy ? Object.assign({}, item.prop, { x: item.prop.x + set.dx, y: item.prop.y + set.dy }) : item.prop);
+          tileProp(room, ctx, set.dy ? Object.assign({}, item.prop, { y: item.prop.y + set.dy }) : item.prop);
         }
 
         tileAtDesk(room, item.prop).forEach(function (person) { tilePerson(room, ctx, person, now, "upper"); });
