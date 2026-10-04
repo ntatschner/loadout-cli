@@ -6115,7 +6115,9 @@
 
       widths.forEach(function (n, y) { if (n >= widest * 0.9) { rows.push(y); } });
 
-      if (rows.length < 4) { return (tileStraightened[key] = plain); }
+      // Already straight, as the doors' edge-on pictures are, or too little
+      // at full width to keep: as it is.
+      if (rows.length < 4 || rows.length === sh) { return (tileStraightened[key] = plain); }
 
       var top = rows[0];
       var bottom = rows[rows.length - 1];
