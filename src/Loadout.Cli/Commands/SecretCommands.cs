@@ -39,7 +39,7 @@ public sealed class SecretSetCommand : AsyncCommand<SecretSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, SecretSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, SecretSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -114,7 +114,7 @@ public sealed class SecretTestCommand : AsyncCommand<SecretSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, SecretSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, SecretSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 
@@ -160,7 +160,7 @@ public sealed class SecretRemoveCommand : AsyncCommand<SecretSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, SecretSettings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, SecretSettings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(_console, settings);
 

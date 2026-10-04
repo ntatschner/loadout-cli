@@ -217,7 +217,7 @@ public sealed class StartFormTests
     {
         public static TeamRunCommand.Settings? Last { get; set; }
 
-        protected override int Execute(CommandContext context, TeamRunCommand.Settings settings, CancellationToken cancellationToken)
+        public override int Execute(CommandContext context, TeamRunCommand.Settings settings, CancellationToken cancellationToken)
         {
             Last = settings;
 

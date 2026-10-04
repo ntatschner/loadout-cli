@@ -100,7 +100,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -284,7 +284,7 @@ public sealed class TeamMessageCommand : AsyncCommand<TeamMessageCommand.Setting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -386,7 +386,7 @@ public sealed class TeamNameCommand : AsyncCommand<TeamNameCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -483,7 +483,7 @@ public sealed class TeamHaltCommand : AsyncCommand<TeamHaltCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -577,7 +577,7 @@ public sealed class TeamBudgetCommand : AsyncCommand<TeamBudgetCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

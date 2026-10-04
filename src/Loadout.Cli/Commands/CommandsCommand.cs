@@ -46,7 +46,7 @@ public sealed class CommandsCommand : Command<CommandsCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 

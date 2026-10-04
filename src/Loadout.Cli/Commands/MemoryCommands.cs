@@ -101,7 +101,7 @@ public sealed class MemoryListCommand : MemoryCommandBase<MemoryListCommand.Sett
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(Console, settings);
 
@@ -258,7 +258,7 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(Console, settings);
 
@@ -457,7 +457,7 @@ public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Se
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(Console, settings);
 
@@ -692,7 +692,7 @@ public sealed class MemoryReindexCommand : MemoryCommandBase<MemoryReindexComman
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(Console, settings);
 

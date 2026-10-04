@@ -99,7 +99,7 @@ public sealed class TeamListCommand : AsyncCommand<TeamSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         TeamSettings settings,
         CancellationToken cancellationToken)
@@ -200,7 +200,7 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -381,7 +381,7 @@ public sealed class TeamRunsCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -482,7 +482,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -918,7 +918,7 @@ public sealed class TeamOutboxCommand : AsyncCommand<TeamOutboxCommand.Settings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -1126,7 +1126,7 @@ public sealed class TeamLogCommand : AsyncCommand<TeamLogCommand.Settings>
         public bool Events { get; init; }
     }
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -1448,7 +1448,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         UsdCap.TryParse(machine?.Teams.Budget, out var cap) ? cap : UsdCap.Unset;
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

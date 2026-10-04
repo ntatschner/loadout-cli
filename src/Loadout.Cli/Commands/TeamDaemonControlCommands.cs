@@ -125,7 +125,7 @@ public sealed class TeamDaemonStopCommand(
     : DaemonControlCommand<DaemonStopSettings>(paths, processes, console, time)
 {
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         DaemonStopSettings settings,
         CancellationToken cancellationToken)
@@ -183,7 +183,7 @@ public sealed class TeamDaemonRestartCommand(
     : DaemonControlCommand<DaemonStopSettings>(paths, processes, console, time)
 {
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         DaemonStopSettings settings,
         CancellationToken cancellationToken)
@@ -260,7 +260,7 @@ public sealed class TeamDaemonPauseCommand(
     : DaemonControlCommand<GlobalSettings>(paths, processes, console, time)
 {
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -317,7 +317,7 @@ public sealed class TeamDaemonResumeCommand(
     : DaemonControlCommand<GlobalSettings>(paths, processes, console, time)
 {
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)

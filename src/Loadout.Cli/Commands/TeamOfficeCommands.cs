@@ -38,7 +38,7 @@ public sealed class TeamOfficeCheckCommand : Command<TeamOfficeCheckCommand.Sett
     }
 
     /// <inheritdoc />
-    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(settings);
 

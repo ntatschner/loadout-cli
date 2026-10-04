@@ -362,17 +362,17 @@
       "loadout": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Tui": "[0.50.0, )",
+          "Loadout.Tui": "[0.54.0, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.12, )",
           "ModelContextProtocol": "[2.2.0, )",
           "Spectre.Console": "[0.57.2, )",
-          "Spectre.Console.Cli": "[0.55.0, )"
+          "Spectre.Console.Cli": "[0.57.2, )"
         }
       },
       "loadout.agents": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Core": "[0.50.0, )",
+          "Loadout.Core": "[0.54.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
@@ -380,8 +380,8 @@
       "loadout.core": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.50.0, )",
-          "Loadout.Platform": "[0.50.0, )",
+          "Loadout.Models": "[0.54.0, )",
+          "Loadout.Platform": "[0.54.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )",
           "YamlDotNet": "[16.3.0, )"
@@ -393,7 +393,7 @@
       "loadout.platform": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Models": "[0.50.0, )",
+          "Loadout.Models": "[0.54.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.12, )",
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.12, )"
         }
@@ -401,7 +401,7 @@
       "loadout.tui": {
         "type": "Project",
         "dependencies": {
-          "Loadout.Agents": "[0.50.0, )",
+          "Loadout.Agents": "[0.54.0, )",
           "Spectre.Console": "[0.57.2, )",
           "Terminal.Gui": "[2.5.0, )"
         }
@@ -452,11 +452,11 @@
       },
       "Spectre.Console.Cli": {
         "type": "CentralTransitive",
-        "requested": "[0.55.0, )",
-        "resolved": "0.55.0",
-        "contentHash": "cFJTB1te4eaAICd4Zp+8T/kiRn1ikQxgGqmoNarb1qoQ/7LzHAvVQ62x5U9GW3E0QI7sZLcXIIoq4CpqgTx42Q==",
+        "requested": "[0.57.2, )",
+        "resolved": "0.57.2",
+        "contentHash": "EAiwpJXAAvhyyzH6hljVo7z19ahG7WM+zViKEHtUagyPymYfJrsainXDOHzUakBHj6VYEpuaqPAShgqvs1N9aQ==",
         "dependencies": {
-          "Spectre.Console": "0.55.0"
+          "Spectre.Console": "0.57.2"
         }
       },
       "Terminal.Gui": {

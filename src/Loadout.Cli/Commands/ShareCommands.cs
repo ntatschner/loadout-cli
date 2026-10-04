@@ -44,7 +44,7 @@ public sealed class ShareCandidatesCommand : AsyncCommand<ShareCandidatesCommand
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -194,7 +194,7 @@ public sealed class SharePromoteCommand : AsyncCommand<SharePromoteCommand.Setti
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

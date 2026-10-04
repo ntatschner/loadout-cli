@@ -92,7 +92,7 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -252,7 +252,7 @@ public sealed class TeamScheduleListCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -340,7 +340,7 @@ public sealed class TeamScheduleRemoveCommand : AsyncCommand<TeamScheduleRemoveC
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

@@ -64,7 +64,7 @@ public sealed class McpServeSettings : GlobalSettings
 public sealed class McpServeCommand : AsyncCommand<McpServeSettings>
 {
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         McpServeSettings settings,
         CancellationToken cancellationToken)

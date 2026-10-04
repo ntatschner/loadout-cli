@@ -100,7 +100,7 @@ public sealed class RulesListCommand : RulesCommandBase<RulesListCommand.Setting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(Console, settings);
 
@@ -216,7 +216,7 @@ public sealed class RulesBudgetCommand : RulesCommandBase<RulesBudgetCommand.Set
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(Console, settings);
 
@@ -326,7 +326,7 @@ public sealed class RulesAuditCommand : RulesCommandBase<RulesAuditCommand.Setti
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var output = new CommandOutput(Console, settings);
 

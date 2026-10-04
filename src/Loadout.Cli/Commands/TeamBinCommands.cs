@@ -111,7 +111,7 @@ public sealed class TeamBinCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -199,7 +199,7 @@ public sealed class TeamBinEmptyCommand : AsyncCommand<TeamBinEmptyCommand.Setti
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -381,7 +381,7 @@ public sealed class TeamRunsRestoreCommand : AsyncCommand<TeamRunsRestoreCommand
     }
 
     /// <inheritdoc />
-    protected override Task<int> ExecuteAsync(
+    public override Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -473,7 +473,7 @@ public sealed class TeamRestoreCommand : AsyncCommand<TeamRestoreCommand.Setting
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

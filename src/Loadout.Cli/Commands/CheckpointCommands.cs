@@ -57,7 +57,7 @@ public sealed class CheckpointCreateCommand : AsyncCommand<CheckpointCreateComma
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -134,7 +134,7 @@ public sealed class CheckpointListCommand : AsyncCommand<CheckpointSettings>
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         CheckpointSettings settings,
         CancellationToken cancellationToken)
@@ -249,7 +249,7 @@ public sealed class CheckpointRestoreCommand : AsyncCommand<CheckpointRestoreCom
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -339,7 +339,7 @@ public sealed class CheckpointRemoveCommand : AsyncCommand<CheckpointRemoveComma
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

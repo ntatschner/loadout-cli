@@ -73,7 +73,7 @@ public sealed class InstructionsExportCommand : AsyncCommand<InstructionsExportS
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         InstructionsExportSettings settings,
         CancellationToken cancellationToken)

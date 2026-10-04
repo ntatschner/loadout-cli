@@ -71,7 +71,7 @@ public sealed class TeamRunsRemoveCommand : AsyncCommand<TeamRunsRemoveCommand.S
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -322,7 +322,7 @@ public sealed class TeamRunsPruneCommand : AsyncCommand<TeamRunsPruneCommand.Set
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)

@@ -66,7 +66,7 @@ public sealed class InstructionsProbeCommand : AsyncCommand<InstructionsProbeSet
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         InstructionsProbeSettings settings,
         CancellationToken cancellationToken)

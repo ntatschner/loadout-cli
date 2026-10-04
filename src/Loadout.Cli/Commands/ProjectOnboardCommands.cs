@@ -62,7 +62,7 @@ public sealed class ProjectOnboardCommand : AsyncCommand<ProjectOnboardCommand.S
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
@@ -208,7 +208,7 @@ public sealed class ProjectProposalCommand : AsyncCommand<ProjectProposalCommand
     }
 
     /// <inheritdoc />
-    protected override async Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         Settings settings,
         CancellationToken cancellationToken)
