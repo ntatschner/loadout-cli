@@ -670,12 +670,25 @@ internal sealed partial class MemoryService : IMemoryService
     /// worth stopping for.
     /// </summary>
     /// <remarks>
-    /// Two distinct words rather than one. One is "build", or "the launcher",
-    /// which half a store has in common and which would stop every write; two is
-    /// the point at which the topics are plausibly about the same thing. A check
-    /// that interrupts every write is one whose override becomes a habit.
+    /// <para>
+    /// Half of what the new topic says, and never fewer than two things. This
+    /// used to be two shared words and nothing else, which sounds selective and
+    /// is not: treating each of the 688 topics in the real stores as a fresh
+    /// one-fact write against the rest of its project, two shared words stopped
+    /// 686 of them. Topics in one project share its vocabulary, so a count of
+    /// shared words says nothing, and a check that interrupts every write is one
+    /// whose override becomes a habit.
+    /// </para>
+    /// <para>
+    /// Measured the same way, this stops 58 of the 688, and the pairs it stops
+    /// are the ones a person would call the same subject: two topics on commit
+    /// attribution covering 96% of each other, two on the same seed script at
+    /// 93%. The first real onboarding's refusals covered about a tenth.
+    /// </para>
     /// </remarks>
-    private const int SharedWordsWorthAsking = 2;
+    private const double ShareWorthAsking = 0.5;
+
+    private const int SharedThingsWorthAsking = 2;
 
     /// <summary>Existing topics that look like they already cover this ground.</summary>
     private async Task<IReadOnlyList<MemoryMatch>> NeighboursAsync(
@@ -698,7 +711,9 @@ internal sealed partial class MemoryService : IMemoryService
         var query = name.Replace('-', ' ') + " " + string.Join(' ', facts);
 
         return MemorySearch.Rank(topics, query, limit: 3)
-            .Where(match => match.Terms >= SharedWordsWorthAsking)
+            .Where(match => MemorySearch.Coverage(match.Topic, query) is var (shared, of)
+                && shared >= SharedThingsWorthAsking
+                && shared >= of * ShareWorthAsking)
             .ToList();
     }
 

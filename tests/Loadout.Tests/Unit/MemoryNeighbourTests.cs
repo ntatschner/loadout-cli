@@ -116,6 +116,46 @@ public sealed class MemoryNeighbourTests : IDisposable
     }
 
     [Fact]
+    public async Task A_file_name_both_topics_mention_counts_once()
+    {
+        // The first real onboarding: a store holding only how to build and test
+        // a script, then a topic on what the script detects. Both name the
+        // script, and its name splits into three words, so one shared name
+        // passed for three shared words and stopped a topic about something
+        // else entirely.
+        await SeedAsync(
+            "verify",
+            "how to build and test this repository",
+            "Run Invoke-Pester against tests/Invoke-SetupCheck.Tests.ps1 after building.");
+
+        var second = await WriteAsync(
+            "detection-behaviour",
+            "what the setup check reports as missing",
+            "Invoke-SetupCheck.ps1 reports a missing Git identity and an unset PATH entry.");
+
+        second.Succeeded.Should().BeTrue(second.Error);
+    }
+
+    [Fact]
+    public async Task Sharing_a_project_s_vocabulary_is_not_covering_the_same_ground()
+    {
+        // Topics in one project share its words. Two of them in common used to
+        // be enough, which stopped all but two of 688 real topics written
+        // afresh; what matters is how much of the new fact is already said.
+        await SeedAsync(
+            "docker-builds",
+            "why the docker build needs the pinned sdk",
+            "The docker build restores locked packages against the pinned SDK image.");
+
+        var second = await WriteAsync(
+            "release-tags",
+            "where the release notes come from",
+            "The release workflow reads notes from the annotated tag body, not the docker build log.");
+
+        second.Succeeded.Should().BeTrue(second.Error);
+    }
+
+    [Fact]
     public async Task Adding_to_a_topic_that_already_exists_is_never_questioned()
     {
         // Extending is the thing this exists to encourage. Asking about it would
