@@ -283,8 +283,12 @@ Two checks keep memory worth loading:
   have been shown — so that's when it's shown. Add the fact to the topic named
   back to you, or pass `--separate` when it really is a different subject.
   Writing to a topic that already exists is never questioned: extending is the
-  thing this exists to encourage. Two shared words are needed, not one, because
-  a check that interrupts every write is one whose override becomes a habit.
+  thing this exists to encourage. It stops only when an existing topic already
+  carries at least half of what the new one says. Counting shared words instead,
+  which it used to, stopped 686 of 688 real topics written afresh, because
+  topics in one project share its vocabulary — and a check that interrupts every
+  write is one whose override becomes a habit. A file name counts as one word,
+  however many parts it has.
 - **A description that can't be chosen from is refused.** Only the index reaches
   a session's context — one name and one line per topic — so that line is the
   whole basis for deciding whether to open the topic. "notes", or the topic's

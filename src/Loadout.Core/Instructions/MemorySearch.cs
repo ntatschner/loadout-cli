@@ -202,6 +202,68 @@ public static class MemorySearch
     }
 
     /// <summary>
+    /// How many of the things a piece of text mentions a topic already carries,
+    /// and how many things it mentions altogether.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A "thing" is a word as the text writes it, not as the search splits it.
+    /// The search takes <c>Invoke-SetupCheck.ps1</c> apart into three terms so
+    /// that "setup check" can find it, which is right for finding and wrong for
+    /// judging whether two topics are about the same subject: two topics that
+    /// both name one file share one thing, not three. Terms written together
+    /// are joined, so "private-repos" and a later "private" stay one thing.
+    /// </para>
+    /// <para>
+    /// The second number is what makes the first mean anything. Within one
+    /// project's store topics share vocabulary, so how many things are shared
+    /// says little; how much of the new text they cover says whether it has
+    /// been said already.
+    /// </para>
+    /// </remarks>
+    public static (int Shared, int Of) Coverage(MemoryTopic topic, string? text)
+    {
+        ArgumentNullException.ThrowIfNull(topic);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return (0, 0);
+        }
+
+        var carried = Fields(topic);
+        var group = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        string Root(string term)
+        {
+            while (group[term] != term)
+            {
+                term = group[term];
+            }
+
+            return term;
+        }
+
+        foreach (var word in text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var terms = Terms(word).Distinct(StringComparer.Ordinal).ToList();
+
+            foreach (var term in terms)
+            {
+                group.TryAdd(term, term);
+            }
+
+            foreach (var term in terms.Skip(1))
+            {
+                group[Root(term)] = Root(terms[0]);
+            }
+        }
+
+        var things = group.Keys.GroupBy(Root, StringComparer.Ordinal).ToList();
+
+        return (things.Count(thing => thing.Any(carried.ContainsKey)), things.Count);
+    }
+
+    /// <summary>
     /// What one term is worth to a topic that keeps saying it.
     /// </summary>
     /// <remarks>
