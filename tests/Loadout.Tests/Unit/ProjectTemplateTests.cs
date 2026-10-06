@@ -67,7 +67,7 @@ public sealed class ProjectTemplateTests : IDisposable
         };
 
         manifest.Agents.Default = "codex";
-        manifest.Agents.Enabled.Add("codex");
+        manifest.Workspace.SyncOnLaunch = false;
         manifest.Context.Global.Add("global/instructions/security.md");
         manifest.Context.Project.Add("instructions.md");
         manifest.Environment["API_KEY"] = new EnvironmentBinding();
@@ -162,7 +162,7 @@ public sealed class ProjectTemplateTests : IDisposable
             Template(), "second-service", "Second Service", remote: null, branch: "main");
 
         derived.Agents.Default.Should().Be("codex");
-        derived.Agents.Enabled.Should().Contain("codex");
+        derived.Workspace.SyncOnLaunch.Should().BeFalse();
         derived.Context.Global.Should().Contain("global/instructions/security.md");
         derived.Context.Project.Should().Contain("instructions.md");
     }
