@@ -159,6 +159,25 @@ public sealed class ProjectLifecycleTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_alias_added_to_the_manifest_after_registering_resolves()
+    {
+        var repository = await CreateRepositoryAsync("aliased", "ssh://git.internal/apps/aliased.git");
+        await _projects.AddAsync(repository);
+
+        // Edited by hand after registering, which is when people add one: the
+        // registry copied the manifest's aliases once, at registration, and
+        // never looked again.
+        var manifest = (await _workspace.ReadProjectAsync("aliased")).Value!;
+        manifest.Aliases = ["al"];
+        (await _workspace.WriteProjectAsync(manifest)).Succeeded.Should().BeTrue();
+
+        var resolved = await _projects.ResolveAsync("AL");
+
+        resolved.Succeeded.Should().BeTrue(resolved.Error);
+        resolved.Value!.Entry.Slug.Should().Be("aliased");
+    }
+
+    [Fact]
     public async Task Removing_a_project_says_what_it_left_in_the_workspace()
     {
         var repository = await CreateRepositoryAsync("keeper", "ssh://git.internal/apps/keeper.git");

@@ -97,7 +97,8 @@ internal sealed class ProjectService : IProjectService
             return OperationResult<ProjectResolution>.Fail(listResult.Error!, listResult.ExitCode);
         }
 
-        var match = listResult.Value!.FirstOrDefault(p => Matches(p.Entry, handle));
+        var match = listResult.Value!.FirstOrDefault(p => Matches(p.Entry, handle))
+            ?? await MatchManifestAliasAsync(listResult.Value!, handle, ct).ConfigureAwait(false);
 
         return match is not null
             ? OperationResult<ProjectResolution>.Ok(match)
@@ -928,6 +929,35 @@ internal sealed class ProjectService : IProjectService
         || string.Equals(entry.Name, handle, StringComparison.OrdinalIgnoreCase)
         || string.Equals(entry.Id, handle, StringComparison.OrdinalIgnoreCase)
         || entry.Aliases.Any(a => string.Equals(a, handle, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Looks for the handle among the aliases in each project's own manifest,
+    /// for when the registry has no match.
+    /// </summary>
+    /// <remarks>
+    /// The registry copies a manifest's aliases once, when the project is
+    /// registered, so an alias added to project.yaml afterwards was never
+    /// found. Only consulted on a miss: the registry stays the fast path, and
+    /// an alias here cannot shadow another project's slug or name.
+    /// </remarks>
+    private async Task<ProjectResolution?> MatchManifestAliasAsync(
+        IReadOnlyList<ProjectResolution> projects,
+        string handle,
+        CancellationToken ct)
+    {
+        foreach (var project in projects)
+        {
+            var manifest = await _workspace.ReadProjectAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+
+            if (manifest.Succeeded
+                && manifest.Value!.Aliases.Any(a => string.Equals(a, handle, StringComparison.OrdinalIgnoreCase)))
+            {
+                return project;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>Lower-cases and strips characters that would be awkward on the command line.</summary>
     internal static string NormaliseSlug(string value)

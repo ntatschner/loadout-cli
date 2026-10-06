@@ -272,7 +272,7 @@ symbols:
 | `id` | The project's permanent identity. It survives a rename and a change of remote, which is why it's never edited. |
 | `slug` | The short name on the command line. Set by `--slug` at registration. |
 | `name` | What the launcher shows. |
-| `aliases` | Other names that find the same project. These are copied into the workspace's `registry/projects.yaml` when the project is registered, and it's the registry that resolves a name, so an alias added to the manifest afterwards also needs adding to the project's row there. |
+| `aliases` | Other names that find the same project. These are copied into the workspace's `registry/projects.yaml` when the project is registered. A name that matches nothing in the registry is then looked for here, so an alias you add to the manifest afterwards works without touching the registry. It can't take over a name another project already answers to. |
 
 ### repository
 
