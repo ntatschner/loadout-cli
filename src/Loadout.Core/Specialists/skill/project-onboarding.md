@@ -106,12 +106,11 @@ the name through unchanged.
 `environments` cannot be proposed at all. They decide which project this is and
 which credentials and sandbox a session gets. If one looks wrong, report it.
 
-**Read by nothing yet.** Changing these changes nothing, so leave them alone:
-`agents.enabled`, `agents.settings`, `launch.working_directory`,
-`workspace.sync_on_launch` and `workspace.save_on_exit`. The same goes for
-`aliases`. Names are resolved from the workspace registry, which copies a
-project's aliases only when it is registered, so an alias added to the manifest
-later never resolves. If the project needs another name, say so in your report.
+**Leave to the person.** `workspace.sync_on_launch`, set to false, stops a
+launch of this project refreshing the shared workspace first. That trades fresh context
+for a launch that never touches the network, which is their call, not a finding.
+`aliases` adds other names the project answers to; if it needs one, say so in
+your report.
 
 Give the reason beside every change. A setting nobody can account for gets
 removed by the next person to read the file.

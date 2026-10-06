@@ -230,6 +230,35 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_project_that_turns_off_sync_on_launch_is_not_synchronised()
+    {
+        var manifest = (await _workspace.ReadProjectAsync(ProjectSlug)).Value!;
+        manifest.Workspace.SyncOnLaunch = false;
+        await _workspace.WriteProjectAsync(manifest);
+
+        // Not offline: without the project's setting this launch would try to
+        // sync, and with no central workspace configured that ends in
+        // NotConfigured rather than in skipping it.
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.SyncOutcome.Should().Be(WorkspaceSyncOutcome.Offline);
+        result.Value.Warnings.Should().Contain(w => w.Contains("sync_on_launch"));
+    }
+
+    [Fact]
+    public async Task A_project_that_leaves_sync_on_launch_alone_is_synchronised()
+    {
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", DryRun: true));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.SyncOutcome.Should().Be(WorkspaceSyncOutcome.NotConfigured);
+        result.Value.Warnings.Should().NotContain(w => w.Contains("sync_on_launch"));
+    }
+
+    [Fact]
     public async Task A_session_started_for_something_else_is_reminded_rather_than_taken_over()
     {
         await _tasks.DeclareAsync(

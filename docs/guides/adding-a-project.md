@@ -237,23 +237,18 @@ repository:
   versioned: true
 agents:
   default: claude
-  enabled: []
   model: ''
   model_by_mode: {}
-  settings: {}
 context:
   global: []
   project: []
   code_map: false
   tasks: false
 profiles: {}
-launch:
-  working_directory: repository
 environment: {}
 environments: {}
 workspace:
   sync_on_launch: true
-  save_on_exit: prompt
 specialists:
   preferred: []
   excluded: []
@@ -289,7 +284,6 @@ symbols:
 | `default` | The agent launched when none is named. It wins over the registry and over `default-agent` in your configuration. |
 | `model` | The model to start the agent on, spelt the way the agent spells it. Empty leaves the agent on its own default. |
 | `model_by_mode` | A model per mode, such as `review: small-model`. Wins over `model` for that mode. A model typed after `--` wins over both. See [Pinning a model](../first-run.md#pinning-a-model). |
-| `enabled`, `settings` | In the schema, and copied by `project new`, but no launch reads them yet. Setting them changes nothing. |
 
 ### context
 
@@ -394,12 +388,18 @@ symbols:
 Run `loadout docs find` once after writing a language: a pattern that doesn't
 compile drops that language rather than failing every lookup.
 
-### launch and workspace
+### workspace
 
-`launch.working_directory`, `workspace.sync_on_launch` and
-`workspace.save_on_exit` are in the schema and copied by `project new`, but no
-launch reads them from the project yet. Sessions start in the repository, and
-syncing follows `sync-launch` and `sync-exit` in your configuration.
+| Setting | What it does |
+|---|---|
+| `sync_on_launch` | `false` skips refreshing the shared workspace when this project is launched, whatever `sync-launch` says in your configuration, and the launch says it used the cached copy. Worth it for a project you launch somewhere the workspace's remote can't be reached; the price is context that may be out of date. |
+
+Sessions start in the repository, and saving at the end follows `sync-exit` in
+your configuration.
+
+A manifest written by an older Loadout may carry `agents.enabled`,
+`agents.settings`, `launch.working_directory` and `workspace.save_on_exit`.
+Nothing ever read them, and they can be deleted.
 
 ## If it went wrong
 

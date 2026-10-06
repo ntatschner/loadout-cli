@@ -347,15 +347,7 @@ internal sealed class ProjectTemplateService : IProjectTemplateService
         // Conventions, which is the whole reason for templating: which agent
         // to launch, which shared instruction files apply, which specialists
         // are expected, how the workspace is synced.
-        manifest.Agents = new ProjectAgents
-        {
-            Default = template.Agents.Default,
-            Enabled = [.. template.Agents.Enabled],
-            Settings = template.Agents.Settings.ToDictionary(
-                pair => pair.Key,
-                pair => new Dictionary<string, object>(pair.Value),
-                StringComparer.Ordinal),
-        };
+        manifest.Agents = new ProjectAgents { Default = template.Agents.Default };
 
         manifest.Context = new ProjectContext
         {
@@ -364,12 +356,7 @@ internal sealed class ProjectTemplateService : IProjectTemplateService
         };
 
         manifest.Profiles = template.Profiles.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
-        manifest.Launch = new ProjectLaunch { WorkingDirectory = template.Launch.WorkingDirectory };
-        manifest.Workspace = new ProjectWorkspace
-        {
-            SyncOnLaunch = template.Workspace.SyncOnLaunch,
-            SaveOnExit = template.Workspace.SaveOnExit,
-        };
+        manifest.Workspace = new ProjectWorkspace { SyncOnLaunch = template.Workspace.SyncOnLaunch };
         manifest.Specialists = template.Specialists;
 
         // Aliases and environment bindings are deliberately not inherited.

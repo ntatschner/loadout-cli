@@ -1362,6 +1362,15 @@ public sealed class AgentLauncher : IAgentLauncher
             return WorkspaceSyncOutcome.Offline;
         }
 
+        if (await SkipsSyncOnLaunchAsync(request.ProjectHandle, ct).ConfigureAwait(false) is { } project)
+        {
+            warnings.Add(
+                $"'{project}' turns off the workspace sync at launch (workspace.sync_on_launch in its project.yaml), "
+                + "so the cached workspace was used.");
+
+            return WorkspaceSyncOutcome.Offline;
+        }
+
         var syncResult = await _workspace.SyncAsync(config, ct).ConfigureAwait(false);
 
         if (syncResult.Failed)
@@ -1381,6 +1390,36 @@ public sealed class AgentLauncher : IAgentLauncher
         }
 
         return outcome.Outcome;
+    }
+
+    /// <summary>
+    /// The project's name when its manifest turns off the sync at launch, or
+    /// null when it does not, or cannot be read yet.
+    /// </summary>
+    /// <remarks>
+    /// Read from the cached workspace, because the question is whether to
+    /// refresh it. A project that cannot be resolved or has no manifest yet
+    /// syncs as before: a project registered on another machine may only
+    /// arrive with the sync this would otherwise skip.
+    /// </remarks>
+    private async Task<string?> SkipsSyncOnLaunchAsync(string handle, CancellationToken ct)
+    {
+        if (!_workspace.IsAvailable())
+        {
+            return null;
+        }
+
+        var project = await _projects.ResolveAsync(handle, ct).ConfigureAwait(false);
+        if (project.Failed)
+        {
+            return null;
+        }
+
+        var manifest = await _workspace.ReadProjectAsync(project.Value!.Entry.Slug, ct).ConfigureAwait(false);
+
+        return manifest.Succeeded && !manifest.Value!.Workspace.SyncOnLaunch
+            ? project.Value.Entry.Name
+            : null;
     }
 
     /// <summary>

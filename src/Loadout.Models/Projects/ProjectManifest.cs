@@ -43,8 +43,6 @@ public sealed class ProjectManifest
     /// </summary>
     public Dictionary<string, ContextProfile> Profiles { get; set; } = [];
 
-    public ProjectLaunch Launch { get; set; } = new();
-
     /// <summary>
     /// Environment variables for the agent process, keyed by variable name
     /// (spec section 53). Values are references, not secrets.
@@ -102,8 +100,6 @@ public sealed class ProjectAgents
     /// <summary>Agent launched when none is named on the command line.</summary>
     public string Default { get; set; } = "claude";
 
-    public List<string> Enabled { get; set; } = [];
-
     /// <summary>
     /// The model this project's agent should use. Empty leaves the agent on
     /// whatever it would have chosen.
@@ -126,14 +122,6 @@ public sealed class ProjectAgents
     /// back to the project's own.
     /// </remarks>
     public Dictionary<string, string> ModelByMode { get; set; } = [];
-
-    /// <summary>
-    /// Per-agent settings keyed by agent name. Kept as a loose map rather than
-    /// typed properties so a new adapter can be added without changing the
-    /// schema — the adapter owns the shape of its own section (spec section 30:
-    /// agent-specific logic stays out of core).
-    /// </summary>
-    public Dictionary<string, Dictionary<string, object>> Settings { get; set; } = [];
 }
 
 /// <summary>Context files pulled in when compiling this project's agent context (spec section 33).</summary>
@@ -234,18 +222,12 @@ public sealed class ProjectSymbolLanguage
     public string Docs { get; set; } = string.Empty;
 }
 
-/// <summary>How the agent process is started.</summary>
-public sealed class ProjectLaunch
-{
-    /// <summary>Either <c>repository</c> (the application clone) or a workspace-relative path.</summary>
-    public string WorkingDirectory { get; set; } = "repository";
-}
-
 /// <summary>Per-project overrides of the workspace sync policy (spec section 45).</summary>
 public sealed class ProjectWorkspace
 {
+    /// <summary>
+    /// False skips the workspace sync when this project is launched, whatever
+    /// <c>sync-launch</c> in config.yaml says; the cached workspace is used.
+    /// </summary>
     public bool SyncOnLaunch { get; set; } = true;
-
-    /// <summary>One of <c>prompt</c>, <c>always</c>, <c>never</c>.</summary>
-    public string SaveOnExit { get; set; } = "prompt";
 }
