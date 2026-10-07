@@ -140,7 +140,7 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         var agents = new AgentRegistry(resolver, _processes, config);
         _agents = agents;
         _ledger = new LaunchLedger(_paths, permissions, TimeProvider.System);
-        _transcripts = new HeadlessTranscripts(environment, _paths);
+        _transcripts = new HeadlessTranscripts(environment, _paths, TimeProvider.System);
         _running = new SessionRegistry(_paths, permissions, new ProcessInspector(), TimeProvider.System);
         _tasks = new Loadout.Core.Tasks.TaskService(workspace, yaml, TimeProvider.System);
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Sessions;
@@ -53,6 +54,13 @@ public interface IHeadlessTranscripts
 /// Only Claude, because only Claude has a headless protocol here. Another
 /// agent's sessions are left alone and this reports that nothing was moved.
 /// </para>
+/// <para>
+/// Kept as long as Claude would have kept them. Claude deletes a transcript
+/// once it has gone <c>cleanupPeriodDays</c> without being written to, thirty
+/// by default, and one moved out of its folder is out of reach of that. So the
+/// same rule is applied here, with Claude's own setting when there is one,
+/// each time something is put away.
+/// </para>
 /// </remarks>
 internal sealed class HeadlessTranscripts : IHeadlessTranscripts
 {
@@ -66,14 +74,19 @@ internal sealed class HeadlessTranscripts : IHeadlessTranscripts
 
     private static readonly TimeSpan Pause = TimeSpan.FromMilliseconds(200);
 
+    /// <summary>Claude's own default for how long a transcript is kept.</summary>
+    private const int DefaultKeepDays = 30;
+
     private readonly IEnvironmentProvider _environment;
+    private readonly TimeProvider _time;
     private readonly string _store;
 
-    public HeadlessTranscripts(IEnvironmentProvider environment, IPlatformPaths paths)
+    public HeadlessTranscripts(IEnvironmentProvider environment, IPlatformPaths paths, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(paths);
 
         _environment = environment;
+        _time = time;
         _store = Path.Combine(paths.Paths.State, "headless", "transcripts");
     }
 
@@ -88,6 +101,8 @@ internal sealed class HeadlessTranscripts : IHeadlessTranscripts
         }
 
         var into = Path.Combine(_store, Path.GetFileName(folder));
+
+        Prune();
 
         for (var attempt = 1; attempt <= Attempts; attempt++)
         {
@@ -135,6 +150,92 @@ internal sealed class HeadlessTranscripts : IHeadlessTranscripts
             // truth and more use than an exception from here.
             return false;
         }
+    }
+
+    /// <summary>
+    /// Deletes what Claude would have deleted by now: every transcript in the
+    /// store not written to for its cleanup period, with its folder.
+    /// </summary>
+    /// <remarks>
+    /// Never throws. One that cannot be deleted is tried again next time, and
+    /// a store that is tidied late is a disk a little fuller, not a failure.
+    /// </remarks>
+    internal void Prune()
+    {
+        if (!Directory.Exists(_store))
+        {
+            return;
+        }
+
+        var cutoff = _time.GetUtcNow().UtcDateTime - TimeSpan.FromDays(KeepDays());
+
+        try
+        {
+            // A project folder each, and the transcripts directly in it: the
+            // subagent files below belong to one of those and go with it.
+            foreach (var transcript in Directory.EnumerateDirectories(_store)
+                .SelectMany(project => Directory.EnumerateFiles(project, "*.jsonl", SearchOption.TopDirectoryOnly))
+                .ToList())
+            {
+                if (File.GetLastWriteTimeUtc(transcript) >= cutoff)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var folder = Path.Combine(
+                        Path.GetDirectoryName(transcript)!,
+                        Path.GetFileNameWithoutExtension(transcript));
+
+                    if (Directory.Exists(folder))
+                    {
+                        Directory.Delete(folder, recursive: true);
+                    }
+
+                    File.Delete(transcript);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Tried again the next time something is put away.
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The store could not be listed; nothing is lost by waiting.
+        }
+    }
+
+    /// <summary>
+    /// How many days Claude keeps a transcript on this machine: its own
+    /// setting when one is written down, and its default otherwise.
+    /// </summary>
+    private int KeepDays()
+    {
+        try
+        {
+            var settings = Agents.AgentHome.ClaudeSettings(_environment);
+
+            if (File.Exists(settings))
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(settings));
+
+                if (document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty("cleanupPeriodDays", out var days)
+                    && days.TryGetInt32(out var kept)
+                    && kept > 0)
+                {
+                    return kept;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        {
+            // A settings file that cannot be read keeps Claude's default.
+        }
+
+        return DefaultKeepDays;
     }
 
     private static bool Applies(string agent, string sessionId) =>
@@ -189,9 +290,57 @@ internal sealed class HeadlessTranscripts : IHeadlessTranscripts
                 Directory.Delete(target, recursive: true);
             }
 
-            Directory.Move(folder, target);
+            MoveFolder(folder, target);
         }
 
+        // Copies and deletes by itself when the two are on different volumes.
         File.Move(Path.Combine(from, file), Path.Combine(into, file), overwrite: true);
+    }
+
+    /// <summary>
+    /// Moves a folder, across volumes as well as within one.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Directory.Move"/> refuses to cross a volume, and the state
+    /// directory and a moved <c>CLAUDE_CONFIG_DIR</c> can sit on different
+    /// drives. Copying is the fallback only when the move could not have
+    /// worked, so a folder that is merely held open on the same volume still
+    /// fails and is retried rather than half-copied. On Windows that is told
+    /// by the roots; elsewhere a mount point does not show in the path, so any
+    /// failure to move is taken as the other volume and copied instead.
+    /// </remarks>
+    private static void MoveFolder(string from, string to)
+    {
+        try
+        {
+            Directory.Move(from, to);
+        }
+        catch (IOException) when (!OperatingSystem.IsWindows() || !SameRoot(from, to))
+        {
+            CopyThenDelete(from, to);
+        }
+    }
+
+    private static bool SameRoot(string left, string right) => string.Equals(
+        Path.GetPathRoot(Path.GetFullPath(left)),
+        Path.GetPathRoot(Path.GetFullPath(right)),
+        StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Copies a folder and everything under it, then deletes the original.</summary>
+    internal static void CopyThenDelete(string from, string to)
+    {
+        foreach (var directory in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(to, Path.GetRelativePath(from, directory)));
+        }
+
+        Directory.CreateDirectory(to);
+
+        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        {
+            File.Copy(file, Path.Combine(to, Path.GetRelativePath(from, file)), overwrite: true);
+        }
+
+        Directory.Delete(from, recursive: true);
     }
 }

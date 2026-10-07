@@ -54,11 +54,18 @@ internal sealed class SessionHistoryService : ISessionHistoryService
     private readonly IProjectService _projects;
     private readonly ILaunchLedger _ledger;
 
+    /// <summary>
+    /// Writes down the nodes of runs from before the ledger did. Optional so a
+    /// service built without one behaves exactly as it did before.
+    /// </summary>
+    private readonly IHeadlessBackfill? _backfill;
+
     public SessionHistoryService(
         IEnumerable<ISessionHistory> histories,
         IDeclaredSessionHistories declared,
         IProjectService projects,
-        ILaunchLedger ledger)
+        ILaunchLedger ledger,
+        IHeadlessBackfill? backfill = null)
     {
         ArgumentNullException.ThrowIfNull(declared);
 
@@ -78,6 +85,7 @@ internal sealed class SessionHistoryService : ISessionHistoryService
 
         _projects = projects;
         _ledger = ledger;
+        _backfill = backfill;
     }
 
     /// <inheritdoc />
@@ -86,6 +94,12 @@ internal sealed class SessionHistoryService : ISessionHistoryService
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        // Before the transcripts are read, because it may move some of them.
+        if (_backfill is not null)
+        {
+            await _backfill.RunOnceAsync(ct).ConfigureAwait(false);
+        }
 
         var scan = Math.Min(MaximumScan, Math.Max(query.Limit, query.Limit * ScanMultiplier));
 

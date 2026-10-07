@@ -237,10 +237,16 @@ moves its transcript, and the folder of subagent files beside it, into
 anything resumes it: a team picking up its lead, or you taking a node over with
 `loadout resume <session id>`. Naming the id in full is what reaches it; the
 picker leaves nodes out. You don't have to dig for the id: once a run has ended,
-picking a node under "What it said" on its dashboard page shows the whole
-command, with a button to copy it. A transcript the agent is still holding is left where it
-is rather than fought over, and sessions from before this have no note in the
-ledger, so they stay listed until they age out.
+`team status` prints the whole command under each node, and picking a node
+under "What it said" on its dashboard page shows it with a button to copy it.
+
+A moved transcript is kept as long as Claude would have kept it, its own
+`cleanupPeriodDays` or thirty days, because out of Claude's folder it's out of
+reach of Claude's clean-up. One the agent is still holding is left where it is
+rather than fought over. Runs from before any of this are caught up on once,
+from their journals, which name every node's session; idea rounds and dump
+splits from then left no record of theirs, so those stay listed until they age
+out.
 
 Rows are escaped before they're drawn, too. A session is named after the first
 thing said in it, and whoever said it was writing prose — a title opening with

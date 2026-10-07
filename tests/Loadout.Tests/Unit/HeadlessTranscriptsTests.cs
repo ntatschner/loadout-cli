@@ -24,6 +24,7 @@ public sealed class HeadlessTranscriptsTests : IDisposable
     private readonly string _root;
     private readonly string _projects;
     private readonly string _store;
+    private readonly FixedTime _time = new();
     private readonly HeadlessTranscripts _transcripts;
 
     public HeadlessTranscriptsTests()
@@ -54,7 +55,7 @@ public sealed class HeadlessTranscriptsTests : IDisposable
 
         _projects = Path.Combine(_root, "claude", "projects");
         _store = Path.Combine(paths.Paths.State, "headless", "transcripts");
-        _transcripts = new HeadlessTranscripts(environment, paths);
+        _transcripts = new HeadlessTranscripts(environment, paths, _time);
     }
 
     public void Dispose()
@@ -130,6 +131,72 @@ public sealed class HeadlessTranscriptsTests : IDisposable
 
         File.ReadAllText(Path.Combine(_store, "D--git-repo", Id + ".jsonl")).Should().Be("first, then more");
         File.Exists(Path.Combine(_store, "D--git-repo", Id, "subagents", "agent-1.jsonl")).Should().BeTrue();
+    }
+
+    [Fact]
+    public void A_folder_that_cannot_be_moved_across_volumes_is_copied_whole_and_then_removed()
+    {
+        // The fallback for a state directory on another drive from Claude's.
+        // Two volumes cannot be made here, so the copy is exercised directly.
+        var folder = Plant();
+        var from = Path.Combine(folder, Id);
+        var to = Path.Combine(_store, "elsewhere", Id);
+
+        HeadlessTranscripts.CopyThenDelete(from, to);
+
+        File.ReadAllText(Path.Combine(to, "subagents", "agent-1.jsonl")).Should().Be("a subagent");
+        Directory.Exists(from).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task A_transcript_kept_past_claudes_cleanup_period_goes_with_its_folder()
+    {
+        // What Claude would have deleted had it been left in its folder.
+        var stale = Kept("1a-stale", daysOld: 31);
+        var recent = Kept("2b-recent", daysOld: 29);
+
+        Plant();
+        await _transcripts.PutAwayAsync("claude", Id);
+
+        File.Exists(stale).Should().BeFalse("thirty days unwritten is Claude's own default");
+        Directory.Exists(Path.ChangeExtension(stale, null)).Should().BeFalse("its subagent files go with it");
+        File.Exists(recent).Should().BeTrue();
+        File.Exists(Path.Combine(_store, "D--git-repo", Id + ".jsonl")).Should().BeTrue(
+            "the one just put away was written now");
+    }
+
+    [Fact]
+    public void Claudes_own_cleanup_period_is_the_one_kept_to()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "claude"));
+        File.WriteAllText(Path.Combine(_root, "claude", "settings.json"), """{"cleanupPeriodDays": 90}""");
+
+        var kept = Kept("1a-old", daysOld: 60);
+
+        _transcripts.Prune();
+
+        File.Exists(kept).Should().BeTrue("the person told Claude to keep ninety days");
+    }
+
+    /// <summary>A transcript already in the store, last written some days ago.</summary>
+    private string Kept(string id, int daysOld)
+    {
+        var folder = Path.Combine(_store, "D--git-other");
+        var transcript = Path.Combine(folder, id + ".jsonl");
+
+        Directory.CreateDirectory(Path.Combine(folder, id, "subagents"));
+        File.WriteAllText(transcript, "kept");
+        File.SetLastWriteTimeUtc(transcript, _time.GetUtcNow().UtcDateTime.AddDays(-daysOld));
+
+        return transcript;
+    }
+
+    /// <summary>The real date, held still so a day's arithmetic cannot straddle midnight.</summary>
+    private sealed class FixedTime : TimeProvider
+    {
+        private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+
+        public override DateTimeOffset GetUtcNow() => _now;
     }
 
     [Fact]

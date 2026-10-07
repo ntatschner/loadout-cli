@@ -119,6 +119,7 @@ public static class ServiceRegistration
         // a launch nobody recorded cannot be recovered later.
         services.AddSingleton<Sessions.ILaunchLedger, Sessions.LaunchLedger>();
         services.AddSingleton<Sessions.IHeadlessTranscripts, Sessions.HeadlessTranscripts>();
+        services.AddSingleton<Sessions.IHeadlessBackfill, Sessions.HeadlessBackfill>();
         services.AddSingleton<Sessions.IRuntimeReaper, Sessions.RuntimeReaper>();
         services.AddSingleton<Instructions.IProbeService, Instructions.ProbeService>();
 
