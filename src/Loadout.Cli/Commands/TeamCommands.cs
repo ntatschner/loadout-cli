@@ -553,6 +553,8 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     startedAt = node.Started,
                     tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
                     lastSeen = node.LastSeen,
+                    node.Session,
+                    takeOver = TakeOver(run, node),
                 }),
                 run.Branches,
                 run.Merged,
@@ -721,6 +723,13 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     $"  {string.Empty,-16} [dim]{Markup.Escape(branch)}[/]"
                     + (taken ? "  [green]merged[/]" : "  [dim]not merged[/]"));
             }
+
+            // Its conversation is kept out of every resume list, so this is
+            // where somebody finds the way back into it.
+            if (TakeOver(run, node) is { } command)
+            {
+                output.WriteLine($"  {string.Empty,-16} [dim]take over: {Markup.Escape(command)}[/]");
+            }
         }
 
         /*
@@ -882,6 +891,26 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     private static string Rounds(RunSummary run) => run.RoundLimit > 0
         ? $"round {run.Rounds} of {run.RoundLimit}"
         : $"{run.Rounds} round(s)";
+
+    /// <summary>
+    /// The command that carries a node's conversation on by hand, or null.
+    /// </summary>
+    /// <remarks>
+    /// Only once the run has ended, the same as the dashboard: a run still
+    /// going resumes its own nodes, and two hands on one conversation fork it.
+    /// </remarks>
+    internal static string? TakeOver(RunSummary run, RunNode node)
+    {
+        if (run.Running || node.Session is not { Length: > 0 } session)
+        {
+            return null;
+        }
+
+        return $"loadout resume {session}"
+            + (run.Project is { Length: > 0 } project
+                ? " --project " + (project.Any(char.IsWhiteSpace) ? $"\"{project}\"" : project)
+                : string.Empty);
+    }
 
     private static string Elapsed(TimeSpan span) => span.TotalMinutes < 1
         ? $"{(int)span.TotalSeconds}s"

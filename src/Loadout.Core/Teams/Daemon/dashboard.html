@@ -2673,6 +2673,15 @@
         <button type="button" id="steer-send" class="lk-btn">Say it</button>
       </div>
 
+      <!-- Once the run has ended: the node's own conversation, which every
+           resume list leaves out, and the command that takes it over. A
+           command to copy rather than a button that runs it, because taking
+           a node over means a terminal of your own, and the page opens none. -->
+      <div class="lk-inline" id="takeover" hidden>
+        <p class="lk-help" id="takeover-said"></p>
+        <button type="button" id="takeover-copy" class="lk-btn lk-btn--sm">Copy the command</button>
+      </div>
+
       <!-- A stop in the tab order of its own, because it scrolls: a region
            that only a mouse wheel can move is one a keyboard cannot read to
            the end of. -->
@@ -15294,7 +15303,57 @@
       });
 
     box.hidden = !alive;
+
+    takingOver();
   }
+
+  /*
+    The other side of steering: a node whose run has ended can be carried on
+    by hand, in its own conversation. Only once the run is over, because a
+    run still going resumes its own nodes and two hands on one conversation
+    is how it forks. Written only when it changes, since this is called on
+    every poll and somebody may be selecting the command to copy it.
+  */
+  function takingOver() {
+    var box = document.getElementById("takeover");
+    var said = document.getElementById("takeover-said");
+    var node = opened && !opened.running && trailOf
+      ? (opened.nodes || []).filter(function (n) { return n.node === trailOf; })[0]
+      : null;
+    var command = node && node.session ? takeOverCommand(opened, node) : "";
+
+    box.hidden = !command;
+
+    if (box.getAttribute("data-command") === command) { return; }
+
+    box.setAttribute("data-command", command);
+    said.textContent = "";
+
+    if (!command) { return; }
+
+    said.appendChild(document.createTextNode("To carry on " + who(node) + "'s conversation yourself, in a terminal: "));
+    reference(command, said);
+  }
+
+  function takeOverCommand(run, node) {
+    var project = run.project || "";
+
+    return "loadout resume " + node.session
+      + (project ? " --project " + (/\s/.test(project) ? "\"" + project + "\"" : project) : "");
+  }
+
+  document.getElementById("takeover-copy").addEventListener("click", function () {
+    var command = document.getElementById("takeover").getAttribute("data-command");
+
+    if (!command) { return; }
+
+    // The clipboard is refused to a page that is not a secure context, and
+    // some browsers refuse it anyway. The command is on the page either way;
+    // saying so is better than pretending it was copied.
+    (navigator.clipboard ? navigator.clipboard.writeText(command) : Promise.reject(new Error("no clipboard")))
+      .then(function () { announce("Copied: " + command); })
+      .catch(function () { announce("The browser would not copy it. The command is on the page to select."); });
+  });
 
   (function () {
     var send = document.getElementById("steer-send");
@@ -15638,6 +15697,8 @@
     trailOf = null;
 
     document.getElementById("steer").hidden = true;
+    document.getElementById("takeover").hidden = true;
+    document.getElementById("takeover").removeAttribute("data-command");
     document.getElementById("who").removeAttribute("data-who");
 
     drawGates(run);

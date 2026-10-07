@@ -157,6 +157,7 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
     private readonly SessionScope _scope;
     private readonly IAgentLauncher _launcher;
     private readonly ILaunchLedger _ledger;
+    private readonly IHeadlessTranscripts _transcripts;
     private readonly IAnsiConsole _console;
 
     private readonly ReadingProfile _reading;
@@ -166,6 +167,7 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
         SessionScope scope,
         IAgentLauncher launcher,
         ILaunchLedger ledger,
+        IHeadlessTranscripts transcripts,
         IAnsiConsole console,
         ReadingProfile reading)
     {
@@ -173,6 +175,7 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
         _scope = scope;
         _launcher = launcher;
         _ledger = ledger;
+        _transcripts = transcripts;
         _console = console;
         _reading = reading;
     }
@@ -183,6 +186,23 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
         var output = new CommandOutput(_console, settings);
 
         var query = await _scope.QueryAsync(settings).ConfigureAwait(false);
+
+        if (settings.Session is { Length: > 0 } named)
+        {
+            // Named outright, so a team node's conversation is one somebody
+            // means to take over. It is put back where the agent reads it,
+            // which is also where the listing below looks, and the listing
+            // is asked not to hide it. Only a picker leaves nodes out. Not on
+            // a dry run, which moves nothing: a finished node then reads as
+            // not found, which is less than the whole truth and changes
+            // nothing.
+            if (!settings.DryRun)
+            {
+                _transcripts.Restore("claude", named);
+            }
+
+            query = query with { IncludeHeadless = true };
+        }
 
         var result = await _sessions.ListAsync(query).ConfigureAwait(false);
 

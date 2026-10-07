@@ -8,11 +8,18 @@ namespace Loadout.Core.Sessions;
 /// <param name="Agent">Only sessions of this agent.</param>
 /// <param name="Directory">Only sessions that ran in this directory or below it.</param>
 /// <param name="Limit">How many to return once filtered.</param>
+/// <param name="IncludeHeadless">
+/// Whether to keep the conversations the launcher started with nobody at a
+/// terminal: team nodes, idea rounds, dump splits. Left out of anything a
+/// person resumes from; kept for the running view, which needs every
+/// transcript to say how long a live node has been quiet.
+/// </param>
 public sealed record SessionQuery(
     string? ProjectSlug = null,
     string? Agent = null,
     string? Directory = null,
-    int Limit = 20);
+    int Limit = 20,
+    bool IncludeHeadless = false);
 
 /// <summary>Recent agent sessions across every agent, attributed to projects.</summary>
 public interface ISessionHistoryService
@@ -45,11 +52,20 @@ internal sealed class SessionHistoryService : ISessionHistoryService
 
     private readonly IReadOnlyList<ISessionHistory> _histories;
     private readonly IProjectService _projects;
+    private readonly ILaunchLedger _ledger;
+
+    /// <summary>
+    /// Writes down the nodes of runs from before the ledger did. Optional so a
+    /// service built without one behaves exactly as it did before.
+    /// </summary>
+    private readonly IHeadlessBackfill? _backfill;
 
     public SessionHistoryService(
         IEnumerable<ISessionHistory> histories,
         IDeclaredSessionHistories declared,
-        IProjectService projects)
+        IProjectService projects,
+        ILaunchLedger ledger,
+        IHeadlessBackfill? backfill = null)
     {
         ArgumentNullException.ThrowIfNull(declared);
 
@@ -68,6 +84,8 @@ internal sealed class SessionHistoryService : ISessionHistoryService
         ];
 
         _projects = projects;
+        _ledger = ledger;
+        _backfill = backfill;
     }
 
     /// <inheritdoc />
@@ -76,6 +94,12 @@ internal sealed class SessionHistoryService : ISessionHistoryService
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(query);
+
+        // Before the transcripts are read, because it may move some of them.
+        if (_backfill is not null)
+        {
+            await _backfill.RunOnceAsync(ct).ConfigureAwait(false);
+        }
 
         var scan = Math.Min(MaximumScan, Math.Max(query.Limit, query.Limit * ScanMultiplier));
 
@@ -105,6 +129,13 @@ internal sealed class SessionHistoryService : ISessionHistoryService
             }
         }
 
+        if (!query.IncludeHeadless)
+        {
+            var headless = await HeadlessAsync(ct).ConfigureAwait(false);
+
+            gathered.RemoveAll(session => headless.Contains((session.Agent, session.SessionId)));
+        }
+
         var attributed = await AttributeAsync(gathered, ct).ConfigureAwait(false);
 
         var filtered = attributed.Where(session => Matches(session, query));
@@ -114,6 +145,48 @@ internal sealed class SessionHistoryService : ISessionHistoryService
                 .OrderByDescending(s => s.LastActive)
                 .Take(query.Limit)
                 .ToList());
+    }
+
+    /// <summary>
+    /// The conversations the launcher started headlessly, by agent and
+    /// identifier.
+    /// </summary>
+    /// <remarks>
+    /// Done here, once, rather than in each agent's reader, so that every list
+    /// a person sees - the command line, the TUI, the dashboard - goes through
+    /// the same filter and none can forget it. A ledger that cannot be read
+    /// filters nothing: a node in the list is a nuisance, an empty list is a
+    /// lie about somebody's history.
+    /// </remarks>
+    private async Task<HashSet<(string Agent, string SessionId)>> HeadlessAsync(CancellationToken ct)
+    {
+        var read = await _ledger.ReadHeadlessSessionsAsync(ct).ConfigureAwait(false);
+
+        var set = new HashSet<(string, string)>(AgentAndId.Instance);
+
+        if (read.Succeeded)
+        {
+            foreach (var session in read.Value!)
+            {
+                set.Add((session.Agent, session.SessionId));
+            }
+        }
+
+        return set;
+    }
+
+    /// <summary>Agent names compared as the launcher compares them, identifiers exactly.</summary>
+    private sealed class AgentAndId : IEqualityComparer<(string Agent, string SessionId)>
+    {
+        public static readonly AgentAndId Instance = new();
+
+        public bool Equals((string Agent, string SessionId) x, (string Agent, string SessionId) y) =>
+            string.Equals(x.Agent, y.Agent, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(x.SessionId, y.SessionId, StringComparison.Ordinal);
+
+        public int GetHashCode((string Agent, string SessionId) obj) => HashCode.Combine(
+            StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Agent),
+            StringComparer.Ordinal.GetHashCode(obj.SessionId));
     }
 
     /// <summary>

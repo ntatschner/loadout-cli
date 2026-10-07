@@ -53,6 +53,32 @@ public sealed class HeadlessSessionTests
     }
 
     [Fact]
+    public async Task The_conversation_s_identifier_is_passed_on_once_however_often_the_agent_repeats_it()
+    {
+        // Claude names the session in its init and again in every result.
+        // Each repetition written down would be a ledger line per turn.
+        var pipe = new StubProcessLauncher.StubPipedProcess(
+            string.Join("\n", Init, Pong, ResultOne, Ping, ResultTwo) + "\n", 0);
+
+        var told = new List<string>();
+
+        await using var session = new HeadlessSession(
+            pipe,
+            ClaudeHeadlessProtocol.Instance,
+            identified: (id, _) =>
+            {
+                told.Add(id);
+
+                return Task.CompletedTask;
+            });
+
+        await session.TurnAsync("say pong");
+        await session.TurnAsync("say ping");
+
+        told.Should().Equal("sess-1");
+    }
+
+    [Fact]
     public async Task Something_said_while_a_turn_is_running_is_written_to_the_agent_there_and_then()
     {
         // The point of it. A worker going the wrong way is spending money doing

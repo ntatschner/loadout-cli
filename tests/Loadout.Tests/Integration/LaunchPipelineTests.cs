@@ -52,6 +52,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     private LauncherConfig _config = null!;
     private IWorkspaceManager _workspace = null!;
     private Loadout.Core.Tasks.TaskService _tasks = null!;
+    private AgentRegistry _agents = null!;
+    private HeadlessTranscripts _transcripts = null!;
 
     public LaunchPipelineTests() =>
         _root = Path.Combine(Path.GetTempPath(), "loadout-launch-" + Guid.NewGuid().ToString("N"));
@@ -68,6 +70,10 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
                 ["XDG_DATA_HOME"] = Path.Combine(_root, "data"),
                 ["XDG_STATE_HOME"] = Path.Combine(_root, "state"),
                 ["XDG_CACHE_HOME"] = Path.Combine(_root, "cache"),
+
+                // Where moved transcripts are looked for, so nothing here can
+                // reach the Claude folder of the machine running the suite.
+                ["CLAUDE_CONFIG_DIR"] = Path.Combine(_root, "claude"),
             })
         {
             PathDirectories = Environment.GetEnvironmentVariable("PATH")?
@@ -132,7 +138,9 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         _workspace = workspace;
 
         var agents = new AgentRegistry(resolver, _processes, config);
+        _agents = agents;
         _ledger = new LaunchLedger(_paths, permissions, TimeProvider.System);
+        _transcripts = new HeadlessTranscripts(environment, _paths, TimeProvider.System);
         _running = new SessionRegistry(_paths, permissions, new ProcessInspector(), TimeProvider.System);
         _tasks = new Loadout.Core.Tasks.TaskService(workspace, yaml, TimeProvider.System);
 
@@ -162,7 +170,8 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
                 _paths, new Loadout.Core.Configuration.YamlStore(new Loadout.Tests.Fakes.NoOpFilePermissions()),
                 TimeProvider.System),
             _reaper,
-            _tasks);
+            _tasks,
+            _transcripts);
     }
 
     /// <summary>Records whether the launch asked for a collection.</summary>
@@ -791,6 +800,104 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
         (await _running.ListAsync()).Should().NotContain(s => s.LaunchId == launch.LaunchId);
         Directory.Exists(Path.GetDirectoryName(launch.Plan.ContextPath!)).Should().BeFalse(
             "the runtime directory goes when the records are closed");
+    }
+
+    [Fact]
+    public async Task A_headless_launch_writes_its_conversation_down_as_headless_and_joined_to_the_launch()
+    {
+        // What keeps a node out of every resume list. Written as soon as the
+        // agent names the conversation, not when it closes, so a launcher
+        // killed mid-turn has still said whose it was.
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, Task: "say pong"),
+            new HeadlessOptions(DisableHooks: false));
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        await using var launch = started.Value!;
+
+        await launch.Session!.TurnAsync("say pong");
+
+        var headless = await _ledger.ReadHeadlessSessionsAsync();
+
+        var session = headless.Value!.Should().ContainSingle().Subject;
+
+        session.SessionId.Should().Be("fake-1");
+        session.Agent.Should().Be("claude");
+        session.LaunchId.Should().Be(launch.LaunchId);
+
+        await launch.CompleteAsync(0);
+
+        (await _ledger.ReadAsync(DateTimeOffset.UnixEpoch)).Value.Should().ContainSingle(
+            "the session line is not a second launch");
+    }
+
+    [Fact]
+    public async Task A_finished_node_s_transcript_leaves_claudes_folder_and_comes_back_to_be_resumed()
+    {
+        // The stand-in writes no transcript of its own, so one is put where
+        // Claude would have written it, under the id the stand-in reports.
+        var folder = Path.Combine(_root, "claude", "projects", "D--node-tree");
+        var transcript = Path.Combine(folder, "fake-1.jsonl");
+
+        Directory.CreateDirectory(folder);
+        await File.WriteAllTextAsync(transcript, "the node's conversation");
+
+        var started = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true),
+            new HeadlessOptions(DisableHooks: false));
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        await using (var node = started.Value!)
+        {
+            await node.Session!.TurnAsync("say pong");
+
+            var (exit, _) = await node.Session.EndAsync(TimeSpan.FromSeconds(20));
+            await node.CompleteAsync(exit);
+        }
+
+        File.Exists(transcript).Should().BeFalse("Claude's own /resume reads that folder");
+
+        var resumed = await _launcher.StartHeadlessAsync(
+            new LaunchRequest(ProjectSlug, "claude", Offline: true, ResumeSessionId: "fake-1"),
+            new HeadlessOptions(DisableHooks: false));
+
+        resumed.Succeeded.Should().BeTrue(resumed.Error);
+
+        await using var again = resumed.Value!;
+
+        File.ReadAllText(transcript).Should().Be(
+            "the node's conversation", "a resume needs the transcript where the agent looks for it");
+
+        await again.CompleteAsync(null);
+    }
+
+    [Fact]
+    public async Task A_detached_round_writes_its_conversation_down_without_making_it_a_launch()
+    {
+        var detached = new Loadout.Agents.Ideas.DetachedLauncher(
+            _configuration, _agents, _paths, _processes, _ledger, _transcripts);
+
+        var started = await detached.StartAsync(
+            new Loadout.Agents.Ideas.DetachedLaunchRequest(_repository, "Fleshing out the idea 'x'", "claude"),
+            new HeadlessOptions(DisableHooks: false));
+
+        started.Succeeded.Should().BeTrue(started.Error);
+
+        await using var round = started.Value!;
+
+        await round.Session!.TurnAsync("say pong");
+        await round.CompleteAsync(0);
+
+        var session = (await _ledger.ReadHeadlessSessionsAsync()).Value!.Should().ContainSingle().Subject;
+
+        session.SessionId.Should().Be("fake-1");
+        session.Purpose.Should().Be("Fleshing out the idea 'x'");
+        session.LaunchId.Should().BeNull();
+
+        (await _ledger.ReadAsync(DateTimeOffset.UnixEpoch)).Value.Should().BeEmpty(
+            "an idea round is not a launch, and the report should not count it as one");
     }
 
     [Fact]

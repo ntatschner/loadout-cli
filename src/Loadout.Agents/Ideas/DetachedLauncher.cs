@@ -1,5 +1,6 @@
 using Loadout.Core.Configuration;
 using Loadout.Core.Diagnostics;
+using Loadout.Core.Sessions;
 using Loadout.Models;
 using Loadout.Models.Agents;
 using Loadout.Models.Projects;
@@ -23,7 +24,8 @@ public sealed record DetachedLaunchRequest(
 
 /// <summary>
 /// Starts an agent headlessly with none of a project's launch around it: no
-/// compiled context, no preflight, no workspace servers, no ledger entry.
+/// compiled context, no preflight, no workspace servers, no launch in the
+/// ledger.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -38,6 +40,12 @@ public sealed record DetachedLaunchRequest(
 /// nothing is inherited: no project settings, no hooks, no MCP servers beyond
 /// those named. The caller is the one deciding what an unattended session may
 /// touch, so it is the one that says.
+/// </para>
+/// <para>
+/// The ledger is still told the conversation's identifier, as a session line
+/// with no launch around it. That keeps the round out of the launch report,
+/// where it is not a launch, and out of every resume list, where nobody
+/// wants a conversation they did not start.
 /// </para>
 /// </remarks>
 public interface IDetachedLauncher
@@ -56,17 +64,23 @@ internal sealed class DetachedLauncher : IDetachedLauncher
     private readonly IAgentRegistry _agents;
     private readonly IPlatformPaths _paths;
     private readonly IProcessLauncher _processes;
+    private readonly ILaunchLedger _ledger;
+    private readonly IHeadlessTranscripts _transcripts;
 
     public DetachedLauncher(
         IConfigurationService configuration,
         IAgentRegistry agents,
         IPlatformPaths paths,
-        IProcessLauncher processes)
+        IProcessLauncher processes,
+        ILaunchLedger ledger,
+        IHeadlessTranscripts transcripts)
     {
+        _transcripts = transcripts;
         _configuration = configuration;
         _agents = agents;
         _paths = paths;
         _processes = processes;
+        _ledger = ledger;
     }
 
     /// <inheritdoc />
@@ -184,19 +198,29 @@ internal sealed class DetachedLauncher : IDetachedLauncher
                 return OperationResult<HeadlessLaunch>.Fail(started.Error!, started.ExitCode);
             }
 
+            var agent = adapter.Value.Name;
+
+            var session = new HeadlessSession(
+                started.Value!,
+                protocol,
+                identified: (sessionId, token) => _ledger.RecordHeadlessSessionAsync(
+                    sessionId, agent, request.Purpose, launchId: null, token));
+
             return OperationResult<HeadlessLaunch>.Ok(new HeadlessLaunch(
                 plan,
                 warnings,
                 preflight,
                 request.Purpose,
-                adapter.Value.Name,
+                agent,
                 launchId: null,
-                new HeadlessSession(started.Value!, protocol),
-                complete: (_, _) =>
+                session,
+                complete: async (_, token) =>
                 {
-                    Clean(runtimeDirectory);
+                    // Never resumed, so never put back: an idea round's
+                    // conversation is over when its answer is read.
+                    await AgentLauncher.PutAwayAsync(_transcripts, session, agent, token).ConfigureAwait(false);
 
-                    return Task.CompletedTask;
+                    Clean(runtimeDirectory);
                 }));
         }
         catch
