@@ -34,17 +34,20 @@ public sealed class SessionRunningCommand : AsyncCommand<SessionRunningCommand.S
 {
     private readonly ISessionRegistry _registry;
     private readonly ISessionHistoryService _sessions;
+    private readonly ILaunchLedger _ledger;
     private readonly IAnsiConsole _console;
     private readonly TimeProvider _time;
 
     public SessionRunningCommand(
         ISessionRegistry registry,
         ISessionHistoryService sessions,
+        ILaunchLedger ledger,
         IAnsiConsole console,
         TimeProvider time)
     {
         _registry = registry;
         _sessions = sessions;
+        _ledger = ledger;
         _console = console;
         _time = time;
     }
@@ -94,12 +97,17 @@ public sealed class SessionRunningCommand : AsyncCommand<SessionRunningCommand.S
         // One read of the transcripts for all of them, rather than one per
         // session: the readers scan a directory either way, and asking once is
         // the difference between this being instant and it being noticeable.
+        // Headless ones included: they are left out of every resume list, but
+        // a live node is running like anything else and its quiet time comes
+        // from its transcript.
         var known = await _sessions
-            .ListAsync(new SessionQuery(Limit: 100), cancellationToken)
+            .ListAsync(new SessionQuery(Limit: 100, IncludeHeadless: true), cancellationToken)
             .ConfigureAwait(false);
 
         var now = _time.GetUtcNow();
         var idleAfter = TimeSpan.FromMinutes(settings.IdleAfter);
+
+        var headless = await HeadlessLaunchesAsync(cancellationToken).ConfigureAwait(false);
 
         var activity = running
             .Select(session => SessionMonitor.Describe(
@@ -117,6 +125,7 @@ public sealed class SessionRunningCommand : AsyncCommand<SessionRunningCommand.S
                 elapsedSeconds = (long)a.Elapsed.TotalSeconds,
                 quietSeconds = a.Quiet is { } quiet ? (long?)quiet.TotalSeconds : null,
                 state = a.State.ToString().ToLowerInvariant(),
+                headless = headless.Contains(a.Session.LaunchId),
             }));
 
             return CommandOutput.Success();
@@ -128,7 +137,8 @@ public sealed class SessionRunningCommand : AsyncCommand<SessionRunningCommand.S
                 $"{Markup.Escape(entry.Session.ProjectSlug),-18} "
                 + $"{Markup.Escape(entry.Session.Agent),-8} "
                 + $"{SessionMonitor.Spoken(entry.Elapsed),-9} "
-                + $"{State(entry)}");
+                + $"{State(entry)}"
+                + (headless.Contains(entry.Session.LaunchId) ? " [dim](headless)[/]" : string.Empty));
         }
 
         output.WriteBlankLine();
@@ -137,6 +147,26 @@ public sealed class SessionRunningCommand : AsyncCommand<SessionRunningCommand.S
             + "transcript; nothing here attaches to a session.[/]");
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// The launches whose agent was started with nobody at a terminal, which
+    /// for a launch means a team node.
+    /// </summary>
+    /// <remarks>
+    /// Known only once the agent has said its session identifier, a moment
+    /// after it starts, so a node seen in its first second is shown unmarked.
+    /// </remarks>
+    private async Task<HashSet<string>> HeadlessLaunchesAsync(CancellationToken ct)
+    {
+        var read = await _ledger.ReadHeadlessSessionsAsync(ct).ConfigureAwait(false);
+
+        return read.Succeeded
+            ? read.Value!
+                .Select(session => session.LaunchId)
+                .OfType<string>()
+                .ToHashSet(StringComparer.Ordinal)
+            : [];
     }
 
     private static string State(SessionActivity entry) => entry.State switch

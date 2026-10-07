@@ -222,6 +222,26 @@ beside that, because the layout has already moved once and nothing inside such a
 file marks it out. The limit is also applied after the read rather than before,
 so it's spent on sessions rather than on whatever happened to be newest.
 
+Nor is it anything Loadout started with nobody at a terminal. Every team node,
+idea round and dump split leaves a transcript like any other, in the project it
+worked in, and a few runs were enough to bury your own sessions under them. The
+launch ledger now notes each one's session id the moment the agent names it, and
+every list you resume from leaves those out: `session list`, `resume` and the
+launcher's recent sessions. `session running` still shows a live node, marked
+headless, because a team at work is worth seeing.
+
+Claude Code's own `/resume` picker reads its projects folder directly, so the
+only way out of that list is out of the folder. When a node finishes, Loadout
+moves its transcript, and the folder of subagent files beside it, into
+`headless/transcripts` under its state directory, and puts it back just before
+anything resumes it: a team picking up its lead, or you taking a node over with
+`loadout resume <session id>`. Naming the id in full is what reaches it; the
+picker leaves nodes out. You don't have to dig for the id: once a run has ended,
+picking a node under "What it said" on its dashboard page shows the whole
+command, with a button to copy it. A transcript the agent is still holding is left where it
+is rather than fought over, and sessions from before this have no note in the
+ledger, so they stay listed until they age out.
+
 Rows are escaped before they're drawn, too. A session is named after the first
 thing said in it, and whoever said it was writing prose — a title opening with
 `[SYSTEM NOTIFICATION]` was read as a style tag and took the whole picker down

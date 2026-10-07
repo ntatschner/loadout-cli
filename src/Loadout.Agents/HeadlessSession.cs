@@ -28,15 +28,28 @@ public sealed class HeadlessSession : IAsyncDisposable
     private readonly IHeadlessProtocol _protocol;
     private readonly List<string> _standardError = [];
     private readonly Task _errorPump;
+    private readonly Func<string, CancellationToken, Task>? _identified;
     private decimal _costSoFar;
 
-    public HeadlessSession(IPipedProcess process, IHeadlessProtocol protocol)
+    /// <param name="process">The agent, already started.</param>
+    /// <param name="protocol">How the agent's wire format reads.</param>
+    /// <param name="identified">
+    /// Called with each identifier the agent gives the conversation, the
+    /// first time it is seen. Called at once rather than when the session
+    /// closes, so that a launcher killed mid-turn has still written down
+    /// whose conversation it was.
+    /// </param>
+    public HeadlessSession(
+        IPipedProcess process,
+        IHeadlessProtocol protocol,
+        Func<string, CancellationToken, Task>? identified = null)
     {
         ArgumentNullException.ThrowIfNull(process);
         ArgumentNullException.ThrowIfNull(protocol);
 
         _process = process;
         _protocol = protocol;
+        _identified = identified;
         _errorPump = Task.Run(PumpErrorAsync);
     }
 
@@ -153,7 +166,7 @@ public sealed class HeadlessSession : IAsyncDisposable
                 switch (evt)
                 {
                     case HeadlessStarted { SessionId.Length: > 0 } started:
-                        SessionId = started.SessionId;
+                        await IdentifyAsync(started.SessionId, ct).ConfigureAwait(false);
                         break;
 
                     case HeadlessResult finished:
@@ -184,11 +197,31 @@ public sealed class HeadlessSession : IAsyncDisposable
 
             if (result.SessionId is { Length: > 0 } id)
             {
-                SessionId = id;
+                await IdentifyAsync(id, ct).ConfigureAwait(false);
             }
         }
 
         return new HeadlessTurn(events, result, cost);
+    }
+
+    /// <summary>
+    /// Takes the agent's identifier for the conversation, and passes on one
+    /// not seen before. A resumed session can be given a new identifier, so
+    /// a change is passed on as well as the first.
+    /// </summary>
+    private async Task IdentifyAsync(string id, CancellationToken ct)
+    {
+        if (string.Equals(SessionId, id, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        SessionId = id;
+
+        if (_identified is not null)
+        {
+            await _identified(id, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

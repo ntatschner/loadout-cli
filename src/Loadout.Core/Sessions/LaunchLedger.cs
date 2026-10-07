@@ -31,6 +31,19 @@ public sealed record NewLaunch(
     string? Worktree,
     EffectiveInstructions? Instructions);
 
+/// <summary>An agent conversation the launcher started with nobody at a terminal.</summary>
+/// <param name="SessionId">The agent's own identifier for the conversation.</param>
+/// <param name="Agent">The adapter that ran it.</param>
+/// <param name="Purpose">What it was for, as the code that started it named it.</param>
+/// <param name="LaunchId">The launch it belongs to, or null for one that is not a launch.</param>
+/// <param name="StartedAt">When the launcher learned the identifier.</param>
+public sealed record HeadlessSessionRecord(
+    string SessionId,
+    string Agent,
+    string? Purpose,
+    string? LaunchId,
+    DateTimeOffset StartedAt);
+
 /// <summary>A record of every launch this machine started.</summary>
 public interface ILaunchLedger
 {
@@ -53,6 +66,31 @@ public interface ILaunchLedger
     /// <param name="ct">Cancellation token.</param>
     Task RecordEndAsync(string launchId, int? exitCode, CancellationToken ct = default);
 
+    /// <summary>
+    /// Writes down that a conversation was started headlessly, so that the
+    /// lists a person resumes from can leave it out.
+    /// </summary>
+    /// <param name="sessionId">The agent's own identifier for the conversation.</param>
+    /// <param name="agent">The adapter that ran it.</param>
+    /// <param name="purpose">What it was for, as the code that started it names it.</param>
+    /// <param name="launchId">The launch it belongs to, or null for one that is not a launch.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task RecordHeadlessSessionAsync(
+        string sessionId,
+        string agent,
+        string? purpose,
+        string? launchId,
+        CancellationToken ct = default);
+
+    /// <summary>Every headless conversation ever written down, oldest first.</summary>
+    /// <remarks>
+    /// Read from the whole file rather than a window. A session started a
+    /// month ago is just as much a node's as one started this morning, and
+    /// the file is a few thousand lines.
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<HeadlessSessionRecord>>> ReadHeadlessSessionsAsync(
+        CancellationToken ct = default);
+
     /// <summary>Launches started on or after a moment, oldest first.</summary>
     Task<OperationResult<IReadOnlyList<LaunchRecord>>> ReadAsync(
         DateTimeOffset since,
@@ -60,9 +98,19 @@ public interface ILaunchLedger
 }
 
 /// <summary>
-/// The launch ledger: one JSON object per line, two lines per launch.
+/// The launch ledger: one JSON object per line, two lines per launch, and a
+/// third kind of line for every conversation started headlessly.
 /// </summary>
 /// <remarks>
+/// <para>
+/// The session lines are a second job for the same file. They name the
+/// conversations that team nodes, idea rounds and dump splits had, which no
+/// person started and nobody wants offered back to them in a resume list.
+/// They are kept here rather than in a run's own directory because runs are
+/// pruned and this file is not, and because an idea round is not a launch and
+/// has nowhere else machine-local to go. The launch reader skips them, so a
+/// round never counts as a launch in the report.
+/// </para>
 /// <para>
 /// Append-only, and two lines rather than one rewritten in place, because a
 /// launch can end in ways that never come back through this code — the machine
@@ -159,15 +207,56 @@ internal sealed class LaunchLedger : ILaunchLedger
     }
 
     /// <inheritdoc />
+    public async Task RecordHeadlessSessionAsync(
+        string sessionId,
+        string agent,
+        string? purpose,
+        string? launchId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return;
+        }
+
+        await AppendAsync(
+            new Row(
+                Kind: SessionKind,
+                Id: sessionId,
+                When: Moment(_time.GetUtcNow()),
+                Agent: agent,
+                Purpose: purpose,
+                Launch: launchId),
+            ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<HeadlessSessionRecord>>> ReadHeadlessSessionsAsync(
+        CancellationToken ct = default)
+    {
+        var sessions = new List<HeadlessSessionRecord>();
+
+        var error = await ReadRowsAsync(
+            (row, when) =>
+            {
+                if (string.Equals(row.Kind, SessionKind, StringComparison.Ordinal))
+                {
+                    sessions.Add(new HeadlessSessionRecord(
+                        row.Id, row.Agent ?? string.Empty, row.Purpose, row.Launch, when));
+                }
+            },
+            ct).ConfigureAwait(false);
+
+        return error is null
+            ? OperationResult<IReadOnlyList<HeadlessSessionRecord>>.Ok(sessions)
+            : OperationResult<IReadOnlyList<HeadlessSessionRecord>>.Fail(error);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult<IReadOnlyList<LaunchRecord>>> ReadAsync(
         DateTimeOffset since,
         CancellationToken ct = default)
     {
-        if (!File.Exists(Path))
-        {
-            return OperationResult<IReadOnlyList<LaunchRecord>>.Ok([]);
-        }
-
         // Starts in the order they were written, so the report reads
         // chronologically without sorting a second time, and endings applied to
         // them as they are met. An ending whose start fell before the window, or
@@ -175,6 +264,60 @@ internal sealed class LaunchLedger : ILaunchLedger
         // dropped rather than invented.
         var started = new List<LaunchRecord>();
         var byId = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        var error = await ReadRowsAsync(
+            (row, when) =>
+            {
+                if (string.Equals(row.Kind, StartKind, StringComparison.Ordinal))
+                {
+                    if (when < since)
+                    {
+                        return;
+                    }
+
+                    byId[row.Id] = started.Count;
+
+                    started.Add(new LaunchRecord(
+                        row.Id,
+                        when,
+                        row.Slug ?? string.Empty,
+                        row.Project ?? string.Empty,
+                        row.Agent ?? string.Empty,
+                        row.Mode,
+                        row.Task,
+                        row.Withheld,
+                        row.Profile,
+                        row.Worktree,
+                        row.Specialists ?? [],
+                        row.Tokens,
+                        row.Budget));
+
+                    return;
+                }
+
+                if (string.Equals(row.Kind, EndKind, StringComparison.Ordinal)
+                    && byId.TryGetValue(row.Id, out var index))
+                {
+                    started[index] = started[index] with { EndedAt = when, ExitCode = row.Exit };
+                }
+            },
+            ct).ConfigureAwait(false);
+
+        return error is null
+            ? OperationResult<IReadOnlyList<LaunchRecord>>.Ok(started)
+            : OperationResult<IReadOnlyList<LaunchRecord>>.Fail(error);
+    }
+
+    /// <summary>
+    /// Hands every line that parses to <paramref name="each"/> in the order it
+    /// was written, and returns what went wrong reading the file, or null.
+    /// </summary>
+    private async Task<string?> ReadRowsAsync(Action<Row, DateTimeOffset> each, CancellationToken ct)
+    {
+        if (!File.Exists(Path))
+        {
+            return null;
+        }
 
         try
         {
@@ -204,47 +347,15 @@ internal sealed class LaunchLedger : ILaunchLedger
                     continue;
                 }
 
-                if (string.Equals(row.Kind, StartKind, StringComparison.Ordinal))
-                {
-                    if (when < since)
-                    {
-                        continue;
-                    }
-
-                    byId[row.Id] = started.Count;
-
-                    started.Add(new LaunchRecord(
-                        row.Id,
-                        when,
-                        row.Slug ?? string.Empty,
-                        row.Project ?? string.Empty,
-                        row.Agent ?? string.Empty,
-                        row.Mode,
-                        row.Task,
-                        row.Withheld,
-                        row.Profile,
-                        row.Worktree,
-                        row.Specialists ?? [],
-                        row.Tokens,
-                        row.Budget));
-
-                    continue;
-                }
-
-                if (string.Equals(row.Kind, EndKind, StringComparison.Ordinal)
-                    && byId.TryGetValue(row.Id, out var index))
-                {
-                    started[index] = started[index] with { EndedAt = when, ExitCode = row.Exit };
-                }
+                each(row, when);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return OperationResult<IReadOnlyList<LaunchRecord>>.Fail(
-                $"Could not read the launch ledger at {Path}: {ex.Message}");
+            return $"Could not read the launch ledger at {Path}: {ex.Message}";
         }
 
-        return OperationResult<IReadOnlyList<LaunchRecord>>.Ok(started);
+        return null;
     }
 
     private async Task AppendAsync(Row row, CancellationToken ct)
@@ -282,6 +393,7 @@ internal sealed class LaunchLedger : ILaunchLedger
 
     private const string StartKind = "start";
     private const string EndKind = "end";
+    private const string SessionKind = "session";
 
     private static string Moment(DateTimeOffset when) =>
         when.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
@@ -309,5 +421,7 @@ internal sealed class LaunchLedger : ILaunchLedger
         IReadOnlyList<string>? Specialists = null,
         int Tokens = 0,
         int Budget = 0,
-        int? Exit = null);
+        int? Exit = null,
+        string? Purpose = null,
+        string? Launch = null);
 }

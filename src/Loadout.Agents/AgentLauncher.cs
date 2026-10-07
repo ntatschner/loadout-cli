@@ -251,6 +251,13 @@ public sealed class AgentLauncher : IAgentLauncher
     /// </summary>
     private readonly Core.Tasks.ITaskService? _tasks;
 
+    /// <summary>
+    /// Moves a finished node's transcript out of the agent's folder and back
+    /// before a resume. Optional so a launcher built without one behaves
+    /// exactly as it did before.
+    /// </summary>
+    private readonly Core.Sessions.IHeadlessTranscripts? _transcripts;
+
     public AgentLauncher(
         IProjectService projects,
         IWorkspaceManager workspace,
@@ -271,9 +278,11 @@ public sealed class AgentLauncher : IAgentLauncher
         Core.Usage.ISpendWatch spend,
         Core.Statusline.ILoadedSpecialistStore loaded,
         Core.Sessions.IRuntimeReaper? reaper = null,
-        Core.Tasks.ITaskService? tasks = null)
+        Core.Tasks.ITaskService? tasks = null,
+        Core.Sessions.IHeadlessTranscripts? transcripts = null)
     {
         _tasks = tasks;
+        _transcripts = transcripts;
         _reaper = reaper;
         _spend = spend;
         _loaded = loaded;
@@ -327,6 +336,8 @@ public sealed class AgentLauncher : IAgentLauncher
                         0, launch.SyncOutcome, warnings, launch.Preflight, null,
                         launch.Project.Entry.Name, launch.Adapter.Name, launch.Agent.Source, launch.Plan));
             }
+
+            RestoreTranscript(launch, request);
 
             var startedAt = DateTimeOffset.UtcNow;
 
@@ -436,6 +447,8 @@ public sealed class AgentLauncher : IAgentLauncher
                 complete: (_, _) => Task.CompletedTask));
         }
 
+        RestoreTranscript(launch, request);
+
         var launchId = await RecordStartAsync(launch, request, ct).ConfigureAwait(false);
 
         var started = await _processes.StartPipedAsync(
@@ -462,6 +475,18 @@ public sealed class AgentLauncher : IAgentLauncher
         var agentName = launch.Adapter.Name;
         var runtimeDirectory = launch.RuntimeDirectory;
 
+        var session = new HeadlessSession(
+                started.Value!,
+                protocol,
+
+                // So the conversation stays out of every list a person resumes
+                // from. Nobody started it, and the run is where it is found.
+                // The purpose is a fixed label rather than the task: the
+                // launch id joins it to the start line, where the task was
+                // screened for credentials before it was kept.
+                identified: (sessionId, token) => _ledger.RecordHeadlessSessionAsync(
+                    sessionId, agentName, "headless launch", launchId, token));
+
         return OperationResult<HeadlessLaunch>.Ok(new HeadlessLaunch(
             launch.Plan,
             warnings,
@@ -469,14 +494,56 @@ public sealed class AgentLauncher : IAgentLauncher
             launch.Project.Entry.Name,
             agentName,
             launchId,
-            new HeadlessSession(started.Value!, protocol),
+            session,
             complete: async (exitCode, token) =>
             {
+                await PutAwayAsync(_transcripts, session, agentName, token).ConfigureAwait(false);
                 await _ledger.RecordEndAsync(launchId, exitCode, token).ConfigureAwait(false);
                 await _running.ReleaseAsync(launchId).ConfigureAwait(false);
                 await _projects.RecordLaunchAsync(slug, agentName, token).ConfigureAwait(false);
                 CleanRuntimeDirectory(runtimeDirectory);
             }));
+    }
+
+    /// <summary>
+    /// Puts back the transcript of a conversation being resumed, if it was
+    /// moved out of the agent's folder when it ended as a headless node.
+    /// </summary>
+    /// <remarks>
+    /// Before the agent starts, because the agent looks for it at once. A
+    /// conversation that was never moved is left alone, so this costs an
+    /// ordinary resume one directory listing.
+    /// </remarks>
+    private void RestoreTranscript(Prepared launch, LaunchRequest request)
+    {
+        if (request.ResumeSessionId is { Length: > 0 } resuming)
+        {
+            _transcripts?.Restore(launch.Adapter.Name, resuming);
+        }
+    }
+
+    /// <summary>
+    /// Moves a finished headless conversation's transcript out of the agent's
+    /// folder, so the agent's own resume picker stops offering it.
+    /// </summary>
+    /// <remarks>
+    /// Only once the agent has gone: a transcript moved from under a running
+    /// agent is one it carries on writing in the old place. A caller that
+    /// completes before ending the session leaves the transcript where it is.
+    /// Shared with the detached launcher, which ends its sessions the same way.
+    /// </remarks>
+    internal static async Task PutAwayAsync(
+        Core.Sessions.IHeadlessTranscripts? transcripts,
+        HeadlessSession session,
+        string agentName,
+        CancellationToken ct)
+    {
+        if (transcripts is not null
+            && session.Exited.IsCompleted
+            && session.SessionId is { Length: > 0 } sessionId)
+        {
+            await transcripts.PutAwayAsync(agentName, sessionId, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

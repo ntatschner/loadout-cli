@@ -283,6 +283,37 @@ public sealed class LaunchLedgerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_headless_session_is_read_back_and_is_never_counted_as_a_launch()
+    {
+        var launchId = await _ledger.RecordStartAsync(Launch("fix the build"));
+
+        await _ledger.RecordHeadlessSessionAsync("sess-node", "claude", "headless launch", launchId);
+        await _ledger.RecordHeadlessSessionAsync("sess-idea", "claude", "Fleshing out the idea 'x'", null);
+
+        // Killed mid-append: the reader skips it rather than giving up on the file.
+        await File.AppendAllTextAsync(_ledger.Path, "{\"Kind\":\"session\",\"Id\":" + Environment.NewLine);
+
+        var sessions = (await _ledger.ReadHeadlessSessionsAsync()).Value!;
+
+        sessions.Select(s => s.SessionId).Should().Equal("sess-node", "sess-idea");
+        sessions[0].LaunchId.Should().Be(launchId);
+        sessions[1].LaunchId.Should().BeNull();
+        sessions[1].Purpose.Should().Be("Fleshing out the idea 'x'");
+
+        (await _ledger.ReadAsync(DateTimeOffset.UnixEpoch)).Value.Should().ContainSingle(
+            "a session line is a note about a launch, or about something that is not one");
+    }
+
+    [Fact]
+    public async Task No_ledger_means_no_headless_sessions_rather_than_a_failure()
+    {
+        var read = await _ledger.ReadHeadlessSessionsAsync();
+
+        read.Succeeded.Should().BeTrue();
+        read.Value.Should().BeEmpty();
+    }
+
+    [Fact]
     public void A_long_project_name_does_not_shift_the_columns()
     {
         // Every row has to be the same width up to the task, or the listing

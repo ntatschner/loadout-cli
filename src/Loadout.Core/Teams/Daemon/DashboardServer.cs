@@ -2124,6 +2124,10 @@ public sealed class DashboardServer : IDisposable
             node.Said,
             node.Model,
             node.Base,
+
+            // The agent's own conversation, which is kept out of every resume
+            // list. This is where somebody finds it to take the node over.
+            node.Session,
             tookSeconds = node.Took is { } took ? (int)took.TotalSeconds : (int?)null,
 
             // When it last said anything, which is how the terminal screen

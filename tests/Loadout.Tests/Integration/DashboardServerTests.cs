@@ -1827,6 +1827,24 @@ public sealed class DashboardServerTests : IAsyncLifetime
         run.GetProperty("running").GetBoolean().Should().BeTrue();
         run.GetProperty("nodes").GetArrayLength().Should().Be(1);
         run.GetProperty("nodes")[0].GetProperty("doing").GetString().Should().Be("Read docs/commands.md");
+
+        // Every resume list leaves a node's conversation out; the run page is
+        // where somebody finds it to take the node over.
+        run.GetProperty("nodes")[0].GetProperty("session").GetString().Should().Be("5d1c9a20-lead");
+    }
+
+    /// <summary>
+    /// A finished node offers the command that takes it over, and only once
+    /// its run has ended.
+    /// </summary>
+    [Fact]
+    public async Task The_page_offers_to_take_over_a_node_of_an_ended_run()
+    {
+        var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
+
+        text.Should().Contain("id=\"takeover\"");
+        text.Should().Contain("var node = opened && !opened.running && trailOf");
+        text.Should().Contain("return \"loadout resume \" + node.session");
     }
 
     /// <summary>
@@ -3033,6 +3051,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
             """{"at":"2026-09-16T12:00:00+00:00","run":"r","node":null,"kind":"run.started","data":{"team":"iterating-project","goal":"Add --since","autonomy":"autonomous","rounds":5,"path":"D:/repo"}}""",
             """{"at":"2026-09-16T12:00:02+00:00","run":"r","node":"lead","kind":"node.launched","data":{"role":"role.project-lead","worktree":"teams-r-lead","base":"1111111111111111111111111111111111111111"}}""",
             """{"at":"2026-09-16T12:00:10+00:00","run":"r","node":"lead","kind":"report.checked","data":{"status":"working","outcome":"accepted","goalUnderstood":"a --since option on loadout usage","coverage":[{"criterion":"a test covers it","verdict":"notattempted","because":"not reached yet","understood":"a test that fails without --since"}]}}""",
+            """{"at":"2026-09-16T12:00:15+00:00","run":"r","node":"lead","kind":"node.turn","data":{"round":1,"turns":0,"cost":0,"session":"5d1c9a20-lead"}}""",
             """{"at":"2026-09-16T12:00:20+00:00","run":"r","node":"lead","kind":"node.doing","data":{"doing":"Read docs/commands.md"}}""",
         ];
 
