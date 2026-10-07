@@ -1287,6 +1287,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
     private readonly IWorkspaceManager _workspace;
     private readonly IProjectService _projects;
     private readonly IAnsiConsole _console;
+    private readonly Loadout.Core.Tasks.ITaskService _tasks;
 
     private readonly ReadingProfile _reading;
 
@@ -1301,7 +1302,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         IWorkspaceManager workspace,
         IProjectService projects,
         IAnsiConsole console,
-        ReadingProfile reading)
+        ReadingProfile reading,
+        Loadout.Core.Tasks.ITaskService tasks)
     {
         _runner = runner;
         _paths = paths;
@@ -1314,6 +1316,7 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         _projects = projects;
         _console = console;
         _reading = reading;
+        _tasks = tasks;
     }
 
     public sealed class Settings : TeamSettings
@@ -1390,6 +1393,20 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             "Take the lead's recommendation when one of its questions has had no answer for this long: "
             + "30m, 2h, or never. Only on a run answered from the dashboard; never for an outward action or a merge.")]
         public string? TakeRecommendationAfter { get; init; }
+
+        /// <summary>
+        /// A task on the project's list that this run is for.
+        /// </summary>
+        /// <remarks>
+        /// The run then moves that task, to doing and on to where it lands,
+        /// rather than adding a <c>team-</c> task of its own beside it - two
+        /// rows for one piece of work, one of which nobody would ever close.
+        /// </remarks>
+        [CommandOption("--task <ID>")]
+        [Description(
+            "A task on the project's list that this run is for. The run moves it to doing, then done or blocked, "
+            + "instead of adding a task of its own.")]
+        public string? Task { get; init; }
     }
 
     /// <summary>
@@ -1465,7 +1482,8 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             // Checked before this is reached, so a figure that does not read
             // has already been refused rather than quietly becoming not set.
             Budget: UsdCap.TryParse(settings.Usd, out var budget) ? budget : UsdCap.Unset,
-            MachineBudget: MachineBudget(machine));
+            MachineBudget: MachineBudget(machine),
+            Task: settings.Task is { Length: > 0 } task ? task.Trim() : null);
     }
 
     /// <summary>
@@ -1562,6 +1580,21 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         if (ceiling.IsShort)
         {
             return output.Fail(TeamCeiling.Explain(team.Name, ceiling), ExitCode.PolicyViolation);
+        }
+
+        if (settings.Task is { Length: > 0 } forTask)
+        {
+            var listed = await _tasks.ListAsync(project.Entry.Slug, cancellationToken).ConfigureAwait(false);
+
+            if (listed.Failed)
+            {
+                return output.Fail(listed);
+            }
+
+            if (Loadout.Core.Tasks.TaskRuns.Rejection(forTask, project.Entry.Slug, listed.Value!) is { } rejected)
+            {
+                return output.Fail(rejected, ExitCode.InvalidArguments);
+            }
         }
 
         var request = Requesting(

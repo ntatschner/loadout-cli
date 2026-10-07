@@ -215,6 +215,42 @@ same thing. A round started from the page carries on if you close the tab,
 because it's run by the dashboard, not the browser. If you stop the dashboard,
 the round stops with it; the idea says where it got to either way.
 
+### 10. Keep your tasks, and run a team on one
+
+Open the **Tasks** tab. It's every project's task list and the workspace-wide
+one, the same lists `loadout task list` reads, with what's being done first,
+then what's blocked, then what's open. Done and dropped tasks are folded away
+under each list. Ideas aren't here: they have their own tab, and a task they
+become turns up here once you accept it.
+
+- **Add a task** puts one on a list as open. Its id is made from the title, so
+  you're asked what it is rather than what to call it.
+- Each task opens to show its note and its buttons: start it, mark it done,
+  drop it, reopen it, or move it back to open. **Mark it blocked** asks what it's
+  waiting on, because a blocked task that doesn't say why is one somebody has to
+  go and ask about.
+- **Edit the title and note** changes either. Emptying the note clears it.
+- **Remove** deletes the row, after asking. If you want a record that it
+  wasn't done, drop it instead.
+- **Run a team** starts a team on the task with nothing to choose. The goal is
+  the task's title, with its note beneath, and the team's own autonomy, budget
+  and done-when criteria apply. The task moves to doing, and to done or blocked
+  when the run ends; the run doesn't add a task of its own beside it.
+
+The team is `iterating-project` unless you've named another:
+
+```sh
+loadout config set team-for-tasks bug-hunt
+```
+
+One team for every task is what makes it a single click. When a task wants a
+different team, or a budget of its own, use **Run a team** at the top of the
+runs pane instead. A task on the workspace-wide list has no repository to work
+in, so it has no run button; move it to a project first.
+
+Like the ideas page, it redraws only when something has changed, and never
+while you have something typed in a box.
+
 ## Only watching
 
 For a screen in a corner, start it so nothing on the page can change a run:
@@ -224,8 +260,8 @@ loadout team dashboard --watch-only
 ```
 
 The server refuses anything that would start or change a run, or change an
-idea, and the page puts its controls away rather than showing buttons that do
-nothing. The ideas are still there to read.
+idea or a task, and the page puts its controls away rather than showing buttons
+that do nothing. The ideas and tasks are still there to read.
 
 ## If it went wrong
 

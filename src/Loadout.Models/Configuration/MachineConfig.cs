@@ -114,6 +114,17 @@ public sealed class MachineTeams
     public List<string> WebhookTeams { get; set; } = [];
 
     /// <summary>
+    /// The team a task is given when somebody runs a team on it from the
+    /// dashboard's task list, or null for the built-in iterating-project.
+    /// </summary>
+    /// <remarks>
+    /// One team for every task, so that running one is a single click with
+    /// nothing to choose. Somebody who wants a different team for a particular
+    /// task still has the Run a team form.
+    /// </remarks>
+    public string? ForTasks { get; set; }
+
+    /// <summary>
     /// What a remediator may do with each kind of task, by kind.
     /// </summary>
     /// <remarks>

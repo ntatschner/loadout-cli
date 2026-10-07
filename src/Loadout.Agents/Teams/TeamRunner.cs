@@ -65,6 +65,11 @@ namespace Loadout.Agents.Teams;
 /// run got to.
 /// </param>
 /// <param name="ResumeMessage">What the person said when picking it up, for the lead.</param>
+/// <param name="Task">
+/// The id of a task already on the project's list that this run is for, or
+/// null for a run of its own. With one, the run moves that task to doing and
+/// then to where it landed, and adds no <c>team-</c> task beside it.
+/// </param>
 /// <param name="Budget">
 /// What this run may spend, said for this run: a figure, no cap, or not set
 /// for the team's own. Written to the run's override file at the start, where
@@ -106,7 +111,8 @@ public sealed record TeamRunRequest(
     TimeSpan? TakeRecommendationAfter = null,
     IReadOnlyList<Loadout.Models.Configuration.TrustedTool>? TrustedTools = null,
     UsdCap Budget = default,
-    UsdCap MachineBudget = default);
+    UsdCap MachineBudget = default,
+    string? Task = null);
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -683,6 +689,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     rounds = request.MaxRounds,
                     project = slug,
                     path = where,
+                    task = request.Task,
 
                     // What it may spend, so a page watching it can say where the
                     // spend stands rather than only what it has cost. No cap is
@@ -780,7 +787,11 @@ public sealed partial class TeamRunner : ITeamRunner
         // Once the lead is actually going, and not before: a run somebody
         // stopped at the first gate did nothing, and a task list that
         // recorded it would be recording an intention.
-        await DeclareAsync(slug, runId, team, TaskState.Doing, request.Goal, $"{autonomy}, running", ct)
+        // A resume is not given the task again: it was written down when the
+        // run started, and the run goes on updating the one it was for.
+        var forTask = request.Task ?? resuming?.Summary.Task;
+
+        await DeclareAsync(slug, runId, forTask, team, TaskState.Doing, request.Goal, $"{autonomy}, running", ct)
             .ConfigureAwait(false);
 
         // Carried on from where it stopped on a resume, so the budget and any
@@ -1371,7 +1382,7 @@ public sealed partial class TeamRunner : ITeamRunner
             "run.finished", null, new { ended, outcome = Filed(ended), cost, rounds, merged }, ct).ConfigureAwait(false);
 
         await DeclareAsync(
-            slug, runId, team, Landed(ended), request.Goal,
+            slug, runId, forTask, team, Landed(ended), request.Goal,
             $"{ended}; {rounds} round(s), ${cost:0.00}. loadout team status {runId}", ct)
             .ConfigureAwait(false);
 
@@ -1437,6 +1448,13 @@ public sealed partial class TeamRunner : ITeamRunner
     /// run's own journal.
     /// </para>
     /// <para>
+    /// A run started for somebody's task moves that task instead, and leaves
+    /// its title and note as they were: they are the person's description of
+    /// the work, and a run that overwrote them with its own status line would
+    /// lose the one thing nobody can get back from the journal. Which run has
+    /// it is said in who declared it, and <c>team status</c> has the rest.
+    /// </para>
+    /// <para>
     /// A failure here is not the run's failure. The task list is a
     /// convenience beside the journal, which is the record, so this reports
     /// nothing and stops nothing.
@@ -1445,6 +1463,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private async Task DeclareAsync(
         string slug,
         string runId,
+        string? task,
         TeamDefinition team,
         TaskState state,
         string goal,
@@ -1453,6 +1472,14 @@ public sealed partial class TeamRunner : ITeamRunner
     {
         if (_tasks is null)
         {
+            return;
+        }
+
+        if (task is { Length: > 0 })
+        {
+            await _tasks.DeclareAsync(slug, task, state, $"team {team.Name}, run {runId}", ct: ct)
+                .ConfigureAwait(false);
+
             return;
         }
 

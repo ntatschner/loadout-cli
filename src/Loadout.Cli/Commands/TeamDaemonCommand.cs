@@ -370,6 +370,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             server.IdeasFor = ideas.ReadAsync;
             server.Ideate = ideas.DoAsync;
 
+            // And the tasks: read for the page, changed by typing the task
+            // command, and a team run on one with 'team run --task'.
+            var tasks = new DashboardTasks(_commands, _tasks, _projects, _configuration, _time, output);
+            server.TasksFor = tasks.ReadAsync;
+            server.Tend = tasks.DoAsync;
+
             // What there is to start, read per request like the waiting area:
             // a team written a moment ago, from the page or from a terminal,
             // belongs in the next answer rather than the next restart.

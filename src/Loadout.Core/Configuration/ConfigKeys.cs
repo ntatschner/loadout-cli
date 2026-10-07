@@ -412,6 +412,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "nothing outside this machine may start a run, whatever token it has"),
 
+        new("team-for-tasks",
+            "The team the dashboard's task list runs on a task, by name",
+            (_, m) => m.Teams.ForTasks,
+            (_, m, v) => m.Teams.ForTasks = v.Trim().Length == 0 ? null : v.Trim(),
+            true,
+            Sample: "bug-hunt",
+            Group: Groups.Machine,
+            WhenUnset: "iterating-project, which plans, implements, reviews and verifies in rounds"),
+
         new("team-webhook-listen",
             "Address the dashboard and its webhook listen on",
             (_, m) => m.Teams.WebhookListen,

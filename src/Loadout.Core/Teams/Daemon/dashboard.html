@@ -1281,6 +1281,16 @@
   #ideas .idea { margin-block: var(--space-3); }
   #ideas .idea > summary { cursor: pointer; font-weight: 600; }
   #ideas .idea-ask { white-space: pre-wrap; }
+  /* Tasks: one disclosure per task, laid out as the ideas are. */
+  #tasks .task { margin-block: var(--space-3); }
+  /* A list's box is a grid with its own gap, and grid items keep their margins,
+     so a card directly in it would sit three gaps from the next. */
+  #tasks fieldset > .task { margin-block: 0; }
+  #tasks .task > summary, #tasks .task-closed > summary, #tasks .task-change > summary { cursor: pointer; }
+  #tasks .task > summary { font-weight: 600; }
+  #tasks .task-note { white-space: pre-wrap; }
+  #tasks details.task-change { margin-block: var(--space-2); }
+  #tasks details.task-change > summary { color: var(--ink-muted); }
   #ideas fieldset.idea-question, #ideas fieldset.idea-layer, #ideas fieldset.idea-addition { border: var(--lk-border) solid var(--line); border-radius: var(--radius-md); margin-block: var(--space-3); padding: var(--space-3); }
   #ideas .idea-piece { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); align-items: start; margin-block: var(--space-2); }
   #ideas .idea-piece .idea-quote { grid-column: 2; white-space: pre-wrap; color: var(--ink-muted); }
@@ -1971,6 +1981,9 @@
              inside the name so it is read aloud with it: "Ideas 2". -->
         <button type="button" id="view-ideas" class="lk-tab" aria-pressed="false">Ideas <span class="lk-count" id="ideas-count" hidden></span></button>
 
+        <!-- The task lists, a page of their own for the same reason. -->
+        <button type="button" id="view-tasks" class="lk-tab" aria-pressed="false">Tasks</button>
+
         <!--
           A destination rather than a dialog. It is a page of its own with
           headings and groups, which is a thing somebody can link to, read in
@@ -1984,6 +1997,7 @@
 
     <section id="settings" hidden aria-labelledby="settings-heading"></section>
     <section id="ideas" hidden aria-labelledby="ideas-heading"></section>
+    <section id="tasks" hidden aria-labelledby="tasks-heading"></section>
 
     <details class="adding lk-disclosure" id="adding" hidden>
       <summary>Which screens are on the board</summary>
@@ -4094,6 +4108,7 @@
     // The board is not here: it is its own thing, shown by showBoard, and it
     // takes the screens off the page rather than swapping one for another.
     { button: "view-ideas", box: "ideas", draw: drawIdeasView },
+    { button: "view-tasks", box: "tasks", draw: drawTasksView },
     { button: "view-settings", box: "settings", draw: drawSettings }
   ];
 
@@ -4397,7 +4412,7 @@
     // the pane carries around its box - the heading, the form for starting a
     // team, the band of totals, a run somebody had open - is about runs, and
     // none of it belongs above a page of preferences.
-    onlySettings(views[which].box === "settings" || views[which].box === "ideas" ? views[which].box : null);
+    onlySettings(["settings", "ideas", "tasks"].indexOf(views[which].box) >= 0 ? views[which].box : null);
 
     var heading = document.getElementById("runs");
 
@@ -4444,7 +4459,7 @@
     Everything the runs pane carries around its box, put away while the
     settings page is up.
   */
-  // Given the page that is not about runs - settings or ideas - or null for a
+  // Given the page that is not about runs - settings, ideas or tasks - or null for a
   // view of the runs.
   function onlySettings(page) {
     var only = !!page;
@@ -11809,6 +11824,308 @@
     document.querySelectorAll("input[name=\"" + name + "\"]").forEach(function (radio) {
       radio.checked = radio.value === value;
     });
+  }
+
+  /*
+    The tasks page: every project's task list and the workspace-wide one,
+    with the task command behind each button and a team run on any task in
+    one click.
+
+    Drawn only when what was read has changed, and never while a box on it
+    has something typed, for the reason the ideas page gives: the runs poll
+    calls this every few seconds, and a redraw throws away an open card, a
+    half-written note and the place somebody had scrolled to.
+  */
+  var tasksDrawn = null;
+  var tasksReadAt = 0;
+  var tasksActs = false;
+  var tasksOpen = {};
+  var taskFields = 0;
+
+  function drawTasksView() {
+    if (tasksDrawn === null || Date.now() - tasksReadAt > 15000) {
+      readTasks(false);
+    }
+  }
+
+  function viewIsTasks() {
+    return view >= 0 && views[view].box === "tasks";
+  }
+
+  function typingInTasks() {
+    var at = document.activeElement;
+    var page = document.getElementById("tasks");
+
+    return !!(at && page && page.contains(at)
+      && (at.tagName === "TEXTAREA" || (at.tagName === "INPUT" && at.type === "text"))
+      && at.value);
+  }
+
+  function readTasks(force) {
+    tasksReadAt = Date.now();
+
+    return Promise.all([api("/api/tasks"), api("/api/choices")]).then(function (both) {
+      var answer = both[0];
+
+      tasksActs = !!(both[1] && both[1].tasks);
+
+      if (!answer) { return; }
+
+      var seen = JSON.stringify(answer) + (tasksActs ? "1" : "0");
+
+      if ((seen !== tasksDrawn || force) && !typingInTasks() && viewIsTasks()) {
+        tasksDrawn = seen;
+        drawTasks(answer);
+      }
+    }, function (failed) {
+      say(failed.message);
+    });
+  }
+
+  function tend(body) {
+    return fetch("/api/tasks?token=" + encodeURIComponent(token), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.text().then(function (text) {
+        var said = null;
+
+        try { said = JSON.parse(text).error; } catch (e) { said = null; }
+
+        if (!r.ok) { throw new Error(said || ("HTTP " + r.status)); }
+      });
+    });
+  }
+
+  // Asks, says what happened, and reads again either way, as the ideas do.
+  function taskDo(body, done) {
+    return tend(body).then(function () {
+      say(done);
+      announce(done);
+    }, function (failed) {
+      say(failed.message);
+      announce(failed.message);
+    }).then(function () { readTasks(true); });
+  }
+
+  function taskField(into, label, multi, value) {
+    var id = "task-field-" + (++taskFields);
+    var field = ideaEl("div", "lk-field");
+    var name = ideaEl("label", "lk-label", label);
+    name.setAttribute("for", id);
+
+    var box = ideaEl(multi ? "textarea" : "input", multi ? "lk-textarea" : "lk-input");
+    box.id = id;
+
+    if (!multi) { box.type = "text"; }
+    if (value) { box.value = value; }
+    if (multi) { box.rows = 3; }
+
+    field.appendChild(name);
+    field.appendChild(box);
+    into.appendChild(field);
+
+    return box;
+  }
+
+  // Doing first, because that is what is going on; then what is stuck, then
+  // what is waiting to be picked up.
+  var taskOrder = { doing: 0, blocked: 1, open: 2, done: 3, dropped: 4 };
+
+  function drawTasks(answer) {
+    var page = document.getElementById("tasks");
+    page.textContent = "";
+    taskFields = 0;
+
+    var head = ideaEl("h2", null, "Tasks");
+    head.id = "tasks-heading";
+    page.appendChild(head);
+
+    page.appendChild(ideaEl("p", "lk-help",
+      "What each project is working on. Each button runs the task command you would otherwise "
+      + "type. Run a team starts " + answer.team + " on the task, with the task's title and note "
+      + "as its goal; the task moves to doing, and to done or blocked when the run ends. "
+      + "Change the team with: loadout config set team-for-tasks <team>"));
+
+    var lists = answer.lists || [];
+    var projects = lists.map(function (l) { return l.project; }).filter(function (p) { return !!p; });
+
+    if (!tasksActs) {
+      page.appendChild(ideaEl("p", "lk-notice",
+        "This dashboard is watching only, so it shows the tasks and cannot change them. "
+        + "Start it without --watch-only, run the daemon, or use the command line."));
+    } else {
+      drawTaskForm(page, projects);
+    }
+
+    var any = false;
+
+    lists.forEach(function (list) {
+      if (!(list.tasks || []).length && !list.error) { return; }
+
+      any = true;
+      drawTaskList(page, list, answer.team);
+    });
+
+    if (!any) {
+      page.appendChild(ideaEl("p", "lk-empty", "No tasks on any list yet."));
+    }
+  }
+
+  function drawTaskForm(page, projects) {
+    var adding = group(page, "Add a task", "Recorded as open. Its id is made from the title.");
+    var title = taskField(adding, "What is to be done", false);
+    var note = taskField(adding, "A note (optional)", true);
+    var where = ideaList(adding, "Put it on", projects);
+
+    var row = ideaEl("div", "lk-btn-row");
+    row.appendChild(ideaButton("Add it", false, function () {
+      if (!title.value.trim()) { title.focus(); return; }
+
+      var body = {
+        verb: "add",
+        title: title.value.trim(),
+        note: note.value.trim() || null,
+        project: where.value || null
+      };
+
+      title.value = "";
+      note.value = "";
+
+      taskDo(body, "The task is on the list.");
+    }));
+    adding.appendChild(row);
+  }
+
+  function drawTaskList(page, list, team) {
+    var tasks = (list.tasks || []).slice().sort(function (a, b) {
+      return (taskOrder[a.state] - taskOrder[b.state]) || (a.declared < b.declared ? 1 : -1);
+    });
+
+    var going = tasks.filter(function (t) { return t.state !== "done" && t.state !== "dropped"; });
+    var closed = tasks.filter(function (t) { return t.state === "done" || t.state === "dropped"; });
+
+    var box = group(page, (list.project || "Workspace-wide") + " — " + going.length + " not finished",
+      list.error ? "This list could not be read: " + list.error : null);
+
+    going.forEach(function (one) { drawTask(box, one, list.project, team); });
+
+    if (!going.length && !list.error) {
+      box.appendChild(ideaEl("p", "lk-help", "Nothing open."));
+    }
+
+    if (closed.length) {
+      var past = ideaEl("details", "task-closed");
+      var key = "closed:" + (list.project || "");
+      past.open = !!tasksOpen[key];
+      past.addEventListener("toggle", function () { tasksOpen[key] = past.open; });
+      past.appendChild(ideaEl("summary", null, "Done and dropped (" + closed.length + ")"));
+      closed.forEach(function (one) { drawTask(past, one, list.project, team); });
+      box.appendChild(past);
+    }
+  }
+
+  function drawTask(into, task, project, team) {
+    var key = (project || "") + "/" + task.id;
+
+    function send(extra, done) {
+      var body = { id: task.id, project: project };
+
+      Object.keys(extra).forEach(function (k) { body[k] = extra[k]; });
+
+      return taskDo(body, done);
+    }
+
+    var card = ideaEl("details", "task lk-bay");
+    card.open = !!tasksOpen[key];
+    card.addEventListener("toggle", function () { tasksOpen[key] = card.open; });
+
+    // The state in words inside the summary, so it is read with the title
+    // rather than left to a colour.
+    card.appendChild(ideaEl("summary", null, (task.title || task.id) + " — " + task.state));
+
+    card.appendChild(ideaEl("p", "lk-help",
+      task.id + " · " + (task.by || "somebody") + ", " + new Date(task.declared).toLocaleString()));
+
+    if (task.note) {
+      card.appendChild(ideaEl("p", "task-note", task.note));
+    }
+
+    into.appendChild(card);
+
+    if (!tasksActs) { return; }
+
+    var finished = task.state === "done" || task.state === "dropped";
+
+    // A task a team run already has. Starting a second on it would have two
+    // runs moving one row, each over the other.
+    var running = task.state === "doing" && /^team /.test(task.by || "");
+
+    var row = ideaEl("div", "lk-btn-row");
+
+    if (!finished && project && !running) {
+      row.appendChild(ideaButton("Run a team", false, function () {
+        agreed("Run " + team + " on " + project + " for “" + (task.title || task.id) + "”?"
+          + "\n\nIts goal is the task's title and note. The team's own autonomy, budget and "
+          + "criteria apply. The task moves to doing now, and to done or blocked when the run ends.",
+          "Run it").then(function (yes) {
+          if (!yes) { return; }
+
+          send({ verb: "run" }, team + " is starting on " + task.id + ". It appears in the list in a moment.");
+        });
+      }));
+    }
+
+    function move(label, state, done) {
+      row.appendChild(ideaButton(label, true, function () { send({ verb: "state", state: state }, done); }));
+    }
+
+    if (task.state === "open") { move("Start it", "doing", task.id + " is doing."); }
+    if (task.state === "doing" || task.state === "blocked") { move("Back to open", "open", task.id + " is open."); }
+    if (!finished) { move("Done", "done", task.id + " is done."); }
+    if (!finished) { move("Drop it", "dropped", task.id + " is dropped."); }
+    if (finished) { move("Reopen", "open", task.id + " is open again."); }
+
+    row.appendChild(ideaButton("Remove", true, function () {
+      agreed("Remove " + task.id + " from " + (project || "the workspace-wide list") + "?"
+        + "\n\nThis deletes the row. To keep a record that it was not done, drop it instead.",
+        "Remove it").then(function (yes) {
+        if (!yes) { return; }
+
+        send({ verb: "remove" }, task.id + " is removed.");
+      });
+    }));
+
+    card.appendChild(row);
+
+    if (!finished && task.state !== "blocked") {
+      var blocking = ideaEl("details", "task-change");
+      blocking.appendChild(ideaEl("summary", null, "Mark it blocked"));
+      var why = taskField(blocking, "What it is waiting on", false);
+      var blockRow = ideaEl("div", "lk-btn-row");
+      blockRow.appendChild(ideaButton("Mark it blocked", false, function () {
+        if (!why.value.trim()) { why.focus(); return; }
+
+        send({ verb: "state", state: "blocked", note: why.value.trim() }, task.id + " is blocked.");
+      }));
+      blocking.appendChild(blockRow);
+      card.appendChild(blocking);
+    }
+
+    var editing = ideaEl("details", "task-change");
+    editing.appendChild(ideaEl("summary", null, "Edit the title and note"));
+    var title = taskField(editing, "Title", false, task.title);
+    var note = taskField(editing, "Note", true, task.note);
+    var editRow = ideaEl("div", "lk-btn-row");
+    editRow.appendChild(ideaButton("Save", false, function () {
+      if (!title.value.trim()) { title.focus(); return; }
+
+      send({ verb: "edit", state: task.state, title: title.value.trim(), note: note.value.trim() },
+        task.id + " is saved.");
+    }));
+    editing.appendChild(editRow);
+    card.appendChild(editing);
   }
 
   /*

@@ -513,6 +513,12 @@ internal static partial class DashboardActions
         // criterion, and a value that starts with a dash is read as an option,
         // which refused the whole run. Joined with = as well, so a criterion
         // that genuinely starts with one still reaches the run as a value.
+        if (asking.Task is { Length: > 0 } task)
+        {
+            arguments.Add("--task");
+            arguments.Add(task);
+        }
+
         foreach (var criterion in asking.Criteria ?? [])
         {
             if (Unlisted(criterion) is { Length: > 0 } said)

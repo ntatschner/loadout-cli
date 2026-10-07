@@ -49,6 +49,10 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// What the run may spend in all, as <c>team run --usd</c> takes it: a figure,
 /// <c>none</c> for no cap, or null for the team's own.
 /// </param>
+/// <param name="Task">
+/// A task on the project's list the run is for, as <c>team run --task</c> takes
+/// it, or null for a run of its own.
+/// </param>
 /// <remarks>
 /// <para>
 /// Nothing here is checked against anything. Whether that team exists, whether
@@ -74,7 +78,8 @@ public sealed record StartRequest(
     string? Model = null,
     string? Agent = null,
     string? TakeRecommendationAfter = null,
-    string? Budget = null);
+    string? Budget = null,
+    string? Task = null);
 
 /// <summary>A team the page asked be written.</summary>
 /// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>
