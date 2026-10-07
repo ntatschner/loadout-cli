@@ -29,4 +29,31 @@ public static partial class TaskIds
             : $"'{id.Trim()}' cannot be a task id. Use letters, digits, dots, dashes and "
                 + "underscores, starting with a letter or digit, up to 48 characters.";
     }
+
+    /// <summary>An id made from the title's first few words, numbered past any already taken.</summary>
+    /// <remarks>
+    /// The same rule ideas are named by, so a task added from the dashboard
+    /// reads like every other id on the list rather than like a timestamp.
+    /// </remarks>
+    public static string From(string title, IEnumerable<string> taken)
+    {
+        ArgumentNullException.ThrowIfNull(taken);
+
+        var stem = Ideas.IdeaService.IdFrom(title ?? string.Empty);
+
+        if (stem == "idea")
+        {
+            stem = "task";
+        }
+
+        var used = new HashSet<string>(taken, StringComparer.OrdinalIgnoreCase);
+        var candidate = stem;
+
+        for (var n = 2; used.Contains(candidate); n++)
+        {
+            candidate = $"{stem}-{n.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        }
+
+        return candidate;
+    }
 }

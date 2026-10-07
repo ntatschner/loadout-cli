@@ -176,6 +176,24 @@ public sealed class StartFormTests
         TeamDuration.Parse(Capture.Last.TakeRecommendationAfter).Should().Be(TimeSpan.FromMinutes(30));
     }
 
+    [Fact]
+    public void A_start_for_a_task_reaches_the_command_as_its_task()
+    {
+        // Without it the run adds a task of its own and the one somebody
+        // pressed the button on never moves.
+        var typed = DashboardActions.Starting(new StartRequest("bug-hunt", "Fix the login", "website", Task: "fix-login"));
+
+        var app = new CommandApp<Capture>();
+        Capture.Last = null;
+
+        app.Run([.. typed]).Should().Be(0);
+
+        Capture.Last!.Task.Should().Be("fix-login");
+        Capture.Last.Project.Should().Be("website");
+
+        DashboardActions.Starting(Filled()).Should().NotContain("--task", "a run of its own names no task");
+    }
+
     [Theory]
     [InlineData("30m", 30)]
     [InlineData("30 mins", 30)]

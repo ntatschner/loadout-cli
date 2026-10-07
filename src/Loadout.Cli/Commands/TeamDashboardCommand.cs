@@ -446,11 +446,18 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         var ideas = new DashboardIdeas(_commands, _ideas, _dumps, _projects, _time, output);
         server.IdeasFor = ideas.ReadAsync;
 
+        // The task lists, read the same way.
+        var tasks = new DashboardTasks(_commands, _tasks, _projects, _configuration, _time, output);
+        server.TasksFor = tasks.ReadAsync;
+
         if (!settings.WatchOnly)
         {
             // Working an idea through from the page: the page asks, this types
             // 'idea answer' or 'idea refine', and the parser decides.
             server.Ideate = ideas.DoAsync;
+
+            // And a task: 'task declare', 'task remove', or 'team run --task'.
+            server.Tend = tasks.DoAsync;
 
             // What every button on the page does, which until now only the
             // daemon could honour. The page drew "Hold it", "Stop it" and a box

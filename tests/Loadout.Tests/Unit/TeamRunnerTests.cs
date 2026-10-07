@@ -95,7 +95,8 @@ public sealed class TeamRunnerTests : IDisposable
         TimeSpan? takeRecommendationAfter = null,
         ITeamConsole? console = null,
         UsdCap budget = default,
-        UsdCap machineBudget = default)
+        UsdCap machineBudget = default,
+        string? task = null)
     {
         return await new TeamRunner(
             _launcher,
@@ -108,7 +109,7 @@ public sealed class TeamRunnerTests : IDisposable
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
-                Budget: budget, MachineBudget: machineBudget),
+                Budget: budget, MachineBudget: machineBudget, Task: task),
             console ?? _console);
     }
 
@@ -876,6 +877,49 @@ public sealed class TeamRunnerTests : IDisposable
         tasks.Declared[1].Id.Should().Be($"team-{outcome.RunId}");
         tasks.Declared[1].State.Should().Be(TaskState.Done);
         tasks.Declared[1].Note.Should().Contain($"loadout team status {outcome.RunId}");
+    }
+
+    [Fact]
+    public async Task A_run_for_a_task_moves_that_task_rather_than_adding_one_of_its_own()
+    {
+        // Two rows for one piece of work, one of which nobody would ever
+        // close, is what this replaced. The person's title and note are
+        // theirs, and the run leaves them alone.
+        var tasks = new FakeTasks();
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        var outcome = (await RunAsync(tasks: tasks, task: "fix-login")).Value!;
+
+        tasks.Declared.Should().HaveCount(2);
+        tasks.Declared.Should().OnlyContain(one => one.Id == "fix-login" && one.Slug == "demo");
+        tasks.Declared.Should().OnlyContain(one => one.Title == null && one.Note == null);
+        tasks.Declared[0].State.Should().Be(TaskState.Doing);
+        tasks.Declared[0].By.Should().Be($"team iterating-project, run {outcome.RunId}");
+        tasks.Declared[1].State.Should().Be(TaskState.Done);
+    }
+
+    [Fact]
+    public async Task A_resumed_run_goes_on_moving_the_task_it_was_started_for()
+    {
+        // The resume is not told the task again: 'team resume' knows only
+        // the run. It is in the journal, which is where the resume reads it.
+        var tasks = new FakeTasks();
+        var (team, first) = await SpentAsync("lead-1", tasks, "fix-login");
+
+        await RunControl.SetBudgetAsync(first.Directory!, 5m);
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        var picked = (await ResumeAsync(first.RunId, team, tasks: tasks)).Value!;
+
+        picked.Ended.Should().Be("done");
+        tasks.Declared.Should().OnlyContain(one => one.Id == "fix-login");
+        tasks.Declared[^1].State.Should().Be(TaskState.Done);
     }
 
     [Fact]
@@ -2679,9 +2723,10 @@ public sealed class TeamRunnerTests : IDisposable
         string runId,
         TeamDefinition team,
         string? message = null,
-        int rounds = 10)
+        int rounds = 10,
+        Loadout.Core.Tasks.ITaskService? tasks = null)
     {
-        return await new TeamRunner(_launcher, _paths, TimeProvider.System).RunAsync(
+        return await new TeamRunner(_launcher, _paths, TimeProvider.System, null, null, null, tasks).RunAsync(
             new TeamRunRequest("demo", team, await SpecialistsAsync(),
                 "Add --since to loadout usage.", "supervised", MaxRounds: rounds, Offline: true,
                 Resuming: runId, ResumeMessage: message),
@@ -2689,7 +2734,10 @@ public sealed class TeamRunnerTests : IDisposable
     }
 
     /// <summary>A run that ends on its budget with its implementer's work on a branch.</summary>
-    private async Task<(TeamDefinition Team, TeamRunOutcome Outcome)> SpentAsync(string leadSession)
+    private async Task<(TeamDefinition Team, TeamRunOutcome Outcome)> SpentAsync(
+        string leadSession,
+        Loadout.Core.Tasks.ITaskService? tasks = null,
+        string? task = null)
     {
         var team = await IteratingProjectAsync();
 
@@ -2704,7 +2752,7 @@ public sealed class TeamRunnerTests : IDisposable
 
         _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
 
-        var outcome = (await RunAsync(team)).Value!;
+        var outcome = (await RunAsync(team, tasks: tasks, task: task)).Value!;
 
         outcome.Ended.Should().StartWith("budget spent", "the case being picked up");
 

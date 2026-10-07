@@ -344,6 +344,18 @@ public sealed class DashboardServer : IDisposable
     public Func<CancellationToken, Task<object>>? IdeasFor { get; set; }
 
     /// <summary>
+    /// Doing something to a task - adding, moving, editing, removing, or
+    /// running a team on it - or null where nothing can.
+    /// </summary>
+    public Func<TaskAction, CancellationToken, Task<OperationResult>>? Tend { get; set; }
+
+    /// <summary>
+    /// Every task list, as the page draws them, or null where nothing can
+    /// read them.
+    /// </summary>
+    public Func<CancellationToken, Task<object>>? TasksFor { get; set; }
+
+    /// <summary>
     /// Clearing out runs in a batch, or null where nothing can.
     /// </summary>
     /// <remarks>
@@ -1146,6 +1158,25 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // Doing something to a task. Matched on the method for the same
+        // reason the ideas are: reading them is a GET on the same path, and
+        // belongs below with the other reads.
+        if (path == "/api/tasks"
+            && string.Equals(context.Request.HttpMethod, "POST", StringComparison.Ordinal))
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await TendAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
         // Writing a team, which belongs to no run either. Behind the token
         // like everything else that changes anything.
         if (path == "/api/teams")
@@ -1438,6 +1469,20 @@ public sealed class DashboardServer : IDisposable
         // The ideas, as whoever supplies them shapes them. An empty answer
         // where nothing can read them, which the page draws as "nothing yet"
         // with the forms put away.
+        // The task lists, as whoever supplies them shapes them. Empty where
+        // nothing can read them, which the page draws as nothing to do.
+        if (path == "/api/tasks")
+        {
+            var tasks = TasksFor is null
+                ? new { lists = Array.Empty<object>(), team = (string?)null }
+                : await TasksFor(ct).ConfigureAwait(false);
+
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(tasks, Json))
+                .ConfigureAwait(false);
+
+            return;
+        }
+
         if (path == "/api/ideas")
         {
             var ideas = IdeasFor is null
@@ -1494,6 +1539,7 @@ public sealed class DashboardServer : IDisposable
                     makes = Make is not null,
                     plans = Plan is not null,
                     ideas = Ideate is not null,
+                    tasks = Tend is not null,
                     teams = choosable.Teams,
                     projects = choosable.Projects,
                     here = choosable.Here,
@@ -2706,6 +2752,58 @@ public sealed class DashboardServer : IDisposable
         }
 
         var done = await Ideate(asking, ct).ConfigureAwait(false);
+
+        await WriteAsync(
+            context,
+            done.Succeeded ? 202 : 400,
+            "application/json; charset=utf-8",
+            JsonSerializer.Serialize(
+                done.Succeeded
+                    ? new { done = true, error = (string?)null }
+                    : new { done = false, error = done.Error },
+                Json)).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Something to do to a task, through whatever runs the command.
+    /// </summary>
+    private async Task TendAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        if (Tend is null)
+        {
+            await WriteAsync(context, 501, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new
+                {
+                    error = "This dashboard is watching only and cannot run commands. "
+                        + "Start it without --watch-only, run the daemon, or use the command line.",
+                }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        TaskAction? asking;
+
+        try
+        {
+            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+
+            asking = JsonSerializer.Deserialize<TaskAction>(
+                await reader.ReadToEndAsync(ct).ConfigureAwait(false), Json);
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            asking = null;
+        }
+
+        if (asking is null || string.IsNullOrWhiteSpace(asking.Verb))
+        {
+            await WriteAsync(context, 400, "application/json; charset=utf-8", JsonSerializer.Serialize(
+                new { error = "Say what to do to the task." }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        var done = await Tend(asking, ct).ConfigureAwait(false);
 
         await WriteAsync(
             context,

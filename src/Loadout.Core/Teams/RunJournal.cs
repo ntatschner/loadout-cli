@@ -350,7 +350,8 @@ public sealed record RunSummary(
     IReadOnlyList<RunCovered>? Covered = null,
     string? Outcome = null,
     string? GoalUnderstood = null,
-    bool Uncapped = false)
+    bool Uncapped = false,
+    string? Task = null)
 {
     /// <summary>Each round, with when it started and when it came back.</summary>
     public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
@@ -892,6 +893,7 @@ public sealed class RunJournal : IRunJournal
         var autonomy = string.Empty;
         string? project = null;
         string? path = null;
+        string? task = null;
         decimal? budget = null;
         var uncapped = false;
         var quiet = 0;
@@ -935,6 +937,11 @@ public sealed class RunJournal : IRunJournal
                     // than as missing.
                     project = entry.Text("project");
                     path = entry.Text("path");
+
+                    // The person's task the run was started for, when it was
+                    // started for one, so a resume goes on updating that
+                    // task rather than one of its own.
+                    task = entry.Text("task");
                     budget = entry.Number("budget");
                     uncapped = Uncapped(entry);
                     started = entry.At;
@@ -1195,7 +1202,8 @@ public sealed class RunJournal : IRunJournal
             covered,
             outcome,
             goalUnderstood,
-            uncapped);
+            uncapped,
+            task);
     }
 
     /// <summary>Whether a budget event said the cap was taken off.</summary>
