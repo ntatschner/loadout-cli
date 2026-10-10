@@ -41,6 +41,19 @@ public sealed class CoverageCheckTests
         ["the goal is met"],
         Criteria: criteria.Length > 0 ? criteria : null);
 
+    private const string Three = "the changelog mentions it";
+
+    /// <summary>
+    /// A reading of every criterion these tests use, so a report is judged on
+    /// its coverage and not sent back for the readings every lead report owes.
+    /// </summary>
+    private static readonly ReportReading[] ReadAll =
+    [
+        new(One, "the whole suite, on a fresh clone"),
+        new(Two, "every command in the help appears in the README"),
+        new(Three, "an entry for this change under the next release"),
+    ];
+
     private static Report Reported(string node, params ReportCoverage[] coverage) => new(
         node,
         ReportStatus.Done,
@@ -48,7 +61,8 @@ public sealed class CoverageCheckTests
         [],
         [new ReportEvidence(EvidenceKind.Test, "dotnet test", EvidenceResult.Pass)],
         [],
-        Coverage: coverage.Length > 0 ? coverage : null);
+        Coverage: coverage.Length > 0 ? coverage : null,
+        Readings: ReadAll);
 
     [Fact]
     public void A_lead_that_answers_every_criterion_is_accepted()
@@ -185,7 +199,8 @@ public sealed class CoverageCheckTests
                 [],
                 [],
                 [],
-                Blocker: new ReportBlocker("the suite does not build", "a fix to the build")),
+                Blocker: new ReportBlocker("the suite does not build", "a fix to the build"),
+                Readings: ReadAll),
             Briefed(null, One, Two));
 
         verdict.Outcome.Should().Be(ReportOutcome.Accepted);
@@ -235,6 +250,12 @@ public sealed class CoverageCheckTests
                   "because": "verifier/1 reported 2843 passing" },
                 { "criterion": "the README names every command that ships",
                   "verdict": "not-attempted" }
+              ],
+              "readings": [
+                { "criterion": "the suite passes on a clean checkout",
+                  "reading": "the whole suite, on a fresh clone" },
+                { "criterion": "the README names every command that ships",
+                  "reading": "every command in the help appears in the README" }
               ]
             }
             """;
@@ -255,6 +276,9 @@ public sealed class CoverageCheckTests
         // The hyphenated member name, which is the one a mismatch would hide.
         report.Coverage[1].Verdict.Should().Be(CoverageVerdict.NotAttempted);
         report.Coverage[1].Because.Should().BeNull();
+
+        report.Readings.Should().HaveCount(2);
+        report.Readings![1].Reading.Should().Be("every command in the help appears in the README");
 
         // And the whole point: the check reaches the same verdict on a report
         // that came through the reader as on one built in a test.
@@ -376,13 +400,54 @@ public sealed class CoverageCheckTests
     }
 
     [Fact]
+    public void A_lead_report_that_says_nothing_about_how_it_reads_a_criterion_goes_back()
+    {
+        // Every status but failed, and blocked here, because the readings are
+        // asked for before any worker starts, long before anything is done.
+        var report = new Report(
+            "lead", ReportStatus.Blocked, "waiting on my requests", [], [], [],
+            Blocker: new ReportBlocker("waiting", "their reports"),
+            Readings: [new ReportReading(" The Suite Passes On A Clean Checkout ", "the whole suite")]);
+
+        var verdict = ReportCheck.Check(report, Briefed(null, One, Two));
+
+        verdict.Outcome.Should().Be(ReportOutcome.Returned);
+        verdict.Reasons.Should().ContainSingle().Which.Should().Contain(Two).And.Contain("'readings'");
+    }
+
+    [Fact]
+    public void A_blank_reading_is_no_reading()
+    {
+        var report = Reported("lead", new ReportCoverage(One, CoverageVerdict.Met, "verifier/1")) with
+        {
+            Readings = [new ReportReading(One, "  ")],
+        };
+
+        ReportCheck.Check(report, Briefed(null, One)).Reasons.Should().ContainSingle()
+            .Which.Should().Contain("reading");
+    }
+
+    [Fact]
+    public void Readings_are_not_asked_of_a_worker_or_of_a_lead_that_has_failed()
+    {
+        var silent = Reported("implementer/1") with { Readings = null };
+
+        ReportCheck.Check(silent, Briefed("lead", One)).Reasons
+            .Should().NotContain(one => one.Contains("reading", StringComparison.Ordinal));
+
+        var failed = new Report("lead", ReportStatus.Failed, "gave up: the build is broken", [], [], []);
+
+        ReportCheck.Check(failed, Briefed(null, One)).Outcome.Should().Be(ReportOutcome.Accepted);
+    }
+
+    [Fact]
     public void Every_unanswered_criterion_is_named_rather_than_counted()
     {
         // Three reasons, not "3 criteria were not covered". The lead has to act
         // on this, and a count tells it nothing about which.
         var verdict = ReportCheck.Check(
             Reported("lead"),
-            Briefed(null, One, Two, "the changelog mentions it"));
+            Briefed(null, One, Two, Three));
 
         verdict.Reasons.Should().HaveCount(3);
         verdict.Reasons.Should().Contain(one => one.Contains(One, StringComparison.Ordinal));

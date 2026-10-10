@@ -652,6 +652,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 [
                     "every criterion below is met, with the evidence cited from your nodes' reports",
                     CoverageOwed,
+                    ReadingsOwed,
 
                     // The same question as below, put beside the project's
                     // criteria rather than replaced by them.
@@ -684,6 +685,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 [
                     "every criterion below is met, with the evidence cited from your nodes' reports",
                     CoverageOwed,
+                    ReadingsOwed,
                     GoalReadingOwed,
                 ],
             team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory,
@@ -935,6 +937,13 @@ public sealed partial class TeamRunner : ITeamRunner
         // and a lead held to criteria it has not seen cannot report coverage.
         IReadOnlyList<string>? agreedThisRound = null;
 
+        // How the lead last said it reads each criterion, so a change is
+        // written down once rather than every round; and whether somebody has
+        // already let workers start on those readings. A resumed run that had
+        // them accepted is not asked again.
+        Dictionary<string, string>? lastReadings = null;
+        var readingsAccepted = resuming?.ReadingsAccepted ?? false;
+
         try
         {
             var prompt = resuming is null
@@ -1122,6 +1131,7 @@ public sealed partial class TeamRunner : ITeamRunner
                                 "every criterion below is met, with the evidence cited from your "
                                     + "nodes' reports",
                                 CoverageOwed,
+                                ReadingsOwed,
                                 GoalReadingOwed,
                             ],
                         };
@@ -1130,6 +1140,33 @@ public sealed partial class TeamRunner : ITeamRunner
                         // the lead's coverage is checked against.
                         agreedThisRound = Held(standing, criteria);
                     }
+                }
+
+                // Written down the first time and whenever one changes, so a
+                // run read back shows how the lead understood what it was
+                // judged on before the verdicts, not only beside them.
+                if (Read(report, Held(standing, criteria)) is { Count: > 0 } readings)
+                {
+                    var changed = lastReadings is null
+                        ? readings
+                        : readings
+                            .Where(one => !lastReadings.TryGetValue(one.Key, out var was)
+                                || !string.Equals(was, one.Value, StringComparison.Ordinal))
+                            .ToDictionary(one => one.Key, one => one.Value, StringComparer.OrdinalIgnoreCase);
+
+                    if (changed.Count > 0)
+                    {
+                        await journal.WriteAsync(
+                            lastReadings is null ? "reading" : "reading.changed",
+                            team.Lead,
+                            new
+                            {
+                                readings = changed.Select(one => new { criterion = one.Key, reading = one.Value }),
+                            },
+                            ct).ConfigureAwait(false);
+                    }
+
+                    lastReadings = new Dictionary<string, string>(readings, StringComparer.OrdinalIgnoreCase);
                 }
 
                 // A lead that says done while the team's gate has not been
@@ -1236,7 +1273,70 @@ public sealed partial class TeamRunner : ITeamRunner
                     feedback.AppendLine();
                 }
 
-                var requests = report.Requests ?? [];
+                IReadOnlyList<ReportRequest> requests = report.Requests ?? [];
+
+                /*
+                  Before the first worker starts, how the lead reads each
+                  criterion goes to the person.
+
+                  A criterion is a sentence somebody wrote in a hurry, and "the
+                  tests pass" read as "the new test passes" is a misreading that
+                  costs nothing to correct now and a whole round of workers to
+                  correct later. Put as an ordinary question with a
+                  recommendation, so a run with a timer takes it on its own the
+                  way it takes any other: holding it for a person would mean a
+                  timed run was almost never unattended. Only where somebody
+                  could answer - an autonomous run, or one with nobody at a
+                  terminal or a dashboard, writes the readings down and carries
+                  on, rather than stopping where it never used to.
+                */
+                var heldForReadings = false;
+
+                if (!readingsAccepted && _asking && requests.Count > 0 && lastReadings is { Count: > 0 })
+                {
+                    var decided = await DecideAsync(
+                            autonomy,
+                            console,
+                            [ReadingsQuestion(lastReadings)],
+                            journal,
+                            directory,
+                            request.TakeRecommendationAfter,
+                            ct)
+                        .ConfigureAwait(false);
+
+                    if (decided is null)
+                    {
+                        ended = "stopped at a decision";
+                        break;
+                    }
+
+                    if (decided[0].Answer == ThinkAgainTold)
+                    {
+                        // Nobody briefed: the work it asked for was planned on
+                        // readings the person has just said are wrong.
+                        heldForReadings = true;
+                        requests = [];
+
+                        feedback.AppendLine("## Your readings").AppendLine().AppendLine(ReadingsSentBack).AppendLine();
+                    }
+                    else
+                    {
+                        readingsAccepted = true;
+
+                        await journal.WriteAsync(
+                            "readings.accepted", team.Lead, new { by = decided[0].By }, ct).ConfigureAwait(false);
+                    }
+                }
+                else if (!readingsAccepted && requests.Count > 0 && lastReadings is { Count: > 0 })
+                {
+                    // Nobody to ask, so they stand. Said, so the record does
+                    // not read as though somebody agreed them.
+                    readingsAccepted = true;
+
+                    await journal.WriteAsync("readings.accepted", team.Lead, new { by = "nobody" }, ct)
+                        .ConfigureAwait(false);
+                }
+
                 var reports = new List<Report>();
                 var refused = new List<string>();
 
@@ -1378,7 +1478,9 @@ public sealed partial class TeamRunner : ITeamRunner
                 // A round that asked for nothing moved nothing. A question is
                 // not progress either: a lead with several to ask asks them in
                 // one report, and one that asks round after round is stuck.
-                quietRounds = requests.Count == 0 ? quietRounds + 1 : 0;
+                // A round whose work was held back over its readings is not a
+                // quiet one: the lead asked, and was told to think again.
+                quietRounds = requests.Count == 0 && !heldForReadings ? quietRounds + 1 : 0;
 
                 // Written down, because a run heading for this is something
                 // somebody would want to know before it gets there - and the
@@ -3616,6 +3718,61 @@ public sealed partial class TeamRunner : ITeamRunner
     }
 
     /// <summary>
+    /// How the lead reads each criterion the run holds it to, keyed by the
+    /// criterion in the run's own words. Empty where it gave none.
+    /// </summary>
+    /// <remarks>
+    /// Only criteria the run has, matched trimmed and past case, so a reading
+    /// of something the lead invented is not recorded as one of the run's.
+    /// </remarks>
+    internal static IReadOnlyDictionary<string, string> Read(Report report, IReadOnlyList<string>? held)
+    {
+        var read = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (held is not { Count: > 0 })
+        {
+            return read;
+        }
+
+        var said = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var one in report.Readings ?? [])
+        {
+            if (one.Reading?.Trim() is { Length: > 0 } reading)
+            {
+                said.TryAdd(one.Criterion?.Trim() ?? string.Empty, reading);
+            }
+        }
+
+        foreach (var criterion in held)
+        {
+            if (said.TryGetValue(criterion.Trim(), out var reading))
+            {
+                read[criterion] = reading;
+            }
+        }
+
+        return read;
+    }
+
+    /// <summary>The question that holds a run for its lead's readings.</summary>
+    internal static ReportQuestion ReadingsQuestion(IReadOnlyDictionary<string, string> readings)
+    {
+        var text = new StringBuilder(
+            "Before any worker starts: is this how you mean the done-when? The lead is saying how it "
+            + "reads each one, not proposing new ones.");
+
+        foreach (var (criterion, reading) in readings)
+        {
+            text.Append($" • \"{criterion}\" read as: {reading}");
+        }
+
+        text.Append($" Choose {ThinkAgain} to have it read them again before anything starts.");
+
+        return new ReportQuestion(text.ToString(), [AcceptReadings], AcceptReadings);
+    }
+
+    /// <summary>
     /// Everything a run is held to: the project's standing criteria, then the
     /// run's chosen ones, each once. Null when there are none.
     /// </summary>
@@ -3890,6 +4047,22 @@ public sealed partial class TeamRunner : ITeamRunner
         "your final report carries one coverage entry per criterion, each saying in 'understood' "
         + "what you took the criterion to mean, with a verdict of met, unmet or not-attempted, and "
         + "every met saying in 'because' which node, report and evidence shows it";
+
+    /// <summary>What every report of the lead's says about each criterion, before any verdict.</summary>
+    internal const string ReadingsOwed =
+        "every report you make carries 'readings': one entry per criterion below, repeating it exactly "
+        + "and saying in 'reading', in a sentence or two, what you take it to mean. Give them before any "
+        + "worker starts and restate them every round; change one only when your understanding has "
+        + "changed, and say why in your summary";
+
+    /// <summary>The answer that lets the run go on with the lead's readings as they stand.</summary>
+    public const string AcceptReadings = "Accept these readings";
+
+    /// <summary>What the lead is told when its readings were sent back.</summary>
+    internal const string ReadingsSentBack =
+        "Your readings of the criteria were sent back: the person did not think they were what they "
+        + "meant, so no worker was briefed this round. Look at each criterion afresh, restate your "
+        + "readings, and ask again for the work you need.";
 
     /// <summary>What every report of the lead's says about the goal.</summary>
     internal const string GoalReadingOwed =

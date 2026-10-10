@@ -152,6 +152,30 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
     }
 
     /// <summary>
+    /// A list of two-string objects from the event's data, such as the
+    /// readings a lead gave, in the order written. Entries missing either
+    /// string are left out.
+    /// </summary>
+    public IReadOnlyList<KeyValuePair<string, string>> Pairs(string list, string key, string value)
+    {
+        if (Data.ValueKind != JsonValueKind.Object
+            || !Data.TryGetProperty(list, out var listed)
+            || listed.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. listed.EnumerateArray()
+                .Where(one => one.ValueKind == JsonValueKind.Object)
+                .Select(one => (Key: Said(one, key), Value: Said(one, value)))
+                .Where(one => one.Key is { Length: > 0 } && one.Value is { Length: > 0 })
+                .Select(one => new KeyValuePair<string, string>(one.Key!, one.Value!)),
+        ];
+    }
+
+    /// <summary>
     /// One string from a coverage entry, with both spellings tried.
     /// </summary>
     /// <remarks>
@@ -1253,6 +1277,16 @@ public sealed class RunJournal : IRunJournal
         : entry.Number("budget") is { } figure ? (figure, false)
         : (budget, uncapped);
 
+    /// <summary>The readings a reading event carries, as "criterion: reading" pairs, or empty.</summary>
+    private static string ReadingsSaid(RunEvent entry)
+    {
+        var said = entry.Pairs("readings", "criterion", "reading");
+
+        return said.Count > 0
+            ? ": " + string.Join("; ", said.Select(one => $"{one.Key} - {one.Value}"))
+            : string.Empty;
+    }
+
     /// <summary>One event as a line somebody can read.</summary>
     public static string Describe(RunEvent entry)
     {
@@ -1353,6 +1387,14 @@ public sealed class RunJournal : IRunJournal
                 "nobody" => "held to the lead's proposed done-when, with nobody watching to agree them",
                 _ => "done-when agreed",
             }) + (entry.Words("criteria") is { Count: > 0 } agreed ? $": {string.Join("; ", agreed)}" : string.Empty),
+            "reading" => "said how it reads the done-when" + ReadingsSaid(entry),
+            "reading.changed" => "now reads the done-when differently" + ReadingsSaid(entry),
+            "readings.accepted" => entry.Text("by") switch
+            {
+                "person" => "its readings were accepted",
+                "timed default" => "its readings were accepted, nobody having answered in time",
+                _ => "its readings stood, with nobody to ask",
+            },
             "criteria.none" => entry.Number("project") is > 0
                 ? "held to the project's done-when alone"
                 : "held to no done-when",

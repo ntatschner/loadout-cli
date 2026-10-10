@@ -423,7 +423,12 @@ public sealed class TeamRunnerTests : IDisposable
         Coverage = [.. met.Select(one => new ReportCoverage(
             one, CoverageVerdict.Met, "implementer/1's report: dotnet test, 1612 passed", Understood: $"read as: {one}"))],
         GoalUnderstood = "a --since option on loadout usage, with a test",
+        Readings = Readings(met),
     };
+
+    /// <summary>A reading of each criterion, as every lead report owes while the run has criteria.</summary>
+    private static ReportReading[] Readings(params string[] criteria) =>
+        [.. criteria.Select(one => new ReportReading(one, $"read as: {one}"))];
 
     private async Task<IReadOnlyList<string>> JournalAsync(TeamRunOutcome outcome) =>
         await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
@@ -1630,7 +1635,7 @@ public sealed class TeamRunnerTests : IDisposable
         _launcher.Script(
             "role.project-lead",
             Init("lead-1"),
-            Result(LeadProposes(AskImplementer()), 0.01m),
+            Result(LeadProposes(AskImplementer()) with { Readings = Readings(Suite) }, 0.01m),
             Result(LeadDoneCovering([Suite, .. Proposal]), 0.02m),
             Result(LeadDoneCovering([Suite, .. Proposal]), 0.02m));
 
@@ -1801,6 +1806,182 @@ public sealed class TeamRunnerTests : IDisposable
             .Should().Equal(Suite, "docs build", "mine");
 
         TeamRunner.Held([], null).Should().BeNull();
+    }
+
+    // ------------------------------------------------ readings, before any worker starts
+
+    private const string Mine = "loadout usage --since filters by date";
+
+    private static Report LeadReadsAndRequests(string reading = "read as: " + Mine) =>
+        LeadRequests(AskImplementer()) with { Readings = [new ReportReading(Mine, reading)] };
+
+    private List<ReportQuestion> AskedAbout(string start)
+    {
+        var asked = new List<ReportQuestion>();
+        var answer = _console.Decide;
+
+        _console.Decide = question =>
+        {
+            if (question.Question.StartsWith(start, StringComparison.Ordinal))
+            {
+                asked.Add(question);
+            }
+
+            return answer(question);
+        };
+
+        return asked;
+    }
+
+    [Fact]
+    public async Task Before_any_worker_starts_the_lead_s_readings_go_to_the_person()
+    {
+        var asked = AskedAbout("Before any worker starts");
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(LeadDoneCovering(Mine), 0.02m), Result(LeadDoneCovering(Mine), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine])).Value!;
+
+        outcome.Ended.Should().Be("done");
+
+        _launcher.Written("role.project-lead")[0].Should().Contain("'readings'");
+
+        asked.Should().ContainSingle().Which.Should().Match<ReportQuestion>(question =>
+            question.Question.Contains($"\"{Mine}\" read as: read as: {Mine}")
+            && question.Recommendation == TeamRunner.AcceptReadings);
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line => line.Contains("\"kind\":\"reading\"") && line.Contains($"read as: {Mine}"));
+        journal.Should().Contain(line => line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"person\""));
+
+        // Asked once: the same readings restated in the final report are not
+        // a change, and the workers have long since started.
+        journal.Should().NotContain(line => line.Contains("\"kind\":\"reading.changed\""));
+        _launcher.Requests.Should().Contain(one => one.Request.Specialists!.Contains("role.implementer"));
+    }
+
+    [Fact]
+    public async Task Readings_sent_back_brief_nobody_and_the_lead_reads_again()
+    {
+        var first = true;
+        var answer = _console.Decide;
+
+        _console.Decide = question =>
+        {
+            if (first && question.Question.StartsWith("Before any worker starts", StringComparison.Ordinal))
+            {
+                first = false;
+
+                return TeamRunner.ThinkAgain;
+            }
+
+            return answer(question);
+        };
+
+        // Recorded outside the answer above, so the one sent back is counted.
+        var asked = AskedAbout("Before any worker starts");
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests("any test passes"), 0.01m),
+            Result(LeadReadsAndRequests("only dates after --since are printed"), 0.02m),
+            Result(LeadDoneCovering(Mine), 0.03m),
+            Result(LeadDoneCovering(Mine), 0.03m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine])).Value!;
+
+        asked.Should().HaveCount(2, "the readings it gave again are put to the person again");
+
+        // The round it was sent back in started nobody; the next one did.
+        _launcher.Written("role.project-lead")[1].Should().Contain("Your readings of the criteria were sent back");
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line =>
+            line.Contains("\"kind\":\"reading.changed\"") && line.Contains("only dates after --since are printed"));
+
+        journal.Where(line => line.Contains("\"kind\":\"node.launched\"") && line.Contains("role.implementer"))
+            .Should().ContainSingle();
+
+        journal.Should().NotContain(line =>
+            line.Contains("\"kind\":\"round.ended\"") && line.Contains("\"quiet\":1"),
+            "a round held back over its readings is not a round that asked for nothing");
+    }
+
+    [Fact]
+    public async Task A_run_nobody_is_watching_writes_the_readings_down_and_carries_on()
+    {
+        var asked = AskedAbout("Before any worker starts");
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(LeadDoneCovering(Mine), 0.02m), Result(LeadDoneCovering(Mine), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(autonomy: "autonomous", criteria: [Mine])).Value!;
+
+        asked.Should().BeEmpty();
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line => line.Contains("\"kind\":\"reading\""));
+        journal.Should().Contain(line => line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"nobody\""));
+    }
+
+    [Fact]
+    public async Task A_run_with_a_timer_takes_the_readings_when_nobody_answers()
+    {
+        var console = new Loadout.Cli.Commands.DashboardTeamConsole(TimeProvider.System, _ => { });
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(LeadDoneCovering(Mine), 0.02m), Result(LeadDoneCovering(Mine), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(
+            criteria: [Mine], takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console)).Value!;
+
+        outcome.Ended.Should().Be("done");
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"timed default\""));
+    }
+
+    [Fact]
+    public async Task A_resumed_run_whose_readings_were_accepted_is_not_held_for_them_again()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadReadsAndRequests(), 0.01m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        // One round: the readings are accepted and the worker runs.
+        var outcome = (await RunAsync(criteria: [Mine], rounds: 1)).Value!;
+
+        var (resumption, why) = RunResumption.Read(new RunJournal(_paths), outcome.RunId);
+
+        resumption.Should().NotBeNull(why);
+        resumption!.ReadingsAccepted.Should().BeTrue();
+    }
+
+    [Fact]
+    public void A_reading_of_something_the_run_does_not_hold_is_not_one_of_its_readings()
+    {
+        var report = LeadDone() with
+        {
+            Readings =
+            [
+                new ReportReading("  Loadout Usage --Since Filters By Date ", "dates after it only"),
+                new ReportReading("something the lead made up", "whatever it likes"),
+                new ReportReading("the suite passes", "   "),
+            ],
+        };
+
+        TeamRunner.Read(report, [Mine, "the suite passes"]).Should().BeEquivalentTo(
+            new Dictionary<string, string> { [Mine] = "dates after it only" });
     }
 
     [Fact]

@@ -55,6 +55,12 @@ namespace Loadout.Models.Teams;
 /// run was working to what they asked rather than to a nearby thing that was
 /// easier. Optional, as the coverage's own reading is.
 /// </param>
+/// <param name="Readings">
+/// How the lead reads each of the run's criteria, restated in every report it
+/// makes while the run has criteria. Asked for up front rather than only with
+/// the verdicts, because a criterion read wrongly is cheap to correct before a
+/// worker starts and expensive after.
+/// </param>
 public sealed record Report(
     [property: JsonPropertyName("node")] string Node,
     [property: JsonPropertyName("status")] ReportStatus Status,
@@ -69,7 +75,8 @@ public sealed record Report(
     [property: JsonPropertyName("next")] string? Next = null,
     [property: JsonPropertyName("coverage")] IReadOnlyList<ReportCoverage>? Coverage = null,
     [property: JsonPropertyName("proposed_done_when")] IReadOnlyList<string>? ProposedDoneWhen = null,
-    [property: JsonPropertyName("goal_understood")] string? GoalUnderstood = null)
+    [property: JsonPropertyName("goal_understood")] string? GoalUnderstood = null,
+    [property: JsonPropertyName("readings")] IReadOnlyList<ReportReading>? Readings = null)
 {
     /// <summary>The version of this shape.</summary>
     [JsonPropertyName("contract")]
@@ -124,6 +131,13 @@ public sealed record ReportCoverage(
     [property: JsonPropertyName("verdict")] CoverageVerdict Verdict,
     [property: JsonPropertyName("because")] string? Because = null,
     [property: JsonPropertyName("understood")] string? Understood = null);
+
+/// <summary>How the lead reads one of the run's criteria.</summary>
+/// <param name="Criterion">The criterion, repeated back exactly as the run gave it.</param>
+/// <param name="Reading">What the lead takes it to mean, in a sentence or two.</param>
+public sealed record ReportReading(
+    [property: JsonPropertyName("criterion")] string Criterion,
+    [property: JsonPropertyName("reading")] string Reading);
 
 /// <summary>What became of one criterion.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<CoverageVerdict>))]

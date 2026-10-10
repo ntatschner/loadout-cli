@@ -86,6 +86,11 @@ public static class ReportSchema
             "next": { "type": "string" },
             "proposed_done_when": { "type": "array", "items": { "type": "string" } },
             "goal_understood": { "type": "string" },
+            "readings": { "type": "array", "items": {
+              "type": "object", "additionalProperties": false, "required": ["criterion", "reading"],
+              "properties": {
+                "criterion": { "type": "string" },
+                "reading": { "type": "string" } } } },
             "coverage": { "type": "array", "items": {
               "type": "object", "additionalProperties": false, "required": ["criterion", "verdict"],
               "properties": {

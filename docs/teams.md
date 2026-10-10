@@ -407,6 +407,42 @@ A run picked up with `team resume` keeps the ones it started with, even if
 `project.yaml` has changed since. They cannot yet be unticked at the point where
 you agree the lead's proposal; that box shows them and holds them.
 
+### How the lead reads them, before anything starts
+
+A criterion is a sentence somebody wrote in a hurry. "The tests pass" read as
+"the new test passes" can be met while the suite is red, and the coverage
+entries above only show that reading at the end, beside the verdict, once the
+work it was planned on has been paid for.
+
+So once a run has criteria, every report the lead makes carries `readings`: each
+criterion repeated exactly, and what it takes it to mean in a sentence or two. A
+report without one for every criterion is sent back once, like any other
+incomplete report. The journal records them the first time and again only when
+one changes (`reading`, then `reading.changed`), so `team log` shows how the
+lead's understanding moved.
+
+The first time the lead asks for workers, a supervised or manual run stops and
+puts the readings to you as an ordinary question, recommending *Accept these
+readings*:
+
+```
+Before any worker starts: is this how you mean the done-when? The lead is
+saying how it reads each one, not proposing new ones.
+ • "the suite passes" read as: the whole suite, on a fresh clone
+```
+
+Accept, and the workers start. Choose **Think again** and nobody is briefed that
+round: the lead is told its readings were sent back, restates them, and asks
+again, and you are asked again. To say what you meant instead, use `team message`
+before you answer.
+
+Because it is an ordinary question, `--take-recommendation-after` times it like
+any other, so a timed run still goes unattended: when the wait is up the
+readings are accepted and the journal says nobody answered. An autonomous run,
+or one with nobody at a terminal or a dashboard, writes the readings down and
+carries on, and the journal says they stood with nobody to ask. A run picked up
+with `team resume` is not asked again once its readings were accepted.
+
 ### If you say nothing
 
 A run with no criteria used to be held to one: *"the goal is met, with the
