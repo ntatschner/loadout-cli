@@ -116,9 +116,46 @@ public static class ReportCheck
                 break;
         }
 
+        // Every status but failed: a lead that has given up has nothing left
+        // to read, and sending it back to say how it reads a criterion it is
+        // abandoning would cost a turn for nothing.
+        if (report.Status != ReportStatus.Failed)
+        {
+            reasons.AddRange(Unread(report, brief));
+        }
+
         return reasons.Count == 0
             ? ReportVerdict.Accepted
             : new ReportVerdict(ReportOutcome.Returned, reasons);
+    }
+
+    /// <summary>
+    /// The run's criteria the lead has not said how it reads.
+    /// </summary>
+    /// <remarks>
+    /// Asked in every report, not only the last, because a criterion read
+    /// wrongly is cheap to put right before a worker starts and dear to put
+    /// right after. Matched the way coverage is, trimmed and past case.
+    /// </remarks>
+    private static IEnumerable<string> Unread(Report report, Brief brief)
+    {
+        if (brief.Parent is not null || brief.Criteria is not { Count: > 0 } criteria)
+        {
+            yield break;
+        }
+
+        var read = new HashSet<string>(
+            (report.Readings ?? [])
+                .Where(one => !string.IsNullOrWhiteSpace(one.Reading))
+                .Select(one => one.Criterion?.Trim() ?? string.Empty),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var criterion in criteria.Where(one => !read.Contains(one.Trim())))
+        {
+            yield return
+                $"Every report needs a reading for every criterion, and none was given for '{criterion}'. "
+                + "Add it to 'readings': the criterion exactly as given, and what you take it to mean.";
+        }
     }
 
     /// <summary>

@@ -33,7 +33,7 @@
 <text x="16" y="469">││                                                                                                        ││</text>
 <text x="16" y="486">││                                                                                                        ││</text>
 <text x="16" y="503">│└────────────────────────────────────────────────────────────────────────────────────────────────────────┘│</text>
-<text x="16" y="520">│ Enter log   s status   d dashboard   r forget   F5 refresh   Esc close                                   │</text>
+<text x="16" y="520">│ Enter log   s status   a answer   d dashboard   r forget   F5 refresh   Esc close                        │</text>
 <text x="16" y="537">╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯</text>
 </g>
 </svg>

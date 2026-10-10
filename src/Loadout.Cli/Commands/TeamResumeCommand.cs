@@ -225,6 +225,7 @@ public sealed class TeamResumeCommand : AsyncCommand<TeamResumeCommand.Settings>
             // as a setting, and a resume that quietly reapplied an old flag
             // would be one somebody had not asked for this time.
             TakeRecommendationAfter: Loadout.Models.Teams.TeamDuration.Parse(team.Rules.TakeRecommendationAfter),
+            OnTimeout: Loadout.Models.Teams.TeamTimeout.Parse(team.Rules.OnTimeout),
             MachineBudget: TeamRunCommand.MachineBudget(machine.Value));
 
         if (!settings.DryRun && asked.IsSet)

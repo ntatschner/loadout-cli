@@ -97,7 +97,8 @@ public sealed class TeamRunnerTests : IDisposable
         UsdCap budget = default,
         UsdCap machineBudget = default,
         string? task = null,
-        StandingCriteria? standing = null)
+        StandingCriteria? standing = null,
+        string? onTimeout = null)
     {
         return await new TeamRunner(
             _launcher,
@@ -110,7 +111,8 @@ public sealed class TeamRunnerTests : IDisposable
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
-                Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing),
+                Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing,
+                OnTimeout: onTimeout),
             console ?? _console);
     }
 
@@ -423,7 +425,12 @@ public sealed class TeamRunnerTests : IDisposable
         Coverage = [.. met.Select(one => new ReportCoverage(
             one, CoverageVerdict.Met, "implementer/1's report: dotnet test, 1612 passed", Understood: $"read as: {one}"))],
         GoalUnderstood = "a --since option on loadout usage, with a test",
+        Readings = Readings(met),
     };
+
+    /// <summary>A reading of each criterion, as every lead report owes while the run has criteria.</summary>
+    private static ReportReading[] Readings(params string[] criteria) =>
+        [.. criteria.Select(one => new ReportReading(one, $"read as: {one}"))];
 
     private async Task<IReadOnlyList<string>> JournalAsync(TeamRunOutcome outcome) =>
         await File.ReadAllLinesAsync(Path.Combine(outcome.Directory!, "journal.jsonl"));
@@ -497,7 +504,7 @@ public sealed class TeamRunnerTests : IDisposable
 
         _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m), Result(LeadDone(), 0.09m));
 
-        var outcome = (await RunAsync(takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console)).Value!;
+        var outcome = (await RunAsync(takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console, onTimeout: TeamTimeout.Recommend)).Value!;
 
         outcome.Ended.Should().Be("done");
         _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **yes**")
@@ -1630,7 +1637,7 @@ public sealed class TeamRunnerTests : IDisposable
         _launcher.Script(
             "role.project-lead",
             Init("lead-1"),
-            Result(LeadProposes(AskImplementer()), 0.01m),
+            Result(LeadProposes(AskImplementer()) with { Readings = Readings(Suite) }, 0.01m),
             Result(LeadDoneCovering([Suite, .. Proposal]), 0.02m),
             Result(LeadDoneCovering([Suite, .. Proposal]), 0.02m));
 
@@ -1801,6 +1808,352 @@ public sealed class TeamRunnerTests : IDisposable
             .Should().Equal(Suite, "docs build", "mine");
 
         TeamRunner.Held([], null).Should().BeNull();
+    }
+
+    // ------------------------------------------------ readings, before any worker starts
+
+    private const string Mine = "loadout usage --since filters by date";
+
+    private static Report LeadReadsAndRequests(string reading = "read as: " + Mine) =>
+        LeadRequests(AskImplementer()) with { Readings = [new ReportReading(Mine, reading)] };
+
+    private List<ReportQuestion> AskedAbout(string start)
+    {
+        var asked = new List<ReportQuestion>();
+        var answer = _console.Decide;
+
+        _console.Decide = question =>
+        {
+            if (question.Question.StartsWith(start, StringComparison.Ordinal))
+            {
+                asked.Add(question);
+            }
+
+            return answer(question);
+        };
+
+        return asked;
+    }
+
+    [Fact]
+    public async Task Before_any_worker_starts_the_lead_s_readings_go_to_the_person()
+    {
+        var asked = AskedAbout("Before any worker starts");
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(LeadDoneCovering(Mine), 0.02m), Result(LeadDoneCovering(Mine), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine])).Value!;
+
+        outcome.Ended.Should().Be("done");
+
+        _launcher.Written("role.project-lead")[0].Should().Contain("'readings'");
+
+        asked.Should().ContainSingle().Which.Should().Match<ReportQuestion>(question =>
+            question.Question.Contains($"\"{Mine}\" read as: read as: {Mine}")
+            && question.Recommendation == TeamRunner.AcceptReadings);
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line => line.Contains("\"kind\":\"reading\"") && line.Contains($"read as: {Mine}"));
+        journal.Should().Contain(line => line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"person\""));
+
+        // Asked once: the same readings restated in the final report are not
+        // a change, and the workers have long since started.
+        journal.Should().NotContain(line => line.Contains("\"kind\":\"reading.changed\""));
+        _launcher.Requests.Should().Contain(one => one.Request.Specialists!.Contains("role.implementer"));
+    }
+
+    [Fact]
+    public async Task Readings_sent_back_brief_nobody_and_the_lead_reads_again()
+    {
+        var first = true;
+        var answer = _console.Decide;
+
+        _console.Decide = question =>
+        {
+            if (first && question.Question.StartsWith("Before any worker starts", StringComparison.Ordinal))
+            {
+                first = false;
+
+                return TeamRunner.ThinkAgain;
+            }
+
+            return answer(question);
+        };
+
+        // Recorded outside the answer above, so the one sent back is counted.
+        var asked = AskedAbout("Before any worker starts");
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests("any test passes"), 0.01m),
+            Result(LeadReadsAndRequests("only dates after --since are printed"), 0.02m),
+            Result(LeadDoneCovering(Mine), 0.03m),
+            Result(LeadDoneCovering(Mine), 0.03m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine])).Value!;
+
+        asked.Should().HaveCount(2, "the readings it gave again are put to the person again");
+
+        // The round it was sent back in started nobody; the next one did.
+        _launcher.Written("role.project-lead")[1].Should().Contain("Your readings of the criteria were sent back");
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line =>
+            line.Contains("\"kind\":\"reading.changed\"") && line.Contains("only dates after --since are printed"));
+
+        journal.Where(line => line.Contains("\"kind\":\"node.launched\"") && line.Contains("role.implementer"))
+            .Should().ContainSingle();
+
+        journal.Should().NotContain(line =>
+            line.Contains("\"kind\":\"round.ended\"") && line.Contains("\"quiet\":1"),
+            "a round held back over its readings is not a round that asked for nothing");
+
+        // The summary shows the reading it ended on, not the one it was sent
+        // back for.
+        Loadout.Cli.Commands.TeamRunCommand.Outcomes(_paths, outcome.RunId).Should().ContainSingle()
+            .Which.Reading.Should().Be($"read as: {Mine}");
+    }
+
+    [Fact]
+    public async Task A_run_nobody_is_watching_writes_the_readings_down_and_carries_on()
+    {
+        var asked = AskedAbout("Before any worker starts");
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(LeadDoneCovering(Mine), 0.02m), Result(LeadDoneCovering(Mine), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(autonomy: "autonomous", criteria: [Mine])).Value!;
+
+        asked.Should().BeEmpty();
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line => line.Contains("\"kind\":\"reading\""));
+        journal.Should().Contain(line => line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"nobody\""));
+    }
+
+    [Fact]
+    public async Task A_run_with_a_timer_takes_the_readings_when_nobody_answers()
+    {
+        var console = new Loadout.Cli.Commands.DashboardTeamConsole(TimeProvider.System, _ => { });
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(LeadDoneCovering(Mine), 0.02m), Result(LeadDoneCovering(Mine), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(
+            criteria: [Mine], takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console,
+            onTimeout: TeamTimeout.Recommend)).Value!;
+
+        outcome.Ended.Should().Be("done");
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"timed default\""));
+    }
+
+    // ------------------------------------------------ when a timed question runs out
+
+    private static readonly TimeSpan Briefly = TimeSpan.FromMilliseconds(300);
+
+    private static Loadout.Cli.Commands.DashboardTeamConsole Unwatched() =>
+        new(TimeProvider.System, _ => { });
+
+    /// <remarks>
+    /// The default. A question nobody answers goes back to the lead once,
+    /// with a round of evidence it did not have; if it comes back and nobody
+    /// answers again, the recommendation is taken.
+    /// </remarks>
+    [Fact]
+    public async Task By_default_a_timed_question_goes_back_once_before_its_recommendation_is_taken()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadAsks(), 0.01m), Result(LeadAsks(), 0.02m), Result(LeadDone(), 0.03m), Result(LeadDone(), 0.03m));
+
+        var outcome = (await RunAsync(takeRecommendationAfter: Briefly, console: Unwatched())).Value!;
+
+        var decisions = (await JournalAsync(outcome)).Where(line => line.Contains("\"kind\":\"decision\"")).ToList();
+
+        decisions.Should().HaveCount(2);
+        decisions[0].Should().Contain("\"by\":\"timed think again\"").And.Contain("\"answer\":\"think again\"");
+        decisions[1].Should().Contain("\"by\":\"timed default\"").And.Contain("\"answer\":\"yes\"");
+
+        // The lead is told nobody chose anything, not that its option won.
+        _launcher.Written("role.project-lead")[1].Should().Contain("nobody answered in time, so it came back to you");
+    }
+
+    [Fact]
+    public async Task Think_again_sends_a_timed_question_back_every_time()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadAsks(), 0.01m), Result(LeadAsks(), 0.02m), Result(LeadDone(), 0.03m), Result(LeadDone(), 0.03m));
+
+        var outcome = (await RunAsync(
+            takeRecommendationAfter: Briefly, console: Unwatched(), onTimeout: TeamTimeout.ThinkAgain)).Value!;
+
+        (await JournalAsync(outcome)).Where(line => line.Contains("\"kind\":\"decision\""))
+            .Should().HaveCount(2).And.OnlyContain(line => line.Contains("\"by\":\"timed think again\""));
+    }
+
+    /// <remarks>
+    /// The readings question's words change every time the lead restates
+    /// them, so a timer that knew questions by their words would send the
+    /// readings back for ever under think-again-once.
+    /// </remarks>
+    [Fact]
+    public async Task Readings_nobody_answers_go_back_once_and_then_stand()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests("any test passes"), 0.01m),
+            Result(LeadReadsAndRequests("only dates after --since are printed"), 0.02m),
+            Result(LeadDoneCovering(Mine), 0.03m),
+            Result(LeadDoneCovering(Mine), 0.03m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine], takeRecommendationAfter: Briefly, console: Unwatched())).Value!;
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line =>
+            line.Contains("\"kind\":\"decision\"") && line.Contains("\"by\":\"timed think again\"")
+            && line.Contains(TeamRunner.ReadingsQuestionStart));
+
+        journal.Should().Contain(line =>
+            line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"timed default\""));
+
+        journal.Where(line => line.Contains("\"kind\":\"node.launched\"") && line.Contains("role.implementer"))
+            .Should().ContainSingle();
+    }
+
+    /// <remarks>
+    /// So whoever is answering is told what will happen, which was the run
+    /// stopping when in fact it would carry on without them.
+    /// </remarks>
+    [Theory]
+    [InlineData(null, QuestionTimer.SendsBack)]
+    [InlineData(TeamTimeout.Recommend, QuestionTimer.TakesRecommendation)]
+    public async Task A_timed_question_is_asked_saying_when_and_what_the_timer_will_do(string? policy, string does)
+    {
+        _console.AnswersInPlace = true;
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.01m), Result(LeadDone(), 0.02m));
+
+        var before = DateTimeOffset.UtcNow;
+
+        await RunAsync(takeRecommendationAfter: TimeSpan.FromMinutes(30), onTimeout: policy);
+
+        var timer = _console.Timers.Should().ContainSingle().Subject;
+
+        timer.Does.Should().Be(does);
+        timer.At.Should().BeCloseTo(before.AddMinutes(30), TimeSpan.FromMinutes(1));
+    }
+
+    [Theory]
+    [InlineData(TeamTimeout.Recommend, false, false)]
+    [InlineData(TeamTimeout.Recommend, true, false)]
+    [InlineData(TeamTimeout.ThinkAgainOnce, false, true)]
+    [InlineData(TeamTimeout.ThinkAgainOnce, true, false)]
+    [InlineData(TeamTimeout.ThinkAgain, true, true)]
+    [InlineData(null, false, true)]
+    [InlineData("  ALWAYS ", true, true)]
+    public void What_a_timer_does_follows_the_setting(string? policy, bool sentBackBefore, bool sendsBack)
+    {
+        TeamTimeout.SendsBack(policy, sentBackBefore).Should().Be(sendsBack);
+    }
+
+    [Fact]
+    public async Task A_resumed_run_whose_readings_were_accepted_is_not_held_for_them_again()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadReadsAndRequests(), 0.01m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        // One round: the readings are accepted and the worker runs.
+        var outcome = (await RunAsync(criteria: [Mine], rounds: 1)).Value!;
+
+        var (resumption, why) = RunResumption.Read(new RunJournal(_paths), outcome.RunId);
+
+        resumption.Should().NotBeNull(why);
+        resumption!.ReadingsAccepted.Should().BeTrue();
+    }
+
+    [Fact]
+    public void A_reading_of_something_the_run_does_not_hold_is_not_one_of_its_readings()
+    {
+        var report = LeadDone() with
+        {
+            Readings =
+            [
+                new ReportReading("  Loadout Usage --Since Filters By Date ", "dates after it only"),
+                new ReportReading("something the lead made up", "whatever it likes"),
+                new ReportReading("the suite passes", "   "),
+            ],
+        };
+
+        TeamRunner.Read(report, [Mine, "the suite passes"]).Should().BeEquivalentTo(
+            new Dictionary<string, string> { [Mine] = "dates after it only" });
+    }
+
+    // ------------------------------------------------ what became of each criterion
+
+    /// <remarks>
+    /// The lead's own final report also lists a4f21c9, as an answer. Only a
+    /// worker's report counts as handing it back, or the lead could cite
+    /// itself as the delivery.
+    /// </remarks>
+    [Fact]
+    public async Task The_summary_ties_each_criterion_to_what_a_worker_handed_back()
+    {
+        var done = LeadDoneCovering(Mine) with
+        {
+            // Something only the lead itself lists, cited as delivered.
+            Deliverables = [new ReportDeliverable(DeliverableKind.Answer, "a4f21c9"), new ReportDeliverable(DeliverableKind.Answer, "lead-only")],
+            Coverage =
+            [
+                new ReportCoverage(Mine, CoverageVerdict.Met, "implementer/1's report",
+                    Understood: "a since filter", Delivered: ["A4F21C9 ", "made-up-ref", "lead-only"]),
+            ],
+        };
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(done, 0.02m), Result(done, 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine])).Value!;
+
+        var summary = Loadout.Cli.Commands.TeamRunCommand.Outcomes(_paths, outcome.RunId);
+
+        var one = summary.Should().ContainSingle().Subject;
+
+        one.Criterion.Should().Be(Mine);
+        one.Reading.Should().Be($"read as: {Mine}", "the reading it stated up front, not the one beside its verdict");
+        one.Verdict.Should().Be("met");
+        one.Source.Should().Be("run");
+        one.Delivered.Should().ContainSingle().Which.Should().Match<Delivered>(d =>
+            d.Node == "implementer" && d.Ref == "a4f21c9" && d.Kind == "commit");
+        one.Unfound.Should().Equal(["made-up-ref", "lead-only"], "the lead citing its own report is not a delivery");
+    }
+
+    [Fact]
+    public async Task A_run_that_stops_before_a_verdict_still_shows_how_the_lead_read_each_criterion()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadReadsAndRequests(), 0.01m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine], rounds: 1)).Value!;
+
+        Loadout.Cli.Commands.TeamRunCommand.Outcomes(_paths, outcome.RunId).Should().ContainSingle()
+            .Which.Should().Match<CriterionOutcome>(one =>
+                one.Criterion == Mine && one.Reading == $"read as: {Mine}" && one.Verdict == null);
     }
 
     [Fact]
@@ -3306,6 +3659,16 @@ public sealed class TeamRunnerTests : IDisposable
 
         public Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default) =>
             Task.FromResult(Decide(question));
+
+        /// <summary>Every timer a question was asked with, in order.</summary>
+        public List<QuestionTimer> Timers { get; } = [];
+
+        public Task<string?> DecideAsync(ReportQuestion question, QuestionTimer timer, CancellationToken ct = default)
+        {
+            Timers.Add(timer);
+
+            return Task.FromResult(Decide(question));
+        }
 
         public void Note(string line) => Notes.Add(line);
     }

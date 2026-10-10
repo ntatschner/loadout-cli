@@ -87,10 +87,12 @@ them. If the team has none either, the lead proposes criteria and they're put in
 front of you before any worker starts. Change them, accept them, or empty the
 box to run with nothing checking it.
 
-For a run you won't be watching, `--take-recommendation-after 30m` takes the
-lead's recommendation on any of its questions that nobody has answered in that
-time. It only applies to runs answered from the dashboard, and never to a merge
-or anything that leaves your machine.
+For a run you won't be watching, `--take-recommendation-after 30m` answers any
+of the lead's questions that nobody has answered in that time. By default it
+sends the question back to the lead once to think again, and takes its
+recommendation if nobody answers the second time either. `--on-timeout recommend`
+takes the recommendation straight away instead. It only applies to runs answered
+from the dashboard, and never to a merge or anything that leaves your machine.
 
 A run with no budget in its team file and no `--rounds` is refused before it
 starts, naming both — without either, a lead that keeps asking for one more
@@ -176,9 +178,13 @@ can't disagree.
 loadout team gate
 ```
 
-You should see what the run is waiting on and the command to answer it. To
-steer the lead without interrupting a node, send a message; it's read at the
-start of the lead's next round:
+You should see what the run is waiting on and the command to answer it. In the
+launcher's **Team runs** screen the selected run shows the same question with
+how long is left, and **a** answers it. Where the question has a timer, the
+countdown says what happens when it runs out: it goes back to the lead, or the
+lead's recommendation is taken. The dashboard says the same. To steer the lead
+without interrupting a node, send a message; it's read at the start of the
+lead's next round:
 
 ```sh
 loadout team message 20260918-1436-ed59 --message "leave the tests alone"

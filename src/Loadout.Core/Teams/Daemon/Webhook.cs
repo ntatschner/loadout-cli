@@ -57,6 +57,10 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// The project's standing criteria somebody unticked for this run, in the
 /// project's own words, as <c>team run --drop-project-done-when</c> takes them.
 /// </param>
+/// <param name="OnTimeout">
+/// What a timed question does when nobody answers, as <c>team run --on-timeout</c>
+/// takes it, or null for the team's own.
+/// </param>
 /// <remarks>
 /// <para>
 /// Nothing here is checked against anything. Whether that team exists, whether
@@ -84,7 +88,8 @@ public sealed record StartRequest(
     string? TakeRecommendationAfter = null,
     string? Budget = null,
     string? Task = null,
-    IReadOnlyList<string>? DropProjectDoneWhen = null);
+    IReadOnlyList<string>? DropProjectDoneWhen = null,
+    string? OnTimeout = null);
 
 /// <summary>A team the page asked be written.</summary>
 /// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>

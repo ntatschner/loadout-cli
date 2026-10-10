@@ -55,6 +55,12 @@ namespace Loadout.Models.Teams;
 /// run was working to what they asked rather than to a nearby thing that was
 /// easier. Optional, as the coverage's own reading is.
 /// </param>
+/// <param name="Readings">
+/// How the lead reads each of the run's criteria, restated in every report it
+/// makes while the run has criteria. Asked for up front rather than only with
+/// the verdicts, because a criterion read wrongly is cheap to correct before a
+/// worker starts and expensive after.
+/// </param>
 public sealed record Report(
     [property: JsonPropertyName("node")] string Node,
     [property: JsonPropertyName("status")] ReportStatus Status,
@@ -69,7 +75,8 @@ public sealed record Report(
     [property: JsonPropertyName("next")] string? Next = null,
     [property: JsonPropertyName("coverage")] IReadOnlyList<ReportCoverage>? Coverage = null,
     [property: JsonPropertyName("proposed_done_when")] IReadOnlyList<string>? ProposedDoneWhen = null,
-    [property: JsonPropertyName("goal_understood")] string? GoalUnderstood = null)
+    [property: JsonPropertyName("goal_understood")] string? GoalUnderstood = null,
+    [property: JsonPropertyName("readings")] IReadOnlyList<ReportReading>? Readings = null)
 {
     /// <summary>The version of this shape.</summary>
     [JsonPropertyName("contract")]
@@ -119,11 +126,25 @@ public enum ReportStatus
 /// passes" can be met while the suite is red. Optional, because runs written
 /// before it was asked for have none.
 /// </param>
+/// <param name="Delivered">
+/// The refs of the deliverables that meet it, as the nodes reported them: a
+/// commit, a branch, a path. Checked against what the workers actually handed
+/// back before anything shows them, so a ref the lead made up is not shown as
+/// delivered.
+/// </param>
 public sealed record ReportCoverage(
     [property: JsonPropertyName("criterion")] string Criterion,
     [property: JsonPropertyName("verdict")] CoverageVerdict Verdict,
     [property: JsonPropertyName("because")] string? Because = null,
-    [property: JsonPropertyName("understood")] string? Understood = null);
+    [property: JsonPropertyName("understood")] string? Understood = null,
+    [property: JsonPropertyName("delivered")] IReadOnlyList<string>? Delivered = null);
+
+/// <summary>How the lead reads one of the run's criteria.</summary>
+/// <param name="Criterion">The criterion, repeated back exactly as the run gave it.</param>
+/// <param name="Reading">What the lead takes it to mean, in a sentence or two.</param>
+public sealed record ReportReading(
+    [property: JsonPropertyName("criterion")] string Criterion,
+    [property: JsonPropertyName("reading")] string Reading);
 
 /// <summary>What became of one criterion.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<CoverageVerdict>))]

@@ -46,6 +46,12 @@ public sealed record RunResumption(
     /// </summary>
     public IReadOnlyList<string> Standing { get; init; } = Standing ?? [];
 
+    /// <summary>
+    /// Whether the lead's readings of the criteria were already let through,
+    /// so a run picked up is not held for them a second time.
+    /// </summary>
+    public bool ReadingsAccepted { get; init; }
+
     /// <summary>The lead's node name: the first node the run launched.</summary>
     public string? Lead => Summary.Nodes.Count > 0 ? Summary.Nodes[0].Node : null;
 
@@ -143,6 +149,7 @@ public sealed record RunResumption(
         IReadOnlyList<string>? criteria = null;
         IReadOnlyList<string> standing = [];
         var proposed = false;
+        var readingsAccepted = false;
 
         foreach (var entry in events)
         {
@@ -152,6 +159,10 @@ public sealed record RunResumption(
                 // the manifest again: a run picked up keeps what it began with.
                 case "criteria.defaults":
                     standing = entry.Words("applied");
+                    break;
+
+                case "readings.accepted":
+                    readingsAccepted = true;
                     break;
 
                 case "criteria.agreed":
@@ -224,7 +235,10 @@ public sealed record RunResumption(
             decisions,
             summary.Nodes[0].Session,
             File.Exists(last) ? Safely(last) : null,
-            standing), null);
+            standing)
+        {
+            ReadingsAccepted = readingsAccepted,
+        }, null);
     }
 
     /// <summary>A run's worker reports, oldest round first.</summary>

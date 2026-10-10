@@ -194,6 +194,17 @@ public sealed class TeamRules
     /// and are the ones a person has to say yes to.
     /// </remarks>
     public string? TakeRecommendationAfter { get; set; }
+
+    /// <summary>
+    /// What a question does when that wait runs out: <c>recommend</c>,
+    /// <c>think-again-once</c> or <c>think-again</c>. Empty means
+    /// think-again-once.
+    /// </summary>
+    /// <remarks>
+    /// A think-again goes back to the lead as a round of its own, so the round
+    /// limit and the budget still bound it, including under think-again.
+    /// </remarks>
+    public string? OnTimeout { get; set; }
 }
 
 /// <summary>What a run may spend, in three currencies.</summary>

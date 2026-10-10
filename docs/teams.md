@@ -407,6 +407,69 @@ A run picked up with `team resume` keeps the ones it started with, even if
 `project.yaml` has changed since. They cannot yet be unticked at the point where
 you agree the lead's proposal; that box shows them and holds them.
 
+### How the lead reads them, before anything starts
+
+A criterion is a sentence somebody wrote in a hurry. "The tests pass" read as
+"the new test passes" can be met while the suite is red, and the coverage
+entries above only show that reading at the end, beside the verdict, once the
+work it was planned on has been paid for.
+
+So once a run has criteria, every report the lead makes carries `readings`: each
+criterion repeated exactly, and what it takes it to mean in a sentence or two. A
+report without one for every criterion is sent back once, like any other
+incomplete report. The journal records them the first time and again only when
+one changes (`reading`, then `reading.changed`), so `team log` shows how the
+lead's understanding moved.
+
+The first time the lead asks for workers, a supervised or manual run stops and
+puts the readings to you as an ordinary question, recommending *Accept these
+readings*:
+
+```
+Before any worker starts: is this how you mean the done-when? The lead is
+saying how it reads each one, not proposing new ones.
+ • "the suite passes" read as: the whole suite, on a fresh clone
+```
+
+Accept, and the workers start. Choose **Think again** and nobody is briefed that
+round: the lead is told its readings were sent back, restates them, and asks
+again, and you are asked again. To say what you meant instead, use `team message`
+before you answer.
+
+Because it is an ordinary question, `--take-recommendation-after` times it like
+any other, so a timed run still goes unattended: when the wait is up the
+readings are accepted and the journal says nobody answered. An autonomous run,
+or one with nobody at a terminal or a dashboard, writes the readings down and
+carries on, and the journal says they stood with nobody to ask. A run picked up
+with `team resume` is not asked again once its readings were accepted.
+
+### What became of each one
+
+When `team run` ends it prints one block per criterion, and `team status` and
+the run's page on the dashboard show the same blocks:
+
+```
+  Done when 1 of 2 met
+  + met           the suite passes  (project)
+      taken to mean: the whole suite, on a fresh clone
+      verifier/1's report: dotnet test, 4071 passed
+      delivered: commit a4f21c9 by implementer/1
+  - unmet         the docs say so
+      taken to mean: the --since option is in docs/commands.md
+```
+
+The reading is the one the lead last stated, not the one it wrote beside its
+verdict, so you see what it was working to. A criterion it read and never gave a
+verdict on, because the run stopped first, is listed with no verdict rather than
+left out.
+
+"Delivered" is checked rather than taken on the lead's word. The lead lists in
+each coverage entry the refs of what meets it, and only refs a worker's own
+report handed back are shown as delivered. Anything it cited that no worker
+reported is shown as *cited but no worker reported it*. That includes refs only
+the lead's own report lists, since a lead can't count as delivering what it
+judges.
+
 ### If you say nothing
 
 A run with no criteria used to be held to one: *"the goal is met, with the
@@ -1864,11 +1927,38 @@ minutes and ten hours are different runs. `never` (or `off`) for a run means no
 limit, even when the team sets one, and the dashboard's box treats it the same
 as leaving it empty.
 
-When it happens, it happens the way you would have answered: the recommendation
-is written as the question's answer, so the question leaves the dashboard, the
-run carries on, and the journal says
-`took the lead's recommendation, nobody having answered in 30m`. It is never
-recorded as a person's choice.
+When it happens, it happens the way you would have answered: the answer is
+written as the question's answer, so the question leaves the dashboard, the run
+carries on, and the journal says which it was. It is never recorded as a
+person's choice.
+
+What that answer is depends on `on_timeout`, set the same three ways
+(`--on-timeout`, `on_timeout:` under `rules`, or *When nobody answers* on the
+dashboard's form):
+
+- **`think-again-once`, the default.** The first time a question goes
+  unanswered it goes back to the lead to think again, exactly as if you had
+  chosen *Think again*, and the lead is told nobody chose anything. If it asks
+  again and that times out too, its recommendation is taken. The lead has had a
+  round more evidence by then, which is the point of asking it to look again.
+- **`recommend`** takes the recommendation at once. This is what every timer did
+  before `on_timeout` existed.
+- **`think-again`** sends it back every time.
+
+Each send-back is a round of its own, so the round limit and the budget still
+stop a run, `think-again` included. The question about the lead's readings
+before any worker starts is timed the same way and counted as one question,
+even though its wording changes each time the lead restates them. The journal
+says `sent back to the lead to think again, nobody having answered in 30m`, or
+`took the lead's recommendation, nobody having answered in 30m`.
+
+While it waits, the question says when the timer will act and what it will do,
+and both the dashboard and the launcher's **Team runs** screen count down to
+that: *12 minutes left, then it goes back to the lead to think again*. Without a
+timer they count down to the run giving up instead. That used to be the only
+countdown, and it read "then the run stops" over questions the timer was about
+to answer. In the launcher, **a** answers the selected run's question with
+`team gate`, the same command the dashboard runs.
 
 What it does not do:
 

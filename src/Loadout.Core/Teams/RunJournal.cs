@@ -145,10 +145,41 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
                 // lower-cased, which nothing that reads a verdict recognised.
                 Said(one, "verdict") is "notattempted" ? "not-attempted" : Said(one, "verdict") ?? "unmet",
                 Said(one, "because"),
-                Said(one, "understood")));
+                Said(one, "understood"))
+            {
+                Delivered = one.TryGetProperty("delivered", out var refs) && refs.ValueKind == JsonValueKind.Array
+                    ? [.. refs.EnumerateArray()
+                        .Where(r => r.ValueKind == JsonValueKind.String && r.GetString()!.Trim().Length > 0)
+                        .Select(r => r.GetString()!.Trim())]
+                    : [],
+            });
         }
 
         return covered;
+    }
+
+    /// <summary>
+    /// A list of two-string objects from the event's data, such as the
+    /// readings a lead gave, in the order written. Entries missing either
+    /// string are left out.
+    /// </summary>
+    public IReadOnlyList<KeyValuePair<string, string>> Pairs(string list, string key, string value)
+    {
+        if (Data.ValueKind != JsonValueKind.Object
+            || !Data.TryGetProperty(list, out var listed)
+            || listed.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. listed.EnumerateArray()
+                .Where(one => one.ValueKind == JsonValueKind.Object)
+                .Select(one => (Key: Said(one, key), Value: Said(one, value)))
+                .Where(one => one.Key is { Length: > 0 } && one.Value is { Length: > 0 })
+                .Select(one => new KeyValuePair<string, string>(one.Key!, one.Value!)),
+        ];
     }
 
     /// <summary>
@@ -205,6 +236,12 @@ public sealed record RunCovered(
     string? Understood = null,
     string? Source = null)
 {
+    /// <summary>
+    /// The refs the lead said meet it, as it wrote them. Unchecked here: see
+    /// <see cref="CriterionOutcomes"/> for which a worker actually handed back.
+    /// </summary>
+    public IReadOnlyList<string> Delivered { get; init; } = [];
+
     /// <summary>Whether this one is settled.</summary>
     public bool Met => string.Equals(Verdict, "met", StringComparison.OrdinalIgnoreCase);
 
@@ -365,6 +402,13 @@ public sealed record RunSummary(
 {
     /// <summary>Each round, with when it started and when it came back.</summary>
     public IReadOnlyList<RunRound> RoundsTaken => Timeline ?? [];
+
+    /// <summary>
+    /// How the lead last said it reads each criterion, by the criterion, or
+    /// empty for a run that never gave readings - every run before they existed.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Readings { get; init; } =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// What the lead last said about each of the run's criteria.
@@ -927,6 +971,10 @@ public sealed class RunJournal : IRunJournal
         var fromProject = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var agreedBy = "run";
 
+        // How the lead last said it reads each criterion. A change replaces
+        // only the readings it names, because that is all it carries.
+        var readings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         // Insertion order, because that is the order the run briefed them
         // and the order somebody reading it will expect.
         var nodes = new Dictionary<string, RunNode>(StringComparer.Ordinal);
@@ -1007,6 +1055,14 @@ public sealed class RunJournal : IRunJournal
 
                 case "criteria.agreed":
                     agreedBy = entry.Text("by") == "team" ? "team" : "lead";
+                    break;
+
+                case "reading" or "reading.changed":
+                    foreach (var (readOf, readAs) in entry.Pairs("readings", "criterion", "reading"))
+                    {
+                        readings[readOf] = readAs;
+                    }
+
                     break;
 
                 case "round.started":
@@ -1230,7 +1286,10 @@ public sealed class RunJournal : IRunJournal
             outcome,
             goalUnderstood,
             uncapped,
-            task);
+            task)
+        {
+            Readings = readings,
+        };
     }
 
     /// <summary>Whether a budget event said the cap was taken off.</summary>
@@ -1252,6 +1311,16 @@ public sealed class RunJournal : IRunJournal
         Uncapped(entry) ? (null, true)
         : entry.Number("budget") is { } figure ? (figure, false)
         : (budget, uncapped);
+
+    /// <summary>The readings a reading event carries, as "criterion: reading" pairs, or empty.</summary>
+    private static string ReadingsSaid(RunEvent entry)
+    {
+        var said = entry.Pairs("readings", "criterion", "reading");
+
+        return said.Count > 0
+            ? ": " + string.Join("; ", said.Select(one => $"{one.Key} - {one.Value}"))
+            : string.Empty;
+    }
 
     /// <summary>One event as a line somebody can read.</summary>
     public static string Describe(RunEvent entry)
@@ -1337,7 +1406,10 @@ public sealed class RunJournal : IRunJournal
             "worktree.tidied" => $"cleared away {entry.Text("branch")}",
             "node.told" => $"was told: {entry.Text("message")}",
             "brief.revised" => $"briefed instead: {entry.Text("now")}",
-            "decision" => entry.Text("answer") == "think again"
+            "decision" => entry.Text("by") == "timed think again"
+                    ? $"sent back to the lead to think again, nobody having answered in {entry.Text("after") ?? "time"}: "
+                        + entry.Text("question")
+                : entry.Text("answer") == "think again"
                     ? $"sent back to the lead to think again: {entry.Text("question")}"
                 : entry.Text("by") == "timed default"
                     ? $"took the lead's recommendation, nobody having answered in {entry.Text("after") ?? "time"}: "
@@ -1353,6 +1425,14 @@ public sealed class RunJournal : IRunJournal
                 "nobody" => "held to the lead's proposed done-when, with nobody watching to agree them",
                 _ => "done-when agreed",
             }) + (entry.Words("criteria") is { Count: > 0 } agreed ? $": {string.Join("; ", agreed)}" : string.Empty),
+            "reading" => "said how it reads the done-when" + ReadingsSaid(entry),
+            "reading.changed" => "now reads the done-when differently" + ReadingsSaid(entry),
+            "readings.accepted" => entry.Text("by") switch
+            {
+                "person" => "its readings were accepted",
+                "timed default" => "its readings were accepted, nobody having answered in time",
+                _ => "its readings stood, with nobody to ask",
+            },
             "criteria.none" => entry.Number("project") is > 0
                 ? "held to the project's done-when alone"
                 : "held to no done-when",

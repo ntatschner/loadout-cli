@@ -503,6 +503,13 @@ internal static partial class DashboardActions
             arguments.Add(after.Trim());
         }
 
+        // Passed as chosen; the command refuses a word it does not know.
+        if (asking.OnTimeout?.Trim() is { Length: > 0 } onTimeout)
+        {
+            arguments.Add("--on-timeout");
+            arguments.Add(onTimeout);
+        }
+
         // One option per criterion, because a criterion is a sentence and
         // sentences contain commas. Blank ones are dropped rather than passed:
         // a criterion the lead can never report a verdict on would refuse
