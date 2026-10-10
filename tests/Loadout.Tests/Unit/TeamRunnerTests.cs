@@ -1911,6 +1911,11 @@ public sealed class TeamRunnerTests : IDisposable
         journal.Should().NotContain(line =>
             line.Contains("\"kind\":\"round.ended\"") && line.Contains("\"quiet\":1"),
             "a round held back over its readings is not a round that asked for nothing");
+
+        // The summary shows the reading it ended on, not the one it was sent
+        // back for.
+        Loadout.Cli.Commands.TeamRunCommand.Outcomes(_paths, outcome.RunId).Should().ContainSingle()
+            .Which.Reading.Should().Be($"read as: {Mine}");
     }
 
     [Fact]
@@ -1982,6 +1987,60 @@ public sealed class TeamRunnerTests : IDisposable
 
         TeamRunner.Read(report, [Mine, "the suite passes"]).Should().BeEquivalentTo(
             new Dictionary<string, string> { [Mine] = "dates after it only" });
+    }
+
+    // ------------------------------------------------ what became of each criterion
+
+    /// <remarks>
+    /// The lead's own final report also lists a4f21c9, as an answer. Only a
+    /// worker's report counts as handing it back, or the lead could cite
+    /// itself as the delivery.
+    /// </remarks>
+    [Fact]
+    public async Task The_summary_ties_each_criterion_to_what_a_worker_handed_back()
+    {
+        var done = LeadDoneCovering(Mine) with
+        {
+            // Something only the lead itself lists, cited as delivered.
+            Deliverables = [new ReportDeliverable(DeliverableKind.Answer, "a4f21c9"), new ReportDeliverable(DeliverableKind.Answer, "lead-only")],
+            Coverage =
+            [
+                new ReportCoverage(Mine, CoverageVerdict.Met, "implementer/1's report",
+                    Understood: "a since filter", Delivered: ["A4F21C9 ", "made-up-ref", "lead-only"]),
+            ],
+        };
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(done, 0.02m), Result(done, 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine])).Value!;
+
+        var summary = Loadout.Cli.Commands.TeamRunCommand.Outcomes(_paths, outcome.RunId);
+
+        var one = summary.Should().ContainSingle().Subject;
+
+        one.Criterion.Should().Be(Mine);
+        one.Reading.Should().Be($"read as: {Mine}", "the reading it stated up front, not the one beside its verdict");
+        one.Verdict.Should().Be("met");
+        one.Source.Should().Be("run");
+        one.Delivered.Should().ContainSingle().Which.Should().Match<Delivered>(d =>
+            d.Node == "implementer" && d.Ref == "a4f21c9" && d.Kind == "commit");
+        one.Unfound.Should().Equal(["made-up-ref", "lead-only"], "the lead citing its own report is not a delivery");
+    }
+
+    [Fact]
+    public async Task A_run_that_stops_before_a_verdict_still_shows_how_the_lead_read_each_criterion()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadReadsAndRequests(), 0.01m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine], rounds: 1)).Value!;
+
+        Loadout.Cli.Commands.TeamRunCommand.Outcomes(_paths, outcome.RunId).Should().ContainSingle()
+            .Which.Should().Match<CriterionOutcome>(one =>
+                one.Criterion == Mine && one.Reading == $"read as: {Mine}" && one.Verdict == null);
     }
 
     [Fact]

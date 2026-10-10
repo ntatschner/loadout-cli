@@ -568,6 +568,19 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     one.Because,
                     one.Source,
                 }),
+
+                // Each criterion with its reading, verdict and what was
+                // delivered behind it, checked against the workers' reports.
+                outcomes = CriterionOutcomes.Of(run, behind).Select(one => new
+                {
+                    one.Criterion,
+                    one.Reading,
+                    one.Verdict,
+                    one.Because,
+                    one.Source,
+                    delivered = one.Delivered.Select(d => new { d.Node, d.Kind, at = d.Ref }),
+                    one.Unfound,
+                }),
                 delivered = behind.Delivered.Select(one => new
                 {
                     one.Node,
@@ -644,35 +657,15 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
         // What the goal was broken into, and where each part got to. Above the
         // nodes rather than below, because "is this run done" is answered here
         // and "what is each node up to" is the question after it.
-        if (run.Coverage.Count > 0)
+        var outcomes = CriterionOutcomes.Of(run, behind);
+
+        if (outcomes.Count > 0)
         {
             output.WriteBlankLine();
-            output.WriteLine(
-                $"  [bold]Done when[/] [dim]{run.Coverage.Count(one => one.Met)} of "
-                + $"{run.Coverage.Count} met[/]");
 
-            foreach (var one in run.Coverage)
+            foreach (var line in TeamStyle.Outcomes(outcomes))
             {
-                // The project's are marked, because they were set once for
-                // every run and nobody asked for them on this one.
-                output.WriteLine(
-                    $"  {Verdict(one.InWords)} {Markup.Escape(one.Criterion)}"
-                    + (one.Source == "project" ? "  [dim](project)[/]" : string.Empty));
-
-                // How the lead read it, before why it says it got there: a
-                // verdict is only worth the reading it was given.
-                if (one.Understood is { Length: > 0 } understood)
-                {
-                    output.WriteLine($"      [dim]taken to mean: {Markup.Escape(understood)}[/]");
-                }
-
-                // The evidence, under the criterion it is for. A met with
-                // nothing behind it never reaches here - the report is sent
-                // back - so anything shown has something to show.
-                if (one.Because is { Length: > 0 } because)
-                {
-                    output.WriteLine($"      [dim]{Markup.Escape(because)}[/]");
-                }
+                output.WriteLine(line);
             }
         }
 
@@ -861,14 +854,6 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
     /// to tell a met criterion from one nobody touched - which is the same rule
     /// the whole of this output follows.
     /// </remarks>
-    private static string Verdict(string verdict) => verdict switch
-    {
-        "met" => "[green]+ met          [/]",
-        "unmet" => "[yellow]- unmet        [/]",
-        "not attempted" => "[yellow]! not attempted[/]",
-        _ => $"[dim]? {Markup.Escape(verdict).PadRight(13)}[/]",
-    };
-
     private static string State(string state)
     {
         var word = state switch
@@ -1726,6 +1711,18 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
                 branches = outcome.Branches,
                 merged = outcome.Merged,
                 final = outcome.FinalReport,
+                outcomes = outcome.Directory is null
+                    ? null
+                    : Outcomes(paths, outcome.RunId).Select(one => new
+                    {
+                        one.Criterion,
+                        one.Reading,
+                        one.Verdict,
+                        one.Because,
+                        one.Source,
+                        delivered = one.Delivered.Select(d => new { d.Node, d.Kind, at = d.Ref }),
+                        one.Unfound,
+                    }),
                 plan = outcome.LeadPlan is { } plan ? new { plan.Executable, plan.Arguments, plan.WorkingDirectory } : null,
                 outcome.Warnings,
             });
@@ -1774,6 +1771,18 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
                 }
             }
 
+            // What became of each criterion, the same lines 'team status'
+            // shows, read back from what the run wrote down.
+            if (Outcomes(paths, outcome.RunId) is { Count: > 0 } outcomes)
+            {
+                output.WriteBlankLine();
+
+                foreach (var line in TeamStyle.Outcomes(outcomes))
+                {
+                    output.WriteLine(line);
+                }
+            }
+
             if (outcome.Branches is { Count: > 0 } branches)
             {
                 output.WriteBlankLine();
@@ -1801,6 +1810,27 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         }
 
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// What became of each of a finished run's criteria, or none where its
+    /// record cannot be read. A summary is worth having and never worth
+    /// failing a run over that has already ended.
+    /// </summary>
+    internal static IReadOnlyList<CriterionOutcome> Outcomes(IPlatformPaths paths, string runId)
+    {
+        var journal = new RunJournal(paths);
+        var events = journal.Read(runId);
+
+        if (events.Failed)
+        {
+            return [];
+        }
+
+        var directory = journal.DirectoryOf(runId);
+
+        return CriterionOutcomes.Of(
+            RunJournal.Fold(runId, directory, events.Value!), RunLeftBehind.In(directory, events.Value!));
     }
 
     /// <summary>

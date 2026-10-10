@@ -97,7 +97,8 @@ public static class ReportSchema
                 "criterion": { "type": "string" },
                 "verdict": { "enum": ["met", "unmet", "not-attempted"] },
                 "because": { "type": "string" },
-                "understood": { "type": "string" } } } }
+                "understood": { "type": "string" },
+                "delivered": { "type": "array", "items": { "type": "string" } } } } }
           }
         }
         """;

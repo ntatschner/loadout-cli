@@ -192,6 +192,37 @@ public sealed class DashboardServerTests : IAsyncLifetime
         (await written.Content.ReadAsStringAsync()).Should().Contain("watching only");
     }
 
+    /// <remarks>
+    /// Its own address, read when the run's page is open, rather than part of
+    /// every run's description: finding what was delivered reads the run's
+    /// report files, and the list is read every few seconds.
+    /// </remarks>
+    [Fact]
+    public async Task A_run_s_criteria_are_served_with_how_the_lead_read_them()
+    {
+        var answer = await GetAsync("/api/runs/20260916-1200-aaaa/outcomes");
+
+        answer.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var said = JsonDocument.Parse(await answer.Content.ReadAsStringAsync());
+
+        var one = said.RootElement.EnumerateArray().Should().ContainSingle().Subject;
+
+        one.GetProperty("criterion").GetString().Should().Be("a test covers it");
+
+        // No reading was stated up front by this run, so it is the one the
+        // lead gave beside its verdict.
+        one.GetProperty("reading").GetString().Should().Be("a test that fails without --since");
+        one.GetProperty("verdict").GetString().Should().Be("not attempted");
+        one.GetProperty("delivered").GetArrayLength().Should().Be(0);
+
+        // And the run's own description carries the readings, empty here,
+        // so the page can show them before any verdict.
+        using var run = JsonDocument.Parse(await (await GetAsync("/api/runs/20260916-1200-aaaa")).Content.ReadAsStringAsync());
+
+        run.RootElement.GetProperty("readings").GetArrayLength().Should().Be(0);
+    }
+
     [Fact]
     public async Task What_is_queued_is_answered_as_well_as_what_is_going()
     {
@@ -1805,7 +1836,7 @@ public sealed class DashboardServerTests : IAsyncLifetime
         var text = await (await GetAsync("/")).Content.ReadAsStringAsync();
 
         text.Should().Contain("label.textContent = \"Taken to mean: \";");
-        text.Should().Contain("var words = one.verdictInWords || one.verdict;");
+        text.Should().Contain("verdict: one.verdictInWords || one.verdict,");
         text.Should().Contain("id=\"start-take\"");
         text.Should().Contain("takeRecommendationAfter: take || null");
         text.Should().Contain("function aboutDefaults(team)");

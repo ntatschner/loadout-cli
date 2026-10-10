@@ -1731,6 +1731,10 @@
   .lk-meant, .lk-criterion .because { display: block; }
   .lk-criterion .because { grid-column: 2; font-size: var(--type-small-size); color: var(--ink-muted); }
 
+  /* A ref the lead cited that no worker reported: the held colour, because it
+     wants a second look rather than meaning the work failed. */
+  .lk-criterion .because.unfound { color: var(--status-held); }
+
   /* A gate is the one thing on the page that stops everything. */
   #gates { display: grid; gap: var(--space-4); }
   #gates:empty { display: none; }
@@ -14109,12 +14113,45 @@
     return line;
   }
 
+  // What was delivered behind each criterion, by run and by what the run's
+  // coverage looked like when it was asked for. Fetched rather than sent with
+  // every poll, because finding it reads the run's report files.
+  var outcomesSeen = {};
+  var outcomesAsking = {};
+
+  // The run's criteria as the page draws them: each verdict with the lead's
+  // latest reading, then any criterion it has read and not yet judged.
+  function criteriaOf(run) {
+    var readings = {};
+
+    (run.readings || []).forEach(function (one) { readings[one.criterion.trim().toLowerCase()] = one.reading; });
+
+    var drawn = (run.coverage || []).map(function (one) {
+      var key = one.criterion.trim().toLowerCase();
+      var read = readings[key] || one.understood || "";
+
+      delete readings[key];
+
+      return { criterion: one.criterion, verdict: one.verdictInWords || one.verdict, met: one.met,
+        because: one.because, source: one.source, reading: read, judged: true };
+    });
+
+    (run.readings || []).forEach(function (one) {
+      if (readings[one.criterion.trim().toLowerCase()] !== undefined) {
+        drawn.push({ criterion: one.criterion, verdict: "no verdict yet", met: false,
+          reading: one.reading, judged: false });
+      }
+    });
+
+    return drawn;
+  }
+
   function drawCoverage(run) {
     var box = document.getElementById("coverage");
 
     if (!box) { return; }
 
-    var covered = run.coverage || [];
+    var covered = criteriaOf(run);
 
     // A run that has said what it took its goal to mean has something to show
     // here before it has a verdict on anything.
@@ -14126,9 +14163,30 @@
       return;
     }
 
-    var shape = (run.goalUnderstood || "") + "#" + covered.map(function (one) {
-      return one.criterion + ":" + one.verdict + ":" + (one.understood || "");
+    var asked = run.id + "#" + covered.map(function (one) {
+      return one.criterion + ":" + one.verdict + ":" + one.reading;
     }).join("|");
+
+    // Asked for once per change in what the lead has said, and only once it
+    // has judged something: before that there is nothing delivered to check.
+    var delivered = outcomesSeen[asked];
+
+    if (!delivered && covered.some(function (one) { return one.judged; }) && !outcomesAsking[asked]) {
+      outcomesAsking[asked] = true;
+
+      api("/api/runs/" + encodeURIComponent(run.id) + "/outcomes").then(function (answer) {
+        var byCriterion = {};
+
+        (answer || []).forEach(function (one) {
+          byCriterion[one.criterion.trim().toLowerCase()] = one;
+        });
+
+        outcomesSeen[asked] = byCriterion;
+        drawCoverage(run);
+      });
+    }
+
+    var shape = (run.goalUnderstood || "") + "#" + asked + "#" + (delivered ? "delivered" : "");
 
     if (box.getAttribute("data-shape") === shape) { return; }
 
@@ -14168,7 +14226,9 @@
     var head = document.createElement("h3");
 
     head.className = "lk-section-title";
-    head.textContent = "Done when - " + met + " of " + covered.length + " met";
+    head.textContent = covered.some(function (one) { return one.judged; })
+      ? "Done when - " + met + " of " + covered.length + " met"
+      : "Done when - how the lead reads it, no verdicts yet";
     box.appendChild(head);
 
     var list = document.createElement("ul");
@@ -14180,13 +14240,13 @@
 
       // In words, from the server. The stored spelling for an old run is
       // "notattempted", which this used to print - in capitals.
-      var words = one.verdictInWords || one.verdict;
+      var words = one.verdict;
 
       // Met is done, not attempted is held, and anything else is a verdict
       // against it. The word is written either way; the key is its glyph.
       li.className = "lk-criterion " + words.replace(/ /g, "-");
       li.setAttribute("data-state", one.met ? "done"
-        : /attempt/.test(words) ? "held"
+        : /attempt/.test(words) || !one.judged ? "held"
         : "fail");
 
       var glyph = document.createElement("span");
@@ -14223,8 +14283,8 @@
 
       // How the lead read it, before why it says it got there: a verdict is
       // only worth the reading it was given.
-      if (one.understood) {
-        li.appendChild(reading(one.understood));
+      if (one.reading) {
+        li.appendChild(reading(one.reading));
       }
 
       // What the lead says shows it. A met with nothing behind it never
@@ -14236,6 +14296,29 @@
         why.className = "because";
         why.textContent = one.because;
         li.appendChild(why);
+      }
+
+      // What was handed back behind it, checked against the workers' own
+      // reports; and anything the lead cited that no worker reported, said
+      // rather than hidden.
+      var behind = delivered && delivered[one.criterion.trim().toLowerCase()];
+
+      if (behind) {
+        (behind.delivered || []).forEach(function (thing) {
+          var line = document.createElement("span");
+
+          line.className = "because";
+          line.textContent = "Delivered: " + thing.kind + " " + thing.at + " by " + thing.node;
+          li.appendChild(line);
+        });
+
+        (behind.unfound || []).forEach(function (cited) {
+          var line = document.createElement("span");
+
+          line.className = "because unfound";
+          line.textContent = "Cited, but no worker reported it: " + cited;
+          li.appendChild(line);
+        });
       }
 
       list.appendChild(li);

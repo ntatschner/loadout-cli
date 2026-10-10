@@ -2444,6 +2444,7 @@ public sealed partial class TeamRunner : ITeamRunner
                         verdict = RunJournal.VerdictWord(one.Verdict),
                         because = one.Because,
                         understood = one.Understood,
+                        delivered = one.Delivered is { Count: > 0 } refs ? refs : null,
                     })
                     : null,
 
@@ -4045,8 +4046,9 @@ public sealed partial class TeamRunner : ITeamRunner
     /// </remarks>
     internal const string CoverageOwed =
         "your final report carries one coverage entry per criterion, each saying in 'understood' "
-        + "what you took the criterion to mean, with a verdict of met, unmet or not-attempted, and "
-        + "every met saying in 'because' which node, report and evidence shows it";
+        + "what you took the criterion to mean, with a verdict of met, unmet or not-attempted, "
+        + "every met saying in 'because' which node, report and evidence shows it, and listing in "
+        + "'delivered' the refs of the deliverables that meet it exactly as your nodes reported them";
 
     /// <summary>What every report of the lead's says about each criterion, before any verdict.</summary>
     internal const string ReadingsOwed =

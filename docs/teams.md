@@ -443,6 +443,33 @@ or one with nobody at a terminal or a dashboard, writes the readings down and
 carries on, and the journal says they stood with nobody to ask. A run picked up
 with `team resume` is not asked again once its readings were accepted.
 
+### What became of each one
+
+When `team run` ends it prints one block per criterion, and `team status` and
+the run's page on the dashboard show the same blocks:
+
+```
+  Done when 1 of 2 met
+  + met           the suite passes  (project)
+      taken to mean: the whole suite, on a fresh clone
+      verifier/1's report: dotnet test, 4071 passed
+      delivered: commit a4f21c9 by implementer/1
+  - unmet         the docs say so
+      taken to mean: the --since option is in docs/commands.md
+```
+
+The reading is the one the lead last stated, not the one it wrote beside its
+verdict, so you see what it was working to. A criterion it read and never gave a
+verdict on, because the run stopped first, is listed with no verdict rather than
+left out.
+
+"Delivered" is checked rather than taken on the lead's word. The lead lists in
+each coverage entry the refs of what meets it, and only refs a worker's own
+report handed back are shown as delivered. Anything it cited that no worker
+reported is shown as *cited but no worker reported it*. That includes refs only
+the lead's own report lists, since a lead can't count as delivering what it
+judges.
+
 ### If you say nothing
 
 A run with no criteria used to be held to one: *"the goal is met, with the

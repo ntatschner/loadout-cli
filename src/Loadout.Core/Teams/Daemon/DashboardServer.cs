@@ -60,7 +60,7 @@ public sealed class DashboardServer : IDisposable
     /// is a 400 somebody notices, and a change routed as a read is a change
     /// that skipped the check.
     /// </remarks>
-    private static readonly string[] Reads = ["events", "documents", "diff", "stream", "spent"];
+    private static readonly string[] Reads = ["events", "documents", "diff", "stream", "spent", "outcomes"];
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -1602,6 +1602,21 @@ public sealed class DashboardServer : IDisposable
                 return;
             }
 
+            // What became of each criterion, with what was delivered behind it.
+            // Its own address rather than part of every run's description,
+            // because it reads the run's report files and the list is read
+            // every few seconds.
+            if (rest.EndsWith("/outcomes", StringComparison.Ordinal))
+            {
+                await WriteAsync(
+                    context,
+                    200,
+                    "application/json; charset=utf-8",
+                    JsonSerializer.Serialize(Outcomes(rest[..^"/outcomes".Length]), Json)).ConfigureAwait(false);
+
+                return;
+            }
+
             if (rest.EndsWith("/documents", StringComparison.Ordinal))
             {
                 await PapersAsync(context, rest[..^"/documents".Length]).ConfigureAwait(false);
@@ -2046,6 +2061,34 @@ public sealed class DashboardServer : IDisposable
     /// a contract that does not move when the summary grows a field, and so
     /// what is sent is only what the page shows.
     /// </remarks>
+    /// <summary>A run's criterion outcomes as the page shows them, or none for a run that cannot be read.</summary>
+    private object Outcomes(string runId)
+    {
+        var events = _journal.Read(runId);
+
+        if (events.Failed)
+        {
+            return Array.Empty<object>();
+        }
+
+        var directory = _journal.DirectoryOf(runId);
+
+        return CriterionOutcomes
+            .Of(RunJournal.Fold(runId, directory, events.Value!), RunLeftBehind.In(directory, events.Value!))
+            .Select(one => new
+            {
+                one.Criterion,
+                one.Reading,
+                one.Verdict,
+                one.Met,
+                one.Because,
+                one.Source,
+                delivered = one.Delivered.Select(d => new { d.Node, d.Kind, at = d.Ref }),
+                one.Unfound,
+            })
+            .ToList();
+    }
+
     private static object Describe(RunSummary run, OfficeKit kit, IReadOnlyDictionary<string, string> pins) =>
         Described(run, kit, OfficeCast.For(kit, run.RunId, run.Nodes.Select(node => (node.Node, node.Role)), pins));
 
@@ -2104,6 +2147,10 @@ public sealed class DashboardServer : IDisposable
             one.Met,
             one.Source,
         }),
+
+        // How the lead last said it reads each criterion, from the journal,
+        // so the page can show readings before there is a verdict on anything.
+        readings = run.Readings.Select(one => new { criterion = one.Key, reading = one.Value }),
 
         // What the lead took the goal to mean, beside the goal itself.
         run.GoalUnderstood,

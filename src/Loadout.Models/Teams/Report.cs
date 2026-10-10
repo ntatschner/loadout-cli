@@ -126,11 +126,18 @@ public enum ReportStatus
 /// passes" can be met while the suite is red. Optional, because runs written
 /// before it was asked for have none.
 /// </param>
+/// <param name="Delivered">
+/// The refs of the deliverables that meet it, as the nodes reported them: a
+/// commit, a branch, a path. Checked against what the workers actually handed
+/// back before anything shows them, so a ref the lead made up is not shown as
+/// delivered.
+/// </param>
 public sealed record ReportCoverage(
     [property: JsonPropertyName("criterion")] string Criterion,
     [property: JsonPropertyName("verdict")] CoverageVerdict Verdict,
     [property: JsonPropertyName("because")] string? Because = null,
-    [property: JsonPropertyName("understood")] string? Understood = null);
+    [property: JsonPropertyName("understood")] string? Understood = null,
+    [property: JsonPropertyName("delivered")] IReadOnlyList<string>? Delivered = null);
 
 /// <summary>How the lead reads one of the run's criteria.</summary>
 /// <param name="Criterion">The criterion, repeated back exactly as the run gave it.</param>
