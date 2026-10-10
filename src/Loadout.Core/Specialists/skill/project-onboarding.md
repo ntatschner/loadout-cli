@@ -95,6 +95,10 @@ yours to propose.
 - `profiles`, where one part of the code — a database, a frontend — needs context
   the rest never does. A profile's `specialists` replace the project's when set.
 - `symbols`, for generated code to ignore or a language the index does not read.
+- `teams.done_when`, criteria every team run on this project is held to as well
+  as its own, each with `text` and the `teams` it applies to (`all` for every
+  one). Only what is true of every such run and checkable, such as the suite
+  passing with the command that shows it. Not what one run is for.
 - `name`, if the name the launcher shows is wrong.
 
 `agents.default`, `agents.model` and `agents.model_by_mode` choose which agent and

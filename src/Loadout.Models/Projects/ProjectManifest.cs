@@ -65,6 +65,77 @@ public sealed class ProjectManifest
 
     /// <summary>How the symbol index should read this project's code, where the defaults are not right.</summary>
     public ProjectSymbols Symbols { get; set; } = new();
+
+    /// <summary>What every team run on this project is held to, beyond its own.</summary>
+    public ProjectTeams Teams { get; set; } = new();
+}
+
+/// <summary>
+/// Settings this project gives the team runs made on it.
+/// </summary>
+/// <remarks>
+/// Here rather than in the repository, because a project's manifest is
+/// already committed and reviewed in the workspace and is read by one reader.
+/// A criterion only ever makes a run check more, so it grants nothing a person
+/// would need to approve.
+/// </remarks>
+public sealed class ProjectTeams
+{
+    /// <summary>
+    /// Criteria every matching team run is held to, on top of whatever the
+    /// run, the team or the lead's agreed proposal supply.
+    /// </summary>
+    public List<ProjectDoneWhen> DoneWhen { get; set; } = [];
+
+    /// <summary>
+    /// The criteria that apply to a run of <paramref name="team"/>, tidied,
+    /// in the order they are written, each once.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the team's name, ignoring case, or <c>all</c>. An entry that
+    /// names no teams applies to every one, because a list somebody left empty
+    /// is far likelier to be meant as "everywhere" than as "nowhere".
+    /// </remarks>
+    public IReadOnlyList<string> For(string team)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var applying = new List<string>();
+
+        foreach (var entry in DoneWhen)
+        {
+            var text = entry.Text?.Trim() ?? string.Empty;
+
+            if (text.Length == 0)
+            {
+                continue;
+            }
+
+            var matches = entry.Teams is not { Count: > 0 }
+                || entry.Teams.Any(one =>
+                    string.Equals(one?.Trim(), ProjectDoneWhen.All, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(one?.Trim(), team, StringComparison.OrdinalIgnoreCase));
+
+            if (matches && seen.Add(text))
+            {
+                applying.Add(text);
+            }
+        }
+
+        return applying;
+    }
+}
+
+/// <summary>One standing criterion, and the teams it applies to.</summary>
+public sealed class ProjectDoneWhen
+{
+    /// <summary>The word that makes a criterion apply to every team.</summary>
+    public const string All = "all";
+
+    /// <summary>What must be true, said so somebody else could check it.</summary>
+    public string Text { get; set; } = string.Empty;
+
+    /// <summary>Team names, or <c>all</c>. Empty means all.</summary>
+    public List<string> Teams { get; set; } = [];
 }
 
 /// <summary>Where the application source lives, described independently of any machine.</summary>

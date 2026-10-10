@@ -96,7 +96,8 @@ public sealed class TeamRunnerTests : IDisposable
         ITeamConsole? console = null,
         UsdCap budget = default,
         UsdCap machineBudget = default,
-        string? task = null)
+        string? task = null,
+        StandingCriteria? standing = null)
     {
         return await new TeamRunner(
             _launcher,
@@ -109,7 +110,7 @@ public sealed class TeamRunnerTests : IDisposable
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
-                Budget: budget, MachineBudget: machineBudget, Task: task),
+                Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing),
             console ?? _console);
     }
 
@@ -1611,6 +1612,197 @@ public sealed class TeamRunnerTests : IDisposable
             "done", "a done the lead could not account for is not a done");
     }
 
+    // ------------------------------------------------ the project's standing done-when
+
+    private const string Suite = "the suite passes";
+
+    private static StandingCriteria Standing(params string[] applied) => new(applied, []);
+
+    /// <remarks>
+    /// The bug the obvious implementation has: the project's criteria arrive
+    /// as criteria, a run with criteria is not asked to propose any, and every
+    /// run on a project with a standing "the suite passes" is judged on that
+    /// alone - generic hygiene in place of what this run is for.
+    /// </remarks>
+    [Fact]
+    public async Task With_the_project_s_criteria_and_none_of_its_own_the_lead_still_proposes()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadProposes(AskImplementer()), 0.01m),
+            Result(LeadDoneCovering([Suite, .. Proposal]), 0.02m),
+            Result(LeadDoneCovering([Suite, .. Proposal]), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(standing: Standing(Suite))).Value!;
+
+        var brief = _launcher.Written("role.project-lead")[0];
+
+        brief.Should().Contain("proposed_done_when", "the project's hygiene is no answer to what this run is for");
+        brief.Should().Contain(Suite);
+
+        // The person agrees the lead's, and is told the project's are held
+        // too rather than handed them in the box to delete.
+        _console.Revisions.Should().ContainSingle()
+            .Which.Should().Contain(Proposal[0]).And.NotContain(Suite);
+        _console.RevisionsAsked.Should().ContainSingle()
+            .Which.Should().Contain("held as well").And.Contain(Suite);
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line =>
+            line.Contains("\"kind\":\"criteria.defaults\"") && line.Contains(Suite));
+        journal.Should().Contain(line =>
+            line.Contains("\"kind\":\"criteria.agreed\"") && line.Contains("\"by\":\"person\"")
+            && !line.Contains(Suite));
+
+        outcome.Ended.Should().Be("done");
+    }
+
+    [Fact]
+    public async Task A_done_that_ignores_the_project_s_criteria_is_not_a_done()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDoneCovering("the team criterion"), 0.01m),
+            Result(LeadDoneCovering("the team criterion"), 0.02m),
+            Result(LeadDoneCovering("the team criterion"), 0.02m));
+
+        var outcome = (await RunAsync(team: await JudgedTeamAsync("the team criterion"), standing: Standing(Suite))).Value!;
+
+        var brief = _launcher.Written("role.project-lead")[0];
+
+        brief.Should().Contain(Suite).And.Contain("the team criterion");
+        brief.Should().NotContain("proposed_done_when", "the team's author already answered that question");
+
+        outcome.Ended.Should().Be("the lead reported done with 1 of 2 criteria unmet");
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"goal.unmet\"") && line.Contains(Suite));
+
+        // And the record says where that one came from.
+        var summary = RunJournal.Fold(
+            outcome.RunId, outcome.Directory!, new RunJournal(_paths).Read(outcome.RunId).Value!);
+
+        summary.Coverage.Should().ContainSingle(one => one.Criterion == "the team criterion")
+            .Which.Source.Should().Be("team");
+    }
+
+    [Fact]
+    public async Task Coverage_of_a_project_criterion_says_it_came_from_the_project()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDoneCovering(Suite, "mine"), 0.01m),
+            Result(LeadDoneCovering(Suite, "mine"), 0.02m));
+
+        var outcome = (await RunAsync(criteria: ["mine"], standing: Standing(Suite))).Value!;
+
+        var summary = RunJournal.Fold(
+            outcome.RunId, outcome.Directory!, new RunJournal(_paths).Read(outcome.RunId).Value!);
+
+        summary.Coverage.Select(one => (one.Criterion, one.Source)).Should().BeEquivalentTo(
+            [(Suite, "project"), ("mine", "run")]);
+    }
+
+    [Fact]
+    public async Task A_criterion_left_out_of_this_run_is_recorded_and_not_held()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadDoneCovering("mine", Suite), 0.01m), Result(LeadDoneCovering("mine", Suite), 0.02m));
+
+        var outcome = (await RunAsync(
+            criteria: ["mine"],
+            standing: new StandingCriteria([Suite], ["docs are in the house voice"], "person"))).Value!;
+
+        _launcher.Written("role.project-lead")[0].Should().NotContain("docs are in the house voice");
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"criteria.defaults\"")
+            && line.Contains("\"dropped\":[\"docs are in the house voice\"]")
+            && line.Contains("\"by\":\"person\""));
+    }
+
+    /// <remarks>
+    /// Nobody to untick anything, so every one applies, and nothing is put to
+    /// a person who is not there.
+    /// </remarks>
+    [Fact]
+    public async Task A_run_nobody_is_watching_is_held_to_every_one()
+    {
+        _console.Revise = _ => throw new InvalidOperationException("nobody is watching");
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadProposes(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(autonomy: "autonomous", standing: Standing(Suite, "docs build"))).Value!;
+
+        outcome.Ended.Should().NotBe("done", "a done that says nothing about the project's criteria is refused");
+
+        // The journal writes an apostrophe as its JSON escape, and a test that
+        // looked for the apostrophe itself would never find it.
+        var quote = (char)92 + "u0027";
+
+        (await JournalAsync(outcome)).Should().Contain(line =>
+            line.Contains("\"kind\":\"report.checked\"") && line.Contains("\"outcome\":\"returned\"")
+            && line.Contains($"nothing was said about {quote}the suite passes{quote}")
+            && line.Contains($"nothing was said about {quote}docs build{quote}"));
+    }
+
+    /// <remarks>
+    /// The lead's brief carries every criterion it is held to, the project's
+    /// included, and picking a run up used to read the brief back as the
+    /// run's own. That would hold a resumed run to the project's twice and
+    /// stop it ever being asked to propose.
+    /// </remarks>
+    [Fact]
+    public async Task Picking_a_run_up_keeps_the_project_s_criteria_apart_from_its_own()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadDoneCovering("mine", Suite), 0.01m), Result(LeadDoneCovering("mine", Suite), 0.02m));
+
+        var outcome = (await RunAsync(criteria: ["mine"], standing: Standing(Suite))).Value!;
+
+        var (resumption, why) = RunResumption.Read(new RunJournal(_paths), outcome.RunId);
+
+        resumption.Should().NotBeNull(why);
+        resumption!.Standing.Should().Equal(Suite);
+        resumption.Criteria.Should().Equal("mine");
+    }
+
+    [Fact]
+    public async Task Picking_up_a_run_given_only_the_project_s_criteria_still_owes_a_proposal()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(), 0.01m));
+
+        var outcome = (await RunAsync(standing: Standing(Suite))).Value!;
+
+        var (resumption, why) = RunResumption.Read(new RunJournal(_paths), outcome.RunId);
+
+        resumption.Should().NotBeNull(why);
+        resumption!.Standing.Should().Equal(Suite);
+        resumption.Criteria.Should().BeNull("the project's are not criteria somebody gave this run");
+    }
+
+    [Fact]
+    public void What_a_run_is_held_to_is_the_project_s_then_its_own_each_once()
+    {
+        TeamRunner.Held([Suite, "docs build"], ["The Suite Passes", "mine"])
+            .Should().Equal(Suite, "docs build", "mine");
+
+        TeamRunner.Held([], null).Should().BeNull();
+    }
+
     [Fact]
     public async Task The_merge_gate_reminder_does_not_buy_the_lead_an_extra_round()
     {
@@ -3090,6 +3282,9 @@ public sealed class TeamRunnerTests : IDisposable
         /// <summary>Every brief that was offered for changing, as it arrived.</summary>
         public List<string> Revisions { get; } = [];
 
+        /// <summary>What each of those was offered with: the question above the box.</summary>
+        public List<string> RevisionsAsked { get; } = [];
+
         public List<string> Confirmations { get; } = [];
 
         public List<string> Notes { get; } = [];
@@ -3104,6 +3299,7 @@ public sealed class TeamRunnerTests : IDisposable
         public Task<string?> ReviseAsync(string what, string task, CancellationToken ct = default)
         {
             Revisions.Add(task);
+            RevisionsAsked.Add(what);
 
             return Task.FromResult(Revise(task));
         }

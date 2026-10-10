@@ -566,6 +566,7 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
                     one.Verdict,
                     verdictInWords = one.InWords,
                     one.Because,
+                    one.Source,
                 }),
                 delivered = behind.Delivered.Select(one => new
                 {
@@ -652,8 +653,11 @@ public sealed class TeamStatusCommand : AsyncCommand<TeamStatusCommand.Settings>
 
             foreach (var one in run.Coverage)
             {
+                // The project's are marked, because they were set once for
+                // every run and nobody asked for them on this one.
                 output.WriteLine(
-                    $"  {Verdict(one.InWords)} {Markup.Escape(one.Criterion)}");
+                    $"  {Verdict(one.InWords)} {Markup.Escape(one.Criterion)}"
+                    + (one.Source == "project" ? "  [dim](project)[/]" : string.Empty));
 
                 // How the lead read it, before why it says it got there: a
                 // verdict is only worth the reading it was given.
@@ -1379,6 +1383,26 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         public string[] DoneWhen { get; init; } = [];
 
         /// <summary>
+        /// Leave every one of the project's standing criteria out of this run.
+        /// </summary>
+        /// <remarks>
+        /// All or nothing on purpose. A single one is dropped by naming it with
+        /// <see cref="DropProjectDoneWhen"/>, which is what the dashboard sends
+        /// for a box somebody unticked.
+        /// </remarks>
+        [CommandOption("--no-project-done-when")]
+        [Description(
+            "Hold this run to none of the project's standing done-when criteria (teams: done_when: in its "
+            + "project.yaml). The run's journal records that they were left out.")]
+        public bool NoProjectDoneWhen { get; init; }
+
+        [CommandOption("--drop-project-done-when <CRITERION>")]
+        [Description(
+            "Leave one of the project's standing done-when criteria out of this run, named as the project "
+            + "writes it. Repeat it for each.")]
+        public string[] DropProjectDoneWhen { get; init; } = [];
+
+        /// <summary>
         /// How long the lead's questions wait for an answer before its
         /// recommendation is taken, overriding the team's own rule.
         /// </summary>
@@ -1436,10 +1460,12 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
         Settings settings,
         string autonomy,
         TeamCeiling.Decision ceiling,
-        Loadout.Models.Configuration.MachineConfig? machine)
+        Loadout.Models.Configuration.MachineConfig? machine,
+        Loadout.Models.Projects.ProjectTeams? projectTeams)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(ceiling);
+        ArgumentNullException.ThrowIfNull(team);
 
         return new TeamRunRequest(
             projectHandle,
@@ -1483,7 +1509,15 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             // has already been refused rather than quietly becoming not set.
             Budget: UsdCap.TryParse(settings.Usd, out var budget) ? budget : UsdCap.Unset,
             MachineBudget: MachineBudget(machine),
-            Task: settings.Task is { Length: > 0 } task ? task.Trim() : null);
+            Task: settings.Task is { Length: > 0 } task ? task.Trim() : null,
+
+            // Here and not in the runner, for the reason the rest of this is:
+            // every way a run starts - this command, the dashboard, a schedule,
+            // a webhook - comes through here, so none of them can forget it.
+            Standing: StandingCriteria.Resolve(
+                projectTeams?.For(team.Name) ?? [],
+                settings.NoProjectDoneWhen,
+                settings.DropProjectDoneWhen));
     }
 
     /// <summary>
@@ -1493,6 +1527,20 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
     /// </summary>
     internal static UsdCap MachineBudget(Loadout.Models.Configuration.MachineConfig? machine) =>
         UsdCap.TryParse(machine?.Teams.Budget, out var cap) ? cap : UsdCap.Unset;
+
+    /// <summary>The project's criteria as a run is about to be held to them, in a line.</summary>
+    internal static string StandingLine(StandingCriteria standing)
+    {
+        ArgumentNullException.ThrowIfNull(standing);
+
+        var held = standing.Applied.Count > 0
+            ? $"Also held to the project's done-when: {string.Join("; ", standing.Applied)}."
+            : "Held to none of the project's done-when.";
+
+        return standing.Dropped.Count > 0
+            ? $"{held} Left out for this run: {string.Join("; ", standing.Dropped)}."
+            : held;
+    }
 
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(
@@ -1597,8 +1645,26 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             }
         }
 
+        // The project's standing criteria. A manifest that cannot be read
+        // holds the run to none of them, said rather than silent, because a
+        // run that should have been held to "the suite passes" and was not is
+        // exactly the thing nobody finds out about.
+        var manifest = await _workspace.ReadProjectAsync(project.Entry.Slug, cancellationToken).ConfigureAwait(false);
+
+        if (manifest.Failed)
+        {
+            output.WriteLine(TeamStyle.Note(
+                $"The project's settings could not be read, so this run is held to none of its standing "
+                + $"done-when: {manifest.Error}"));
+        }
+
         var request = Requesting(
-            project.Entry.Slug, team, specialists, settings, autonomy, ceiling, machine.Value);
+            project.Entry.Slug, team, specialists, settings, autonomy, ceiling, machine.Value, manifest.Value?.Teams);
+
+        if (request.Standing is { } standing && (standing.Applied.Count > 0 || standing.Dropped.Count > 0))
+        {
+            output.WriteLine(TeamStyle.Note(StandingLine(standing)));
+        }
 
         return await DriveAsync(
             _runner, _console, _reading, _git, _paths, _processes,

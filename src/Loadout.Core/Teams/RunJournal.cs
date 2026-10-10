@@ -193,7 +193,17 @@ public sealed record RunEvent(DateTimeOffset At, string? Node, string Kind, Json
 /// What the lead took the criterion to mean, in its words, or null where it
 /// did not say - which is every run written before it was asked.
 /// </param>
-public sealed record RunCovered(string Criterion, string Verdict, string? Because, string? Understood = null)
+/// <param name="Source">
+/// Where the criterion came from: <c>project</c>, <c>team</c>, <c>lead</c> for
+/// one the lead proposed, or <c>run</c> for one given when it started. Null
+/// until the run's journal has been folded.
+/// </param>
+public sealed record RunCovered(
+    string Criterion,
+    string Verdict,
+    string? Because,
+    string? Understood = null,
+    string? Source = null)
 {
     /// <summary>Whether this one is settled.</summary>
     public bool Met => string.Equals(Verdict, "met", StringComparison.OrdinalIgnoreCase);
@@ -911,6 +921,12 @@ public sealed class RunJournal : IRunJournal
         IReadOnlyList<RunCovered> covered = [];
         string? goalUnderstood = null;
 
+        // Where the criteria came from, so each coverage row can say. The
+        // project's are named in their own event; the rest come from whoever
+        // last agreed them, or from the start of the run.
+        var fromProject = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var agreedBy = "run";
+
         // Insertion order, because that is the order the run briefed them
         // and the order somebody reading it will expect.
         var nodes = new Dictionary<string, RunNode>(StringComparer.Ordinal);
@@ -983,6 +999,14 @@ public sealed class RunJournal : IRunJournal
                         };
                     }
 
+                    break;
+
+                case "criteria.defaults":
+                    fromProject.UnionWith(entry.Words("applied"));
+                    break;
+
+                case "criteria.agreed":
+                    agreedBy = entry.Text("by") == "team" ? "team" : "lead";
                     break;
 
                 case "round.started":
@@ -1199,7 +1223,10 @@ public sealed class RunJournal : IRunJournal
             turns,
             timeline,
             conflicts,
-            covered,
+            [.. covered.Select(one => one with
+            {
+                Source = fromProject.Contains(one.Criterion.Trim()) ? "project" : agreedBy,
+            })],
             outcome,
             goalUnderstood,
             uncapped,
@@ -1326,7 +1353,17 @@ public sealed class RunJournal : IRunJournal
                 "nobody" => "held to the lead's proposed done-when, with nobody watching to agree them",
                 _ => "done-when agreed",
             }) + (entry.Words("criteria") is { Count: > 0 } agreed ? $": {string.Join("; ", agreed)}" : string.Empty),
-            "criteria.none" => "held to no done-when",
+            "criteria.none" => entry.Number("project") is > 0
+                ? "held to the project's done-when alone"
+                : "held to no done-when",
+            "criteria.defaults" =>
+                (entry.Words("applied") is { Count: > 0 } applied
+                    ? $"held to the project's done-when: {string.Join("; ", applied)}"
+                    : "held to none of the project's done-when")
+                + (entry.Words("dropped") is { Count: > 0 } dropped
+                    ? $" (left out {(entry.Text("by") == "flag" ? "with --no-project-done-when" : "by you")}: "
+                        + $"{string.Join("; ", dropped)})"
+                    : string.Empty),
             _ => entry.Kind,
         };
     }

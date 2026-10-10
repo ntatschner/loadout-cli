@@ -527,6 +527,17 @@ internal static partial class DashboardActions
             }
         }
 
+        // The project's own the person unticked. Passed as the project writes
+        // them, list markers and all, because they are matched against the
+        // manifest's text rather than read as something somebody typed.
+        foreach (var dropped in asking.DropProjectDoneWhen ?? [])
+        {
+            if (dropped?.Trim() is { Length: > 0 } named)
+            {
+                arguments.Add(Joined("--drop-project-done-when", named));
+            }
+        }
+
         arguments.Add("--non-interactive");
 
         return arguments;
@@ -1045,7 +1056,27 @@ internal static partial class DashboardActions
             .OrderBy(one => one, StringComparer.Ordinal)
             .ToList();
 
-        return new Choosable(offered, slugs, here, startable);
+        // Each project's standing criteria, so the form can show them beside
+        // the team it applies them to. A manifest that cannot be read offers
+        // none, and the command says so when the run starts.
+        var standing = new Dictionary<string, IReadOnlyList<ChoosableDoneWhen>>(StringComparer.Ordinal);
+
+        foreach (var slug in slugs)
+        {
+            var manifest = await workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false);
+
+            if (manifest.Value?.Teams.DoneWhen is { Count: > 0 } listed)
+            {
+                standing[slug] =
+                [
+                    .. listed
+                        .Where(one => one.Text?.Trim() is { Length: > 0 })
+                        .Select(one => new ChoosableDoneWhen(one.Text.Trim(), [.. one.Teams])),
+                ];
+            }
+        }
+
+        return new Choosable(offered, slugs, here, startable, standing);
     }
 
     /// <summary>Where a team came from, for the page, in the words the listing uses.</summary>
