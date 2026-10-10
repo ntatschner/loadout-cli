@@ -96,6 +96,11 @@ namespace Loadout.Agents.Teams;
 /// machine's settings are, so the runner reads no workspace files. Held on top
 /// of <paramref name="Criteria"/> or the team's own, never instead of them.
 /// </param>
+/// <param name="OnTimeout">
+/// What a question timed by <paramref name="TakeRecommendationAfter"/> does when
+/// nobody answers: one of <see cref="TeamTimeout"/>'s words, or null for
+/// think-again-once.
+/// </param>
 public sealed record TeamRunRequest(
     string ProjectHandle,
     TeamDefinition Team,
@@ -119,7 +124,8 @@ public sealed record TeamRunRequest(
     UsdCap Budget = default,
     UsdCap MachineBudget = default,
     string? Task = null,
-    StandingCriteria? Standing = null);
+    StandingCriteria? Standing = null,
+    string? OnTimeout = null);
 
 /// <summary>
 /// A project's standing done-when criteria as they reach one run.
@@ -743,6 +749,8 @@ public sealed partial class TeamRunner : ITeamRunner
         // refused instead of put to the person sitting in front of the
         // dashboard.
         _asking = autonomy != "autonomous" && console.CanAsk;
+        _onTimeout = request.OnTimeout;
+        _sentBackByTimer.Clear();
 
         var journal = new Journal(Path.Combine(directory, "journal.jsonl"), runId, _time);
 
@@ -3756,11 +3764,14 @@ public sealed partial class TeamRunner : ITeamRunner
         return read;
     }
 
+    /// <summary>How the readings question begins, which is what it is known by.</summary>
+    internal const string ReadingsQuestionStart = "Before any worker starts:";
+
     /// <summary>The question that holds a run for its lead's readings.</summary>
     internal static ReportQuestion ReadingsQuestion(IReadOnlyDictionary<string, string> readings)
     {
         var text = new StringBuilder(
-            "Before any worker starts: is this how you mean the done-when? The lead is saying how it "
+            ReadingsQuestionStart + " is this how you mean the done-when? The lead is saying how it "
             + "reads each one, not proposing new ones.");
 
         foreach (var (criterion, reading) in readings)
@@ -4088,6 +4099,8 @@ public sealed partial class TeamRunner : ITeamRunner
     internal static string Decided(string question, string answer, string by) => by switch
     {
         "person" => $"- {question}: **{answer}** (the person decided this)",
+        "timed think again" => $"- {question}: **{answer}** (nobody answered in time, so it came back to "
+            + "you rather than taking your recommendation: nobody chose anything)",
         _ => $"- {question}: **{answer}** (your own recommendation, taken because nobody answered: "
              + "nobody approved it, so do not say anybody did)",
     };
@@ -4120,9 +4133,25 @@ public sealed partial class TeamRunner : ITeamRunner
                 && console.AnswersInPlace
                 && question.Recommendation is { Length: > 0 })
             {
-                (answer, timed) = await DecideOrTakeAsync(console, question, directory, wait, ct).ConfigureAwait(false);
+                // Decided now, before the wait, so the answer the timer would
+                // write is settled whatever happens while it runs. Known by
+                // its key rather than its words for the readings, whose words
+                // change every time the lead restates them.
+                var key = KeyOf(question);
+                var sendBack = TeamTimeout.SendsBack(_onTimeout, _sentBackByTimer.Contains(key));
 
-                if (timed)
+                (answer, timed) = await DecideOrTakeAsync(
+                    console, question, directory, wait, sendBack ? ThinkAgain : question.Recommendation, ct).ConfigureAwait(false);
+
+                if (timed && sendBack)
+                {
+                    _sentBackByTimer.Add(key);
+
+                    console.Note(
+                        $"Nobody answered in {TeamDuration.Spell(wait)}, so the question went back to the lead to "
+                        + $"think again: {question.Question}");
+                }
+                else if (timed)
                 {
                     console.Note(
                         $"Nobody answered in {TeamDuration.Spell(wait)}, so the lead's recommendation was taken: "
@@ -4137,6 +4166,7 @@ public sealed partial class TeamRunner : ITeamRunner
             var rethink = string.Equals(answer, ThinkAgain, StringComparison.Ordinal);
 
             var by = autonomy == "autonomous" ? "recommendation"
+                : timed && rethink ? "timed think again"
                 : timed ? "timed default"
                 : answer is null ? "nobody"
                 : "person";
@@ -4172,8 +4202,29 @@ public sealed partial class TeamRunner : ITeamRunner
     }
 
     /// <summary>
-    /// Asks, and takes the lead's recommendation if nobody has answered in
-    /// time. Says whether it was taken that way.
+    /// Which questions the timer has already sent back to the lead, by
+    /// <see cref="KeyOf"/>, so think-again-once sends each back only once.
+    /// </summary>
+    private readonly HashSet<string> _sentBackByTimer = new(StringComparer.Ordinal);
+
+    /// <summary>What a timed question does when nobody answers, for this run.</summary>
+    private string? _onTimeout;
+
+    /// <summary>
+    /// What a question is known by for <see cref="_sentBackByTimer"/>: its words,
+    /// except the readings question, whose words are the lead's readings and
+    /// change every time it restates them, but which is still the one question.
+    /// </summary>
+    private static string KeyOf(ReportQuestion question) =>
+        question.Question.StartsWith(ReadingsQuestionStart, StringComparison.Ordinal)
+            ? ReadingsQuestionStart
+            : question.Question;
+
+    /// <summary>
+    /// Asks, and answers with <paramref name="chosen"/> if nobody has answered
+    /// in time: the lead's recommendation, or <see cref="ThinkAgain"/> where the
+    /// run's on-timeout setting sends it back. Says whether it was answered that
+    /// way.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -4194,8 +4245,11 @@ public sealed partial class TeamRunner : ITeamRunner
         ReportQuestion question,
         string directory,
         TimeSpan wait,
+        string chosen,
         CancellationToken ct)
     {
+        var sentBack = string.Equals(chosen, ThinkAgain, StringComparison.Ordinal);
+
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         var asking = console.DecideAsync(question, ct);
@@ -4227,9 +4281,11 @@ public sealed partial class TeamRunner : ITeamRunner
                         pending.Id,
                         new AskAnswer(
                             true,
-                            $"Nobody answered in {TeamDuration.Spell(wait)}, so the lead's recommendation was taken.",
-                            Chosen: question.Recommendation,
-                            By: "timed default"),
+                            sentBack
+                                ? $"Nobody answered in {TeamDuration.Spell(wait)}, so it went back to the lead to think again."
+                                : $"Nobody answered in {TeamDuration.Spell(wait)}, so the lead's recommendation was taken.",
+                            Chosen: chosen,
+                            By: sentBack ? "timed think again" : "timed default"),
                         ct).ConfigureAwait(false);
 
                     wrote = true;

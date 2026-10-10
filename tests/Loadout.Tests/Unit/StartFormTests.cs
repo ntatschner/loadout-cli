@@ -37,7 +37,8 @@ public sealed class StartFormTests
         Criteria: ["the option exists", "  ", "a test covers it"],
         Model: "opus",
         Agent: "claude",
-        TakeRecommendationAfter: "30m");
+        TakeRecommendationAfter: "30m",
+        OnTimeout: "think-again");
 
     [Fact]
     public void Every_box_on_the_form_reaches_the_command_line()
@@ -52,6 +53,7 @@ public sealed class StartFormTests
         typed.Should().ContainInConsecutiveOrder("--model", "opus");
         typed.Should().ContainInConsecutiveOrder("--agent", "claude");
         typed.Should().ContainInConsecutiveOrder("--take-recommendation-after", "30m");
+        typed.Should().ContainInConsecutiveOrder("--on-timeout", "think-again");
 
         // One option per criterion, because a criterion is a sentence and
         // sentences contain commas.

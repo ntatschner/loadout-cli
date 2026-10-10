@@ -97,7 +97,8 @@ public sealed class TeamRunnerTests : IDisposable
         UsdCap budget = default,
         UsdCap machineBudget = default,
         string? task = null,
-        StandingCriteria? standing = null)
+        StandingCriteria? standing = null,
+        string? onTimeout = null)
     {
         return await new TeamRunner(
             _launcher,
@@ -110,7 +111,8 @@ public sealed class TeamRunnerTests : IDisposable
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, dryRun, MaxRounds: rounds, Offline: true,
                 Criteria: criteria, TakeRecommendationAfter: takeRecommendationAfter,
-                Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing),
+                Budget: budget, MachineBudget: machineBudget, Task: task, Standing: standing,
+                OnTimeout: onTimeout),
             console ?? _console);
     }
 
@@ -502,7 +504,7 @@ public sealed class TeamRunnerTests : IDisposable
 
         _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m), Result(LeadDone(), 0.09m));
 
-        var outcome = (await RunAsync(takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console)).Value!;
+        var outcome = (await RunAsync(takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console, onTimeout: TeamTimeout.Recommend)).Value!;
 
         outcome.Ended.Should().Be("done");
         _launcher.Written("role.project-lead")[1].Should().Contain("Proceed with one implementer?: **yes**")
@@ -1949,12 +1951,100 @@ public sealed class TeamRunnerTests : IDisposable
         _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
 
         var outcome = (await RunAsync(
-            criteria: [Mine], takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console)).Value!;
+            criteria: [Mine], takeRecommendationAfter: TimeSpan.FromMilliseconds(300), console: console,
+            onTimeout: TeamTimeout.Recommend)).Value!;
 
         outcome.Ended.Should().Be("done");
 
         (await JournalAsync(outcome)).Should().Contain(line =>
             line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"timed default\""));
+    }
+
+    // ------------------------------------------------ when a timed question runs out
+
+    private static readonly TimeSpan Briefly = TimeSpan.FromMilliseconds(300);
+
+    private static Loadout.Cli.Commands.DashboardTeamConsole Unwatched() =>
+        new(TimeProvider.System, _ => { });
+
+    /// <remarks>
+    /// The default. A question nobody answers goes back to the lead once,
+    /// with a round of evidence it did not have; if it comes back and nobody
+    /// answers again, the recommendation is taken.
+    /// </remarks>
+    [Fact]
+    public async Task By_default_a_timed_question_goes_back_once_before_its_recommendation_is_taken()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadAsks(), 0.01m), Result(LeadAsks(), 0.02m), Result(LeadDone(), 0.03m), Result(LeadDone(), 0.03m));
+
+        var outcome = (await RunAsync(takeRecommendationAfter: Briefly, console: Unwatched())).Value!;
+
+        var decisions = (await JournalAsync(outcome)).Where(line => line.Contains("\"kind\":\"decision\"")).ToList();
+
+        decisions.Should().HaveCount(2);
+        decisions[0].Should().Contain("\"by\":\"timed think again\"").And.Contain("\"answer\":\"think again\"");
+        decisions[1].Should().Contain("\"by\":\"timed default\"").And.Contain("\"answer\":\"yes\"");
+
+        // The lead is told nobody chose anything, not that its option won.
+        _launcher.Written("role.project-lead")[1].Should().Contain("nobody answered in time, so it came back to you");
+    }
+
+    [Fact]
+    public async Task Think_again_sends_a_timed_question_back_every_time()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadAsks(), 0.01m), Result(LeadAsks(), 0.02m), Result(LeadDone(), 0.03m), Result(LeadDone(), 0.03m));
+
+        var outcome = (await RunAsync(
+            takeRecommendationAfter: Briefly, console: Unwatched(), onTimeout: TeamTimeout.ThinkAgain)).Value!;
+
+        (await JournalAsync(outcome)).Where(line => line.Contains("\"kind\":\"decision\""))
+            .Should().HaveCount(2).And.OnlyContain(line => line.Contains("\"by\":\"timed think again\""));
+    }
+
+    /// <remarks>
+    /// The readings question's words change every time the lead restates
+    /// them, so a timer that knew questions by their words would send the
+    /// readings back for ever under think-again-once.
+    /// </remarks>
+    [Fact]
+    public async Task Readings_nobody_answers_go_back_once_and_then_stand()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests("any test passes"), 0.01m),
+            Result(LeadReadsAndRequests("only dates after --since are printed"), 0.02m),
+            Result(LeadDoneCovering(Mine), 0.03m),
+            Result(LeadDoneCovering(Mine), 0.03m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = (await RunAsync(criteria: [Mine], takeRecommendationAfter: Briefly, console: Unwatched())).Value!;
+
+        var journal = await JournalAsync(outcome);
+
+        journal.Should().Contain(line =>
+            line.Contains("\"kind\":\"decision\"") && line.Contains("\"by\":\"timed think again\"")
+            && line.Contains(TeamRunner.ReadingsQuestionStart));
+
+        journal.Should().Contain(line =>
+            line.Contains("\"kind\":\"readings.accepted\"") && line.Contains("\"by\":\"timed default\""));
+
+        journal.Where(line => line.Contains("\"kind\":\"node.launched\"") && line.Contains("role.implementer"))
+            .Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData(TeamTimeout.Recommend, false, false)]
+    [InlineData(TeamTimeout.Recommend, true, false)]
+    [InlineData(TeamTimeout.ThinkAgainOnce, false, true)]
+    [InlineData(TeamTimeout.ThinkAgainOnce, true, false)]
+    [InlineData(TeamTimeout.ThinkAgain, true, true)]
+    [InlineData(null, false, true)]
+    [InlineData("  ALWAYS ", true, true)]
+    public void What_a_timer_does_follows_the_setting(string? policy, bool sentBackBefore, bool sendsBack)
+    {
+        TeamTimeout.SendsBack(policy, sentBackBefore).Should().Be(sendsBack);
     }
 
     [Fact]

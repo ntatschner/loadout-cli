@@ -218,6 +218,7 @@ public sealed class TeamCatalogueTests : IDisposable
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { gates: { outward: allow } }", "team-outward", "may only ask")]
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { gates: { merge: [nobody] } }", "team-merge-gate", "'nobody'")]
     [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { take_recommendation_after: soon }", "team-recommendation-wait", "not a duration")]
+    [InlineData("lead: a\nnodes: { a: { role: role.project-lead } }\nrules: { on_timeout: shrug }", "team-on-timeout", "think-again-once")]
     public async Task A_team_that_would_not_make_sense_to_run_is_a_finding_that_says_what_to_change(
         string body, string rule, string detail)
     {

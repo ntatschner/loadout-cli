@@ -418,6 +418,11 @@ public sealed class TeamCatalogue : ITeamCatalogue
             Error("team-recommendation-wait", $"Team '{team.Name}' sets take_recommendation_after to '{after}', which is not a duration. Write it as 30m, 2h or 1d.");
         }
 
+        if (team.Rules.OnTimeout is { Length: > 0 } onTimeout && TeamTimeout.Parse(onTimeout) is null)
+        {
+            Error("team-on-timeout", $"Team '{team.Name}' sets on_timeout to '{onTimeout}'. {TeamTimeout.Refusal(onTimeout)}");
+        }
+
         // Zero read as no cap once, in the run's own override, and "no cap"
         // has to be something a person says. Named here rather than taken as
         // either reading.

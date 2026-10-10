@@ -1406,7 +1406,10 @@ public sealed class RunJournal : IRunJournal
             "worktree.tidied" => $"cleared away {entry.Text("branch")}",
             "node.told" => $"was told: {entry.Text("message")}",
             "brief.revised" => $"briefed instead: {entry.Text("now")}",
-            "decision" => entry.Text("answer") == "think again"
+            "decision" => entry.Text("by") == "timed think again"
+                    ? $"sent back to the lead to think again, nobody having answered in {entry.Text("after") ?? "time"}: "
+                        + entry.Text("question")
+                : entry.Text("answer") == "think again"
                     ? $"sent back to the lead to think again: {entry.Text("question")}"
                 : entry.Text("by") == "timed default"
                     ? $"took the lead's recommendation, nobody having answered in {entry.Text("after") ?? "time"}: "

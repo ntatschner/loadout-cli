@@ -334,8 +334,17 @@ public sealed class TeamShowCommand : AsyncCommand<TeamShowCommand.Settings>
         if (TeamDuration.Parse(team.Rules.TakeRecommendationAfter) is { } after)
         {
             output.WriteLine(
-                $"  questions  the lead's recommendation is taken after {TeamDuration.Spell(after)} with no answer, "
-                + "on a run answered from the dashboard");
+                (TeamTimeout.Parse(team.Rules.OnTimeout) ?? TeamTimeout.ThinkAgainOnce) switch
+                {
+                    TeamTimeout.Recommend =>
+                        $"  questions  the lead's recommendation is taken after {TeamDuration.Spell(after)} with no answer",
+                    TeamTimeout.ThinkAgain =>
+                        $"  questions  sent back to the lead after {TeamDuration.Spell(after)} with no answer, every time",
+                    _ =>
+                        $"  questions  sent back to the lead once after {TeamDuration.Spell(after)} with no answer, "
+                        + "then its recommendation is taken",
+                }
+                + ", on a run answered from the dashboard");
         }
 
         if (team.Rules.Gates.OutwardAllowedWhenAutonomous.Count > 0)
@@ -1403,6 +1412,14 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             + "30m, 2h, or never. Only on a run answered from the dashboard; never for an outward action or a merge.")]
         public string? TakeRecommendationAfter { get; init; }
 
+        /// <summary>What a timed question does when nobody answers, overriding the team's rule.</summary>
+        [CommandOption("--on-timeout <WHAT>")]
+        [Description(
+            "What a timed question does when nobody answers: think-again-once (the default) sends it back "
+            + "to the lead once and then takes its recommendation, recommend takes it at once, think-again "
+            + "always sends it back. Each send-back is a round.")]
+        public string? OnTimeout { get; init; }
+
         /// <summary>
         /// A task on the project's list that this run is for.
         /// </summary>
@@ -1502,7 +1519,10 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             Standing: StandingCriteria.Resolve(
                 projectTeams?.For(team.Name) ?? [],
                 settings.NoProjectDoneWhen,
-                settings.DropProjectDoneWhen));
+                settings.DropProjectDoneWhen),
+
+            // The run's own, then the team's; the runner's default where neither says.
+            OnTimeout: TeamTimeout.Parse(settings.OnTimeout) ?? TeamTimeout.Parse(team.Rules.OnTimeout));
     }
 
     /// <summary>
@@ -1582,6 +1602,11 @@ public sealed class TeamRunCommand : AsyncCommand<TeamRunCommand.Settings>
             && TeamDuration.Parse(after) is null)
         {
             return output.Fail(TeamDuration.Refusal(after), ExitCode.InvalidArguments);
+        }
+
+        if (settings.OnTimeout is { Length: > 0 } onTimeout && TeamTimeout.Parse(onTimeout) is null)
+        {
+            return output.Fail(TeamTimeout.Refusal(onTimeout), ExitCode.InvalidArguments);
         }
 
         var autonomy = (settings.Autonomy ?? team.Rules.Autonomy).Trim().ToLowerInvariant();

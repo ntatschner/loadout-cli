@@ -1927,11 +1927,30 @@ minutes and ten hours are different runs. `never` (or `off`) for a run means no
 limit, even when the team sets one, and the dashboard's box treats it the same
 as leaving it empty.
 
-When it happens, it happens the way you would have answered: the recommendation
-is written as the question's answer, so the question leaves the dashboard, the
-run carries on, and the journal says
-`took the lead's recommendation, nobody having answered in 30m`. It is never
-recorded as a person's choice.
+When it happens, it happens the way you would have answered: the answer is
+written as the question's answer, so the question leaves the dashboard, the run
+carries on, and the journal says which it was. It is never recorded as a
+person's choice.
+
+What that answer is depends on `on_timeout`, set the same three ways
+(`--on-timeout`, `on_timeout:` under `rules`, or *When nobody answers* on the
+dashboard's form):
+
+- **`think-again-once`, the default.** The first time a question goes
+  unanswered it goes back to the lead to think again, exactly as if you had
+  chosen *Think again*, and the lead is told nobody chose anything. If it asks
+  again and that times out too, its recommendation is taken. The lead has had a
+  round more evidence by then, which is the point of asking it to look again.
+- **`recommend`** takes the recommendation at once. This is what every timer did
+  before `on_timeout` existed.
+- **`think-again`** sends it back every time.
+
+Each send-back is a round of its own, so the round limit and the budget still
+stop a run, `think-again` included. The question about the lead's readings
+before any worker starts is timed the same way and counted as one question,
+even though its wording changes each time the lead restates them. The journal
+says `sent back to the lead to think again, nobody having answered in 30m`, or
+`took the lead's recommendation, nobody having answered in 30m`.
 
 What it does not do:
 

@@ -166,4 +166,25 @@ public sealed class TeamRequestTests
 
         request.Standing.Should().Be(StandingCriteria.None);
     }
+
+    [Fact]
+    public void What_a_timed_question_does_is_the_run_s_then_the_team_s()
+    {
+        var team = Team();
+        team.Rules.OnTimeout = "think-again";
+
+        TeamRunCommand.Requesting(
+                "demo", team, Specialists(), Settings(), "supervised", TeamCeiling.Nothing, null, null)
+            .OnTimeout.Should().Be(TeamTimeout.ThinkAgain);
+
+        var settings = new TeamRunCommand.Settings { Goal = "Fix the thing", Rounds = 3, OnTimeout = " Recommend " };
+
+        TeamRunCommand.Requesting(
+                "demo", team, Specialists(), settings, "supervised", TeamCeiling.Nothing, null, null)
+            .OnTimeout.Should().Be(TeamTimeout.Recommend);
+
+        TeamRunCommand.Requesting(
+                "demo", Team(), Specialists(), Settings(), "supervised", TeamCeiling.Nothing, null, null)
+            .OnTimeout.Should().BeNull("neither said, so the runner's own default applies");
+    }
 }

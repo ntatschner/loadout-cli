@@ -2174,9 +2174,25 @@
               <input type="text" id="start-take" placeholder="never" class="lk-input"
                      aria-describedby="start-take-about">
               <p class="lk-help" id="start-take-about">When one of the lead's
-                questions has had no answer for this long, its recommendation is
-                taken and the run carries on. 30m, 2h or 1 hour; empty or never for no limit. Never a merge or anything
-                that leaves this machine.</p>
+                questions has had no answer for this long, the run carries on
+                without you, as chosen below. 30m, 2h or 1 hour; empty or never for no limit. Never a merge or anything
+                that leaves this machine, and never the box where you agree what the run is judged on: a timed
+                run given no done-when still stops there once.</p>
+            </div>
+
+            <!-- What the timer does, next to it, because the two only mean
+                 anything together. Passed as chosen and checked by 'team run'. -->
+            <div class="lk-field">
+              <label for="start-on-timeout" class="lk-label">When nobody answers</label>
+              <select id="start-on-timeout" class="lk-select" aria-describedby="start-on-timeout-about">
+                <option value="">the team's own</option>
+                <option value="think-again-once">send it back once, then take the recommendation</option>
+                <option value="recommend">take the recommendation</option>
+                <option value="think-again">always send it back</option>
+              </select>
+              <p class="lk-help" id="start-on-timeout-about">Sending a question back makes the lead look
+                again with what it has learnt since. Each time is a round, so the round limit and the budget
+                still stop it.</p>
             </div>
 
             <!-- Free text rather than a list. Which models exist is the agent's
@@ -3393,6 +3409,7 @@
         .filter(function (one) { return one.length > 0; });
 
       var take = document.getElementById("start-take").value.trim();
+      var onTimeout = document.getElementById("start-on-timeout").value;
       var chosen = teamsKnown.filter(function (t) { return t.name === team; })[0];
       var defaults = chosen && chosen.doneWhen ? chosen.doneWhen : [];
       var standing = standingChosen();
@@ -3433,7 +3450,13 @@
         + (standing.dropped.length
           ? "\n\nLeft out for this run:\n- " + standing.dropped.join("\n- ")
           : "")
-        + (take ? "\n\nThe lead's recommendation is taken after " + take + " with no answer." : ""),
+        + (take
+          ? "\n\nAfter " + take + " with no answer, "
+            + (onTimeout === "recommend" ? "the lead's recommendation is taken."
+              : onTimeout === "think-again" ? "the question goes back to the lead, every time."
+              : onTimeout === "think-again-once" ? "the question goes back to the lead once, then its recommendation is taken."
+              : "the team's own rule decides.")
+          : ""),
         "Start it").then(function (yes) {
         if (!yes) { return; }
 
@@ -3453,6 +3476,7 @@
             model: model || null,
             agent: agent || null,
             takeRecommendationAfter: take || null,
+            onTimeout: onTimeout || null,
             dropProjectDoneWhen: standing.dropped.length ? standing.dropped : null
           })
         })

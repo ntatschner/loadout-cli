@@ -87,10 +87,12 @@ them. If the team has none either, the lead proposes criteria and they're put in
 front of you before any worker starts. Change them, accept them, or empty the
 box to run with nothing checking it.
 
-For a run you won't be watching, `--take-recommendation-after 30m` takes the
-lead's recommendation on any of its questions that nobody has answered in that
-time. It only applies to runs answered from the dashboard, and never to a merge
-or anything that leaves your machine.
+For a run you won't be watching, `--take-recommendation-after 30m` answers any
+of the lead's questions that nobody has answered in that time. By default it
+sends the question back to the lead once to think again, and takes its
+recommendation if nobody answers the second time either. `--on-timeout recommend`
+takes the recommendation straight away instead. It only applies to runs answered
+from the dashboard, and never to a merge or anything that leaves your machine.
 
 A run with no budget in its team file and no `--rounds` is refused before it
 starts, naming both — without either, a lead that keeps asking for one more
