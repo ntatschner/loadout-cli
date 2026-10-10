@@ -1544,6 +1544,8 @@ public sealed class DashboardServer : IDisposable
                     projects = choosable.Projects,
                     here = choosable.Here,
                     agents = choosable.Agents ?? [],
+                    projectDoneWhen = choosable.ProjectDoneWhen
+                        ?? new Dictionary<string, IReadOnlyList<ChoosableDoneWhen>>(),
                 }, Json)).ConfigureAwait(false);
 
             return;
@@ -2100,6 +2102,7 @@ public sealed class DashboardServer : IDisposable
             one.Because,
             one.Understood,
             one.Met,
+            one.Source,
         }),
 
         // What the lead took the goal to mean, beside the goal itself.

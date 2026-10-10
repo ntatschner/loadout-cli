@@ -2,7 +2,9 @@ using FluentAssertions;
 using Loadout.Cli.Commands;
 using Loadout.Core.Instructions;
 using Loadout.Core.Teams;
+using Loadout.Agents.Teams;
 using Loadout.Models.Configuration;
+using Loadout.Models.Projects;
 using Loadout.Models.Teams;
 using Xunit;
 
@@ -46,7 +48,7 @@ public sealed class TeamRequestTests
         ceiling.IsShort.Should().BeFalse();
 
         var request = TeamRunCommand.Requesting(
-            "demo", Team(), Specialists(), Settings(), "autonomous", ceiling, new MachineConfig());
+            "demo", Team(), Specialists(), Settings(), "autonomous", ceiling, new MachineConfig(), projectTeams: null);
 
         request.OutwardAllowed.Should().BeEquivalentTo(["git push"]);
     }
@@ -69,7 +71,7 @@ public sealed class TeamRequestTests
         machine.Teams.Remediation["cleanup"] = "trusted";
 
         var request = TeamRunCommand.Requesting(
-            "demo", Team(), Specialists(), Settings(), "autonomous", TeamCeiling.Nothing, machine);
+            "demo", Team(), Specialists(), Settings(), "autonomous", TeamCeiling.Nothing, machine, projectTeams: null);
 
         request.TrustedRemedies.Should().ContainSingle()
             .Which.Remedy.Should().Be("remove-artifact-txt-files");
@@ -82,10 +84,86 @@ public sealed class TeamRequestTests
     {
         // The safe direction, and the reason the two above were invisible.
         var request = TeamRunCommand.Requesting(
-            "demo", Team(), Specialists(), Settings(), "supervised", TeamCeiling.Nothing, machine: null);
+            "demo", Team(), Specialists(), Settings(), "supervised", TeamCeiling.Nothing, machine: null, projectTeams: null);
 
         request.OutwardAllowed.Should().BeEmpty();
         request.TrustedRemedies.Should().BeNull();
         request.Remediation.Should().BeNull();
+    }
+
+    private static ProjectTeams ProjectWith(params (string Text, string[] Teams)[] entries)
+    {
+        var teams = new ProjectTeams();
+
+        foreach (var (text, names) in entries)
+        {
+            teams.DoneWhen.Add(new ProjectDoneWhen { Text = text, Teams = [.. names] });
+        }
+
+        return teams;
+    }
+
+    [Fact]
+    public void The_projects_standing_criteria_for_this_team_reach_the_run()
+    {
+        // Resolved here for every way a run starts, the dashboard and the
+        // schedules included, because they all come through this command.
+        var project = ProjectWith(
+            ("the suite passes", ["all"]),
+            ("docs are in the house voice", ["docs-crew"]),
+            ("nothing new is logged at warning", []),
+            ("the watch is quiet", ["System-Watch"]));
+
+        var request = TeamRunCommand.Requesting(
+            "demo", Team(), Specialists(), Settings(), "supervised", TeamCeiling.Nothing, null, project);
+
+        request.Standing!.Applied.Should().Equal(
+            "the suite passes", "nothing new is logged at warning", "the watch is quiet");
+        request.Standing.Dropped.Should().BeEmpty();
+        request.Standing.DroppedBy.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_criterion_unticked_for_this_run_is_left_out_and_said_to_be()
+    {
+        var project = ProjectWith(("the suite passes", ["all"]), ("the watch is quiet", ["all"]));
+
+        var settings = new TeamRunCommand.Settings
+        {
+            Goal = "Fix the thing",
+            Rounds = 3,
+            DropProjectDoneWhen = ["  The Suite Passes "],
+        };
+
+        var request = TeamRunCommand.Requesting(
+            "demo", Team(), Specialists(), settings, "supervised", TeamCeiling.Nothing, null, project);
+
+        request.Standing!.Applied.Should().Equal("the watch is quiet");
+        request.Standing.Dropped.Should().Equal("the suite passes");
+        request.Standing.DroppedBy.Should().Be("person");
+    }
+
+    [Fact]
+    public void The_flag_leaves_all_of_them_out()
+    {
+        var project = ProjectWith(("the suite passes", ["all"]), ("the watch is quiet", []));
+
+        var settings = new TeamRunCommand.Settings { Goal = "Fix the thing", Rounds = 3, NoProjectDoneWhen = true };
+
+        var request = TeamRunCommand.Requesting(
+            "demo", Team(), Specialists(), settings, "supervised", TeamCeiling.Nothing, null, project);
+
+        request.Standing!.Applied.Should().BeEmpty();
+        request.Standing.Dropped.Should().Equal("the suite passes", "the watch is quiet");
+        request.Standing.DroppedBy.Should().Be("flag");
+    }
+
+    [Fact]
+    public void A_project_that_sets_none_holds_the_run_to_none()
+    {
+        var request = TeamRunCommand.Requesting(
+            "demo", Team(), Specialists(), Settings(), "supervised", TeamCeiling.Nothing, null, new ProjectTeams());
+
+        request.Standing.Should().Be(StandingCriteria.None);
     }
 }

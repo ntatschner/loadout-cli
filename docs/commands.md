@@ -88,6 +88,7 @@
 | `loadout team new\|edit\|remove` | Write a team of your own, open its file, or move it to the bin |
 | `loadout team restore <team>` | Put a team back from the bin where it was, the copy removed most recently. Refused while a team of that name exists |
 | `loadout team run <team> "<goal>" --done-when` | Say what the run is judged on, one per use. The lead must report a verdict and evidence for every one |
+| `loadout team run <team> "<goal>" --no-project-done-when` | Hold this run to none of the project's standing done-when (`teams: done_when:` in its `project.yaml`), or leave out one with `--drop-project-done-when`. The journal records what was left out |
 | `loadout team run <team> "<goal>" --usd` | What this run may spend in all, over the team's own budget: a figure, or `none` for no cap |
 | `loadout team capabilities` | The machinery a team's declarations can ask for, and what each one needs |
 | `loadout team runs\|status\|log` | What the runs did: where each node got to, and everything one wrote down |

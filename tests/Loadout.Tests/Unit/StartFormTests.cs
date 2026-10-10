@@ -63,6 +63,22 @@ public sealed class StartFormTests
     }
 
     [Fact]
+    public void A_project_criterion_unticked_on_the_form_reaches_the_command_as_written()
+    {
+        // Matched against the manifest's text, so it is passed as the project
+        // wrote it - a leading dash included, joined to its option so the
+        // parser never reads it as one.
+        var typed = DashboardActions.Starting(Filled() with
+        {
+            DropProjectDoneWhen = ["the suite passes", " ", "- docs are in the house voice"],
+        });
+
+        typed.Should().Contain("--drop-project-done-when=the suite passes");
+        typed.Should().Contain("--drop-project-done-when=- docs are in the house voice");
+        typed.Count(one => one.StartsWith("--drop-project-done-when", StringComparison.Ordinal)).Should().Be(2);
+    }
+
+    [Fact]
     public void A_blank_criterion_is_dropped_rather_than_passed()
     {
         // A criterion nothing could report a verdict on would refuse every done

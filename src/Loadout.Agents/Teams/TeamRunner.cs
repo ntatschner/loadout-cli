@@ -90,6 +90,12 @@ namespace Loadout.Agents.Teams;
 /// what a machine allows is decided before a run starts and arrives already
 /// decided, so forgetting to decide it grants nothing rather than everything.
 /// </param>
+/// <param name="Standing">
+/// The project's standing criteria for this team, and which of them somebody
+/// dropped for this run. Resolved by whoever builds the request, the way the
+/// machine's settings are, so the runner reads no workspace files. Held on top
+/// of <paramref name="Criteria"/> or the team's own, never instead of them.
+/// </param>
 public sealed record TeamRunRequest(
     string ProjectHandle,
     TeamDefinition Team,
@@ -112,7 +118,67 @@ public sealed record TeamRunRequest(
     IReadOnlyList<Loadout.Models.Configuration.TrustedTool>? TrustedTools = null,
     UsdCap Budget = default,
     UsdCap MachineBudget = default,
-    string? Task = null);
+    string? Task = null,
+    StandingCriteria? Standing = null);
+
+/// <summary>
+/// A project's standing done-when criteria as they reach one run.
+/// </summary>
+/// <param name="Applied">What the run is held to.</param>
+/// <param name="Dropped">What matched the team and was left out of this run.</param>
+/// <param name="DroppedBy">
+/// Who left them out: <c>person</c> for some unticked, <c>flag</c> for all of
+/// them with <c>--no-project-done-when</c>. Null when nothing was dropped.
+/// </param>
+public sealed record StandingCriteria(
+    IReadOnlyList<string> Applied,
+    IReadOnlyList<string> Dropped,
+    string? DroppedBy = null)
+{
+    /// <summary>None at all, which is every project that sets none.</summary>
+    public static StandingCriteria None { get; } = new([], []);
+
+    /// <summary>
+    /// What matched the team, less what was dropped.
+    /// </summary>
+    /// <param name="matching">The project's criteria for this team.</param>
+    /// <param name="dropAll">Whether all of them were dropped.</param>
+    /// <param name="drop">Individual ones dropped, matched trimmed and ignoring case.</param>
+    /// <remarks>
+    /// A drop that names a criterion the project does not have is ignored
+    /// rather than refused. The page sends what it showed, and the manifest
+    /// may have changed since it was drawn; nothing is held to less than it
+    /// would have been by a drop that matched nothing.
+    /// </remarks>
+    public static StandingCriteria Resolve(
+        IReadOnlyList<string> matching,
+        bool dropAll,
+        IEnumerable<string>? drop)
+    {
+        ArgumentNullException.ThrowIfNull(matching);
+
+        if (matching.Count == 0)
+        {
+            return None;
+        }
+
+        if (dropAll)
+        {
+            return new StandingCriteria([], matching, "flag");
+        }
+
+        var unticked = new HashSet<string>(
+            (drop ?? []).Select(one => one.Trim()).Where(one => one.Length > 0),
+            StringComparer.OrdinalIgnoreCase);
+
+        var dropped = matching.Where(one => unticked.Contains(one.Trim())).ToList();
+
+        return dropped.Count == 0
+            ? new StandingCriteria(matching, [])
+            : new StandingCriteria(
+                [.. matching.Where(one => !unticked.Contains(one.Trim()))], dropped, "person");
+    }
+}
 
 /// <summary>How a run ended.</summary>
 /// <param name="RunId">The run's identifier, which names its directory under the state root.</param>
@@ -569,9 +635,33 @@ public sealed partial class TeamRunner : ITeamRunner
             ?? (request.Criteria is { Count: > 0 } asked ? asked : null)
             ?? (fromTeam ? TeamDefaults(team) : null);
 
+        // The project's, held on top of whichever of those was chosen and kept
+        // apart from it. Kept apart because `criteria` being null is what asks
+        // the lead to propose, and a project's generic hygiene - "the suite
+        // passes" - is no answer to what this particular run is for. Frozen at
+        // the start: a resumed run keeps what it began with, whatever the
+        // manifest says now.
+        var standing = resuming is not null
+            ? resuming.Standing
+            : [.. (request.Standing?.Applied ?? []).Select(one => one.Trim()).Where(one => one.Length > 0)];
+
         var leadBrief = MakeBrief(
             runId, team.Lead, parent: null, leadNode, leadRole, request.Goal, inputs: [],
-            doneWhen: criteria is null
+            doneWhen: criteria is null && standing.Count > 0
+                ?
+                [
+                    "every criterion below is met, with the evidence cited from your nodes' reports",
+                    CoverageOwed,
+
+                    // The same question as below, put beside the project's
+                    // criteria rather than replaced by them.
+                    "your first report proposes, in 'proposed_done_when', what this run should "
+                        + "actually be judged on beyond the project's standing criteria below: each "
+                        + "one a thing somebody else could check, each one specific to this goal. "
+                        + "Say what would have to be true, not that the goal is met",
+                    GoalReadingOwed,
+                ]
+                : criteria is null
                 ?
                 [
                     "the goal is met, with the evidence cited from your nodes' reports",
@@ -597,7 +687,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     GoalReadingOwed,
                 ],
             team, autonomy, request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory,
-            criteria);
+            Held(standing, criteria));
 
         if (request.DryRun)
         {
@@ -711,6 +801,23 @@ public sealed partial class TeamRunner : ITeamRunner
             {
                 await journal.WriteAsync(
                     "criteria.agreed", null, new { criteria, by = "team" }, ct).ConfigureAwait(false);
+            }
+
+            // Which of the project's criteria this run is held to and which
+            // somebody left out, so a report can answer "why was this run held
+            // to that?" - and a resume can keep exactly these.
+            if (request.Standing is { } given && (standing.Count > 0 || given.Dropped.Count > 0))
+            {
+                await journal.WriteAsync(
+                    "criteria.defaults",
+                    null,
+                    new
+                    {
+                        applied = standing,
+                        dropped = given.Dropped,
+                        by = given.Dropped.Count > 0 ? given.DroppedBy ?? "person" : null,
+                    },
+                    ct).ConfigureAwait(false);
             }
         }
         else
@@ -999,7 +1106,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 {
                     proposed = true;
 
-                    criteria = await AgreedAsync(report, autonomy, console, journal, ct)
+                    criteria = await AgreedAsync(report, autonomy, console, journal, standing, ct)
                         .ConfigureAwait(false);
 
                     if (criteria is { Count: > 0 })
@@ -1009,7 +1116,7 @@ public sealed partial class TeamRunner : ITeamRunner
                         // somebody typed.
                         leadBrief = leadBrief with
                         {
-                            Criteria = criteria,
+                            Criteria = Held(standing, criteria),
                             DoneWhen =
                             [
                                 "every criterion below is met, with the evidence cited from your "
@@ -1019,7 +1126,9 @@ public sealed partial class TeamRunner : ITeamRunner
                             ],
                         };
 
-                        agreedThisRound = criteria;
+                        // All of it, the project's included: this is the list
+                        // the lead's coverage is checked against.
+                        agreedThisRound = Held(standing, criteria);
                     }
                 }
 
@@ -1072,7 +1181,8 @@ public sealed partial class TeamRunner : ITeamRunner
                         "2 of 3 met" is exactly that.
                     */
                     if (report.Status == ReportStatus.Done
-                        && Outstanding(criteria, report) is { Count: > 0 } missed)
+                        && Held(standing, criteria) is { } held
+                        && Outstanding(held, report) is { Count: > 0 } missed)
                     {
                         await journal.WriteAsync(
                             "goal.unmet",
@@ -1082,11 +1192,11 @@ public sealed partial class TeamRunner : ITeamRunner
 
                         console.Note(
                             $"The lead reported done without accounting for {missed.Count} of "
-                            + $"{criteria!.Count} criteria: {string.Join("; ", missed)}");
+                            + $"{held.Count} criteria: {string.Join("; ", missed)}");
 
-                        ended = missed.Count == criteria.Count
+                        ended = missed.Count == held.Count
                             ? "the lead reported done without accounting for the goal"
-                            : $"the lead reported done with {missed.Count} of {criteria.Count} "
+                            : $"the lead reported done with {missed.Count} of {held.Count} "
                               + "criteria unmet";
 
                         break;
@@ -1207,7 +1317,8 @@ public sealed partial class TeamRunner : ITeamRunner
                     var role = request.Specialists.Find(node.Role)!;
                     var brief = MakeBrief(
                         runId, ask.Node, team.Lead, node, role, task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
-                        request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory, criteria, ask.From);
+                        request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory,
+                        Held(standing, criteria), ask.From);
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
@@ -3444,11 +3555,19 @@ public sealed partial class TeamRunner : ITeamRunner
         string autonomy,
         ITeamConsole console,
         Journal journal,
+        IReadOnlyList<string> standing,
         CancellationToken ct)
     {
-        if (Tidied(report.ProposedDoneWhen) is not { Count: > 0 } proposal)
+        // A lead shown the project's criteria tends to propose them back. They
+        // are held already, and a person handed them in the box would think
+        // deleting them there dropped them.
+        var fixedOnes = new HashSet<string>(standing.Select(one => one.Trim()), StringComparer.OrdinalIgnoreCase);
+
+        if (Tidied(report.ProposedDoneWhen)?.Where(one => !fixedOnes.Contains(one.Trim())).ToList()
+            is not { Count: > 0 } proposal)
         {
-            await journal.WriteAsync("criteria.none", null, new { by = "lead" }, ct).ConfigureAwait(false);
+            await journal.WriteAsync(
+                "criteria.none", null, new { by = "lead", project = standing.Count }, ct).ConfigureAwait(false);
 
             return null;
         }
@@ -3460,14 +3579,18 @@ public sealed partial class TeamRunner : ITeamRunner
 
             console.Note(
                 "Nobody is watching, so the run is held to the criteria the lead proposed: "
-                + string.Join("; ", proposal));
+                + string.Join("; ", proposal)
+                + (standing.Count > 0 ? $", and to the project's: {string.Join("; ", standing)}" : string.Empty));
 
             return proposal;
         }
 
         var answer = await console.ReviseAsync(
             "What this run will be judged on. The lead proposed these; change them if they are "
-            + "not what you meant, one per line.",
+            + "not what you meant, one per line."
+            + (standing.Count > 0
+                ? " The project's own are held as well and are not in the box: " + string.Join("; ", standing) + "."
+                : string.Empty),
             string.Join(Environment.NewLine, proposal),
             ct).ConfigureAwait(false);
 
@@ -3477,7 +3600,8 @@ public sealed partial class TeamRunner : ITeamRunner
             // this run held to anything, which is what it would have done
             // anyway.
             await journal.WriteAsync(
-                "criteria.none", null, new { by = "person", proposed = proposal }, ct).ConfigureAwait(false);
+                "criteria.none", null, new { by = "person", proposed = proposal, project = standing.Count }, ct)
+                .ConfigureAwait(false);
 
             return null;
         }
@@ -3489,6 +3613,23 @@ public sealed partial class TeamRunner : ITeamRunner
             ct).ConfigureAwait(false);
 
         return agreed;
+    }
+
+    /// <summary>
+    /// Everything a run is held to: the project's standing criteria, then the
+    /// run's chosen ones, each once. Null when there are none.
+    /// </summary>
+    /// <remarks>
+    /// Once, matched the way <see cref="Outstanding"/> matches, because a
+    /// criterion listed twice is one the lead has to answer twice and one a
+    /// count of "2 of 5 met" counts twice.
+    /// </remarks>
+    internal static IReadOnlyList<string>? Held(IReadOnlyList<string> standing, IReadOnlyList<string>? chosen)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        List<string> held = [.. standing.Concat(chosen ?? []).Where(one => seen.Add(one.Trim()))];
+
+        return held.Count > 0 ? held : null;
     }
 
     /// <summary>

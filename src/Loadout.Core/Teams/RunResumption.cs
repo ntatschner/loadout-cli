@@ -29,6 +29,7 @@ namespace Loadout.Core.Teams;
 /// The lead's last report as a JSON document, for telling a fresh lead where
 /// things stand. Null where it never reported.
 /// </param>
+/// <param name="Standing">The project's criteria the run started with.</param>
 public sealed record RunResumption(
     RunSummary Summary,
     IReadOnlyList<string>? Criteria,
@@ -36,8 +37,15 @@ public sealed record RunResumption(
     IReadOnlyDictionary<string, string> Branches,
     IReadOnlyDictionary<string, string> Decisions,
     string? LeadSession,
-    string? LastReport)
+    string? LastReport,
+    IReadOnlyList<string>? Standing = null)
 {
+    /// <summary>
+    /// The project's standing criteria the run started with, apart from
+    /// <see cref="Criteria"/>, or none for a run that had none.
+    /// </summary>
+    public IReadOnlyList<string> Standing { get; init; } = Standing ?? [];
+
     /// <summary>The lead's node name: the first node the run launched.</summary>
     public string? Lead => Summary.Nodes.Count > 0 ? Summary.Nodes[0].Node : null;
 
@@ -133,12 +141,19 @@ public sealed record RunResumption(
         }
 
         IReadOnlyList<string>? criteria = null;
+        IReadOnlyList<string> standing = [];
         var proposed = false;
 
         foreach (var entry in events)
         {
             switch (entry.Kind)
             {
+                // The project's, as the run started with them. Never read from
+                // the manifest again: a run picked up keeps what it began with.
+                case "criteria.defaults":
+                    standing = entry.Words("applied");
+                    break;
+
                 case "criteria.agreed":
                     criteria = entry.Words("criteria") is { Count: > 0 } agreed ? agreed : criteria;
                     proposed = true;
@@ -153,8 +168,16 @@ public sealed record RunResumption(
         var lead = summary.Nodes[0].Node;
 
         // Criteria somebody typed with --done-when are in the lead's brief and
-        // nowhere else.
-        criteria ??= BriefCriteria(Path.Combine(directory, $"brief-{lead}.json"));
+        // nowhere else. So are the project's, which are not the run's own and
+        // must not be read back as if somebody had typed them: that would stop
+        // the lead being asked to propose, and hold the run to them twice.
+        var unfixed = new HashSet<string>(standing, StringComparer.OrdinalIgnoreCase);
+
+        criteria ??= BriefCriteria(Path.Combine(directory, $"brief-{lead}.json"))?
+            .Where(one => !unfixed.Contains(one))
+            .ToList() is { Count: > 0 } typed
+                ? typed
+                : null;
 
         if (criteria is { Count: > 0 })
         {
@@ -200,7 +223,8 @@ public sealed record RunResumption(
             branches,
             decisions,
             summary.Nodes[0].Session,
-            File.Exists(last) ? Safely(last) : null), null);
+            File.Exists(last) ? Safely(last) : null,
+            standing), null);
     }
 
     /// <summary>A run's worker reports, oldest round first.</summary>

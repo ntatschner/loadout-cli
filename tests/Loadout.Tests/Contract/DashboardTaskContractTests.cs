@@ -51,6 +51,17 @@ public sealed class DashboardTaskContractTests
         await AcceptedAsync("run", ["team", "run", .. typed, "--dry-run"]);
     }
 
+    [BuiltCliFact]
+    public async Task A_run_leaving_out_the_project_s_criteria_is_a_line_the_parser_accepts()
+    {
+        var typed = DashboardActions.Starting(new StartRequest(
+            "iterating-project", "- Fix the login", "website",
+            DropProjectDoneWhen: ["- docs are in the house voice", "the suite passes"]));
+
+        await AcceptedAsync("run", ["team", "run", .. typed, "--dry-run"]);
+        await AcceptedAsync("run", ["team", "run", "iterating-project", "Fix the login", "--no-project-done-when", "--dry-run"]);
+    }
+
     private static async Task AcceptedAsync(string verb, string[] line)
     {
         using var loadout = new LoadoutProcess();

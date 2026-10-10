@@ -356,6 +356,57 @@ asked to propose any — the team's author already answered that — and the
 journal records `by: team`, so a run read back says whose criteria they were.
 `team show` lists them, and the dashboard's form shows them in its empty box.
 
+### The project's own
+
+Some criteria are true of every run on a repository, whatever the run is for:
+the suite passes, the docs are in the house voice. Saying those every time is
+the sort of thing that gets forgotten on exactly the run where it mattered, so a
+project can say them once, in its `project.yaml` in the workspace:
+
+```yaml
+teams:
+  done_when:
+    - text: "the suite passes"
+      teams: [all]
+    - text: "docs are in the house voice"
+      teams: [docs-crew]
+```
+
+Each one names the teams it applies to, or `all`. One that names none applies to
+every team, because an empty list is far likelier to mean "everywhere" than
+"nowhere".
+
+**These are held on top, not instead.** Unlike the team's own, they do not step
+aside when a run brings its own criteria: whatever the run, the team or the
+lead's agreed proposal says, a matching run is held to these as well, and a
+`done` that leaves one unanswered is sent back like any other. They also do not
+count as an answer to what this run is for, so a run given nothing else still
+has its lead propose criteria, and the box you agree them in says the project's
+are held as well. They are generic hygiene; the proposal is what makes this
+particular run's done mean something.
+
+They live in the workspace rather than in the repository, because the manifest
+is already committed and reviewed there and has one reader. A criterion only
+ever makes a run check more, so it grants nothing anybody would need to approve.
+
+To leave them out of one run, untick them on the dashboard's form, where they are
+listed under the box for your own, or on the command line:
+
+```sh
+loadout team run docs-crew "tidy the guides" --no-project-done-when
+loadout team run docs-crew "tidy the guides" --drop-project-done-when "docs are in the house voice"
+```
+
+Either way the run's journal records a `criteria.defaults` line naming what it
+was held to and what was left out, and by whom, so a run read back can answer
+"why was it held to that?" `team status` marks a project's criteria with
+`(project)`. A run that nobody is watching, started by a schedule or a webhook,
+has nobody to untick anything and is held to every one that matches.
+
+A run picked up with `team resume` keeps the ones it started with, even if
+`project.yaml` has changed since. They cannot yet be unticked at the point where
+you agree the lead's proposal; that box shows them and holds them.
+
 ### If you say nothing
 
 A run with no criteria used to be held to one: *"the goal is met, with the

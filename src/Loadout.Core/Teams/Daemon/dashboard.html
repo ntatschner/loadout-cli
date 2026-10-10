@@ -1642,6 +1642,12 @@
      than dotted, so it is never taken for a radio button: several of these
      can be on at once. */
   .lk-choice input[type="checkbox"] { border-radius: 4px; }
+
+  /* A group of ticks in the start form, laid out like any other field rather
+     than in the browser's own boxed fieldset. */
+  .start-standing { border: 0; padding: 0; margin: 0; min-width: 0; }
+  .start-standing[hidden] { display: none; }
+  .start-standing #start-standing-list { display: grid; gap: 6px; }
   .lk-choice input[type="checkbox"]::after {
     width: 10px;
     height: 10px;
@@ -2093,6 +2099,22 @@
               that can show it. The lead must answer for every line.
             </p>
           </div>
+
+          <!--
+            The project's standing done-when for the chosen team, from teams:
+            done_when: in its project.yaml. Held on top of whatever the box above
+            says, never instead of it, so they are ticks rather than lines in the
+            box: unticking one is a decision the run's journal records, where
+            deleting a line would be an edit nobody could see afterwards.
+          -->
+          <fieldset class="lk-field lk-field--wide start-standing" id="start-standing" hidden>
+            <legend class="lk-label">The project's done-when</legend>
+            <div id="start-standing-list"></div>
+            <p class="lk-help">
+              Held as well as anything above. Untick one to leave it out of this
+              run only; the run's record says it was left out.
+            </p>
+          </fieldset>
 
           <div class="lk-field">
             <label for="start-project" class="lk-label">Project</label>
@@ -3006,6 +3028,14 @@
   */
   var teamsKnown = [];
 
+  // Each project's standing done-when, by slug, as /api/choices gives them.
+  var standingKnown = {};
+
+  // What somebody unticked, kept across redraws: the choices are read again
+  // every so often, and a redraw that ticked everything again would undo a
+  // choice under somebody halfway through the form.
+  var standingUnticked = {};
+
   // Whether this server can change the schedules. Read from /api/choices like
   // 'acts' is from /api/runs, and false until it has answered, so a page that
   // has not heard yet draws nothing it might not be able to honour.
@@ -3031,10 +3061,92 @@
       if (planning) { planning.hidden = !plans; }
       if (open) { open.hidden = !answer.makes && !plans; }
 
+      standingKnown = answer.projectDoneWhen || {};
+
       fillTeams(answer.teams || []);
       fillProjects(answer.projects || [], answer.here);
       fillAgents(answer.agents || []);
+      drawStanding();
     });
+  }
+
+  // The project's criteria that apply to a team: every one naming it or
+  // "all", and every one naming nothing. The same rule 'team run' applies,
+  // which is the one that decides; this only shows it.
+  function standingFor(project, team) {
+    var seen = {};
+
+    return (standingKnown[project] || []).filter(function (one) {
+      var teams = one.teams || [];
+      var applies = !teams.length || teams.some(function (name) {
+        var said = (name || "").trim().toLowerCase();
+
+        return said === "all" || said === team.toLowerCase();
+      });
+      var key = one.text.toLowerCase();
+
+      if (!applies || seen[key]) { return false; }
+
+      seen[key] = true;
+
+      return true;
+    }).map(function (one) { return one.text; });
+  }
+
+  // Drawn only when what it would show changes, so a tick somebody has just
+  // taken off is not put back by the next read of the choices.
+  function drawStanding() {
+    var box = document.getElementById("start-standing");
+    var list = document.getElementById("start-standing-list");
+
+    if (!box || !list) { return; }
+
+    var project = document.getElementById("start-project").value;
+    var team = document.getElementById("start-team").value;
+    var applying = project && team ? standingFor(project, team) : [];
+    var shape = project + "|" + team + "|" + applying.join("|");
+
+    if (list.getAttribute("data-shape") === shape) { return; }
+
+    list.setAttribute("data-shape", shape);
+    list.textContent = "";
+    box.hidden = applying.length === 0;
+
+    applying.forEach(function (text) {
+      var label = document.createElement("label");
+      var tick = document.createElement("input");
+
+      label.className = "lk-choice";
+      tick.type = "checkbox";
+      tick.value = text;
+      tick.checked = !standingUnticked[project + "|" + text];
+      tick.addEventListener("change", function () {
+        if (tick.checked) {
+          delete standingUnticked[project + "|" + text];
+        } else {
+          standingUnticked[project + "|" + text] = true;
+        }
+      });
+
+      label.appendChild(tick);
+      label.appendChild(document.createTextNode(text));
+      list.appendChild(label);
+    });
+  }
+
+  // What the form would hold the run to from the project, and what it would leave out.
+  function standingChosen() {
+    var held = [];
+    var dropped = [];
+    var box = document.getElementById("start-standing");
+
+    if (!box || box.hidden) { return { held: held, dropped: dropped }; }
+
+    box.querySelectorAll("input[type=checkbox]").forEach(function (tick) {
+      (tick.checked ? held : dropped).push(tick.value);
+    });
+
+    return { held: held, dropped: dropped };
   }
 
   function fillTeams(teams) {
@@ -3125,6 +3237,7 @@
       box.hidden = true;
       box.textContent = "";
       aboutDefaults(null);
+      drawStanding();
 
       return;
     }
@@ -3135,6 +3248,7 @@
       + (team.trouble ? " Something is wrong with it: " + team.trouble : "");
 
     aboutDefaults(team);
+    drawStanding();
   }
 
   /*
@@ -3251,6 +3365,10 @@
 
     if (picked) { picked.addEventListener("change", aboutTeam); }
 
+    var where = document.getElementById("start-project");
+
+    if (where) { where.addEventListener("change", drawStanding); }
+
     var go = document.getElementById("start");
 
     go.addEventListener("click", function () {
@@ -3273,6 +3391,7 @@
       var take = document.getElementById("start-take").value.trim();
       var chosen = teamsKnown.filter(function (t) { return t.name === team; })[0];
       var defaults = chosen && chosen.doneWhen ? chosen.doneWhen : [];
+      var standing = standingChosen();
 
       if (!team || !goal) {
         announce("A run needs a team and something to do.");
@@ -3301,7 +3420,15 @@
           : defaults.length
             ? "\n\nNone of your own, so it is held to the team's " + defaults.length + ":\n- "
               + defaults.join("\n- ")
-            : "\n\nNo criteria, so it is done when the lead says so.")
+            : standing.held.length
+              ? "\n\nNone of your own, so the lead proposes some."
+              : "\n\nNo criteria, so it is done when the lead says so.")
+        + (standing.held.length
+          ? "\n\nAnd the project's " + standing.held.length + ":\n- " + standing.held.join("\n- ")
+          : "")
+        + (standing.dropped.length
+          ? "\n\nLeft out for this run:\n- " + standing.dropped.join("\n- ")
+          : "")
         + (take ? "\n\nThe lead's recommendation is taken after " + take + " with no answer." : ""),
         "Start it").then(function (yes) {
         if (!yes) { return; }
@@ -3321,7 +3448,8 @@
             criteria: criteria.length ? criteria : null,
             model: model || null,
             agent: agent || null,
-            takeRecommendationAfter: take || null
+            takeRecommendationAfter: take || null,
+            dropProjectDoneWhen: standing.dropped.length ? standing.dropped : null
           })
         })
           .then(function (answer) {
@@ -14074,6 +14202,17 @@
       var said = document.createElement("p");
 
       said.textContent = one.criterion;
+
+      // Marked, because it was set once for every run on the project and
+      // nobody asked for it on this one.
+      if (one.source === "project") {
+        var whose = document.createElement("span");
+
+        whose.className = "lk-optional";
+        whose.textContent = " (project)";
+        said.appendChild(whose);
+      }
+
       li.appendChild(said);
 
       var verdict = document.createElement("span");
@@ -14473,6 +14612,10 @@
       document.getElementById("start-project").value = run.project || "";
       document.getElementById("start-rounds").value = run.roundLimit || "";
       document.getElementById("start-autonomy").value = run.autonomy || "";
+
+      // Set by hand rather than chosen, so nothing raised the change that
+      // redraws what follows from the team and the project.
+      aboutTeam();
 
       var form = document.querySelector(".start");
 

@@ -53,6 +53,10 @@ public sealed record TriggerRequest(string Team, string Goal, string? Project = 
 /// A task on the project's list the run is for, as <c>team run --task</c> takes
 /// it, or null for a run of its own.
 /// </param>
+/// <param name="DropProjectDoneWhen">
+/// The project's standing criteria somebody unticked for this run, in the
+/// project's own words, as <c>team run --drop-project-done-when</c> takes them.
+/// </param>
 /// <remarks>
 /// <para>
 /// Nothing here is checked against anything. Whether that team exists, whether
@@ -79,7 +83,8 @@ public sealed record StartRequest(
     string? Agent = null,
     string? TakeRecommendationAfter = null,
     string? Budget = null,
-    string? Task = null);
+    string? Task = null,
+    IReadOnlyList<string>? DropProjectDoneWhen = null);
 
 /// <summary>A team the page asked be written.</summary>
 /// <param name="Name">What to call it. Lowercase and hyphenated, as the built-ins are.</param>
@@ -230,11 +235,22 @@ public sealed record ChoosableTeam(
 /// refused by the launcher with its own sentence - the same division of labour
 /// every other field on this form follows.
 /// </param>
+/// <param name="ProjectDoneWhen">
+/// Each project's standing done-when criteria, by slug, with the teams each
+/// applies to, so the form can show which a run would be held to and let
+/// somebody untick one. Which apply is still decided by <c>team run</c>.
+/// </param>
 public sealed record Choosable(
     IReadOnlyList<ChoosableTeam> Teams,
     IReadOnlyList<string> Projects,
     string? Here = null,
-    IReadOnlyList<string>? Agents = null);
+    IReadOnlyList<string>? Agents = null,
+    IReadOnlyDictionary<string, IReadOnlyList<ChoosableDoneWhen>>? ProjectDoneWhen = null);
+
+/// <summary>One of a project's standing criteria, as the start form shows it.</summary>
+/// <param name="Text">The criterion.</param>
+/// <param name="Teams">The teams it applies to; empty or <c>all</c> means every one.</param>
+public sealed record ChoosableDoneWhen(string Text, IReadOnlyList<string> Teams);
 
 /// <summary>Something the page asked be done to a run.</summary>
 /// <param name="Run">Which run, as the journal names it.</param>
