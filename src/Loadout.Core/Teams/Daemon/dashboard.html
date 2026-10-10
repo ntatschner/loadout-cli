@@ -14406,24 +14406,44 @@
       // to disable controls that do not exist yet at this point.
       var countdown = null;
 
-      if (gate.until) {
+      if (gate.until || gate.timer) {
         var left = document.createElement("p");
 
         left.className = "lk-gate-clock";
         left.setAttribute("role", "timer");
         card.appendChild(left);
 
+        // Minutes while there are minutes, seconds once it is close enough
+        // that a minute is the wrong unit to be told in.
+        var spell = function (seconds) {
+          return seconds >= 120 ? Math.floor(seconds / 60) + " minutes" : seconds + " seconds";
+        };
+
         var tick = function () {
+          /*
+            A timed question is answered by the run itself, sooner than the run
+            would give up on it, so that is the moment to count down to. Saying
+            "then the run stops" over a question the timer was about to answer
+            told somebody the opposite of what would happen.
+          */
+          if (gate.timer) {
+            var toTimer = Math.round((new Date(gate.timer.at) - new Date()) / 1000);
+
+            left.textContent = toTimer > 0
+              ? "Waiting for you - " + spell(toTimer) + " left, then "
+                + (gate.timer.does === "think again"
+                  ? "it goes back to the lead to think again."
+                  : "the lead's recommendation" + (gate.recommendation ? " (" + gate.recommendation + ")" : "")
+                    + " is taken.")
+              : "Nobody answered in time, so the run is answering it itself.";
+
+            return;
+          }
+
           var seconds = Math.round((new Date(gate.until) - new Date()) / 1000);
 
           if (seconds > 0) {
-            // Minutes while there are minutes, seconds once it is close
-            // enough that a minute is the wrong unit to be told in.
-            left.textContent = "Waiting for you - "
-              + (seconds >= 120
-                ? Math.floor(seconds / 60) + " minutes left"
-                : seconds + " seconds left")
-              + ", then the run stops.";
+            left.textContent = "Waiting for you - " + spell(seconds) + " left, then the run stops.";
 
             return;
           }

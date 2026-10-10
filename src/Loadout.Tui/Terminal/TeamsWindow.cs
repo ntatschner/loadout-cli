@@ -48,6 +48,8 @@ internal sealed class TeamsWindow : Window
     private readonly Func<CancellationToken, Task<IReadOnlyList<RunSummary>>> _read;
     private readonly bool _live;
     private readonly Func<RunSummary, bool> _agreed;
+    private readonly Func<PendingAsk, string?> _choose;
+    private readonly TimeProvider _time;
 
     private IReadOnlyList<RunSummary> _runs;
     private object? _timer;
@@ -60,6 +62,13 @@ internal sealed class TeamsWindow : Window
     /// asked for.
     /// </summary>
     internal string? Chosen { get; private set; }
+
+    /// <summary>
+    /// What goes after <see cref="Chosen"/>, kept apart from it because an
+    /// answer is prose - "Think again" - and a command path is split on its
+    /// spaces.
+    /// </summary>
+    internal IReadOnlyList<string> ChosenArguments { get; private set; } = [];
 
     /// <param name="runs">What was read before the screen opened.</param>
     /// <param name="read">How to read them again.</param>
@@ -75,12 +84,19 @@ internal sealed class TeamsWindow : Window
     /// What the real dialog does with the answer it gets is not covered by
     /// that - only what this screen does with the answer.
     /// </param>
+    /// <param name="choose">
+    /// How somebody picks an answer to a run's question, or null for none.
+    /// The dialog by default; a test passes its own, for the reason above.
+    /// </param>
+    /// <param name="time">The clock the countdowns are read against.</param>
     internal TeamsWindow(
         IReadOnlyList<RunSummary> runs,
         Func<CancellationToken, Task<IReadOnlyList<RunSummary>>> read,
         bool live,
         IApplication application,
-        Func<RunSummary, bool>? agreed = null)
+        Func<RunSummary, bool>? agreed = null,
+        Func<PendingAsk, string?>? choose = null,
+        TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(runs);
         ArgumentNullException.ThrowIfNull(read);
@@ -91,6 +107,8 @@ internal sealed class TeamsWindow : Window
         _live = live;
         _application = application;
         _agreed = agreed ?? Asks;
+        _choose = choose ?? Chooses;
+        _time = time ?? TimeProvider.System;
 
         Title = "Team runs";
         BorderStyle = LauncherTheme.Lines;
@@ -147,6 +165,7 @@ internal sealed class TeamsWindow : Window
         [
             ("Enter", "log"),
             ("s", "status"),
+            ("a", "answer"),
             ("d", "dashboard"),
             ("r", "forget"),
             ("F5", live ? "read now" : "refresh"),
@@ -182,6 +201,22 @@ internal sealed class TeamsWindow : Window
         // did, so it asks first and takes the same slot the manager screen
         // uses for removing something.
         Hand(Key.R, Command.Cut, Forget);
+
+        // Answering a run's question, through 'team gate' like the dashboard.
+        // Its own slot, and one nothing on a list raises: Edit.
+        this.BindEverywhere(Key.A, Command.Edit);
+
+        AddCommand(Command.Edit, () =>
+        {
+            if (Answer() is { } answer)
+            {
+                Chosen = "team gate";
+                ChosenArguments = answer;
+                _application.RequestStop();
+            }
+
+            return true;
+        });
 
         // Reading again is a read, so it happens here rather than being handed
         // back as a command: closing the screen to refresh it would be a
@@ -233,6 +268,71 @@ internal sealed class TeamsWindow : Window
         Selected() is { Running: false } run && _agreed(run)
             ? $"team runs remove {run.RunId}"
             : null;
+
+    /// <summary>
+    /// The arguments for answering the first question the selected run is
+    /// waiting on, or null where it is waiting on none or nothing was picked.
+    /// </summary>
+    /// <remarks>
+    /// The answer joined to its option, because it is prose that can start
+    /// with a dash, and the parser reads a value like that as an option.
+    /// </remarks>
+    private IReadOnlyList<string>? Answer() =>
+        Selected() is { } run
+        && run.Waiting.FirstOrDefault() is { } gate
+        && _choose(gate) is { Length: > 0 } chosen
+            ? [run.RunId, "--gate", gate.Id, $"--answer={chosen}"]
+            : null;
+
+    /// <summary>Puts a run's question on the screen, with what may be answered.</summary>
+    private string? Chooses(PendingAsk gate)
+    {
+        var choices = gate.Choices;
+
+        using var dialog = new ChoiceDialog(gate.Question, choices, _application);
+
+        _application.Run(dialog);
+
+        return dialog.ChosenIndex is int at && at >= 0 && at < choices.Count ? choices[at] : null;
+    }
+
+    /// <summary>
+    /// How long a question has left, and what happens when it runs out, in
+    /// words.
+    /// </summary>
+    /// <remarks>
+    /// The timer first where there is one: it answers sooner than the run gives
+    /// up, and "then the run stops" over a question the run was about to answer
+    /// itself is the opposite of what happens. Empty for a question written
+    /// before either was carried.
+    /// </remarks>
+    internal static string Countdown(PendingAsk gate, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(gate);
+
+        if (gate.Timer is { } timer)
+        {
+            return timer.At > now
+                ? $"{Left(timer.At - now)} left, then "
+                    + (timer.Does == QuestionTimer.SendsBack
+                        ? "it goes back to the lead to think again."
+                        : $"the lead's recommendation{(gate.Recommendation is { Length: > 0 } r ? $" ({r})" : string.Empty)} is taken.")
+                : "Nobody answered in time, so the run is answering it itself.";
+        }
+
+        if (gate.Until is { } until)
+        {
+            return until > now
+                ? $"{Left(until - now)} left, then the run stops."
+                : "The run stopped waiting for this.";
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>Minutes while there are minutes, seconds once it is close.</summary>
+    private static string Left(TimeSpan span) =>
+        span >= TimeSpan.FromMinutes(2) ? $"{(int)span.TotalMinutes} minutes" : $"{Math.Max(0, (int)span.TotalSeconds)} seconds";
 
     /// <summary>Puts the question on the screen.</summary>
     private bool Asks(RunSummary run)
@@ -432,6 +532,22 @@ internal sealed class TeamsWindow : Window
         if (run.Nodes.Count == 0)
         {
             lines.Add("No node has written anything yet.");
+        }
+
+        // What it is waiting on, with how long is left, above everything else
+        // that follows because it is the thing somebody can act on. Answered
+        // with the 'a' key.
+        foreach (var gate in run.Waiting)
+        {
+            lines.Add(string.Empty);
+            lines.Add($"Waiting for you: {gate.Question}");
+
+            if (Countdown(gate, _time.GetUtcNow()) is { Length: > 0 } counting)
+            {
+                lines.Add($"  {counting}");
+            }
+
+            lines.Add($"  Press a to answer: {string.Join(", ", gate.Choices)}.");
         }
 
         if (run.AtMostRemaining is { } left)

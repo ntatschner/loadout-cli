@@ -1840,6 +1840,10 @@ public sealed class DashboardServerTests : IAsyncLifetime
         text.Should().Contain("id=\"start-take\"");
         text.Should().Contain("takeRecommendationAfter: take || null");
         text.Should().Contain("function aboutDefaults(team)");
+
+        // A timed question counts down to the timer, not to the run giving up.
+        text.Should().Contain("if (gate.timer) {").And.Contain("it goes back to the lead to think again.");
+        text.Should().Contain("id=\"start-on-timeout\"").And.Contain("onTimeout: onTimeout || null");
     }
 
     [Fact]

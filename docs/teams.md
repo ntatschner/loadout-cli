@@ -1952,6 +1952,14 @@ even though its wording changes each time the lead restates them. The journal
 says `sent back to the lead to think again, nobody having answered in 30m`, or
 `took the lead's recommendation, nobody having answered in 30m`.
 
+While it waits, the question says when the timer will act and what it will do,
+and both the dashboard and the launcher's **Team runs** screen count down to
+that: *12 minutes left, then it goes back to the lead to think again*. Without a
+timer they count down to the run giving up instead. That used to be the only
+countdown, and it read "then the run stops" over questions the timer was about
+to answer. In the launcher, **a** answers the selected run's question with
+`team gate`, the same command the dashboard runs.
+
 What it does not do:
 
 - **Only the lead's own questions.** Never a merge, never anything that leaves

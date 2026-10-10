@@ -150,7 +150,18 @@ public sealed class DashboardTeamConsole : ITeamConsole
     }
 
     /// <inheritdoc />
-    public async Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default)
+    public Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default) =>
+        AskingAsync(question, null, ct);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The timer goes in the question's file, where the page and the launcher
+    /// read it, so both can count down to what will actually happen.
+    /// </remarks>
+    public Task<string?> DecideAsync(ReportQuestion question, QuestionTimer timer, CancellationToken ct = default) =>
+        AskingAsync(question, timer, ct);
+
+    private async Task<string?> AskingAsync(ReportQuestion question, QuestionTimer? timer, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(question);
 
@@ -176,7 +187,8 @@ public sealed class DashboardTeamConsole : ITeamConsole
                 // The lead's own options, plus the two it cannot offer: sending
                 // the question back to it, and stopping.
                 Options: [.. question.Options, TeamRunner.ThinkAgain, Stop],
-                Recommendation: question.Recommendation),
+                Recommendation: question.Recommendation,
+                Timer: timer),
             _time,
 
             // The wait for somebody who has to read this before they can answer

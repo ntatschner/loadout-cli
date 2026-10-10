@@ -121,6 +121,21 @@ public sealed record RemedyStanding(
     }
 }
 
+/// <summary>When a run will answer one of its questions itself, and how.</summary>
+/// <param name="At">The moment it answers, if nobody has first.</param>
+/// <param name="Does">
+/// What it does then, in words: <see cref="SendsBack"/> or
+/// <see cref="TakesRecommendation"/>.
+/// </param>
+public sealed record QuestionTimer(DateTimeOffset At, string Does)
+{
+    /// <summary>The question goes back to the lead to think again.</summary>
+    public const string SendsBack = "think again";
+
+    /// <summary>The lead's recommendation is taken.</summary>
+    public const string TakesRecommendation = "take the recommendation";
+}
+
 /// <summary>
 /// Something a run has stopped on, waiting for a person.
 /// </summary>
@@ -148,6 +163,12 @@ public sealed record RemedyStanding(
 /// on a question written before this was carried, which reads as no deadline
 /// shown rather than as no deadline.
 /// </param>
+/// <param name="Timer">
+/// When the run will answer it itself, and how, for a question with a timer.
+/// Earlier than <paramref name="Until"/>, so a page counting down to
+/// <paramref name="Until"/> alone told somebody the run would stop when in
+/// fact it would carry on without them.
+/// </param>
 /// <remarks>
 /// One shape for all three because they are one thing to whoever is answering:
 /// the run has stopped and wants a person. They were separate while only a
@@ -165,7 +186,8 @@ public sealed record PendingAsk(
     string? Asked = null,
     IReadOnlyList<string>? Options = null,
     string? Recommendation = null,
-    DateTimeOffset? Until = null)
+    DateTimeOffset? Until = null,
+    QuestionTimer? Timer = null)
 {
     /// <summary>The question, as a person reads it.</summary>
     /// <remarks>

@@ -1054,6 +1054,7 @@ public sealed class TerminalLauncher : ILauncherTui
     private async Task ShowTeamsAsync(CancellationToken ct)
     {
         string? chosen;
+        IReadOnlyList<string> arguments;
 
         using (IApplication application = Application.Create())
         {
@@ -1068,6 +1069,7 @@ public sealed class TerminalLauncher : ILauncherTui
             await application.RunAsync(window, ct).ConfigureAwait(false);
 
             chosen = window.Chosen;
+            arguments = window.ChosenArguments;
         }
 
         if (chosen is not { Length: > 0 } path)
@@ -1075,7 +1077,7 @@ public sealed class TerminalLauncher : ILauncherTui
             return;
         }
 
-        await _catalogue.RunAsync(path, [], ct).ConfigureAwait(false);
+        await _catalogue.RunAsync(path, arguments, ct).ConfigureAwait(false);
 
         Pause();
     }

@@ -268,6 +268,18 @@ public interface ITeamConsole
     /// <summary>A question the lead could not decide. The option chosen, or null to stop the run.</summary>
     Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default);
 
+    /// <summary>
+    /// The same, for a question the run will answer itself at
+    /// <see cref="QuestionTimer.At"/> if nobody has.
+    /// </summary>
+    /// <remarks>
+    /// So whoever is answering can be told when and what. A console with no
+    /// way to say so asks the plain question, which is what every console did
+    /// before.
+    /// </remarks>
+    Task<string?> DecideAsync(ReportQuestion question, QuestionTimer timer, CancellationToken ct = default) =>
+        DecideAsync(question, ct);
+
     /// <summary>Something happened worth a line.</summary>
     void Note(string line);
 
@@ -391,6 +403,25 @@ internal sealed class OneAtATime(ITeamConsole inner) : ITeamConsole, IDisposable
         try
         {
             return await inner.DecideAsync(question, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _turn.Release();
+        }
+    }
+
+    /// <remarks>
+    /// Forwarded for the reason the others are: the default would ask this
+    /// wrapper's untimed question, and the page would count down to the wrong
+    /// thing.
+    /// </remarks>
+    public async Task<string?> DecideAsync(ReportQuestion question, QuestionTimer timer, CancellationToken ct = default)
+    {
+        await _turn.WaitAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            return await inner.DecideAsync(question, timer, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -4252,7 +4283,15 @@ public sealed partial class TeamRunner : ITeamRunner
 
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        var asking = console.DecideAsync(question, ct);
+        // Said to whoever is answering, so a page counts down to this rather
+        // than to the run giving up, which is later and not what will happen.
+        var asking = console.DecideAsync(
+            question,
+            new QuestionTimer(
+                _time.GetUtcNow() + wait,
+                sentBack ? QuestionTimer.SendsBack : QuestionTimer.TakesRecommendation),
+            ct);
+
         var clock = Task.Delay(wait, _time, stop.Token);
 
         if (await Task.WhenAny(asking, clock).ConfigureAwait(false) == asking)

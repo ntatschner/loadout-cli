@@ -2177,6 +2177,10 @@ public sealed class DashboardServer : IDisposable
             // question with a deadline nobody is shown is one somebody answers
             // too late and is told it worked.
             gate.Until,
+
+            // When the run answers it itself, and how, for a timed question.
+            // Sooner than the wait above, and the one to count down to.
+            timer = gate.Timer is { } timer ? new { at = timer.At, does = timer.Does } : null,
         }),
 
         // Where the spend stands, which the design asked for and the list

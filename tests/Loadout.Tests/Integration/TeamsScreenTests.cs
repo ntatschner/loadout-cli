@@ -393,6 +393,139 @@ public sealed class TeamsScreenTests
         window.Chosen.Should().BeNull();
     }
 
+    // ------------------------------------------------ a run's questions, answered from here
+
+    private sealed class Clock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private static PendingAsk Question(QuestionTimer? timer = null, DateTimeOffset? until = null) => new(
+        "gate-1a2b3c4d", "lead", "the lead", string.Empty, null, Noon.AddMinutes(-2),
+        Kind: "question",
+        Asked: "Proceed with one implementer?",
+        Options: ["yes", "no", "Think again", "Stop the run"],
+        Recommendation: "yes",
+        Until: until ?? Noon.AddHours(4),
+        Timer: timer);
+
+    private static TeamsWindow Waiting(
+        PendingAsk gate, Func<PendingAsk, string?>? choose = null)
+    {
+        IReadOnlyList<RunSummary> runs =
+        [
+            Run("20260916-1200-aaaa", "bug-hunt", finished: null) with { Gates = [gate] },
+            .. Runs().Skip(1),
+        ];
+
+        using IApplication app = Application.Create();
+
+        app.Init(DriverRegistry.Names.ANSI);
+        app.Screen = new Rectangle(0, 0, Width, Height);
+
+        var window = new TeamsWindow(runs, Read(runs), live: false, app, choose: choose, time: new Clock(Noon));
+
+        app.Begin(window);
+        app.LayoutAndDraw();
+
+        return window;
+    }
+
+    private static string Detail(TeamsWindow window) =>
+        (Named<Label>(window, "teams-detail") ?? throw new InvalidOperationException("No detail pane.")).Text;
+
+    /// <remarks>
+    /// The answer is handed back apart from the command, joined to its option:
+    /// it is prose, "Think again" has a space in it, and a command path is
+    /// split on its spaces.
+    /// </remarks>
+    [Fact]
+    public void A_question_is_answered_with_the_command_the_dashboard_would_run()
+    {
+        PendingAsk? asked = null;
+
+        using var window = Waiting(Question(), gate =>
+        {
+            asked = gate;
+
+            return "Think again";
+        });
+
+        List(window).SelectedItem = 0;
+
+        Press(window, "a");
+
+        asked!.Id.Should().Be("gate-1a2b3c4d");
+        window.Chosen.Should().Be("team gate");
+        window.ChosenArguments.Should().Equal(
+            "20260916-1200-aaaa", "--gate", "gate-1a2b3c4d", "--answer=Think again");
+    }
+
+    [Fact]
+    public void Answering_nothing_asks_for_nothing()
+    {
+        using var window = Waiting(Question(), _ => null);
+
+        List(window).SelectedItem = 0;
+
+        Press(window, "a");
+
+        window.Chosen.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_run_waiting_on_nothing_offers_nothing_to_answer()
+    {
+        var asked = 0;
+
+        using var window = Waiting(Question(), _ =>
+        {
+            asked += 1;
+
+            return "yes";
+        });
+
+        // The second run is waiting on nothing.
+        List(window).SelectedItem = 1;
+
+        Press(window, "a");
+
+        asked.Should().Be(0);
+        window.Chosen.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_timed_question_counts_down_to_what_the_timer_will_do()
+    {
+        using var window = Waiting(Question(new QuestionTimer(Noon.AddMinutes(25), QuestionTimer.SendsBack)));
+
+        List(window).SelectedItem = 0;
+
+        var detail = Detail(window);
+
+        detail.Should().Contain("Waiting for you: Proceed with one implementer?");
+        detail.Should().Contain("25 minutes left, then it goes back to the lead to think again.");
+        detail.Should().NotContain("then the run stops", "the run would answer it long before it gave up");
+        detail.Should().Contain("Press a to answer: yes, no, Think again, Stop the run.");
+    }
+
+    [Theory]
+    [InlineData(QuestionTimer.TakesRecommendation, 25, "25 minutes left, then the lead's recommendation (yes) is taken.")]
+    [InlineData(QuestionTimer.SendsBack, 1, "60 seconds left, then it goes back to the lead to think again.")]
+    [InlineData(QuestionTimer.SendsBack, -1, "Nobody answered in time, so the run is answering it itself.")]
+    public void What_a_countdown_says(string does, int minutes, string expected)
+    {
+        TeamsWindow.Countdown(Question(new QuestionTimer(Noon.AddMinutes(minutes), does)), Noon)
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void An_untimed_question_counts_down_to_the_run_giving_up()
+    {
+        TeamsWindow.Countdown(Question(until: Noon.AddMinutes(90)), Noon)
+            .Should().Be("90 minutes left, then the run stops.");
+    }
+
     /// <summary>Presses a key the way the screen would receive it.</summary>
     private static void Press(TeamsWindow window, string key)
     {
@@ -402,6 +535,7 @@ public sealed class TeamsScreenTests
             "s" => Key.S,
             "d" => Key.D,
             "r" => Key.R,
+            "a" => Key.A,
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, "Not a key this screen binds."),
         };
 

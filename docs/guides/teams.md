@@ -178,9 +178,13 @@ can't disagree.
 loadout team gate
 ```
 
-You should see what the run is waiting on and the command to answer it. To
-steer the lead without interrupting a node, send a message; it's read at the
-start of the lead's next round:
+You should see what the run is waiting on and the command to answer it. In the
+launcher's **Team runs** screen the selected run shows the same question with
+how long is left, and **a** answers it. Where the question has a timer, the
+countdown says what happens when it runs out: it goes back to the lead, or the
+lead's recommendation is taken. The dashboard says the same. To steer the lead
+without interrupting a node, send a message; it's read at the start of the
+lead's next round:
 
 ```sh
 loadout team message 20260918-1436-ed59 --message "leave the tests alone"

@@ -2034,6 +2034,29 @@ public sealed class TeamRunnerTests : IDisposable
             .Should().ContainSingle();
     }
 
+    /// <remarks>
+    /// So whoever is answering is told what will happen, which was the run
+    /// stopping when in fact it would carry on without them.
+    /// </remarks>
+    [Theory]
+    [InlineData(null, QuestionTimer.SendsBack)]
+    [InlineData(TeamTimeout.Recommend, QuestionTimer.TakesRecommendation)]
+    public async Task A_timed_question_is_asked_saying_when_and_what_the_timer_will_do(string? policy, string does)
+    {
+        _console.AnswersInPlace = true;
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.01m), Result(LeadDone(), 0.02m));
+
+        var before = DateTimeOffset.UtcNow;
+
+        await RunAsync(takeRecommendationAfter: TimeSpan.FromMinutes(30), onTimeout: policy);
+
+        var timer = _console.Timers.Should().ContainSingle().Subject;
+
+        timer.Does.Should().Be(does);
+        timer.At.Should().BeCloseTo(before.AddMinutes(30), TimeSpan.FromMinutes(1));
+    }
+
     [Theory]
     [InlineData(TeamTimeout.Recommend, false, false)]
     [InlineData(TeamTimeout.Recommend, true, false)]
@@ -3636,6 +3659,16 @@ public sealed class TeamRunnerTests : IDisposable
 
         public Task<string?> DecideAsync(ReportQuestion question, CancellationToken ct = default) =>
             Task.FromResult(Decide(question));
+
+        /// <summary>Every timer a question was asked with, in order.</summary>
+        public List<QuestionTimer> Timers { get; } = [];
+
+        public Task<string?> DecideAsync(ReportQuestion question, QuestionTimer timer, CancellationToken ct = default)
+        {
+            Timers.Add(timer);
+
+            return Task.FromResult(Decide(question));
+        }
 
         public void Note(string line) => Notes.Add(line);
     }
