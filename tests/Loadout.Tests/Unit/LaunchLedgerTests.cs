@@ -107,6 +107,39 @@ public sealed class LaunchLedgerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_launch_linked_to_a_task_records_which()
+    {
+        await _ledger.RecordStartAsync(Launch("Ship the thing") with { TaskId = "ship-it" });
+
+        var record = (await _ledger.ReadAsync(DateTimeOffset.MinValue)).Value!
+            .Should().ContainSingle().Subject;
+
+        // By id, because a title is somebody's words and can match two tasks
+        // or none once either is edited.
+        record.TaskId.Should().Be("ship-it");
+        record.Task.Should().Be("Ship the thing");
+    }
+
+    [Fact]
+    public async Task A_line_written_before_tasks_could_be_linked_still_reads()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_ledger.Path)!);
+
+        // The shape every line had before the link existed: no TaskId at all.
+        await File.WriteAllTextAsync(
+            _ledger.Path,
+            "{\"Kind\":\"start\",\"Id\":\"old\",\"When\":\"2026-09-01T09:00:00.0000000+00:00\","
+            + "\"Slug\":\"starstats\",\"Project\":\"StarStats\",\"Agent\":\"claude\",\"Task\":\"an old one\"}"
+            + Environment.NewLine);
+
+        var record = (await _ledger.ReadAsync(DateTimeOffset.MinValue)).Value!
+            .Should().ContainSingle().Subject;
+
+        record.Task.Should().Be("an old one");
+        record.TaskId.Should().BeNull();
+    }
+
+    [Fact]
     public async Task An_ending_joins_to_its_start()
     {
         var id = await _ledger.RecordStartAsync(Launch("fix the upload path"));

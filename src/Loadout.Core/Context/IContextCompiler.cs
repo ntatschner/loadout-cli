@@ -67,6 +67,11 @@ public interface IContextCompiler
     /// a project may ask for. Null when it is not on this machine, in which
     /// case there is no code to map.
     /// </param>
+    /// <param name="taskId">
+    /// The recorded task this session was started against, or null. Its note
+    /// is written first, under a heading of its own, and left out of the list
+    /// of open tasks so it is not paid for twice.
+    /// </param>
     /// <param name="ct">Cancellation token.</param>
     Task<OperationResult<CompiledContext>> CompileAsync(
         ProjectManifest manifest,
@@ -77,6 +82,7 @@ public interface IContextCompiler
         string? handoffPath = null,
         Models.Instructions.EffectiveInstructions? instructions = null,
         string? repositoryPath = null,
+        string? taskId = null,
         CancellationToken ct = default);
 
     /// <summary>

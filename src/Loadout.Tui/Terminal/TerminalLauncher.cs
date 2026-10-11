@@ -1348,7 +1348,14 @@ public sealed class TerminalLauncher : ILauncherTui
             arguments.AddRange(["--agent", agentName]);
         }
 
-        if (options.Task is { Length: > 0 } task)
+        // A picked task goes by its id alone. The launch takes the title from
+        // the record, so passing it as well would be two answers to one
+        // question that could only ever agree or be wrong.
+        if (options.TaskId is { Length: > 0 } taskId)
+        {
+            arguments.AddRange(["--task-id", taskId]);
+        }
+        else if (options.Task is { Length: > 0 } task)
         {
             arguments.AddRange(["--task", task]);
         }
@@ -1477,7 +1484,9 @@ public sealed class TerminalLauncher : ILauncherTui
         // pick from: being worked on first, then not started, then waiting.
         // Finished and abandoned work is left out — it describes what a session
         // is about to do, and those two no longer describe anything.
-        var declared = new List<string>();
+        // Every one, not the first eight: the sheet's list scrolls, and a task
+        // left off it is one that can only be reached by typing its title.
+        var declared = new List<DeclaredTask>();
         var tasks = await _tasks.ListAsync(project.Entry.Slug, ct).ConfigureAwait(false);
 
         if (tasks.Succeeded)
@@ -1492,9 +1501,8 @@ public sealed class TerminalLauncher : ILauncherTui
                     _ => 2,
                 })
                 .ThenByDescending(item => item.DeclaredUtc)
-                .Select(item => item.Title)
-                .Where(title => !string.IsNullOrWhiteSpace(title))
-                .Take(8)
+                .Where(item => !string.IsNullOrWhiteSpace(item.Title))
+                .Select(item => new DeclaredTask(item.Id, item.Title, item.State))
                 .ToList();
         }
 

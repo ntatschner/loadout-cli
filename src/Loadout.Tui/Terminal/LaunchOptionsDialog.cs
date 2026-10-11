@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
+using Loadout.Models.Tasks;
 using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
@@ -23,6 +24,10 @@ namespace Loadout.Tui.Terminal;
 /// Which working tree, by branch or directory name, or null for the main one.
 /// </param>
 /// <param name="IncludeHandoff">Append the most recent handoff to the context.</param>
+/// <param name="TaskId">
+/// The recorded task picked for the session, or null. When set, <paramref name="Task"/>
+/// is that task's title, and the launch is linked to the task by this id.
+/// </param>
 internal sealed record LaunchOptions(
     string? Task = null,
     string? Mode = null,
@@ -31,7 +36,14 @@ internal sealed record LaunchOptions(
     string? Agent = null,
     string? Profile = null,
     string? Worktree = null,
-    bool IncludeHandoff = false);
+    bool IncludeHandoff = false,
+    string? TaskId = null);
+
+/// <summary>A task the project has on record, as the sheet offers it.</summary>
+/// <param name="Id">What <c>--task-id</c> takes.</param>
+/// <param name="Title">What is shown, and what chooses specialists.</param>
+/// <param name="State">Doing, open or blocked; nothing finished is offered.</param>
+internal sealed record DeclaredTask(string Id, string Title, TaskState State);
 
 /// <summary>One thing that can be picked, and what picking it means.</summary>
 /// <param name="Label">What is shown.</param>
@@ -47,7 +59,8 @@ internal sealed record LaunchChoice(string Label, string? Value);
 /// <param name="Profiles">Context profiles the chosen agent can use, the default first.</param>
 /// <param name="Worktrees">Working trees of the repository, the main one first.</param>
 /// <param name="Declared">
-/// What this project has recorded itself as working on, newest first.
+/// What this project has recorded itself as working on: doing, then open,
+/// then blocked, newest first within each.
 /// <para>
 /// The task line decides which specialists a session is given, and it was
 /// filled in twice in a hundred and twenty-two launches: a blank field asking
@@ -59,7 +72,7 @@ internal sealed record LaunchChoice(string Label, string? Value);
 internal sealed record LaunchChoices(
     IReadOnlyList<LaunchChoice> Profiles,
     IReadOnlyList<LaunchChoice> Worktrees,
-    IReadOnlyList<string> Declared)
+    IReadOnlyList<DeclaredTask> Declared)
 {
     /// <summary>A project with nothing to choose: one profile, one working tree.</summary>
     internal static readonly LaunchChoices None = new(
@@ -148,8 +161,12 @@ internal sealed class LaunchOptionsDialog : Window
     private readonly TimeSpan _previewDelay;
     private readonly IApplication _application;
 
+    private const string NoTask = "No task";
+
+    private const string Other = "Other… (Enter to type a task of your own)";
+
+    private readonly ListView _taskList;
     private readonly TextField _task;
-    private readonly Label _alsoDeclared;
     private readonly ListView _agent;
     private readonly ListView _mode;
     private readonly ListView _profile;
@@ -160,6 +177,15 @@ internal sealed class LaunchOptionsDialog : Window
     private readonly ListView _preview;
 
     private LaunchChoices _choices = LaunchChoices.None;
+
+    /// <summary>
+    /// Whether somebody has moved the task list. Until they have, choices that
+    /// arrive late may set its default; once they have, nothing overrides it.
+    /// </summary>
+    private bool _taskChosen;
+
+    /// <summary>Set while the sheet moves the task list itself, so that is not mistaken for a choice.</summary>
+    private bool _offeringTasks;
 
     /// <summary>Cancels a preview or a choice read that is no longer wanted.</summary>
     private CancellationTokenSource? _pending;
@@ -220,21 +246,19 @@ internal sealed class LaunchOptionsDialog : Window
 
         Add(new Label { X = 1, Y = 0, Text = "What are you about to do?" });
 
-        _task = new TextField { X = 1, Y = 1, Width = Dim.Fill(1) };
+        // A list of what the project has on record rather than a blank line.
+        // The blank line was filled in twice in a hundred and twenty-two
+        // launches, and when a recorded task was put in it as editable text it
+        // still could not say which task the session was for — only that its
+        // words matched one. Picking from the record links the session to it.
+        _taskList = new ListView { X = 1, Y = 1, Width = Dim.Fill(1), Height = 3 };
 
-        Add(new Label
-        {
-            X = 1,
-            Y = 2,
-            Text = "This chooses the specialists the agent is given.",
-        });
+        // Where the list was, shown only for Other…, so a task that is not on
+        // record can still be typed without a row of the sheet spent on it.
+        _task = new TextField { X = 1, Y = 1, Width = Dim.Fill(1), Visible = false };
 
-        // Says what else the project has on record without spending a picker
-        // on it. Empty for a project that has declared nothing, which is most
-        // of them.
-        _alsoDeclared = new Label { X = 1, Y = 3, Width = Dim.Fill(1), Text = string.Empty };
-
-        Add(_alsoDeclared);
+        Add(_taskList);
+        ShowTasks();
 
         // Four pickers side by side, each a short list, so the whole sheet
         // fits an 80x24 terminal with the preview still visible beneath.
@@ -276,27 +300,69 @@ internal sealed class LaunchOptionsDialog : Window
         previewFrame.Add(_preview);
 
         var launch = new Button { X = 1, Y = Pos.AnchorEnd(1), Text = "_Launch", IsDefault = true };
-        var cancel = new Button { X = Pos.Right(launch) + 2, Y = Pos.AnchorEnd(1), Text = "Cance_l" };
+        var quick = new Button { X = Pos.Right(launch) + 2, Y = Pos.AnchorEnd(1), Text = "_Quick session" };
+        var cancel = new Button { X = Pos.Right(quick) + 2, Y = Pos.AnchorEnd(1), Text = "Cance_l" };
 
         launch.Accepting += (_, e) => { e.Handled = true; Accept(); };
+        quick.Accepting += (_, e) => { e.Handled = true; Quick(); };
         cancel.Accepting += (_, e) => { e.Handled = true; Dismiss(); };
+
+        // Enter on a task launches, as Enter on the old text field did: the
+        // one question that needed somebody has been answered. Enter on
+        // Other… opens the field instead. Accepting rather than Activating on
+        // purpose: a click raises Activate, and a click on a list is choosing
+        // a row, not starting a session.
+        _taskList.Accepting += (_, e) =>
+        {
+            e.Handled = true;
+
+            if (IsOther(_taskList.SelectedItem))
+            {
+                ShowField();
+            }
+            else
+            {
+                Accept();
+            }
+        };
 
         // Enter in the text field starts the launch rather than doing nothing,
         // because somebody who has just typed what they are about to do has
         // finished answering the only question that needed them.
         _task.Accepting += (_, e) => { e.Handled = true; Accept(); };
 
+        // Esc in an empty field goes back to the list rather than closing the
+        // sheet: somebody who opened Other… and thought better of it has not
+        // decided against launching.
+        _task.KeyDown += (_, key) =>
+        {
+            if (key == Key.Esc && string.IsNullOrWhiteSpace(_task.Text))
+            {
+                key.Handled = true;
+                ShowList();
+            }
+        };
+
         this.Bind(Key.Esc, Command.Quit);
         AddCommand(Command.Quit, () => { Dismiss(); return true; });
 
-        Add(_task, _offline, _noSync, _handoff, previewFrame, launch, cancel);
+        Add(_task, _offline, _noSync, _handoff, previewFrame, launch, quick, cancel);
 
         _task.TextChanged += (_, _) => PreviewSoon();
+        _taskList.ValueChanged += (_, _) =>
+        {
+            if (!_offeringTasks)
+            {
+                _taskChosen = true;
+            }
+
+            PreviewSoon();
+        };
         _agent.ValueChanged += (_, _) => { ReadChoices(); PreviewNow(); };
         _mode.ValueChanged += (_, _) => PreviewNow();
         _profile.ValueChanged += (_, _) => PreviewNow();
 
-        _task.SetFocus();
+        _taskList.SetFocus();
 
         ReadChoices();
         PreviewNow();
@@ -315,14 +381,58 @@ internal sealed class LaunchOptionsDialog : Window
             ? Modes[index]
             : null;
 
+    /// <summary>The recorded task picked, or null for no task or one typed in.</summary>
+    private DeclaredTask? CurrentDeclared =>
+        _taskList.SelectedItem is int index && index > 0 && index <= _choices.Declared.Count
+            ? _choices.Declared[index - 1]
+            : null;
+
     private string? CurrentTask
     {
         get
         {
-            var typed = _task.Text?.Trim();
+            if (CurrentDeclared is { } declared)
+            {
+                return declared.Title;
+            }
+
+            // Only what was typed under Other…, and only while the field is
+            // up: text left in a field somebody backed out of is not a task.
+            var typed = _task.Visible ? _task.Text?.Trim() : null;
 
             return string.IsNullOrWhiteSpace(typed) ? null : typed;
         }
+    }
+
+    private bool IsOther(int? index) => index == _choices.Declared.Count + 1;
+
+    /// <summary>The rows of the task list: no task, what is on record, then Other….</summary>
+    private void ShowTasks()
+    {
+        var rows = new List<string> { NoTask };
+
+        rows.AddRange(_choices.Declared.Select(
+            task => $"{task.State.ToString().ToLowerInvariant(),-8} {task.Title}"));
+
+        rows.Add(Other);
+
+        _taskList.SetSource(new ObservableCollection<string>(rows));
+    }
+
+    private void ShowField()
+    {
+        _taskList.Visible = false;
+        _task.Visible = true;
+        _task.SetFocus();
+        PreviewSoon();
+    }
+
+    private void ShowList()
+    {
+        _task.Visible = false;
+        _taskList.Visible = true;
+        _taskList.SetFocus();
+        PreviewSoon();
     }
 
     private string? CurrentProfile => ValueOf(_profile, _choices.Profiles);
@@ -424,32 +534,66 @@ internal sealed class LaunchOptionsDialog : Window
 
     private void Offer(LaunchChoices choices)
     {
+        // Choices are read again whenever the agent changes, so the task row
+        // somebody chose is found again by id rather than by where it was, and
+        // the default is only ever set before anybody has chosen. Read before
+        // the choices are replaced, while the index still means the old list.
+        var picked = CurrentDeclared?.Id;
+        var other = IsOther(_taskList.SelectedItem);
+
         _choices = choices;
 
-        _profile.SetSource(new ObservableCollection<string>(Labels(choices.Profiles)));
-        _profile.SelectedItem = 0;
+        _offeringTasks = true;
 
-        _worktree.SetSource(new ObservableCollection<string>(Labels(choices.Worktrees)));
-        _worktree.SelectedItem = 0;
-
-        // Offered, never imposed: the field is filled only when it is empty,
-        // so a task typed before the choices arrived is never overwritten, and
-        // what lands there is editable text rather than a selection. Correcting
-        // a line beats composing one, which is the whole reason the field was
-        // left blank in a hundred and twenty launches out of a hundred and
-        // twenty-two.
-        if (choices.Declared.Count > 0 && string.IsNullOrWhiteSpace(_task.Text))
+        try
         {
-            _task.Text = choices.Declared[0];
+            _profile.SetSource(new ObservableCollection<string>(Labels(choices.Profiles)));
+            _profile.SelectedItem = 0;
 
-            if (choices.Declared.Count > 1)
-            {
-                _alsoDeclared.Text =
-                    $"also recorded: {string.Join("; ", choices.Declared.Skip(1).Take(2))}";
-            }
+            _worktree.SetSource(new ObservableCollection<string>(Labels(choices.Worktrees)));
+            _worktree.SelectedItem = 0;
 
-            PreviewSoon();
+            ShowTasks();
+
+            _taskList.SelectedItem = !_taskChosen
+                ? DefaultTask(choices.Declared)
+                : other
+                    ? choices.Declared.Count + 1
+                    : picked is null
+                        ? 0
+                        : IndexOf(choices.Declared, picked);
         }
+        finally
+        {
+            _offeringTasks = false;
+        }
+
+        PreviewSoon();
+    }
+
+    /// <summary>
+    /// The row the sheet opens on: the newest task being worked on, or no task
+    /// when nothing is.
+    /// </summary>
+    /// <remarks>
+    /// Not the newest open one. Something being worked on is what a session is
+    /// most likely for; something merely open is a guess, and a guess that
+    /// chooses the specialists is one nobody sees being made.
+    /// </remarks>
+    private static int DefaultTask(IReadOnlyList<DeclaredTask> declared) =>
+        declared.Count > 0 && declared[0].State == TaskState.Doing ? 1 : 0;
+
+    private static int IndexOf(IReadOnlyList<DeclaredTask> declared, string id)
+    {
+        for (var i = 0; i < declared.Count; i++)
+        {
+            if (string.Equals(declared[i].Id, id, StringComparison.Ordinal))
+            {
+                return i + 1;
+            }
+        }
+
+        return 0;
     }
 
     /// <summary>Re-resolves once typing has paused.</summary>
@@ -629,8 +773,24 @@ internal sealed class LaunchOptionsDialog : Window
             CurrentAgent,
             CurrentProfile,
             CurrentWorktree,
-            _handoff.Value == CheckState.Checked);
+            _handoff.Value == CheckState.Checked,
+            CurrentDeclared?.Id);
 
+        Stop();
+    }
+
+    /// <summary>
+    /// Launches at once with no task and nothing else changed: the defaults,
+    /// whatever the sheet has been moved to.
+    /// </summary>
+    /// <remarks>
+    /// For the session that is a question rather than a piece of work. Without
+    /// it, getting one meant scrolling to No task first, now that the sheet
+    /// opens on whatever is being worked on.
+    /// </remarks>
+    private void Quick()
+    {
+        Chosen = new LaunchOptions();
         Stop();
     }
 

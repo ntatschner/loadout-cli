@@ -206,7 +206,9 @@ goes through the launcher rather than straight to the agent, so the workspace
 syncs and the context recompiles instead of just reopening a bare transcript.
 The task, mode, profile and worktree the session launched with are read back
 from the launch ledger and carried over, so it reopens with the specialists it
-had. `--task` and `--mode` replace them when the work has changed shape. The
+had. `--task` and `--mode` replace them when the work has changed shape, and
+`--task-id` links the resumed session to a recorded task, as it does on
+`loadout launch`. The
 interactive launcher offers the same picker per project.
 
 Neither storage format is a published contract, so both readers are best-effort

@@ -70,8 +70,9 @@ two of them decide much:
 twice then gives up" is a task; "work on the API" isn't, and won't reach
 anything the file extensions wouldn't have reached anyway. It's the field that
 does the most and the one nobody fills in — here it was typed twice in 122
-launches — so if the project has declared what it's working on, the sheet fills
-it in for you and you correct the line rather than composing one.
+launches — so the sheet lists what the project has declared it's working on and
+you pick one, which also links the session to that task. *Other…* lets you type
+one that isn't recorded, and **Quick session** skips the question altogether.
 
 **The mode** is the posture for the whole session: `implement`, `investigate`,
 `review` or `advise`. It is never guessed from what you typed, and it defaults

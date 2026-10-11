@@ -25,15 +25,21 @@ costs you.
 You should see four choices — agent, task, mode, profile or worktree — and a
 panel headed *This session would load*.
 
-### 2. Check the task line
+### 2. Pick the task
 
-If the project has recorded what it's working on, the task line is already
-filled in, and up to two other recorded tasks are named beneath it. That's
-because a blank task line gets skipped: across 122 launches it was typed twice.
-The line is editable text, so correct it rather than starting again. It's only
-filled when it's empty, so anything you typed first is never overwritten.
+The top of the sheet lists the tasks the project has recorded: what's being
+worked on, then what's open, then what's waiting. It opens on the newest one
+you're working on, or on *No task* if there isn't one. A list, because a blank
+line for a sentence gets skipped: across 122 launches it was typed twice.
 
-If it's empty, type your sentence.
+- Pick a recorded task and the session is linked to it. Its title chooses the
+  specialists, and its note is the first thing the agent reads.
+- Pick *No task* for a session about nothing in particular.
+- Pick *Other…* and press Enter to type a task that isn't recorded. Esc on an
+  empty line takes you back to the list.
+
+If you just want a session with the defaults and no task, press **Quick
+session** and skip the rest.
 
 ### 3. Choose the mode
 
@@ -51,7 +57,7 @@ which is the commonest reason a session doesn't behave as somebody expected.
 
 ### 4. Read what the session would load
 
-As you type the task or change the mode, the panel updates. You should see each
+As you pick the task or change the mode, the panel updates. You should see each
 specialist it would load, why each was picked — "task mentions slow", "300 .cs
 files" — and the total cost in tokens against the budget.
 
@@ -70,6 +76,15 @@ Everything on the sheet is a flag:
 ```sh
 loadout starstats --task "the upload retries twice then gives up" --mode investigate
 ```
+
+A recorded task goes by its id, which `loadout task list` shows:
+
+```sh
+loadout starstats --task-id upload-retries --mode investigate
+```
+
+An id the project doesn't have, or one that's done or dropped, stops the launch
+rather than starting a session about nothing.
 
 To see the whole launch described without starting anything:
 

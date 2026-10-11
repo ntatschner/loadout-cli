@@ -239,6 +239,58 @@ public sealed class LaunchPipelineTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_launch_for_a_recorded_task_takes_its_title_and_records_the_link()
+    {
+        await _tasks.DeclareAsync(
+            ProjectSlug, "ship-it", Loadout.Models.Tasks.TaskState.Open, "nigel", title: "Ship the thing");
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, TaskId: "ship-it"));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.Plan!.Task.Should().Be("Ship the thing", "the title chooses specialists, as a typed task does");
+        result.Value.Plan.TaskId.Should().Be("ship-it");
+
+        var record = (await _ledger.ReadAsync(DateTimeOffset.MinValue)).Value!
+            .Should().ContainSingle().Subject;
+
+        record.TaskId.Should().Be("ship-it");
+        record.Task.Should().Be("Ship the thing");
+    }
+
+    [Fact]
+    public async Task A_task_given_in_words_as_well_chooses_the_specialists_and_the_link_stands()
+    {
+        await _tasks.DeclareAsync(
+            ProjectSlug, "ship-it", Loadout.Models.Tasks.TaskState.Doing, "nigel", title: "Ship the thing");
+
+        var result = await _launcher.LaunchAsync(new LaunchRequest(
+            ProjectSlug, "probe", Offline: true, DryRun: true, Task: "just the changelog", TaskId: "ship-it"));
+
+        result.Succeeded.Should().BeTrue(result.Error);
+        result.Value!.Plan!.Task.Should().Be("just the changelog");
+        result.Value.Plan.TaskId.Should().Be("ship-it");
+    }
+
+    [Theory]
+    [InlineData("no-such-task", "has no task with the id")]
+    [InlineData("finished", "is done")]
+    public async Task A_task_id_the_project_cannot_be_working_on_stops_the_launch(string id, string said)
+    {
+        await _tasks.DeclareAsync(
+            ProjectSlug, "finished", Loadout.Models.Tasks.TaskState.Done, "nigel", title: "Already shipped");
+
+        var result = await _launcher.LaunchAsync(
+            new LaunchRequest(ProjectSlug, "probe", Offline: true, DryRun: true, TaskId: id));
+
+        // Refused rather than launched without the link: the session would
+        // otherwise be about nothing while somebody believed it was about this.
+        result.Failed.Should().BeTrue();
+        result.ExitCode.Should().Be(Loadout.Models.ExitCode.InvalidArguments);
+        result.Error.Should().Contain(said);
+    }
+
+    [Fact]
     public async Task A_project_that_turns_off_sync_on_launch_is_not_synchronised()
     {
         var manifest = (await _workspace.ReadProjectAsync(ProjectSlug)).Value!;

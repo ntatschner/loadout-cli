@@ -59,7 +59,7 @@ public sealed class TaskContextTests : IDisposable
         DeclaredUtc = new DateTimeOffset(2026, 9, 8, 12, 0, 0, TimeSpan.Zero),
     };
 
-    private async Task<string> CompileAsync(bool tasks, StubTasks? service)
+    private async Task<string> CompileAsync(bool tasks, StubTasks? service, string? taskId = null)
     {
         var compiler = new ContextCompiler(
             new NoOpFilePermissions(),
@@ -75,7 +75,7 @@ public sealed class TaskContextTests : IDisposable
             Context = { Tasks = tasks },
         };
 
-        var result = await compiler.CompileAsync(manifest, _workspace, _runtime, "claude");
+        var result = await compiler.CompileAsync(manifest, _workspace, _runtime, "claude", taskId: taskId);
 
         result.Failed.Should().BeFalse(result.Error);
 
@@ -182,6 +182,70 @@ public sealed class TaskContextTests : IDisposable
 
         text.Should().Contain("waiting");
         text.Should().Contain("blocked");
+    }
+
+    [Fact]
+    public async Task The_task_a_session_was_started_for_comes_first_and_only_once()
+    {
+        var service = new StubTasks([
+            Task("ship-it", TaskState.Open, "Ship the thing", "Tag it, then watch the release run."),
+            Task("other-work", TaskState.Doing, "Something else entirely"),
+        ]);
+
+        var text = await CompileAsync(tasks: true, service, taskId: "ship-it");
+
+        // Said outright, under its own heading, ahead of the list: a session
+        // left to work out its task from where it sits in a list might not.
+        var own = text.IndexOf("## This session's task", StringComparison.Ordinal);
+        var rest = text.IndexOf("## Open tasks", StringComparison.Ordinal);
+
+        own.Should().BeGreaterThan(-1);
+        rest.Should().BeGreaterThan(own);
+        text[own..rest].Should().Contain("ship-it").And.Contain("Tag it, then watch the release run.");
+
+        // And not again in the list, so the note is paid for once.
+        text[rest..].Should().NotContain("ship-it");
+        text[rest..].Should().Contain("other-work");
+
+        CountOf(text, "Tag it, then watch the release run.").Should().Be(1);
+    }
+
+    [Fact]
+    public async Task The_session_task_is_carried_even_where_the_project_lists_none()
+    {
+        var service = new StubTasks([Task("ship-it", TaskState.Open, "Ship the thing")]);
+
+        var text = await CompileAsync(tasks: false, service, taskId: "ship-it");
+
+        // Somebody picked it for this launch, which is a stronger reason than
+        // a project setting about the rest of the record.
+        text.Should().Contain("## This session's task").And.Contain("Ship the thing");
+        text.Should().NotContain("## Open tasks");
+    }
+
+    [Fact]
+    public async Task A_session_with_no_task_gets_no_heading_for_one()
+    {
+        var service = new StubTasks([Task("ship-it", TaskState.Open, "Ship the thing")]);
+
+        var text = await CompileAsync(tasks: true, service);
+
+        text.Should().NotContain("This session's task");
+        text.Should().Contain("## Open tasks").And.Contain("ship-it");
+    }
+
+    private static int CountOf(string text, string part)
+    {
+        var count = 0;
+
+        for (var at = text.IndexOf(part, StringComparison.Ordinal);
+            at >= 0;
+            at = text.IndexOf(part, at + part.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     /// <summary>A task record that answers at once and records being asked.</summary>

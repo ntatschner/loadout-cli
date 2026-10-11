@@ -54,6 +54,10 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
         [Description("What you are about to do. Chooses the specialists the agent is given.")]
         public string? Task { get; init; }
 
+        [CommandOption("--task-id <ID>")]
+        [Description("A recorded task this session is for. Its title is the task unless --task is given, and the session is linked to it.")]
+        public string? TaskId { get; init; }
+
         [CommandOption("--mode <MODE>")]
         [Description("Posture: advise, investigate, implement or review.")]
         public string? Mode { get; init; }
@@ -86,7 +90,8 @@ public sealed class LaunchCommand : AsyncCommand<LaunchCommand.Settings>
             Specialists: settings.Specialist,
             ExcludedSpecialists: settings.Without,
             Mode: settings.Mode,
-            DryRun: settings.DryRun);
+            DryRun: settings.DryRun,
+            TaskId: settings.TaskId);
 
         var result = await _launcher.LaunchAsync(request, cancellationToken).ConfigureAwait(false);
         if (result.Failed)
@@ -148,6 +153,10 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
         [Description("What you are about to do. Chooses the specialists the agent is given.")]
         public string? Task { get; init; }
 
+        [CommandOption("--task-id <ID>")]
+        [Description("A recorded task this session is for. Its title is the task unless --task is given, and the session is linked to it.")]
+        public string? TaskId { get; init; }
+
         [CommandOption("--mode <MODE>")]
         [Description("Posture: advise, investigate, implement or review.")]
         public string? Mode { get; init; }
@@ -191,7 +200,8 @@ public sealed class HereCommand : AsyncCommand<HereCommand.Settings>
             Specialists: settings.Specialist,
             ExcludedSpecialists: settings.Without,
             Mode: settings.Mode,
-            DryRun: settings.DryRun);
+            DryRun: settings.DryRun,
+            TaskId: settings.TaskId);
 
         var result = await _launcher.LaunchAsync(request, cancellationToken).ConfigureAwait(false);
         if (result.Failed)
@@ -274,7 +284,8 @@ internal static class LaunchReport
 
         if (plan.Task is { Length: > 0 } task)
         {
-            output.WriteLine($"  {"Task",-12} {Markup.Escape(task)}");
+            output.WriteLine($"  {"Task",-12} {Markup.Escape(task)}"
+                + (plan.TaskId is { Length: > 0 } id ? $"  [dim]linked to {Markup.Escape(id)}[/]" : string.Empty));
         }
 
         output.WriteLine($"  {"Mode",-12} {Markup.Escape(plan.Mode ?? plan.Instructions?.Mode ?? "default")}"
@@ -348,6 +359,7 @@ internal static class LaunchReport
         agent = outcome.AgentName,
         agentSource = outcome.AgentSource.ToString(),
         task = plan.Task,
+        taskId = plan.TaskId,
         mode = plan.Mode ?? plan.Instructions?.Mode,
         executable = plan.Executable,
         arguments = plan.Arguments,
