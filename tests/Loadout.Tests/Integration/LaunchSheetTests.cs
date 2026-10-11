@@ -1,5 +1,6 @@
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
+using Loadout.Models.Tasks;
 using Loadout.Tui.Terminal;
 using FluentAssertions;
 using Terminal.Gui.Input;
@@ -117,13 +118,39 @@ public sealed class LaunchSheetTests
         view.NewKeyDownEvent(key);
     }
 
+    /// <summary>The task list, found by the row it always has.</summary>
+    private static ListView TaskList(View root) => Picker(root, "No task");
+
+    private static IReadOnlyList<string> Rows(ListView list) =>
+        list.Source!.ToList().Cast<object?>().Select(row => row?.ToString() ?? string.Empty).ToList();
+
+    /// <summary>Chooses Other… and types, the way somebody with a task not on record would.</summary>
+    private void TypeOwnTask(TuiSession session, string text)
+    {
+        var tasks = TaskList(Built);
+
+        tasks.SelectedItem = Rows(tasks).Count - 1;
+        Press(tasks, Key.Enter);
+
+        session.Type(text);
+    }
+
+    private static DeclaredTask Declared(string id, string title, TaskState state) => new(id, title, state);
+
+    private static LaunchChoices WithTasks(params DeclaredTask[] tasks) =>
+        new(
+            [new LaunchChoice("default", null)],
+            [new LaunchChoice("main  (main working tree)", null)],
+            tasks);
+
     [Fact]
     public void Enter_twice_launches_with_the_defaults()
     {
         using var session = Sheet(Project(agent: "codex"), agents: ["claude", "codex"]);
 
-        // Focus starts in the task field, and Enter there is the launch: the
-        // fast path costs one keystroke more than the old Enter-on-a-project.
+        // Focus starts on the task list, at No task when nothing is being worked
+        // on, and Enter there is the launch: the fast path costs one keystroke
+        // more than the old Enter-on-a-project.
         session.Press(Key.Enter);
 
         Built.Chosen.Should().NotBeNull();
@@ -156,7 +183,7 @@ public sealed class LaunchSheetTests
     {
         using var session = Sheet();
 
-        session.Type("why is this query so slow");
+        TypeOwnTask(session, "why is this query so slow");
 
         // Index zero is "let the task decide", so this picks investigate.
         Picker(Built, "investigate").SelectedItem = 3;
@@ -184,7 +211,7 @@ public sealed class LaunchSheetTests
     {
         using var session = Sheet();
 
-        session.Type("   ");
+        TypeOwnTask(session, "   ");
         Press(ButtonNamed(Built, "Launch"), Key.Enter);
 
         // An empty string would be a task, and the resolver would go looking
@@ -231,12 +258,11 @@ public sealed class LaunchSheetTests
     }
 
     [Fact]
-    public void What_the_project_says_it_is_working_on_fills_the_task_line()
+    public void The_sheet_opens_on_what_is_being_worked_on_and_links_the_session_to_it()
     {
-        var choices = new LaunchChoices(
-            [new LaunchChoice("default", null)],
-            [new LaunchChoice("main  (main working tree)", null)],
-            ["fix the flaky release check", "prune the narrative memory topics"]);
+        var choices = WithTasks(
+            Declared("flaky-release", "fix the flaky release check", TaskState.Doing),
+            Declared("prune-memory", "prune the narrative memory topics", TaskState.Open));
 
         using var session = Sheet(sources: Sources(choices: choices));
 
@@ -244,17 +270,106 @@ public sealed class LaunchSheetTests
 
         // The line that decides which specialists a session is given was filled
         // in twice in a hundred and twenty-two launches. A project that has
-        // already said what it is working on has answered the question once
-        // already, and asking again is how it ends up blank.
+        // already said what it is working on has answered the question once,
+        // and now the answer is linked by id, not only copied as words.
         Built.Chosen!.Task.Should().Be("fix the flaky release check");
+        Built.Chosen.TaskId.Should().Be("flaky-release");
     }
 
-    // NOT TESTED, deliberately: that a task already typed is never replaced by
-    // a recorded one. The guard is a line in Offer, and reaching it a second
-    // time needs the choices to arrive again after somebody has typed, which
-    // this harness does not reproduce — two attempts passed with the guard
-    // removed. A test that passes either way is worse than none, so there is
-    // not one, and the behaviour is unverified rather than falsely covered.
+    [Fact]
+    public void With_nothing_being_worked_on_the_sheet_opens_on_no_task()
+    {
+        var choices = WithTasks(
+            Declared("prune-memory", "prune the narrative memory topics", TaskState.Open),
+            Declared("waiting", "waiting on the key", TaskState.Blocked));
+
+        using var session = Sheet(sources: Sources(choices: choices));
+
+        session.Press(Key.Enter);
+
+        // Open is a guess at what the session is for, and a guess that chooses
+        // the specialists is one nobody sees being made.
+        Built.Chosen!.Task.Should().BeNull();
+        Built.Chosen.TaskId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Any_task_on_record_can_be_picked_and_none_are_cut_off()
+    {
+        var many = Enumerable.Range(1, 12)
+            .Select(i => Declared($"task-{i}", $"task number {i}", TaskState.Open))
+            .ToArray();
+
+        using var session = Sheet(sources: Sources(choices: WithTasks(many)));
+
+        var rows = Rows(TaskList(Built));
+
+        // No task, all twelve, then Other…. The old line offered eight titles
+        // and dropped the rest without a word.
+        rows.Should().HaveCount(14);
+        rows[0].Should().Be("No task");
+        rows[^1].Should().StartWith("Other");
+        rows[1].Should().Contain("open").And.Contain("task number 1");
+
+        TaskList(Built).SelectedItem = 12;
+        Press(TaskList(Built), Key.Enter);
+
+        Built.Chosen!.TaskId.Should().Be("task-12");
+    }
+
+    [Fact]
+    public void Clicking_a_task_chooses_it_without_launching()
+    {
+        var choices = WithTasks(Declared("ship-it", "ship the thing", TaskState.Open));
+
+        using var session = Sheet(sources: Sources(choices: choices));
+
+        // A click raises Activate; only Enter raises Accept. A session started
+        // by somebody choosing a row would be one nobody asked to start.
+        TaskList(Built).InvokeCommand(Command.Activate);
+
+        Built.Chosen.Should().BeNull();
+    }
+
+    [Fact]
+    public void Other_opens_a_field_and_esc_from_an_empty_one_goes_back_to_the_list()
+    {
+        var choices = WithTasks(Declared("ship-it", "ship the thing", TaskState.Doing));
+
+        using var session = Sheet(sources: Sources(choices: choices));
+
+        var tasks = TaskList(Built);
+
+        tasks.SelectedItem = Rows(tasks).Count - 1;
+        Press(tasks, Key.Enter);
+
+        // Enter on Other… is not a launch: it is asking to type one.
+        Built.Chosen.Should().BeNull();
+        FieldNamed(Built).Visible.Should().BeTrue();
+        tasks.Visible.Should().BeFalse();
+
+        session.Press(Key.Esc);
+
+        // Backed out of typing, not out of launching.
+        Built.Chosen.Should().BeNull();
+        tasks.Visible.Should().BeTrue();
+        FieldNamed(Built).Visible.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Quick_session_launches_with_no_task_and_the_defaults()
+    {
+        var choices = WithTasks(Declared("ship-it", "ship the thing", TaskState.Doing));
+
+        using var session = Sheet(Project(agent: "codex"), agents: ["claude", "codex"], Sources(choices: choices));
+
+        // Moved off the defaults first, so the button is seen to ignore them.
+        Picker(Built, "investigate").SelectedItem = 3;
+
+        Press(ButtonNamed(Built, "Quick"), Key.Enter);
+
+        Built.Chosen.Should().Be(new LaunchOptions());
+    }
 
     [Fact]
     public void The_main_working_tree_and_the_default_profile_are_no_option_at_all()
@@ -309,7 +424,7 @@ public sealed class LaunchSheetTests
 
         using var session = Sheet(Project(agent: "claude"), sources: sources);
 
-        session.Type("slow query");
+        TypeOwnTask(session, "slow query");
 
         // Re-asked with what was typed, and the answer on screen. The delay
         // is zero here, so the last keystroke is the last request.

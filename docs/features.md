@@ -124,7 +124,7 @@ you know before you spend one.
 Enter opens the launch sheet: which agent, what the task is, how to work, and
 which profile or worktree, all filled in with the defaults so Enter again
 starts the session. Underneath, the sheet shows which specialists that task
-would load and what they cost, re-resolved as you type, by asking the same
+would load and what they cost, re-resolved as you change it, by asking the same
 resolver the launch asks. What it shows is what the session gets.
 
 The task line — the field that decides most of what a session gets — is filled

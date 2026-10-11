@@ -44,6 +44,11 @@ namespace Loadout.Models.Agents;
 /// says which by whether <see cref="EndedAt"/> is set: a launch still open, and
 /// one that closed without the agent ever running.
 /// </param>
+/// <param name="TaskId">
+/// The recorded task the session was started against, by its id, or null for
+/// a session started without one — including every launch written before the
+/// link existed, whose lines have no such field.
+/// </param>
 public sealed record LaunchRecord(
     string Id,
     DateTimeOffset StartedAt,
@@ -59,7 +64,8 @@ public sealed record LaunchRecord(
     int EstimatedTokens,
     int TokenBudget,
     DateTimeOffset? EndedAt = null,
-    int? ExitCode = null)
+    int? ExitCode = null,
+    string? TaskId = null)
 {
     /// <summary>How long the session ran, or null while it is still open.</summary>
     public TimeSpan? Duration => EndedAt is { } ended ? ended - StartedAt : null;

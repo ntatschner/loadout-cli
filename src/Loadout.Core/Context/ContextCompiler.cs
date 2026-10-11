@@ -73,6 +73,7 @@ internal sealed class ContextCompiler : IContextCompiler
         string? handoffPath = null,
         Models.Instructions.EffectiveInstructions? instructions = null,
         string? repositoryPath = null,
+        string? taskId = null,
         CancellationToken ct = default)
     {
         if (!Directory.Exists(runtimeDirectory))
@@ -171,9 +172,15 @@ internal sealed class ContextCompiler : IContextCompiler
                 .ConfigureAwait(false);
         }
 
+        // The session's own task whether or not the project lists its open
+        // ones: somebody picked it for this launch, which is a stronger reason
+        // to carry it than a project setting about the rest.
+        var linked = await AppendSessionTaskAsync(builder, sources, manifest.Slug, taskId, ct)
+            .ConfigureAwait(false);
+
         if (manifest.Context.Tasks)
         {
-            await AppendTasksAsync(builder, sources, manifest.Slug, ct).ConfigureAwait(false);
+            await AppendTasksAsync(builder, sources, manifest.Slug, linked, ct).ConfigureAwait(false);
         }
 
         // Last of everything, after the specialists, the project's own
@@ -403,6 +410,73 @@ internal sealed class ContextCompiler : IContextCompiler
     }
 
     /// <summary>
+    /// Appends the task this session was started against, and returns its id
+    /// when it was written, so the open-task list can leave it out.
+    /// </summary>
+    /// <remarks>
+    /// Said plainly under a heading of its own rather than by moving it to the
+    /// top of the list: a session left to infer its task from the order of a
+    /// list is a session that might not.
+    /// </remarks>
+    private async Task<string?> AppendSessionTaskAsync(
+        StringBuilder builder,
+        List<ContextSource> sources,
+        string slug,
+        string? taskId,
+        CancellationToken ct)
+    {
+        if (_tasks is null || taskId is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        var listed = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+        if (listed.Failed
+            || listed.Value!.FirstOrDefault(t => string.Equals(t.Id, taskId, StringComparison.Ordinal))
+                is not { } task)
+        {
+            // The launcher checked the id before getting here, so this is a
+            // record changed in between. Nothing is written rather than a
+            // heading over a task that is not there.
+            return null;
+        }
+
+        var section = new StringBuilder();
+
+        section.AppendLine(
+            "This session was started for the recorded task below. Move it on with "
+            + "`loadout_task_declare`, or `loadout task declare <id> <state>`, when the work does.");
+        section.AppendLine();
+        section.AppendLine(
+            $"- **{task.Id}** ({task.State.ToString().ToLowerInvariant()}) — "
+            + $"{(task.Title.Length > 0 ? task.Title : task.Id)}");
+        section.AppendLine($"  {task.DeclaredBy}, {task.DeclaredUtc:yyyy-MM-dd}");
+
+        if (task.Note is { Length: > 0 } note)
+        {
+            foreach (var line in note.Split('\n'))
+            {
+                section.AppendLine($"  {line.TrimEnd()}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("## This session's task");
+        builder.AppendLine();
+        builder.AppendLine($"<!-- source: projects/{slug}/tasks.yaml -->");
+        builder.AppendLine();
+        builder.Append(section);
+
+        sources.Add(new ContextSource(
+            $"projects/{slug}/tasks.yaml",
+            "This session's task",
+            Encoding.UTF8.GetByteCount(section.ToString())));
+
+        return task.Id;
+    }
+
+    /// <summary>
     /// Appends what the project is working on, for a project that keeps a task
     /// record and has asked for it.
     /// </summary>
@@ -423,6 +497,7 @@ internal sealed class ContextCompiler : IContextCompiler
         StringBuilder builder,
         List<ContextSource> sources,
         string slug,
+        string? linked,
         CancellationToken ct)
     {
         if (_tasks is null)
@@ -438,10 +513,12 @@ internal sealed class ContextCompiler : IContextCompiler
         }
 
         // Ideas are left out. One still being shaped is not work a session
-        // should pick up, and being told about it is how one would.
+        // should pick up, and being told about it is how one would. So is the
+        // session's own task, already written in full above.
         var open = listed.Value!
             .Where(t => t.Kind == TaskKind.Task)
             .Where(t => t.State is TaskState.Open or TaskState.Doing or TaskState.Blocked)
+            .Where(t => !string.Equals(t.Id, linked, StringComparison.Ordinal))
             .OrderBy(t => t.State)
             .ToList();
 

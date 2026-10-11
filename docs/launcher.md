@@ -87,9 +87,9 @@ preview, which is a good trade.
 ```text
 ╭┤Launch loadout-cli├──────────────────────────────────────────────────────╮
 │ What are you about to do?                                                │
-│ fix the memory import notice                                             │
-│ This chooses the specialists the agent is given.                         │
-│                                                                          │
+│ No task                                                                  │
+│ doing    Fix the memory import notice                                    │
+│ open     Add value examples to specialist docs                           │
 │ Agent          Mode                    Profile            Worktree       │
 │ claude         (let the task decide)   default            main (main …)  │
 │ codex          advise                                     feature-x      │
@@ -106,28 +106,45 @@ preview, which is a good trade.
 ││                                                                        ││
 ││ specialists  about 1,456 tokens, 12% of 12,000                         ││
 │╰────────────────────────────────────────────────────────────────────────╯│
-│ [ Launch ]  [ Cancel ]                                                   │
+│ [ Launch ]  [ Quick session ]  [ Cancel ]                                │
 ╰──────────────────────────────────────────────────────────────────────────╯
 ```
 
 **Agent** lists every agent installed on this machine, the project's own first,
 so switching is a keystroke rather than a quit and a retyped command line.
 
-**The task line is filled in for you when the project has said what it's doing.**
-It's the field that decides most of what a session is given, and it's the one
-nobody fills in: across 122 recorded launches here it was typed twice, both the
-same sentence. A blank line asking for a sentence gets answered by starting work
-instead. So the sheet reads what `loadout task declare` already recorded — work
-in progress first, then what hasn't been started, then what's waiting — puts the
-first into the field as editable text, and names up to two others beneath it as
-*also recorded*. Finished and abandoned work is left out, because the line
-describes what a session is about to do.
+**The task is picked from what the project has recorded, not typed.** It's the
+choice that decides most of what a session is given, and when it was a blank
+line nobody filled it in: across 122 recorded launches here it was typed twice,
+both the same sentence. So the sheet lists what `loadout task declare` already
+recorded — work in progress first, then what hasn't been started, then what's
+waiting, newest first within each — between *No task* at the top and *Other…*
+at the bottom. Every one of them, scrolling, not the first few. Finished and
+abandoned work is left out, because the list describes what a session is about
+to do.
 
-Offered, never imposed. The field is only filled when it's empty, so a task you
-typed before the choices arrived is never overwritten, and what lands there is
-text you can correct rather than a selection you have to accept. Correcting a
-line is a much lower bar than composing one, which is the whole reason the field
-sat empty 120 times out of 122.
+It opens on the newest task you're working on, or on *No task* when you're not
+working on anything. It doesn't guess at an open one: a guess that chooses the
+specialists is one you'd never see being made.
+
+Picking a task links the session to it. The task's title chooses the
+specialists, exactly as typing it would, and the session is also told which
+task it's for: its note goes first in what the agent reads, under *This
+session's task*, and isn't repeated in the list of open tasks after it. The
+launch ledger records the task's id, so you can tell later which session was for
+what. Linking doesn't change the task's state; you still move it on yourself.
+
+*No task* leaves the specialists to the repository alone. The list of open tasks
+is still in the context, so the agent can still see what the project is working
+on. *Other…* (Enter on it) swaps the list for a line you can type a one-off task
+into; Esc on an empty line puts the list back.
+
+Enter on a task launches. A click only selects it, because choosing a row isn't
+asking to start a session.
+
+**Quick session** launches straight away with no task and the defaults,
+whatever you've moved on the sheet. Use it for a session that's a question
+rather than a piece of work.
 
 **Task and mode** are what choose the specialists. **Profile** and **Worktree**
 show up front when the project has more than one, under the same names
@@ -135,13 +152,14 @@ show up front when the project has more than one, under the same names
 different things.
 
 **This session would load** is the answer the launch itself will get. As you
-type the task or change the mode, the sheet asks the same resolver the launch
+pick or type the task or change the mode, the sheet asks the same resolver the launch
 asks, and shows you what came back: which specialists, why each one was chosen,
 and what they cost against the budget. It isn't a second implementation of that
 choice. It's the choice, shown early, without closing the launcher to see it.
 
 Cancel the sheet and you're back at the list with nothing started. Launch and it
-hands what you chose to the `launch` command as its flags, so a session started
+hands what you chose to the `launch` command as its flags (a picked task as
+`--task-id`), so a session started
 from the screen is the same session a typed one is — down to the question about
 uncommitted workspace changes on the way out.
 

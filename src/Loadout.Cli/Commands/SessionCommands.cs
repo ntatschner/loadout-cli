@@ -134,6 +134,10 @@ public sealed class ResumeSettings : SessionSettings
     [Description("What the session is for now. Otherwise what it was launched for is carried over.")]
     public string? Task { get; init; }
 
+    [CommandOption("--task-id <ID>")]
+    [Description("A recorded task the session is for now. Its title is the task unless --task is given.")]
+    public string? TaskId { get; init; }
+
     [CommandOption("--mode <MODE>")]
     [Description("Posture: advise, investigate, implement or review. Otherwise carried over.")]
     public string? Mode { get; init; }
@@ -270,7 +274,7 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
         // different one from the session it claimed to be continuing.
         var carried = await CarriedOverAsync(chosen, slug, cancellationToken).ConfigureAwait(false);
 
-        if (carried is not null && settings.Task is null && settings.Mode is null)
+        if (carried is not null && settings.Task is null && settings.TaskId is null && settings.Mode is null)
         {
             var what = string.Join(", ", new[]
             {
@@ -295,9 +299,13 @@ public sealed class ResumeCommand : AsyncCommand<ResumeSettings>
             Profile: settings.Profile ?? carried?.Profile,
             Environment: settings.Environment,
             ResumeSessionId: chosen.SessionId,
-            Task: settings.Task ?? carried?.Task,
+            // A task named by id replaces the carried one rather than sitting
+            // beside it: the carried words would otherwise choose the
+            // specialists for a session now said to be about something else.
+            Task: settings.Task ?? (settings.TaskId is null ? carried?.Task : null),
             Mode: settings.Mode ?? carried?.Mode,
-            DryRun: settings.DryRun)).ConfigureAwait(false);
+            DryRun: settings.DryRun,
+            TaskId: settings.TaskId)).ConfigureAwait(false);
 
         if (launch.Failed)
         {

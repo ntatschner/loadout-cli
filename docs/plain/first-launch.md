@@ -81,12 +81,15 @@ the agent.
 
 ### 7. Say what you want to do
 
-In the box at the top, type one sentence about what you want. Be specific.
-"The upload retries twice then gives up" is good. "Work on the code" is too
-vague to help.
+At the top is a list. If your project has notes about what you're working on,
+they're listed here, and you can pick one with the arrow keys.
 
-If the box already has a sentence in it, Loadout found it in your project's
-notes. You can change it.
+If what you want isn't listed, move down to **Other…** and press Enter. Then
+type one sentence about what you want. Be specific. "The upload retries twice
+then gives up" is good. "Work on the code" is too vague to help.
+
+If you just want to ask the agent something, press **Quick session** instead.
+It starts straight away.
 
 ### 8. Choose how the agent should work
 

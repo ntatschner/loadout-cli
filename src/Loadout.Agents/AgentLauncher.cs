@@ -81,6 +81,12 @@ namespace Loadout.Agents;
 /// the first of these: its nodes are briefed with the path and told to keep
 /// what the team learns there, and without it the agent refuses every write.
 /// </param>
+/// <param name="TaskId">
+/// A recorded task this session is for, by its id. Its title becomes
+/// <paramref name="Task"/> when no task was given in words, its note goes
+/// first in the context, and the ledger records the link. An id the project
+/// does not have, or one already finished, stops the launch.
+/// </param>
 public sealed record LaunchRequest(
     string ProjectHandle,
     string? AgentName = null,
@@ -103,7 +109,8 @@ public sealed record LaunchRequest(
     string? PermissionPolicyPath = null,
     IReadOnlyList<string>? ReachableDirectories = null,
     string? WorktreeFrom = null,
-    string? OpeningPrompt = null);
+    string? OpeningPrompt = null,
+    string? TaskId = null);
 
 /// <summary>How a launch ended.</summary>
 /// <param name="AgentExitCode">The agent's own exit status, propagated per spec section 40.</param>
@@ -183,6 +190,7 @@ public sealed record LaunchOutcome(
 /// <param name="Instructions">The specialists resolved for it, with reasons, or null.</param>
 /// <param name="Task">What the session was said to be for, or null.</param>
 /// <param name="Mode">The posture asked for, or null when the task decided.</param>
+/// <param name="TaskId">The recorded task the session is for, or null.</param>
 public sealed record LaunchPlan(
     string Executable,
     IReadOnlyList<string> Arguments,
@@ -195,7 +203,8 @@ public sealed record LaunchPlan(
     string? Profile,
     EffectiveInstructions? Instructions,
     string? Task = null,
-    string? Mode = null);
+    string? Mode = null,
+    string? TaskId = null);
 
 /// <summary>Runs the launch sequence of spec section 45.</summary>
 public interface IAgentLauncher
@@ -619,6 +628,17 @@ public sealed class AgentLauncher : IAgentLauncher
 
         var manifest = await LoadManifestAsync(project.Entry.Slug, warnings, ct).ConfigureAwait(false);
 
+        // Before onboarding, which reads the task: a session started for a
+        // recorded task has one, and is not the project's first.
+        var linked = await LinkTaskAsync(project.Entry.Slug, request, ct).ConfigureAwait(false);
+
+        if (linked.Failed)
+        {
+            return OperationResult<Prepared>.Fail(linked.Error!, linked.ExitCode);
+        }
+
+        request = linked.Value!;
+
         request = await OnboardingAsync(project.Entry.Slug, request, attended: headless is null, warnings, ct)
             .ConfigureAwait(false);
 
@@ -926,7 +946,8 @@ public sealed class AgentLauncher : IAgentLauncher
             compiled.Value?.ProfileName,
             compiled.Value?.Instructions,
             request.Task,
-            request.Mode);
+            request.Mode,
+            request.TaskId);
 
         return OperationResult<Prepared>.Ok(new Prepared(
             config, syncOutcome, project, agent, adapter, runtimeDirectory,
@@ -957,7 +978,8 @@ public sealed class AgentLauncher : IAgentLauncher
                 launch.Plan.Task,
                 request.Profile,
                 request.Worktree,
-                launch.Compiled?.Instructions),
+                launch.Compiled?.Instructions,
+                launch.Plan.TaskId),
             ct).ConfigureAwait(false);
 
         // Written down so the status line can say what was composed
@@ -1067,6 +1089,74 @@ public sealed class AgentLauncher : IAgentLauncher
             + "Create one at projects/" + slug + "/project.yaml in the workspace.");
 
         return null;
+    }
+
+    /// <summary>
+    /// Checks a launch's task id against the project's record, and gives the
+    /// launch the task's title when it was given no task in words.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The title is what chooses specialists, exactly as a typed task does, so
+    /// a session linked to a task gets the same set it would have got from the
+    /// title typed out. A task given in words as well wins for that, and the
+    /// link still stands.
+    /// </para>
+    /// <para>
+    /// Refused rather than dropped when the id is wrong. Somebody who asked for
+    /// a session about one task and got a session about nothing would not find
+    /// out until the agent did not know what they meant.
+    /// </para>
+    /// </remarks>
+    private async Task<OperationResult<LaunchRequest>> LinkTaskAsync(
+        string slug,
+        LaunchRequest request,
+        CancellationToken ct)
+    {
+        if (request.TaskId is not { Length: > 0 } id)
+        {
+            return OperationResult<LaunchRequest>.Ok(request with { TaskId = null });
+        }
+
+        if (_tasks is null)
+        {
+            return OperationResult<LaunchRequest>.Fail(
+                "This launcher cannot read the task record, so a session cannot be linked to a task.",
+                ExitCode.GeneralFailure);
+        }
+
+        var listed = await _tasks.ListAsync(slug, ct).ConfigureAwait(false);
+
+        if (listed.Failed)
+        {
+            return OperationResult<LaunchRequest>.Fail(listed.Error!, listed.ExitCode);
+        }
+
+        var task = listed.Value!.FirstOrDefault(
+            t => string.Equals(t.Id, id.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (task is null)
+        {
+            return OperationResult<LaunchRequest>.Fail(
+                $"'{slug}' has no task with the id '{id}'. See them with: loadout task list --project {slug}",
+                ExitCode.InvalidArguments);
+        }
+
+        if (task.State is Models.Tasks.TaskState.Done or Models.Tasks.TaskState.Dropped)
+        {
+            return OperationResult<LaunchRequest>.Fail(
+                $"The task '{task.Id}' is {task.State.ToString().ToLowerInvariant()}. "
+                + $"Reopen it first with: loadout task declare {task.Id} open --project {slug}",
+                ExitCode.InvalidArguments);
+        }
+
+        return OperationResult<LaunchRequest>.Ok(request with
+        {
+            TaskId = task.Id,
+            Task = request.Task is { Length: > 0 } typed
+                ? typed
+                : task.Title is { Length: > 0 } title ? title : task.Id,
+        });
     }
 
     /// <summary>
@@ -1250,6 +1340,7 @@ public sealed class AgentLauncher : IAgentLauncher
             // registered checkout: a map of the primary clone's directories
             // describes a branch the session is not on.
             workingDirectory,
+            request.TaskId,
             ct).ConfigureAwait(false);
 
         // A bad profile name is the user's mistake and must stop the launch:

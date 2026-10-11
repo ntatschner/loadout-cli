@@ -82,6 +82,19 @@ public sealed class LaunchPathTests
     }
 
     [Fact]
+    public void A_picked_task_reaches_the_command_by_its_id_alone()
+    {
+        var arguments = TerminalLauncher.LaunchArguments(
+            Project(),
+            "claude",
+            new LaunchOptions(Task: "Ship the thing", TaskId: "ship-it"));
+
+        // The launch reads the title from the record. Sending it as well would
+        // be a second answer that could only agree or be wrong.
+        arguments.Should().Equal("alpha", "--agent", "claude", "--task-id", "ship-it");
+    }
+
+    [Fact]
     public void The_launch_command_is_one_the_parser_has()
     {
         // The seam test checks every entry in LauncherCommands.All against the

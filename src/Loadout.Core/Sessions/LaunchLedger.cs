@@ -22,6 +22,7 @@ namespace Loadout.Core.Sessions;
 /// mapping from a resolution to a record lives in one place and cannot disagree
 /// with itself.
 /// </param>
+/// <param name="TaskId">The recorded task the session was started against, or null.</param>
 public sealed record NewLaunch(
     string ProjectSlug,
     string ProjectName,
@@ -29,7 +30,8 @@ public sealed record NewLaunch(
     string? Task,
     string? Profile,
     string? Worktree,
-    EffectiveInstructions? Instructions);
+    EffectiveInstructions? Instructions,
+    string? TaskId = null);
 
 /// <summary>An agent conversation the launcher started with nobody at a terminal.</summary>
 /// <param name="SessionId">The agent's own identifier for the conversation.</param>
@@ -183,7 +185,8 @@ internal sealed class LaunchLedger : ILaunchLedger
                     .Select(selection => selection.Specialist.Id)
                     .ToList(),
                 Tokens: launch.Instructions?.Budget.EstimatedTokens ?? 0,
-                Budget: launch.Instructions?.Budget.TokenBudget ?? 0),
+                Budget: launch.Instructions?.Budget.TokenBudget ?? 0,
+                TaskId: launch.TaskId),
             ct).ConfigureAwait(false);
 
         return id;
@@ -290,7 +293,8 @@ internal sealed class LaunchLedger : ILaunchLedger
                         row.Worktree,
                         row.Specialists ?? [],
                         row.Tokens,
-                        row.Budget));
+                        row.Budget,
+                        TaskId: row.TaskId));
 
                     return;
                 }
@@ -423,5 +427,6 @@ internal sealed class LaunchLedger : ILaunchLedger
         int Budget = 0,
         int? Exit = null,
         string? Purpose = null,
-        string? Launch = null);
+        string? Launch = null,
+        string? TaskId = null);
 }
