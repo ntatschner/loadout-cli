@@ -4,6 +4,7 @@
 |---|---|
 | `loadout` | Full-screen launcher, or first-run setup |
 | `loadout setup` | Configure the launcher on this machine |
+| `loadout start` | Make your first project, step by step, with an agent to help plan and build it |
 | `loadout <project>` | Launch the project's default agent |
 | `loadout here` | Launch the agent for the current repository |
 | `loadout launch <project>` | Launch an agent against a project, which is what naming one on its own does |
