@@ -6,7 +6,8 @@ that your coding agent is there too.
 ## Before you start
 
 You'll need a coding agent, Claude Code or Codex, installed first. Loadout
-doesn't install it for you. [Loadout in plain words](README.md) explains why.
+doesn't install it for you. [Loadout in plain words](README.md) explains why,
+and [before you start](before-you-start.md) shows how.
 
 ## Steps
 
@@ -91,4 +92,5 @@ If it says no agent was found, install Claude Code or Codex. Then type
 
 ## Next
 
-[Your first launch](first-launch.md)
+If you don't have a project yet, [your first project](your-first-project.md).
+If you do, [your first launch](first-launch.md).

@@ -8,6 +8,8 @@ after seeing what it was told.
 - Loadout is installed. See [installing Loadout](installing.md).
 - You have a **project**: a folder of code. It should be a **Git repository**,
   which means Git is keeping track of its changes.
+  If you don't have one yet, [your first project](your-first-project.md)
+  makes one with you.
 
 ## Steps
 

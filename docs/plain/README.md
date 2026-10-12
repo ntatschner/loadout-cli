@@ -45,7 +45,8 @@ tidy.
   one needs.
 - **Git.** Git is a program that keeps track of changes to files. Loadout uses
   it.
-- **A project.** This is a folder of code you want the agent to work on.
+- **A project.** This is a folder of code you want the agent to work on. If
+  you don't have one, `loadout start` helps you make your first.
 
 Loadout itself needs no account and no online service.
 
@@ -53,11 +54,14 @@ Loadout itself needs no account and no online service.
 
 Take these in order:
 
-1. [Installing Loadout](installing.md)
-2. [Your first launch](first-launch.md)
-3. [Watching a team](watching-a-team.md), when you're ready for more than one
+1. [Before you start](before-you-start.md), if you don't have Git or a coding
+   agent yet
+2. [Installing Loadout](installing.md)
+3. [Your first project](your-first-project.md), if you're starting from nothing
+4. [Your first launch](first-launch.md), if you already have a folder of code
+5. [Watching a team](watching-a-team.md), when you're ready for more than one
    agent at once
-4. [Accessibility](accessibility.md), if you'd like Loadout to change how it
+6. [Accessibility](accessibility.md), if you'd like Loadout to change how it
    shows or says things
 
 If something goes wrong at any point, type `loadout doctor` and press Enter. It

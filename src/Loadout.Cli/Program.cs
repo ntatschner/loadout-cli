@@ -612,6 +612,7 @@ public static class Program
         });
 
         Top<SetupCommand>(config, "setup");
+        Top<StartCommand>(config, "start");
         Top<DoctorCommand>(config, "doctor");
         Top<StatusCommand>(config, "status");
         Top<LaunchCommand>(config, "launch");

@@ -205,6 +205,27 @@ because somebody asked to register everything they'd cloned. Build output —
 `__pycache__`, `dist`, a screenshots folder — stays out of the offer, though
 it's still walked through in case a repository is buried in one.
 
+## A first project from nothing
+
+`loadout start` is for somebody who has never had a project: new to
+programming and to agents both. It checks Git, a name in Git, an agent and
+Loadout's own setup, and for whichever is missing prints the line to type for
+this operating system and offers to look again. It never runs an installer.
+Somebody new to this learns more from typing the line than from a launcher
+that changes their machine, and Loadout doesn't install the agents it starts
+anywhere else either.
+
+Then it makes the project from a starter (a web page, a checklist, or an empty
+folder for your own idea), every one of which needs only a browser, because a
+missing runtime would make the first project fail for a reason that has
+nothing to do with it. Git, registering and `loadout protect` come with it.
+
+The planning and the building are handed to an agent, in two sessions: advise
+first, ending in a `PLAN.md`, then implement. Each is previewed and asked about
+separately, because each spends from your plan, and `--yes` covers the machine
+steps only. Run it again and it carries on from the first step not done.
+[Your first project](plain/your-first-project.md) walks through it.
+
 ## Undo
 
 Every command that changes a file takes `--dry-run` and shows you the change
