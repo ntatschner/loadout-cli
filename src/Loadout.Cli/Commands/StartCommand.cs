@@ -49,6 +49,9 @@ public sealed class StartCommand : AsyncCommand<StartCommand.Settings>
     private readonly ReadingProfile _reading;
     private readonly IAnsiConsole _console;
 
+    /// <summary>The agents found on this machine at the last check, by name.</summary>
+    private IReadOnlyList<string> _installed = [];
+
     public StartCommand(
         IFirstProjectGuide guide,
         IAgentRegistry agents,
@@ -291,6 +294,8 @@ public sealed class StartCommand : AsyncCommand<StartCommand.Settings>
         while (true)
         {
             var agents = await _agents.DetectAllAsync(ct).ConfigureAwait(false);
+
+            _installed = [.. agents.Where(a => a.IsInstalled).Select(a => a.Name)];
             var statuses = await _guide
                 .CheckAsync([.. agents.Where(a => a.IsInstalled).Select(a => a.DisplayName)], ct)
                 .ConfigureAwait(false);
@@ -514,6 +519,24 @@ public sealed class StartCommand : AsyncCommand<StartCommand.Settings>
             DryRun: true);
 
         var preview = await _launcher.LaunchAsync(request, ct).ConfigureAwait(false);
+
+        // A new project's definition names Claude Code whatever is installed,
+        // so somebody with only Codex passed the check above and was then
+        // refused by the launch. Unless an agent was asked for by name, the
+        // guide uses one this machine has, and says which.
+        if (settings.Agent is null
+            && _installed.Count > 0
+            && (preview.Failed || !_installed.Contains(preview.Value!.AgentName ?? string.Empty, StringComparer.OrdinalIgnoreCase)))
+        {
+            var chosen = _installed[0];
+
+            output.WriteLine(
+                $"[dim]The project names an agent this computer does not have, so this uses "
+                + $"{Markup.Escape(chosen)}, which it does.[/]");
+
+            request = request with { AgentName = chosen };
+            preview = await _launcher.LaunchAsync(request, ct).ConfigureAwait(false);
+        }
 
         if (preview.Failed)
         {
