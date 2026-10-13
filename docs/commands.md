@@ -31,7 +31,7 @@
 | `loadout drift --fix` | Put right the drift the launcher can fix itself |
 | `loadout doctor --fix` | Put right the findings the doctor can fix itself |
 | `loadout doctor --bundle [path]` | Write the findings to one file to send somebody, screened first |
-| `loadout docs audit [project]` | Report where the documentation has come adrift from the repository |
+| `loadout docs audit [project]` | Report where the documentation has come adrift from the repository, and warn where it breaks your learned voice |
 | `loadout docs find <name>` | Say where a type or member is declared, from an index kept in step with the repository |
 | `loadout docs refresh <file>` | Bring the symbol index up to date for the files named, after an edit; `--hook` is the form an after-edit hook runs, `--dialect generic` for one that is not Claude's |
 | `loadout docs ci` | Write a CI workflow that regenerates the documents. A starting point, not a fixture |
@@ -61,6 +61,11 @@
 | `loadout instructions new <id>` | Draft a specialist or skill in the workspace, or in one project |
 | `loadout style list\|show\|use` | See your coding styles, which are in force for a project, and choose the named one it uses |
 | `loadout instructions explain --style <name>` | See what a task would load under a different named style |
+| `loadout voice show\|check\|mark` | See the writing rules in your voice profile, check a doc or commit message against every guide's rules, and mark what you wrote by hand |
+| `loadout voice learn [--guide] [--dry-run] [--pull-requests] [--transcripts]` | Learn writing rules from the sources a guide lists, such as your squash merges, marked writing or what you typed to Claude Code, then accept, edit or reject each one, and score them against writing held back |
+| `loadout voice runs` | Past learn runs: how each ended, how its cap was set, what it cost and how its rules scored |
+| `loadout voice render [--force]` | Render your voice into the style specialist your sessions load. A learn run does this itself |
+| `loadout voice guide list\|show\|draft` | See the guides voices are learned against, and draft a new one with an agent, saved only once you have reviewed it |
 | `loadout instructions export <specialist>` | Copy a built-in specialist into the workspace so it can be edited |
 | `loadout instructions stats` | Say which specialists launches actually reached, and which none did |
 | `loadout instructions probe [specialist]` | Say how often sessions did what a specialist asks for, week by week |

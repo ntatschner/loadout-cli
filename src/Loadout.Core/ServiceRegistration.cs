@@ -27,6 +27,7 @@ public static class ServiceRegistration
         services.AddSingleton<YamlStore>();
         services.AddSingleton<IConfigurationService, ConfigurationService>();
         services.AddSingleton<IGitManager, GitManager>();
+        services.AddSingleton<IPullRequestReader, GhPullRequestReader>();
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton<IProjectService, ProjectService>();
         services.AddSingleton<Projects.IProjectTemplateService, Projects.ProjectTemplateService>();
@@ -72,6 +73,18 @@ public static class ServiceRegistration
                     return SymbolScanOptions.From(manifest.Value?.Symbols);
                 });
         });
+        // The personal profile beside config.yaml, marks in machine state, and
+        // named and codebase profiles in the workspace when there is one.
+        services.AddSingleton(provider =>
+        {
+            var paths = provider.GetRequiredService<Loadout.Platform.Abstractions.IPlatformPaths>().Paths;
+            var workspace = provider.GetRequiredService<IWorkspaceManager>();
+
+            return new Voice.VoiceStore(
+                paths.Config, paths.State, workspace.IsAvailable() ? workspace.LocalPath : null);
+        });
+        services.AddSingleton<Voice.VoiceMarks>();
+        services.AddSingleton<Voice.VoiceTranscripts>();
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<Instructions.MemoryCompressor>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();

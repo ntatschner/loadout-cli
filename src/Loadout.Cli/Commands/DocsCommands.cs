@@ -40,17 +40,23 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
     private readonly IProjectService _projects;
     private readonly Loadout.Core.Workspace.IWorkspaceManager _workspace;
     private readonly Loadout.Core.Configuration.YamlStore _yaml;
+    private readonly Loadout.Core.Voice.VoiceStore _voice;
+    private readonly IInstructionService _instructions;
     private readonly IAnsiConsole _console;
 
     public DocsAuditCommand(
         IProjectService projects,
         Loadout.Core.Workspace.IWorkspaceManager workspace,
         Loadout.Core.Configuration.YamlStore yaml,
+        Loadout.Core.Voice.VoiceStore voice,
+        IInstructionService instructions,
         IAnsiConsole console)
     {
         _projects = projects;
         _workspace = workspace;
         _yaml = yaml;
+        _voice = voice;
+        _instructions = instructions;
         _console = console;
     }
 
@@ -111,9 +117,22 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
 
         var findings = DocsAuditor.Audit(repository, documents, policy, cancellationToken);
 
+        var (rules, unreadable) = await VoiceRulesAsync(
+            resolution.Succeeded ? resolution.Value!.Entry.Slug : null, settings.Profile, cancellationToken)
+            .ConfigureAwait(false);
+
+        var voice = Loadout.Core.Voice.VoiceChecker.Audit(repository, documents, rules, cancellationToken);
+
         if (output.IsJson)
         {
-            output.WriteJson(new { documents = documents.Count, findings });
+            // Apart from the findings rather than among them, so anything
+            // counting stale references counts what it always counted.
+            output.WriteJson(new
+            {
+                documents = documents.Count,
+                findings,
+                voice = new { rules = rules.Count, findings = voice, unreadable = unreadable is null ? null : Loadout.Tui.Shown.Plainly(unreadable) },
+            });
 
             return CommandOutput.Success();
         }
@@ -122,14 +141,42 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
         {
             output.WriteLine(
                 $"[green]+[/] {documents.Count} document(s), every reference resolves.");
+        }
+        else
+        {
+            output.WriteLine($"[bold]{documents.Count}[/] document(s), "
+                + $"[bold]{findings.Count}[/] finding(s)");
+            output.WriteBlankLine();
 
-            return CommandOutput.Success();
+            Write(output, findings);
         }
 
-        output.WriteLine($"[bold]{documents.Count}[/] document(s), "
-            + $"[bold]{findings.Count}[/] finding(s)");
-        output.WriteBlankLine();
+        if (unreadable is not null)
+        {
+            output.WriteLine($"[yellow]Your voice was not checked:[/] {Loadout.Tui.Shown.Safely(unreadable)}");
+        }
+        else if (voice.Count > 0)
+        {
+            output.WriteBlankLine();
+            output.WriteLine(
+                $"[bold]Voice[/]  [dim]{voice.Count} warning(s) against {rules.Count} learned rule(s). "
+                + "A learned rule warns and does not fail the audit.[/]");
+            output.WriteBlankLine();
 
+            Write(output, voice);
+        }
+        else if (rules.Count > 0)
+        {
+            output.WriteLine($"[green]+[/] Nothing breaks the {rules.Count} learned voice rule(s).");
+        }
+
+        // Reported, not failed. A stale reference is worth knowing about and is
+        // not a reason for a command to exit non-zero in somebody's pipeline.
+        return CommandOutput.Success();
+    }
+
+    private static void Write(CommandOutput output, IReadOnlyList<DocsFinding> findings)
+    {
         foreach (var group in findings.GroupBy(finding => finding.Path).OrderBy(g => g.Key, StringComparer.Ordinal))
         {
             output.WriteLine($"[bold]{Markup.Escape(group.Key)}[/]");
@@ -144,10 +191,35 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
 
             output.WriteBlankLine();
         }
+    }
 
-        // Reported, not failed. A stale reference is worth knowing about and is
-        // not a reason for a command to exit non-zero in somebody's pipeline.
-        return CommandOutput.Success();
+    /// <summary>
+    /// The prose voice rules in force here, resolved the way <c>voice check</c>
+    /// resolves them, or why they could not be read.
+    /// </summary>
+    /// <remarks>
+    /// A profile that cannot be read is said rather than failing the audit:
+    /// the reference checks need nothing configured and should not stop
+    /// because a voice file is broken.
+    /// </remarks>
+    private async Task<(IReadOnlyList<Loadout.Models.Voice.VoiceRule> Rules, string? Unreadable)> VoiceRulesAsync(
+        string? slug,
+        string? profileName,
+        CancellationToken ct)
+    {
+        var manifest = slug is not null && _workspace.IsAvailable()
+            ? (await _workspace.ReadProjectAsync(slug, ct).ConfigureAwait(false)).Value
+            : null;
+
+        var chosen = StyleChoice.Of(
+            manifest, profileName, await _instructions.DefaultStyleAsync(ct).ConfigureAwait(false));
+
+        // Every guide's rules: a doc is written in the whole voice, not one part of it.
+        var rules = await _voice.RulesInForceAsync(chosen, slug, ct).ConfigureAwait(false);
+
+        return rules.Failed
+            ? ([], rules.Error)
+            : (rules.Value!.Select(r => r.Rule).ToList(), null);
     }
 
     /// <summary>

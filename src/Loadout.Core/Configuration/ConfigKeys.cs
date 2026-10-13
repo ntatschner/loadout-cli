@@ -291,6 +291,13 @@ public static class ConfigKeys
             (c, _, v) => c.InstructionContext.WarnAtPercent = Count(v), false,
             Group: Groups.Instructions),
 
+        new("default-style", "Named style in force where a project chooses none",
+            (c, _) => c.InstructionContext.DefaultStyle,
+            (c, _, v) => c.InstructionContext.DefaultStyle = v.Trim().ToLowerInvariant(), false,
+            Sample: "work",
+            Group: Groups.Instructions,
+            WhenUnset: "only your personal and codebase styles, unless a project chooses one"),
+
         new("telemetry", "Tell launched agents to report token usage to this machine",
             (c, _) => Boolean(c.Telemetry.Enabled),
             (c, _, v) => c.Telemetry.Enabled = Flag(v), false,

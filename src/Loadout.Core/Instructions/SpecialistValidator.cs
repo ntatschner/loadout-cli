@@ -122,10 +122,10 @@ internal static class SpecialistValidator
 
         // Modes are chosen rather than detected, so having no evidence is
         // correct for them. So are roles: the team that uses one names it.
-        // So is a style's core, which is in force because the style is.
+        // So is a style's core or voice, which is in force because the style is.
         if (specialist.Kind is SpecialistKind.Mode or SpecialistKind.Role
             || (specialist.Kind is SpecialistKind.Style
-                && CodingStyles.PartOf(specialist.Id) == StylePart.Core))
+                && CodingStyles.PartOf(specialist.Id) is StylePart.Core or StylePart.Voice))
         {
             return;
         }
@@ -197,7 +197,8 @@ internal static class SpecialistValidator
                     + "'style.<name>.pattern.<pattern>' for a pattern."));
                 break;
 
-            case StylePart.Core:
+            // A voice loads with its core on every launch, so it is held to the same ceiling.
+            case StylePart.Core or StylePart.Voice:
                 if (specialist.EstimatedTokens > CodingStyles.CoreTokenCeiling)
                 {
                     findings.Add(new RuleFinding(

@@ -13,6 +13,8 @@ namespace Loadout.Tests.Fakes;
 /// </summary>
 public sealed class ScriptedDetachedLauncher(params string[] lines) : IDetachedLauncher
 {
+    private readonly Queue<string[]> _later = new();
+
     /// <summary>A result line from Claude, with the structured answer given, or an error.</summary>
     public static string Result(string? structured, bool error = false) =>
         $$"""{"type":"result","subtype":"{{(error ? "error_during_execution" : "success")}}","is_error":{{(error ? "true" : "false")}},"num_turns":1,"duration_ms":10,"total_cost_usd":0.05,"usage":{}{{(structured is null ? string.Empty : $",\"structured_output\":{structured}")}}}""";
@@ -25,6 +27,17 @@ public sealed class ScriptedDetachedLauncher(params string[] lines) : IDetachedL
 
     public int Started { get; private set; }
 
+    /// <summary>
+    /// What the agent says when started again, one start per call, in order.
+    /// Once these run out, every start says the first lines again.
+    /// </summary>
+    public ScriptedDetachedLauncher Then(params string[] next)
+    {
+        _later.Enqueue(next);
+
+        return this;
+    }
+
     public Task<OperationResult<HeadlessLaunch>> StartAsync(
         DetachedLaunchRequest request,
         HeadlessOptions options,
@@ -32,8 +45,9 @@ public sealed class ScriptedDetachedLauncher(params string[] lines) : IDetachedL
     {
         Request = request;
         Options = options;
+        var said = Started > 0 && _later.Count > 0 ? _later.Dequeue() : lines;
         Started++;
-        Pipe = new StubProcessLauncher.StubPipedProcess(string.Join('\n', lines) + "\n", 0);
+        Pipe = new StubProcessLauncher.StubPipedProcess(string.Join('\n', said) + "\n", 0);
 
         var plan = new LaunchPlan("claude", [], request.WorkingDirectory, [], [], null, 0, 0, null, null);
 

@@ -66,7 +66,10 @@ public sealed class StyleListCommand : InstructionsCommandBase<StyleListSettings
             .LibraryAsync(WorkspacePath, project?.Entry.Slug, cancellationToken)
             .ConfigureAwait(false);
 
-        var chosen = StyleChoice.Of(manifest, settings.Profile);
+        var chosen = StyleChoice.Of(
+            manifest,
+            settings.Profile,
+            await Instructions.DefaultStyleAsync(cancellationToken).ConfigureAwait(false));
         var styles = CodingStyles.All(catalogue);
 
         // A chosen style with nothing in the library is the one fault here
@@ -113,7 +116,9 @@ public sealed class StyleListCommand : InstructionsCommandBase<StyleListSettings
             var state = layer switch
             {
                 StyleLayer.Personal => "[green]in force[/] [dim]personal, everywhere[/]",
-                StyleLayer.Named when chosen is { Length: > 0 } => "[green]in force[/] [dim]chosen for this work[/]",
+                StyleLayer.Named when StyleChoice.Of(manifest, settings.Profile) is null =>
+                    "[green]in force[/] [dim]your default, from default-style[/]",
+                StyleLayer.Named => "[green]in force[/] [dim]chosen for this work[/]",
                 StyleLayer.Codebase when style.Parts.Any(s => s.Origin == SpecialistOrigin.Project) =>
                     "[green]in force[/] [dim]this codebase[/]",
                 _ => "[dim]not in force[/]",
@@ -140,7 +145,7 @@ public sealed class StyleListCommand : InstructionsCommandBase<StyleListSettings
     {
         output.WriteBlankLine();
         output.WriteLine(
-            $"[yellow]This project chose the '{Markup.Escape(chosen)}' style, and the library has no "
+            $"[yellow]The '{Markup.Escape(chosen)}' style is chosen for this work, and the library has no "
             + "part of it. Launches carry on without it.[/]");
 
         return CommandOutput.Success();
@@ -427,7 +432,13 @@ public sealed class StyleUseCommand : InstructionsCommandBase<StyleUseSettings>
 /// <summary>The named style a project or profile has chosen, read the way a launch reads it.</summary>
 internal static class StyleChoice
 {
-    public static string? Of(ProjectManifest? manifest, string? profileName)
+    /// <param name="manifest">The project, or null outside one.</param>
+    /// <param name="profileName">The profile picked, or null.</param>
+    /// <param name="fallback">The default-style from your configuration, used when neither chose one.</param>
+    public static string? Of(ProjectManifest? manifest, string? profileName, string? fallback = null) =>
+        Chosen(manifest, profileName) ?? (string.IsNullOrWhiteSpace(fallback) ? null : fallback.Trim());
+
+    private static string? Chosen(ProjectManifest? manifest, string? profileName)
     {
         if (manifest is null)
         {

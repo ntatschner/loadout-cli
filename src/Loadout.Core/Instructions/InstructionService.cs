@@ -47,6 +47,12 @@ public interface IInstructionService
         string? slug = null,
         CancellationToken ct = default);
 
+    /// <summary>
+    /// The named style set in your configuration for wherever a project chooses
+    /// none, or null when there is none.
+    /// </summary>
+    Task<string?> DefaultStyleAsync(CancellationToken ct = default);
+
     /// <summary>Resolves the effective instructions for one piece of work.</summary>
     Task<OperationResult<EffectiveInstructions>> ResolveAsync(
         InstructionRequest request,
@@ -130,6 +136,10 @@ internal sealed class InstructionService : IInstructionService
         _library.LoadAsync(workspacePath, slug, ct);
 
     /// <inheritdoc />
+    public async Task<string?> DefaultStyleAsync(CancellationToken ct = default) =>
+        NullIfEmpty((await SettingsAsync(ct).ConfigureAwait(false)).DefaultStyle)?.Trim();
+
+    /// <inheritdoc />
     public async Task<OperationResult<EffectiveInstructions>> ResolveAsync(
         InstructionRequest request,
         CancellationToken ct = default)
@@ -171,7 +181,7 @@ internal sealed class InstructionService : IInstructionService
         }
 
         var preferences = Preferences(request);
-        var style = Style(request);
+        var style = Style(request, settings);
 
         // A style asked for by name that has no part in the library is refused
         // for the same reason an unknown specialist is. One set in a project
@@ -309,23 +319,25 @@ internal sealed class InstructionService : IInstructionService
 
     /// <summary>
     /// The named style in force: the command line's, then the profile's, then
-    /// the project's.
+    /// the project's, then the default in your configuration.
     /// </summary>
     /// <remarks>
     /// Falls through rather than being replaced with the rest of the
     /// preferences. A profile narrows what a session knows about; it does not
     /// change whose code is being written.
     /// </remarks>
-    private static string? Style(InstructionRequest request)
+    private static string? Style(InstructionRequest request, InstructionContextSettings settings)
     {
         if (request.Style is { Length: > 0 } asked)
         {
             return asked.Trim();
         }
 
+        var fallback = NullIfEmpty(settings.DefaultStyle)?.Trim();
+
         if (request.Manifest is not { } manifest)
         {
-            return null;
+            return fallback;
         }
 
         if (request.ProfileName is { Length: > 0 } name
@@ -335,7 +347,7 @@ internal sealed class InstructionService : IInstructionService
             return chosen.Trim();
         }
 
-        return NullIfEmpty(manifest.Specialists.Style)?.Trim();
+        return NullIfEmpty(manifest.Specialists.Style)?.Trim() ?? fallback;
     }
 
     /// <summary>Exclusions from the command line and from the project both count.</summary>

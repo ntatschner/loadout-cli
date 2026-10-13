@@ -8,6 +8,12 @@ public enum StylePart
     /// <summary>The rules that load on every launch the style is in force: <c>style.work</c>.</summary>
     Core,
 
+    /// <summary>
+    /// How the style writes prose, rendered from its learned voice and loaded
+    /// whenever the style is: <c>style.work.voice</c>.
+    /// </summary>
+    Voice,
+
     /// <summary>Rules for one language, loaded only with that language: <c>style.work.csharp</c>.</summary>
     Language,
 
@@ -33,15 +39,17 @@ public enum StyleLayer
 /// <param name="Core">Its core, or null when it has only language files and patterns.</param>
 /// <param name="Languages">Its language files.</param>
 /// <param name="Patterns">Its patterns.</param>
+/// <param name="Voice">Its voice, rendered from a learned profile, or null when it has none.</param>
 public sealed record CodingStyle(
     string Name,
     SpecialistDocument? Core,
     IReadOnlyList<SpecialistDocument> Languages,
-    IReadOnlyList<SpecialistDocument> Patterns)
+    IReadOnlyList<SpecialistDocument> Patterns,
+    SpecialistDocument? Voice = null)
 {
-    /// <summary>Every part, core first.</summary>
+    /// <summary>Every part, core first, then the voice.</summary>
     public IEnumerable<SpecialistDocument> Parts =>
-        new[] { Core }.OfType<SpecialistDocument>().Concat(Languages).Concat(Patterns);
+        new[] { Core, Voice }.OfType<SpecialistDocument>().Concat(Languages).Concat(Patterns);
 }
 
 /// <summary>
@@ -82,6 +90,13 @@ public static class CodingStyles
     /// <summary>The id segment that marks a pattern.</summary>
     public const string PatternSegment = "pattern";
 
+    /// <summary>The id segment that marks a style's voice.</summary>
+    /// <remarks>
+    /// Reserved the way <c>pattern</c> is. No language is called voice, and a
+    /// part rendered from a profile needs an id nobody would write by hand.
+    /// </remarks>
+    public const string VoiceSegment = "voice";
+
     /// <summary>
     /// The most a style's core should cost, in estimated tokens.
     /// </summary>
@@ -117,6 +132,7 @@ public static class CodingStyles
         return segments.Length switch
         {
             2 => StylePart.Core,
+            3 when string.Equals(segments[2], VoiceSegment, StringComparison.OrdinalIgnoreCase) => StylePart.Voice,
             3 when !string.Equals(segments[2], PatternSegment, StringComparison.OrdinalIgnoreCase) => StylePart.Language,
             4 when string.Equals(segments[2], PatternSegment, StringComparison.OrdinalIgnoreCase) => StylePart.Pattern,
             _ => null,
@@ -227,7 +243,8 @@ public static class CodingStyles
                 g.Key,
                 g.FirstOrDefault(s => PartOf(s.Id) == StylePart.Core),
                 g.Where(s => PartOf(s.Id) == StylePart.Language).OrderBy(s => s.Id, StringComparer.Ordinal).ToList(),
-                g.Where(s => PartOf(s.Id) == StylePart.Pattern).OrderBy(s => s.Id, StringComparer.Ordinal).ToList()))
+                g.Where(s => PartOf(s.Id) == StylePart.Pattern).OrderBy(s => s.Id, StringComparer.Ordinal).ToList(),
+                g.FirstOrDefault(s => PartOf(s.Id) == StylePart.Voice)))
             .ToList();
     }
 
