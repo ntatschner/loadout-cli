@@ -8,6 +8,9 @@ public enum VoiceMarkKind
 
     /// <summary>A file in a repository.</summary>
     File,
+
+    /// <summary>A pull request's title and description, read through gh.</summary>
+    PullRequest,
 }
 
 /// <summary>
@@ -24,7 +27,7 @@ public sealed class VoiceMark
     /// <summary>What it points at.</summary>
     public VoiceMarkKind Kind { get; set; }
 
-    /// <summary>The commit's full hash, or the file's path relative to its repository.</summary>
+    /// <summary>The commit's full hash, the file's path relative to its repository, or the pull request as <c>#123</c>.</summary>
     public string Reference { get; set; } = string.Empty;
 
     /// <summary>The repository it belongs to, as a full path.</summary>

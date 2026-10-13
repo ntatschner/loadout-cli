@@ -23,7 +23,15 @@ public sealed class VoiceLearnerTests : IDisposable
     private const string FirstPieceOnly =
         """{"contract":"voice-mine/1","rules":[{"id":"british","statement":"Write British spellings.","check":null,"surfaces":[],"citations":[{"evidence":"e1","excerpt":"the colour of it"}]}]}""";
 
+    /// <summary>
+    /// The British rule cited from the pieces left once b.md is held out: a.md
+    /// (e1) and both squash merges (e3, e4).
+    /// </summary>
+    private const string SupportedWithoutB =
+        """{"contract":"voice-mine/1","rules":[{"id":"british","statement":"Write British spellings.","check":{"type":"prefer-spelling","spellings":[{"avoid":"color","prefer":"colour"}]},"surfaces":[],"citations":[{"evidence":"e1","excerpt":"the colour of it"},{"evidence":"e3","excerpt":"colour the output"},{"evidence":"e4","excerpt":"Tidy the docs"}]}]}""";
+
     private readonly TemporaryWorkspace _space = new();
+    private readonly FakePullRequests _pulls = new();
     private readonly string _repository;
     private readonly FakeGit _git;
     private readonly VoiceStore _store;
@@ -37,7 +45,7 @@ public sealed class VoiceLearnerTests : IDisposable
         _git.CommitMessages.Add(("2222222222222222222222222222222222222222", "Tidy the docs (#13)"));
         _git.CommitMessages.Add(("3333333333333333333333333333333333333333", "Release 0.1.0"));
         _store = new VoiceStore(_space.Paths.Paths.Config, _space.Paths.Paths.State, _space.Workspace.LocalPath);
-        _marks = new VoiceMarks(_git, _store, TimeProvider.System);
+        _marks = new VoiceMarks(_git, _pulls, _store, TimeProvider.System);
     }
 
     public void Dispose() => _space.Dispose();
@@ -54,10 +62,22 @@ public sealed class VoiceLearnerTests : IDisposable
     }
 
     private VoiceLearner Learner(ScriptedDetachedLauncher launcher) =>
-        new(_store, new VoiceEvidenceGatherer(_git, _marks), launcher, _space.Paths, TimeProvider.System);
+        new(_store, new VoiceEvidenceGatherer(_git, _pulls, _marks), launcher, _space.Paths, TimeProvider.System);
 
-    private VoiceLearnRequest Request(Prompts prompts, VoiceGuide? guide = null, bool dryRun = false) =>
-        new(guide ?? VoiceGuides.Prose(), StyleLayer.Personal, CodingStyles.Personal, null, _repository, null, prompts, DryRun: dryRun);
+    private VoiceLearnRequest Request(Prompts prompts, VoiceGuide? guide = null, bool dryRun = false, bool pullRequests = false) =>
+        new(guide ?? Guide(), StyleLayer.Personal, CodingStyles.Personal, null, _repository, null, prompts, pullRequests, DryRun: dryRun);
+
+    /// <summary>
+    /// prose/1 holding nothing back, so the tests about mining and review
+    /// see every piece. The scoring tests set the share themselves.
+    /// </summary>
+    private static VoiceGuide Guide(double holdOut = 0)
+    {
+        var guide = VoiceGuides.Prose();
+        guide.Scoring.HoldOut = holdOut;
+
+        return guide;
+    }
 
     private string ProfilePath => _store.PathOf(StyleLayer.Personal, CodingStyles.Personal, "prose", null)!;
 
@@ -68,7 +88,7 @@ public sealed class VoiceLearnerTests : IDisposable
     {
         await MarkAsync();
 
-        var gathered = (await new VoiceEvidenceGatherer(_git, _marks).GatherAsync(_repository, null)).Value!;
+        var gathered = (await new VoiceEvidenceGatherer(_git, _pulls, _marks).GatherAsync(_repository, null)).Value!;
 
         gathered.Evidence.Select(e => (e.Id, e.Source)).Should().Equal(
             ("e1", "doc"), ("e2", "doc"), ("e3", "commit"), ("e4", "commit"));
@@ -92,7 +112,10 @@ public sealed class VoiceLearnerTests : IDisposable
         var run = learned.Value!.Run;
         run.Outcome.Should().Be(VoiceRunOutcome.Complete);
         run.Cap.Should().Be(VoiceCapSetting.Accepted);
-        (run.Calls, run.Accepted, run.Score).Should().Be((1, 1, null));
+        (run.Calls, run.Accepted).Should().Be((1, 1));
+        run.Score!.Rules.Should().ContainSingle().Which.Unscored.Should().Be(
+            "no held-out sample it applies to", "nothing was held back and no pull requests were read");
+        _pulls.Reads.Should().Be(0, "pull requests are read only when asked for");
 
         var profile = (await VoiceStore.ReadProfileAsync(ProfilePath)).Value!;
         profile.Guide.Should().Be("prose/1");
@@ -137,7 +160,7 @@ public sealed class VoiceLearnerTests : IDisposable
     public async Task A_run_stopped_at_its_cap_is_partial_and_carries_what_it_mined_to_the_next()
     {
         await MarkAsync();
-        var guide = VoiceGuides.Prose();
+        var guide = Guide();
         guide.Cap.BatchCharacters = 10;
         var prompts = new Prompts
         {
@@ -152,6 +175,7 @@ public sealed class VoiceLearnerTests : IDisposable
         first.Value!.Run.Outcome.Should().Be(VoiceRunOutcome.Partial);
         first.Value.Run.Cap.Should().Be(VoiceCapSetting.Typed);
         first.Value.Run.Carried.Should().Be(1);
+        first.Value.Run.Score.Should().BeNull("a partial run is never scored");
         prompts.Reviewed.Should().BeEmpty("the person said no to more of this run, so it reviews only what it carried in");
 
         var next = new Prompts { CapAnswer = new VoiceCapAnswer(VoiceCapChoice.Decline) };
@@ -205,7 +229,7 @@ public sealed class VoiceLearnerTests : IDisposable
     public async Task More_to_read_than_the_cap_allows_asks_before_spending_and_a_no_spends_nothing()
     {
         await MarkAsync();
-        var guide = VoiceGuides.Prose();
+        var guide = Guide();
         await VoiceStore.WriteStateAsync(StatePath, new VoiceLearnState
         {
             Cap = new VoiceCap { Calls = 1, Usd = 0.10m, Estimate = 0.08m },
@@ -250,6 +274,54 @@ public sealed class VoiceLearnerTests : IDisposable
         launcher.Options!.AllowedTools.Should().BeEmpty();
         launcher.Options.OutputSchemaJson.Should().Be(VoiceMining.Schema);
         launcher.Pipe!.Written.ToString().Should().Contain("We chose a colour scheme.", "the writing is in the prompt");
+    }
+
+    [Fact]
+    public async Task A_complete_run_scores_its_rules_against_writing_it_never_mined_and_the_descriptions_rewritten()
+    {
+        await MarkAsync();
+        _pulls.Known[12] = new(12, "Make the CLI color the output", "The color can be turned off.");
+        _pulls.Known[13] = new(13, "Tidy the docs", string.Empty);
+
+        // At a fifth held back, b.md is the one piece whose reference falls in it.
+        var guide = Guide(0.2);
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(SupportedWithoutB));
+        var prompts = new Prompts { CapAnswer = new VoiceCapAnswer(VoiceCapChoice.Accept) };
+
+        var learned = await Learner(launcher).LearnAsync(Request(prompts, guide, pullRequests: true));
+
+        learned.Succeeded.Should().BeTrue(learned.Error);
+        learned.Value!.HeldOut.Should().Be(1);
+        learned.Value.Gathered.EditPairs.Should().ContainSingle(
+            "#13 has no description to have rewritten").Which.Number.Should().Be(12);
+        launcher.Pipe!.Written.ToString().Should().NotContain("We chose a colour scheme.", "held-out writing is never mined");
+
+        var score = learned.Value.Run.Score!;
+        (score.Own, score.Edits).Should().Be((1, 1));
+
+        var british = score.Rules.Should().ContainSingle().Subject;
+        (british.Own, british.OwnAgreed, british.Edit, british.EditAgreed).Should().Be((1, 1, 1, 1));
+        british.Agreement.Should().Be(1.0);
+        british.Meets.Should().BeFalse("one edit sample is short of the floor of five");
+
+        var saved = (await VoiceStore.ReadStateAsync(StatePath)).Value!.Runs.Single().Score;
+        saved!.Rules.Single().Agreement.Should().Be(1.0, "the score is kept in the run history");
+    }
+
+    [Fact]
+    public async Task Asking_for_pull_requests_when_gh_cannot_read_them_fails_before_anything_is_spent()
+    {
+        await MarkAsync();
+        _pulls.Unavailable = "The GitHub CLI is not on PATH.";
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Supported));
+        var prompts = new Prompts { CapAnswer = new VoiceCapAnswer(VoiceCapChoice.Accept) };
+
+        var learned = await Learner(launcher).LearnAsync(Request(prompts, pullRequests: true));
+
+        learned.Failed.Should().BeTrue();
+        learned.Error.Should().Contain("not on PATH");
+        prompts.CapQuestions.Should().BeEmpty();
+        launcher.Started.Should().Be(0);
     }
 
     /// <summary>A person who answers the same way every time, and remembers what they were asked.</summary>

@@ -382,7 +382,7 @@ public sealed class VoiceCheckCommand : VoiceCommandBase<VoiceCheckSettings>
 public sealed class VoiceMarkSettings : VoiceSettings
 {
     [CommandArgument(0, "[TARGETS]")]
-    [Description("Files, commits, or a commit range such as main~20..main.")]
+    [Description("Files, pull requests as pr:123, commits, or a commit range such as main~20..main.")]
     public string[] Targets { get; init; } = [];
 
     [CommandOption("--remove")]
@@ -413,11 +413,11 @@ public sealed class VoiceMarkSettings : VoiceSettings
 /// </para>
 /// <para>
 /// The list is kept on this machine and nothing is written to the repository,
-/// so the provenance stays out of git. A file's mark is pinned to its text and
-/// lapses when the text changes; <c>--lapsed</c> re-confirms them in one go.
+/// so the provenance stays out of git. A file's or pull request's mark is
+/// pinned to its text and lapses when the text changes; <c>--lapsed</c> re-confirms them in one go.
 /// </para>
 /// </remarks>
-[Description("Mark files or commits as written by you, so learning counts them.")]
+[Description("Mark files, pull requests or commits as written by you, so learning counts them.")]
 [CommandMeta(CommandCategory.AgentConfiguration,
     Intent = "mark hand-written my own writing commit docs evidence voice lapsed",
     Mutates = true,

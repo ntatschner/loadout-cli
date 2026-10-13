@@ -113,7 +113,7 @@ public sealed class VoiceStoreTests : IDisposable
     public async Task A_file_mark_lapses_when_its_text_changes_and_holds_again_once_reconfirmed()
     {
         var store = Store();
-        var marks = new VoiceMarks(new FakeGit(_root), store, TimeProvider.System);
+        var marks = new VoiceMarks(new FakeGit(_root), new FakePullRequests(), store, TimeProvider.System);
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(Path.Combine(repository, "docs"));
         var file = Path.Combine(repository, "docs", "guide.md");
@@ -143,7 +143,7 @@ public sealed class VoiceStoreTests : IDisposable
     [Fact]
     public async Task A_file_outside_the_repository_cannot_be_marked_from_it()
     {
-        var marks = new VoiceMarks(new FakeGit(_root), Store(), TimeProvider.System);
+        var marks = new VoiceMarks(new FakeGit(_root), new FakePullRequests(), Store(), TimeProvider.System);
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(repository);
         await File.WriteAllTextAsync(Path.Combine(_root, "elsewhere.md"), "x");
@@ -155,7 +155,7 @@ public sealed class VoiceStoreTests : IDisposable
     public async Task Unmarking_takes_the_mark_off_and_only_that_one()
     {
         var store = Store();
-        var marks = new VoiceMarks(new FakeGit(_root), store, TimeProvider.System);
+        var marks = new VoiceMarks(new FakeGit(_root), new FakePullRequests(), store, TimeProvider.System);
         var repository = Path.Combine(_root, "repo");
         Directory.CreateDirectory(repository);
         await File.WriteAllTextAsync(Path.Combine(repository, "a.md"), "a");

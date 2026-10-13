@@ -108,11 +108,11 @@ public sealed class VoiceRun
     public int Carried { get; set; }
 
     /// <summary>
-    /// Agreement on held-out samples, or null when the run has no score. A
-    /// partial or review-only run never has one, and that is shown as no score
-    /// rather than a score from a smaller sample.
+    /// How the accepted rules did on held-out samples, or null when the run has
+    /// no score. A partial or review-only run never has one, and that is shown
+    /// as no score rather than a score from a smaller sample.
     /// </summary>
-    public double? Score { get; set; }
+    public VoiceScore? Score { get; set; }
 
     /// <summary>When it finished.</summary>
     public DateTimeOffset Finished { get; set; }
@@ -135,4 +135,61 @@ public sealed class VoiceLearnState
 
     /// <summary>Every run, oldest first.</summary>
     public List<VoiceRun> Runs { get; set; } = [];
+}
+
+/// <summary>
+/// How a run's accepted rules did against writing they were not learned from.
+/// Recorded from the first release and acted on from the second, so promotion
+/// has history to go on from its first day.
+/// </summary>
+public sealed class VoiceScore
+{
+    /// <summary>Pieces of the person's own writing held out from mining.</summary>
+    public int Own { get; set; }
+
+    /// <summary>Edit pairs read: descriptions the person rewrote when they merged.</summary>
+    public int Edits { get; set; }
+
+    /// <summary>Each accepted rule's result.</summary>
+    public List<VoiceRuleScore> Rules { get; set; } = [];
+}
+
+/// <summary>One rule's agreement on held-out samples, counted by where each sample came from.</summary>
+/// <remarks>
+/// Counted by source rather than pooled, because the sources mean different
+/// things: the person's own writing shows a rule does not fire where it should
+/// not, and only an edit shows it firing where the person agreed it should.
+/// Release 2 promotes on the pool and on a floor of edit samples.
+/// </remarks>
+public sealed class VoiceRuleScore
+{
+    /// <summary>The rule's id.</summary>
+    public string Rule { get; set; } = string.Empty;
+
+    /// <summary>Its check type, or null for a judged rule.</summary>
+    public string? Check { get; set; }
+
+    /// <summary>Held-out pieces of the person's own writing it applied to.</summary>
+    public int Own { get; set; }
+
+    /// <summary>Of those, how many it passed, as it should.</summary>
+    public int OwnAgreed { get; set; }
+
+    /// <summary>Edit pairs it had an opinion on: it fired on one side or both.</summary>
+    public int Edit { get; set; }
+
+    /// <summary>Of those, how many it fired on the draft and not on what was kept.</summary>
+    public int EditAgreed { get; set; }
+
+    /// <summary>Agreement across every sample, from 0 to 1, or null when it could not be scored.</summary>
+    public double? Agreement { get; set; }
+
+    /// <summary>
+    /// Whether this run, taken alone, met the guide's promotion thresholds.
+    /// Nothing acts on it yet.
+    /// </summary>
+    public bool Meets { get; set; }
+
+    /// <summary>Why it has no agreement, when it has none.</summary>
+    public string? Unscored { get; set; }
 }

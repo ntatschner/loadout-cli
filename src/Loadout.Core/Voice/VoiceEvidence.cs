@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Loadout.Core.Git;
 using Loadout.Core.Security;
@@ -8,11 +9,21 @@ namespace Loadout.Core.Voice;
 
 /// <summary>One piece of the person's writing a run may learn from.</summary>
 /// <param name="Id">Short id the agent cites it by, such as <c>e3</c>.</param>
-/// <param name="Source">What kind of writing it is: <c>commit</c>, <c>doc</c> or <c>corpus</c>.</param>
-/// <param name="Reference">Where it came from: a commit hash or a path.</param>
+/// <param name="Source">What kind of writing it is: <c>commit</c>, <c>doc</c>, <c>pr</c> or <c>corpus</c>.</param>
+/// <param name="Reference">Where it came from: a commit hash, a path, or a pull request as <c>#123</c>.</param>
 /// <param name="Text">The text, redacted.</param>
 /// <param name="Hash">The hash of the text as written, so a citation can be told to still hold.</param>
 public sealed record VoiceEvidence(string Id, string Source, string Reference, string Text, string Hash);
+
+/// <summary>
+/// A pull request's description and the squash message it was merged with:
+/// what was drafted, and what the person kept.
+/// </summary>
+/// <param name="Number">The pull request.</param>
+/// <param name="Commit">The squash commit.</param>
+/// <param name="Before">The pull request's title and description, redacted.</param>
+/// <param name="After">The squash message, redacted.</param>
+public sealed record VoiceEditPair(int Number, string Commit, string Before, string After);
 
 /// <summary>What gathering found.</summary>
 /// <param name="Evidence">The pieces a run may read.</param>
@@ -20,7 +31,15 @@ public sealed record VoiceEvidence(string Id, string Source, string Reference, s
 /// Pieces left out because redaction could not finish on them. Sent unchecked
 /// they might carry a credential, so they are not sent at all.
 /// </param>
-public sealed record VoiceGathering(IReadOnlyList<VoiceEvidence> Evidence, int Refused);
+/// <param name="EditPairs">Descriptions the person rewrote when they merged, when pull requests were asked for.</param>
+public sealed record VoiceGathering(IReadOnlyList<VoiceEvidence> Evidence, int Refused, IReadOnlyList<VoiceEditPair> EditPairs)
+{
+    /// <summary>Nothing found.</summary>
+    public VoiceGathering(IReadOnlyList<VoiceEvidence> evidence, int refused)
+        : this(evidence, refused, [])
+    {
+    }
+}
 
 /// <summary>
 /// Gathers the writing a learn run may read: only what is known to be the
@@ -33,6 +52,12 @@ public sealed record VoiceGathering(IReadOnlyList<VoiceEvidence> Evidence, int R
 /// marked, and only while its mark holds; and, for a named style, a corpus
 /// they pointed at. The rest of a repository was written by tools, agents
 /// and other people, and learning from it would learn their voice.
+/// </para>
+/// <para>
+/// Edit pairs come only when asked for, since reading them goes to GitHub.
+/// They are not evidence: a description the person rewrote is what they did
+/// not want, and it is kept for scoring rules against rather than learning
+/// them from.
 /// </para>
 /// <para>
 /// Text is redacted before anything sees it. It is going to a model and its
@@ -50,17 +75,22 @@ public sealed partial class VoiceEvidenceGatherer
     private static readonly string[] CorpusExtensions = [".md", ".txt", ".markdown"];
 
     private readonly IGitManager _git;
+    private readonly IPullRequestReader _pullRequests;
     private readonly VoiceMarks _marks;
 
-    public VoiceEvidenceGatherer(IGitManager git, VoiceMarks marks)
+    public VoiceEvidenceGatherer(IGitManager git, IPullRequestReader pullRequests, VoiceMarks marks)
     {
         _git = git;
+        _pullRequests = pullRequests;
         _marks = marks;
     }
 
     /// <summary>The subject GitHub gives a squash merge: the title, then the pull request's number.</summary>
-    [GeneratedRegex(@"\(#\d+\)\s*$")]
+    [GeneratedRegex(@"\(#(\d{1,9})\)\s*$")]
     private static partial Regex SquashSubject();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Whitespace();
 
     /// <summary>
     /// The writing in a repository known to be the person's, and a corpus if
@@ -68,14 +98,17 @@ public sealed partial class VoiceEvidenceGatherer
     /// </summary>
     /// <param name="repository">The repository, or null to read only the corpus.</param>
     /// <param name="corpus">A directory of somebody's writing, for a named style, or null.</param>
+    /// <param name="pullRequests">Read merged pull requests through gh for edit pairs.</param>
     /// <param name="ct">Cancellation.</param>
     public async Task<OperationResult<VoiceGathering>> GatherAsync(
         string? repository,
         string? corpus,
+        bool pullRequests = false,
         CancellationToken ct = default)
     {
         var pieces = new List<(string Source, string Reference, string Text)>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var squashes = new List<(int Number, string Sha, string Message)>();
 
         if (repository is not null)
         {
@@ -90,22 +123,9 @@ public sealed partial class VoiceEvidenceGatherer
             {
                 var mark = held.Mark;
 
-                if (mark.Kind == VoiceMarkKind.File)
+                if (await _marks.TextAsync(mark, ct).ConfigureAwait(false) is { } text)
                 {
-                    var text = await File.ReadAllTextAsync(Path.Combine(mark.Repository, mark.Reference), ct)
-                        .ConfigureAwait(false);
-
-                    pieces.Add(("doc", mark.Reference, text));
-                }
-                else
-                {
-                    var commit = await _git.ReadCommitMessagesAsync(mark.Repository, mark.Reference, ct: ct)
-                        .ConfigureAwait(false);
-
-                    if (commit.Succeeded && commit.Value!.Count == 1)
-                    {
-                        pieces.Add(("commit", mark.Reference, commit.Value[0].Message));
-                    }
+                    pieces.Add((Source(mark.Kind), mark.Reference, text));
                 }
 
                 seen.Add(mark.Reference);
@@ -117,10 +137,52 @@ public sealed partial class VoiceEvidenceGatherer
 
             foreach (var (sha, message) in history.Value ?? [])
             {
-                if (!seen.Contains(sha) && SquashSubject().IsMatch(message.Split('\n', 2)[0]))
+                if (SquashSubject().Match(message.Split('\n', 2)[0]) is not { Success: true } squash)
+                {
+                    continue;
+                }
+
+                squashes.Add((int.Parse(squash.Groups[1].Value, CultureInfo.InvariantCulture), sha, message));
+
+                if (seen.Add(sha))
                 {
                     pieces.Add(("commit", sha, message));
-                    seen.Add(sha);
+                }
+            }
+        }
+
+        var pairs = new List<VoiceEditPair>();
+        var refused = 0;
+
+        if (pullRequests && repository is not null && squashes.Count > 0)
+        {
+            var merged = await _pullRequests.MergedAsync(repository, SquashWalk, ct).ConfigureAwait(false);
+
+            if (merged.Failed)
+            {
+                return OperationResult<VoiceGathering>.Fail(merged.Error!, merged.ExitCode);
+            }
+
+            var byNumber = merged.Value!.GroupBy(p => p.Number).ToDictionary(g => g.Key, g => g.First());
+
+            foreach (var (number, sha, message) in squashes)
+            {
+                // A description left empty was never drafted, and one merged
+                // unchanged was kept as it was: neither shows a rewrite.
+                if (!byNumber.TryGetValue(number, out var pull)
+                    || pull.Body.Trim().Length == 0
+                    || Flatten(pull.Text) == Flatten(message))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    pairs.Add(new VoiceEditPair(number, sha, Clip(SecretRedactor.Redact(pull.Text)), Clip(SecretRedactor.Redact(message))));
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    refused++;
                 }
             }
         }
@@ -144,7 +206,6 @@ public sealed partial class VoiceEvidenceGatherer
         }
 
         var evidence = new List<VoiceEvidence>();
-        var refused = 0;
 
         foreach (var (source, reference, text) in pieces.Where(p => p.Text.Trim().Length > 0))
         {
@@ -165,8 +226,17 @@ public sealed partial class VoiceEvidenceGatherer
                 $"e{evidence.Count + 1}", source, reference, Clip(redacted), VoiceStore.Hash(text)));
         }
 
-        return OperationResult<VoiceGathering>.Ok(new VoiceGathering(evidence, refused));
+        return OperationResult<VoiceGathering>.Ok(new VoiceGathering(evidence, refused, pairs));
     }
+
+    private static string Source(VoiceMarkKind kind) => kind switch
+    {
+        VoiceMarkKind.File => VoiceGuides.Document,
+        VoiceMarkKind.PullRequest => VoiceGuides.PullRequest,
+        _ => VoiceGuides.Commit,
+    };
+
+    private static string Flatten(string text) => Whitespace().Replace(text, " ").Trim();
 
     private static string Clip(string text) =>
         text.Length <= PieceCharacters ? text : text[..PieceCharacters];

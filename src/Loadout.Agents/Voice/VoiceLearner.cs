@@ -86,6 +86,7 @@ public interface IVoiceLearnPrompts
 /// <param name="Repository">Where to find marked writing and squash merges, or null.</param>
 /// <param name="Corpus">A directory of writing, for a named style, or null.</param>
 /// <param name="Prompts">How to ask the person.</param>
+/// <param name="PullRequests">Read merged pull requests through gh, for edit pairs to score against.</param>
 /// <param name="AgentName">The agent to ask, or null for the default.</param>
 /// <param name="Model">The model to ask for, or null.</param>
 /// <param name="DryRun">Plan only: ask nothing, start nothing, write nothing.</param>
@@ -97,6 +98,7 @@ public sealed record VoiceLearnRequest(
     string? Repository,
     string? Corpus,
     IVoiceLearnPrompts Prompts,
+    bool PullRequests = false,
     string? AgentName = null,
     string? Model = null,
     bool DryRun = false);
@@ -105,6 +107,7 @@ public sealed record VoiceLearnRequest(
 /// <param name="Run">The run as recorded, or as it would be on a dry run.</param>
 /// <param name="ProfilePath">Where the profile is.</param>
 /// <param name="Gathered">The writing it found.</param>
+/// <param name="HeldOut">Pieces of it held back from mining, to score against.</param>
 /// <param name="Estimate">What mining was expected to cost.</param>
 /// <param name="Dropped">Carried proposals dropped because their evidence no longer counts, by id.</param>
 /// <param name="Weakened">Accepted rules whose counted evidence is now short of the threshold, by id.</param>
@@ -113,6 +116,7 @@ public sealed record VoiceLearnOutcome(
     VoiceRun Run,
     string ProfilePath,
     VoiceGathering Gathered,
+    int HeldOut,
     VoiceEstimate Estimate,
     IReadOnlyList<string> Dropped,
     IReadOnlyList<string> Weakened,
@@ -138,7 +142,11 @@ public interface IVoiceLearner
 /// <para>
 /// A rule with enough evidence is proposed; one without is asked about, which
 /// is the interview. Either way the person decides, rule by rule, and only
-/// what they accept reaches the profile. Nothing is held-out scored yet: every
+/// what they accept reaches the profile.
+/// </para>
+/// <para>
+/// A share of the writing is never mined, and a complete run scores the
+/// profile against it and against any edit pairs. A partial or review-only
 /// run is recorded with no score, and that is shown rather than hidden.
 /// </para>
 /// </remarks>
@@ -199,14 +207,14 @@ internal sealed class VoiceLearner : IVoiceLearner
         var now = _time.GetUtcNow();
         var runId = now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
 
-        var gathered = await _gatherer.GatherAsync(request.Repository, request.Corpus, ct).ConfigureAwait(false);
+        var gathered = await _gatherer.GatherAsync(request.Repository, request.Corpus, request.PullRequests, ct).ConfigureAwait(false);
 
         if (gathered.Failed)
         {
             return OperationResult<VoiceLearnOutcome>.Fail(gathered.Error!, gathered.ExitCode);
         }
 
-        var evidence = gathered.Value!.Evidence;
+        var (evidence, heldOut) = VoiceScoring.HoldOut(gathered.Value!.Evidence, guide);
         var holding = VoicePlanning.Holding(evidence);
 
         // Carried proposals first, re-checked against the writing as it is now.
@@ -244,7 +252,7 @@ internal sealed class VoiceLearner : IVoiceLearner
             run.Carried = carried.Count;
 
             return OperationResult<VoiceLearnOutcome>.Ok(
-                new VoiceLearnOutcome(run, profilePath, gathered.Value, estimate, dropped, weakened, []));
+                new VoiceLearnOutcome(run, profilePath, gathered.Value, heldOut.Count, estimate, dropped, weakened, []));
         }
 
         // The cap, settled before anything is spent.
@@ -447,6 +455,14 @@ internal sealed class VoiceLearner : IVoiceLearner
         run.Outcome = !mine ? VoiceRunOutcome.ReviewOnly
             : stopped || failures.Count > 0 ? VoiceRunOutcome.Partial
             : VoiceRunOutcome.Complete;
+        // Scored only when complete. A partial run cannot count towards
+        // promotion, and a score from part of the work reads like one from all
+        // of it.
+        if (run.Outcome == VoiceRunOutcome.Complete)
+        {
+            run.Score = VoiceScoring.Score(profile.Rules, heldOut, gathered.Value.EditPairs, guide);
+        }
+
         run.Finished = _time.GetUtcNow();
 
         if (changed)
@@ -471,6 +487,6 @@ internal sealed class VoiceLearner : IVoiceLearner
         return saved.Failed
             ? OperationResult<VoiceLearnOutcome>.Fail(saved.Error!, saved.ExitCode)
             : OperationResult<VoiceLearnOutcome>.Ok(
-                new VoiceLearnOutcome(run, profilePath, gathered.Value, estimate, dropped, weakened, failures));
+                new VoiceLearnOutcome(run, profilePath, gathered.Value, heldOut.Count, estimate, dropped, weakened, failures));
     }
 }

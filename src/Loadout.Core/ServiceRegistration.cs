@@ -27,6 +27,7 @@ public static class ServiceRegistration
         services.AddSingleton<YamlStore>();
         services.AddSingleton<IConfigurationService, ConfigurationService>();
         services.AddSingleton<IGitManager, GitManager>();
+        services.AddSingleton<IPullRequestReader, GhPullRequestReader>();
         services.AddSingleton<IWorkspaceManager, WorkspaceManager>();
         services.AddSingleton<IProjectService, ProjectService>();
         services.AddSingleton<Projects.IProjectTemplateService, Projects.ProjectTemplateService>();

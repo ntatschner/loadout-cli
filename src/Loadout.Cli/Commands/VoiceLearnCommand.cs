@@ -34,6 +34,10 @@ public sealed class VoiceLearnSettings : VoiceSettings
     [CommandOption("--model <MODEL>")]
     [Description("The model to ask for, as the agent spells it.")]
     public string? Model { get; init; }
+
+    [CommandOption("--pull-requests")]
+    [Description("Also read merged pull requests through gh, read-only, to score rules against the descriptions you rewrote when merging.")]
+    public bool PullRequests { get; init; }
 }
 
 /// <summary>
@@ -49,7 +53,8 @@ public sealed class VoiceLearnSettings : VoiceSettings
 /// <para>
 /// Rounds read and never write: the agent is given the writing and no tools,
 /// in a directory of its own. Nothing is pushed or fetched; marked files and
-/// squash merges are read from the repository as it is.
+/// squash merges are read from the repository as it is. Pull requests are
+/// read through gh only with <c>--pull-requests</c>, or when one is marked.
 /// </para>
 /// </remarks>
 [Description("Learn how you write from your own writing, then accept, edit or reject each rule.")]
@@ -161,9 +166,10 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
                 repository,
                 settings.Corpus is null ? null : Path.GetFullPath(settings.Corpus),
                 prompts,
-                settings.Agent,
-                settings.Model,
-                settings.DryRun),
+                PullRequests: settings.PullRequests,
+                AgentName: settings.Agent,
+                Model: settings.Model,
+                DryRun: settings.DryRun),
             cancellationToken).ConfigureAwait(false);
 
         if (learned.Failed)
@@ -179,7 +185,9 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
             {
                 dryRun = settings.DryRun,
                 profile = outcome.ProfilePath,
-                evidence = outcome.Gathered.Evidence.Count,
+                evidence = outcome.Gathered.Evidence.Count - outcome.HeldOut,
+                heldOut = outcome.HeldOut,
+                editPairs = outcome.Gathered.EditPairs.Count,
                 refused = outcome.Gathered.Refused,
                 estimate = new { calls = outcome.Estimate.Calls, usd = outcome.Estimate.Usd, fromHistory = outcome.Estimate.FromHistory },
                 run = VoiceRunView.Of(outcome.Run),
@@ -203,7 +211,7 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
         if (dryRun)
         {
             output.WriteLine(
-                $"[bold]Would read[/] {gathered.Evidence.Count} piece(s) of your writing in "
+                $"[bold]Would read[/] {gathered.Evidence.Count - outcome.HeldOut} piece(s) of your writing in "
                 + $"{outcome.Estimate.Calls} call(s), estimated at {Usd(outcome.Estimate.Usd)}"
                 + (outcome.Estimate.FromHistory ? " from earlier runs." : " (a first guess; there are no earlier runs to go on)."));
 
@@ -211,6 +219,11 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
             {
                 output.WriteLine($"  [dim]{source.Count()} {Markup.Escape(source.Key)}[/]");
             }
+
+            output.WriteLine(
+                $"[dim]{outcome.HeldOut} of them held back, never mined, to score the rules against"
+                + (gathered.EditPairs.Count > 0 ? $", with {gathered.EditPairs.Count} description(s) you rewrote when merging." : ".")
+                + "[/]");
 
             if (outcome.Run.Carried > 0)
             {
@@ -226,6 +239,7 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
                 $"[bold]{Outcome(run.Outcome)}.[/] Accepted {run.Accepted}, rejected {run.Rejected}, "
                 + $"left {run.Carried} for next time. {run.Calls} call(s), {Usd(run.CostUsd)}.");
             output.WriteLine($"[dim]Profile: {Markup.Escape(outcome.ProfilePath)}[/]");
+            output.WriteLine($"[dim]{Scored(run)}[/]");
         }
 
         if (gathered.Evidence.Count == 0)
@@ -257,6 +271,25 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
         {
             output.WriteLine($"[yellow]A round could not be used:[/] {Markup.Escape(failure)}");
         }
+    }
+
+    /// <summary>A run's score in a line, or why it has none.</summary>
+    internal static string Scored(VoiceRun run)
+    {
+        if (run.Score is not { } score)
+        {
+            return run.Outcome == VoiceRunOutcome.Complete
+                ? "No score."
+                : "No score: only a complete run is scored.";
+        }
+
+        var scored = score.Rules.Count(r => r.Agreement is not null);
+
+        return $"Scored {scored} of {score.Rules.Count} rule(s) against {score.Own} held-out piece(s) "
+            + $"and {score.Edits} edit pair(s)"
+            + (scored > 0
+                ? $", {score.Rules.Where(r => r.Agreement is not null).Average(r => r.Agreement!.Value).ToString("P0", CultureInfo.InvariantCulture)} agreement on average."
+                : ".");
     }
 
     internal static string Usd(decimal amount) =>
@@ -506,7 +539,9 @@ public sealed class VoiceRunsCommand : VoiceCommandBase<VoiceRunsSettings>
                 $"[cyan]{Markup.Escape(run.Id)}[/]  {VoiceLearnCommand.Outcome(run.Outcome).ToLowerInvariant()}, "
                 + $"cap {run.Cap.ToString().ToLowerInvariant()}, {run.Calls} call(s), {VoiceLearnCommand.Usd(run.CostUsd)}, "
                 + $"accepted {run.Accepted} of {run.Proposed}, "
-                + (run.Score is { } score ? $"scored {score:P0}" : "[dim]no score[/]"));
+                + (run.Score is { } score
+                    ? $"scored {score.Rules.Count(r => r.Agreement is not null)} of {score.Rules.Count} rule(s)"
+                    : "[dim]no score[/]"));
         }
 
         if (learn.Cap is { } cap)

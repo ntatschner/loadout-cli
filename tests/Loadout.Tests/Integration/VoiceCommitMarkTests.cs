@@ -100,7 +100,7 @@ public sealed class VoiceCommitMarkTests : IAsyncLifetime
     public async Task A_marked_commit_holds()
     {
         var store = new VoiceStore(Path.Combine(_root, "config"), Path.Combine(_root, "state"), null);
-        var marks = new VoiceMarks(_git, store, TimeProvider.System);
+        var marks = new VoiceMarks(_git, new FakePullRequests(), store, TimeProvider.System);
 
         var candidates = (await marks.CandidatesAsync(_repository, "HEAD~2..HEAD")).Value!;
         candidates.Should().HaveCount(2).And.OnlyContain(c => c.Kind == VoiceMarkKind.Commit);

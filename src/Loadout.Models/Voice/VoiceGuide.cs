@@ -48,6 +48,9 @@ public sealed class VoiceGuide
     /// <summary>How a run's spending is capped.</summary>
     public VoiceCapRule Cap { get; set; } = new();
 
+    /// <summary>How rules are scored against writing they were not learned from.</summary>
+    public VoiceScoringRule Scoring { get; set; } = new();
+
     /// <summary>The <c>id/version</c> a profile records, such as <c>prose/1</c>.</summary>
     public string Reference => $"{Id}/{Version}";
 }
@@ -102,4 +105,16 @@ public sealed class VoiceCapRule
 
     /// <summary>How much writing one call reads, in characters, which sets how many calls a run needs.</summary>
     public int BatchCharacters { get; set; } = 40_000;
+}
+
+/// <summary>How a run keeps writing back to score its rules against.</summary>
+public sealed class VoiceScoringRule
+{
+    /// <summary>
+    /// The share of the person's writing never shown to the miner, from 0 to 1.
+    /// Which pieces is decided by each one's reference, so the same pieces are
+    /// held out on every run and a rule is never scored on what it was learned
+    /// from.
+    /// </summary>
+    public double HoldOut { get; set; } = 0.2;
 }
