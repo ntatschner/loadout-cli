@@ -196,6 +196,95 @@ public sealed class VoiceStore
     public static Task<OperationResult> WriteProfileAsync(string path, VoiceProfile profile, CancellationToken ct = default) =>
         WriteAsync(path, profile, ct);
 
+    /// <summary>
+    /// Where drafted guide definitions are kept, or null without a workspace.
+    /// </summary>
+    /// <remarks>
+    /// In the workspace, because a definition is what a shared profile was
+    /// learned against and has to be readable wherever that profile is. Beside
+    /// the voice directory rather than inside it, where a named style called
+    /// "guides" would have shared its name.
+    /// </remarks>
+    public string? GuidesDirectory => _workspace is null ? null : Path.Combine(_workspace, "voice-guides");
+
+    /// <summary>Every saved guide definition, by id and then version.</summary>
+    public async Task<OperationResult<IReadOnlyList<VoiceGuide>>> SavedGuidesAsync(CancellationToken ct = default)
+    {
+        var guides = new List<VoiceGuide>();
+
+        if (GuidesDirectory is not { } root || !Directory.Exists(root))
+        {
+            return OperationResult<IReadOnlyList<VoiceGuide>>.Ok(guides);
+        }
+
+        foreach (var file in Directory.EnumerateFiles(root, "*.json", SearchOption.AllDirectories))
+        {
+            var read = await ReadAsync<VoiceGuide>(file, ct).ConfigureAwait(false);
+
+            if (read.Failed)
+            {
+                return OperationResult<IReadOnlyList<VoiceGuide>>.Fail(read.Error!, read.ExitCode);
+            }
+
+            // The path is what the version is known by, so a file whose
+            // contents say otherwise was edited and is not to be trusted.
+            var expected = GuidePath(read.Value!.Id, read.Value.Version);
+
+            if (!string.Equals(Path.GetFullPath(file), expected is null ? null : Path.GetFullPath(expected), StringComparison.OrdinalIgnoreCase))
+            {
+                return OperationResult<IReadOnlyList<VoiceGuide>>.Fail(
+                    $"'{file}' says it is {read.Value.Reference}, which is not where it is kept. A saved guide is never edited.",
+                    ExitCode.ConfigurationInvalid);
+            }
+
+            guides.Add(read.Value);
+        }
+
+        return OperationResult<IReadOnlyList<VoiceGuide>>.Ok(
+            guides.OrderBy(g => g.Id, StringComparer.Ordinal).ThenBy(g => g.Version).ToList());
+    }
+
+    /// <summary>
+    /// Saves a guide definition under its version, refusing to replace one
+    /// already saved: a profile learned against it would change meaning.
+    /// </summary>
+    public async Task<OperationResult> SaveGuideAsync(VoiceGuide guide, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(guide);
+
+        if (GuidePath(guide.Id, guide.Version) is not { } path)
+        {
+            return OperationResult.Fail(
+                "There is no workspace on this machine, so there is nowhere to keep a guide. Run 'loadout setup' first.",
+                ExitCode.ConfigurationInvalid);
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+            // Made in full before the file is opened, so nothing can fail
+            // half way through and leave a version that can never be replaced.
+            var text = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(guide, Options) + "\n");
+
+            await using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
+            await stream.WriteAsync(text, ct).ConfigureAwait(false);
+
+            return OperationResult.Ok();
+        }
+        catch (IOException) when (File.Exists(path))
+        {
+            return OperationResult.Fail($"{guide.Reference} is already saved, and a saved guide is never replaced.", ExitCode.InvalidArguments);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult.Fail($"Could not write '{path}': {ex.Message}");
+        }
+    }
+
+    private string? GuidePath(string id, int version) =>
+        GuidesDirectory is { } root ? Path.Combine(root, id, $"{version.ToString(System.Globalization.CultureInfo.InvariantCulture)}.json") : null;
+
     /// <summary>The local mark list, empty when nothing has been marked.</summary>
     public async Task<OperationResult<VoiceMarkList>> ReadMarksAsync(CancellationToken ct = default)
     {

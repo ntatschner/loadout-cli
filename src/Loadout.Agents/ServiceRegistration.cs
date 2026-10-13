@@ -49,6 +49,7 @@ public static class ServiceRegistration
         services.AddSingleton<Ideas.IDumpSplitter, Ideas.DumpSplitter>();
         services.AddSingleton<Core.Voice.VoiceEvidenceGatherer>();
         services.AddSingleton<Voice.IVoiceLearner, Voice.VoiceLearner>();
+        services.AddSingleton<Voice.IVoiceGuideDrafter, Voice.VoiceGuideDrafter>();
         services.AddSingleton<IDiagnosticContributor, AgentDiagnosticContributor>();
 
         return services;

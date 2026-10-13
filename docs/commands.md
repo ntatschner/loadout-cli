@@ -65,6 +65,7 @@
 | `loadout voice learn [--dry-run] [--pull-requests]` | Learn writing rules from your squash merges and marked writing, then accept, edit or reject each one, and score them against writing held back |
 | `loadout voice runs` | Past learn runs: how each ended, how its cap was set, what it cost and how its rules scored |
 | `loadout voice render [--force]` | Render your voice into the style specialist your sessions load. A learn run does this itself |
+| `loadout voice guide list\|show\|draft` | See the guides voices are learned against, and draft a new one with an agent, saved only once you have reviewed it |
 | `loadout instructions export <specialist>` | Copy a built-in specialist into the workspace so it can be edited |
 | `loadout instructions stats` | Say which specialists launches actually reached, and which none did |
 | `loadout instructions probe [specialist]` | Say how often sessions did what a specialist asks for, week by week |

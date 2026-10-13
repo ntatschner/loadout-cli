@@ -265,6 +265,16 @@ commit or the pull request, because a rule learned last week shouldn't hold up
 today's work. `loadout docs audit` runs the same check over the documentation
 and lists what it finds as warnings. A learned rule never fails the audit.
 
+Every voice is learned against a guide: a fixed definition of where evidence
+comes from, which checks a rule may carry, and every threshold a run is judged
+by. `prose/1` ships. `loadout voice guide draft <id> --about "..."` asks an agent
+to draft another, shows it to you, and saves it only if you say so. A saved
+version is never changed, so a profile learned against it keeps its meaning,
+and drafting the same id again proposes the next version. A draft can only
+use the checks Loadout can run. It may name sources Loadout can't read yet,
+such as code, and `voice guide list` says which, because a guide that needs
+them can't be learned from until they exist.
+
 Validation warns about a style that works but costs more than it should:
 
 - a core or voice over about 1,000 tokens, since both load on every launch and

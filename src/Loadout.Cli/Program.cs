@@ -957,6 +957,16 @@ public static class Program
             voice.AddCommand<VoiceLearnCommand>("learn");
             voice.AddCommand<VoiceRunsCommand>("runs");
             voice.AddCommand<VoiceRenderCommand>("render");
+
+            // A branch of its own: 'voice guide draft' drafts a guide, which is
+            // a different thing from learning a voice with one.
+            voice.AddBranch("guide", guide =>
+            {
+                guide.SetDescription("The guide definitions voices are learned against: list, show, or draft a new one.");
+                guide.AddCommand<VoiceGuideListCommand>("list");
+                guide.AddCommand<VoiceGuideShowCommand>("show");
+                guide.AddCommand<VoiceGuideDraftCommand>("draft");
+            });
         });
 
         TopBranch(config, "docs", docs =>

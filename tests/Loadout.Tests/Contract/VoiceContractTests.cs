@@ -158,6 +158,32 @@ public sealed class VoiceContractTests
         (rendered.StandardOutput + rendered.StandardError).Should().Contain("loadout setup");
     }
 
+    [BuiltCliFact]
+    public async Task The_shipped_guide_is_listed_and_shown_and_drafting_asks_for_review_before_spending()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var listed = (await loadout.RunAsync("voice", "guide", "list", "--json")).Json();
+        var prose = listed.GetProperty("guides").EnumerateArray().Single(g => g.GetProperty("id").GetString() == "prose");
+        prose.GetProperty("reference").GetString().Should().Be("prose/1");
+        prose.GetProperty("ships").GetBoolean().Should().BeTrue();
+
+        var shown = (await loadout.RunAsync("voice", "guide", "show", "prose/1", "--json")).Json();
+        shown.GetProperty("guide").GetProperty("evidence").GetProperty("citations").GetInt32().Should().Be(3);
+
+        (await loadout.RunAsync("voice", "guide", "show", "nothing")).ExitCode.Should().NotBe(0);
+
+        var unattended = await loadout.RunAsync("voice", "guide", "draft", "idiolect", "--about", "the phrases I reach for");
+
+        unattended.ExitCode.Should().NotBe(0, "a draft is saved only once somebody has reviewed it");
+        (unattended.StandardOutput + unattended.StandardError).Should().Contain("--dry-run");
+
+        var json = await loadout.RunAsync("voice", "guide", "draft", "idiolect", "--about", "the phrases", "--json");
+
+        json.ExitCode.Should().NotBe(0, "saving asks, so JSON output goes with a dry run");
+        (json.StandardOutput + json.StandardError).Should().Contain("--json goes with --dry-run");
+    }
+
     private static async Task PersonalProfileAsync(LoadoutProcess loadout)
     {
         var shown = (await loadout.RunAsync("voice", "show", "--json")).Json();
