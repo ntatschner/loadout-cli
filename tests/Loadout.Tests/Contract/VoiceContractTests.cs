@@ -115,4 +115,70 @@ public sealed class VoiceContractTests
         (await loadout.RunAsync("voice", "mark", "--list", "--repo", repository, "--json")).Json()
             .GetProperty("marks").GetArrayLength().Should().Be(2);
     }
+
+    [BuiltCliFact]
+    public async Task The_docs_audit_reports_voice_warnings_apart_from_its_findings_and_still_succeeds()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await PersonalProfileAsync(loadout);
+
+        var repository = Path.Combine(loadout.Home, "widget");
+        Directory.CreateDirectory(repository);
+        await File.WriteAllLinesAsync(Path.Combine(repository, "README.md"), ["# Widget", string.Empty, "The color is red."]);
+
+        var audit = await loadout.RunAsync("docs", "audit", "--repo", repository, "--json");
+
+        audit.ExitCode.Should().Be(0, "a learned rule warns and never fails the audit");
+
+        var json = audit.Json();
+        json.GetProperty("findings").EnumerateArray()
+            .Should().NotContain(f => f.GetProperty("kind").GetString() == "voice",
+                "anything counting stale references counts what it always counted");
+
+        var voice = json.GetProperty("voice");
+        voice.GetProperty("rules").GetInt32().Should().Be(2);
+
+        var finding = voice.GetProperty("findings").EnumerateArray().Single();
+        finding.GetProperty("path").GetString().Should().Be("README.md");
+        finding.GetProperty("line").GetInt32().Should().Be(3);
+        finding.GetProperty("detail").GetString().Should().StartWith("british: ");
+    }
+
+    [BuiltCliFact]
+    public async Task Rendering_without_a_workspace_says_where_to_set_one_up()
+    {
+        using var loadout = new LoadoutProcess();
+
+        await PersonalProfileAsync(loadout);
+
+        var rendered = await loadout.RunAsync("voice", "render");
+
+        rendered.ExitCode.Should().NotBe(0);
+        (rendered.StandardOutput + rendered.StandardError).Should().Contain("loadout setup");
+    }
+
+    private static async Task PersonalProfileAsync(LoadoutProcess loadout)
+    {
+        var shown = (await loadout.RunAsync("voice", "show", "--json")).Json();
+        var personal = shown.GetProperty("layers").EnumerateArray()
+            .First(l => l.GetProperty("layer").GetString() == "personal")
+            .GetProperty("path").GetString()!;
+
+        Directory.CreateDirectory(Path.GetDirectoryName(personal)!);
+        await File.WriteAllTextAsync(personal, JsonSerializer.Serialize(new
+        {
+            guide = "prose/1",
+            rules = new object[]
+            {
+                new
+                {
+                    id = "british",
+                    statement = "Write British spellings.",
+                    check = new { type = "prefer-spelling", spellings = new Dictionary<string, string> { ["color"] = "colour" } },
+                },
+                new { id = "warm", statement = "Sound warm." },
+            },
+        }));
+    }
 }

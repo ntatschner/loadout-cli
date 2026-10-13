@@ -98,6 +98,14 @@ public static class SpecialistScaffold
 
         var canonical = $"{kind.ToString().ToLowerInvariant()}.{name.ToLowerInvariant()}";
 
+        if (kind is SpecialistKind.Style && CodingStyles.PartOf(canonical) == StylePart.Voice)
+        {
+            return OperationResult<SpecialistDraft>.Fail(
+                $"'{canonical}' is rendered from a learned voice, not written by hand. "
+                + "Learn one with: loadout voice learn",
+                ExitCode.InvalidArguments);
+        }
+
         if (kind is SpecialistKind.Style && CodingStyles.PartOf(canonical) is null)
         {
             return OperationResult<SpecialistDraft>.Fail(

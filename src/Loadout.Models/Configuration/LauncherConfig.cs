@@ -252,6 +252,20 @@ public sealed class InstructionContextSettings
 
     /// <summary>Share of the ceiling above which it is worth saying so.</summary>
     public int WarnAtPercent { get; set; } = 80;
+
+    /// <summary>
+    /// The named style in force wherever a project or profile has not chosen
+    /// one, or empty for none.
+    /// </summary>
+    /// <remarks>
+    /// The one gap in the style layers. Your personal style is in force
+    /// everywhere and a codebase's in its own project, but a named style held
+    /// only where a project had chosen it, so somebody who writes the same way
+    /// across most of their work had to choose it project by project. A
+    /// project's own choice still wins, the same way a project's agent wins
+    /// over <c>default-agent</c>.
+    /// </remarks>
+    public string DefaultStyle { get; set; } = string.Empty;
 }
 
 /// <summary>Connection details for the central agent-workspaces repository (spec section 10).</summary>

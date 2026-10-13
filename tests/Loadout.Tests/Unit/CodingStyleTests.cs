@@ -232,6 +232,7 @@ public sealed class CodingStyleTests : IDisposable
     [InlineData("style.work", StylePart.Core)]
     [InlineData("style.work.csharp", StylePart.Language)]
     [InlineData("style.work.pattern.repository", StylePart.Pattern)]
+    [InlineData("style.work.voice", StylePart.Voice)]
     [InlineData("style.work.pattern", null)]
     [InlineData("style.work.csharp.extra", null)]
     [InlineData("language.csharp", null)]

@@ -70,8 +70,13 @@ public abstract class VoiceCommandBase<TSettings> : InstructionsCommandBase<TSet
             ? (await Workspace.ReadProjectAsync(project.Entry.Slug, ct).ConfigureAwait(false)).Value
             : null;
 
+        var chosen = StyleChoice.Of(
+            manifest,
+            settings.Profile,
+            await Instructions.DefaultStyleAsync(ct).ConfigureAwait(false));
+
         var layers = await Store
-            .LayersAsync(guide.Id, StyleChoice.Of(manifest, settings.Profile), project?.Entry.Slug, ct)
+            .LayersAsync(guide.Id, chosen, project?.Entry.Slug, ct)
             .ConfigureAwait(false);
 
         return layers.Failed

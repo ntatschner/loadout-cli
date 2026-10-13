@@ -175,10 +175,11 @@ internal sealed class SpecialistResolver : ISpecialistResolver
     }
 
     /// <summary>
-    /// The core of each style in force, least specific first.
+    /// The core and voice of each style in force, least specific first.
     /// </summary>
     /// <remarks>
-    /// Only the core. A style's language files follow their language in, and
+    /// Only those two. The voice goes wherever the core does, because prose is
+    /// written in any task that ends in a commit. A style's language files follow their language in, and
     /// its patterns wait for the task to point at them, so a style with a
     /// dozen patterns costs one page on a launch that needs none of them.
     /// </remarks>
@@ -192,6 +193,11 @@ internal sealed class SpecialistResolver : ISpecialistResolver
             if (catalogue.Find($"style.{name}") is { Kind: SpecialistKind.Style } core)
             {
                 Offer(candidates, core, SpecialistTrigger.Style, CodingStyles.Reason(layer, name));
+            }
+
+            if (catalogue.Find($"style.{name}.{CodingStyles.VoiceSegment}") is { Kind: SpecialistKind.Style } voice)
+            {
+                Offer(candidates, voice, SpecialistTrigger.Style, CodingStyles.Reason(layer, name));
             }
         }
     }

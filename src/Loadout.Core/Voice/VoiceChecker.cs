@@ -83,6 +83,59 @@ public static partial class VoiceChecker
     private static partial Regex SentenceBreak();
 
     /// <summary>
+    /// Checks documentation for the docs audit: every finding a warning, never
+    /// a failure.
+    /// </summary>
+    /// <param name="repositoryRoot">The repository the paths are relative to.</param>
+    /// <param name="documents">Documents to read, relative to the root.</param>
+    /// <param name="rules">The rules in force.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// The same check <c>voice check</c> runs, so the audit and the drafting
+    /// prompts cannot disagree about a page. A page that cannot be read is
+    /// left to the audit's own checks, which already say so.
+    /// </remarks>
+    public static IReadOnlyList<Instructions.DocsFinding> Audit(
+        string repositoryRoot,
+        IReadOnlyList<string> documents,
+        IReadOnlyList<VoiceRule> rules,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(documents);
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var findings = new List<Instructions.DocsFinding>();
+
+        if (rules.Count == 0)
+        {
+            return findings;
+        }
+
+        foreach (var document in documents)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            string text;
+
+            try
+            {
+                text = File.ReadAllText(Path.Combine(repositoryRoot, document.Replace('/', Path.DirectorySeparatorChar)));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            foreach (var finding in Check(text, VoiceGuides.Document, rules).Findings)
+            {
+                findings.Add(new Instructions.DocsFinding(document, finding.Line, "voice", $"{finding.Rule}: {finding.Detail}"));
+            }
+        }
+
+        return findings;
+    }
+
+    /// <summary>
     /// Checks one piece of writing.
     /// </summary>
     /// <param name="text">The writing.</param>

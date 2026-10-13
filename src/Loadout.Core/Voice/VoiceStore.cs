@@ -82,6 +82,55 @@ public sealed class VoiceStore
     };
 
     /// <summary>
+    /// Where a layer's voice is rendered as a style specialist, or null when it
+    /// would be in a workspace this machine does not have.
+    /// </summary>
+    /// <remarks>
+    /// Beside the style's other parts: the workspace's own specialists for the
+    /// personal and named styles, the project's for its codebase style. The
+    /// personal profile itself stays in user configuration; what is rendered
+    /// from it is guidance, not provenance, so it can travel with the workspace
+    /// the way <c>style.personal</c> already does.
+    /// </remarks>
+    public string? SpecialistPath(StyleLayer layer, string name, string? slug) => layer switch
+    {
+        StyleLayer.Personal or StyleLayer.Named when _workspace is not null =>
+            Path.Combine(_workspace, "global", "specialists", $"{VoiceRendering.IdOf(name)}.md"),
+        StyleLayer.Codebase when _workspace is not null && slug is { Length: > 0 } =>
+            Path.Combine(_workspace, "projects", slug, "specialists", $"{VoiceRendering.IdOf(name)}.md"),
+        _ => null,
+    };
+
+    /// <summary>
+    /// Renders one layer's profile into its style specialist, guarded against
+    /// hand edits.
+    /// </summary>
+    public async Task<OperationResult<VoiceRendered>> RenderAsync(
+        StyleLayer layer,
+        string name,
+        VoiceGuide guide,
+        string? slug,
+        bool force = false,
+        bool dryRun = false,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(guide);
+
+        if (PathOf(layer, name, guide.Id, slug) is not { } source || SpecialistPath(layer, name, slug) is not { } target)
+        {
+            return OperationResult<VoiceRendered>.Fail(
+                "There is no workspace on this machine, so there is nowhere to render the voice into. Run 'loadout setup' first.",
+                ExitCode.ConfigurationInvalid);
+        }
+
+        var profile = await ReadProfileAsync(source, ct).ConfigureAwait(false);
+
+        return profile.Failed
+            ? OperationResult<VoiceRendered>.Fail(profile.Error!, profile.ExitCode)
+            : await VoiceRendering.WriteAsync(target, profile.Value, layer, name, guide, force, dryRun, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// The profiles in force for a guide, least specific first, including
     /// layers with nothing in them yet so a caller can say where one would go.
     /// </summary>

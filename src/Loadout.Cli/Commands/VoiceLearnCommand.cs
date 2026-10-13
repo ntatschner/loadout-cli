@@ -179,12 +179,31 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
 
         var outcome = learned.Value!;
 
+        // Rendered as soon as the profile is written, so what was accepted is
+        // what the next session loads. A render that cannot happen, with no
+        // workspace or past a hand edit, is said and does not undo the run.
+        var rendered = settings.DryRun
+            ? null
+            : await Store.RenderAsync(layer, name, guide, project?.Entry.Slug, ct: cancellationToken).ConfigureAwait(false);
+
         if (output.IsJson)
         {
             output.WriteJson(new
             {
                 dryRun = settings.DryRun,
                 profile = outcome.ProfilePath,
+                rendered = rendered switch
+                {
+                    null => null,
+                    { Failed: true } => (object)new { error = Loadout.Tui.Shown.Plainly(rendered.Error) },
+                    _ => new
+                    {
+                        id = rendered.Value!.Id,
+                        path = rendered.Value.Path,
+                        state = VoiceRenderReport.State(rendered.Value.State),
+                        estimatedTokens = rendered.Value.EstimatedTokens,
+                    },
+                },
                 evidence = outcome.Gathered.Evidence.Count - outcome.HeldOut,
                 heldOut = outcome.HeldOut,
                 editPairs = outcome.Gathered.EditPairs.Count,
@@ -200,6 +219,15 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
         }
 
         Report(output, outcome, settings.DryRun);
+
+        if (rendered is { Failed: true })
+        {
+            output.WriteLine($"[yellow]Not rendered:[/] {Loadout.Tui.Shown.Safely(rendered.Error!)}");
+        }
+        else if (rendered is { Value: { } done })
+        {
+            output.WriteLine(VoiceRenderReport.Line(done, dryRun: false, layer, name));
+        }
 
         return CommandOutput.Success();
     }

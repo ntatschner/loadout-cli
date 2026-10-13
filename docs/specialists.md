@@ -167,12 +167,13 @@ repository class looks like. It lives in the same library as every other
 specialist, under the `style` kind, so it is loaded, budgeted and explained the
 same way.
 
-A style has up to three parts, and each costs something only when it is
+A style has up to four parts, and each costs something only when it is
 relevant:
 
 | Part | Id | Loads |
 |---|---|---|
 | Core | `style.work` | On every launch the style is in force |
+| Voice | `style.work.voice` | With the core. Rendered from a learned voice, never written by hand |
 | Language file | `style.work.csharp` | Only when the language it accompanies does |
 | Pattern | `style.work.pattern.repository` | Only when the task mentions it |
 
@@ -211,6 +212,18 @@ rest of a profile's preferences, a profile that doesn't name a style keeps the
 project's: a profile narrows what a session knows about, not whose code it's
 writing.
 
+If you write the same way across most of your work, set a default instead of
+choosing it project by project:
+
+```bash
+loadout config set default-style work
+```
+
+The default is the named style wherever a project or profile hasn't chosen one,
+and outside a project. A project's own choice still wins. One limit: `style use
+none` clears the project's choice, so that project falls back to the default
+rather than to no named style at all.
+
 ### Writing one
 
 ```bash
@@ -230,10 +243,32 @@ do.
 core costs. `loadout style show <name>` prints the core and says when each
 language file and pattern loads.
 
+### A learned voice
+
+`loadout voice learn` builds a voice from your own writing, rule by rule, and
+renders the rules you accepted as the style's voice part:
+`style.personal.voice`, `style.<name>.voice` or `style.codebase.voice`. It
+loads wherever its style is in force, so a named style's voice goes where the
+style does.
+
+The profile is the source and the rendered file is made from it. Each rendered
+file carries a hash of what was rendered, and a file changed by hand is left
+alone on the next render rather than overwritten, with a message saying so.
+Put the change in the profile, or replace the file with `loadout voice render
+--force`. Only the rules are rendered. The writing they were learned from
+stays in the profile, because the rendered file travels with the workspace.
+
+The voice tells a session to check a commit message, pull request description
+or changed page with `loadout voice check`, fix what it finds once, and then
+carry on. Anything still reported goes in the session's reply, never in the
+commit or the pull request, because a rule learned last week shouldn't hold up
+today's work. `loadout docs audit` runs the same check over the documentation
+and lists what it finds as warnings. A learned rule never fails the audit.
+
 Validation warns about a style that works but costs more than it should:
 
-- a core over about 1,000 tokens, since a core loads on every launch and is
-  never dropped for budget
+- a core or voice over about 1,000 tokens, since both load on every launch and
+  are never dropped for budget
 - a language file that accompanies nothing, so nothing will load it
 - a pattern with no example code, which is a rule and belongs in the core or a
   language file
