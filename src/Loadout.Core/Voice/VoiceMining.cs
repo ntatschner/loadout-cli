@@ -72,6 +72,17 @@ public static partial class VoiceMining
         AllowTrailingCommas = true,
     };
 
+    /// <summary>What each check type takes, for the prompt.</summary>
+    private static readonly IReadOnlyDictionary<string, string> CheckFields = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [VoiceChecker.AvoidPhrase] = "phrases",
+        [VoiceChecker.PreferSpelling] = "spellings: avoid and prefer",
+        [VoiceChecker.HeadingCase] = "sentence-case headings",
+        [VoiceChecker.MaxSentenceWords] = "limit",
+        [VoiceChecker.CommitSubject] = "limit: subject length; also no full stop, capital first",
+        [VoiceChecker.Regex] = "pattern that must not match; use only when nothing else fits",
+    };
+
     [GeneratedRegex(@"^[a-z0-9][a-z0-9\-]{0,59}$")]
     private static partial Regex RuleId();
 
@@ -93,13 +104,24 @@ public static partial class VoiceMining
         prompt.AppendLine("Below is writing by one person, every piece of it written by hand. Work out the rules their");
         prompt.AppendLine("writing follows: how they write, not what they write about. Answer in the " + Version + " shape.");
         prompt.AppendLine();
+        prompt.AppendLine(CultureInfo.InvariantCulture, $"This is the {guide.Id} guide: {guide.Summary}");
+        prompt.AppendLine("Propose only rules about that.");
+        prompt.AppendLine();
         prompt.AppendLine("For each rule:");
         prompt.AppendLine("- id: short, lower case, words joined by hyphens. Reuse a known rule's id only to change that rule.");
         prompt.AppendLine("- statement: the rule in one plain sentence, as an instruction to a writer.");
         prompt.AppendLine("- check: a mechanical check when one fits exactly, otherwise null. Types:");
-        prompt.AppendLine("  avoid-phrase (phrases), prefer-spelling (spellings: avoid and prefer), heading-case (sentence-case");
-        prompt.AppendLine("  headings), max-sentence-words (limit), commit-subject (limit: subject length; also no full stop,");
-        prompt.AppendLine("  capital first), regex (pattern that must not match; use only when nothing else fits).");
+
+        if (guide.CheckTypes.Count == 0)
+        {
+            prompt.AppendLine("  none in this guide, so always null.");
+        }
+
+        foreach (var type in guide.CheckTypes)
+        {
+            prompt.AppendLine(CultureInfo.InvariantCulture, $"  {type} ({CheckFields.GetValueOrDefault(type, "see the schema")})");
+        }
+
         prompt.AppendLine("- surfaces: where it applies, from doc, commit and pr. Empty means everywhere.");
         prompt.AppendLine("- citations: every passage that shows the rule, as the evidence id and an excerpt copied from");
         prompt.AppendLine("  that piece exactly, character for character, never reworded. Cite as many as there are.");

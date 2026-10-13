@@ -90,6 +90,7 @@ public interface IVoiceLearnPrompts
 /// <param name="AgentName">The agent to ask, or null for the default.</param>
 /// <param name="Model">The model to ask for, or null.</param>
 /// <param name="DryRun">Plan only: ask nothing, start nothing, write nothing.</param>
+/// <param name="Transcripts">Read what the person typed to Claude Code, for a guide that lists them.</param>
 public sealed record VoiceLearnRequest(
     VoiceGuide Guide,
     StyleLayer Layer,
@@ -101,7 +102,8 @@ public sealed record VoiceLearnRequest(
     bool PullRequests = false,
     string? AgentName = null,
     string? Model = null,
-    bool DryRun = false);
+    bool DryRun = false,
+    bool Transcripts = false);
 
 /// <summary>What a learn run came to.</summary>
 /// <param name="Run">The run as recorded, or as it would be on a dry run.</param>
@@ -210,7 +212,11 @@ internal sealed class VoiceLearner : IVoiceLearner
         var now = _time.GetUtcNow();
         var runId = now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
 
-        var gathered = await _gatherer.GatherAsync(request.Repository, request.Corpus, request.PullRequests, ct).ConfigureAwait(false);
+        var gathered = await _gatherer
+            .GatherAsync(
+                new VoiceGatherRequest(request.Repository, request.Corpus, guide.Sources, request.PullRequests, request.Transcripts),
+                ct)
+            .ConfigureAwait(false);
 
         if (gathered.Failed)
         {

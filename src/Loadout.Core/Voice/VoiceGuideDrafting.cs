@@ -45,7 +45,22 @@ public static partial class VoiceGuideDrafting
         ["edit-pair"] = "pull request descriptions against the squash message they were merged under",
         ["interview"] = "the person's answers when asked about a rule directly",
         ["corpus"] = "a directory of somebody's writing, for a named style",
+        [Transcript] = "what the person typed to Claude Code; word choice and spelling only, never sentence form",
     };
+
+    /// <summary>The source kind for what the person typed to Claude Code.</summary>
+    public const string Transcript = "transcript";
+
+    /// <summary>
+    /// The only checks a guide reading transcripts may carry.
+    /// </summary>
+    /// <remarks>
+    /// Prompts to an agent are written in a different register from docs and
+    /// commit messages: short, unpunctuated, often a fragment. Word choice and
+    /// spelling carry across registers and sentence form does not, so a guide
+    /// learning from them is held to the checks about words.
+    /// </remarks>
+    public static readonly IReadOnlyList<string> TranscriptChecks = [VoiceChecker.AvoidPhrase, VoiceChecker.PreferSpelling];
 
     /// <summary>What each check type does, for the prompt.</summary>
     private static readonly IReadOnlyDictionary<string, string> CheckMeanings = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -272,6 +287,13 @@ public static partial class VoiceGuideDrafting
         if (guide.CheckTypes.FirstOrDefault(t => !VoiceChecker.Types.Contains(t)) is { } unknown)
         {
             return $"'{unknown}' is not a check Loadout can run. It can run: {string.Join(", ", VoiceChecker.Types)}.";
+        }
+
+        if (guide.Sources.Contains(Transcript, StringComparer.Ordinal)
+            && guide.CheckTypes.FirstOrDefault(t => !TranscriptChecks.Contains(t)) is { } formCheck)
+        {
+            return $"A guide that reads transcripts may carry only {string.Join(" and ", TranscriptChecks)}, "
+                + $"because prompts show word choice and spelling but not how sentences are formed. '{formCheck}' is about form.";
         }
 
         var evidence = guide.Evidence;

@@ -59,7 +59,7 @@ public sealed class VoiceRenderingTests : IDisposable
     private async Task<VoiceRendered> RenderAsync(
         StyleLayer layer = StyleLayer.Personal, string name = CodingStyles.Personal, bool force = false, bool dryRun = false)
     {
-        var rendered = await _store.RenderAsync(layer, name, _guide, Slug, force, dryRun);
+        var rendered = await _store.RenderAsync(layer, name, Slug, force, dryRun);
 
         rendered.Failed.Should().BeFalse(rendered.Error);
 
@@ -203,7 +203,7 @@ public sealed class VoiceRenderingTests : IDisposable
     {
         var store = new VoiceStore(Path.Combine(_root, "config"), Path.Combine(_root, "state"), workspaceRoot: null);
 
-        var rendered = await store.RenderAsync(StyleLayer.Personal, CodingStyles.Personal, _guide, Slug);
+        var rendered = await store.RenderAsync(StyleLayer.Personal, CodingStyles.Personal, Slug);
 
         rendered.Failed.Should().BeTrue();
         rendered.Error.Should().Contain("loadout setup");

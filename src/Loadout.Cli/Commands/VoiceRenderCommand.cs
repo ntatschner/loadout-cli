@@ -106,7 +106,7 @@ public sealed class VoiceRenderCommand : VoiceCommandBase<VoiceRenderSettings>
         }
 
         var rendered = await Store
-            .RenderAsync(layer, name, guide, project?.Entry.Slug, settings.Force, settings.DryRun, cancellationToken)
+            .RenderAsync(layer, name, project?.Entry.Slug, settings.Force, settings.DryRun, cancellationToken)
             .ConfigureAwait(false);
 
         if (rendered.Failed)

@@ -77,10 +77,16 @@ public static partial class VoiceRendering
     /// <param name="layer">Its layer.</param>
     /// <param name="name">Its style's name.</param>
     /// <param name="guide">The guide, for the surfaces a rule with none applies to.</param>
-    public static string Render(VoiceProfile profile, StyleLayer layer, string name, VoiceGuide guide)
+    public static string Render(VoiceProfile profile, StyleLayer layer, string name, VoiceGuide guide) =>
+        Render([(guide, profile)], layer, name);
+
+    /// <summary>The specialist text for every guide's profile at a layer, stamped with its hash.</summary>
+    /// <param name="learned">Each guide with its profile, in the order they are to be read.</param>
+    /// <param name="layer">Their layer.</param>
+    /// <param name="name">Their style's name.</param>
+    public static string Render(IReadOnlyList<(VoiceGuide Guide, VoiceProfile Profile)> learned, StyleLayer layer, string name)
     {
-        ArgumentNullException.ThrowIfNull(profile);
-        ArgumentNullException.ThrowIfNull(guide);
+        ArgumentNullException.ThrowIfNull(learned);
 
         var text = new StringBuilder();
 
@@ -96,18 +102,21 @@ public static partial class VoiceRendering
 
         text.Append("## Rules\n\n");
         text.Append(CultureInfo.InvariantCulture,
-            $"Learned from {Whose(layer, name)} own writing and accepted rule by rule ({profile.Guide}).\n\n");
+            $"Learned from {Whose(layer, name)} own writing and accepted rule by rule ({string.Join(", ", learned.Select(l => l.Profile.Guide))}).\n\n");
 
-        foreach (var rule in profile.Rules)
+        foreach (var (guide, profile) in learned)
         {
-            text.Append("- ").Append(rule.Statement.Trim());
-
-            if (Limited(rule, guide) is { } surfaces)
+            foreach (var rule in profile.Rules)
             {
-                text.Append(CultureInfo.InvariantCulture, $" *({surfaces} only)*");
-            }
+                text.Append("- ").Append(rule.Statement.Trim());
 
-            text.Append('\n');
+                if (Limited(rule, guide) is { } surfaces)
+                {
+                    text.Append(CultureInfo.InvariantCulture, $" *({surfaces} only)*");
+                }
+
+                text.Append('\n');
+            }
         }
 
         text.Append("\n## Before you commit or open a pull request\n\n");
@@ -151,7 +160,7 @@ public static partial class VoiceRendering
     /// <param name="force">Replace a hand-edited file anyway.</param>
     /// <param name="dryRun">Say what would happen and change nothing.</param>
     /// <param name="ct">Cancellation.</param>
-    public static async Task<OperationResult<VoiceRendered>> WriteAsync(
+    public static Task<OperationResult<VoiceRendered>> WriteAsync(
         string path,
         VoiceProfile? profile,
         StyleLayer layer,
@@ -159,9 +168,33 @@ public static partial class VoiceRendering
         VoiceGuide guide,
         bool force = false,
         bool dryRun = false,
+        CancellationToken ct = default) =>
+        WriteAsync(path, profile is { Rules.Count: > 0 } ? [(guide, profile)] : [], layer, name, force, dryRun, ct);
+
+    /// <summary>
+    /// Renders every guide's profile at a layer into its specialist file,
+    /// guarded against hand edits.
+    /// </summary>
+    /// <param name="path">The specialist file.</param>
+    /// <param name="learned">Each guide with rules, and its profile.</param>
+    /// <param name="layer">Their layer.</param>
+    /// <param name="name">Their style's name.</param>
+    /// <param name="force">Replace a hand-edited file anyway.</param>
+    /// <param name="dryRun">Say what would happen and change nothing.</param>
+    /// <param name="ct">Cancellation.</param>
+    public static async Task<OperationResult<VoiceRendered>> WriteAsync(
+        string path,
+        IReadOnlyList<(VoiceGuide Guide, VoiceProfile Profile)> learned,
+        StyleLayer layer,
+        string name,
+        bool force = false,
+        bool dryRun = false,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(learned);
+
+        learned = [.. learned.Where(l => l.Profile.Rules.Count > 0)];
 
         var id = IdOf(name);
 
@@ -176,7 +209,7 @@ public static partial class VoiceRendering
                 return OperationResult<VoiceRendered>.Ok(new VoiceRendered(id, path, VoiceRenderState.HandEdited, 0));
             }
 
-            if (profile is not { Rules.Count: > 0 })
+            if (learned.Count == 0)
             {
                 if (existing is null)
                 {
@@ -191,7 +224,7 @@ public static partial class VoiceRendering
                 return OperationResult<VoiceRendered>.Ok(new VoiceRendered(id, path, VoiceRenderState.Removed, 0));
             }
 
-            var text = Render(profile, layer, name, guide);
+            var text = Render(learned, layer, name);
             var tokens = Tokens(text);
 
             if (existing is not null && string.Equals(

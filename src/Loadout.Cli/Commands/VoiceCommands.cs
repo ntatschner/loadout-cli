@@ -22,13 +22,16 @@ public class VoiceSettings : GlobalSettings
     public string? Project { get; init; }
 
     [CommandOption("--guide <GUIDE>")]
-    [Description("Which guide. Only prose ships so far.")]
-    [DefaultValue("prose")]
-    public string Guide { get; init; } = "prose";
+    [Description("Which guide, as an id or id/version: prose, which ships, or one you drafted. Defaults to prose.")]
+    public string? Guide { get; init; }
 }
 
 /// <summary>The guide in use, the project if any, and the profiles in force.</summary>
-public sealed record VoiceContext(VoiceGuide Guide, ProjectResolution? Project, IReadOnlyList<VoiceLayer> Layers);
+public sealed record VoiceContext(VoiceGuide Guide, ProjectResolution? Project, IReadOnlyList<VoiceLayer> Layers)
+{
+    /// <summary>The named style chosen for this work, or null.</summary>
+    public string? Chosen { get; init; }
+}
 
 /// <summary>
 /// Shared by the voice commands: which guide, which project, and the profiles
@@ -56,13 +59,14 @@ public abstract class VoiceCommandBase<TSettings> : InstructionsCommandBase<TSet
         TSettings settings,
         CancellationToken ct)
     {
-        if (VoiceGuides.Find(settings.Guide) is not { } guide)
+        var found = await Store.FindGuideAsync(settings.Guide ?? VoiceGuides.Prose().Id, ct).ConfigureAwait(false);
+
+        if (found.Failed)
         {
-            return Loadout.Models.Results.OperationResult<VoiceContext>.Fail(
-                $"There is no guide called '{settings.Guide}'. "
-                + $"There is: {string.Join(", ", VoiceGuides.All().Select(g => g.Id))}.",
-                ExitCode.InvalidArguments);
+            return Loadout.Models.Results.OperationResult<VoiceContext>.Fail(found.Error!, found.ExitCode);
         }
+
+        var guide = found.Value!;
 
         var project = await ProjectAsync(settings.Project, settings.Repo, ct).ConfigureAwait(false);
 
@@ -81,7 +85,8 @@ public abstract class VoiceCommandBase<TSettings> : InstructionsCommandBase<TSet
 
         return layers.Failed
             ? Loadout.Models.Results.OperationResult<VoiceContext>.Fail(layers.Error!, layers.ExitCode)
-            : Loadout.Models.Results.OperationResult<VoiceContext>.Ok(new VoiceContext(guide, project, layers.Value!));
+            : Loadout.Models.Results.OperationResult<VoiceContext>.Ok(
+                new VoiceContext(guide, project, layers.Value!) { Chosen = chosen });
     }
 
     protected static string Layer(StyleLayer layer) => layer.ToString().ToLowerInvariant();
@@ -280,17 +285,43 @@ public sealed class VoiceCheckCommand : VoiceCommandBase<VoiceCheckSettings>
 
         var (guide, project, layers) = resolved.Value!;
 
+        // One guide when one is named; otherwise the whole voice, since the
+        // rendered voice tells an agent to check against everything learned.
+        IReadOnlyList<VoiceGuide> guides = [guide];
+        List<Loadout.Models.Voice.VoiceRule> rules;
+
+        if (settings.Guide is null)
+        {
+            var current = await Store.CurrentGuidesAsync(cancellationToken).ConfigureAwait(false);
+            var inForce = current.Failed
+                ? Loadout.Models.Results.OperationResult<IReadOnlyList<ResolvedVoiceRule>>.Fail(current.Error!, current.ExitCode)
+                : await Store.RulesInForceAsync(resolved.Value!.Chosen, project?.Entry.Slug, cancellationToken).ConfigureAwait(false);
+
+            if (inForce.Failed)
+            {
+                return output.Fail(inForce);
+            }
+
+            guides = current.Value!;
+            rules = inForce.Value!.Select(r => r.Rule).ToList();
+        }
+        else
+        {
+            rules = VoiceStore.Resolve(layers).Select(r => r.Rule).ToList();
+        }
+
         var surface = (settings.Surface ?? (settings.Files.Length > 0 ? VoiceGuides.Document : VoiceGuides.Commit))
             .Trim().ToLowerInvariant();
 
-        if (!guide.Surfaces.Contains(surface, StringComparer.Ordinal))
+        var surfaces = guides.SelectMany(g => g.Surfaces).Distinct(StringComparer.Ordinal).ToList();
+
+        if (!surfaces.Contains(surface, StringComparer.Ordinal))
         {
             return output.Fail(
-                $"'{surface}' is not a surface the {guide.Id} guide knows. It knows: {string.Join(", ", guide.Surfaces)}.",
+                $"'{surface}' is not a surface {(guides.Count == 1 ? $"the {guide.Id} guide" : "any guide")} knows. "
+                + $"Known: {string.Join(", ", surfaces)}.",
                 ExitCode.InvalidArguments);
         }
-
-        var rules = VoiceStore.Resolve(layers).Select(r => r.Rule).ToList();
         var pieces = new List<(string Source, string Text)>();
 
         if (settings.Message is { } message)
@@ -329,7 +360,7 @@ public sealed class VoiceCheckCommand : VoiceCommandBase<VoiceCheckSettings>
         {
             output.WriteJson(new
             {
-                guide = guide.Reference,
+                guides = guides.Select(g => g.Reference),
                 surface,
                 rules = rules.Count,
                 checks = results.Select(r => new

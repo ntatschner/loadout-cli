@@ -84,6 +84,7 @@ public static class ServiceRegistration
                 paths.Config, paths.State, workspace.IsAvailable() ? workspace.LocalPath : null);
         });
         services.AddSingleton<Voice.VoiceMarks>();
+        services.AddSingleton<Voice.VoiceTranscripts>();
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<Instructions.MemoryCompressor>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();

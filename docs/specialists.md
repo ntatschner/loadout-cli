@@ -275,6 +275,27 @@ use the checks Loadout can run. It may name sources Loadout can't read yet,
 such as code, and `voice guide list` says which, because a guide that needs
 them can't be learned from until they exist.
 
+A drafted guide is learned with `loadout voice learn --guide <id>`, and reads
+only the sources it lists. Its rules go into the same voice part as the prose
+rules, and `voice check` and the docs audit check against every guide's rules
+unless `--guide` names one.
+
+One source is for word choice only. `--transcripts` reads what you typed to
+Claude Code, for your personal voice, and only a guide that lists `transcript`
+can use it. Prompts to an agent are short and often unpunctuated, so they show
+which words you reach for and how you spell them, not how you build a sentence.
+A guide that reads them may carry only the `avoid-phrase` and `prefer-spelling`
+checks. Only prompts Claude records as typed by a person are read, never one
+sent by Loadout or another program, and pasted text and code are taken out.
+Two more things are left out on purpose:
+
+- A session's opening prompt. Loadout starts some sessions with one, and the
+  transcript records it exactly as if you had typed it.
+- Prompts typed in the Claude desktop app, which are recorded the same way as
+  prompts a program sends.
+
+Text pasted without Claude marking it as pasted is still read as yours.
+
 Validation warns about a style that works but costs more than it should:
 
 - a core or voice over about 1,000 tokens, since both load on every launch and

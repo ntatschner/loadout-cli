@@ -102,32 +102,169 @@ public sealed class VoiceStore
     };
 
     /// <summary>
-    /// Renders one layer's profile into its style specialist, guarded against
-    /// hand edits.
+    /// Renders one layer's profiles, one for each guide learned there, into
+    /// its style specialist, guarded against hand edits.
     /// </summary>
+    /// <remarks>
+    /// Every guide's rules go in the one file, because a style has one voice
+    /// part: what was learned about word choice belongs beside what was
+    /// learned about prose, not in place of it.
+    /// </remarks>
     public async Task<OperationResult<VoiceRendered>> RenderAsync(
         StyleLayer layer,
         string name,
-        VoiceGuide guide,
         string? slug,
         bool force = false,
         bool dryRun = false,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(guide);
-
-        if (PathOf(layer, name, guide.Id, slug) is not { } source || SpecialistPath(layer, name, slug) is not { } target)
+        if (SpecialistPath(layer, name, slug) is not { } target)
         {
             return OperationResult<VoiceRendered>.Fail(
                 "There is no workspace on this machine, so there is nowhere to render the voice into. Run 'loadout setup' first.",
                 ExitCode.ConfigurationInvalid);
         }
 
-        var profile = await ReadProfileAsync(source, ct).ConfigureAwait(false);
+        var guides = await CurrentGuidesAsync(ct).ConfigureAwait(false);
 
-        return profile.Failed
-            ? OperationResult<VoiceRendered>.Fail(profile.Error!, profile.ExitCode)
-            : await VoiceRendering.WriteAsync(target, profile.Value, layer, name, guide, force, dryRun, ct).ConfigureAwait(false);
+        if (guides.Failed)
+        {
+            return OperationResult<VoiceRendered>.Fail(guides.Error!, guides.ExitCode);
+        }
+
+        var learned = new List<(VoiceGuide Guide, VoiceProfile Profile)>();
+
+        foreach (var guide in guides.Value!)
+        {
+            if (PathOf(layer, name, guide.Id, slug) is not { } source)
+            {
+                continue;
+            }
+
+            var profile = await ReadProfileAsync(source, ct).ConfigureAwait(false);
+
+            if (profile.Failed)
+            {
+                return OperationResult<VoiceRendered>.Fail(profile.Error!, profile.ExitCode);
+            }
+
+            if (profile.Value is { Rules.Count: > 0 } kept)
+            {
+                learned.Add((guide, kept));
+            }
+        }
+
+        return await VoiceRendering.WriteAsync(target, learned, layer, name, force, dryRun, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A guide by id, or by <c>id/version</c>: one that ships, or one drafted
+    /// and saved here. An id alone means the newest version.
+    /// </summary>
+    public async Task<OperationResult<VoiceGuide>> FindGuideAsync(string reference, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        var parts = reference.Trim().ToLowerInvariant().Split('/', 2);
+        var id = parts[0];
+        int? version = null;
+
+        if (parts.Length == 2)
+        {
+            if (!int.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number))
+            {
+                return OperationResult<VoiceGuide>.Fail(
+                    $"'{reference}' is not a guide. Name one as an id, such as prose, or as id/version, such as prose/1.",
+                    ExitCode.InvalidArguments);
+            }
+
+            version = number;
+        }
+
+        var saved = await SavedGuidesAsync(ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            return OperationResult<VoiceGuide>.Fail(saved.Error!, saved.ExitCode);
+        }
+
+        var candidates = VoiceGuides.All()
+            .Concat(saved.Value!)
+            .Where(g => string.Equals(g.Id, id, StringComparison.Ordinal) && (version is null || g.Version == version))
+            .OrderByDescending(g => g.Version)
+            .ToList();
+
+        if (candidates.Count > 0)
+        {
+            return OperationResult<VoiceGuide>.Ok(candidates[0]);
+        }
+
+        var known = VoiceGuides.All().Concat(saved.Value!).Select(g => g.Id).Distinct(StringComparer.Ordinal);
+
+        return OperationResult<VoiceGuide>.Fail(
+            $"There is no guide called '{reference}'. There is: {string.Join(", ", known)}.",
+            ExitCode.InvalidArguments);
+    }
+
+    /// <summary>
+    /// The newest version of every guide, those that ship first: the ones a
+    /// voice is checked and rendered against.
+    /// </summary>
+    public async Task<OperationResult<IReadOnlyList<VoiceGuide>>> CurrentGuidesAsync(CancellationToken ct = default)
+    {
+        var saved = await SavedGuidesAsync(ct).ConfigureAwait(false);
+
+        if (saved.Failed)
+        {
+            return OperationResult<IReadOnlyList<VoiceGuide>>.Fail(saved.Error!, saved.ExitCode);
+        }
+
+        var shipped = VoiceGuides.All();
+
+        // A saved version of a shipped id cannot be drafted, so one here was
+        // put here by hand, and the shipped definition wins.
+        var drafted = saved.Value!
+            .Where(g => !shipped.Any(s => string.Equals(s.Id, g.Id, StringComparison.Ordinal)))
+            .GroupBy(g => g.Id, StringComparer.Ordinal)
+            .Select(g => g.MaxBy(x => x.Version)!);
+
+        return OperationResult<IReadOnlyList<VoiceGuide>>.Ok([.. shipped, .. drafted]);
+    }
+
+    /// <summary>
+    /// The rules in force across every guide, for checking writing against
+    /// the whole voice rather than one guide's part of it.
+    /// </summary>
+    /// <param name="chosen">The named style chosen for this work, or null.</param>
+    /// <param name="slug">The project, or null outside one.</param>
+    /// <param name="ct">Cancellation.</param>
+    public async Task<OperationResult<IReadOnlyList<ResolvedVoiceRule>>> RulesInForceAsync(
+        string? chosen,
+        string? slug,
+        CancellationToken ct = default)
+    {
+        var guides = await CurrentGuidesAsync(ct).ConfigureAwait(false);
+
+        if (guides.Failed)
+        {
+            return OperationResult<IReadOnlyList<ResolvedVoiceRule>>.Fail(guides.Error!, guides.ExitCode);
+        }
+
+        var rules = new List<ResolvedVoiceRule>();
+
+        foreach (var guide in guides.Value!)
+        {
+            var layers = await LayersAsync(guide.Id, chosen, slug, ct).ConfigureAwait(false);
+
+            if (layers.Failed)
+            {
+                return OperationResult<IReadOnlyList<ResolvedVoiceRule>>.Fail(layers.Error!, layers.ExitCode);
+            }
+
+            rules.AddRange(Resolve(layers.Value!));
+        }
+
+        return OperationResult<IReadOnlyList<ResolvedVoiceRule>>.Ok(rules);
     }
 
     /// <summary>

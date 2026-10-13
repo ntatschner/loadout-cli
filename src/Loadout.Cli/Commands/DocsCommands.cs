@@ -214,13 +214,12 @@ public sealed class DocsAuditCommand : AsyncCommand<DocsAuditCommand.Settings>
         var chosen = StyleChoice.Of(
             manifest, profileName, await _instructions.DefaultStyleAsync(ct).ConfigureAwait(false));
 
-        var layers = await _voice
-            .LayersAsync(Loadout.Core.Voice.VoiceGuides.Prose().Id, chosen, slug, ct)
-            .ConfigureAwait(false);
+        // Every guide's rules: a doc is written in the whole voice, not one part of it.
+        var rules = await _voice.RulesInForceAsync(chosen, slug, ct).ConfigureAwait(false);
 
-        return layers.Failed
-            ? ([], layers.Error)
-            : (Loadout.Core.Voice.VoiceStore.Resolve(layers.Value!).Select(r => r.Rule).ToList(), null);
+        return rules.Failed
+            ? ([], rules.Error)
+            : (rules.Value!.Select(r => r.Rule).ToList(), null);
     }
 
     /// <summary>

@@ -38,6 +38,10 @@ public sealed class VoiceLearnSettings : VoiceSettings
     [CommandOption("--pull-requests")]
     [Description("Also read merged pull requests through gh, read-only, to score rules against the descriptions you rewrote when merging.")]
     public bool PullRequests { get; init; }
+
+    [CommandOption("--transcripts")]
+    [Description("Also read what you typed to Claude Code, for a guide about word choice or spelling that lists transcripts. Your personal profile only.")]
+    public bool Transcripts { get; init; }
 }
 
 /// <summary>
@@ -149,6 +153,24 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
                 ExitCode.InvalidArguments);
         }
 
+        // Your prompts are yours, so they teach your own profile and nothing
+        // else: not a named style learned from somebody's corpus, and not a
+        // codebase, which is everybody who works on it.
+        if (settings.Transcripts && layer != StyleLayer.Personal)
+        {
+            return output.Fail(
+                "Transcripts are your own prompts, so they can only teach your personal profile. Use --layer personal.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (settings.Transcripts && !guide.Sources.Contains(VoiceGuideDrafting.Transcript, StringComparer.Ordinal))
+        {
+            return output.Fail(
+                $"{guide.Reference} does not read transcripts. Only a guide about word choice or spelling can, "
+                + "and it has to list them: draft one with 'loadout voice guide draft'.",
+                ExitCode.InvalidArguments);
+        }
+
         // A corpus-only named style reads no repository: somebody else's style
         // is not to be mixed with whatever this repository's history holds.
         var repository = settings.Corpus is null
@@ -169,7 +191,8 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
                 PullRequests: settings.PullRequests,
                 AgentName: settings.Agent,
                 Model: settings.Model,
-                DryRun: settings.DryRun),
+                DryRun: settings.DryRun,
+                Transcripts: settings.Transcripts),
             cancellationToken).ConfigureAwait(false);
 
         if (learned.Failed)
@@ -184,7 +207,7 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
         // workspace or past a hand edit, is said and does not undo the run.
         var rendered = settings.DryRun
             ? null
-            : await Store.RenderAsync(layer, name, guide, project?.Entry.Slug, ct: cancellationToken).ConfigureAwait(false);
+            : await Store.RenderAsync(layer, name, project?.Entry.Slug, ct: cancellationToken).ConfigureAwait(false);
 
         if (output.IsJson)
         {
