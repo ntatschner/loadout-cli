@@ -239,6 +239,7 @@ public interface IGitManager
     /// </summary>
     /// <param name="repositoryPath">Any working tree of the repository.</param>
     /// <param name="revision">One commit, or a range such as <c>main~20..main</c>.</param>
+    /// <param name="walk">Read this many commits back from the revision, rather than it alone.</param>
     /// <param name="ct">Cancellation.</param>
     /// <remarks>
     /// A single commit is read alone rather than with its history: asking for
@@ -248,6 +249,7 @@ public interface IGitManager
     Task<OperationResult<IReadOnlyList<(string Sha, string Message)>>> ReadCommitMessagesAsync(
         string repositoryPath,
         string revision,
+        int? walk = null,
         CancellationToken ct = default);
 
     /// <summary>Lists the main working tree and any linked worktrees (spec section 71).</summary>

@@ -162,6 +162,41 @@ public sealed class VoiceStore
         WriteAsync(MarksPath, marks, ct);
 
     /// <summary>
+    /// The local file for one person's running of a guide for one profile:
+    /// its cap, carried proposals, rejections and run history.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by profile, and kept in machine state even for a profile that is
+    /// shared, because what one person spent and what they have not yet
+    /// reviewed is nobody else's business and nothing reads it but them.
+    /// </remarks>
+    public string StatePath(StyleLayer layer, string name, string guide, string? slug)
+    {
+        var key = layer switch
+        {
+            StyleLayer.Personal => "personal",
+            StyleLayer.Named => $"named-{name}",
+            _ => $"codebase-{slug}",
+        };
+
+        return Path.Combine(_state, "voice", "learn", $"{key}-{guide}.json");
+    }
+
+    /// <summary>The local learn state, empty before the first run.</summary>
+    public static async Task<OperationResult<VoiceLearnState>> ReadStateAsync(string path, CancellationToken ct = default)
+    {
+        var read = await ReadAsync<VoiceLearnState>(path, ct).ConfigureAwait(false);
+
+        return read.Failed
+            ? OperationResult<VoiceLearnState>.Fail(read.Error!, read.ExitCode)
+            : OperationResult<VoiceLearnState>.Ok(read.Value ?? new VoiceLearnState());
+    }
+
+    /// <summary>Writes the local learn state.</summary>
+    public static Task<OperationResult> WriteStateAsync(string path, VoiceLearnState state, CancellationToken ct = default) =>
+        WriteAsync(path, state, ct);
+
+    /// <summary>
     /// The hash a mark or citation is pinned to: SHA-256 of the text with its
     /// line endings made the same, so a checkout on another platform does not
     /// lapse every mark.

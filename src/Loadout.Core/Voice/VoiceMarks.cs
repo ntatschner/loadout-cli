@@ -90,7 +90,7 @@ public sealed class VoiceMarks
                 [new VoiceMarkCandidate(VoiceMarkKind.File, Relative(repository, path), text)]);
         }
 
-        var commits = await _git.ReadCommitMessagesAsync(repository, target, ct).ConfigureAwait(false);
+        var commits = await _git.ReadCommitMessagesAsync(repository, target, ct: ct).ConfigureAwait(false);
 
         if (commits.Failed)
         {
@@ -259,7 +259,7 @@ public sealed class VoiceMarks
 
         if (mark.Kind == VoiceMarkKind.Commit)
         {
-            var commit = await _git.ReadCommitMessagesAsync(mark.Repository, mark.Reference, ct).ConfigureAwait(false);
+            var commit = await _git.ReadCommitMessagesAsync(mark.Repository, mark.Reference, ct: ct).ConfigureAwait(false);
 
             return commit.Succeeded && commit.Value!.Count == 1 ? VoiceMarkState.Holds : VoiceMarkState.Missing;
         }

@@ -92,4 +92,14 @@ public sealed class VoiceCapRule
 
     /// <summary>A lower cap is offered only when the new proposal is below this fraction of the stored one.</summary>
     public double LowerBelow { get; set; } = 0.5;
+
+    /// <summary>
+    /// What one call is assumed to cost before there is any history to go on,
+    /// in US dollars. Replaced by the average of the calls already made as soon
+    /// as there are some.
+    /// </summary>
+    public decimal SeedCallUsd { get; set; } = 0.30m;
+
+    /// <summary>How much writing one call reads, in characters, which sets how many calls a run needs.</summary>
+    public int BatchCharacters { get; set; } = 40_000;
 }

@@ -206,8 +206,11 @@ public sealed class FakeGit : IGitManager
         Task.FromResult(OperationResult<IReadOnlyList<CommitSummary>>.Ok([]));
 
     public Task<OperationResult<IReadOnlyList<(string Sha, string Message)>>> ReadCommitMessagesAsync(
-        string repositoryPath, string revision, CancellationToken ct = default) =>
-        Task.FromResult(OperationResult<IReadOnlyList<(string Sha, string Message)>>.Ok([]));
+        string repositoryPath, string revision, int? walk = null, CancellationToken ct = default) =>
+        Task.FromResult(OperationResult<IReadOnlyList<(string Sha, string Message)>>.Ok(CommitMessages));
+
+    /// <summary>What ReadCommitMessagesAsync answers, whatever is asked.</summary>
+    public List<(string Sha, string Message)> CommitMessages { get; } = [];
 
     public Task<OperationResult<GitWorktree>> AddWorktreeAsync(
         string repositoryPath, string path, string branch, string? baseRef = null, CancellationToken ct = default) =>

@@ -954,6 +954,8 @@ public static class Program
             voice.AddCommand<VoiceShowCommand>("show");
             voice.AddCommand<VoiceCheckCommand>("check");
             voice.AddCommand<VoiceMarkCommand>("mark");
+            voice.AddCommand<VoiceLearnCommand>("learn");
+            voice.AddCommand<VoiceRunsCommand>("runs");
         });
 
         TopBranch(config, "docs", docs =>

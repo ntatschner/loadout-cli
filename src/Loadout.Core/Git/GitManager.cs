@@ -219,6 +219,7 @@ internal sealed class GitManager : IGitManager
     public async Task<OperationResult<IReadOnlyList<(string Sha, string Message)>>> ReadCommitMessagesAsync(
         string repositoryPath,
         string revision,
+        int? walk = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(revision) || revision.TrimStart().StartsWith('-'))
@@ -229,7 +230,9 @@ internal sealed class GitManager : IGitManager
 
         // A record separator between commits and NUL between the hash and the
         // message, because a message can hold any line a person can type.
-        string[] arguments = revision.Contains("..", StringComparison.Ordinal)
+        string[] arguments = walk is > 0
+            ? ["log", "--max-count=" + walk.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), "--format=%H%x00%B%x1e", revision.Trim(), "--"]
+            : revision.Contains("..", StringComparison.Ordinal)
             ? ["log", "--format=%H%x00%B%x1e", revision.Trim(), "--"]
             : ["log", "--no-walk", "--format=%H%x00%B%x1e", revision.Trim(), "--"];
 

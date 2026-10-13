@@ -59,6 +59,31 @@ public sealed class VoiceContractTests
     }
 
     [BuiltCliFact]
+    public async Task Learning_without_a_terminal_refuses_but_a_dry_run_shows_the_plan()
+    {
+        using var loadout = new LoadoutProcess();
+
+        var repository = Path.Combine(loadout.Home, "notes");
+        Directory.CreateDirectory(repository);
+        await File.WriteAllTextAsync(Path.Combine(repository, "a.md"), "Written by hand.");
+        (await loadout.RunAsync("voice", "mark", "a.md", "--repo", repository)).ExitCode.Should().Be(0);
+
+        var refused = await loadout.RunAsync("voice", "learn", "--repo", repository);
+
+        refused.ExitCode.Should().NotBe(0, "every rule is the person's decision, so it will not run unattended");
+        (refused.StandardOutput + refused.StandardError).Should().Contain("--dry-run");
+
+        var planned = (await loadout.RunAsync("voice", "learn", "--repo", repository, "--dry-run", "--json")).Json();
+
+        planned.GetProperty("dryRun").GetBoolean().Should().BeTrue();
+        planned.GetProperty("evidence").GetInt32().Should().Be(1, "the marked file, and no squash merges outside a repository");
+        planned.GetProperty("estimate").GetProperty("calls").GetInt32().Should().Be(1);
+
+        (await loadout.RunAsync("voice", "runs", "--json")).Json()
+            .GetProperty("runs").GetArrayLength().Should().Be(0, "a dry run records nothing");
+    }
+
+    [BuiltCliFact]
     public async Task A_check_with_nothing_to_check_is_refused()
     {
         using var loadout = new LoadoutProcess();
