@@ -212,7 +212,9 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
         {
             output.WriteLine(
                 $"[bold]Would read[/] {gathered.Evidence.Count - outcome.HeldOut} piece(s) of your writing in "
-                + $"{outcome.Estimate.Calls} call(s), estimated at {Usd(outcome.Estimate.Usd)}"
+                + $"{outcome.Estimate.Calls} call(s)"
+                + (VoiceScoring.Calls(outcome.HeldOut, gathered.EditPairs.Count) > 0 ? " (two of them for scoring)" : string.Empty)
+                + $", estimated at {Usd(outcome.Estimate.Usd)}"
                 + (outcome.Estimate.FromHistory ? " from earlier runs." : " (a first guess; there are no earlier runs to go on)."));
 
             foreach (var source in gathered.Evidence.GroupBy(e => e.Source).OrderBy(g => g.Key, StringComparer.Ordinal))

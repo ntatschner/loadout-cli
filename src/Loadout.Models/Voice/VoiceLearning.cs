@@ -150,6 +150,9 @@ public sealed class VoiceScore
     /// <summary>Edit pairs read: descriptions the person rewrote when they merged.</summary>
     public int Edits { get; set; }
 
+    /// <summary>Held-out pieces rewritten by a model to break a rule, so a rule the history never breaks can be tested.</summary>
+    public int Variants { get; set; }
+
     /// <summary>Each accepted rule's result.</summary>
     public List<VoiceRuleScore> Rules { get; set; } = [];
 }
@@ -158,15 +161,16 @@ public sealed class VoiceScore
 /// <remarks>
 /// Counted by source rather than pooled, because the sources mean different
 /// things: the person's own writing shows a rule does not fire where it should
-/// not, and only an edit shows it firing where the person agreed it should.
-/// Release 2 promotes on the pool and on a floor of edit samples.
+/// not, an edit shows it firing where the person agreed it should, and a
+/// variant shows it firing where a model thought it should. Release 2
+/// promotes on the pool and on a floor of edit samples.
 /// </remarks>
 public sealed class VoiceRuleScore
 {
     /// <summary>The rule's id.</summary>
     public string Rule { get; set; } = string.Empty;
 
-    /// <summary>Its check type, or null for a judged rule.</summary>
+    /// <summary>Its check type, or null for a judged rule, which is scored by a model's verdicts.</summary>
     public string? Check { get; set; }
 
     /// <summary>Held-out pieces of the person's own writing it applied to.</summary>
@@ -180,6 +184,12 @@ public sealed class VoiceRuleScore
 
     /// <summary>Of those, how many it fired on the draft and not on what was kept.</summary>
     public int EditAgreed { get; set; }
+
+    /// <summary>Variants written to break it.</summary>
+    public int Generated { get; set; }
+
+    /// <summary>Of those, how many it caught.</summary>
+    public int GeneratedAgreed { get; set; }
 
     /// <summary>Agreement across every sample, from 0 to 1, or null when it could not be scored.</summary>
     public double? Agreement { get; set; }

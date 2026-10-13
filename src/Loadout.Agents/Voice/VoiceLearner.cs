@@ -108,10 +108,10 @@ public sealed record VoiceLearnRequest(
 /// <param name="ProfilePath">Where the profile is.</param>
 /// <param name="Gathered">The writing it found.</param>
 /// <param name="HeldOut">Pieces of it held back from mining, to score against.</param>
-/// <param name="Estimate">What mining was expected to cost.</param>
+/// <param name="Estimate">What mining and scoring were expected to cost.</param>
 /// <param name="Dropped">Carried proposals dropped because their evidence no longer counts, by id.</param>
 /// <param name="Weakened">Accepted rules whose counted evidence is now short of the threshold, by id.</param>
-/// <param name="Failures">Mining rounds that came back unusable, with why.</param>
+/// <param name="Failures">Mining and scoring rounds that came back unusable, with why.</param>
 public sealed record VoiceLearnOutcome(
     VoiceRun Run,
     string ProfilePath,
@@ -146,8 +146,11 @@ public interface IVoiceLearner
 /// </para>
 /// <para>
 /// A share of the writing is never mined, and a complete run scores the
-/// profile against it and against any edit pairs. A partial or review-only
-/// run is recorded with no score, and that is shown rather than hidden.
+/// profile against it and against any edit pairs. Scoring may ask a model
+/// twice, once to rewrite held-out writing so it breaks a rule and once to
+/// judge the rules no checker can read, and both calls are in the estimate
+/// and under the cap. A partial or review-only run is recorded with no score,
+/// and that is shown rather than hidden.
 /// </para>
 /// </remarks>
 internal sealed class VoiceLearner : IVoiceLearner
@@ -242,7 +245,8 @@ internal sealed class VoiceLearner : IVoiceLearner
             .ToList();
 
         var batches = VoicePlanning.Batches(evidence, guide);
-        var estimate = VoicePlanning.Estimate(batches.Count, state, guide);
+        var estimate = VoicePlanning.Estimate(
+            batches.Count + VoiceScoring.Calls(heldOut.Count, gathered.Value.EditPairs.Count), state, guide);
 
         var run = new VoiceRun { Id = runId, Guide = guide.Reference, Evidence = evidence.Count, Cap = VoiceCapSetting.Kept };
 
@@ -298,10 +302,10 @@ internal sealed class VoiceLearner : IVoiceLearner
         var stopped = false;
         var past = false;
         var known = profile.Rules;
+        var directory = Path.Combine(_paths.Paths.State, "voice", "rounds", runId);
 
         if (mine)
         {
-            var directory = Path.Combine(_paths.Paths.State, "voice", "rounds", runId);
             Directory.CreateDirectory(directory);
 
             for (var index = 0; index < batches.Count; index++)
@@ -460,7 +464,11 @@ internal sealed class VoiceLearner : IVoiceLearner
         // of it.
         if (run.Outcome == VoiceRunOutcome.Complete)
         {
-            run.Score = VoiceScoring.Score(profile.Rules, heldOut, gathered.Value.EditPairs, guide);
+            run.Score = await ScoreAsync(
+                new Scoring(request, profile.Rules, heldOut, gathered.Value.EditPairs, cap!, past, directory),
+                run,
+                failures,
+                ct).ConfigureAwait(false);
         }
 
         run.Finished = _time.GetUtcNow();
@@ -488,5 +496,138 @@ internal sealed class VoiceLearner : IVoiceLearner
             ? OperationResult<VoiceLearnOutcome>.Fail(saved.Error!, saved.ExitCode)
             : OperationResult<VoiceLearnOutcome>.Ok(
                 new VoiceLearnOutcome(run, profilePath, gathered.Value, heldOut.Count, estimate, dropped, weakened, failures));
+    }
+
+    /// <summary>What scoring a run needs to know.</summary>
+    private sealed record Scoring(
+        VoiceLearnRequest Request,
+        IReadOnlyList<VoiceRule> Rules,
+        IReadOnlyList<VoiceEvidence> HeldOut,
+        IReadOnlyList<VoiceEditPair> Pairs,
+        VoiceCap Cap,
+        bool Past,
+        string Directory);
+
+    /// <summary>
+    /// Scores the profile, asking for variants and verdicts where they are
+    /// needed and the cap allows. A round that cannot be asked or used leaves
+    /// the rules it was for unscored, with why, and the run stays complete:
+    /// everything was mined and reviewed.
+    /// </summary>
+    private async Task<VoiceScore> ScoreAsync(Scoring scoring, VoiceRun run, List<string> failures, CancellationToken ct)
+    {
+        var guide = scoring.Request.Guide;
+        var prompts = scoring.Request.Prompts;
+        var variants = new List<VoiceVariant>();
+        var requests = VoiceScoring.VariantRequests(scoring.Rules, scoring.HeldOut, scoring.Pairs, guide);
+
+        bool Affordable() => scoring.Past || !VoicePlanning.Reached(scoring.Cap, run.Calls, run.CostUsd);
+
+        if (requests.Count > 0 && Affordable())
+        {
+            prompts.Progress($"Rewriting {requests.Count} piece(s) of your writing to test the rules against.");
+
+            var asked = await AskAsync(
+                scoring,
+                VoiceJudging.VariantsSchema,
+                VoiceJudging.VariantsVersion,
+                VoiceJudging.VariantsPrompt(requests),
+                json => VoiceJudging.ReadVariants(json, requests),
+                run,
+                failures,
+                ct).ConfigureAwait(false);
+
+            variants.AddRange(asked ?? []);
+        }
+
+        var judged = scoring.Rules.Where(r => r.Check is null).ToList();
+        VoiceJudgement? judgement = null;
+        string? unjudged = null;
+
+        if (judged.Count > 0)
+        {
+            var samples = VoiceScoring.JudgeSamples(judged, scoring.HeldOut, scoring.Pairs, variants, guide);
+
+            if (samples.Count == 0)
+            {
+                unjudged = "no held-out sample it applies to";
+            }
+            else if (!Affordable())
+            {
+                unjudged = "the cap was reached before the judged rules could be scored";
+            }
+            else
+            {
+                prompts.Progress($"Judging {judged.Count} rule(s) against {samples.Count} sample(s).");
+
+                var broken = await AskAsync(
+                    scoring,
+                    VoiceJudging.JudgeSchema,
+                    VoiceJudging.JudgeVersion,
+                    VoiceJudging.JudgePrompt(judged, samples),
+                    json => VoiceJudging.ReadVerdicts(json, judged, samples),
+                    run,
+                    failures,
+                    ct).ConfigureAwait(false);
+
+                if (broken is null)
+                {
+                    unjudged = "the judging round could not be used";
+                }
+                else
+                {
+                    judgement = new VoiceJudgement(samples.Select(s => s.Id).ToHashSet(StringComparer.Ordinal), broken);
+                }
+            }
+        }
+
+        return VoiceScoring.Score(scoring.Rules, scoring.HeldOut, scoring.Pairs, guide, variants, judgement, unjudged);
+    }
+
+    /// <summary>One scoring round, counted against the run. Null when it could not be used, with why in the failures.</summary>
+    private async Task<T?> AskAsync<T>(
+        Scoring scoring,
+        string schema,
+        string contract,
+        string prompt,
+        Func<string?, OperationResult<T>> read,
+        VoiceRun run,
+        List<string> failures,
+        CancellationToken ct)
+        where T : class
+    {
+        var request = scoring.Request;
+
+        Directory.CreateDirectory(scoring.Directory);
+
+        var asked = await SchemaRound.AskAsync(
+            _launcher,
+            new DetachedLaunchRequest(scoring.Directory, $"Scoring your {request.Guide.Id} voice", request.AgentName, request.Model),
+            [],
+            schema,
+            contract,
+            prompt,
+            read,
+            null,
+            ct).ConfigureAwait(false);
+
+        if (asked.Failed)
+        {
+            failures.Add(asked.Error!);
+
+            return null;
+        }
+
+        run.Calls++;
+        run.CostUsd += asked.Value!.CostUsd;
+
+        if (asked.Value.Answer.Failed)
+        {
+            failures.Add(asked.Value.Answer.Error!);
+
+            return null;
+        }
+
+        return asked.Value.Answer.Value;
     }
 }

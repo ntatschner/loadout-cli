@@ -285,7 +285,9 @@ public sealed class VoiceLearnerTests : IDisposable
 
         // At a fifth held back, b.md is the one piece whose reference falls in it.
         var guide = Guide(0.2);
-        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(SupportedWithoutB));
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(SupportedWithoutB))
+            .Then(ScriptedDetachedLauncher.Result(
+                """{"contract":"voice-variants/1","variants":[{"rule":"british","sample":"e2","text":"We chose a color scheme."}]}"""));
         var prompts = new Prompts { CapAnswer = new VoiceCapAnswer(VoiceCapChoice.Accept) };
 
         var learned = await Learner(launcher).LearnAsync(Request(prompts, guide, pullRequests: true));
@@ -294,18 +296,59 @@ public sealed class VoiceLearnerTests : IDisposable
         learned.Value!.HeldOut.Should().Be(1);
         learned.Value.Gathered.EditPairs.Should().ContainSingle(
             "#13 has no description to have rewritten").Which.Number.Should().Be(12);
-        launcher.Pipe!.Written.ToString().Should().NotContain("We chose a colour scheme.", "held-out writing is never mined");
+        launcher.Started.Should().Be(2, "one mining round and one for variants; the only rule is typed, so nothing is judged");
+        learned.Value.Estimate.Calls.Should().Be(3, "scoring's two calls are in the estimate the cap was set against");
+        learned.Value.Failures.Should().BeEmpty();
 
         var score = learned.Value.Run.Score!;
         (score.Own, score.Edits).Should().Be((1, 1));
 
         var british = score.Rules.Should().ContainSingle().Subject;
         (british.Own, british.OwnAgreed, british.Edit, british.EditAgreed).Should().Be((1, 1, 1, 1));
+        (british.Generated, british.GeneratedAgreed).Should().Be((1, 1), "it caught the variant written to break it");
         british.Agreement.Should().Be(1.0);
         british.Meets.Should().BeFalse("one edit sample is short of the floor of five");
 
         var saved = (await VoiceStore.ReadStateAsync(StatePath)).Value!.Runs.Single().Score;
         saved!.Rules.Single().Agreement.Should().Be(1.0, "the score is kept in the run history");
+    }
+
+    [Fact]
+    public async Task Held_out_writing_is_never_shown_to_the_miner()
+    {
+        await MarkAsync();
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(SupportedWithoutB));
+
+        await Learner(launcher).LearnAsync(
+            Request(new Prompts { CapAnswer = new VoiceCapAnswer(VoiceCapChoice.Typed, 0.01m) }, Guide(0.2)));
+
+        launcher.Started.Should().Be(1, "a cap of one call leaves nothing for scoring");
+        launcher.Pipe!.Written.ToString().Should().Contain("I like the colour of it.")
+            .And.NotContain("We chose a colour scheme.", "b.md is held out");
+    }
+
+    [Fact]
+    public async Task A_judged_rule_is_scored_by_a_judging_round_under_the_cap()
+    {
+        await MarkAsync();
+        const string judged =
+            """{"contract":"voice-mine/1","rules":[{"id":"warm","statement":"Write warmly.","check":null,"surfaces":[],"citations":[{"evidence":"e1","excerpt":"I like the colour of it."},{"evidence":"e3","excerpt":"colour the output"},{"evidence":"e4","excerpt":"Tidy the docs"}]}]}""";
+
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(judged))
+            .Then(ScriptedDetachedLauncher.Result(
+                """{"contract":"voice-variants/1","variants":[{"rule":"warm","sample":"e2","text":"A colour scheme was selected."}]}"""))
+            .Then(ScriptedDetachedLauncher.Result(
+                """{"contract":"voice-judge/1","verdicts":[{"rule":"warm","sample":"v1","breaks":true},{"rule":"warm","sample":"e2","breaks":false}]}"""));
+        var prompts = new Prompts { CapAnswer = new VoiceCapAnswer(VoiceCapChoice.Accept) };
+
+        var learned = await Learner(launcher).LearnAsync(Request(prompts, Guide(0.2)));
+
+        launcher.Started.Should().Be(3);
+        launcher.Options!.OutputSchemaJson.Should().Be(VoiceJudging.JudgeSchema);
+
+        var warm = learned.Value!.Run.Score!.Rules.Single();
+        (warm.Own, warm.OwnAgreed, warm.Generated, warm.GeneratedAgreed).Should().Be((1, 1, 1, 1));
+        warm.Meets.Should().BeFalse("a judged rule never gates");
     }
 
     [Fact]
