@@ -209,6 +209,53 @@ internal sealed class GitManager : IGitManager
         return OperationResult<IReadOnlyList<Tasks.CommitSummary>>.Ok(commits);
     }
 
+    private const char RecordSeparator = (char)0x1e;
+    private const char Nul = (char)0;
+    private const char LineFeed = (char)10;
+    private const char Return = (char)13;
+    private static readonly char[] LineEnds = [LineFeed, Return];
+
+    /// <inheritdoc />
+    public async Task<OperationResult<IReadOnlyList<(string Sha, string Message)>>> ReadCommitMessagesAsync(
+        string repositoryPath,
+        string revision,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(revision) || revision.TrimStart().StartsWith('-'))
+        {
+            return OperationResult<IReadOnlyList<(string, string)>>.Fail(
+                $"'{revision}' is not a commit or a range.", ExitCode.InvalidArguments);
+        }
+
+        // A record separator between commits and NUL between the hash and the
+        // message, because a message can hold any line a person can type.
+        string[] arguments = revision.Contains("..", StringComparison.Ordinal)
+            ? ["log", "--format=%H%x00%B%x1e", revision.Trim(), "--"]
+            : ["log", "--no-walk", "--format=%H%x00%B%x1e", revision.Trim(), "--"];
+
+        var result = await RunAsync(repositoryPath, arguments, LocalOperationTimeout, ct).ConfigureAwait(false);
+
+        if (result.Failed)
+        {
+            return OperationResult<IReadOnlyList<(string, string)>>.Fail(
+                result.Error!, ExitCode.RepositoryUnavailable);
+        }
+
+        var commits = new List<(string, string)>();
+
+        foreach (var record in result.Value!.Split(RecordSeparator))
+        {
+            var parts = record.TrimStart(LineEnds).Split(Nul, 2);
+
+            if (parts.Length == 2 && parts[0].Length > 0)
+            {
+                commits.Add((parts[0], string.Join(LineFeed, parts[1].Split(LineFeed).Select(l => l.TrimEnd(Return))).TrimEnd()));
+            }
+        }
+
+        return OperationResult<IReadOnlyList<(string, string)>>.Ok(commits);
+    }
+
     /// <inheritdoc />
     public async Task<OperationResult> InitAsync(
         string path,

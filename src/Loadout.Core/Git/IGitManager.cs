@@ -234,6 +234,22 @@ public interface IGitManager
     /// <summary>Pushes the current branch to its upstream.</summary>
     Task<OperationResult> PushAsync(string repositoryPath, CancellationToken ct = default);
 
+    /// <summary>
+    /// Commit messages in full, with the hash each belongs to, newest first.
+    /// </summary>
+    /// <param name="repositoryPath">Any working tree of the repository.</param>
+    /// <param name="revision">One commit, or a range such as <c>main~20..main</c>.</param>
+    /// <param name="ct">Cancellation.</param>
+    /// <remarks>
+    /// A single commit is read alone rather than with its history: asking for
+    /// one message and getting every ancestor's is the wrong answer however
+    /// it is filtered afterwards.
+    /// </remarks>
+    Task<OperationResult<IReadOnlyList<(string Sha, string Message)>>> ReadCommitMessagesAsync(
+        string repositoryPath,
+        string revision,
+        CancellationToken ct = default);
+
     /// <summary>Lists the main working tree and any linked worktrees (spec section 71).</summary>
     /// <summary>
     /// Commits authored on or after a moment, newest first.

@@ -945,6 +945,17 @@ public static class Program
             style.AddCommand<StyleUseCommand>("use");
         });
 
+        TopBranch(config, "voice", voice =>
+        {
+            voice.Describe(
+                "How you write, learned from your own writing and checked against it.",
+                CommandCategory.AgentConfiguration,
+                "voice writing style prose commit messages docs hand-written marks");
+            voice.AddCommand<VoiceShowCommand>("show");
+            voice.AddCommand<VoiceCheckCommand>("check");
+            voice.AddCommand<VoiceMarkCommand>("mark");
+        });
+
         TopBranch(config, "docs", docs =>
         {
             docs.Describe(

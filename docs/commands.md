@@ -61,6 +61,7 @@
 | `loadout instructions new <id>` | Draft a specialist or skill in the workspace, or in one project |
 | `loadout style list\|show\|use` | See your coding styles, which are in force for a project, and choose the named one it uses |
 | `loadout instructions explain --style <name>` | See what a task would load under a different named style |
+| `loadout voice show\|check\|mark` | See the writing rules in your voice profile, check a doc or commit message against them, and mark what you wrote by hand |
 | `loadout instructions export <specialist>` | Copy a built-in specialist into the workspace so it can be edited |
 | `loadout instructions stats` | Say which specialists launches actually reached, and which none did |
 | `loadout instructions probe [specialist]` | Say how often sessions did what a specialist asks for, week by week |
