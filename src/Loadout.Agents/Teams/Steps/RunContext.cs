@@ -80,4 +80,52 @@ internal sealed class RunContext
 
     /// <summary>What the lead is told on its next turn.</summary>
     public string Prompt { get; set; } = string.Empty;
+
+    /// <summary>What was asked for: the team, the goal and how to run it.</summary>
+    public required TeamRunRequest Request { get; init; }
+
+    /// <summary>The team being run.</summary>
+    public required TeamDefinition Team { get; init; }
+
+    /// <summary>Whoever is watching, through one voice.</summary>
+    public required ITeamConsole Console { get; init; }
+
+    /// <summary>manual, supervised or autonomous.</summary>
+    public required string Autonomy { get; init; }
+
+    /// <summary>The run's own id.</summary>
+    public required string RunId { get; init; }
+
+    /// <summary>Where the run keeps everything it writes.</summary>
+    public required string Directory { get; init; }
+
+    /// <summary>Where the team keeps what it makes, across runs.</summary>
+    public required string TeamDirectory { get; init; }
+
+    /// <summary>The team's lead node.</summary>
+    public required TeamNode LeadNode { get; init; }
+
+    /// <summary>The lead's role.</summary>
+    public required Loadout.Models.Instructions.SpecialistDocument LeadRole { get; init; }
+
+    /// <summary>The project's criteria the run is held to, frozen at its start.</summary>
+    public required IReadOnlyList<string> Standing { get; init; }
+
+    /// <summary>What a picked-up run is picked up from, or null for a new one.</summary>
+    public required Core.Teams.RunResumption? Resuming { get; init; }
+
+    /// <summary>The lead's brief, which gains the criteria once they are agreed.</summary>
+    public required Brief LeadBrief { get; set; }
+
+    /// <summary>What the run is judged on, once anybody has said.</summary>
+    public required IReadOnlyList<string>? Criteria { get; set; }
+
+    /// <summary>The project's slug, once resolved.</summary>
+    public string Slug { get; set; } = string.Empty;
+
+    /// <summary>The task the run was started for, if any.</summary>
+    public string? ForTask { get; set; }
+
+    /// <summary>The lead's session, once it has started.</summary>
+    public HeadlessLaunch? Lead { get; set; }
 }
