@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Loadout.Agents.Teams.Steps;
 using Loadout.Core.Git;
 using Loadout.Core.Instructions;
 using Loadout.Core.Security;
@@ -479,8 +480,6 @@ public sealed partial class TeamRunner : ITeamRunner
 {
     private static readonly TimeSpan EndGrace = TimeSpan.FromSeconds(15);
 
-    private static readonly JsonSerializerOptions JournalLine = new() { WriteIndented = false };
-
     private readonly IAgentLauncher _launcher;
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
@@ -783,7 +782,7 @@ public sealed partial class TeamRunner : ITeamRunner
         _onTimeout = request.OnTimeout;
         _sentBackByTimer.Clear();
 
-        var journal = new Journal(Path.Combine(directory, "journal.jsonl"), runId, _time);
+        var journal = new JournalWriter(Path.Combine(directory, "journal.jsonl"), runId, _time);
 
         // Runs for the whole run rather than around each turn. A question only
         // appears while a node is mid-turn, so a watcher that covered anything
@@ -1845,7 +1844,7 @@ public sealed partial class TeamRunner : ITeamRunner
         IReadOnlyDictionary<string, string> branches,
         IReadOnlyDictionary<string, string> decisions,
         ITeamConsole console,
-        Journal journal,
+        JournalWriter journal,
         List<string> warnings,
         List<decimal> spent,
         CancellationToken ct)
@@ -2024,7 +2023,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private async Task TidyAsync(
         string repository,
         string branch,
-        Journal journal,
+        JournalWriter journal,
         string node,
         List<string> warnings,
         CancellationToken ct)
@@ -2088,7 +2087,7 @@ public sealed partial class TeamRunner : ITeamRunner
         string autonomy,
         string repository,
         ITeamConsole console,
-        Journal journal,
+        JournalWriter journal,
         List<string> warnings,
         List<decimal> spent,
         CancellationToken ct)
@@ -2182,7 +2181,7 @@ public sealed partial class TeamRunner : ITeamRunner
         TeamRunRequest request,
         TeamDefinition team,
         IReadOnlyList<Briefed> briefed,
-        Journal journal,
+        JournalWriter journal,
         CancellationToken ct)
     {
         if (briefed.Count <= 1)
@@ -2246,7 +2245,7 @@ public sealed partial class TeamRunner : ITeamRunner
         TeamRunRequest request,
         TeamDefinition team,
         Briefed briefed,
-        Journal journal,
+        JournalWriter journal,
         SemaphoreSlim starting,
         CancellationToken ct)
     {
@@ -2397,7 +2396,7 @@ public sealed partial class TeamRunner : ITeamRunner
         HeadlessLaunch launch,
         Brief brief,
         string prompt,
-        Journal journal,
+        JournalWriter journal,
         TimeProvider time,
         CancellationToken ct)
     {
@@ -2882,7 +2881,7 @@ public sealed partial class TeamRunner : ITeamRunner
 
     private async Task FoldQuestionsAsync(
         Brief brief,
-        Journal journal,
+        JournalWriter journal,
         List<string> warnings,
         CancellationToken ct)
     {
@@ -2953,7 +2952,7 @@ public sealed partial class TeamRunner : ITeamRunner
     /// precise about what happened and says nothing about why, the node's says
     /// why and may be wrong. Merging them would lose whichever disagreed.
     /// </remarks>
-    private async Task FoldProgressAsync(Brief brief, Journal journal, CancellationToken ct)
+    private async Task FoldProgressAsync(Brief brief, JournalWriter journal, CancellationToken ct)
     {
         var path = Path.Combine(RunDirectory(brief.Run), NodeProgress.FileName(brief.Node));
 
@@ -3002,7 +3001,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private async Task WatchAsksAsync(
         string directory,
         ITeamConsole console,
-        Journal journal,
+        JournalWriter journal,
         CancellationToken ct)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -3087,7 +3086,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private static async Task NoteAnsweredAsync(
         string directory,
         Dictionary<string, PendingAsk> outstanding,
-        Journal journal,
+        JournalWriter journal,
         CancellationToken ct)
     {
         foreach (var (id, ask) in outstanding.ToList())
@@ -3696,7 +3695,7 @@ public sealed partial class TeamRunner : ITeamRunner
         Report report,
         string autonomy,
         ITeamConsole console,
-        Journal journal,
+        JournalWriter journal,
         IReadOnlyList<string> standing,
         CancellationToken ct)
     {
@@ -4140,7 +4139,7 @@ public sealed partial class TeamRunner : ITeamRunner
         string autonomy,
         ITeamConsole console,
         IReadOnlyList<ReportQuestion> questions,
-        Journal journal,
+        JournalWriter journal,
         string directory,
         TimeSpan? takeRecommendationAfter,
         CancellationToken ct)
@@ -4402,13 +4401,13 @@ public sealed partial class TeamRunner : ITeamRunner
     {
         private static readonly TimeSpan Quiet = TimeSpan.FromSeconds(5);
 
-        private readonly Journal _journal;
+        private readonly JournalWriter _journal;
         private readonly string _node;
         private readonly TimeProvider _time;
         private DateTimeOffset _last = DateTimeOffset.MinValue;
         private string _said = string.Empty;
 
-        public Progress(Journal journal, string node, TimeProvider time)
+        public Progress(JournalWriter journal, string node, TimeProvider time)
         {
             _journal = journal;
             _node = node;
@@ -4589,89 +4588,6 @@ public sealed partial class TeamRunner : ITeamRunner
                 > 90 => trimmed[..90] + "...",
                 _ => trimmed,
             };
-        }
-    }
-
-    /// <summary>The run's record: one JSON line per thing that happened, appended as it happens.</summary>
-    private sealed class Journal
-    {
-        private readonly string _path;
-        private readonly string _run;
-        private readonly TimeProvider _time;
-        private readonly SemaphoreSlim _lock = new(1, 1);
-
-        public Journal(string path, string run, TimeProvider time)
-        {
-            _path = path;
-            _run = run;
-            _time = time;
-        }
-
-        /// <summary>The run's directory, which is where everything else goes.</summary>
-        public string Directory => Path.GetDirectoryName(_path) ?? string.Empty;
-
-        /// <summary>When it is, by whatever clock the run is keeping.</summary>
-        public DateTimeOffset Now => _time.GetUtcNow();
-
-        /// <summary>
-        /// Appends one line to a file beside the journal, and never fails a run
-        /// over it.
-        /// </summary>
-        public async Task AppendAsync(string file, string line, CancellationToken ct)
-        {
-            await _lock.WaitAsync(ct).ConfigureAwait(false);
-
-            try
-            {
-                await File.AppendAllTextAsync(Path.Combine(Directory, file), line + "\n", ct)
-                    .ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-            }
-            finally
-            {
-                _lock.Release();
-            }
-        }
-
-        /// <summary>Records one thing that happened.</summary>
-        /// <param name="kind">What happened.</param>
-        /// <param name="node">Which node, or null for the run itself.</param>
-        /// <param name="data">Whatever that kind carries.</param>
-        /// <param name="ct">Cancellation.</param>
-        /// <param name="at">
-        /// When it happened, where that is not now. An event harvested out of a
-        /// side file happened when the file says, not when it was read: the
-        /// permission decisions are folded in at the end of a node's turn, and
-        /// dating them at the fold put two of them minutes late and after the
-        /// node had already ended.
-        /// </param>
-        public async Task WriteAsync(
-            string kind,
-            string? node,
-            object? data,
-            CancellationToken ct,
-            DateTimeOffset? at = null)
-        {
-            var line = JsonSerializer.Serialize(
-                new { at = at ?? _time.GetUtcNow(), run = _run, node, kind, data }, JournalLine);
-
-            await _lock.WaitAsync(ct).ConfigureAwait(false);
-
-            try
-            {
-                await File.AppendAllTextAsync(_path, line + "\n", ct).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // A journal that cannot be written must not stop the run; the
-                // outcome still carries the result.
-            }
-            finally
-            {
-                _lock.Release();
-            }
         }
     }
 }
