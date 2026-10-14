@@ -14,7 +14,7 @@
 # 10.0 tag stops building the day a newer SDK lands in it. Only versions that
 # Microsoft publishes an image for can go here: pick the global.json pin with
 # that in mind. SdkPinTests fails when the two disagree.
-ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.401
+ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0.402
 FROM ${SDK_IMAGE}
 
 # dpkg-deb ships with the base image; rpm does not. Both are needed to build the
