@@ -386,6 +386,17 @@ internal sealed class OpenRunStep
                     uncapped = RunControl.Cap(directory).Or(TeamRunner.StartingCap(request, team)).None,
                 },
                 ct).ConfigureAwait(false);
+
+            // Where each question the run stopped on went, so somebody looking
+            // for it finds it closed rather than gone.
+            foreach (var ask in run.Retired)
+            {
+                await journal.WriteAsync(
+                    "node.answered",
+                    ask.Node,
+                    new { tool = ask.Tool, allowed = false, by = NodePermissions.Retired, question = ask.Question },
+                    ct).ConfigureAwait(false);
+            }
         }
 
         if (!await TeamRunner.GateAsync(autonomy, console, $"Brief the lead ({leadNode.Role}) with the goal", ct).ConfigureAwait(false))
