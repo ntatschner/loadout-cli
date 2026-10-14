@@ -768,7 +768,7 @@ public sealed partial class TeamRunner : ITeamRunner
         // therefore decided that nobody was watching, and a held remedy was
         // refused instead of put to the person sitting in front of the
         // dashboard.
-        var run = new RunContext(autonomy != "autonomous" && console.CanAsk, request.OnTimeout);
+        var run = new RunContext(autonomy != "autonomous" && console.CanAsk, request.OnTimeout, warnings);
 
         var journal = new JournalWriter(Path.Combine(directory, "journal.jsonl"), runId, _time);
 
@@ -880,7 +880,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 ct).ConfigureAwait(false);
 
             return OperationResult<TeamRunOutcome>.Ok(new TeamRunOutcome(
-                runId, directory, Stopping, null, 0m, 0, warnings));
+                runId, directory, Stopping, null, 0m, 0, run.Warnings));
         }
 
         // Kept as it was on a resume: it is the brief the lead was given, and
@@ -905,7 +905,7 @@ public sealed partial class TeamRunner : ITeamRunner
         }
 
         var lead = started.Value!;
-        warnings.AddRange(lead.Warnings);
+        run.Warnings.AddRange(lead.Warnings);
 
         await journal.WriteAsync(
             "node.launched",
@@ -931,48 +931,47 @@ public sealed partial class TeamRunner : ITeamRunner
 
         // Carried on from where it stopped on a resume, so the budget and any
         // round limit count what it has already spent and taken.
-        var cost = resuming?.Summary.CostUsd ?? 0m;
-        var rounds = resuming?.Summary.Rounds ?? 0;
-        var quietRounds = 0;
-        string ended;
+        run.Cost = resuming?.Summary.CostUsd ?? 0m;
+        run.Rounds = resuming?.Summary.Rounds ?? 0;
+        run.QuietRounds = 0;
 
         // The budget the run was last held to, so a change is written down
         // once rather than every round.
-        var heldTo = resuming is null
+        run.HeldTo = resuming is null
             ? StartingCap(request, team)
             : RunControl.Cap(directory).Or(StartingCap(request, team));
-        Report? final = null;
+        run.Final = null;
 
         // What the run put on branches of its own, and what the team's merge
         // gate nodes decided about it. Both are read at the end, when the
         // question is whether any of it may come back to the repository.
-        var branches = new Dictionary<string, string>(
+        run.Branches = new Dictionary<string, string>(
             resuming?.Branches ?? new Dictionary<string, string>(), StringComparer.Ordinal);
-        var decisions = new Dictionary<string, string>(
+        run.Decisions = new Dictionary<string, string>(
             resuming?.Decisions ?? new Dictionary<string, string>(), StringComparer.Ordinal);
-        var askedAboutTheGate = false;
+        run.AskedAboutTheGate = false;
 
         // Asked once per run, on the lead's first report. A lead that proposes
         // nothing is not asked again: the question was put and it declined to
         // answer, and asking every round would be badgering it with something
         // that costs a turn each time.
-        var proposed = resuming?.Proposed ?? false;
+        run.Proposed = resuming?.Proposed ?? false;
 
         // What was agreed this round, for the feedback the lead reads next. It
         // has to be told: it proposed them, a person may have rewritten them,
         // and a lead held to criteria it has not seen cannot report coverage.
-        IReadOnlyList<string>? agreedThisRound = null;
+        run.AgreedThisRound = null;
 
         // How the lead last said it reads each criterion, so a change is
         // written down once rather than every round; and whether somebody has
         // already let workers start on those readings. A resumed run that had
         // them accepted is not asked again.
-        Dictionary<string, string>? lastReadings = null;
-        var readingsAccepted = resuming?.ReadingsAccepted ?? false;
+        run.LastReadings = null;
+        run.ReadingsAccepted = resuming?.ReadingsAccepted ?? false;
 
         try
         {
-            var prompt = resuming is null
+            run.Prompt = resuming is null
                 ? Render(leadBrief)
                 : Picking(resuming, request, lead.Plan, leadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd);
 
@@ -991,9 +990,9 @@ public sealed partial class TeamRunner : ITeamRunner
                 // 25 budget - the cap doing the work was the money and the cap
                 // in the way was the rounds. Nothing here is uncapped: the
                 // check above refuses a run that has neither.
-                if (request.MaxRounds > 0 && rounds >= request.MaxRounds)
+                if (request.MaxRounds > 0 && run.Rounds >= request.MaxRounds)
                 {
-                    ended = $"round limit: {request.MaxRounds} round{(request.MaxRounds == 1 ? string.Empty : "s")}";
+                    run.Ended = $"round limit: {request.MaxRounds} round{(request.MaxRounds == 1 ? string.Empty : "s")}";
                     break;
                 }
 
@@ -1011,25 +1010,25 @@ public sealed partial class TeamRunner : ITeamRunner
                 // dashboard or `team budget` lands before the next lead turn.
                 var ceiling = RunControl.Cap(directory).Or(StartingCap(request, team));
 
-                if (ceiling != heldTo)
+                if (ceiling != run.HeldTo)
                 {
-                    heldTo = ceiling;
+                    run.HeldTo = ceiling;
 
                     await journal.WriteAsync(
                         "run.budget", null, new { budget = ceiling.Usd, uncapped = ceiling.None, by = "you" }, ct)
                         .ConfigureAwait(false);
                 }
 
-                if (ceiling.Usd is { } spendable && cost >= spendable)
+                if (ceiling.Usd is { } spendable && run.Cost >= spendable)
                 {
                     // Somebody is watching, so the run asks rather than ends:
                     // a run stopped on its budget with the goal half done was
                     // otherwise a run that could not be picked up again.
-                    if (run.Asking && await RaiseAsync(console, cost, spendable, ct).ConfigureAwait(false) is { IsSet: true } raised)
+                    if (run.Asking && await RaiseAsync(console, run.Cost, spendable, ct).ConfigureAwait(false) is { IsSet: true } raised)
                     {
                         await RunControl.SetCapAsync(directory, raised, ct).ConfigureAwait(false);
 
-                        heldTo = raised;
+                        run.HeldTo = raised;
 
                         await journal.WriteAsync(
                             "run.budget", null, new { budget = raised.Usd, uncapped = raised.None, by = "you" }, ct)
@@ -1037,7 +1036,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     }
                     else
                     {
-                        ended = $"budget spent: {cost:0.00} of {spendable:0.00} USD";
+                        run.Ended = $"budget spent: {run.Cost:0.00} of {spendable:0.00} USD";
                         break;
                     }
                 }
@@ -1048,7 +1047,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 // what was paid for it - or to ask it, which it cannot hear.
                 if (RunControl.Stopped(directory))
                 {
-                    ended = "stopped by request";
+                    run.Ended = "stopped by request";
                     break;
                 }
 
@@ -1056,7 +1055,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 // carries on the moment the hold is lifted.
                 if (RunControl.Paused(directory))
                 {
-                    await journal.WriteAsync("run.paused", null, new { round = rounds + 1 }, ct)
+                    await journal.WriteAsync("run.paused", null, new { round = run.Rounds + 1 }, ct)
                         .ConfigureAwait(false);
 
                     console.Note("Held. It carries on when you let it.");
@@ -1068,11 +1067,11 @@ public sealed partial class TeamRunner : ITeamRunner
 
                     if (RunControl.Stopped(directory))
                     {
-                        ended = "stopped by request";
+                        run.Ended = "stopped by request";
                         break;
                     }
 
-                    await journal.WriteAsync("run.resumed", null, new { round = rounds + 1 }, ct)
+                    await journal.WriteAsync("run.resumed", null, new { round = run.Rounds + 1 }, ct)
                         .ConfigureAwait(false);
                 }
 
@@ -1086,27 +1085,27 @@ public sealed partial class TeamRunner : ITeamRunner
                             .ConfigureAwait(false);
                     }
 
-                    prompt = "The person running this team says:\n\n"
+                    run.Prompt = "The person running this team says:\n\n"
                         + string.Join("\n\n", messages)
                         + "\n\n"
-                        + prompt;
+                        + run.Prompt;
                 }
 
-                rounds++;
+                run.Rounds++;
 
                 // Written as it starts rather than counted at the end, so a
                 // run still going can be told how far through it is.
-                await journal.WriteAsync("round.started", null, new { round = rounds, of = request.MaxRounds }, ct)
+                await journal.WriteAsync("round.started", null, new { round = run.Rounds, of = request.MaxRounds }, ct)
                     .ConfigureAwait(false);
 
-                var turn = await NodeTurnAsync(lead, leadBrief, prompt, journal, _time, ct).ConfigureAwait(false);
+                var turn = await NodeTurnAsync(lead, leadBrief, run.Prompt, journal, _time, ct).ConfigureAwait(false);
                 var report = turn.Report;
-                cost += turn.Cost;
+                run.Cost += turn.Cost;
 
                 if (turn.Halted)
                 {
-                    ended = "halted: the lead took an outward action its brief did not allow";
-                    final = report;
+                    run.Ended = "halted: the lead took an outward action its brief did not allow";
+                    run.Final = report;
                     break;
                 }
 
@@ -1114,14 +1113,14 @@ public sealed partial class TeamRunner : ITeamRunner
                 {
                     // What it said instead is the explanation, and it is
                     // usually a sentence a person can act on.
-                    ended = turn.Said.Length > 0
+                    run.Ended = turn.Said.Length > 0
                         ? $"the lead ended without a report. It said: {turn.Said}"
                         : "the lead ended without a report";
 
                     break;
                 }
 
-                final = report;
+                run.Final = report;
 
                 /*
                   What this run is judged on, agreed before a worker is briefed.
@@ -1137,9 +1136,9 @@ public sealed partial class TeamRunner : ITeamRunner
                   briefed in this same round are handed the criteria too, and a
                   criterion agreed after they have gone is one they never saw.
                 */
-                if (criteria is null && !proposed)
+                if (criteria is null && !run.Proposed)
                 {
-                    proposed = true;
+                    run.Proposed = true;
 
                     criteria = await AgreedAsync(report, autonomy, console, journal, standing, ct)
                         .ConfigureAwait(false);
@@ -1164,7 +1163,7 @@ public sealed partial class TeamRunner : ITeamRunner
 
                         // All of it, the project's included: this is the list
                         // the lead's coverage is checked against.
-                        agreedThisRound = Held(standing, criteria);
+                        run.AgreedThisRound = Held(standing, criteria);
                     }
                 }
 
@@ -1173,17 +1172,17 @@ public sealed partial class TeamRunner : ITeamRunner
                 // judged on before the verdicts, not only beside them.
                 if (Read(report, Held(standing, criteria)) is { Count: > 0 } readings)
                 {
-                    var changed = lastReadings is null
+                    var changed = run.LastReadings is null
                         ? readings
                         : readings
-                            .Where(one => !lastReadings.TryGetValue(one.Key, out var was)
+                            .Where(one => !run.LastReadings.TryGetValue(one.Key, out var was)
                                 || !string.Equals(was, one.Value, StringComparison.Ordinal))
                             .ToDictionary(one => one.Key, one => one.Value, StringComparer.OrdinalIgnoreCase);
 
                     if (changed.Count > 0)
                     {
                         await journal.WriteAsync(
-                            lastReadings is null ? "reading" : "reading.changed",
+                            run.LastReadings is null ? "reading" : "reading.changed",
                             team.Lead,
                             new
                             {
@@ -1192,7 +1191,7 @@ public sealed partial class TeamRunner : ITeamRunner
                             ct).ConfigureAwait(false);
                     }
 
-                    lastReadings = new Dictionary<string, string>(readings, StringComparer.OrdinalIgnoreCase);
+                    run.LastReadings = new Dictionary<string, string>(readings, StringComparer.OrdinalIgnoreCase);
                 }
 
                 // A lead that says done while the team's gate has not been
@@ -1201,17 +1200,17 @@ public sealed partial class TeamRunner : ITeamRunner
                 // them will otherwise end the run with the work stranded on
                 // a branch nobody looked at. Once: the second answer is the
                 // lead's to give.
-                if (report.Status == ReportStatus.Done && !askedAboutTheGate
-                    && Ungated(team, branches, decisions) is { Count: > 0 } pending)
+                if (report.Status == ReportStatus.Done && !run.AskedAboutTheGate
+                    && Ungated(team, run.Branches, run.Decisions) is { Count: > 0 } pending)
                 {
-                    askedAboutTheGate = true;
+                    run.AskedAboutTheGate = true;
 
                     await journal.WriteAsync("gate.reminded", team.Lead, new { pending }, ct).ConfigureAwait(false);
 
                     console.Note($"The lead reported done without the merge gate: {string.Join("; ", pending)}. Telling it once.");
 
-                    prompt =
-                        $"You reported done. This team will not take {string.Join(" or ", branches.Values)} back into "
+                    run.Prompt =
+                        $"You reported done. This team will not take {string.Join(" or ", run.Branches.Values)} back into "
                         + $"the repository until {string.Join(" and ", team.Rules.Gates.Merge)} have accepted it, and "
                         + $"{string.Join("; ", pending)}. Request them, or report done again and the work stays on its branch.";
 
@@ -1257,7 +1256,7 @@ public sealed partial class TeamRunner : ITeamRunner
                             $"The lead reported done without accounting for {missed.Count} of "
                             + $"{held.Count} criteria: {string.Join("; ", missed)}");
 
-                        ended = missed.Count == held.Count
+                        run.Ended = missed.Count == held.Count
                             ? "the lead reported done without accounting for the goal"
                             : $"the lead reported done with {missed.Count} of {held.Count} "
                               + "criteria unmet";
@@ -1265,13 +1264,13 @@ public sealed partial class TeamRunner : ITeamRunner
                         break;
                     }
 
-                    ended = Spell(report.Status);
+                    run.Ended = Spell(report.Status);
                     break;
                 }
 
-                if (!await GateAsync(autonomy, console, $"Act on the lead's report (round {rounds}, {Spell(report.Status)})", ct).ConfigureAwait(false))
+                if (!await GateAsync(autonomy, console, $"Act on the lead's report (round {run.Rounds}, {Spell(report.Status)})", ct).ConfigureAwait(false))
                 {
-                    ended = "stopped by the person";
+                    run.Ended = "stopped by the person";
                     break;
                 }
 
@@ -1285,7 +1284,7 @@ public sealed partial class TeamRunner : ITeamRunner
 
                     if (decided is null)
                     {
-                        ended = "stopped at a decision";
+                        run.Ended = "stopped at a decision";
                         break;
                     }
 
@@ -1318,13 +1317,13 @@ public sealed partial class TeamRunner : ITeamRunner
                 */
                 var heldForReadings = false;
 
-                if (!readingsAccepted && run.Asking && requests.Count > 0 && lastReadings is { Count: > 0 })
+                if (!run.ReadingsAccepted && run.Asking && requests.Count > 0 && run.LastReadings is { Count: > 0 })
                 {
                     var decided = await DecideAsync(
                             run,
                             autonomy,
                             console,
-                            [ReadingsQuestion(lastReadings)],
+                            [ReadingsQuestion(run.LastReadings)],
                             journal,
                             directory,
                             request.TakeRecommendationAfter,
@@ -1333,7 +1332,7 @@ public sealed partial class TeamRunner : ITeamRunner
 
                     if (decided is null)
                     {
-                        ended = "stopped at a decision";
+                        run.Ended = "stopped at a decision";
                         break;
                     }
 
@@ -1348,17 +1347,17 @@ public sealed partial class TeamRunner : ITeamRunner
                     }
                     else
                     {
-                        readingsAccepted = true;
+                        run.ReadingsAccepted = true;
 
                         await journal.WriteAsync(
                             "readings.accepted", team.Lead, new { by = decided[0].By }, ct).ConfigureAwait(false);
                     }
                 }
-                else if (!readingsAccepted && requests.Count > 0 && lastReadings is { Count: > 0 })
+                else if (!run.ReadingsAccepted && requests.Count > 0 && run.LastReadings is { Count: > 0 })
                 {
                     // Nobody to ask, so they stand. Said, so the record does
                     // not read as though somebody agreed them.
-                    readingsAccepted = true;
+                    run.ReadingsAccepted = true;
 
                     await journal.WriteAsync("readings.accepted", team.Lead, new { by = "nobody" }, ct)
                         .ConfigureAwait(false);
@@ -1386,7 +1385,7 @@ public sealed partial class TeamRunner : ITeamRunner
                         var reason =
                             $"The lead asked for '{ask.Node}', which it may not request. It may request: "
                             + string.Join(", ", leadNode.Delegates) + ".";
-                        warnings.Add(reason);
+                        run.Warnings.Add(reason);
                         refused.Add(reason);
                         await journal.WriteAsync("request.refused", team.Lead, new { node = ask.Node, reason }, ct).ConfigureAwait(false);
                         continue;
@@ -1400,7 +1399,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     if (ask.From is { } from && !IsRef(from))
                     {
                         var reason = $"The lead asked for '{ask.Node}' from '{from}', which was refused: '{from}' is not the name of a commit or branch.";
-                        warnings.Add(reason);
+                        run.Warnings.Add(reason);
                         refused.Add(reason);
                         await journal.WriteAsync("request.refused", team.Lead, new { node = ask.Node, reason }, ct).ConfigureAwait(false);
                         continue;
@@ -1421,7 +1420,7 @@ public sealed partial class TeamRunner : ITeamRunner
 
                         if (revised is null)
                         {
-                            ended = "stopped by the person";
+                            run.Ended = "stopped by the person";
                             goto finished;
                         }
 
@@ -1447,11 +1446,11 @@ public sealed partial class TeamRunner : ITeamRunner
                         request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory,
                         Held(standing, criteria), ask.From);
 
-                    await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
+                    await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{run.Rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
                     if (brief.Constraints.Worktree is { Length: > 0 } made)
                     {
-                        branches[ask.Node] = made;
+                        run.Branches[ask.Node] = made;
                     }
 
                     accepted.Add(new Briefed(ask, node, role, brief));
@@ -1464,8 +1463,8 @@ public sealed partial class TeamRunner : ITeamRunner
                     var ask = accepted[index].Ask;
                     var workerReport = ran[index];
 
-                    cost += workerReport.Cost;
-                    warnings.AddRange(workerReport.Warnings);
+                    run.Cost += workerReport.Cost;
+                    run.Warnings.AddRange(workerReport.Warnings);
 
                     if (workerReport.Report is { } decided)
                     {
@@ -1473,14 +1472,14 @@ public sealed partial class TeamRunner : ITeamRunner
                         // in the one word its role tells it to use.
                         foreach (var deliverable in decided.Deliverables.Where(d => d.Kind == DeliverableKind.Decision))
                         {
-                            decisions[BaseNode(ask.Node)] = deliverable.Ref.Trim();
+                            run.Decisions[BaseNode(ask.Node)] = deliverable.Ref.Trim();
                         }
                     }
 
                     if (workerReport.Halted)
                     {
-                        ended = $"halted: {ask.Node} took an outward action its brief did not allow";
-                        final = report;
+                        run.Ended = $"halted: {ask.Node} took an outward action its brief did not allow";
+                        run.Final = report;
                         goto finished;
                     }
 
@@ -1488,18 +1487,18 @@ public sealed partial class TeamRunner : ITeamRunner
                         ask.Node, ReportStatus.Failed, workerReport.Failure ?? "The node ended without a report.", [], [], []);
 
                     reports.Add(handed);
-                    await WriteDocumentAsync(directory, $"report-{Safe(ask.Node)}-{rounds}.json", ReportReader.Write(handed), ct).ConfigureAwait(false);
+                    await WriteDocumentAsync(directory, $"report-{Safe(ask.Node)}-{run.Rounds}.json", ReportReader.Write(handed), ct).ConfigureAwait(false);
 
                     if (!await GateAsync(autonomy, console, $"Hand {ask.Node}'s report ({Spell(handed.Status)}) to the lead", ct).ConfigureAwait(false))
                     {
-                        ended = "stopped by the person";
+                        run.Ended = "stopped by the person";
                         goto finished;
                     }
                 }
 
                 if (report.OutwardRequested is { Count: > 0 } wanted)
                 {
-                    warnings.Add($"The lead asked for outward actions it was not allowed: {string.Join("; ", wanted)}.");
+                    run.Warnings.Add($"The lead asked for outward actions it was not allowed: {string.Join("; ", wanted)}.");
                 }
 
                 // A round that asked for nothing moved nothing. A question is
@@ -1507,7 +1506,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 // one report, and one that asks round after round is stuck.
                 // A round whose work was held back over its readings is not a
                 // quiet one: the lead asked, and was told to think again.
-                quietRounds = requests.Count == 0 && !heldForReadings ? quietRounds + 1 : 0;
+                run.QuietRounds = requests.Count == 0 && !heldForReadings ? run.QuietRounds + 1 : 0;
 
                 // Written down, because a run heading for this is something
                 // somebody would want to know before it gets there - and the
@@ -1515,12 +1514,12 @@ public sealed partial class TeamRunner : ITeamRunner
                 await journal.WriteAsync(
                     "round.ended",
                     null,
-                    new { round = rounds, requests = requests.Count, quiet = quietRounds },
+                    new { round = run.Rounds, requests = requests.Count, quiet = run.QuietRounds },
                     ct).ConfigureAwait(false);
 
-                if (quietRounds >= 2)
+                if (run.QuietRounds >= 2)
                 {
-                    ended = "no progress: two rounds without a request or a finish";
+                    run.Ended = "no progress: two rounds without a request or a finish";
                     break;
                 }
 
@@ -1529,7 +1528,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 // them, so the list it reads here is the list ReportCheck will
                 // hold its done to - and a lead held to criteria it has not
                 // seen cannot report coverage for them.
-                if (agreedThisRound is { Count: > 0 } settled)
+                if (run.AgreedThisRound is { Count: > 0 } settled)
                 {
                     feedback.AppendLine("## What this run is judged on").AppendLine();
                     feedback.AppendLine(
@@ -1543,7 +1542,7 @@ public sealed partial class TeamRunner : ITeamRunner
 
                     feedback.AppendLine();
 
-                    agreedThisRound = null;
+                    run.AgreedThisRound = null;
                 }
 
                 if (reports.Count > 0)
@@ -1575,7 +1574,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     + "document. Keep summary short: a few sentences, not a report of its own. "
                     + "Status done needs evidence cited from these reports.");
 
-                prompt = feedback.ToString();
+                run.Prompt = feedback.ToString();
             }
 
         finished:
@@ -1589,16 +1588,16 @@ public sealed partial class TeamRunner : ITeamRunner
             await journal.WriteAsync("node.ended", team.Lead, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
             await lead.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
 
-            await FoldQuestionsAsync(leadBrief, journal, warnings, CancellationToken.None).ConfigureAwait(false);
+            await FoldQuestionsAsync(leadBrief, journal, run.Warnings, CancellationToken.None).ConfigureAwait(false);
 
             // A node that produced no report and said why on its error
             // stream has explained itself, and that explanation must reach
             // the person. The first real run ended "without a report" in
             // under a second, exit code 1, and nothing said what the agent
             // had printed.
-            if (final is null && stderr.Length > 0)
+            if (run.Final is null && stderr.Length > 0)
             {
-                warnings.Add($"The lead wrote to its error stream (exit code {exit}): {stderr}");
+                run.Warnings.Add($"The lead wrote to its error stream (exit code {exit}): {stderr}");
             }
         }
 
@@ -1608,10 +1607,10 @@ public sealed partial class TeamRunner : ITeamRunner
         var afterwards = new List<decimal>();
 
         var merged = await MergeAsync(
-            run, request, team, runId, autonomy, ended, branches, decisions, console, journal, warnings, afterwards, ct)
+            run, request, team, runId, autonomy, run.Ended, run.Branches, run.Decisions, console, journal, run.Warnings, afterwards, ct)
             .ConfigureAwait(false);
 
-        cost += afterwards.Sum();
+        run.Cost += afterwards.Sum();
 
         // The watch stops before the ending is written, so its last look -
         // an answer given just before the end - goes down ahead of it, where
@@ -1619,24 +1618,24 @@ public sealed partial class TeamRunner : ITeamRunner
         await watching.StopAsync().ConfigureAwait(false);
 
         await journal.WriteAsync(
-            "run.finished", null, new { ended, outcome = Filed(ended), cost, rounds, merged }, ct).ConfigureAwait(false);
+            "run.finished", null, new { ended = run.Ended, outcome = Filed(run.Ended), cost = run.Cost, rounds = run.Rounds, merged }, ct).ConfigureAwait(false);
 
         await DeclareAsync(
-            slug, runId, forTask, team, Landed(ended), request.Goal,
-            $"{ended}; {rounds} round(s), ${cost:0.00}. loadout team status {runId}", ct)
+            slug, runId, forTask, team, Landed(run.Ended), request.Goal,
+            $"{run.Ended}; {run.Rounds} round(s), ${run.Cost:0.00}. loadout team status {runId}", ct)
             .ConfigureAwait(false);
 
-        if (final is not null)
+        if (run.Final is not null)
         {
-            await WriteDocumentAsync(directory, "final-report.json", ReportReader.Write(final), ct).ConfigureAwait(false);
+            await WriteDocumentAsync(directory, "final-report.json", ReportReader.Write(run.Final), ct).ConfigureAwait(false);
         }
 
         // Every node's launch contributes the same preflight notices, so a
         // four-node run said each of them four times. The same sentence
         // twice is noise that buries the one that was only said once.
         return OperationResult<TeamRunOutcome>.Ok(new TeamRunOutcome(
-            runId, directory, ended, final, cost, rounds,
-            warnings.Distinct(StringComparer.Ordinal).ToList(), branches, merged));
+            runId, directory, run.Ended, run.Final, run.Cost, run.Rounds,
+            run.Warnings.Distinct(StringComparer.Ordinal).ToList(), run.Branches, merged));
     }
 
     /// <summary>

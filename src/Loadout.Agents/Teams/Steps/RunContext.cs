@@ -1,3 +1,5 @@
+using Loadout.Models.Teams;
+
 namespace Loadout.Agents.Teams.Steps;
 
 /// <summary>
@@ -6,10 +8,11 @@ namespace Loadout.Agents.Teams.Steps;
 /// </summary>
 internal sealed class RunContext
 {
-    public RunContext(bool asking, string? onTimeout)
+    public RunContext(bool asking, string? onTimeout, List<string> warnings)
     {
         Asking = asking;
         OnTimeout = onTimeout;
+        Warnings = warnings;
     }
 
     /// <summary>
@@ -29,4 +32,52 @@ internal sealed class RunContext
     /// <c>TeamRunner.KeyOf</c>, so think-again-once sends each back only once.
     /// </summary>
     public HashSet<string> SentBackByTimer { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Everything the run has to tell the person at the end. The same list the
+    /// run gathered before the context was made, so nothing said early is lost.
+    /// </summary>
+    public List<string> Warnings { get; }
+
+    /// <summary>What the run has spent so far, in USD.</summary>
+    public decimal Cost { get; set; }
+
+    /// <summary>How many rounds the lead has taken.</summary>
+    public int Rounds { get; set; }
+
+    /// <summary>Rounds in a row with neither a request nor a finish.</summary>
+    public int QuietRounds { get; set; }
+
+    /// <summary>Why the run ended, once it has.</summary>
+    public string Ended { get; set; } = string.Empty;
+
+    /// <summary>The budget the run was last held to.</summary>
+    public UsdCap HeldTo { get; set; }
+
+    /// <summary>The lead's last report, kept as the run's final one.</summary>
+    public Report? Final { get; set; }
+
+    /// <summary>What the run put on branches of its own, by node.</summary>
+    public Dictionary<string, string> Branches { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>What the team's merge gate nodes decided, by node.</summary>
+    public Dictionary<string, string> Decisions { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>Whether the lead has already been told about an unconsulted gate.</summary>
+    public bool AskedAboutTheGate { get; set; }
+
+    /// <summary>Whether the lead has been asked to propose criteria.</summary>
+    public bool Proposed { get; set; }
+
+    /// <summary>What was agreed this round, for the feedback the lead reads next.</summary>
+    public IReadOnlyList<string>? AgreedThisRound { get; set; }
+
+    /// <summary>How the lead last said it reads each criterion.</summary>
+    public Dictionary<string, string>? LastReadings { get; set; }
+
+    /// <summary>Whether somebody has let workers start on the lead's readings.</summary>
+    public bool ReadingsAccepted { get; set; }
+
+    /// <summary>What the lead is told on its next turn.</summary>
+    public string Prompt { get; set; } = string.Empty;
 }
