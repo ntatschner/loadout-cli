@@ -44,6 +44,15 @@ public sealed partial class TeamRunnerTests
     [InlineData("gated-merge")]
     [InlineData("permission-answered")]
     [InlineData("quiet-rounds")]
+    [InlineData("gate-reminded")]
+    [InlineData("gate-refused")]
+    [InlineData("merge-conflict-resolved")]
+    [InlineData("decision-question")]
+    [InlineData("budget-raised")]
+    [InlineData("resumed")]
+    [InlineData("folded-asks")]
+    [InlineData("readings-accepted")]
+    [InlineData("manual-brief-revised")]
     public async Task TeamRunnerReplay(string scenario)
     {
         var record = scenario switch
@@ -52,6 +61,15 @@ public sealed partial class TeamRunnerTests
             "gated-merge" => await GatedMergeAsync(),
             "permission-answered" => await PermissionAnsweredAsync(),
             "quiet-rounds" => await QuietRoundsAsync(),
+            "gate-reminded" => await GateRemindedAsync(),
+            "gate-refused" => await GateRefusedAsync(),
+            "merge-conflict-resolved" => await MergeConflictResolvedAsync(),
+            "decision-question" => await DecisionQuestionAsync(),
+            "budget-raised" => await BudgetRaisedAsync(),
+            "resumed" => await ResumedAsync(),
+            "folded-asks" => await FoldedAsksAsync(),
+            "readings-accepted" => await ReadingsAcceptedAsync(),
+            "manual-brief-revised" => await ManualBriefRevisedAsync(),
             _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "no such scenario"),
         };
 
@@ -83,6 +101,11 @@ public sealed partial class TeamRunnerTests
     }
 
     // ---------------------------------------------------------- scenarios
+    //
+    // S14, two workers asked for together (Two_nodes_the_lead_asked_for_together_run_together),
+    // is left out. Grouped by node it still differs from run to run: each
+    // node's stepped times depend on how the other's lines interleaved, and
+    // dropping the times to make it pass would loosen every comparison.
 
     /// <summary>S1. Copied from A_folded_decision_keeps_the_time_it_was_made's lead, without its side file.</summary>
     private async Task<string> OneRoundDoneAsync()
@@ -104,6 +127,15 @@ public sealed partial class TeamRunnerTests
     private async Task<string> GatedMergeAsync()
     {
         var git = new FakeGit(Path.Combine(_root, "repo"));
+
+        ScriptAGatedReplay(git);
+
+        return await RecordAsync(await ReplayRunAsync(git: git));
+    }
+
+    /// <summary>The script S2 and S7 share: one implementer through the full merge gate, a node a round.</summary>
+    private void ScriptAGatedReplay(FakeGit git)
+    {
         string? branch = null;
 
         var accepted = new Report(
@@ -138,8 +170,6 @@ public sealed partial class TeamRunnerTests
         _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
         _launcher.Script("role.reviewer", Init("rev-1"), Result(accepted, 0.02m));
         _launcher.Script("role.verifier", Init("ver-1"), Result(verified, 0.02m));
-
-        return await RecordAsync(await ReplayRunAsync(git: git));
     }
 
     /// <summary>
@@ -184,6 +214,163 @@ public sealed partial class TeamRunnerTests
         return await RecordAsync(await ReplayRunAsync(autonomy: "autonomous"));
     }
 
+    /// <summary>S5. Copied from A_lead_that_requests_a_worker_gets_its_report_back_and_finishes: the gate reminder, no git.</summary>
+    private async Task<string> GateRemindedAsync()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        return await RecordAsync(await ReplayRunAsync());
+    }
+
+    /// <summary>S6. Copied from Nothing_is_merged_until_every_node_the_gate_names_has_accepted.</summary>
+    private async Task<string> GateRefusedAsync()
+    {
+        var returned = new Report(
+            "reviewer", ReportStatus.Done, "Two findings.",
+            [new ReportDeliverable(DeliverableKind.Decision, "return", "a4f21c9")], [Passed], []);
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadRequests(new ReportRequest("reviewer", "review it", DeliverableKind.Decision)), 0.06m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+        _launcher.Script("role.reviewer", Init("rev-1"), Result(returned, 0.02m));
+
+        return await RecordAsync(await ReplayRunAsync());
+    }
+
+    /// <summary>
+    /// S7. Copied from A_branch_that_conflicts_goes_back_to_the_node_that_wrote_it,
+    /// over S2's script rather than ScriptAGatedRun for the reason S2 gives.
+    /// </summary>
+    private async Task<string> MergeConflictResolvedAsync()
+    {
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        git.NextMerge(new GitMerge(Merged: false, FastForward: false, ["docs/commands.md"]));
+
+        ScriptAGatedReplay(git);
+
+        // The implementer is briefed a second time, to resolve.
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone(), 0.04m));
+
+        return await RecordAsync(await ReplayRunAsync(git: git));
+    }
+
+    /// <summary>S8. Copied from A_question_is_put_to_the_person_and_the_answer_goes_back_to_the_lead.</summary>
+    private async Task<string> DecisionQuestionAsync()
+    {
+        _console.Decide = q => q.Options[1];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m), Result(LeadDone(), 0.09m));
+
+        return await RecordAsync(await ReplayRunAsync());
+    }
+
+    /// <summary>S9. Copied from A_watched_run_given_more_carries_on_and_says_so.</summary>
+    private async Task<string> BudgetRaisedAsync()
+    {
+        var team = await IteratingProjectAsync();
+
+        team.Rules.Budget.Usd = 0.10m;
+
+        _console.Decide = question => question.Recommendation;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.20m),
+            Result(LeadDone(), 0.30m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        return await RecordAsync(await ReplayRunAsync(team));
+    }
+
+    /// <summary>
+    /// S10. Copied from An_ended_run_is_picked_up_where_it_stopped_with_its_lead_s_own_session,
+    /// with SpentAsync's first run inlined. Both runs write one journal.
+    /// </summary>
+    private async Task<string> ResumedAsync()
+    {
+        var team = await IteratingProjectAsync();
+
+        team.Rules.Budget.Usd = 0.10m;
+        _console.CanAsk = false;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.20m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        var first = await ReplayRunAsync(team);
+
+        await RunControl.SetBudgetAsync(first.Directory!, 5m);
+        await RunControl.StopAsync(first.Directory!);
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        var picked = await ReplayRunAsync(team, resuming: first.RunId, message: "Finish it off.", rounds: 10);
+
+        return await RecordAsync([first, picked]);
+    }
+
+    /// <summary>
+    /// S11. The side files of What_a_node_asked_for_reaches_the_run_and_the_person
+    /// and A_folded_decision_keeps_the_time_it_was_made, both in one, so the
+    /// refused question and the explicit time are each pinned.
+    /// </summary>
+    private async Task<string> FoldedAsksAsync()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        _launcher.BeforeStart = directory => File.AppendAllText(
+            Path.Combine(directory, NodePermissions.AskedFileName("lead")),
+            """{"at":"2026-09-16T10:00:00+00:00","node":"lead","tool":"WebFetch","target":"https://example.invalid","allowed":false,"rule":null,"reason":"nothing allows it"}"""
+                + "\n"
+                + """{"at":"2026-09-16T10:00:00+00:00","node":"lead","tool":"Bash","target":"dotnet test","allowed":true,"rule":null,"reason":"allowed for this call only"}"""
+                + "\n");
+
+        return await RecordAsync(await ReplayRunAsync());
+    }
+
+    /// <summary>S12. Copied from Before_any_worker_starts_the_lead_s_readings_go_to_the_person.</summary>
+    private async Task<string> ReadingsAcceptedAsync()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests(), 0.01m), Result(LeadDoneCovering(Mine), 0.02m), Result(LeadDoneCovering(Mine), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        return await RecordAsync(await ReplayRunAsync(criteria: [Mine]));
+    }
+
+    /// <summary>S13. Copied from A_brief_that_was_changed_says_so_and_says_what_it_was.</summary>
+    private async Task<string> ManualBriefRevisedAsync()
+    {
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.03m));
+
+        _console.Revise = _ => "Something else entirely.";
+
+        return await RecordAsync(await ReplayRunAsync(autonomy: "manual"));
+    }
+
     // ----------------------------------------------------------- the harness
 
     private async Task<TeamRunOutcome> ReplayRunAsync(
@@ -218,24 +405,13 @@ public sealed partial class TeamRunnerTests
     /// declarations, the git calls, the run's directory, then each outcome.
     /// </summary>
     /// <param name="outcomes">Every run of the scenario, in order; they share one directory.</param>
-    /// <param name="byNode">
-    /// The journal grouped by node, keeping each node's own order, for a
-    /// scenario whose nodes run at the same time.
-    /// </param>
-    private async Task<string> RecordAsync(TeamRunOutcome[] outcomes, bool byNode = false)
+    private async Task<string> RecordAsync(TeamRunOutcome[] outcomes)
     {
         var last = outcomes[^1];
         var directory = last.Directory!;
         var lines = new List<string>();
 
-        IEnumerable<string> journal = await File.ReadAllLinesAsync(Path.Combine(directory, "journal.jsonl"));
-
-        if (byNode)
-        {
-            journal = journal.OrderBy(l => RunJournal.Parse(l)?.Node ?? string.Empty, StringComparer.Ordinal).ToList();
-        }
-
-        lines.AddRange(journal);
+        lines.AddRange(await File.ReadAllLinesAsync(Path.Combine(directory, "journal.jsonl")));
 
         lines.AddRange(_replayTasks.Declared.Select(d => Json(new
         {
