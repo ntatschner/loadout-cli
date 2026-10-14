@@ -65,6 +65,7 @@ public sealed partial class TeamRunnerTests
     [InlineData("node-told-and-said")]
     [InlineData("node-failed")]
     [InlineData("merge-failed")]
+    [InlineData("parallel-workers")]
     public async Task TeamRunnerReplay(string scenario)
     {
         var record = scenario switch
@@ -94,6 +95,7 @@ public sealed partial class TeamRunnerTests
             "node-told-and-said" => await NodeToldAndSaidAsync(),
             "node-failed" => await NodeFailedAsync(),
             "merge-failed" => await MergeFailedAsync(),
+            "parallel-workers" => PerNode(await ParallelWorkersAsync()),
             _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "no such scenario"),
         };
 
@@ -125,11 +127,6 @@ public sealed partial class TeamRunnerTests
     }
 
     // ---------------------------------------------------------- scenarios
-    //
-    // S14, two workers asked for together (Two_nodes_the_lead_asked_for_together_run_together),
-    // is left out. Grouped by node it still differs from run to run: each
-    // node's stepped times depend on how the other's lines interleaved, and
-    // dropping the times to make it pass would loosen every comparison.
 
     /// <summary>S1. Copied from A_folded_decision_keeps_the_time_it_was_made's lead, without its side file.</summary>
     private async Task<string> OneRoundDoneAsync()
@@ -644,7 +641,104 @@ public sealed partial class TeamRunnerTests
         return await RecordAsync(await ReplayRunAsync(git: git));
     }
 
+    /// <summary>
+    /// S14. Copied from Two_nodes_the_lead_asked_for_together_run_together:
+    /// two implementers asked for in one round, each held until the other has
+    /// arrived, so they are genuinely running at the same moment. Compared
+    /// through <see cref="PerNode"/>, the one scenario that is not compared in
+    /// exact order.
+    /// </summary>
+    private async Task<string> ParallelWorkersAsync()
+    {
+        var both = new TaskCompletionSource();
+        var arrived = 0;
+
+        _launcher.Hold("role.implementer", async () =>
+        {
+            if (Interlocked.Increment(ref arrived) == 2)
+            {
+                both.SetResult();
+            }
+
+            await both.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        });
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(
+                AskImplementer() with { Node = "implementer/1" },
+                AskImplementer() with { Node = "implementer/2" }), 0.05m),
+            Result(LeadDone(), 0.09m),
+            Result(LeadDone(), 0.09m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone() with { Node = "implementer/1" }, 0.03m));
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone() with { Node = "implementer/2" }, 0.03m));
+
+        var outcome = await ReplayRunAsync();
+
+        arrived.Should().Be(2, "both implementers were meant to be running at once");
+
+        return await RecordAsync(outcome);
+    }
+
     // ----------------------------------------------------------- the harness
+
+    /// <summary>
+    /// A record whose workers ran at the same time, put in an order that does
+    /// not depend on how their lines happened to interleave.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only the workers' own journal lines move, and only among themselves:
+    /// they are gathered at the place the first of them was written, grouped
+    /// by node in name order, each node's lines in the order that node wrote
+    /// them. Every other line, the run's and the lead's included, stays where
+    /// it was, so their order is still compared exactly.
+    /// </para>
+    /// <para>
+    /// The workers' stepped times are blanked, and nothing else is: each
+    /// worker's times depend on how many lines the other wrote first, so they
+    /// differ from run to run whatever the order. A time that is not the
+    /// stepping clock's, such as a folded question's, is kept.
+    /// </para>
+    /// </remarks>
+    private static string PerNode(string record)
+    {
+        static string? Worker(string line) =>
+            JsonDocument.Parse(line).RootElement is { ValueKind: JsonValueKind.Object } root
+            && root.TryGetProperty("kind", out _)
+            && root.TryGetProperty("node", out var node)
+            && node.GetString() is { } name
+            && name.Contains('/', StringComparison.Ordinal)
+                ? name
+                : null;
+
+        var lines = record.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var workers = lines.Where(line => Worker(line) is not null).ToList();
+
+        if (workers.Count == 0)
+        {
+            return record;
+        }
+
+        var block = workers
+            .Select((line, index) => (Node: Worker(line)!, Index: index, Line: StepTime().Replace(line, "\"at\":\"<t>\"")))
+            .OrderBy(one => one.Node, StringComparer.Ordinal)
+            .ThenBy(one => one.Index)
+            .Select(one => one.Line);
+
+        var first = Array.FindIndex(lines, line => Worker(line) is not null);
+        var others = lines.Where(line => Worker(line) is null).ToList();
+
+        others.InsertRange(first, block);
+
+        return string.Join('\n', others) + "\n";
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"""at"":""<t\+\d+>""")]
+    private static partial System.Text.RegularExpressions.Regex StepTime();
+
 
     private async Task<TeamRunOutcome> ReplayRunAsync(
         TeamDefinition? team = null,
