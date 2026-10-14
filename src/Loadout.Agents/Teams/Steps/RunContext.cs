@@ -45,6 +45,12 @@ internal sealed class RunContext
     /// </summary>
     public IReadOnlyList<Core.Teams.PendingAsk> Retired { get; set; } = [];
 
+    /// <summary>
+    /// The questions a run being picked up again closed itself as it ended,
+    /// which the lead is told of alongside <see cref="Retired"/>.
+    /// </summary>
+    public IReadOnlyList<Core.Teams.PendingAsk> ClosedAtEnd { get; set; } = [];
+
     /// <summary>What the run has spent so far, in USD.</summary>
     public decimal Cost { get; set; }
 

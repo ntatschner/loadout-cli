@@ -555,46 +555,99 @@ public static partial class NodePermissions
     public static IReadOnlyList<PendingAsk> Pending(string directory, DateTimeOffset? since) =>
         since is { } after ? [.. Pending(directory).Where(ask => ask.At > after)] : Pending(directory);
 
-    /// <summary>What a question is answered by when it was retired rather than answered.</summary>
+    /// <summary>
+    /// What a question is answered by when a run picked up again found it
+    /// still open, left by a run that ended before closing its own.
+    /// </summary>
     public const string Retired = "retired";
+
+    /// <summary>What a question is answered by when the run ended with it still open.</summary>
+    public const string Ended = "ended";
 
     /// <summary>
     /// Closes every question still open in a run that is being picked up
     /// again, and returns the ones it closed.
     /// </summary>
     /// <remarks>
-    /// <para>
     /// The wait each of them belonged to ended with the run, and the lead was
     /// told nobody answered. An answer given to one now would be read by
     /// nothing, so it is closed as refused and the lead is told to ask again
     /// if it still needs to know.
-    /// </para>
-    /// <para>
+    /// </remarks>
+    public static Task<IReadOnlyList<PendingAsk>> RetireAsync(string directory, CancellationToken ct = default) =>
+        CloseAsync(
+            directory,
+            Retired,
+            "The run stopped before this was answered, and it was retired when the run was picked up again.",
+            ct);
+
+    /// <summary>
+    /// Closes every question still open in a run that is ending, and returns
+    /// the ones it closed.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is left to read an answer once the run has gone, and a run that
+    /// is never picked up again has no reopening to clear them: they stayed on
+    /// the page, greyed out, for as long as the run was kept.
+    /// </remarks>
+    public static Task<IReadOnlyList<PendingAsk>> CloseAsync(string directory, CancellationToken ct = default) =>
+        CloseAsync(directory, Ended, "The run ended before this was answered.", ct);
+
+    /// <remarks>
     /// Written as an answer, so the first-answer-wins rule still holds: one
     /// somebody gave in the same instant stands, and that question is not
-    /// counted as retired.
-    /// </para>
+    /// counted as closed.
     /// </remarks>
-    public static async Task<IReadOnlyList<PendingAsk>> RetireAsync(string directory, CancellationToken ct = default)
+    private static async Task<IReadOnlyList<PendingAsk>> CloseAsync(
+        string directory, string by, string reason, CancellationToken ct)
     {
-        var retired = new List<PendingAsk>();
+        var closed = new List<PendingAsk>();
 
         foreach (var ask in Pending(directory))
         {
-            var closing = new AskAnswer(
-                false,
-                "The run stopped before this was answered, and it was retired when the run was picked up again.",
-                By: Retired);
+            await AnswerAsync(directory, ask.Id, new AskAnswer(false, reason, By: by), ct).ConfigureAwait(false);
 
-            await AnswerAsync(directory, ask.Id, closing, ct).ConfigureAwait(false);
-
-            if (Answered(directory, ask.Id) is { By: Retired })
+            if (Answered(directory, ask.Id)?.By == by)
             {
-                retired.Add(ask);
+                closed.Add(ask);
             }
         }
 
-        return retired;
+        return closed;
+    }
+
+    /// <summary>
+    /// Questions asked after <paramref name="since"/> (or ever, where it is
+    /// null) that were closed by <paramref name="by"/> rather than answered.
+    /// </summary>
+    public static IReadOnlyList<PendingAsk> ClosedBy(string directory, string by, DateTimeOffset? since)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        var closed = new List<PendingAsk>();
+
+        foreach (var file in Directory.EnumerateFiles(directory, "ask-*.json"))
+        {
+            try
+            {
+                if (JsonSerializer.Deserialize<PendingAsk>(File.ReadAllText(file)) is { } ask
+                    && (since is null || ask.At > since)
+                    && Answered(directory, ask.Id)?.By == by)
+                {
+                    closed.Add(ask);
+                }
+            }
+            catch (Exception ex) when (ex is JsonException or IOException)
+            {
+                // Being written as it was read. Nothing closes a question
+                // that is still being asked.
+            }
+        }
+
+        return [.. closed.OrderBy(ask => ask.At)];
     }
 
     /// <summary>What somebody decided about one question, or null if nobody has.</summary>

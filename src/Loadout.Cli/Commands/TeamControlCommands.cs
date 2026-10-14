@@ -125,7 +125,7 @@ public sealed class TeamGateCommand : AsyncCommand<TeamGateCommand.Settings>
         }
 
         var directory = _journal.DirectoryOf(run);
-        var waiting = NodePermissions.Pending(directory);
+        var waiting = RunJournal.Open(directory);
 
         if (waiting.Count == 0)
         {
@@ -330,7 +330,7 @@ public sealed class TeamMessageCommand : AsyncCommand<TeamMessageCommand.Setting
           told, rather than finding out from a run that ended without ever
           mentioning it.
         */
-        foreach (var pending in NodePermissions.Pending(directory))
+        foreach (var pending in RunJournal.Open(directory))
         {
             output.WriteLine(
                 $"[yellow]It is waiting on a question first:[/] {Markup.Escape(pending.Asking)}");

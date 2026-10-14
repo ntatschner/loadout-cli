@@ -1,6 +1,9 @@
 using System.Text.Json;
 using FluentAssertions;
 using Loadout.Core.Teams;
+using Loadout.Models.Platform;
+using Loadout.Platform.Linux;
+using Loadout.Tests.Fakes;
 using Xunit;
 
 namespace Loadout.Tests.Unit;
@@ -92,6 +95,79 @@ public sealed class StaleQuestionTests : IDisposable
             by = "retired",
             question = "Which database should it use?",
         })).Should().Be("question retired when the run was picked up again: Which database should it use?");
+
+        RunJournal.Wording(Event(Start, "node.answered", new
+        {
+            tool = string.Empty,
+            allowed = false,
+            by = "ended",
+            question = "Which database should it use?",
+        })).Should().Be("question closed unanswered when the run ended: Which database should it use?");
+    }
+
+    /// <summary>
+    /// What 'team gate', 'team tell' and the remedy list read, none of which
+    /// fold the whole run first.
+    /// </summary>
+    [Fact]
+    public async Task The_open_questions_read_from_the_journal_leave_out_those_from_before_the_run_was_picked_up()
+    {
+        await AskAsync("gate-old", Start.AddMinutes(5));
+        await AskAsync("gate-new", Start.AddMinutes(95));
+
+        await WriteJournalAsync(_directory,
+            Event(Start, "run.started", new { team = "t", goal = "g", autonomy = "supervised" }),
+            Event(Start.AddMinutes(90), "run.reopened", new { was = "stopped" }));
+
+        RunJournal.Open(_directory).Select(one => one.Id).Should().Equal("gate-new");
+    }
+
+    [Fact]
+    public async Task A_run_with_no_journal_keeps_every_open_question()
+    {
+        await AskAsync("gate-old", Start.AddMinutes(5));
+
+        RunJournal.Open(_directory).Select(one => one.Id).Should().Equal("gate-old");
+    }
+
+    [Fact]
+    public async Task A_remedy_question_from_before_the_run_was_picked_up_is_not_listed_as_waiting()
+    {
+        var paths = new LinuxPaths(
+            new FakeEnvironmentProvider(
+                Path.Combine(_directory, "home"),
+                new Dictionary<string, string> { ["XDG_STATE_HOME"] = Path.Combine(_directory, "state") }),
+            new NoOpFilePermissions(),
+            new HostPlatform(HostOperatingSystem.Linux, System.Runtime.InteropServices.Architecture.X64, "test", "TEST"));
+
+        var run = Path.Combine(paths.Paths.State, "teams", "runs", "20261014-0900-abcd");
+
+        await NodePermissions.PutAsync(run, new PendingAsk(
+            "remedy-old", "implementer", "role.implementer", "Bash", "dotnet test", Start.AddMinutes(5), Kind: "remedy"));
+        await NodePermissions.PutAsync(run, new PendingAsk(
+            "remedy-new", "implementer", "role.implementer", "Bash", "dotnet test", Start.AddMinutes(95), Kind: "remedy"));
+
+        await WriteJournalAsync(run,
+            Event(Start, "run.started", new { team = "t", goal = "g", autonomy = "supervised" }),
+            Event(Start.AddMinutes(90), "run.reopened", new { was = "stopped" }));
+
+        new RemedyBook(paths).Waiting("t").Value!.Select(one => one.Id).Should().Equal("remedy-new");
+    }
+
+    private static Task WriteJournalAsync(string directory, params RunEvent[] events)
+    {
+        Directory.CreateDirectory(directory);
+
+        return File.WriteAllLinesAsync(
+            Path.Combine(directory, "journal.jsonl"),
+            events.Select(one => JsonSerializer.Serialize(new
+            {
+                at = one.At,
+                run = "r",
+                node = one.Node,
+                kind = one.Kind,
+                data = one.Data,
+            })));
     }
 
     private Task AskAsync(string id, DateTimeOffset at) =>

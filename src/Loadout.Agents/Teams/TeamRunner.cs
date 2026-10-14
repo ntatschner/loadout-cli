@@ -619,6 +619,9 @@ public sealed partial class TeamRunner : ITeamRunner
         // reopened.
         if (resuming is not null)
         {
+            // Those it closed itself as it ended, in the leg that ended, are
+            // already written down; the lead still has to hear of them.
+            run.ClosedAtEnd = NodePermissions.ClosedBy(directory, NodePermissions.Ended, RunJournal.LastReopened(directory));
             run.Retired = await NodePermissions.RetireAsync(directory, ct).ConfigureAwait(false);
         }
 
@@ -641,7 +644,7 @@ public sealed partial class TeamRunner : ITeamRunner
         {
             run.Prompt = resuming is null
                 ? Render(run.LeadBrief)
-                : Picking(resuming, request, lead.Plan, run.LeadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd, run.Retired);
+                : Picking(resuming, request, lead.Plan, run.LeadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd, [.. run.ClosedAtEnd, .. run.Retired]);
 
             while (true)
             {

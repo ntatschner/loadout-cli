@@ -789,6 +789,52 @@ public sealed class RunJournal : IRunJournal
     }
 
     /// <summary>
+    /// The questions a run is still waiting on, read straight from its
+    /// directory, for whatever does not fold the whole run first.
+    /// </summary>
+    /// <remarks>
+    /// The same list <see cref="Fold"/> gives: none asked before the run was
+    /// last picked up again, whose waits ended with the run.
+    /// </remarks>
+    public static IReadOnlyList<PendingAsk> Open(string directory) =>
+        NodePermissions.Pending(directory, LastReopened(directory));
+
+    /// <summary>When the run in this directory was last picked up again, or null if never.</summary>
+    public static DateTimeOffset? LastReopened(string directory)
+    {
+        var path = Path.Combine(directory, "journal.jsonl");
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        string[] lines;
+
+        try
+        {
+            lines = File.ReadAllLines(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        DateTimeOffset? reopened = null;
+
+        foreach (var line in lines)
+        {
+            if (line.Contains("\"run.reopened\"", StringComparison.Ordinal)
+                && Parse(line) is { Kind: "run.reopened" } entry)
+            {
+                reopened = entry.At;
+            }
+        }
+
+        return reopened;
+    }
+
+    /// <summary>
     /// One line as an event, or null.
     /// </summary>
     /// <remarks>
@@ -1380,6 +1426,8 @@ public sealed class RunJournal : IRunJournal
                 + (entry.Word("target") is { Length: > 0 } wanted ? $" {wanted}" : string.Empty),
             "node.answered" when entry.Text("by") == NodePermissions.Retired =>
                 $"question retired when the run was picked up again: {entry.Text("question")}",
+            "node.answered" when entry.Text("by") == NodePermissions.Ended =>
+                $"question closed unanswered when the run ended: {entry.Text("question")}",
             "node.answered" => (entry.Yes("allowed") ? "was allowed " : "was refused ")
                 + entry.Word("tool")
                 + (entry.Word("chosen") is { } chosen
