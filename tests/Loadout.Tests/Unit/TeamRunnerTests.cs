@@ -34,7 +34,7 @@ namespace Loadout.Tests.Unit;
 /// they ship, so a change to either that broke a run would show here.
 /// </para>
 /// </remarks>
-public sealed class TeamRunnerTests : IDisposable
+public sealed partial class TeamRunnerTests : IDisposable
 {
     private static SpecialistCatalogue? _specialists;
 
