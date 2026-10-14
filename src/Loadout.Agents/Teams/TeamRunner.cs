@@ -490,6 +490,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private readonly MergeStep _merge;
     private readonly OpenRunStep _open;
     private readonly RoundLimitsStep _limits;
+    private readonly LeadReportStep _leadReport;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
@@ -519,6 +520,7 @@ public sealed partial class TeamRunner : ITeamRunner
         _merge = new MergeStep(projects, git, paths, new TidyStep(git), _workers);
         _open = new OpenRunStep(paths, time, lifetime, projects, _sessions, _declare);
         _limits = new RoundLimitsStep(time);
+        _leadReport = new LeadReportStep(_sessions);
     }
 
     /// <inheritdoc />
@@ -552,7 +554,6 @@ public sealed partial class TeamRunner : ITeamRunner
         var team = request.Team;
         var (runId, warnings, leadNode, teamDirectory, fromTeam, standing) =
             (opening!.RunId, opening.Warnings, opening.LeadNode, opening.TeamDirectory, opening.FromTeam, opening.Standing);
-        var (criteria, leadBrief) = (opening.Criteria, opening.LeadBrief);
 
         var directory = RunDirectory(runId);
         Directory.CreateDirectory(directory);
@@ -600,8 +601,8 @@ public sealed partial class TeamRunner : ITeamRunner
             LeadRole = opening.LeadRole,
             Standing = standing,
             Resuming = resuming,
-            LeadBrief = leadBrief,
-            Criteria = criteria,
+            LeadBrief = opening.LeadBrief,
+            Criteria = opening.Criteria,
         };
 
         var journal = new JournalWriter(Path.Combine(directory, "journal.jsonl"), runId, _time);
@@ -624,8 +625,8 @@ public sealed partial class TeamRunner : ITeamRunner
         try
         {
             run.Prompt = resuming is null
-                ? Render(leadBrief)
-                : Picking(resuming, request, lead.Plan, leadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd);
+                ? Render(run.LeadBrief)
+                : Picking(resuming, request, lead.Plan, run.LeadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd);
 
             while (true)
             {
@@ -634,175 +635,19 @@ public sealed partial class TeamRunner : ITeamRunner
                     break;
                 }
 
-                var turn = await _sessions.TurnAsync(lead, leadBrief, run.Prompt, journal, ct).ConfigureAwait(false);
-                var report = turn.Report;
-                run.Cost += turn.Cost;
+                var said = await _leadReport.RunAsync(run, journal, ct).ConfigureAwait(false);
 
-                if (turn.Halted)
+                if (said.Ended is not null)
                 {
-                    run.Ended = "halted: the lead took an outward action its brief did not allow";
-                    run.Final = report;
                     break;
                 }
 
-                if (report is null)
+                if (said.Reminded)
                 {
-                    // What it said instead is the explanation, and it is
-                    // usually a sentence a person can act on.
-                    run.Ended = turn.Said.Length > 0
-                        ? $"the lead ended without a report. It said: {turn.Said}"
-                        : "the lead ended without a report";
-
-                    break;
-                }
-
-                run.Final = report;
-
-                /*
-                  What this run is judged on, agreed before a worker is briefed.
-
-                  Only where nobody said: a run started with --done-when was
-                  settled by whoever typed them. Without them the run's only
-                  criterion was "the goal is met", which the lead writes its own
-                  verdict on - so a run that produced a design document for a
-                  goal somebody wanted code from reported done, cited itself,
-                  and was right by the only rule it had.
-
-                  Here rather than after the dispatch, because the workers
-                  briefed in this same round are handed the criteria too, and a
-                  criterion agreed after they have gone is one they never saw.
-                */
-                if (criteria is null && !run.Proposed)
-                {
-                    run.Proposed = true;
-
-                    criteria = await AgreedAsync(report, autonomy, console, journal, standing, ct)
-                        .ConfigureAwait(false);
-
-                    if (criteria is { Count: > 0 })
-                    {
-                        // The brief is what ReportCheck reads, so every later
-                        // done is held to these exactly as it would be to ones
-                        // somebody typed.
-                        leadBrief = leadBrief with
-                        {
-                            Criteria = Held(standing, criteria),
-                            DoneWhen =
-                            [
-                                "every criterion below is met, with the evidence cited from your "
-                                    + "nodes' reports",
-                                CoverageOwed,
-                                ReadingsOwed,
-                                GoalReadingOwed,
-                            ],
-                        };
-
-                        // All of it, the project's included: this is the list
-                        // the lead's coverage is checked against.
-                        run.AgreedThisRound = Held(standing, criteria);
-                    }
-                }
-
-                // Written down the first time and whenever one changes, so a
-                // run read back shows how the lead understood what it was
-                // judged on before the verdicts, not only beside them.
-                if (Read(report, Held(standing, criteria)) is { Count: > 0 } readings)
-                {
-                    var changed = run.LastReadings is null
-                        ? readings
-                        : readings
-                            .Where(one => !run.LastReadings.TryGetValue(one.Key, out var was)
-                                || !string.Equals(was, one.Value, StringComparison.Ordinal))
-                            .ToDictionary(one => one.Key, one => one.Value, StringComparer.OrdinalIgnoreCase);
-
-                    if (changed.Count > 0)
-                    {
-                        await journal.WriteAsync(
-                            run.LastReadings is null ? "reading" : "reading.changed",
-                            team.Lead,
-                            new
-                            {
-                                readings = changed.Select(one => new { criterion = one.Key, reading = one.Value }),
-                            },
-                            ct).ConfigureAwait(false);
-                    }
-
-                    run.LastReadings = new Dictionary<string, string>(readings, StringComparer.OrdinalIgnoreCase);
-                }
-
-                // A lead that says done while the team's gate has not been
-                // consulted is told once, because its role says to route
-                // every change through those nodes and a model that skipped
-                // them will otherwise end the run with the work stranded on
-                // a branch nobody looked at. Once: the second answer is the
-                // lead's to give.
-                if (report.Status == ReportStatus.Done && !run.AskedAboutTheGate
-                    && MergeStep.Ungated(team, run.Branches, run.Decisions) is { Count: > 0 } pending)
-                {
-                    run.AskedAboutTheGate = true;
-
-                    await journal.WriteAsync("gate.reminded", team.Lead, new { pending }, ct).ConfigureAwait(false);
-
-                    console.Note($"The lead reported done without the merge gate: {string.Join("; ", pending)}. Telling it once.");
-
-                    run.Prompt =
-                        $"You reported done. This team will not take {string.Join(" or ", run.Branches.Values)} back into "
-                        + $"the repository until {string.Join(" and ", team.Rules.Gates.Merge)} have accepted it, and "
-                        + $"{string.Join("; ", pending)}. Request them, or report done again and the work stays on its branch.";
-
                     continue;
                 }
 
-                // A lead that has requests is mid-round whatever status it
-                // wrote: blocked on its own requests is how a round is asked
-                // for. Blocked with nothing requested is blocked.
-                var hasRequests = report.Requests is { Count: > 0 };
-
-                if (report.Status is ReportStatus.Done or ReportStatus.Failed
-                    || (report.Status == ReportStatus.Blocked && !hasRequests))
-                {
-                    /*
-                        A done the lead could not account for is not a done.
-
-                        ReportCheck already refused this twice - a returned
-                        report goes back once and the second answer is the
-                        node's, whatever it says. That contract is right for a
-                        worker and leaves a hole at the top of a run: a lead
-                        that never fills in coverage is asked twice, and the
-                        run then ends recording "done" while the journal it
-                        wrote says two of three criteria were met.
-
-                        So the run does not argue further and does not spend
-                        another round. It records what happened. An autonomous
-                        run nobody watched must not be readable afterwards as
-                        having met a goal it did not, and "ended: done" beside
-                        "2 of 3 met" is exactly that.
-                    */
-                    if (report.Status == ReportStatus.Done
-                        && Held(standing, criteria) is { } held
-                        && Outstanding(held, report) is { Count: > 0 } missed)
-                    {
-                        await journal.WriteAsync(
-                            "goal.unmet",
-                            team.Lead,
-                            new { criteria = missed },
-                            ct).ConfigureAwait(false);
-
-                        console.Note(
-                            $"The lead reported done without accounting for {missed.Count} of "
-                            + $"{held.Count} criteria: {string.Join("; ", missed)}");
-
-                        run.Ended = missed.Count == held.Count
-                            ? "the lead reported done without accounting for the goal"
-                            : $"the lead reported done with {missed.Count} of {held.Count} "
-                              + "criteria unmet";
-
-                        break;
-                    }
-
-                    run.Ended = Spell(report.Status);
-                    break;
-                }
+                var report = said.Report!;
 
                 if (!await GateAsync(autonomy, console, $"Act on the lead's report (round {run.Rounds}, {Spell(report.Status)})", ct).ConfigureAwait(false))
                 {
@@ -980,7 +825,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     var brief = MakeBrief(
                         runId, ask.Node, team.Lead, node, role, task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
                         request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory,
-                        Held(standing, criteria), ask.From);
+                        Held(standing, run.Criteria), ask.From);
 
                     await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{run.Rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
 
@@ -1124,7 +969,7 @@ public sealed partial class TeamRunner : ITeamRunner
             await journal.WriteAsync("node.ended", team.Lead, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
             await lead.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
 
-            await _fold.RunAsync(run, journal, leadBrief, run.Warnings, CancellationToken.None).ConfigureAwait(false);
+            await _fold.RunAsync(run, journal, run.LeadBrief, run.Warnings, CancellationToken.None).ConfigureAwait(false);
 
             // A node that produced no report and said why on its error
             // stream has explained itself, and that explanation must reach
@@ -1725,7 +1570,7 @@ public sealed partial class TeamRunner : ITeamRunner
     /// on.
     /// </para>
     /// </remarks>
-    private static async Task<IReadOnlyList<string>?> AgreedAsync(
+    internal static async Task<IReadOnlyList<string>?> AgreedAsync(
         Report report,
         string autonomy,
         ITeamConsole console,
