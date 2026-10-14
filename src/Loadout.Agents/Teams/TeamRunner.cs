@@ -487,6 +487,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private readonly Core.Git.IGitManager? _git;
     private readonly IChildLifetime? _lifetime;
     private readonly DeclareStep _declare;
+    private readonly FoldStep _fold;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
@@ -513,6 +514,7 @@ public sealed partial class TeamRunner : ITeamRunner
         _git = git;
         _lifetime = lifetime;
         _declare = new DeclareStep(tasks);
+        _fold = new FoldStep(paths);
         _tools = tools;
     }
 
@@ -1588,7 +1590,7 @@ public sealed partial class TeamRunner : ITeamRunner
             await journal.WriteAsync("node.ended", team.Lead, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
             await lead.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
 
-            await FoldQuestionsAsync(leadBrief, journal, run.Warnings, CancellationToken.None).ConfigureAwait(false);
+            await _fold.RunAsync(run, journal, leadBrief, run.Warnings, CancellationToken.None).ConfigureAwait(false);
 
             // A node that produced no report and said why on its error
             // stream has explained itself, and that explanation must reach
@@ -2271,7 +2273,7 @@ public sealed partial class TeamRunner : ITeamRunner
         await journal.WriteAsync("node.ended", brief.Node, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
         await launch.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
 
-        await FoldQuestionsAsync(brief, journal, warnings, CancellationToken.None).ConfigureAwait(false);
+        await _fold.RunAsync(run, journal, brief, warnings, CancellationToken.None).ConfigureAwait(false);
 
         if (turn.Report is null)
         {
@@ -2776,136 +2778,6 @@ public sealed partial class TeamRunner : ITeamRunner
             char.IsAsciiLetterOrDigit(one) || one == '-' ? char.ToLowerInvariant(one) : '-')]);
 
         return clean.Trim('-') is { Length: > 0 } named ? named : "team";
-    }
-
-    /// <summary>
-    /// Takes what the answerer recorded into the run's own record, once the
-    /// node that asked has gone.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The answerer runs in another process, so it writes its own file rather
-    /// than appending to the journal: two processes appending to one file is
-    /// how a record acquires half lines. This is the fold, and it happens
-    /// after the node has ended, when nothing more can be written to it.
-    /// </para>
-    /// <para>
-    /// A refusal is worth telling the person about, because it is usually not
-    /// a node misbehaving. It is a role whose lists are narrower than the work
-    /// it was given, and nobody finds that out from a count of denials.
-    /// </para>
-    /// </remarks>
-    /// <summary>When a folded event says it happened, or nothing.</summary>
-    private static DateTimeOffset? When(RunEvent asked) =>
-        asked.Word("at") is { } said
-        && DateTimeOffset.TryParse(
-            said,
-            System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.RoundtripKind,
-            out var then)
-            ? then
-            : null;
-
-    private async Task FoldQuestionsAsync(
-        Brief brief,
-        JournalWriter journal,
-        List<string> warnings,
-        CancellationToken ct)
-    {
-        var path = Path.Combine(RunDirectory(brief.Run), NodePermissions.AskedFileName(brief.Node));
-
-        string[] lines;
-
-        try
-        {
-            if (!File.Exists(path))
-            {
-                return;
-            }
-
-            lines = await File.ReadAllLinesAsync(path, ct).ConfigureAwait(false);
-
-            // Removed once folded, so a node briefed a second time in the
-            // same run does not have its first turn's questions counted
-            // again.
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return;
-        }
-
-        var refused = new List<string>();
-
-        foreach (var line in lines)
-        {
-            if (RunJournal.Parse($$"""{"kind":"permission.asked","data":{{line}}}""") is not { } asked)
-            {
-                continue;
-            }
-
-            // The decision carries its own time. Dating it at the fold is what
-            // put it after the node's death in the log.
-            await journal
-                .WriteAsync("permission.asked", brief.Node, asked.Data, ct, When(asked))
-                .ConfigureAwait(false);
-
-            if (asked.Data.TryGetProperty("allowed", out var allowed) && allowed.ValueKind == JsonValueKind.False)
-            {
-                var what = asked.Text("tool") ?? "something";
-                var target = asked.Text("target");
-
-                refused.Add(target is { Length: > 0 } ? $"{what} ({target})" : what);
-            }
-        }
-
-        if (refused.Count > 0)
-        {
-            warnings.Add(
-                $"{brief.Node} asked for {refused.Count} thing(s) its role does not allow: "
-                + string.Join(", ", refused.Distinct(StringComparer.Ordinal))
-                + ". Either the role is narrower than the work, or the node was going somewhere it should not.");
-        }
-
-        await FoldProgressAsync(brief, journal, ct).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Folds a node's own account of what it was doing into the journal.
-    /// </summary>
-    /// <remarks>
-    /// Kept as its own kind of entry rather than merged with what the run
-    /// observed. Two accounts, and neither corrects the other: the run's is
-    /// precise about what happened and says nothing about why, the node's says
-    /// why and may be wrong. Merging them would lose whichever disagreed.
-    /// </remarks>
-    private async Task FoldProgressAsync(Brief brief, JournalWriter journal, CancellationToken ct)
-    {
-        var path = Path.Combine(RunDirectory(brief.Run), NodeProgress.FileName(brief.Node));
-
-        var said = NodeProgress.Read(path);
-
-        if (said.Count == 0)
-        {
-            return;
-        }
-
-        foreach (var one in said)
-        {
-            await journal
-                .WriteAsync("node.said", brief.Node, new { step = one.Step, of = one.Of, doing = one.Doing, line = one.Line }, ct)
-                .ConfigureAwait(false);
-        }
-
-        try
-        {
-            // Removed once folded, so a node briefed twice in one run does not
-            // have its first turn's account replayed into the second.
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
     }
 
     /// <summary>
