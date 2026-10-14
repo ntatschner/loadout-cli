@@ -613,6 +613,15 @@ public sealed partial class TeamRunner : ITeamRunner
 
         var journal = new JournalWriter(Path.Combine(directory, "journal.jsonl"), runId, _time);
 
+        // Before the watcher starts, not after: a question still open when it
+        // first looks is journalled as asked again and kept as waiting, for a
+        // wait that ended with the run. Journalled once the run says it was
+        // reopened.
+        if (resuming is not null)
+        {
+            run.Retired = await NodePermissions.RetireAsync(directory, ct).ConfigureAwait(false);
+        }
+
         // Runs for the whole run rather than around each turn. A question only
         // appears while a node is mid-turn, so a watcher that covered anything
         // narrower would be four watchers with four chances to miss one. It
@@ -632,7 +641,7 @@ public sealed partial class TeamRunner : ITeamRunner
         {
             run.Prompt = resuming is null
                 ? Render(run.LeadBrief)
-                : Picking(resuming, request, lead.Plan, run.LeadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd);
+                : Picking(resuming, request, lead.Plan, run.LeadBrief, RunControl.Cap(directory).Or(StartingCap(request, team)).Usd, run.Retired);
 
             while (true)
             {
@@ -1454,7 +1463,8 @@ public sealed partial class TeamRunner : ITeamRunner
         TeamRunRequest request,
         LaunchPlan plan,
         Brief brief,
-        decimal? budget)
+        decimal? budget,
+        IReadOnlyList<PendingAsk>? retired = null)
     {
         var summary = resuming.Summary;
         var own = resuming.LeadSession is { Length: > 0 } session
@@ -1491,6 +1501,23 @@ public sealed partial class TeamRunner : ITeamRunner
                 text.AppendLine("Its last report:").AppendLine()
                     .AppendLine("```json").AppendLine(last.Trim()).AppendLine("```").AppendLine();
             }
+        }
+
+        // Named, so a lead that still needs one of these asks it again rather
+        // than guessing at the answer or quietly taking its own default. Only
+        // its own: a node's permission question went with the node's turn.
+        if (retired?.Where(one => one.Kind == "question").ToList() is { Count: > 0 } unanswered)
+        {
+            text.AppendLine(
+                "These questions went unanswered when the run stopped, and have been closed. Ask again "
+                + "if you still need an answer:").AppendLine();
+
+            foreach (var one in unanswered)
+            {
+                text.AppendLine($"- {one.Question}");
+            }
+
+            text.AppendLine();
         }
 
         if (summary.Outstanding is { Count: > 0 } open)

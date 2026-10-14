@@ -958,6 +958,10 @@ public sealed class RunJournal : IRunJournal
         var cost = 0m;
         var rounds = 0;
         var limit = 0;
+
+        // When it was last picked up again, since a question asked before then
+        // belonged to a wait that ended with the run.
+        DateTimeOffset? reopened = null;
         var merged = new List<string>();
         var turns = new List<RunTurn>();
         var timeline = new List<RunRound>();
@@ -1016,6 +1020,7 @@ public sealed class RunJournal : IRunJournal
                 // the nodes' own figures again until it writes a new total,
                 // because the total the first ending wrote stops at that point.
                 case "run.reopened":
+                    reopened = entry.At;
                     finished = null;
                     ended = null;
                     outcome = null;
@@ -1272,8 +1277,10 @@ public sealed class RunJournal : IRunJournal
             path,
 
             // From the directory, not from the events: a question is answered
-            // by a file appearing, and the journal hears about it after.
-            NodePermissions.Pending(directory),
+            // by a file appearing, and the journal hears about it after. None
+            // from before it was last picked up: a run reopened before the
+            // reopening retired its questions still has them on disk.
+            NodePermissions.Pending(directory, reopened),
             budget,
             quiet,
             turns,
@@ -1371,6 +1378,8 @@ public sealed class RunJournal : IRunJournal
             // legible line in its log.
             "node.asked" => $"stopped to ask: {entry.Word("tool")}"
                 + (entry.Word("target") is { Length: > 0 } wanted ? $" {wanted}" : string.Empty),
+            "node.answered" when entry.Text("by") == NodePermissions.Retired =>
+                $"question retired when the run was picked up again: {entry.Text("question")}",
             "node.answered" => (entry.Yes("allowed") ? "was allowed " : "was refused ")
                 + entry.Word("tool")
                 + (entry.Word("chosen") is { } chosen

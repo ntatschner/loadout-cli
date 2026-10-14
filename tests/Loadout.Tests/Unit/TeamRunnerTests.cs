@@ -3345,6 +3345,63 @@ public sealed partial class TeamRunnerTests : IDisposable
         journal.Count(l => l.Contains("\"kind\":\"run.finished\"")).Should().Be(2);
     }
 
+    /// <summary>
+    /// A question the run stopped on is retired when it is picked up, not left
+    /// in the directory for the dashboard to show for good.
+    /// </summary>
+    /// <remarks>
+    /// The console answers in place, as the dashboard's does, so the watcher
+    /// is reading the directory: a question still there when it starts is
+    /// journalled as asked all over again and kept as outstanding.
+    /// </remarks>
+    [Fact]
+    public async Task A_question_left_open_when_the_run_stopped_is_retired_when_it_is_picked_up()
+    {
+        var (team, first) = await SpentAsync("lead-1");
+
+        await RunControl.SetBudgetAsync(first.Directory!, 5m);
+
+        await NodePermissions.PutAsync(first.Directory!, new PendingAsk(
+            "gate-stale", "lead", "the lead", string.Empty, null, DateTimeOffset.UtcNow.AddMinutes(-30),
+            Kind: "question", Asked: "Which database should it use?", Options: ["Postgres", "SQLite"],
+            Recommendation: "SQLite", Until: DateTimeOffset.UtcNow.AddMinutes(-20)));
+
+        _console.CanAsk = true;
+        _console.AnswersInPlace = true;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        var picked = (await ResumeAsync(first.RunId, team)).Value!;
+
+        picked.Ended.Should().Be("done");
+
+        NodePermissions.Pending(first.Directory!).Should().BeEmpty();
+
+        var answer = NodePermissions.Answered(first.Directory!, "gate-stale")!;
+
+        answer.Allowed.Should().BeFalse();
+        answer.By.Should().Be("retired");
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(first.Directory!, "journal.jsonl"));
+
+        journal.Should().NotContain(l => l.Contains("\"kind\":\"node.asked\""), "nobody asked it again");
+
+        var retired = Array.FindIndex(journal, l => l.Contains("\"kind\":\"node.answered\"") && l.Contains("\"by\":\"retired\""));
+        var reopened = Array.FindIndex(journal, l => l.Contains("\"kind\":\"run.reopened\""));
+
+        retired.Should().BeGreaterThan(reopened, "it is the reopening that retired it");
+        journal.Count(l => l.Contains("\"by\":\"retired\"")).Should().Be(1);
+
+        // So the lead asks again if it still needs the answer, rather than
+        // guessing at one.
+        _launcher.Written("role.project-lead")[2]
+            .Should().Contain("- Which database should it use?").And.Contain("Ask again if you still need an answer");
+    }
+
     [Fact]
     public async Task A_run_with_no_recorded_session_is_picked_up_by_a_fresh_lead_told_where_it_got_to()
     {

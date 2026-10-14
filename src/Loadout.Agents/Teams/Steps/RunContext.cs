@@ -39,6 +39,12 @@ internal sealed class RunContext
     /// </summary>
     public List<string> Warnings { get; }
 
+    /// <summary>
+    /// The questions a run being picked up again had left open, closed before
+    /// anything watched for them, so the reopening can say it closed them.
+    /// </summary>
+    public IReadOnlyList<Core.Teams.PendingAsk> Retired { get; set; } = [];
+
     /// <summary>What the run has spent so far, in USD.</summary>
     public decimal Cost { get; set; }
 
