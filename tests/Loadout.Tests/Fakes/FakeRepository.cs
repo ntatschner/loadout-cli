@@ -99,6 +99,9 @@ public sealed class FakeGit : IGitManager
     /// <summary>What the next merge answers. Answers a conflict-free merge once these run out.</summary>
     public void NextMerge(GitMerge merge) => _merges.Enqueue(OperationResult<GitMerge>.Ok(merge));
 
+    /// <summary>The next merge fails outright, as git does when it cannot run at all.</summary>
+    public void NextMergeFails(string error) => _merges.Enqueue(OperationResult<GitMerge>.Fail(error));
+
     public Task<OperationResult<GitRepositoryState>> GetStateAsync(string repositoryPath, CancellationToken ct = default) =>
         Task.FromResult(OperationResult<GitRepositoryState>.Ok(State));
 

@@ -53,6 +53,18 @@ public sealed partial class TeamRunnerTests
     [InlineData("folded-asks")]
     [InlineData("readings-accepted")]
     [InlineData("manual-brief-revised")]
+    [InlineData("merge-conflicted-twice")]
+    [InlineData("criteria-proposed")]
+    [InlineData("goal-unmet")]
+    [InlineData("node-doing")]
+    [InlineData("request-refused")]
+    [InlineData("report-unreadable")]
+    [InlineData("run-told")]
+    [InlineData("readings-sent-back")]
+    [InlineData("run-paused")]
+    [InlineData("node-told-and-said")]
+    [InlineData("node-failed")]
+    [InlineData("merge-failed")]
     public async Task TeamRunnerReplay(string scenario)
     {
         var record = scenario switch
@@ -70,6 +82,18 @@ public sealed partial class TeamRunnerTests
             "folded-asks" => await FoldedAsksAsync(),
             "readings-accepted" => await ReadingsAcceptedAsync(),
             "manual-brief-revised" => await ManualBriefRevisedAsync(),
+            "merge-conflicted-twice" => await MergeConflictedTwiceAsync(),
+            "criteria-proposed" => await CriteriaProposedAsync(),
+            "goal-unmet" => await GoalUnmetAsync(),
+            "node-doing" => await NodeDoingAsync(),
+            "request-refused" => await RequestRefusedAsync(),
+            "report-unreadable" => await ReportUnreadableAsync(),
+            "run-told" => await RunToldAsync(),
+            "readings-sent-back" => await ReadingsSentBackAsync(),
+            "run-paused" => await RunPausedAsync(),
+            "node-told-and-said" => await NodeToldAndSaidAsync(),
+            "node-failed" => await NodeFailedAsync(),
+            "merge-failed" => await MergeFailedAsync(),
             _ => throw new ArgumentOutOfRangeException(nameof(scenario), scenario, "no such scenario"),
         };
 
@@ -371,6 +395,255 @@ public sealed partial class TeamRunnerTests
         return await RecordAsync(await ReplayRunAsync(autonomy: "manual"));
     }
 
+    /// <summary>
+    /// S7b. Copied from A_branch_that_conflicts_twice_is_left_alone_and_said_so,
+    /// over S2's script, so the second merge.conflicted and its again=true are pinned.
+    /// </summary>
+    private async Task<string> MergeConflictedTwiceAsync()
+    {
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        git.NextMerge(new GitMerge(Merged: false, FastForward: false, ["docs/commands.md"]));
+        git.NextMerge(new GitMerge(Merged: false, FastForward: false, ["docs/commands.md"]));
+
+        ScriptAGatedReplay(git);
+        _launcher.Script("role.implementer", Init("impl-2"), Result(ImplementerDone(), 0.04m));
+
+        return await RecordAsync(await ReplayRunAsync(git: git));
+    }
+
+    /// <summary>S15. Copied from With_the_project_s_criteria_and_none_of_its_own_the_lead_still_proposes: criteria.defaults, criteria.agreed.</summary>
+    private async Task<string> CriteriaProposedAsync()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadProposes(AskImplementer()) with { Readings = Readings(Suite) }, 0.01m),
+            Result(LeadDoneCovering([Suite, .. Proposal]), 0.02m),
+            Result(LeadDoneCovering([Suite, .. Proposal]), 0.02m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        return await RecordAsync(await ReplayRunAsync(standing: Standing(Suite)));
+    }
+
+    /// <summary>S16. Copied from A_done_that_ignores_the_project_s_criteria_is_not_a_done: goal.unmet.</summary>
+    private async Task<string> GoalUnmetAsync()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDoneCovering("the team criterion"), 0.01m),
+            Result(LeadDoneCovering("the team criterion"), 0.02m),
+            Result(LeadDoneCovering("the team criterion"), 0.02m));
+
+        return await RecordAsync(await ReplayRunAsync(await JudgedTeamAsync("the team criterion"), standing: Standing(Suite)));
+    }
+
+    /// <summary>S17. Copied from A_node_says_what_it_is_doing_while_the_turn_is_still_running: node.doing, throttled by the stepping clock.</summary>
+    private async Task<string> NodeDoingAsync()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Using("Read", """{"file_path":"docs/commands.md"}"""),
+            Using("Bash", """{"command":"dotnet test"}"""),
+            Result(LeadDone(), 0.04m));
+
+        return await RecordAsync(await ReplayRunAsync());
+    }
+
+    /// <summary>S18. Copied from A_lead_that_asks_for_a_node_it_may_not_is_refused_and_both_the_person_and_the_lead_are_told: request.refused.</summary>
+    private async Task<string> RequestRefusedAsync()
+    {
+        var lead = LeadRequests(new ReportRequest("verifier", "verify", DeliverableKind.Decision)) with { Status = ReportStatus.Blocked };
+        var team = await IteratingProjectAsync();
+        team.Nodes["lead"].Delegates = ["implementer"];
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(lead, 0.05m), Result(LeadDone(), 0.09m));
+
+        return await RecordAsync(await ReplayRunAsync(team));
+    }
+
+    /// <summary>S19. Copied from A_node_that_answers_in_prose_instead_of_a_report_has_what_it_said_passed_on: report.unreadable.</summary>
+    private async Task<string> ReportUnreadableAsync()
+    {
+        const string Limit = "You've reached your Fable limit. Switch to another model to continue.";
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m),
+            Say(Limit), NoReport(0.05m), Say(Limit), NoReport(0.05m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Say(Limit), NoReport(0m), Say(Limit), NoReport(0m));
+
+        return await RecordAsync(await ReplayRunAsync());
+    }
+
+    /// <summary>S20. Copied from What_somebody_says_to_a_lead_reaches_it_before_its_next_round: run.told.</summary>
+    private async Task<string> RunToldAsync()
+    {
+        _launcher.BeforeStart = where =>
+            RunControl.SayAsync(where, "leave the tests alone").GetAwaiter().GetResult();
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.01m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        return await RecordAsync(await ReplayRunAsync(rounds: 3));
+    }
+
+    /// <summary>
+    /// S21. Copied from Readings_sent_back_brief_nobody_and_the_lead_reads_again,
+    /// without its count of the questions asked: reading.changed.
+    /// </summary>
+    private async Task<string> ReadingsSentBackAsync()
+    {
+        var first = true;
+        var answer = _console.Decide;
+
+        _console.Decide = question =>
+        {
+            if (first && question.Question.StartsWith("Before any worker starts", StringComparison.Ordinal))
+            {
+                first = false;
+
+                return TeamRunner.ThinkAgain;
+            }
+
+            return answer(question);
+        };
+
+        _launcher.Script("role.project-lead", Init("lead-1"),
+            Result(LeadReadsAndRequests("any test passes"), 0.01m),
+            Result(LeadReadsAndRequests("only dates after --since are printed"), 0.02m),
+            Result(LeadDoneCovering(Mine), 0.03m),
+            Result(LeadDoneCovering(Mine), 0.03m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        return await RecordAsync(await ReplayRunAsync(criteria: [Mine]));
+    }
+
+    /// <summary>
+    /// S22. A_run_asked_to_stop_ends_after_the_round_it_is_in, held rather
+    /// than stopped: run.paused, run.resumed. No test in TeamRunnerTests
+    /// pauses a run, so this one is adapted rather than copied. The hold is
+    /// lifted only once run.paused is in the journal, so the order is fixed.
+    /// </summary>
+    private async Task<string> RunPausedAsync()
+    {
+        var started = 0;
+        Task lifted = Task.CompletedTask;
+
+        _launcher.BeforeStart = where =>
+        {
+            if (Interlocked.Increment(ref started) != 2)
+            {
+                return;
+            }
+
+            RunControl.PauseAsync(where).GetAwaiter().GetResult();
+
+            // Watching the console's note rather than the journal: the note
+            // follows run.paused, and reading the journal while the run
+            // appends to it makes the run's write fail, and it drops the line.
+            lifted = Task.Run(async () =>
+            {
+                for (var waited = 0; waited < 600; waited++)
+                {
+                    lock (_console.Notes)
+                    {
+                        if (_console.Notes.Exists(n => n.StartsWith("Held.", StringComparison.Ordinal)))
+                        {
+                            break;
+                        }
+                    }
+
+                    await Task.Delay(50);
+                }
+
+                RunControl.Resume(where);
+            });
+        };
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadRequests(AskImplementer()), 0.01m),
+            Result(LeadDone(), 0.01m),
+            Result(LeadDone(), 0.01m));
+
+        _launcher.Script("role.implementer", Init("impl-1"), Result(ImplementerDone(), 0.01m));
+
+        var outcome = await ReplayRunAsync();
+
+        await lifted;
+
+        return await RecordAsync(outcome);
+    }
+
+    /// <summary>
+    /// S23. S1's lead, with a message left for it and an account of its own
+    /// progress already written, as the dashboard and loadout_progress leave
+    /// them: node.told, node.said. No test in TeamRunnerTests covers either,
+    /// so this is adapted from What_somebody_says_to_a_lead_reaches_it_before_its_next_round.
+    /// Both are dated at a fixed past time, so the record does not carry the wall clock.
+    /// A node's progress is folded only where it also left an asked file, so
+    /// one allowed call from S11's side file is left beside it.
+    /// </summary>
+    private async Task<string> NodeToldAndSaidAsync()
+    {
+        var then = new DateTimeOffset(2026, 9, 16, 10, 0, 0, TimeSpan.Zero);
+
+        _launcher.BeforeStart = where =>
+        {
+            File.AppendAllText(
+                Path.Combine(where, NodePermissions.AskedFileName("lead")),
+                """{"at":"2026-09-16T10:00:00+00:00","node":"lead","tool":"Bash","target":"dotnet test","allowed":true,"rule":null,"reason":"allowed for this call only"}"""
+                    + "\n");
+            NodeControl.SayAsync(where, "lead", "leave the tests alone", then).GetAwaiter().GetResult();
+            NodeProgress.AppendAsync(where, new NodeSaid(then, "lead", "role.project-lead", 1, 2, "reading the brief"))
+                .GetAwaiter().GetResult();
+        };
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadDone(), 0.04m));
+
+        return await RecordAsync(await ReplayRunAsync());
+    }
+
+    /// <summary>
+    /// S24. S5's script with no session for the implementer, so its launch
+    /// fails: node.failed. No test in TeamRunnerTests fails a launch, so this
+    /// is adapted from A_lead_that_requests_a_worker_gets_its_report_back_and_finishes.
+    /// </summary>
+    private async Task<string> NodeFailedAsync()
+    {
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"), Result(LeadRequests(AskImplementer()), 0.05m), Result(LeadDone(), 0.09m), Result(LeadDone(), 0.09m));
+
+        return await RecordAsync(await ReplayRunAsync());
+    }
+
+    /// <summary>
+    /// S25. S7 with a merge git refuses outright rather than one that
+    /// conflicts: merge.failed. No test in TeamRunnerTests fails a merge, so
+    /// this is adapted from A_branch_that_conflicts_goes_back_to_the_node_that_wrote_it.
+    /// </summary>
+    private async Task<string> MergeFailedAsync()
+    {
+        var git = new FakeGit(Path.Combine(_root, "repo"));
+        git.NextMergeFails("fatal: not a git repository");
+
+        ScriptAGatedReplay(git);
+
+        return await RecordAsync(await ReplayRunAsync(git: git));
+    }
+
     // ----------------------------------------------------------- the harness
 
     private async Task<TeamRunOutcome> ReplayRunAsync(
@@ -380,7 +653,8 @@ public sealed partial class TeamRunnerTests
         IReadOnlyList<string>? criteria = null,
         string? resuming = null,
         string? message = null,
-        int rounds = 5)
+        int rounds = 5,
+        StandingCriteria? standing = null)
     {
         var result = await new TeamRunner(
             _launcher,
@@ -392,7 +666,7 @@ public sealed partial class TeamRunnerTests
             _replayTasks).RunAsync(
             new TeamRunRequest("demo", team ?? await IteratingProjectAsync(), await SpecialistsAsync(),
                 "Add --since to loadout usage.", autonomy, MaxRounds: rounds, Offline: true,
-                Criteria: criteria, Resuming: resuming, ResumeMessage: message),
+                Criteria: criteria, Resuming: resuming, ResumeMessage: message, Standing: standing),
             _console);
 
         result.Succeeded.Should().BeTrue(result.Error);
