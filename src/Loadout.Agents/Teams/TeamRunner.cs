@@ -496,16 +496,6 @@ public sealed partial class TeamRunner : ITeamRunner
     /// kind. Without the task service a run is still recorded in its own
     /// journal, and only the project's task list goes without it.
     /// </summary>
-    /// <summary>
-    /// Whether this run may put a node's unmatched call to the person.
-    /// </summary>
-    /// <remarks>
-    /// Set once the posture is known and read when each node's policy is
-    /// written. A field rather than a parameter threaded through six methods,
-    /// because it is a fact about the run rather than about any one node.
-    /// </remarks>
-    private bool _asking;
-
     public TeamRunner(
         IAgentLauncher launcher,
         IPlatformPaths paths,
@@ -730,7 +720,7 @@ public sealed partial class TeamRunner : ITeamRunner
         if (request.DryRun)
         {
             var dry = await StartNodeAsync(
-                    request, team, leadNode, leadRole, leadBrief, dryRun: true, ct, resuming?.LeadSession)
+                    null, request, team, leadNode, leadRole, leadBrief, dryRun: true, ct, resuming?.LeadSession)
                 .ConfigureAwait(false);
 
             if (dry.Failed)
@@ -778,9 +768,7 @@ public sealed partial class TeamRunner : ITeamRunner
         // therefore decided that nobody was watching, and a held remedy was
         // refused instead of put to the person sitting in front of the
         // dashboard.
-        _asking = autonomy != "autonomous" && console.CanAsk;
-        _onTimeout = request.OnTimeout;
-        _sentBackByTimer.Clear();
+        var run = new RunContext(autonomy != "autonomous" && console.CanAsk, request.OnTimeout);
 
         var journal = new JournalWriter(Path.Combine(directory, "journal.jsonl"), runId, _time);
 
@@ -790,7 +778,7 @@ public sealed partial class TeamRunner : ITeamRunner
         // stops however the run leaves, including the six places that return
         // early.
         await using var watching = Watching.Start(
-            _asking, token => WatchAsksAsync(directory, console, journal, token), ct);
+            run.Asking, token => WatchAsksAsync(directory, console, journal, token), ct);
 
         // Resolved before the run is written down rather than after, because
         // which project a run worked on is the first thing somebody reading it
@@ -903,7 +891,7 @@ public sealed partial class TeamRunner : ITeamRunner
         }
 
         var started = await StartNodeAsync(
-            request, team, leadNode, leadRole, leadBrief, dryRun: false, ct, resuming?.LeadSession).ConfigureAwait(false);
+            run, request, team, leadNode, leadRole, leadBrief, dryRun: false, ct, resuming?.LeadSession).ConfigureAwait(false);
 
         if (started.Failed)
         {
@@ -1037,7 +1025,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     // Somebody is watching, so the run asks rather than ends:
                     // a run stopped on its budget with the goal half done was
                     // otherwise a run that could not be picked up again.
-                    if (_asking && await RaiseAsync(console, cost, spendable, ct).ConfigureAwait(false) is { IsSet: true } raised)
+                    if (run.Asking && await RaiseAsync(console, cost, spendable, ct).ConfigureAwait(false) is { IsSet: true } raised)
                     {
                         await RunControl.SetCapAsync(directory, raised, ct).ConfigureAwait(false);
 
@@ -1292,7 +1280,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 if (report.Status == ReportStatus.NeedsDecision)
                 {
                     var decided = await DecideAsync(
-                            autonomy, console, report.Questions ?? [], journal, directory, request.TakeRecommendationAfter, ct)
+                            run, autonomy, console, report.Questions ?? [], journal, directory, request.TakeRecommendationAfter, ct)
                         .ConfigureAwait(false);
 
                     if (decided is null)
@@ -1330,9 +1318,10 @@ public sealed partial class TeamRunner : ITeamRunner
                 */
                 var heldForReadings = false;
 
-                if (!readingsAccepted && _asking && requests.Count > 0 && lastReadings is { Count: > 0 })
+                if (!readingsAccepted && run.Asking && requests.Count > 0 && lastReadings is { Count: > 0 })
                 {
                     var decided = await DecideAsync(
+                            run,
                             autonomy,
                             console,
                             [ReadingsQuestion(lastReadings)],
@@ -1468,7 +1457,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     accepted.Add(new Briefed(ask, node, role, brief));
                 }
 
-                var ran = await RunTogetherAsync(request, team, accepted, journal, ct).ConfigureAwait(false);
+                var ran = await RunTogetherAsync(run, request, team, accepted, journal, ct).ConfigureAwait(false);
 
                 for (var index = 0; index < accepted.Count; index++)
                 {
@@ -1619,7 +1608,7 @@ public sealed partial class TeamRunner : ITeamRunner
         var afterwards = new List<decimal>();
 
         var merged = await MergeAsync(
-            request, team, runId, autonomy, ended, branches, decisions, console, journal, warnings, afterwards, ct)
+            run, request, team, runId, autonomy, ended, branches, decisions, console, journal, warnings, afterwards, ct)
             .ConfigureAwait(false);
 
         cost += afterwards.Sum();
@@ -1836,6 +1825,7 @@ public sealed partial class TeamRunner : ITeamRunner
     /// </para>
     /// </remarks>
     private async Task<IReadOnlyList<string>> MergeAsync(
+        RunContext run,
         TeamRunRequest request,
         TeamDefinition team,
         string runId,
@@ -1966,7 +1956,7 @@ public sealed partial class TeamRunner : ITeamRunner
                 // second look will not on a third, and the person needs to
                 // hear about it rather than watch it spend.
                 var second = await ResolveAsync(
-                    request, team, runId, node, branch, target, result.Value.Conflicts,
+                    run, request, team, runId, node, branch, target, result.Value.Conflicts,
                     autonomy, repository, console, journal, warnings, spent, ct).ConfigureAwait(false);
 
                 if (second is null)
@@ -2077,6 +2067,7 @@ public sealed partial class TeamRunner : ITeamRunner
     /// </para>
     /// </remarks>
     private async Task<GitMerge?> ResolveAsync(
+        RunContext run,
         TeamRunRequest request,
         TeamDefinition team,
         string runId,
@@ -2126,7 +2117,7 @@ public sealed partial class TeamRunner : ITeamRunner
         using var alone = new SemaphoreSlim(1, 1);
 
         var outcome = await RunWorkerAsync(
-            request, team, new Briefed(ask, node, role, brief), journal, alone, ct).ConfigureAwait(false);
+            run, request, team, new Briefed(ask, node, role, brief), journal, alone, ct).ConfigureAwait(false);
 
         warnings.AddRange(outcome.Warnings);
         spent.Add(outcome.Cost);
@@ -2178,6 +2169,7 @@ public sealed partial class TeamRunner : ITeamRunner
     /// </para>
     /// </remarks>
     private async Task<IReadOnlyList<WorkerOutcome>> RunTogetherAsync(
+        RunContext run,
         TeamRunRequest request,
         TeamDefinition team,
         IReadOnlyList<Briefed> briefed,
@@ -2188,7 +2180,7 @@ public sealed partial class TeamRunner : ITeamRunner
         {
             return briefed.Count == 0
                 ? []
-                : [await RunWorkerAsync(request, team, briefed[0], journal, new SemaphoreSlim(1, 1), ct).ConfigureAwait(false)];
+                : [await RunWorkerAsync(run, request, team, briefed[0], journal, new SemaphoreSlim(1, 1), ct).ConfigureAwait(false)];
         }
 
         using var starting = new SemaphoreSlim(1, 1);
@@ -2215,7 +2207,7 @@ public sealed partial class TeamRunner : ITeamRunner
 
                 try
                 {
-                    return await RunWorkerAsync(request, team, one, journal, starting, ct).ConfigureAwait(false);
+                    return await RunWorkerAsync(run, request, team, one, journal, starting, ct).ConfigureAwait(false);
                 }
                 finally
                 {
@@ -2242,6 +2234,7 @@ public sealed partial class TeamRunner : ITeamRunner
     /// asked for the nodes.
     /// </remarks>
     private async Task<WorkerOutcome> RunWorkerAsync(
+        RunContext run,
         TeamRunRequest request,
         TeamDefinition team,
         Briefed briefed,
@@ -2262,7 +2255,7 @@ public sealed partial class TeamRunner : ITeamRunner
 
         try
         {
-            started = await StartNodeAsync(request, team, node, role, brief, dryRun: false, ct, reviewing: reviewing)
+            started = await StartNodeAsync(run, request, team, node, role, brief, dryRun: false, ct, reviewing: reviewing)
                 .ConfigureAwait(false);
         }
         finally
@@ -2594,6 +2587,7 @@ public sealed partial class TeamRunner : ITeamRunner
     internal static readonly IReadOnlyList<string> NeverDelegated = ["Agent", "Task"];
 
     private async Task<OperationResult<HeadlessLaunch>> StartNodeAsync(
+        RunContext? run,
         TeamRunRequest request,
         TeamDefinition team,
         TeamNode node,
@@ -2628,7 +2622,7 @@ public sealed partial class TeamRunner : ITeamRunner
                     // nobody, and a question nobody answers is a node sitting
                     // still for five minutes and then being refused anyway -
                     // worse than the refusal it would have had at once.
-                    Ask: _asking,
+                    Ask: run?.Asking ?? false,
 
                     // What this team has registered and what was decided about
                     // each, worked out here so that whatever answers the node's
@@ -4136,6 +4130,7 @@ public sealed partial class TeamRunner : ITeamRunner
     };
 
     private async Task<IReadOnlyList<(string Question, string Answer, string By)>?> DecideAsync(
+        RunContext run,
         string autonomy,
         ITeamConsole console,
         IReadOnlyList<ReportQuestion> questions,
@@ -4168,14 +4163,14 @@ public sealed partial class TeamRunner : ITeamRunner
                 // its key rather than its words for the readings, whose words
                 // change every time the lead restates them.
                 var key = KeyOf(question);
-                var sendBack = TeamTimeout.SendsBack(_onTimeout, _sentBackByTimer.Contains(key));
+                var sendBack = TeamTimeout.SendsBack(run.OnTimeout, run.SentBackByTimer.Contains(key));
 
                 (answer, timed) = await DecideOrTakeAsync(
                     console, question, directory, wait, sendBack ? ThinkAgain : question.Recommendation, ct).ConfigureAwait(false);
 
                 if (timed && sendBack)
                 {
-                    _sentBackByTimer.Add(key);
+                    run.SentBackByTimer.Add(key);
 
                     console.Note(
                         $"Nobody answered in {TeamDuration.Spell(wait)}, so the question went back to the lead to "
@@ -4232,16 +4227,7 @@ public sealed partial class TeamRunner : ITeamRunner
     }
 
     /// <summary>
-    /// Which questions the timer has already sent back to the lead, by
-    /// <see cref="KeyOf"/>, so think-again-once sends each back only once.
-    /// </summary>
-    private readonly HashSet<string> _sentBackByTimer = new(StringComparer.Ordinal);
-
-    /// <summary>What a timed question does when nobody answers, for this run.</summary>
-    private string? _onTimeout;
-
-    /// <summary>
-    /// What a question is known by for <see cref="_sentBackByTimer"/>: its words,
+    /// What a question is known by for <see cref="RunContext.SentBackByTimer"/>: its words,
     /// except the readings question, whose words are the lead's readings and
     /// change every time it restates them, but which is still the one question.
     /// </summary>
