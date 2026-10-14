@@ -29,7 +29,7 @@ internal sealed class RunContext
 
     /// <summary>
     /// Which questions the timer has already sent back to the lead, by
-    /// <c>TeamRunner.KeyOf</c>, so think-again-once sends each back only once.
+    /// <c>DecideStep.KeyOf</c>, so think-again-once sends each back only once.
     /// </summary>
     public HashSet<string> SentBackByTimer { get; } = new(StringComparer.Ordinal);
 
