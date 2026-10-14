@@ -486,7 +486,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private readonly Core.Projects.IProjectService? _projects;
     private readonly Core.Git.IGitManager? _git;
     private readonly IChildLifetime? _lifetime;
-    private readonly Core.Tasks.ITaskService? _tasks;
+    private readonly DeclareStep _declare;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
@@ -512,7 +512,7 @@ public sealed partial class TeamRunner : ITeamRunner
         _projects = projects;
         _git = git;
         _lifetime = lifetime;
-        _tasks = tasks;
+        _declare = new DeclareStep(tasks);
         _tools = tools;
     }
 
@@ -926,7 +926,7 @@ public sealed partial class TeamRunner : ITeamRunner
         // run started, and the run goes on updating the one it was for.
         var forTask = request.Task ?? resuming?.Summary.Task;
 
-        await DeclareAsync(slug, runId, forTask, team, TaskState.Doing, request.Goal, $"{autonomy}, running", ct)
+        await _declare.RunAsync(run, journal, slug, runId, forTask, team, TaskState.Doing, request.Goal, $"{autonomy}, running", ct)
             .ConfigureAwait(false);
 
         // Carried on from where it stopped on a resume, so the budget and any
@@ -1620,8 +1620,8 @@ public sealed partial class TeamRunner : ITeamRunner
         await journal.WriteAsync(
             "run.finished", null, new { ended = run.Ended, outcome = Filed(run.Ended), cost = run.Cost, rounds = run.Rounds, merged }, ct).ConfigureAwait(false);
 
-        await DeclareAsync(
-            slug, runId, forTask, team, Landed(run.Ended), request.Goal,
+        await _declare.RunAsync(
+            run, journal, slug, runId, forTask, team, Landed(run.Ended), request.Goal,
             $"{run.Ended}; {run.Rounds} round(s), ${run.Cost:0.00}. loadout team status {runId}", ct)
             .ConfigureAwait(false);
 
@@ -1672,72 +1672,6 @@ public sealed partial class TeamRunner : ITeamRunner
         var resolution = await _projects.ResolveAsync(request.ProjectHandle, ct).ConfigureAwait(false);
 
         return resolution.Value?.Entry.Slug ?? request.ProjectHandle;
-    }
-
-    /// <summary>
-    /// Puts the run in the project's task list, so what a team is doing shows
-    /// up beside everything else the project is working on.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// One task for the run, not one per node. The list is a shared file that
-    /// travels with the workspace and is meant to hold tens of things; a
-    /// row per node would put hundreds there within a few runs, and the
-    /// per-node view already exists in <c>team status</c>, which reads the
-    /// run's own journal.
-    /// </para>
-    /// <para>
-    /// A run started for somebody's task moves that task instead, and leaves
-    /// its title and note as they were: they are the person's description of
-    /// the work, and a run that overwrote them with its own status line would
-    /// lose the one thing nobody can get back from the journal. Which run has
-    /// it is said in who declared it, and <c>team status</c> has the rest.
-    /// </para>
-    /// <para>
-    /// A failure here is not the run's failure. The task list is a
-    /// convenience beside the journal, which is the record, so this reports
-    /// nothing and stops nothing.
-    /// </para>
-    /// </remarks>
-    private async Task DeclareAsync(
-        string slug,
-        string runId,
-        string? task,
-        TeamDefinition team,
-        TaskState state,
-        string goal,
-        string note,
-        CancellationToken ct)
-    {
-        if (_tasks is null)
-        {
-            return;
-        }
-
-        if (task is { Length: > 0 })
-        {
-            await _tasks.DeclareAsync(slug, task, state, $"team {team.Name}, run {runId}", ct: ct)
-                .ConfigureAwait(false);
-
-            return;
-        }
-
-        await _tasks.DeclareAsync(
-            slug,
-            $"team-{runId}",
-            state,
-            $"team {team.Name}",
-            Cut(goal),
-            note,
-            ct).ConfigureAwait(false);
-    }
-
-    /// <summary>A goal short enough to read in a list.</summary>
-    private static string Cut(string goal)
-    {
-        var trimmed = goal.Trim();
-
-        return trimmed.Length > 120 ? trimmed[..120] + "..." : trimmed;
     }
 
     /// <summary>
