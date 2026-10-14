@@ -482,16 +482,14 @@ public sealed partial class TeamRunner : ITeamRunner
 
     private readonly IPlatformPaths _paths;
     private readonly TimeProvider _time;
-    private readonly DeclareStep _declare;
-    private readonly FoldStep _fold;
     private readonly WatchAsksStep _watchAsks;
-    private readonly NodeSessions _sessions;
     private readonly StartWorkersStep _workers;
-    private readonly MergeStep _merge;
     private readonly OpenRunStep _open;
     private readonly RoundLimitsStep _limits;
     private readonly LeadReportStep _leadReport;
-    private readonly DecideStep _decide;
+    private readonly BriefRequestsStep _briefRequests;
+    private readonly FeedbackStep _feedback;
+    private readonly CloseRunStep _close;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
@@ -513,16 +511,22 @@ public sealed partial class TeamRunner : ITeamRunner
     {
         _paths = paths;
         _time = time;
-        _declare = new DeclareStep(tasks);
-        _fold = new FoldStep(paths);
+
+        // Some steps are shared: the lead, the workers and the resolver are
+        // all started through the same sessions, and the opening and the
+        // close both say where the run is on the project's task list.
+        var declare = new DeclareStep(tasks);
+        var fold = new FoldStep(paths);
+        var sessions = new NodeSessions(launcher, paths, time, tools);
+
         _watchAsks = new WatchAsksStep(time);
-        _sessions = new NodeSessions(launcher, paths, time, tools);
-        _workers = new StartWorkersStep(_sessions, new ReviewTreeStep(projects, git), _fold, git);
-        _merge = new MergeStep(projects, git, paths, new TidyStep(git), _workers);
-        _open = new OpenRunStep(paths, time, lifetime, projects, _sessions, _declare);
+        _workers = new StartWorkersStep(sessions, new ReviewTreeStep(projects, git), fold, git);
+        _open = new OpenRunStep(paths, time, lifetime, projects, sessions, declare);
         _limits = new RoundLimitsStep(time);
-        _leadReport = new LeadReportStep(_sessions);
-        _decide = new DecideStep(time);
+        _leadReport = new LeadReportStep(sessions);
+        _briefRequests = new BriefRequestsStep(new DecideStep(time));
+        _feedback = new FeedbackStep();
+        _close = new CloseRunStep(fold, new MergeStep(projects, git, paths, new TidyStep(git), _workers), declare);
     }
 
     /// <inheritdoc />
@@ -622,7 +626,7 @@ public sealed partial class TeamRunner : ITeamRunner
             return ended;
         }
 
-        var (slug, forTask, lead) = (run.Slug, run.ForTask, run.Lead!);
+        var lead = run.Lead!;
 
         try
         {
@@ -651,364 +655,27 @@ public sealed partial class TeamRunner : ITeamRunner
 
                 var report = said.Report!;
 
-                if (!await GateAsync(autonomy, console, $"Act on the lead's report (round {run.Rounds}, {Spell(report.Status)})", ct).ConfigureAwait(false))
+                var briefing = await _briefRequests.RunAsync(run, journal, report, ct).ConfigureAwait(false);
+
+                if (briefing.Ended is not null)
                 {
-                    run.Ended = "stopped by the person";
                     break;
                 }
 
-                var feedback = new StringBuilder();
+                var ran = await _workers.RunAsync(run, journal, request, team, briefing.Accepted, ct).ConfigureAwait(false);
 
-                if (report.Status == ReportStatus.NeedsDecision)
+                if (await _feedback.RunAsync(run, journal, report, briefing, ran, ct).ConfigureAwait(false) is not null)
                 {
-                    var decided = await _decide.RunAsync(run, journal, report.Questions ?? [], ct)
-                        .ConfigureAwait(false);
-
-                    if (decided is null)
-                    {
-                        run.Ended = "stopped at a decision";
-                        break;
-                    }
-
-                    feedback.AppendLine("## Decisions").AppendLine();
-
-                    foreach (var (question, answer, by) in decided)
-                    {
-                        feedback.AppendLine(Decided(question, answer, by));
-                    }
-
-                    feedback.AppendLine();
-                }
-
-                IReadOnlyList<ReportRequest> requests = report.Requests ?? [];
-
-                /*
-                  Before the first worker starts, how the lead reads each
-                  criterion goes to the person.
-
-                  A criterion is a sentence somebody wrote in a hurry, and "the
-                  tests pass" read as "the new test passes" is a misreading that
-                  costs nothing to correct now and a whole round of workers to
-                  correct later. Put as an ordinary question with a
-                  recommendation, so a run with a timer takes it on its own the
-                  way it takes any other: holding it for a person would mean a
-                  timed run was almost never unattended. Only where somebody
-                  could answer - an autonomous run, or one with nobody at a
-                  terminal or a dashboard, writes the readings down and carries
-                  on, rather than stopping where it never used to.
-                */
-                var heldForReadings = false;
-
-                if (!run.ReadingsAccepted && run.Asking && requests.Count > 0 && run.LastReadings is { Count: > 0 })
-                {
-                    var decided = await _decide.RunAsync(run, journal, [ReadingsQuestion(run.LastReadings)], ct)
-                        .ConfigureAwait(false);
-
-                    if (decided is null)
-                    {
-                        run.Ended = "stopped at a decision";
-                        break;
-                    }
-
-                    if (decided[0].Answer == ThinkAgainTold)
-                    {
-                        // Nobody briefed: the work it asked for was planned on
-                        // readings the person has just said are wrong.
-                        heldForReadings = true;
-                        requests = [];
-
-                        feedback.AppendLine("## Your readings").AppendLine().AppendLine(ReadingsSentBack).AppendLine();
-                    }
-                    else
-                    {
-                        run.ReadingsAccepted = true;
-
-                        await journal.WriteAsync(
-                            "readings.accepted", team.Lead, new { by = decided[0].By }, ct).ConfigureAwait(false);
-                    }
-                }
-                else if (!run.ReadingsAccepted && requests.Count > 0 && run.LastReadings is { Count: > 0 })
-                {
-                    // Nobody to ask, so they stand. Said, so the record does
-                    // not read as though somebody agreed them.
-                    run.ReadingsAccepted = true;
-
-                    await journal.WriteAsync("readings.accepted", team.Lead, new { by = "nobody" }, ct)
-                        .ConfigureAwait(false);
-                }
-
-                var reports = new List<Report>();
-                var refused = new List<string>();
-
-                // Briefed one at a time, run together, read back in the order
-                // the lead asked. Only the middle of those three is worth
-                // overlapping: a person cannot answer two gates at once, and
-                // a record that arrived in whatever order the nodes finished
-                // would read differently every time the same run happened.
-                var accepted = new List<Briefed>();
-
-                foreach (var ask in requests)
-                {
-                    // "implementer/1" asks for an instance of the node called
-                    // "implementer"; the instance name is what the worker is
-                    // briefed as and reports as.
-                    var baseName = BaseNode(ask.Node);
-
-                    if (!leadNode.Delegates.Contains(baseName, StringComparer.Ordinal) || !team.Nodes.TryGetValue(baseName, out var node))
-                    {
-                        var reason =
-                            $"The lead asked for '{ask.Node}', which it may not request. It may request: "
-                            + string.Join(", ", leadNode.Delegates) + ".";
-                        run.Warnings.Add(reason);
-                        refused.Add(reason);
-                        await journal.WriteAsync("request.refused", team.Lead, new { node = ask.Node, reason }, ct).ConfigureAwait(false);
-                        continue;
-                    }
-
-                    // Handed to git, so it has to be a name and nothing else:
-                    // one starting with a dash would be read as an option. To
-                    // a node with a tree of its own it is where the tree
-                    // starts; to one without, the work it reads, which is how
-                    // the first lead to have it used it on a reviewer.
-                    if (ask.From is { } from && !IsRef(from))
-                    {
-                        var reason = $"The lead asked for '{ask.Node}' from '{from}', which was refused: '{from}' is not the name of a commit or branch.";
-                        run.Warnings.Add(reason);
-                        refused.Add(reason);
-                        await journal.WriteAsync("request.refused", team.Lead, new { node = ask.Node, reason }, ct).ConfigureAwait(false);
-                        continue;
-                    }
-
-                    // The one checkpoint that offers a third answer. Yes and no
-                    // make somebody choose between the wrong brief and no brief,
-                    // and the lead being wrong about a task is both ordinary and
-                    // expensive: the worker goes off and does the wrong thing,
-                    // competently, for ten minutes.
-                    var task = ask.Task;
-
-                    if (autonomy == "manual")
-                    {
-                        var revised = await console
-                            .ReviseAsync($"Brief {ask.Node} ({node.Role})", task, ct)
-                            .ConfigureAwait(false);
-
-                        if (revised is null)
-                        {
-                            run.Ended = "stopped by the person";
-                            goto finished;
-                        }
-
-                        if (!string.Equals(revised, task, StringComparison.Ordinal))
-                        {
-                            await journal.WriteAsync(
-                                "brief.revised",
-                                ask.Node,
-                                new { was = task, now = revised },
-                                ct).ConfigureAwait(false);
-
-                            task = revised;
-                        }
-                    }
-                    else
-                    {
-                        console.Note($"Brief {ask.Node} ({node.Role}): {task}");
-                    }
-
-                    var role = request.Specialists.Find(node.Role)!;
-                    var brief = MakeBrief(
-                        runId, ask.Node, team.Lead, node, role, task, ask.Inputs ?? [], doneWhen: [], team, autonomy,
-                        request.OutwardAllowed ?? [], request.Specialists.Find, teamDirectory,
-                        Held(standing, run.Criteria), ask.From);
-
-                    await WriteDocumentAsync(directory, $"brief-{Safe(ask.Node)}-{run.Rounds}.json", ReportReader.Write(brief), ct).ConfigureAwait(false);
-
-                    if (brief.Constraints.Worktree is { Length: > 0 } made)
-                    {
-                        run.Branches[ask.Node] = made;
-                    }
-
-                    accepted.Add(new Briefed(ask, node, role, brief));
-                }
-
-                var ran = await _workers.RunAsync(run, journal, request, team, accepted, ct).ConfigureAwait(false);
-
-                for (var index = 0; index < accepted.Count; index++)
-                {
-                    var ask = accepted[index].Ask;
-                    var workerReport = ran[index];
-
-                    run.Cost += workerReport.Cost;
-                    run.Warnings.AddRange(workerReport.Warnings);
-
-                    if (workerReport.Report is { } decided)
-                    {
-                        // A gate node's answer is the decision it hands back,
-                        // in the one word its role tells it to use.
-                        foreach (var deliverable in decided.Deliverables.Where(d => d.Kind == DeliverableKind.Decision))
-                        {
-                            run.Decisions[BaseNode(ask.Node)] = deliverable.Ref.Trim();
-                        }
-                    }
-
-                    if (workerReport.Halted)
-                    {
-                        run.Ended = $"halted: {ask.Node} took an outward action its brief did not allow";
-                        run.Final = report;
-                        goto finished;
-                    }
-
-                    var handed = workerReport.Report ?? new Report(
-                        ask.Node, ReportStatus.Failed, workerReport.Failure ?? "The node ended without a report.", [], [], []);
-
-                    reports.Add(handed);
-                    await WriteDocumentAsync(directory, $"report-{Safe(ask.Node)}-{run.Rounds}.json", ReportReader.Write(handed), ct).ConfigureAwait(false);
-
-                    if (!await GateAsync(autonomy, console, $"Hand {ask.Node}'s report ({Spell(handed.Status)}) to the lead", ct).ConfigureAwait(false))
-                    {
-                        run.Ended = "stopped by the person";
-                        goto finished;
-                    }
-                }
-
-                if (report.OutwardRequested is { Count: > 0 } wanted)
-                {
-                    run.Warnings.Add($"The lead asked for outward actions it was not allowed: {string.Join("; ", wanted)}.");
-                }
-
-                // A round that asked for nothing moved nothing. A question is
-                // not progress either: a lead with several to ask asks them in
-                // one report, and one that asks round after round is stuck.
-                // A round whose work was held back over its readings is not a
-                // quiet one: the lead asked, and was told to think again.
-                run.QuietRounds = requests.Count == 0 && !heldForReadings ? run.QuietRounds + 1 : 0;
-
-                // Written down, because a run heading for this is something
-                // somebody would want to know before it gets there - and the
-                // journal had no way to say "that round asked for nothing".
-                await journal.WriteAsync(
-                    "round.ended",
-                    null,
-                    new { round = run.Rounds, requests = requests.Count, quiet = run.QuietRounds },
-                    ct).ConfigureAwait(false);
-
-                if (run.QuietRounds >= 2)
-                {
-                    run.Ended = "no progress: two rounds without a request or a finish";
                     break;
                 }
-
-                // What it is now held to, said once, in the round after it was
-                // agreed. It proposed these and a person may have rewritten
-                // them, so the list it reads here is the list ReportCheck will
-                // hold its done to - and a lead held to criteria it has not
-                // seen cannot report coverage for them.
-                if (run.AgreedThisRound is { Count: > 0 } settled)
-                {
-                    feedback.AppendLine("## What this run is judged on").AppendLine();
-                    feedback.AppendLine(
-                        "Agreed from what you proposed. " + char.ToUpperInvariant(CoverageOwed[0]) + CoverageOwed[1..] + ".")
-                        .AppendLine();
-
-                    for (var i = 0; i < settled.Count; i++)
-                    {
-                        feedback.AppendLine($"{i + 1}. {settled[i]}");
-                    }
-
-                    feedback.AppendLine();
-
-                    run.AgreedThisRound = null;
-                }
-
-                if (reports.Count > 0)
-                {
-                    feedback.AppendLine("## Reports from your requests").AppendLine();
-
-                    foreach (var handed in reports)
-                    {
-                        feedback.AppendLine("```json").AppendLine(ReportReader.Write(handed)).AppendLine("```").AppendLine();
-                    }
-                }
-
-                if (refused.Count > 0)
-                {
-                    // Said to the lead as well as to the person: a lead that
-                    // is refused and not told asks again, and did, twice.
-                    feedback.AppendLine("## Requests refused").AppendLine();
-
-                    foreach (var reason in refused)
-                    {
-                        feedback.AppendLine($"- {reason}");
-                    }
-
-                    feedback.AppendLine();
-                }
-
-                feedback.AppendLine(
-                    "Decide what happens next: more requests, or finish. Reply with one report/1 "
-                    + "document. Keep summary short: a few sentences, not a report of its own. "
-                    + "Status done needs evidence cited from these reports.");
-
-                run.Prompt = feedback.ToString();
             }
-
-        finished:
-            ;
         }
         finally
         {
-            var (exit, killed) = await lead.Session!.EndAsync(EndGrace, CancellationToken.None).ConfigureAwait(false);
-            var stderr = Tail(lead.Session.StandardError);
-
-            await journal.WriteAsync("node.ended", team.Lead, new { exit, killed, stderr }, CancellationToken.None).ConfigureAwait(false);
-            await lead.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
-
-            await _fold.RunAsync(run, journal, run.LeadBrief, run.Warnings, CancellationToken.None).ConfigureAwait(false);
-
-            // A node that produced no report and said why on its error
-            // stream has explained itself, and that explanation must reach
-            // the person. The first real run ended "without a report" in
-            // under a second, exit code 1, and nothing said what the agent
-            // had printed.
-            if (run.Final is null && stderr.Length > 0)
-            {
-                run.Warnings.Add($"The lead wrote to its error stream (exit code {exit}): {stderr}");
-            }
+            await _close.EndLeadAsync(run, journal).ConfigureAwait(false);
         }
 
-        // A node asked to resolve a conflict spends money like any other, and
-        // the run's total is written after the merge, so it is still in time
-        // to count it.
-        var afterwards = new List<decimal>();
-
-        var merged = await _merge.RunAsync(run, journal, request, team, runId, autonomy, console, afterwards, ct)
-            .ConfigureAwait(false);
-
-        run.Cost += afterwards.Sum();
-
-        // The watch stops before the ending is written, so its last look -
-        // an answer given just before the end - goes down ahead of it, where
-        // somebody following the journal still reads it.
-        await watching.StopAsync().ConfigureAwait(false);
-
-        await journal.WriteAsync(
-            "run.finished", null, new { ended = run.Ended, outcome = Filed(run.Ended), cost = run.Cost, rounds = run.Rounds, merged }, ct).ConfigureAwait(false);
-
-        await _declare.RunAsync(
-            run, journal, slug, runId, forTask, team, Landed(run.Ended), request.Goal,
-            $"{run.Ended}; {run.Rounds} round(s), ${run.Cost:0.00}. loadout team status {runId}", ct)
-            .ConfigureAwait(false);
-
-        if (run.Final is not null)
-        {
-            await WriteDocumentAsync(directory, "final-report.json", ReportReader.Write(run.Final), ct).ConfigureAwait(false);
-        }
-
-        // Every node's launch contributes the same preflight notices, so a
-        // four-node run said each of them four times. The same sentence
-        // twice is noise that buries the one that was only said once.
-        return OperationResult<TeamRunOutcome>.Ok(new TeamRunOutcome(
-            runId, directory, run.Ended, run.Final, run.Cost, run.Rounds,
-            run.Warnings.Distinct(StringComparer.Ordinal).ToList(), run.Branches, merged));
+        return await _close.RunAsync(run, journal, watching, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1038,7 +705,7 @@ public sealed partial class TeamRunner : ITeamRunner
     internal static string? Filed(string? ended) =>
         RunOutcomes.From(ended) is { } outcome ? RunOutcomes.Spell(outcome) : null;
 
-    private static TaskState Landed(string ended) => ended switch
+    internal static TaskState Landed(string ended) => ended switch
     {
         "done" => TaskState.Done,
         "blocked" => TaskState.Blocked,
