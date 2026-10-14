@@ -490,6 +490,7 @@ public sealed partial class TeamRunner : ITeamRunner
     private readonly FoldStep _fold;
     private readonly WatchAsksStep _watchAsks;
     private readonly ReviewTreeStep _reviewTree;
+    private readonly TidyStep _tidy;
 
     /// <summary>
     /// The project service and the git manager are optional so a caller that
@@ -519,6 +520,7 @@ public sealed partial class TeamRunner : ITeamRunner
         _fold = new FoldStep(paths);
         _watchAsks = new WatchAsksStep(time);
         _reviewTree = new ReviewTreeStep(projects, git);
+        _tidy = new TidyStep(git);
         _tools = tools;
     }
 
@@ -1932,60 +1934,10 @@ public sealed partial class TeamRunner : ITeamRunner
                     ? $"Merged {branch} into {target}, fast-forward."
                     : $"Merged {branch} into {target} with a merge commit.");
 
-            await TidyAsync(repository, branch, journal, node, warnings, ct).ConfigureAwait(false);
+            await _tidy.RunAsync(run, journal, repository, branch, node, warnings, ct).ConfigureAwait(false);
         }
 
         return merged;
-    }
-
-    /// <summary>
-    /// Clears away a branch that has arrived: its worktree, then the branch
-    /// itself.
-    /// </summary>
-    /// <remarks>
-    /// Only ever after a merge, so nothing is thrown away: the commits are
-    /// in the repository and git refuses both steps if that turns out not to
-    /// be true. A tree left for every implementer of every run is litter
-    /// somebody has to clear by hand, and three of them had already
-    /// accumulated before this existed.
-    /// </remarks>
-    private async Task TidyAsync(
-        string repository,
-        string branch,
-        JournalWriter journal,
-        string node,
-        List<string> warnings,
-        CancellationToken ct)
-    {
-        var worktrees = await _git!.ListWorktreesAsync(repository, ct).ConfigureAwait(false);
-
-        var tree = worktrees.Value?.FirstOrDefault(
-            w => !w.IsPrimary && string.Equals(w.Branch, branch, StringComparison.Ordinal));
-
-        if (tree is not null)
-        {
-            var removed = await _git.RemoveWorktreeAsync(repository, tree.Path, ct).ConfigureAwait(false);
-
-            if (removed.Failed)
-            {
-                // Almost always because the node left something uncommitted
-                // in there, which is worth keeping and worth saying.
-                warnings.Add($"The worktree at {tree.Path} was kept: {removed.Error}");
-
-                return;
-            }
-        }
-
-        var deleted = await _git.DeleteMergedBranchAsync(repository, branch, ct).ConfigureAwait(false);
-
-        await journal.WriteAsync(
-            "worktree.tidied", node, new { branch, path = tree?.Path, branchDeleted = deleted.Succeeded }, ct)
-            .ConfigureAwait(false);
-
-        if (deleted.Failed)
-        {
-            warnings.Add($"The branch {branch} was kept: {deleted.Error}");
-        }
     }
 
     /// <summary>
