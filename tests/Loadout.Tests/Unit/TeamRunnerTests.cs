@@ -3402,6 +3402,68 @@ public sealed partial class TeamRunnerTests : IDisposable
             .Should().Contain("- Which database should it use?").And.Contain("Ask again if you still need an answer");
     }
 
+    /// <summary>
+    /// A run that ends for good with a question open closes it, so it is not
+    /// left on the page with no reopening ever coming to clear it; and if the
+    /// run is picked up after all, the lead still hears it went unanswered.
+    /// </summary>
+    [Fact]
+    public async Task A_question_open_when_the_run_ends_is_closed_and_the_lead_hears_of_it_if_picked_up()
+    {
+        var team = await IteratingProjectAsync();
+
+        // Asks the way the dashboard does, as a file in the run's directory,
+        // and nobody answers.
+        _console.Decide = question =>
+        {
+            var run = Directory.GetDirectories(Path.Combine(_paths.Paths.State, "teams", "runs")).Single();
+
+            NodePermissions.PutAsync(run, new PendingAsk(
+                "gate-ended", "lead", "the lead", string.Empty, null, DateTimeOffset.UtcNow,
+                Kind: "question", Asked: question.Question, Options: question.Options,
+                Recommendation: question.Recommendation)).GetAwaiter().GetResult();
+
+            return null;
+        };
+
+        _launcher.Script("role.project-lead", Init("lead-1"), Result(LeadAsks(), 0.05m));
+
+        var first = (await RunAsync(team)).Value!;
+
+        first.Ended.Should().Be("stopped at a decision");
+
+        NodePermissions.Pending(first.Directory!).Should().BeEmpty();
+        NodePermissions.Answered(first.Directory!, "gate-ended")!.By.Should().Be(NodePermissions.Ended);
+
+        var journal = await File.ReadAllLinesAsync(Path.Combine(first.Directory!, "journal.jsonl"));
+
+        var closed = Array.FindIndex(journal, l => l.Contains("\"kind\":\"node.answered\"") && l.Contains("\"by\":\"ended\""));
+        var finished = Array.FindIndex(journal, l => l.Contains("\"kind\":\"run.finished\""));
+
+        closed.Should().BeGreaterThan(-1).And.BeLessThan(finished, "it is written down before the ending");
+
+        _console.Decide = question => question.Recommendation;
+
+        _launcher.Script(
+            "role.project-lead",
+            Init("lead-1"),
+            Result(LeadDone(), 0.02m),
+            Result(LeadDone(), 0.03m));
+
+        (await ResumeAsync(first.RunId, team)).Value!.Ended.Should().Be("done");
+
+        var asked = (await File.ReadAllLinesAsync(Path.Combine(first.Directory!, "journal.jsonl")))
+            .First(l => l.Contains("\"kind\":\"node.answered\""));
+
+        _launcher.Written("role.project-lead")[1]
+            .Should().Contain("Ask again if you still need an answer")
+            .And.Contain($"- {JsonOf(asked)}");
+    }
+
+    /// <summary>The question a node.answered line carries.</summary>
+    private static string JsonOf(string line) =>
+        System.Text.Json.JsonDocument.Parse(line).RootElement.GetProperty("data").GetProperty("question").GetString()!;
+
     [Fact]
     public async Task A_run_with_no_recorded_session_is_picked_up_by_a_fresh_lead_told_where_it_got_to()
     {

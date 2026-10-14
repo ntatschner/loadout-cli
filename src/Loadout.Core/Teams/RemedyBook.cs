@@ -242,7 +242,7 @@ public sealed class RemedyBook : IRemedyBook
 
         foreach (var run in Directory.EnumerateDirectories(runs))
         {
-            foreach (var ask in NodePermissions.Pending(run))
+            foreach (var ask in RunJournal.Open(run))
             {
                 if (!string.Equals(ask.Kind, "remedy", StringComparison.Ordinal))
                 {
@@ -275,7 +275,7 @@ public sealed class RemedyBook : IRemedyBook
 
         foreach (var run in Directory.EnumerateDirectories(runs))
         {
-            if (!NodePermissions.Pending(run).Any(one =>
+            if (!RunJournal.Open(run).Any(one =>
                 string.Equals(one.Id, id, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;

@@ -75,6 +75,19 @@ internal sealed class CloseRunStep
         // somebody following the journal still reads it.
         await watching.StopAsync().ConfigureAwait(false);
 
+        // After the watch, so nothing it has outstanding is closed under it;
+        // before the ending, so the page stops offering them as the run goes.
+        // Not cancellable, because a run being cancelled is one of the ways it
+        // ends with a question open.
+        foreach (var ask in await NodePermissions.CloseAsync(directory, CancellationToken.None).ConfigureAwait(false))
+        {
+            await journal.WriteAsync(
+                "node.answered",
+                ask.Node,
+                new { tool = ask.Tool, allowed = false, by = NodePermissions.Ended, question = ask.Question },
+                CancellationToken.None).ConfigureAwait(false);
+        }
+
         await journal.WriteAsync(
             "run.finished", null, new { ended = run.Ended, outcome = TeamRunner.Filed(run.Ended), cost = run.Cost, rounds = run.Rounds, merged }, ct).ConfigureAwait(false);
 
