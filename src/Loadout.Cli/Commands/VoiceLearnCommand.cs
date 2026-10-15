@@ -231,6 +231,8 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
                 heldOut = outcome.HeldOut,
                 editPairs = outcome.Gathered.EditPairs.Count,
                 refused = outcome.Gathered.Refused,
+                agentWritten = outcome.Gathered.AgentWritten,
+                unconfirmed = outcome.Gathered.Unconfirmed,
                 estimate = new { calls = outcome.Estimate.Calls, usd = outcome.Estimate.Usd, fromHistory = outcome.Estimate.FromHistory },
                 run = VoiceRunView.Of(outcome.Run),
                 dropped = outcome.Dropped,
@@ -300,6 +302,18 @@ public sealed class VoiceLearnCommand : VoiceCommandBase<VoiceLearnSettings>
             output.WriteLine(
                 "[yellow]None of your writing was found to learn from.[/] Only squash merges and what you have marked "
                 + "count. Mark some with: loadout voice mark <file or commit range>");
+        }
+
+        if (gathered.AgentWritten > 0)
+        {
+            output.WriteLine(
+                $"[dim]{gathered.AgentWritten} squash merge(s) were left out because they name an assistant as an author.[/]");
+        }
+
+        // A real run said this before the cap; a dry run never got that far.
+        if (dryRun && gathered.OnlyUnconfirmed)
+        {
+            output.WriteLine($"[yellow]{Markup.Escape(VoiceGathering.UnconfirmedWarning)}[/]");
         }
 
         if (gathered.Refused > 0)
