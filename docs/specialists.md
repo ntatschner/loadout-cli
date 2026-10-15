@@ -275,6 +275,17 @@ use the checks Loadout can run. It may name sources Loadout can't read yet,
 such as code, and `voice guide list` says which, because a guide that needs
 them can't be learned from until they exist.
 
+`prose/1` learns from your squash merges and anything you mark with `loadout
+voice mark`, on the grounds that a squash message is usually written by hand
+when a pull request is merged. Usually is not always: if an agent writes your
+commits, learning from them would learn its voice and call it yours. So a
+squash merge whose message names an assistant as a co-author, or carries the
+"Generated with Claude Code" footer, is left out, and so is its pull request
+when edit pairs are read. Anything you've marked is kept whatever its trailer
+says. A squash merge with no trailer is still read, and when that's all a run
+found it says so before asking for a cap, so you can decline and spend
+nothing, then mark what you did write instead.
+
 A drafted guide is learned with `loadout voice learn --guide <id>`, and reads
 only the sources it lists. Its rules go into the same voice part as the prose
 rules, and `voice check` and the docs audit check against every guide's rules
@@ -287,14 +298,21 @@ which words you reach for and how you spell them, not how you build a sentence.
 A guide that reads them may carry only the `avoid-phrase` and `prefer-spelling`
 checks. Only prompts Claude records as typed by a person are read, never one
 sent by Loadout or another program, and pasted text and code are taken out.
-Two more things are left out on purpose:
+So are screenshots: the image is never read, and the `[Image #1]` placeholder
+or file path left beside it is removed. A short error pasted in is often not
+marked as pasted, so it's known by how its lines look instead: a shell prompt,
+an `error:` or `warning:` line, a stack trace, a compiler error. Those lines go
+and the rest of the prompt stays. A line of yours that happens to look like
+terminal output goes too, which costs a line rather than teaching a tool's
+output as your voice. Two more things are left out on purpose:
 
 - A session's opening prompt. Loadout starts some sessions with one, and the
   transcript records it exactly as if you had typed it.
 - Prompts typed in the Claude desktop app, which are recorded the same way as
   prompts a program sends.
 
-Text pasted without Claude marking it as pasted is still read as yours.
+Other text pasted without Claude marking it as pasted, and not shaped like
+terminal output, is still read as yours.
 
 Validation warns about a style that works but costs more than it should:
 
