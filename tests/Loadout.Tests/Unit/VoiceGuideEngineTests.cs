@@ -128,6 +128,35 @@ public sealed class VoiceGuideEngineTests : IDisposable
         VoiceTranscripts.Clean("<command-name>/clear</command-name>").Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("PS D:\\git\\talkwatch> dotnet run --project tools/Capture -- cert https://192.168.1.1\nerror: No certificate was presented.")]
+    [InlineData("C:\\work> loadout voice check")]
+    [InlineData("me@box:~/src$ make")]
+    [InlineData("fail: Microsoft.Hosting[1]")]
+    [InlineData("Unhandled exception. System.InvalidOperationException: Sequence contains more than one element\n   at System.Linq.Enumerable.Single[T](IEnumerable`1 source)\n   at Program.Main()")]
+    [InlineData("    at Object.<anonymous> (/app/index.js:3:9)")]
+    [InlineData("Traceback (most recent call last):\n  File \"main.py\", line 4, in <module>\nKeyError: 'x'")]
+    [InlineData("src/Foo.cs(12,5): error CS1002: ; expected")]
+    [InlineData("[Image #1]")]
+    [InlineData("C:\\Users\\me\\Pictures\\Screenshot 2026-10-15 101112.png")]
+    [InlineData("\"/home/me/Pictures/Screen Shot.jpg\"")]
+    public void Terminal_output_and_screenshots_are_taken_out(string pasted) =>
+        VoiceTranscripts.Clean(pasted).Should().BeEmpty();
+
+    [Fact]
+    public void The_persons_words_around_an_unwrapped_error_are_kept()
+    {
+        VoiceTranscripts.Clean(
+                "this fails when i run it\nerror: Could not find file 'talk.har'.\n[Image #1] and the screen looks wrong")
+            .Should().Be("this fails when i run it\n  and the screen looks wrong");
+
+        VoiceTranscripts.Clean("the error says it can't find the file, at least I think so")
+            .Should().Be("the error says it can't find the file, at least I think so", "talking about an error is not pasting one");
+
+        VoiceTranscripts.Clean("compare this with screenshot.pngs elsewhere")
+            .Should().Be("compare this with screenshot.pngs elsewhere");
+    }
+
     [Fact]
     public async Task Transcripts_are_read_from_where_claude_keeps_them_one_session_a_piece()
     {

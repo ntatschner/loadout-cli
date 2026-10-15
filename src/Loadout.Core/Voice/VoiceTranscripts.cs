@@ -37,8 +37,13 @@ public sealed record VoiceTranscript(string Session, string Text);
 /// </para>
 /// <para>
 /// Pasted text is wrapped in <c>pasted_content</c> tags and taken out, and so
-/// is anything inside a code fence: neither is the person's prose. Text pasted
-/// without either is read as theirs, which is a stated limit.
+/// is anything inside a code fence: neither is the person's prose. A
+/// screenshot reaches the transcript as an image block, which is never read,
+/// and its placeholder or path is taken out of the text beside it. An error
+/// pasted short enough to arrive unwrapped is known by its lines, which look
+/// like terminal output: a shell prompt, an <c>error:</c> prefix, a stack
+/// frame, a compiler diagnostic. Other text pasted without a marker is read
+/// as theirs, which is a stated limit.
 /// </para>
 /// </remarks>
 public sealed partial class VoiceTranscripts
@@ -63,6 +68,31 @@ public sealed partial class VoiceTranscripts
 
     [GeneratedRegex(@"```.*?(```|\z)", RegexOptions.Singleline)]
     private static partial Regex Fenced();
+
+    /// <summary>What Claude Code leaves in the text where a screenshot was attached, and a path to one.</summary>
+    [GeneratedRegex(
+        @"\[Image[^\]\n]*\]"
+        + @"|""[^""\n]*\.(png|jpe?g|gif|webp|bmp)"""
+        + @"|(?<!\S)[A-Za-z]:\\[^\n]*?\.(png|jpe?g|gif|webp|bmp)(?!\S)"
+        + @"|(?<!\S)\S+\.(png|jpe?g|gif|webp|bmp)(?!\S)",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex Screenshot();
+
+    /// <summary>
+    /// A line of terminal output: a shell prompt, a log or diagnostic prefix,
+    /// a stack frame, a traceback, a compiler diagnostic or an exception.
+    /// </summary>
+    [GeneratedRegex(
+        @"^\s*(PS [A-Za-z]:\\[^>]*>|[A-Za-z]:\\[^>\s]*>|\S+@\S+:\S*[$#]\s|\$ )"
+        + @"|^\s*(error|warning|warn|fail|fatal|info|dbug|crit|trce)(\[[^\]]*\])?:"
+        + @"|^\s+at \S+[.(<]"
+        + @"|^\s*Traceback \(most recent call last\)"
+        + @"|^\s*File "".*"", line \d+"
+        + @"|^\s*[\w.]*(Exception|Error)(:|\s*$)"
+        + @"|\(\d+,\d+\): (error|warning) [A-Z]+\d+"
+        + @"|^\s*(Unhandled exception\.|--- End of )",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Output();
 
     /// <summary>
     /// The newest sessions' typed prompts, newest first, leaving out sessions
@@ -180,7 +210,10 @@ public sealed partial class VoiceTranscripts
         return prompts.Count > 0 ? string.Join("\n\n", prompts) : null;
     }
 
-    /// <summary>Takes out pasted text and code, and drops what is left if it is markup.</summary>
+    /// <summary>
+    /// Takes out pasted text, code, screenshots and terminal output, and drops
+    /// what is left if it is markup.
+    /// </summary>
     public static string? Clean(string? text)
     {
         if (text is null)
@@ -188,7 +221,13 @@ public sealed partial class VoiceTranscripts
             return null;
         }
 
-        var kept = Fenced().Replace(PastedUnclosed().Replace(Pasted().Replace(text, " "), " "), " ").Trim();
+        var unwrapped = Screenshot().Replace(
+            Fenced().Replace(PastedUnclosed().Replace(Pasted().Replace(text, " "), " "), " "), " ");
+
+        // An error pasted short enough is not wrapped, so it is known by its
+        // lines. A line of the person's that happens to look like output is
+        // lost, which costs one line; output kept would be learned as theirs.
+        var kept = string.Join('\n', unwrapped.Split('\n').Where(line => !Output().IsMatch(line))).Trim();
 
         // Slash commands and other injected blocks arrive as markup.
         return kept.StartsWith('<') ? null : kept;
