@@ -97,6 +97,33 @@ public sealed class VoicePullRequestTests : IDisposable
         with.Evidence.Should().HaveCount(4, "edit pairs are scored against, not mined, so evidence is unchanged");
     }
 
+    [Theory]
+    [InlineData("Fix it (#1)\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>", true)]
+    [InlineData("Fix it (#1)\n\nco-authored-by: Copilot <copilot@github.com>", true)]
+    [InlineData("Fix it (#1)\n\nCo-authored-by: dependabot[bot] <support@github.com>", true)]
+    [InlineData("Fix it (#1)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)", true)]
+    [InlineData("Fix it (#1)\n\nCo-Authored-By: Sam Jones <sam@example.com>", false)]
+    [InlineData("Ask Claude about the colour (#1)\n\nWritten by hand.", false)]
+    public void An_assistant_is_known_by_its_trailer_not_by_being_mentioned(string message, bool expected) =>
+        VoiceEvidenceGatherer.ByAnAssistant(message).Should().Be(expected);
+
+    [Fact]
+    public async Task A_squash_merge_an_assistant_co_wrote_is_neither_evidence_nor_an_edit()
+    {
+        _git.CommitMessages.Add(("a1", "Colour the output (#12)\n\nKept short.\n\nCo-Authored-By: Claude <noreply@anthropic.com>"));
+        _git.CommitMessages.Add(("a2", "Tidy the docs (#13)\n\nBy hand."));
+        _pulls.Known[12] = new(12, "Colour the output", "A long draft about colour.");
+        _pulls.Known[13] = new(13, "Tidy the docs", "A draft about docs.");
+
+        var gathered = (await new VoiceEvidenceGatherer(_git, _pulls, _marks).GatherAsync(_repository, null, pullRequests: true)).Value!;
+
+        gathered.Evidence.Should().ContainSingle().Which.Reference.Should().Be("a2");
+        gathered.EditPairs.Should().ContainSingle().Which.Number.Should().Be(13);
+        gathered.AgentWritten.Should().Be(1);
+        gathered.Unconfirmed.Should().Be(1, "a2 is read on the assumption it is the person's");
+        gathered.OnlyUnconfirmed.Should().BeTrue();
+    }
+
     [Fact]
     public async Task Gh_is_asked_only_to_read()
     {

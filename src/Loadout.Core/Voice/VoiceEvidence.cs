@@ -32,13 +32,36 @@ public sealed record VoiceEditPair(int Number, string Commit, string Before, str
 /// they might carry a credential, so they are not sent at all.
 /// </param>
 /// <param name="EditPairs">Descriptions the person rewrote when they merged, when pull requests were asked for.</param>
-public sealed record VoiceGathering(IReadOnlyList<VoiceEvidence> Evidence, int Refused, IReadOnlyList<VoiceEditPair> EditPairs)
+/// <param name="AgentWritten">Squash merges left out because their message names an assistant as an author.</param>
+/// <param name="Unconfirmed">
+/// Pieces taken from squash merges on the assumption the person wrote them,
+/// with nothing to confirm it: no mark, no trailer either way.
+/// </param>
+public sealed record VoiceGathering(
+    IReadOnlyList<VoiceEvidence> Evidence,
+    int Refused,
+    IReadOnlyList<VoiceEditPair> EditPairs,
+    int AgentWritten = 0,
+    int Unconfirmed = 0)
 {
     /// <summary>Nothing found.</summary>
     public VoiceGathering(IReadOnlyList<VoiceEvidence> evidence, int refused)
         : this(evidence, refused, [])
     {
     }
+
+    /// <summary>
+    /// Everything found is squash merges nobody has said the person wrote.
+    /// Where an agent writes the commits, learning from them would learn the
+    /// agent's voice and file it as theirs.
+    /// </summary>
+    public bool OnlyUnconfirmed => Evidence.Count > 0 && Unconfirmed == Evidence.Count;
+
+    /// <summary>What to tell the person when <see cref="OnlyUnconfirmed"/> holds, before anything is spent.</summary>
+    public const string UnconfirmedWarning =
+        "Everything found is squash-merge messages, and nothing confirms you wrote them. "
+        + "If an agent writes your commits, this would learn its voice as yours: decline the cap to spend nothing, "
+        + "and mark what you did write with 'loadout voice mark' instead.";
 }
 
 /// <summary>What to gather, and from where.</summary>
@@ -61,11 +84,18 @@ public sealed record VoiceGatherRequest(
 /// <remarks>
 /// <para>
 /// Four kinds, and nothing else. Squash-merge messages, because they are
-/// written by hand when a pull request is merged; anything the person has
+/// usually written by hand when a pull request is merged; anything the person has
 /// marked, and only while its mark holds; for a named style, a corpus they
 /// pointed at; and, when asked for, what they typed to Claude Code. The rest
 /// of a repository was written by tools, agents and other people, and
 /// learning from it would learn their voice.
+/// </para>
+/// <para>
+/// "Usually" is the weak point, since many people have an agent write their
+/// commits. A squash merge whose message names an assistant as an author is
+/// left out, as evidence and as the second half of an edit pair. One with no
+/// trailer is still read, because nothing says otherwise, but it is counted
+/// as unconfirmed so a run made of nothing else can say so before it spends.
 /// </para>
 /// <para>
 /// Only the kinds the guide lists are read. A guide about word choice that
@@ -120,6 +150,18 @@ public sealed partial class VoiceEvidenceGatherer
     private static partial Regex Whitespace();
 
     /// <summary>
+    /// A trailer or footer naming an assistant: a co-author line for one of
+    /// the coding agents or a bot, or the footer Claude Code adds.
+    /// </summary>
+    [GeneratedRegex(
+        @"^\s*(co-authored-by:.*\b(claude|anthropic|copilot|codex|openai|chatgpt|cursor|gemini|devin|aider|\[bot\])|.*generated with \[?claude code)",
+        RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant)]
+    private static partial Regex AssistantTrailer();
+
+    /// <summary>The message names an assistant as an author, so the person did not write it alone.</summary>
+    public static bool ByAnAssistant(string message) => AssistantTrailer().IsMatch(message);
+
+    /// <summary>
     /// The writing in a repository known to be the person's, and a corpus if
     /// one is named.
     /// </summary>
@@ -165,6 +207,8 @@ public sealed partial class VoiceEvidenceGatherer
         var pieces = new List<(string Source, string Reference, string Text)>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var squashes = new List<(int Number, string Sha, string Message)>();
+        var fromSquash = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var agentWritten = 0;
 
         if (repository is not null && sources.Contains("mark"))
         {
@@ -203,11 +247,23 @@ public sealed partial class VoiceEvidenceGatherer
                     continue;
                 }
 
+                // Marked by hand, it is the person's whatever its trailer
+                // says; the mark was read above. Otherwise an assistant named
+                // as an author means it is not their writing, and not their
+                // edit of a draft either.
+                if (!seen.Contains(sha) && ByAnAssistant(message))
+                {
+                    agentWritten++;
+
+                    continue;
+                }
+
                 squashes.Add((int.Parse(squash.Groups[1].Value, CultureInfo.InvariantCulture), sha, message));
 
                 if (sources.Contains("squash") && seen.Add(sha))
                 {
                     pieces.Add(("commit", sha, message));
+                    fromSquash.Add(sha);
                 }
             }
         }
@@ -300,7 +356,9 @@ public sealed partial class VoiceEvidenceGatherer
                 $"e{evidence.Count + 1}", source, reference, Clip(redacted), VoiceStore.Hash(text)));
         }
 
-        return OperationResult<VoiceGathering>.Ok(new VoiceGathering(evidence, refused, pairs));
+        var unconfirmed = evidence.Count(e => e.Source == "commit" && fromSquash.Contains(e.Reference));
+
+        return OperationResult<VoiceGathering>.Ok(new VoiceGathering(evidence, refused, pairs, agentWritten, unconfirmed));
     }
 
     private static string Source(VoiceMarkKind kind) => kind switch

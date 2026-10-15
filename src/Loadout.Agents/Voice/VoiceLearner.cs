@@ -265,6 +265,12 @@ internal sealed class VoiceLearner : IVoiceLearner
                 new VoiceLearnOutcome(run, profilePath, gathered.Value, heldOut.Count, estimate, dropped, weakened, []));
         }
 
+        // Said before the cap, so declining it is the way out and costs nothing.
+        if (gathered.Value.OnlyUnconfirmed)
+        {
+            prompts.Progress(VoiceGathering.UnconfirmedWarning);
+        }
+
         // The cap, settled before anything is spent.
         var cap = state.Cap;
         var mine = batches.Count > 0;

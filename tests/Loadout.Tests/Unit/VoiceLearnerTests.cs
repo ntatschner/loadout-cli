@@ -157,6 +157,28 @@ public sealed class VoiceLearnerTests : IDisposable
     }
 
     [Fact]
+    public async Task Squash_merges_alone_are_warned_about_before_the_cap_is_asked()
+    {
+        var prompts = new Prompts();
+
+        var learned = await Learner(new ScriptedDetachedLauncher()).LearnAsync(Request(prompts));
+
+        learned.Value!.Gathered.OnlyUnconfirmed.Should().BeTrue("both pieces are squash merges nobody marked");
+        prompts.Said.Should().Equal(VoiceGathering.UnconfirmedWarning, "cap?");
+    }
+
+    [Fact]
+    public async Task Marked_writing_beside_squash_merges_is_not_warned_about()
+    {
+        await MarkAsync();
+        var prompts = new Prompts();
+
+        await Learner(new ScriptedDetachedLauncher()).LearnAsync(Request(prompts));
+
+        prompts.Said.Should().NotContain(VoiceGathering.UnconfirmedWarning);
+    }
+
+    [Fact]
     public async Task A_run_stopped_at_its_cap_is_partial_and_carries_what_it_mined_to_the_next()
     {
         await MarkAsync();
@@ -380,13 +402,15 @@ public sealed class VoiceLearnerTests : IDisposable
 
         public List<VoiceReviewItem> Reviewed { get; } = [];
 
-        public void Progress(string message)
-        {
-        }
+        /// <summary>Everything said and asked, in order, with a cap question as <c>cap?</c>.</summary>
+        public List<string> Said { get; } = [];
+
+        public void Progress(string message) => Said.Add(message);
 
         public VoiceCapAnswer Cap(VoiceCapQuestion question, VoiceEstimate estimate, VoiceCap proposed, VoiceCap? stored)
         {
             CapQuestions.Add(question);
+            Said.Add("cap?");
 
             return CapAnswer;
         }
