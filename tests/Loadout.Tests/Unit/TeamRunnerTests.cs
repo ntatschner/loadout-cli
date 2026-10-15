@@ -3413,7 +3413,9 @@ public sealed partial class TeamRunnerTests : IDisposable
         var team = await IteratingProjectAsync();
 
         // Asks the way the dashboard does, as a file in the run's directory,
-        // and nobody answers.
+        // and nobody answers. The dashboard answers in place, so the watch
+        // only notes the question rather than putting it to the console.
+        _console.AnswersInPlace = true;
         _console.Decide = question =>
         {
             var run = Directory.GetDirectories(Path.Combine(_paths.Paths.State, "teams", "runs")).Single();
@@ -3422,6 +3424,11 @@ public sealed partial class TeamRunnerTests : IDisposable
                 "gate-ended", "lead", "the lead", string.Empty, null, DateTimeOffset.UtcNow,
                 Kind: "question", Asked: question.Question, Options: question.Options,
                 Recommendation: question.Recommendation)).GetAwaiter().GetResult();
+
+            // Long enough for the watch to glance while it is pending, as it
+            // did on a slow runner: fast machines ended the run first and hid
+            // what the watch does with it.
+            Thread.Sleep(NodePermissions.Glance * 3);
 
             return null;
         };
@@ -3441,6 +3448,8 @@ public sealed partial class TeamRunnerTests : IDisposable
         var finished = Array.FindIndex(journal, l => l.Contains("\"kind\":\"run.finished\""));
 
         closed.Should().BeGreaterThan(-1).And.BeLessThan(finished, "it is written down before the ending");
+        journal.Count(l => l.Contains("\"kind\":\"node.answered\"")).Should().Be(
+            1, "closing it is journalled once, by the step that closed it, not again by the watch that saw the answer appear");
 
         _console.Decide = question => question.Recommendation;
 
