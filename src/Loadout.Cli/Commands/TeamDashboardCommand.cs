@@ -337,7 +337,11 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
 
         if (settings.Open && output.CanOpenAWindow)
         {
-            await _opener.OpenUrlAsync(daemon.Address!, ct).ConfigureAwait(false);
+            // A sign-in link rather than the address with its token, so what
+            // lands in the browser's history works once and then never again.
+            var link = DashboardServer.SignInLink(daemon.Address, SignIn.ForMachine(_paths)) ?? daemon.Address!;
+
+            await _opener.OpenUrlAsync(link, ct).ConfigureAwait(false);
         }
 
         return CommandOutput.Success();
@@ -526,6 +530,8 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             return CommandOutput.Success();
         }
 
+        server.SignIn = SignIn.ForMachine(_paths);
+
         var started = server.Start(settings.Port, settings.Listen);
 
         if (started.Failed)
@@ -562,7 +568,9 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         {
             // Asked for, never assumed. A command that opened a browser
             // because it felt like it is one somebody runs once.
-            await _opener.OpenUrlAsync(server.Address, cancellationToken).ConfigureAwait(false);
+            await _opener.OpenUrlAsync(
+                (server.Beyond ? null : DashboardServer.SignInLink(server.Address, server.SignIn)) ?? server.Address,
+                cancellationToken).ConfigureAwait(false);
         }
 
         _reading.Ring(_console);

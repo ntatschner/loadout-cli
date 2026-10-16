@@ -880,7 +880,7 @@ there is one account of what happened rather than three that can disagree.
 - `loadout team status` — where each node got to, what it is doing now, what it
   cost.
 - `loadout dashboard` — a page on this machine, live, at a loopback address
-  behind a token that changes every start. It watches and it acts: starting a
+  you sign in to (see below). It watches and it acts: starting a
   team, answering a gate, holding a run, stopping one, renaming its room,
   opening a pull request, sending the lead a message and typing at a live node
   are all buttons on it.
@@ -910,6 +910,33 @@ there is one account of what happened rather than three that can disagree.
   daemon and reached for the obvious command was quietly sent to a different
   page. `--port`, `--listen` and `--watch-only` are asking for a server of your
   own and still get one.
+
+  **The daemon serves on the same port every time,** 47611 unless
+  `loadout config set dashboard-port <port>` names another. It used to take
+  whichever port the machine offered, which was fine for a tab and no good for
+  an app window: an installed window is tied to the address it was installed
+  from, port and all. If something else already has the port, the daemon says
+  so and stops rather than quietly moving, because a page served somewhere you
+  are not looking is worse than one that is not served. `doctor` mentions it
+  when the port has been moved, since a window installed from the old one will
+  no longer open. A dashboard you start yourself, with no daemon running, still
+  takes whichever port the machine offers.
+
+  **`--open` signs the browser in** instead of opening the address with the
+  token in it. It opens a link carrying a code that works once and runs out
+  after two minutes. The page swaps the code for a cookie that lasts ninety
+  days, renewed each day you use it, so restarting the daemon or updating
+  Loadout doesn't sign you out. Nothing that lasts ends up in the browser's
+  history. The address with the token is still printed and still works.
+  `loadout dashboard sign-out` replaces the key the cookies are signed with,
+  which signs every browser out at once, including in a daemon already running.
+
+  The cookie only counts on loopback. A browser sends a cookie to every port on
+  a host, so the cookie only lets in a request that names this dashboard as its
+  host and, where it says where it came from, came from the dashboard's own
+  page; another service on the machine can't borrow it. A dashboard listening
+  beyond this machine issues no cookie and keeps the token, because a
+  credential that lasts ninety days belongs on the one machine it was made for.
 - **Tools → Team runs…** in the launcher — the same, in the terminal UI. See
   [The launcher](launcher.md).
 

@@ -437,6 +437,17 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: "loopback only, reachable from this machine and nowhere else"),
 
+        new("dashboard-port",
+            "Port the daemon serves the dashboard on",
+            (_, m) => m.Teams.DashboardPort is { } port
+                ? port.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty,
+            (_, m, v) => m.Teams.DashboardPort = v.Trim().Length == 0 ? null : Port(v),
+            true,
+            Sample: "47611",
+            Group: Groups.Machine,
+            WhenUnset: $"{Teams.Daemon.DashboardServer.DefaultPort}, the same every time, so an installed app window keeps finding it"),
+
         new("discovery-roots", "Comma-separated directories scanned for repositories",
             (_, m) => string.Join(", ", m.DiscoveryRoots),
             (_, m, v) => m.DiscoveryRoots = SplitDirectories(v),
@@ -774,6 +785,21 @@ public static class ConfigKeys
             out var parsed) && parsed >= 0
             ? parsed
             : throw new FormatException($"'{value}' is not a whole number of zero or more.");
+
+    /// <summary>A port somebody can listen on: 1 to 65535.</summary>
+    /// <remarks>
+    /// Zero is refused even though the listener understands it as "any". The
+    /// point of this key is a port that stays put, and zero is the one value
+    /// that would move every time.
+    /// </remarks>
+    private static int Port(string value) =>
+        int.TryParse(
+            value.Trim(),
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var parsed) && parsed is >= 1 and <= 65535
+            ? parsed
+            : throw new FormatException($"'{value}' is not a port: give a whole number from 1 to 65535.");
 
     /// <summary>A default team budget: a figure above zero, none, or empty to clear it.</summary>
     /// <remarks>Refused rather than guessed, for the reason <see cref="Count" /> gives.</remarks>

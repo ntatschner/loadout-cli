@@ -623,6 +623,7 @@ public static class Program
     private static void Configure(IConfigurator config, bool showFullExceptions, bool json = false)
     {
         config.SetApplicationName("loadout");
+        config.SetHelpProvider(new BranchHelp(config.Settings));
 
         // Without this, --version is rejected as an unknown option. It is the
         // first thing anyone types against an unfamiliar binary, and the first
@@ -880,7 +881,7 @@ public static class Program
         // A command for now, and a group once it has a second command to hold:
         // a branch with only a default hides that command's options from its
         // help.
-        Top<TeamDashboardCommand>(config, "dashboard");
+        TopBranch(config, "dashboard", Dashboard);
 
         TopBranch(config, "daemon", Daemon);
 
@@ -1135,6 +1136,18 @@ public static class Program
     /// the controls are daemon commands rather than commands called
     /// daemon-stop.
     /// </remarks>
+    /// <summary>The page, and signing browsers out of it.</summary>
+    private static void Dashboard(Branch dashboard)
+    {
+        // The command first, for the reason Daemon gives.
+        dashboard.SetDefaultCommand<TeamDashboardCommand>();
+        dashboard.Describe(
+            "Show what the team runs are doing on a page: the one a daemon is already serving, or a new one on this machine.",
+            CommandCategory.Start,
+            "dashboard web page browser watch runs live team");
+        dashboard.AddCommand<DashboardSignOutCommand>("sign-out");
+    }
+
     private static void Daemon(Branch daemon)
     {
         // The command first. The catalogue keeps whichever entry for a path

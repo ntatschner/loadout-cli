@@ -153,7 +153,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     public sealed class Settings : GlobalSettings
     {
         [CommandOption("--port <PORT>")]
-        [Description("The port the dashboard listens on. One the machine chooses when omitted.")]
+        [Description("The port the dashboard listens on. The dashboard-port setting, or 47611, when omitted.")]
         public int Port { get; init; }
 
         [CommandOption("--listen <ADDRESS>")]
@@ -286,13 +286,24 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             // The flag wins over the configured address, because somebody
             // typing one means it for this run and not for ever.
+            // The same port every time unless somebody names one, because an
+            // installed app window is tied to the address it was installed
+            // from. Taken is reported, never swapped for another.
+            var port = settings.Port != 0 ? settings.Port : teams?.DashboardPort ?? DashboardServer.DefaultPort;
+
+            server.SignIn = SignIn.ForMachine(_paths);
+
             var started = server.Start(
-                settings.Port,
+                port,
                 settings.Listen is { Length: > 0 } asked ? asked : Webhook.Listen(teams));
 
             if (started.Failed)
             {
-                return output.Fail(started);
+                return settings.Port != 0
+                    ? output.Fail(started)
+                    : output.Fail(OperationResult.Fail(
+                        started.Error + $" To serve on another port from now on: loadout config set dashboard-port <port>",
+                        started.ExitCode));
             }
 
             // The office art, if this machine has any. Read once: a set is a
