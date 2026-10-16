@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Loadout Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="studio/tokens.css">
+<link rel="stylesheet" href="studio/bundle.css">
+<script src="studio/bundle.js"></script>
+<style>
+/* Layout: the side rail on the left, one page beside it; every colour, size and face comes from the Loadout Studio design system (studio/tokens.css). */
+:root { color-scheme: dark; }
+:root[data-theme="light"], :root[data-theme="hc-light"] { color-scheme: light; }
+html, body { min-height: 100%; }
+body { background: var(--ground); color: var(--ink); }
+.skip { position: absolute; left: -999px; top: 8px; z-index: 50; padding: 8px 14px; background: var(--surface); color: var(--ink-strong); }
+.skip:focus { left: max(16px, env(safe-area-inset-left, 0px)); }
+#nav { position: fixed; left: 0; top: 0; bottom: 0; z-index: 40; }
+#nav .ls-slidescrim, #nav .ls-slide { position: fixed; }
+#nav .ls-pagestab { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); }
+.page { min-height: 100%; padding-block: 18px 56px; padding-left: max(calc(var(--rail-width) + 28px), env(safe-area-inset-left, 0px)); padding-right: max(28px, env(safe-area-inset-right, 0px)); }
+@media (max-width: 599px) { .page { padding-left: max(52px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
+.ls-appearance { margin-top: auto; }
+/* page head */
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 26px; margin-bottom: calc(var(--space-6) * var(--density)); }
+.head h1 { margin: 0; font-size: 30px; line-height: 34px; font-weight: 200; color: var(--ink-strong); }
+.head .fact { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.head .fact.need { color: var(--needs-text); }
+.head .grow { flex: 1 1 auto; }
+.head .clock { font-family: var(--font-mono); font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.views { display: inline-flex; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.views button { min-height: 40px; padding: 0 18px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; cursor: pointer; }
+.views button[aria-pressed="true"] { background: var(--tint-picked-c); color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.views button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sample { margin-top: 40px; font-size: 12.5px; color: var(--muted); }
+/* Lens */
+.lens { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 32px 40px; align-items: start; }
+.lens .wide { grid-column: 1 / -1; }
+.lens .halo-col { min-width: 0; overflow-x: clip; }
+.ls-halo-wrap.small { width: min(100%, 280px); margin: 0 auto; }
+.ls-halo-wrap.small .olabel { display: none; }
+.core { display: grid; justify-items: center; gap: 4px; max-width: 300px; text-align: center; }
+.core .k { font-family: var(--font-mono); font-size: 12px; color: var(--ink-soft); }
+.core .t { margin: 0; font-size: 21px; line-height: 26px; font-weight: 300; color: var(--ink-strong); text-wrap: balance; }
+.core .note { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.core .ask { margin: 4px 0 0; font-size: 15.5px; line-height: 1.3; color: var(--needs-text); }
+.core .ls-answers { justify-content: center; gap: 4px 18px; margin-top: 4px; }
+.core .ls-action { justify-items: center; }
+.stepper { display: flex; justify-content: center; align-items: center; gap: 18px; margin-top: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.side { display: grid; gap: calc(var(--space-7) * var(--density)); min-width: 0; }
+.rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; width: 100%; min-height: var(--control); padding: 8px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background-color var(--dur-quick); }
+.row:hover { background: var(--tint-hover-c); }
+.row[aria-current="true"] { background: linear-gradient(90deg, var(--tint-picked-c), transparent 90%); box-shadow: inset 3px 0 0 var(--accent); }
+.row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.row .t { font-size: 15px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.row .x { grid-column: 1; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.row .ls-sig { grid-row: 1 / span 2; grid-column: 2; }
+.waitcard { display: grid; gap: 6px; padding: 12px 14px; background: var(--needs-wash); box-shadow: inset 3px 0 0 var(--needs); }
+.waitcard .w { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+.waitcard .q { margin: 0; font-size: 15.5px; color: var(--needs-text); }
+.waitcard.problem { background: var(--bad-wash); box-shadow: inset 3px 0 0 var(--bad); }
+.waitcard.problem .w, .waitcard.problem .q { color: var(--bad-text); }
+.calm { margin: 0; color: var(--muted); }
+.feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.feed li { display: grid; grid-template-columns: 52px 22px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 14px; }
+.feed .tm { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.feed .g { font-weight: 600; color: var(--c); text-align: center; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 28px 40px; }
+@media (max-width: 1060px) { .lens { grid-template-columns: minmax(0, 1fr); } .lens .halo-col { justify-self: center; width: min(100%, 540px); } }
+/* Map */
+.mapview { display: grid; gap: 16px; }
+/* Sessions */
+.slist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; align-items: center; width: 100%; min-height: 52px; padding: 8px 12px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; text-decoration: none; }
+.srow:hover { background: var(--tint-hover-c); }
+.srow:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.srow .t { font-size: 15px; color: var(--ink-strong); overflow-wrap: anywhere; }
+.srow .x { grid-column: 1; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.srow .ls-sig { grid-row: 1 / span 2; grid-column: 2; }
+.recent { display: grid; grid-template-columns: max-content max-content max-content minmax(0, 1fr); gap: 6px 18px; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-soft); }
+.recent span:nth-child(4n) { color: var(--ink-strong); font-family: var(--font-sans); font-size: 14px; overflow-wrap: anywhere; }
+@media (max-width: 599px) { .recent { grid-template-columns: max-content minmax(0, 1fr); } .recent span:nth-child(4n+1), .recent span:nth-child(4n+3) { display: none; } }
+/* One session */
+.back { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 8px; color: var(--ink-soft); font-size: 12.5px; letter-spacing: .2em; text-transform: uppercase; text-decoration: none; }
+.back:hover { color: var(--ink-strong); }
+.back:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sess { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 24px 32px; align-items: start; }
+@media (max-width: 960px) { .sess { grid-template-columns: minmax(0, 1fr); } }
+.term { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: min(560px, 70vh); min-height: 320px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); }
+.term .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 14px; box-shadow: inset 0 -1px 0 var(--rule); font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.term .bar .live { color: var(--moving); }
+.term .out { margin: 0; padding: 12px 14px; overflow: auto; font-family: var(--font-mono); font-size: 13px; line-height: 20px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.term .out .me { color: var(--accent-text); }
+.term .out .dim { color: var(--muted); }
+.term .out .ask { color: var(--needs-text); }
+.term .out .ok { color: var(--good); }
+.term form { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; box-shadow: inset 0 1px 0 var(--rule); }
+.term form label { font-family: var(--font-mono); color: var(--accent-text); }
+.term input { flex: 1; min-width: 0; min-height: 40px; border: 0; background: transparent; color: var(--ink-strong); caret-color: var(--accent); font-family: var(--font-mono); font-size: 13px; outline: none; }
+.term form:focus-within { box-shadow: inset 0 1px 0 var(--rule), inset 0 0 0 2px var(--accent); }
+.facts { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
+.facts dt { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); align-self: center; }
+.facts dd { margin: 0; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-strong); overflow-wrap: anywhere; }
+/* Launch sheet */
+.sheet { display: grid; gap: 18px; }
+.sheet .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px 24px; align-items: start; }
+.tasks { display: grid; gap: 2px; max-height: 220px; overflow: auto; padding: 4px 0; box-shadow: inset 0 0 0 1px var(--rule); }
+.tasks button { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: center; min-height: 40px; padding: 4px 12px; border: 0; background: none; color: var(--ink); font: inherit; font-size: 14.5px; text-align: left; cursor: pointer; }
+.tasks button .st { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.tasks button[aria-checked="true"] { background: linear-gradient(90deg, var(--tint-picked-c), transparent 90%); box-shadow: inset 3px 0 0 var(--accent); color: var(--ink-strong); }
+.tasks button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.other { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+.other input, .msg input { flex: 1; min-width: 0; min-height: 40px; padding: 0 12px; border: 0; background: transparent; color: var(--ink-strong); font: inherit; box-shadow: inset 0 0 0 1px var(--control-edge); }
+.other input:focus, .msg input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.loads { display: grid; gap: 6px; padding: 12px 14px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--rule); }
+.loads h3 { margin: 0 0 4px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.loads dl { margin: 0; display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 3px 12px; font-size: 13.5px; }
+.loads dt { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.loads dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.loads .ls-meter { margin-top: 4px; }
+.optsw .ls-switch .lbl { font-size: 14.5px; }
+/* Appearance */
+.appear { display: grid; gap: 14px; }
+.seg { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; }
+.seg legend { margin-bottom: 6px; padding: 0; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.seg .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg label { position: relative; display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; cursor: pointer; font-size: 13.5px; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.seg label:has(input:checked) { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Ambient */
+.amb { position: fixed; inset: 0; z-index: 60; overflow: auto; background: var(--ground); padding: max(18px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(18px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.amb .bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 28px; align-items: flex-start; }
+.kpis { display: flex; flex-wrap: wrap; gap: 14px 30px; }
+.kpis div { display: grid; }
+.kpis b { font-size: 30px; line-height: 1.05; font-weight: 200; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
+.kpis span { font-size: 11px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.kpis .warm b { color: var(--needs-text); }
+.amb .stage { display: grid; justify-items: center; margin-top: 10px; }
+.amb .ls-halo-wrap { width: min(100%, 560px); }
+.strip { display: grid; gap: 4px; justify-items: center; margin-top: 18px; text-align: center; }
+.strip div { display: flex; gap: 10px; align-items: baseline; max-width: 100%; color: var(--ink); }
+.strip div:first-child { font-size: 19px; }
+.strip div:not(:first-child) { font-size: 14px; color: var(--muted); }
+.strip .tm { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
+.placeholder { max-width: 640px; display: grid; gap: 14px; }
+</style>
+
+<a class="skip" href="#main">Skip to the page</a>
+<div id="nav"></div>
+<main id="main" class="page" tabindex="-1"></main>
+<div id="toasts"></div>
+<div id="amb" class="amb" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  var S = window.LoadoutStudio, root = document.documentElement;
+  document.body.classList.add("ls");
+
+  /* ---------- appearance: kept in this browser for the prototype ---------- */
+  var PREF_KEY = "studio-prototype-appearance";
+  function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "null") || {}; } catch (e) { return {}; } }
+  function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch (e) { /* storage blocked: the choice lasts this visit */ } }
+  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", keys: true }, loadPrefs());
+  var hostTheme = root.getAttribute("data-theme");
+  function applyPrefs() {
+    var t = P.theme || (hostTheme === "light" || hostTheme === "dark" ? hostTheme : S.preferredTheme());
+    S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion);
+  }
+  applyPrefs();
+  new MutationObserver(function () {
+    var v = root.getAttribute("data-theme");
+    if (!P.theme && (v === "light" || v === "dark") && v !== hostTheme) { hostTheme = v; }
+  }).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+
+  /* ---------- example data: the same work as the boards ---------- */
+  var PROJECTS = {
+    starstats: { path: "~/code/starstats", agent: "claude", worktrees: ["main"], tasks: [["upload-retries", "open", "Retry the upload with backoff"], ["new-bucket", "blocked", "Move uploads to the new bucket"]],
+      loads: [["foundation", "Change safety, Engineering core, Evidence first, …"], ["language", "C# · 212 .cs files"], ["database", "PostgreSQL · db/migrations"]], base: 1520 },
+    "loadout-cli": { path: "~/code/loadout-cli", agent: "claude", worktrees: ["main", "feature-x"], tasks: [["memory-import-notice", "doing", "Fix the memory import notice"], ["specialist-examples", "open", "Add value examples to specialist docs"]],
+      loads: [["foundation", "Change safety, Engineering core, Evidence first, …"], ["language", "C# · 459 .cs files"], ["framework", ".NET · Microsoft.Extensions declared"]], base: 1180 },
+    workspace: { path: "~/code", agent: "claude", worktrees: ["main"], tasks: [], loads: [["foundation", "Change safety, Engineering core, Evidence first, …"]], base: 640 }
+  };
+  var MODES = [["", "chosen with the specialists for the task"], ["advise", "Answer the question. Don't change the repository."], ["investigate", "Find out what's happening. The fix is a separate step."], ["implement", "Make the change and verify it."], ["review", "Judge the change as written. Report, don't rewrite."]];
+  var MODE_COST = { "": 276, advise: 180, investigate: 240, implement: 276, review: 210 };
+
+  var ST = {
+    clock: 842, paused: false, step: 0, view: "lens", focus: "t1", picked: "t1", ambient: false, tokens: 41200, feed: [], startTask: "",
+    lines: [
+      { id: "t1", code: "4", kind: "team run", title: "Release 0.66.0", stage: 2, where: "release-crew", note: "round 3 · lead is coordinating", quiet: 1, cost: 3.10, cap: 10, mins: 48,
+        checks: [["Release notes match the changes", "met"], ["Every test passes on main", "met"], ["The tag is pushed", "not attempted"]],
+        workers: [["lead", "coordinating"], ["writer/1", "writing the release notes"], ["checker/1", "waiting on writer/1"]], events: [{ stage: 2, kind: "started", t: "13:14", text: "release-crew started round 1" }] },
+      { id: "s1", code: "2", kind: "session", title: "why is this postgres query so slow", stage: 2, where: "starstats", agent: "claude", mode: "investigate", note: "investigate · Claude Code", quiet: 0, mins: 12, tok: [18204, 6120], events: [] },
+      { id: "s2", code: "3", kind: "session", title: "add a retry to the upload step", stage: 2, where: "loadout-cli", agent: "codex", mode: "implement", note: "implement · Codex", quiet: 3, mins: 21, tok: [9120, 3880], events: [] },
+      { id: "i1", code: "1", kind: "idea", title: "Run the launcher in a browser", stage: 1, where: "loadout-cli", ref: "browser-launcher", note: "round 2 back · 3 questions answered", quiet: 40, events: [] },
+      { id: "k2", code: "6", kind: "task", title: "Move uploads to the new bucket", stage: 2, where: "starstats", ref: "new-bucket", blocked: "waiting on access to the new bucket", note: "blocked", quiet: 95, events: [{ stage: 2, kind: "blocked", t: "12:37", text: "Marked blocked: waiting on access to the new bucket" }] },
+      { id: "k1", code: "5", kind: "task", title: "Retry the upload with backoff", stage: 0, where: "starstats", ref: "upload-retries", note: "declared yesterday", quiet: 0, events: [] }
+    ],
+    recent: [["13:40", "claude", "loadout-cli", "review the memory compress change"], ["yesterday", "codex", "starstats", "tidy the deploy script"], ["2 days ago", "claude", "workspace", "what changed in 0.66.0"]],
+    term: {}, script: {}
+  };
+  var TERM = {
+    s1: [["me", "› loadout starstats --task \"why is this postgres query so slow\" --mode investigate"], ["dim", "  loaded foundation, investigate mode, database.postgresql, function.performance · 2,140 tokens"],
+      ["", "● Reading src/Stats/Queries/DailyTotals.sql"], ["", "● Running EXPLAIN ANALYZE on the daily totals query"], ["dim", "  Seq Scan on events  (rows=1,840,211)"], ["dim", "  Filter: created_at >= now() - interval '1 day'"],
+      ["", "● The filter on created_at has no index, so every row is read."], ["", "● Looking for an index on events.created_at in db/migrations"], ["dim", "  none found"],
+      ["ok", "● Found it: add an index on events (created_at). Investigate mode doesn't change the repository; the fix is a separate session."], ["end"]],
+    s2: [["me", "› loadout loadout-cli --agent codex --task \"add a retry to the upload step\" --mode implement"], ["dim", "  loaded foundation, implement mode, language.csharp, framework.dotnet · 1,456 tokens"],
+      ["", "● Reading src/Upload/Uploader.cs"], ["", "● Adding a retry with backoff around the upload call"], ["", "● Running the upload tests: 14 passed"],
+      ["", "● Regenerating the dashboard screenshot for the docs"], ["ask", "? Overwrite docs/images/dashboard-office.png? [y/n]"], ["wait"],
+      ["", "● Committing on the session branch"], ["ok", "● Done. The upload retries three times with backoff; tests pass."], ["end"]]
+  };
+
+  var SCRIPT = [
+    function () { var l = line("s2"); return null; },
+    function () { var t = line("t1"); t.note = "round 3 · writer/1 reported back"; t.workers = [["lead", "reading the notes"], ["writer/1", "reported back"], ["checker/1", "checking the notes"]]; addEvent(t, "report", "writer/1 reported back to the lead"); return ["info", "release-crew: writer/1 reported back to the lead", ""]; },
+    function () { var i = line("i1"); i.stage = 2; i.note = "round 3 running · Codex"; addEvent(i, "round", "The browser launcher idea went another round"); return ["info", "Run the launcher in a browser: round 3 started", ""]; },
+    function () { var t = line("t1"); t.stage = 3; t.waiting = true; t.askedAt = ST.clock; t.ask = "Push the tag v0.66.0 to origin?"; t.note = "round 3 · asks to push"; t.checks[1][1] = "met"; addEvent(t, "asked", "release-crew asks to push the tag");
+      return ["needs", "release-crew asks: push the tag v0.66.0 to origin?", "", gateActs()]; },
+    function () { var i = line("i1"); i.stage = 1; i.failed = "round 3 failed · Codex"; i.note = "round 3 failed · Codex"; addEvent(i, "failed", "The idea's round 3 failed");
+      return ["problem", "Run the launcher in a browser: round 3 failed", "Codex · loadout-cli", [{ label: "Try the round again", cmd: "$ loadout idea refine browser-launcher", onPress: function () { refine(); return "You asked for round 3 again"; } }, { label: "Acknowledge", kind: "danger", cmd: "changes nothing in Loadout", onPress: function () { return "Acknowledged: round 3 failed"; } }]]; }
+  ];
+
+  function line(id) { return ST.lines.filter(function (l) { return l.id === id; })[0]; }
+  function hhmm(m) { var h = Math.floor(m / 60) % 24, mm = m % 60; return h + ":" + (mm < 10 ? "0" : "") + mm; }
+  function addEvent(l, kind, text) {
+    var st = l.waiting ? 3 : l.stage;
+    l.events = [{ stage: st, kind: kind, t: hhmm(ST.clock), text: text }].concat(l.events || []).slice(0, 5);
+    ST.feed.unshift({ t: hhmm(ST.clock), text: text, fam: S.signalOf(S.wordFor(l)).family, glyph: { asked: "?", failed: "✕", blocked: "‖", ended: "✓", answered: "✓" }[kind] || "↻" });
+    ST.feed = ST.feed.slice(0, 8);
+  }
+  function wordOf(l) { if (l.held && !l.waiting) { return "held after this round"; } return S.wordFor(l); }
+  function factsOf(l) { return l.blocked ? l.blocked : (l.note || ""); }
+  function waitingLines() { return S.rankUrgent(ST.lines.map(function (l) { return Object.assign({ problem: !!l.failed }, l); })); }
+
+  /* ---------- actions: each one says the command it runs ---------- */
+  function gateActs() {
+    return [{ label: "Approve", kind: "needs", solid: true, glyph: "✓", cmd: "$ loadout team gate --answer Approve", onPress: function () { answerGate(true); return "You approved: push the tag v0.66.0"; } },
+      { label: "Refuse", glyph: "✕", cmd: "$ loadout team gate --answer Refuse", onPress: function () { answerGate(false); return "You refused: push the tag v0.66.0"; } }];
+  }
+  function answerGate(yes) {
+    var t = line("t1"); if (!t.waiting) { return; }
+    t.waiting = false; t.ask = ""; t.stage = yes ? 4 : 2; t.note = yes ? "tag pushed · round 3 done" : "round 4 · carrying on without the push";
+    if (yes) { t.checks[2][1] = "met"; }
+    addEvent(t, yes ? "answered" : "answered", yes ? "You approved the push; release-crew finished" : "You refused the push; release-crew carries on");
+    ST.clock += 1; render();
+  }
+  function answerSession(id, yes) {
+    var l = line(id); if (!l || !l.waiting) { return; }
+    l.waiting = false; l.ask = ""; l.stage = 2; l.note = (l.mode || "") + " · " + (l.agent === "codex" ? "Codex" : "Claude Code");
+    term(id, "me", "› " + (yes ? "y" : "n")); term(id, "dim", yes ? "  overwriting docs/images/dashboard-office.png" : "  keeping the old screenshot");
+    addEvent(l, "answered", "You answered: " + (yes ? "overwrite it" : "keep the old one"));
+    render();
+  }
+  function sessionAnswers(l) {
+    return [{ label: "Overwrite it", kind: "needs", cmd: "typed into the session", onPress: function () { answerSession(l.id, true); return "You answered: overwrite it"; } },
+      { label: "Keep the old one", cmd: "typed into the session", onPress: function () { answerSession(l.id, false); return "You answered: keep the old one"; } }];
+  }
+  function refine() { var i = line("i1"); i.failed = ""; i.stage = 2; i.note = "round 3 running again · Codex"; addEvent(i, "round", "You asked for round 3 again"); render(); }
+  function actionsFor(l) {
+    if (l.waiting && l.kind === "team run") { return gateActs(); }
+    if (l.waiting && l.kind === "session") { return sessionAnswers(l); }
+    if (l.failed) { return [{ label: "Try the round again", cmd: "$ loadout idea refine " + l.ref, onPress: refine }]; }
+    if (l.kind === "task" && l.blocked) { return [{ label: "Mark it doing", cmd: "$ loadout task declare " + l.ref + " doing --project " + l.where, onPress: function () { l.blocked = ""; l.note = "doing"; addEvent(l, "started", "You unblocked the task"); render(); } }]; }
+    if (l.kind === "task" && l.stage === 0) { return [{ label: "Mark it doing", cmd: "$ loadout task declare " + l.ref + " doing --project " + l.where, onPress: function () { l.stage = 2; l.note = "doing"; addEvent(l, "started", "You started the task"); render(); } }]; }
+    if (l.kind === "team run" && l.stage === 2) {
+      return l.held ? [{ label: "Let it carry on", cmd: "$ loadout team halt --resume", onPress: function () { l.held = false; addEvent(l, "started", "release-crew carries on"); render(); } }]
+        : [{ label: "Hold after this round", cmd: "$ loadout team halt --pause", onPress: function () { l.held = true; addEvent(l, "blocked", "You held release-crew after this round"); render(); } }];
+    }
+    if (l.kind === "session") { return [{ label: "Open the session", cmd: "opens here · changes nothing", onPress: function () { go("session-" + l.id); } }]; }
+    return [];
+  }
+
+  /* ---------- small DOM helper ---------- */
+  function el(tag, attrs, kids) {
+    var e = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { var v = attrs[k]; if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { e.textContent = v; } else if (k === "class") { e.className = v; } else if (k.slice(0, 2) === "on") { e.addEventListener(k.slice(2), v); } else { e.setAttribute(k, v === true ? "" : v); } });
+    (kids || []).forEach(function (c) { if (c) { e.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return e;
+  }
+  function key(node, k) { var b = node.tagName === "BUTTON" || node.tagName === "A" || node.tagName === "INPUT" ? node : node.querySelector("button, a, input"); if (b) { b.setAttribute("data-k", k); } return node; }
+  function zone(no, name, id) { return el("h2", { "class": "ls-zone", id: id || null }, [no ? el("span", { "class": "no", text: no }) : null, name]); }
+  function halo(o, k) { return key(S.HaloButton(o), k || ("hb-" + o.label)); }
+
+  /* ---------- routing ---------- */
+  var PAGES = [["home", "Home"], ["sessions", "Sessions"], ["ideas", "Ideas"], ["teams", "Teams"], ["memory", "Memory"], ["context", "Context"], ["spend", "Spend"], ["projects", "Projects"], ["settings", "Settings"]];
+  var ELSEWHERE = { ideas: ["Ideas", "$ loadout idea list", "Ideas you are shaping, a round at a time."], teams: ["Teams", "$ loadout team list", "Teams and their runs."], memory: ["Memory", "$ loadout memory list starstats", "What each project remembers, by topic."],
+    context: ["Context", "$ loadout instructions explain", "What a session reads before it starts, and what it costs in tokens."], spend: ["Spend", "$ loadout usage", "Tokens used, by day, project and model."], projects: ["Projects", "$ loadout project list", "The projects Loadout knows on this machine."] };
+  function route() { var h = (location.hash || "#home").slice(1); return h || "home"; }
+  function go(r) { if (location.hash.slice(1) === r) { render(); } else { location.hash = r; } }
+  window.addEventListener("hashchange", function () { render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
+
+  /* ---------- the rail ---------- */
+  function renderNav() {
+    var w = ST.lines.filter(function (l) { return l.waiting; }), r = route(), cur = r.indexOf("session") === 0 ? "sessions" : r;
+    var sw = w.filter(function (l) { return l.kind === "session"; }).length, tw = w.filter(function (l) { return l.kind === "team run"; }).length;
+    var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2 && !l.waiting; }).length;
+    var facts = { home: [w.length ? w.length + " waiting on you" : "all calm", !!w.length], sessions: [sw ? sw + " waiting on you" : running + " running", !!sw], ideas: [ST.lines.filter(function (l) { return l.kind === "idea"; }).length + " being shaped", false],
+      teams: [tw ? tw + " waiting on you" : "1 running", !!tw], memory: ["12 topics", false], context: ["2,403 tokens", false], spend: [Math.round(ST.tokens / 600) + "% of threshold", false], projects: ["3 projects", false], settings: ["", false] };
+    var nav = document.getElementById("nav"); nav.textContent = "";
+    var rail = S.SideRail({ current: cur, onSearch: openPalette, pages: PAGES.map(function (p) { return { key: p[0], name: p[1], fact: facts[p[0]][0], need: facts[p[0]][1], href: "#" + p[0] }; }) });
+    var foot = el("button", { type: "button", "class": "ls-rl ls-appearance", onclick: openAppearance, "data-k": "appearance" }, [svgIcon("M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14"), el("span", { "class": "n", text: "Appearance" }), el("span", { "class": "f", text: themeName() })]);
+    rail.querySelector(".ls-railnav").appendChild(foot);
+    nav.appendChild(rail);
+  }
+  function svgIcon(d) { var ns = "http://www.w3.org/2000/svg", v = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path"); v.setAttribute("viewBox", "0 0 20 20"); v.setAttribute("aria-hidden", "true"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); v.appendChild(p); return v; }
+  function themeName() { return { dark: "Dark", light: "Light", "hc-dark": "High contrast dark", "hc-light": "High contrast light" }[root.getAttribute("data-theme")] + " · " + P.accent; }
+
+  /* ---------- Home ---------- */
+  function homeHead(main) {
+    var w = ST.lines.filter(function (l) { return l.waiting; }).length;
+    var views = el("div", { "class": "views", role: "group", "aria-label": "Home view" }, [["lens", "Lens"], ["map", "Map"]].map(function (v) {
+      return el("button", { type: "button", "aria-pressed": ST.view === v[0] ? "true" : "false", "data-k": "view-" + v[0], text: v[1], onclick: function () { ST.view = v[0]; render(); } }); }));
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Home" }), el("span", { "class": "fact" + (w ? " need" : ""), text: w ? w + " waiting on you" : "all calm" })]), views, el("span", { "class": "grow" }),
+      el("span", { "class": "clock", text: hhmm(ST.clock) }),
+      halo({ label: "Ambient", size: "small", onPress: function () { setAmbient(true); } }, "ambient"),
+      halo({ label: ST.paused ? "Play" : "Pause", size: "small", onPress: function () { ST.paused = !ST.paused; render(); } }, "pause")]));
+  }
+  function coreFor(f) {
+    var c = el("div", { "class": "core" }, [el("span", { "class": "k", text: "line " + f.code + " · " + f.kind + " · " + f.where }), el("p", { "class": "t", text: f.title }), S.Signal(wordOf(f), { big: true }), el("span", { "class": "note", text: factsOf(f) })]);
+    if (f.waiting && f.ask) { c.appendChild(el("p", { "class": "ask", text: f.ask })); }
+    var acts = actionsFor(f);
+    if (acts.length) { c.appendChild(el("div", { "class": "ls-answers" }, acts.map(function (a) { return halo(Object.assign({ size: "small" }, a), "core-" + a.label); }))); }
+    return c;
+  }
+  function renderLens(main) {
+    var f = line(ST.focus) || ST.lines[0], idx = ST.lines.indexOf(f), n = ST.lines.length;
+    var lens = el("div", { "class": "lens" });
+    var spend = f.cap ? f.cost / f.cap : null;
+    var narrow = window.innerWidth < 600;
+    var H = S.Halo({ style: narrow ? "orbit" : P.halo, stage: f.waiting ? 3 : f.stage, core: narrow ? S.Signal(wordOf(f), { big: true }) : coreFor(f), hour: ((f.mins || 0) % 60) / 60, spend: spend });
+    if (narrow) { H.el.classList.add("small"); }
+    lens.appendChild(el("section", { "class": "halo-col", "aria-labelledby": "z-focus" }, [zone("02", "Focus", "z-focus"), H.el, narrow ? el("div", { style: "display: grid; justify-items: center; margin-top: 8px" }, [coreFor(f)]) : null,
+      el("div", { "class": "stepper" }, [halo({ label: "Prev", size: "small", onPress: function () { ST.focus = ST.lines[(idx - 1 + n) % n].id; render(); } }, "prev"), (idx + 1) + " of " + n, halo({ label: "Next", size: "small", onPress: function () { ST.focus = ST.lines[(idx + 1) % n].id; render(); } }, "next")])]));
+    var side = el("div", { "class": "side" });
+    var wl = waitingLines();
+    var needs = el("section", { "aria-labelledby": "z-needs" }, [zone("01", "Needs you · " + wl.length, "z-needs")]);
+    if (!wl.length) { needs.appendChild(el("p", { "class": "calm", text: "Nothing needs you." })); }
+    wl.forEach(function (l) {
+      needs.appendChild(el("div", { "class": "waitcard" + (l.problem && !l.waiting ? " problem" : ""), style: "margin-bottom: 8px" }, [el("span", { "class": "w", text: l.kind + " · " + l.where + (l.askedAt ? " · " + Math.max(1, ST.clock - l.askedAt) + " min" : "") }),
+        el("p", { "class": "q", text: l.waiting ? (l.ask || l.title) : l.title + " · " + l.failed }),
+        el("div", { "class": "ls-answers", style: "margin: 0" }, actionsFor(l).map(function (a) { return halo(Object.assign({ size: "small" }, a), "need-" + l.id + a.label); }).concat([halo({ label: "Focus it", size: "small", onPress: function () { ST.focus = l.id; render(); } }, "focus-" + l.id)]))]));
+    });
+    side.appendChild(needs);
+    var all = el("ul", { "class": "rows", "aria-label": "Everything" });
+    var rows = ST.lines.map(function (l) {
+      var b = el("button", { type: "button", "class": "row", "aria-current": l.id === f.id ? "true" : "false", "data-k": "row-" + l.id, onclick: function () { ST.focus = l.id; render(); } }, [el("span", { "class": "t", text: l.title }), S.Signal(wordOf(l)), el("span", { "class": "x", text: l.kind + " · " + l.where + " · " + factsOf(l) })]);
+      all.appendChild(el("li", {}, [b])); return b;
+    });
+    var top = wl[0]; S.applyUrgency(rows, top ? ST.lines.indexOf(line(top.id)) : -1, top && top.problem && !top.waiting ? "problem" : "needs");
+    side.appendChild(el("section", { "aria-labelledby": "z-all" }, [zone("03", "Everything · " + ST.lines.length, "z-all"), all]));
+    lens.appendChild(side);
+    var rail = S.StartRail({ value: ST.startTask, id: "home-task", command: function (t) { ST.startTask = t; return "$ loadout starstats --task \"" + (t || "\u2026") + "\" --mode investigate"; }, onDeploy: function (t) { launch({ project: "starstats", task: t, mode: "investigate", agent: "claude" }); } });
+    lens.appendChild(el("section", { "class": "wide", "aria-labelledby": "z-start" }, [zone("04", "Start a session", "z-start"), rail,
+      el("p", { "class": "calm", style: "margin: 10px 0 0; font-size: 13.5px" }, ["Want the full sheet, with the task picked from what the project has recorded? ", key(el("a", { href: "#sessions", text: "New session in Sessions" }), "to-sheet")])]));
+    lens.appendChild(el("section", { "class": "wide", "aria-labelledby": "z-sig" }, [zone("05", "Signal", "z-sig"), el("div", { "class": "two" }, [feedList(), tokenMeter()])]));
+    main.appendChild(lens);
+  }
+  function feedList() {
+    var ul = el("ul", { "class": "feed", "aria-label": "What happened" });
+    (ST.feed.length ? ST.feed : [{ t: hhmm(ST.clock), text: "Studio online · 3 projects in view", fam: "rest", glyph: "·" }]).slice(0, 5).forEach(function (e) {
+      ul.appendChild(el("li", { style: "--c: var(--" + e.fam + ")" }, [el("span", { "class": "tm", text: e.t }), el("span", { "class": "g", "aria-hidden": "true", text: e.glyph }), el("span", { text: e.text })])); });
+    return ul;
+  }
+  function tokenMeter() {
+    var m = S.Meter({ label: "Tokens used today", value: ST.tokens, max: 100000, threshold: 60000, unit: "tokens", thresholdLabel: "daily threshold", format: function (v) { return v.toLocaleString("en-GB"); }, of: function () { return "today, of a 60,000 daily threshold"; }, source: "worked out by $ loadout spend refresh · says where you stand, stops nothing" });
+    return el("div", {}, [m.el]);
+  }
+  function renderMap(main) {
+    var w = ST.lines.filter(function (l) { return l.waiting; }), o = w.length ? w.reduce(function (a, b) { return (a.askedAt || 0) < (b.askedAt || 0) ? a : b; }) : null;
+    var picked = line(ST.picked) || ST.lines[0];
+    var wrap = el("div", { "class": "mapview" });
+    wrap.appendChild(S.NetworkStatus({ lines: ST.lines, clock: hhmm(ST.clock), oldest: o ? Math.max(1, ST.clock - o.askedAt) + " min · " + o.where : "none", tokens: ST.tokens.toLocaleString("en-GB") + " · daily threshold 60,000" }));
+    var M = S.TubeMap({ lines: ST.lines.map(function (l) { return Object.assign({}, l, { facts: factsOf(l) }); }), picked: picked.id, onPick: function (id) { ST.picked = id; render(); setTimeout(function () { var s = document.querySelector(".ls-strip"); if (s && s.scrollIntoView) { s.scrollIntoView({ block: "nearest", behavior: S.motion() === "full" ? "smooth" : "auto" }); } }, 30); } });
+    wrap.appendChild(M.el);
+    var facts = [{ k: "Kind", v: picked.kind + " · " + picked.where }];
+    if (picked.agent) { facts.push({ k: "Agent", v: (picked.agent === "codex" ? "Codex" : "Claude Code") + " · " + picked.mode }); }
+    if (picked.mins) { facts.push({ k: "Running", v: picked.mins + " min" }); }
+    facts.push({ k: "Quiet", v: (picked.quiet || 0) + " min" });
+    if (picked.cap) { facts.push({ k: "Cost", v: "$" + picked.cost.toFixed(2) + " of $" + picked.cap.toFixed(2) + " budget" }); }
+    if (picked.tok) { facts.push({ k: "Tokens", v: "in " + picked.tok[0].toLocaleString("en-GB") + " · out " + picked.tok[1].toLocaleString("en-GB") }); }
+    wrap.appendChild(S.LineStrip({ line: Object.assign({}, picked, { note: factsOf(picked) }), facts: facts, checks: picked.checks, events: picked.events, actions: actionsFor(picked) }));
+    main.appendChild(wrap);
+  }
+
+  /* ---------- Ambient ---------- */
+  function setAmbient(on) {
+    ST.ambient = on; var a = document.getElementById("amb");
+    a.hidden = !on; document.body.style.overflow = on ? "hidden" : "";
+    if (on) { renderAmbient(); setTimeout(function () { var b = a.querySelector("button"); if (b) { b.focus(); } }, 30); } else { a.textContent = ""; var b = document.querySelector('[data-k="ambient"]'); if (b) { b.focus(); } }
+  }
+  function renderAmbient() {
+    var a = document.getElementById("amb"); if (!ST.ambient) { return; }
+    var keep = document.activeElement && a.contains(document.activeElement) ? document.activeElement.getAttribute("data-k") : null;
+    a.textContent = "";
+    var f = waitingLines()[0] ? line(waitingLines()[0].id) : (line(ST.focus) || ST.lines[0]);
+    var w = ST.lines.filter(function (l) { return l.waiting; }), running = ST.lines.filter(function (l) { return l.stage === 2 && !l.waiting && !l.blocked; }).length;
+    var oldest = w.length ? Math.max(1, ST.clock - Math.min.apply(null, w.map(function (l) { return l.askedAt || ST.clock; }))) + " min" : "none";
+    a.setAttribute("role", "region"); a.setAttribute("aria-label", "Ambient");
+    a.appendChild(el("div", { "class": "bar" }, [
+      el("div", { "class": "kpis", role: "group", "aria-label": "Key numbers" }, [["Running", String(running), ""], ["Waiting for you", String(w.length), w.length ? "warm" : ""], ["Oldest question", oldest, w.length ? "warm" : ""], ["Tokens today", ST.tokens.toLocaleString("en-GB"), ""]].map(function (k) { return el("div", { "class": k[2] }, [el("b", { text: k[1] }), el("span", { text: k[0] })]); })),
+      el("div", { "class": "ls-answers", style: "margin: 0" }, [halo({ label: "New session", size: "small", onPress: function () { setAmbient(false); go("sessions"); setTimeout(openLaunch, 60); } }, "amb-new"), halo({ label: "Leave ambient", size: "small", onPress: function () { setAmbient(false); } }, "amb-leave")])]));
+    var others = ST.lines.filter(function (l) { return l.id !== f.id; }).map(function (l) { return { title: l.title, word: wordOf(l), onPick: function () { ST.focus = l.id; renderAmbient(); render(); } }; });
+    var big = window.innerWidth >= 900;
+    var H = S.Halo({ style: P.halo, stage: f.waiting ? 3 : f.stage, core: coreFor(f), hour: ((f.mins || 0) % 60) / 60, spend: f.cap ? f.cost / f.cap : null, orbiters: big ? others : null, orbitRadius: 330 });
+    a.appendChild(el("div", { "class": "stage", style: big ? "padding: 90px 0 70px" : "" }, [H.el]));
+    a.appendChild(el("div", { "class": "strip", "aria-hidden": "true" }, ST.feed.slice(0, 3).map(function (e) { return el("div", {}, [el("span", { "class": "tm", text: e.t }), e.text]); })));
+    if (keep) { var k = a.querySelector('[data-k="' + keep + '"]'); if (k) { k.focus(); } }
+  }
+
+  /* ---------- Sessions ---------- */
+  function renderSessions(main) {
+    var live = ST.lines.filter(function (l) { return l.kind === "session"; });
+    var w = live.filter(function (l) { return l.waiting; }).length;
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Sessions" }), el("span", { "class": "fact" + (w ? " need" : ""), text: w ? w + " waiting on you" : live.filter(function (l) { return l.stage === 2; }).length + " running" })]), el("span", { "class": "grow" }),
+      halo({ label: "New session…", cmd: "opens the launch sheet · changes nothing yet", onPress: openLaunch }, "new-session")]));
+    var two = el("div", { "class": "two" });
+    var ul = el("ul", { "class": "slist", "aria-label": "In this browser's view" });
+    live.forEach(function (l) {
+      ul.appendChild(el("li", {}, [el("a", { "class": "srow", href: "#session-" + l.id, "data-k": "s-" + l.id }, [el("span", { "class": "t", text: l.title }), S.Signal(wordOf(l)), el("span", { "class": "x", text: l.where + " · " + (l.agent === "codex" ? "codex" : "claude") + " · " + l.mode + " · " + (l.mins || 0) + " min" })])]));
+    });
+    two.appendChild(el("section", { "aria-labelledby": "z-live" }, [zone("", "Running and waiting", "z-live"), ul]));
+    var rec = el("div", { "class": "recent", role: "list", "aria-label": "Recent sessions" });
+    ST.recent.forEach(function (r) { r.forEach(function (c) { rec.appendChild(el("span", { role: "listitem", text: c })); }); });
+    two.appendChild(el("section", { "aria-labelledby": "z-rec" }, [zone("", "Recent", "z-rec"), rec, el("p", { "class": "calm", style: "margin: 12px 0 0; font-size: 13.5px" }, ["Reopen one in a terminal: ", el("code", { "class": "ls-cmd", text: "$ loadout resume --last" })])]));
+    main.appendChild(two);
+  }
+  function term(id, cls, text) {
+    (ST.term[id] = ST.term[id] || []).push([cls, text]);
+    var out = document.getElementById("term-out");
+    if (out && out.getAttribute("data-id") === id) { out.appendChild(el("span", { "class": cls, text: text + "\n" })); out.scrollTop = out.scrollHeight; }
+  }
+  function renderSession(main, id) {
+    var l = line(id);
+    if (!l) { main.appendChild(el("p", { "class": "calm", text: "That session has ended or isn't in view." })); return; }
+    main.appendChild(key(el("a", { "class": "back", href: "#sessions" }, [el("span", { "aria-hidden": "true", text: "←" }), "Sessions"]), "back"));
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: l.title, style: "font-size: 26px; line-height: 30px" }), el("span", { "class": "fact", text: l.where + " · " + (l.agent === "codex" ? "Codex" : "Claude Code") + " · " + l.mode + " · " + (l.mins || 0) + " min" })]), S.Signal(wordOf(l), { big: true })]));
+    var g = el("div", { "class": "sess" });
+    var left = el("div", { style: "display: grid; gap: 14px; min-width: 0" });
+    if (l.waiting) { left.appendChild(el("div", { "class": "waitcard" }, [el("span", { "class": "w", text: "asks before overwriting · answer here or type it below" }), el("p", { "class": "q", text: l.ask }), el("div", { "class": "ls-answers", style: "margin: 0" }, sessionAnswers(l).map(function (a) { return halo(Object.assign({ size: "small" }, a), "sa-" + a.label); }))])); }
+    var out = el("pre", { "class": "out", id: "term-out", "data-id": l.id, tabindex: "0", "aria-label": "Session output", "aria-live": "polite" });
+    (ST.term[l.id] || []).forEach(function (t) { out.appendChild(el("span", { "class": t[0], text: t[1] + "\n" })); });
+    var input = el("input", { id: "term-in", "data-k": "term-in", autocomplete: "off", placeholder: l.stage === 4 ? "This session has ended" : "Type to the agent, Enter to send", disabled: l.stage === 4 ? true : null });
+    var form = el("form", { onsubmit: function (e) { e.preventDefault(); var v = input.value.trim(); if (!v) { return; } input.value = "";
+      if (l.waiting && /^(y|yes)$/i.test(v)) { answerSession(l.id, true); return; } if (l.waiting && /^(n|no)$/i.test(v)) { answerSession(l.id, false); return; }
+      term(l.id, "me", "› " + v); term(l.id, "dim", "  sent to the session"); } }, [el("label", { "for": "term-in", text: "›", title: "Type to the agent" }), input]);
+    left.appendChild(el("div", { "class": "term" }, [el("div", { "class": "bar" }, [el("span", { "class": l.stage === 4 ? "" : "live", text: l.stage === 4 ? "■ ended" : "● live" }), l.where + " · " + (l.agent === "codex" ? "codex" : "claude")]), out, form]));
+    g.appendChild(left);
+    var facts = el("dl", { "class": "facts" }, [].concat.apply([], [["Project", l.where], ["Agent", l.agent === "codex" ? "Codex" : "Claude Code"], ["Mode", l.mode], ["Running", (l.mins || 0) + " min"], ["Quiet", (l.quiet || 0) + " min"],
+      ["Tokens", l.tok ? "in " + l.tok[0].toLocaleString("en-GB") + " · out " + l.tok[1].toLocaleString("en-GB") : "counting"]].map(function (f) { return [el("dt", { text: f[0] }), el("dd", { text: f[1] })]; })));
+    g.appendChild(el("aside", { style: "display: grid; gap: 18px; align-content: start; min-width: 0", "aria-label": "About this session" }, [facts,
+      S.Command({ why: "Carry this conversation on in a terminal instead:", command: "$ loadout resume --last" })]));
+    main.appendChild(g);
+    setTimeout(function () { out.scrollTop = out.scrollHeight; }, 0);
+  }
+
+  /* ---------- the launch sheet ---------- */
+  function openLaunch() {
+    var L = { project: "loadout-cli", task: null, other: "", agent: "claude", mode: "", worktree: "main", offline: false, nosync: false, handoff: false };
+    var proj = function () { return PROJECTS[L.project]; };
+    var firstDoing = function () { var d = proj().tasks.filter(function (t) { return t[1] === "doing"; })[0]; return d ? d[0] : null; };
+    L.task = firstDoing();
+    var body = el("div", { "class": "sheet" }), cmdLine = el("code", { "class": "ls-cmdline" }), loads = el("div", { "class": "loads" }), tasksBox = el("div"), wtBox = el("div");
+    function command() {
+      var p = ["$ loadout " + L.project];
+      if (L.task === "__other" && L.other.trim()) { p.push("--task \"" + L.other.trim() + "\""); } else if (L.task && L.task !== "__other") { p.push("--task-id " + L.task); }
+      if (L.agent !== proj().agent) { p.push("--agent " + L.agent); }
+      if (L.mode) { p.push("--mode " + L.mode); }
+      if (L.worktree !== "main") { p.push("--worktree " + L.worktree); }
+      if (L.offline) { p.push("--offline"); } if (L.nosync) { p.push("--no-sync"); } if (L.handoff) { p.push("--handoff"); }
+      return p.join(" ");
+    }
+    function paintLoads() {
+      var modeName = L.mode || (L.task ? "implement" : "advise"), tokens = proj().base + MODE_COST[L.mode] + (L.task ? 180 : 0);
+      loads.textContent = "";
+      loads.appendChild(el("h3", { text: "This session would load" }));
+      var dl = el("dl");
+      proj().loads.concat([["mode", modeName.charAt(0).toUpperCase() + modeName.slice(1) + (L.mode ? "" : " · chosen by the task")]]).forEach(function (r) { dl.appendChild(el("dt", { text: r[0] })); dl.appendChild(el("dd", { text: r[1] })); });
+      if (L.task && L.task !== "__other") { dl.appendChild(el("dt", { text: "task" })); dl.appendChild(el("dd", { text: "its note goes first, under This session's task" })); }
+      loads.appendChild(dl);
+      loads.appendChild(S.Meter({ label: "Specialists against the instruction budget", value: tokens, max: 12000, threshold: 9600, unit: "tokens", thresholdLabel: "warns at 80%", format: function (v) { return "about " + v.toLocaleString("en-GB"); }, of: function (v) { return Math.round(v / 120) + "% of 12,000"; } }).el);
+      cmdLine.textContent = command();
+    }
+    function paintTasks() {
+      tasksBox.textContent = "";
+      var opts = [[null, "", "No task"]].concat(proj().tasks.slice().sort(function (a, b) { var o = { doing: 0, open: 1, blocked: 2 }; return o[a[1]] - o[b[1]]; }).map(function (t) { return [t[0], t[1], t[2]]; })).concat([["__other", "", "Other…"]]);
+      var lab = el("span", { "class": "lab", id: "task-lab", text: "What are you about to do?" });
+      var list = el("div", { "class": "tasks", role: "radiogroup", "aria-labelledby": "task-lab" });
+      var btns = opts.map(function (o, i) { return el("button", { type: "button", role: "radio", "aria-checked": L.task === o[0] ? "true" : "false", tabindex: L.task === o[0] ? "0" : "-1", onclick: function () { pick(i); } }, [el("span", { "class": "st", text: o[1] }), el("span", { text: o[2] })]); });
+      function pick(i) { L.task = opts[i][0]; btns.forEach(function (b, k) { b.setAttribute("aria-checked", k === i ? "true" : "false"); b.tabIndex = k === i ? 0 : -1; }); other.hidden = L.task !== "__other"; if (L.task === "__other") { oin.focus(); } paintLoads(); }
+      btns.forEach(function (b) { list.appendChild(b); }); S.roving(btns, pick);
+      var oin = el("input", { id: "other-task", placeholder: "Describe a one-off task", "aria-label": "Other task", value: L.other, oninput: function () { L.other = oin.value; paintLoads(); } });
+      var other = el("div", { "class": "other" }, [oin]); other.hidden = L.task !== "__other";
+      tasksBox.appendChild(el("div", { "class": "ls-field", style: "justify-items: stretch" }, [lab, list, other]));
+      el("span");
+    }
+    function paintWorktree() { wtBox.textContent = ""; if (proj().worktrees.length > 1) { wtBox.appendChild(S.Picker({ label: "Worktree", options: proj().worktrees.map(function (w) { return { name: w, sub: w === "main" ? "the project's own checkout" : "~/code/loadout-cli.worktrees/" + w }; }), onPick: function (o) { L.worktree = o.name; paintLoads(); } })); } }
+    body.appendChild(el("div", { "class": "grid2" }, [
+      S.Picker({ label: "Project", selected: 1, options: Object.keys(PROJECTS).map(function (k) { return { name: k, sub: PROJECTS[k].path }; }), onPick: function (o) { L.project = o.name; L.task = firstDoing(); L.worktree = "main"; paintTasks(); paintWorktree(); paintLoads(); } }),
+      S.Picker({ label: "Mode", options: MODES.map(function (m) { return { name: m[0] || "(let the task decide)", sub: m[1] }; }), onPick: function (o, i) { L.mode = MODES[i][0]; paintLoads(); } })]));
+    body.appendChild(tasksBox);
+    body.appendChild(el("div", { "class": "grid2" }, [el("div", {}, [el("span", { "class": "lab", style: "display: block; margin-bottom: 6px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft)", text: "Agent" }),
+      S.ModePicker({ label: "Agent", options: [{ name: "claude", desc: "Claude Code · this project's agent" }, { name: "codex", desc: "Codex · installed here" }], onChange: function (n) { L.agent = n; paintLoads(); } })]), wtBox]));
+    body.appendChild(el("div", { "class": "optsw" }, [S.Switch({ label: "Work offline", sub: "--offline", onChange: function (v) { L.offline = v; paintLoads(); } }), S.Switch({ label: "Skip workspace sync", sub: "--no-sync", onChange: function (v) { L.nosync = v; paintLoads(); } }), S.Switch({ label: "Append last handoff", sub: "--handoff", onChange: function (v) { L.handoff = v; paintLoads(); } })]));
+    body.appendChild(loads); body.appendChild(cmdLine);
+    paintTasks(); paintWorktree(); paintLoads();
+    var D = S.Dialog({ title: "New session", why: "Everything a launch asks is here, filled in with the defaults. The command below is the launch; Studio runs it for you.", content: body,
+      actions: [{ label: "Launch", solid: true, glyph: "▶", cmd: "runs the command above", onPress: function () { var t = L.task === "__other" ? L.other.trim() : (proj().tasks.filter(function (x) { return x[0] === L.task; })[0] || [0, 0, ""])[2]; launch({ project: L.project, task: t || "No task", mode: L.mode || (L.task ? "implement" : "advise"), agent: L.agent, cmd: command() }); } },
+        { label: "Quick session", cmd: "$ loadout " + L.project + " · no task, the defaults", onPress: function () { launch({ project: L.project, task: "Quick session", mode: "advise", agent: proj().agent, cmd: "$ loadout " + L.project }); } }] });
+    D.open();
+  }
+  var nextCode = 7;
+  function launch(o) {
+    var id = "n" + nextCode, code = String(nextCode > 8 ? 7 : nextCode); nextCode += 1;
+    var l = { id: id, code: code, kind: "session", title: o.task, stage: 2, where: o.project, agent: o.agent, mode: o.mode, note: o.mode + " · " + (o.agent === "codex" ? "Codex" : "Claude Code"), quiet: 0, mins: 0, events: [] };
+    ST.lines.push(l); addEvent(l, "started", "Started in " + o.project + ": " + o.task);
+    var c = o.cmd || ("$ loadout " + o.project + " --task \"" + o.task + "\" --mode " + o.mode);
+    ST.script[id] = [["me", "› " + c.replace(/^\$ /, "")], ["dim", "  loaded foundation, " + o.mode + " mode · " + (PROJECTS[o.project].base + MODE_COST[o.mode === "advise" ? "advise" : o.mode] || 900).toLocaleString("en-GB") + " tokens"], ["", "● Reading the task"], ["", "● Looking through the repository"], ["dim", "  (example output: this prototype plays a script)"]];
+    toasts.add({ level: "done", text: "Started in " + o.project, cmd: c });
+    ST.startTask = "";
+    go("session-" + id);
+  }
+
+  /* ---------- palette ---------- */
+  function openPalette() {
+    var go1 = PAGES.map(function (p) { return { glyph: "→", label: p[1], sub: "page", kind: "page", run: function () { go(p[0]); } }; });
+    var flight = ST.lines.map(function (l) { return { glyph: l.waiting ? "!" : "▶", label: l.title, sub: l.where + " · " + wordOf(l), need: !!l.waiting, kind: "focus", run: function () { ST.focus = l.id; ST.view = "lens"; go("home"); } }; });
+    var acts = [{ glyph: "+", label: "Start a session…", sub: "opens New session · $ loadout <project> --task \"…\"", kind: "action", run: function () { go("sessions"); setTimeout(openLaunch, 60); } }];
+    var t = line("t1");
+    if (t.waiting) { acts.push({ glyph: "✓", label: "Approve: push the tag v0.66.0", sub: "$ loadout team gate --answer Approve", need: true, kind: "action", run: function () { answerGate(true); } }, { glyph: "✕", label: "Refuse: push the tag v0.66.0", sub: "$ loadout team gate --answer Refuse", kind: "action", run: function () { answerGate(false); } }); }
+    if (t.stage === 2 && !t.held) { acts.push({ glyph: "‖", label: "Hold release-crew after this round", sub: "$ loadout team halt --pause", kind: "action", run: function () { t.held = true; render(); } }); }
+    acts.push({ glyph: "↻", label: "Refine the browser launcher idea", sub: "$ loadout idea refine browser-launcher", kind: "action", run: refine },
+      { glyph: "▶", label: "Mark upload-retries doing", sub: "$ loadout task declare upload-retries doing --project starstats", kind: "action", run: function () { var k = line("k1"); k.stage = 2; k.note = "doing"; render(); } },
+      { glyph: "◎", label: "Enter Ambient", sub: "changes nothing · A", kind: "action", run: function () { setAmbient(true); } },
+      { glyph: "◐", label: "Appearance…", sub: "theme, accent, density, motion, halo", kind: "action", run: openAppearance });
+    S.CommandPalette({ groups: [{ name: "Go to", items: go1 }, { name: "In flight", items: flight }, { name: "Do", items: acts }], bindKeys: false }).open();
+  }
+
+  /* ---------- appearance ---------- */
+  function appearanceForm() {
+    var f = el("div", { "class": "appear" });
+    function seg(name, legend, opts, val, set) {
+      var fs = el("fieldset", { "class": "seg" }, [el("legend", { text: legend })]), row = el("div", { "class": "opts" });
+      opts.forEach(function (o) { var id = "ap-" + name + "-" + o[0]; row.appendChild(el("label", { "for": id }, [el("input", { type: "radio", name: "ap-" + name, id: id, value: o[0], checked: val === o[0] ? true : null, onchange: function () { set(o[0]); savePrefs(); applyPrefs(); renderNav(); render(); } }), o[1]])); });
+      fs.appendChild(row); return fs;
+    }
+    var cur = root.getAttribute("data-theme");
+    f.appendChild(seg("theme", "Theme", [["dark", "Dark"], ["light", "Light"], ["hc-dark", "High contrast dark"], ["hc-light", "High contrast light"]], P.theme || cur, function (v) { P.theme = v; }));
+    f.appendChild(seg("accent", "Accent", [["cyan", "Cyan"], ["ice", "Ice"], ["magenta", "Magenta"], ["violet", "Violet"]], P.accent, function (v) { P.accent = v; }));
+    f.appendChild(seg("density", "Density", [["compact", "Compact"], ["comfortable", "Comfortable"], ["roomy", "Roomy"]], P.density, function (v) { P.density = v; }));
+    f.appendChild(seg("motion", "Motion", [["full", "Full"], ["reduced", "Reduced"], ["none", "None"]], P.motion, function (v) { P.motion = v; }));
+    f.appendChild(seg("halo", "Lens halo", [["orbit", "Orbit"], ["gyroscope", "Gyroscope"]], P.halo, function (v) { P.halo = v; }));
+    f.appendChild(S.Switch({ label: "Single-letter shortcuts", sub: "A for Ambient, N for a new session", checked: P.keys, onChange: function (v) { P.keys = v; savePrefs(); } }));
+    f.appendChild(el("p", { "class": "calm", style: "margin: 0; font-size: 12.5px" }, ["Kept in this browser for the prototype. Studio keeps the halo in Loadout's config: ", el("code", { "class": "ls-cmd", text: "$ loadout config set studio-halo orbit" }), " (a proposed key)."]));
+    return f;
+  }
+  function openAppearance() { S.Dialog({ title: "Appearance", why: "Every Studio screen follows these.", content: appearanceForm(), cancelLabel: "Done" }).open(); }
+
+  /* ---------- placeholder pages ---------- */
+  function renderElsewhere(main, r) {
+    if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
+    var e = ELSEWHERE[r] || ["Not found", "$ loadout --help", "This page doesn't exist."];
+    main.appendChild(el("div", { "class": "head" }, [el("h1", { text: e[0] })]));
+    main.appendChild(el("div", { "class": "placeholder" }, [el("p", { "class": "calm", text: e[2] + " This page isn't part of the prototype; Home and Sessions are." }), S.Command({ why: "Until then, in a terminal:", command: e[1] })]));
+  }
+
+  /* ---------- render, keeping focus where it was ---------- */
+  function render() {
+    var a = document.activeElement, k = a && a.getAttribute && a.getAttribute("data-k"), caret = a && a.selectionStart;
+    if (!k && a && a.id === "home-task") { k = "home-task"; }
+    renderNav();
+    var main = document.getElementById("main"), r = route(); main.textContent = "";
+    if (r === "home") { homeHead(main); if (ST.view === "map") { renderMap(main); } else { renderLens(main); } }
+    else if (r === "sessions") { renderSessions(main); }
+    else if (r.indexOf("session-") === 0) { renderSession(main, r.slice(8)); }
+    else { renderElsewhere(main, r); }
+    main.appendChild(el("p", { "class": "sample", text: "Example data and scripted agents: this prototype doesn't talk to Loadout. Every command shown is the real one." }));
+    if (k) { var n = k === "home-task" ? document.getElementById("home-task") : document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); if (caret !== undefined && n.setSelectionRange && caret !== null) { try { n.setSelectionRange(caret, caret); } catch (e) { /* not a text field */ } } } }
+    renderAmbient();
+  }
+
+  /* ---------- time: the script, and the agents typing ---------- */
+  var toasts = S.Toasts(document.getElementById("toasts"));
+  function step() {
+    if (ST.paused || ST.step >= SCRIPT.length) { return; }
+    var r = SCRIPT[ST.step++](); ST.clock += 2; ST.tokens += 1800;
+    ST.lines.forEach(function (l) { if (l.stage === 2 && !l.waiting) { l.mins = (l.mins || 0) + 2; } });
+    if (r) { toasts.add({ level: r[0], text: r[1], cmd: r[2], actions: r[3] || [] }); }
+    render();
+  }
+  function typeTick() {
+    if (ST.paused) { return; }
+    Object.keys(TERM).concat(Object.keys(ST.script)).forEach(function (id) {
+      var l = line(id); if (!l || l.stage === 4) { return; }
+      var q = TERM[id] || ST.script[id];
+      if (l.waiting) { return; }
+      var nx = q.shift(); if (!nx) { return; }
+      if (nx[0] === "wait") { l.waiting = true; l.askedAt = ST.clock; l.ask = "Overwrite docs/images/dashboard-office.png?"; l.note = "asks before overwriting"; addEvent(l, "asked", l.where + ": Codex asks to overwrite a screenshot");
+        toasts.add({ level: "needs", text: l.title + " asks: overwrite docs/images/dashboard-office.png?", cmd: "Codex · " + l.where, actions: sessionAnswers(l) }); render(); return; }
+      if (nx[0] === "end") { l.stage = 4; l.note = "ended · " + (l.mins || 0) + " min"; addEvent(l, "ended", l.title + " ended"); toasts.add({ level: "done", text: l.title + " ended", cmd: "" }); render(); return; }
+      term(id, nx[0], nx[1]);
+    });
+  }
+  ["s1", "s2"].forEach(function (id) { ST.term[id] = []; for (var i = 0; i < 3; i++) { var x = TERM[id].shift(); ST.term[id].push(x); } });
+  setInterval(step, 7000);
+  setInterval(typeTick, 1600);
+
+  /* ---------- keys ---------- */
+  window.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); openPalette(); return; }
+    if (e.key === "Escape" && ST.ambient) { setAmbient(false); return; }
+    var t = e.target && e.target.tagName, typing = t === "INPUT" || t === "TEXTAREA" || (e.target && e.target.isContentEditable);
+    if (typing || e.ctrlKey || e.metaKey || e.altKey || !P.keys || document.querySelector(".ls-dialog")) { return; }
+    if (e.key === "a" || e.key === "A") { setAmbient(!ST.ambient); }
+    if ((e.key === "n" || e.key === "N")) { e.preventDefault(); if (ST.ambient) { setAmbient(false); } go("sessions"); setTimeout(openLaunch, 60); }
+  });
+  window.addEventListener("resize", function () { clearTimeout(window.__rz); window.__rz = setTimeout(render, 200); });
+
+  render();
+})();
+</script>
+
+</body>
+</html>

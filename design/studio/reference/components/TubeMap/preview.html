@@ -1,0 +1,42 @@
+<!-- @dsCard group="Map" height=900 width=1320 subtitle="Every piece of work is a line; stations are stages; Needs you is the interchange. Pick a line to see it drawn straight." -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TubeMap</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="m"></div><div id="s" style="margin-top: 16px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var LINES = [
+    { id: "t1", code: "4", kind: "team run", title: "Release 0.66.0", stage: 2, where: "release-crew", note: "round 3 · lead is coordinating", facts: "quiet 1m · round 3",
+      checks: [["Release notes match the changes", "met"], ["Every test passes on main", "met"], ["The tag is pushed", "not attempted"]],
+      workers: [["lead", "coordinating"], ["writer/1", "writing the release notes"], ["checker/1", "waiting on writer/1"]],
+      events: [{ stage: 2, kind: "started", t: "13:14", text: "release-crew started round 1" }] },
+    { id: "s1", code: "2", kind: "session", title: "why is this postgres query so slow", stage: 2, where: "starstats", facts: "quiet 0m · investigate" },
+    { id: "s2", code: "3", kind: "session", title: "add a retry to the upload step", stage: 3, waiting: true, where: "loadout-cli", facts: "asks before overwriting",
+      events: [{ stage: 3, kind: "asked", t: "13:58", text: "Codex is holding for your call" }] },
+    { id: "i1", code: "1", kind: "idea", title: "Run the launcher in a browser", stage: 1, where: "loadout-cli", facts: "round 2 back · 3 questions answered" },
+    { id: "k2", code: "6", kind: "task", title: "Move uploads to the new bucket", stage: 2, where: "starstats", blocked: "waiting on access to the new bucket",
+      events: [{ stage: 2, kind: "blocked", t: "12:37", text: "Marked blocked: waiting on access to the new bucket" }] },
+    { id: "k1", code: "5", kind: "task", title: "Retry the upload with backoff", stage: 0, where: "starstats", facts: "declared yesterday" }
+  ];
+  var strip = document.getElementById("s");
+  function show(id) { var l = LINES.filter(function (x) { return x.id === id; })[0]; strip.textContent = ""; strip.appendChild(S.LineStrip({ line: l, events: l.events, checks: l.checks })); }
+  var M = S.TubeMap({ lines: LINES, picked: "t1", onPick: show });
+  document.getElementById("m").appendChild(M.el); show("t1");
+})();
+</script>
+</body>
+</html>

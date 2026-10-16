@@ -1,0 +1,30 @@
+<!-- @dsCard group="Signals" height=170 subtitle="One ping, then a mark that stays until the thing is looked at" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>EventMark</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div class="row" id="m" style="position: relative; padding-top: 10px"></div>
+<div style="margin-top: 14px"><button type="button" class="ls-halo small" id="go"><span class="ring" aria-hidden="true"></span>Something happens</button></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var m = document.getElementById("m");
+  [["needs", "asks to push the tag", "3 min ago"], ["bad", "round 2 failed", "just now"], ["good", "the slow-query session closed", "just now"], ["moving", "started round 4", "1 min ago"]].forEach(function (e) {
+    m.appendChild(S.EventMark({ family: e[0], text: e[1], age: e[2] })); });
+  document.getElementById("go").addEventListener("click", function () { S.ping(m, 60, 18, "needs"); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!-- @dsCard group="Overlays" height=640 width=1100 subtitle="Ctrl K or Cmd K: go to a page, find work in flight, or do something; every action shows its command" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CommandPalette</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="stage" style="position: relative; height: 600px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--rule)">
+  <div id="page" style="padding: 24px 28px"><p class="lab">Home</p><p style="margin: 0 0 12px; color: var(--muted)">Press Ctrl K (Cmd K on a Mac), or the button.</p><div id="b"></div><p class="out" role="status" id="out"></p></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var out = document.getElementById("out");
+  function did(r) { out.textContent = "\u2713 " + r.label + (r.sub && r.sub.indexOf("$") >= 0 ? " \u00b7 " + r.sub.slice(r.sub.indexOf("$")) : ""); }
+  var go = ["Home", "Sessions", "Ideas", "Teams", "Memory", "Context", "Spend", "Projects", "Settings"].map(function (n) { return { glyph: "\u2192", label: n, sub: "page", kind: "page", run: did }; });
+  var flight = [["!", "Release 0.66.0", "release-crew \u00b7 waiting for you", true], ["\u25b6", "why is this postgres query so slow", "starstats \u00b7 running 12 min"], ["!", "add a retry to the upload step", "loadout-cli \u00b7 waiting for you", true], ["\u25c7", "Run the launcher in a browser", "loadout-cli \u00b7 shaping, round 2"]].map(function (f) { return { glyph: f[0], label: f[1], sub: f[2], need: !!f[3], kind: "focus", run: did }; });
+  var act = [["+", "Start a session\u2026", "opens New session \u00b7 $ loadout <project> --task \"\u2026\""], ["\u2713", "Approve: push the tag v0.66.0", "$ loadout team gate --answer Approve", true], ["\u2715", "Refuse: push the tag v0.66.0", "$ loadout team gate --answer Refuse"],
+    ["\u2016", "Hold release-crew after this round", "$ loadout team halt --pause"], ["\u21bb", "Refine the browser launcher idea", "$ loadout idea refine browser-launcher"], ["\u25b6", "Mark upload-retries doing", "$ loadout task declare upload-retries doing --project starstats"], ["\u23fb", "Sign out every browser\u2026", "asks first \u00b7 $ loadout dashboard sign-out"]].map(function (d) { return { glyph: d[0], label: d[1], sub: d[2], need: !!d[3], kind: "action", run: did }; });
+  var P = S.CommandPalette({ groups: [{ name: "Go to", items: go }, { name: "In flight", items: flight }, { name: "Do", items: act }], host: document.getElementById("stage"), contained: true, behind: document.getElementById("page") });
+  document.getElementById("b").appendChild(S.HaloButton({ label: "Search", size: "small", onPress: P.open }));
+  P.open();
+})();
+</script>
+</body>
+</html>

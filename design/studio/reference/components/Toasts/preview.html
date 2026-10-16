@@ -1,0 +1,39 @@
+<!-- @dsCard group="Signals" height=460 width=1100 subtitle="Top right, four levels; folds after six seconds unless it still needs you" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Toasts</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  .ls-toasts { width: 360px; }
+</style>
+</head>
+<body class="ls">
+<div style="padding-right: 400px"><div class="row" id="b"></div>
+<p style="margin: 14px 0 0; max-width: 440px; font-size: 13.5px; color: var(--muted)">Done and For your information fold into a chip after six seconds. Needs you and Problem stay open until answered or acknowledged. While the pointer or the keyboard is on the stack, nothing folds.</p></div>
+<div id="stack" style="position: absolute; top: 14px; right: 18px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var T = S.Toasts(document.getElementById("stack")), b = document.getElementById("b");
+  document.getElementById("stack").style.position = "absolute";
+  function btn(label, kind, fn) { b.appendChild(S.HaloButton({ label: label, kind: kind, size: "small", onPress: fn })); }
+  btn("Deploy a session", "", function () { T.add({ level: "done", text: "Deployed in starstats", cmd: "$ loadout starstats --task \"why is this postgres query so slow\" --mode investigate" }); });
+  btn("A run moves on", "", function () { T.add({ level: "info", text: "release-crew started round 4" }); });
+  btn("A question arrives", "needs", function () { T.add({ level: "needs", text: "release-crew asks: push the tag v0.66.0 to origin?", actions: [
+    { label: "Approve", kind: "needs", cmd: "$ loadout team gate --answer Approve", onPress: function () { return "You approved: push the tag v0.66.0"; } },
+    { label: "Refuse", cmd: "$ loadout team gate --answer Refuse", onPress: function () { return "You refused: push the tag v0.66.0"; } }] }); });
+  btn("A round fails", "danger", function () { T.add({ level: "problem", text: "The idea's round 3 failed", cmd: "Run the launcher in a browser \u00b7 Codex", actions: [
+    { label: "Try the round again", cmd: "$ loadout idea refine browser-launcher", onPress: function () { return "You asked for round 3 again"; } },
+    { label: "Acknowledge", kind: "danger", cmd: "changes nothing in Loadout", onPress: function () { return "Acknowledged: round 3 failed"; } }] }); });
+  T.add({ level: "info", text: "release-crew started round 3" });
+})();
+</script>
+</body>
+</html>

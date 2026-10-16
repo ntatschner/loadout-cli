@@ -1,0 +1,76 @@
+<!-- @dsCard group="Foundations" height=760 width=1280 page subtitle="The four themes side by side. Pick an accent and a density; every panel follows." -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Foundations</title>
+<style>
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--font-sans); }
+  .bar { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; padding: 16px 20px 12px; }
+  .bar fieldset { display: flex; gap: 6px; align-items: center; margin: 0; padding: 0; border: 0; }
+  .bar legend { float: left; margin-right: 10px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .bar label { position: relative; display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; cursor: pointer; font-size: 13.5px; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); }
+  .bar input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .bar label:has(input:checked) { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+  .bar label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .th { padding: calc(var(--space-6) * var(--density)) calc(var(--space-5) * var(--density)); background: var(--ground); color: var(--ink); min-width: 0; }
+  .th h2 { margin: 0 0 calc(var(--space-4) * var(--density)); font-size: 13px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-soft); }
+  .card { padding: calc(var(--space-4) * var(--density)); background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+  .t { margin: 0; font-size: 21px; line-height: 26px; font-weight: 300; color: var(--ink-strong); }
+  .m { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
+  .ring { --c: var(--accent); display: inline-flex; align-items: center; gap: 12px; min-height: 44px; margin-top: calc(var(--space-3) * var(--density)); font-size: 13.5px; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--ink); }
+  .ring i { position: relative; width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--c), 0 0 var(--glow-md) -2px var(--glow); }
+  .ring i::after { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: var(--c); transform: scale(.55); }
+  .tab { display: inline-block; margin-top: calc(var(--space-4) * var(--density)); padding: 4px 14px 4px 24px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; background: var(--accent); color: var(--on-accent); }
+  .sigs { list-style: none; margin: calc(var(--space-4) * var(--density)) 0 0; padding: 0; display: grid; gap: calc(var(--space-2) * var(--density)); }
+  .sigs li { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+  .sigs svg { width: 20px; height: 20px; flex: none; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--c); color: var(--c); }
+  .sigs b { font-weight: 500; color: var(--c); }
+  .sigs span { color: var(--muted); font-size: 12.5px; }
+  .wash { margin-top: calc(var(--space-3) * var(--density)); padding: 10px 12px; background: var(--needs-wash); box-shadow: inset 3px 0 0 var(--needs); color: var(--needs-text); font-size: 14px; }
+  .focus { display: inline-block; margin-top: calc(var(--space-4) * var(--density)); padding: 8px 12px; outline: 2px solid var(--focus); outline-offset: 3px; font-size: 13px; color: var(--ink); }
+  .sw { display: flex; gap: 4px; margin-top: calc(var(--space-4) * var(--density)); }
+  .sw i { width: 28px; height: 18px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <fieldset><legend>Accent</legend>
+    <label><input type="radio" name="acc" value="cyan" checked>Cyan</label><label><input type="radio" name="acc" value="ice">Ice</label><label><input type="radio" name="acc" value="magenta">Magenta</label><label><input type="radio" name="acc" value="violet">Violet</label>
+  </fieldset>
+  <fieldset><legend>Density</legend>
+    <label><input type="radio" name="den" value="compact">Compact</label><label><input type="radio" name="den" value="comfortable" checked>Comfortable</label><label><input type="radio" name="den" value="roomy">Roomy</label>
+  </fieldset>
+</div>
+<div class="grid" id="grid"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var NAMES = { "dark": "Dark", "light": "Light", "hc-dark": "High contrast dark", "hc-light": "High contrast light" };
+  var G = {"play": "M7 5 L15 10 L7 15 Z", "needs": "M10 4 V11.5 M10 15 V15.2", "failed": "M6 6 L14 14 M14 6 L6 14", "done": "M5 10.5 L8.5 14 L15 6.5", "idle": "M5 10 H15"};
+  var SIG = [["moving", "play", "working", "starstats · 12 min"], ["needs", "needs", "waiting for you", "asks to push"], ["bad", "failed", "last round failed", "round 2"], ["good", "done", "done", "tests green"], ["rest", "idle", "idle", "quiet 14 min"]];
+  var grid = document.getElementById("grid");
+  S.THEMES.forEach(function (t) {
+    var p = document.createElement("section");
+    p.className = "th"; p.setAttribute("data-theme", t); p.setAttribute("aria-label", NAMES[t]);
+    var sigs = SIG.map(function (s) {
+      return '<li style="--c: var(--' + s[0] + ')"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="' + G[s[1]] + '" fill="' + (s[1] === "play" ? "currentColor" : "none") + '" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><b>' + s[2] + '</b><span>' + s[3] + '</span></li>';
+    }).join("");
+    p.innerHTML = '<h2>' + NAMES[t] + '</h2>' +
+      '<div class="card"><p class="t">Release 0.66.0</p><p class="m">line 4 · team run · release-crew</p>' +
+      '<span class="ring"><i aria-hidden="true"></i>Deploy</span><br><code class="ls-cmd">$ loadout team gate --answer Approve</code>' +
+      '<br><span class="tab">What should it do?</span>' +
+      '<div class="wash">Push the tag v0.66.0 to origin?</div></div>' +
+      '<ul class="sigs">' + sigs + '</ul>' +
+      '<span class="focus">Focus ring</span>' +
+      '<div class="sw" aria-hidden="true"><i style="background: var(--ground); box-shadow: inset 0 0 0 1px var(--rule)"></i><i style="background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule)"></i><i style="background: var(--surface-2)"></i><i style="background: var(--accent)"></i><i style="background: var(--gauge)"></i></div>';
+    grid.appendChild(p);
+  });
+  function on(name, fn) { document.querySelectorAll('input[name="' + name + '"]').forEach(function (r) { r.addEventListener("change", function () { fn(r.value); }); }); }
+  on("acc", function (v) { grid.querySelectorAll(".th").forEach(function (p) { S.setAccent(v, p); }); document.documentElement.setAttribute("data-accent", v); });
+  on("den", function (v) { grid.querySelectorAll(".th").forEach(function (p) { S.setDensity(v, p); }); });
+})();
+</script>
+</body>
+</html>

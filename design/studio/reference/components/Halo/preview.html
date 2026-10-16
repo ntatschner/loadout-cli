@@ -1,0 +1,41 @@
+<!-- @dsCard group="Lens" height=700 width=1200 subtitle="Orbit and Gyroscope, both usable; chosen per component in Settings, Orbit by default" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Halo</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div class="row" style="margin-bottom: 8px" id="ctl"></div>
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+  <div style="width: 540px"><p class="lab">Orbit</p><div id="o"></div></div>
+  <div style="width: 540px"><p class="lab">Gyroscope</p><div id="g"></div></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var stage = 2, W = ["captured", "shaping", "running", "needs a decision", "done"], NOTE = ["declared yesterday", "round 2 \u00b7 the lead is planning", "round 3 \u00b7 lead, writer/1, checker/1", "asks to push the tag", "tag pushed \u00b7 23 min"];
+  function core() {
+    var c = document.createElement("div"); c.style.cssText = "display: grid; justify-items: center; gap: 4px; max-width: 280px";
+    var k = document.createElement("span"); k.className = "ls-cmd"; k.style.color = "var(--ink-soft)"; k.textContent = "line 4 \u00b7 team run \u00b7 release-crew"; c.appendChild(k);
+    var t = document.createElement("p"); t.className = "title"; t.style.cssText = "margin: 0; color: var(--ink-strong)"; t.textContent = "Release 0.66.0"; c.appendChild(t);
+    c.appendChild(S.Signal(W[stage], { big: true }));
+    var n = document.createElement("span"); n.className = "ls-cmd"; n.textContent = NOTE[stage]; c.appendChild(n);
+    return c;
+  }
+  var O = S.Halo({ style: "orbit", stage: stage, core: core() }), G = S.Halo({ style: "gyroscope", stage: stage, hour: 0.8, spend: 0.31, core: core() });
+  document.getElementById("o").appendChild(O.el); document.getElementById("g").appendChild(G.el);
+  document.getElementById("ctl").appendChild(S.HaloButton({ label: "Move it on", size: "small", onPress: function () { stage = (stage + 1) % 5; O.set({ stage: stage, core: core() }); G.set({ stage: stage, core: core() }); } }));
+})();
+</script>
+</body>
+</html>

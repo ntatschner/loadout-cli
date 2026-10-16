@@ -1,0 +1,28 @@
+<!-- @dsCard group="Actions" height=170 subtitle="Type a task; the command it will run updates as you type" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StartRail</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="rail" style="max-width: 760px"></div><p class="out" role="status" id="out"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("rail").appendChild(S.StartRail({ value: "why is this postgres query so slow",
+    command: function (t) { return "$ loadout starstats --task \"" + t + "\" --mode investigate"; },
+    onDeploy: function (t) { document.getElementById("out").textContent = "\u2713 Deployed in starstats: " + t; } }));
+})();
+</script>
+</body>
+</html>
