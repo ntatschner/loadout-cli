@@ -389,6 +389,100 @@ public sealed class MemoryCompressorTests : IDisposable
         result.Failed.Should().BeTrue();
         result.ExitCode.Should().Be(Loadout.Models.ExitCode.ProjectNotFound);
     }
+
+    [Fact]
+    public async Task Compressing_into_a_topic_that_exists_keeps_what_it_already_held()
+    {
+        const string Kept = "The read model is rebuilt from the journal on every deploy, never migrated.";
+
+        (await _memory.WriteAsync(
+            _workspace, Slug, "architecture", "How the system is put together", MemoryKind.Decision, [Kept]))
+            .Succeeded.Should().BeTrue();
+
+        var path = WriteInstructions(
+            "## Architecture",
+            "",
+            "- " + Durable("event"),
+            "- " + Durable("audit"));
+
+        var applied = await _compressor.ApplyAsync(path, _workspace, Slug);
+
+        applied.Succeeded.Should().BeTrue(applied.Error);
+
+        var topic = (await _memory.ListAsync(_workspace, Slug)).Value!.Single(t => t.Name == "architecture");
+
+        topic.Facts.Should().Contain(Kept, "compress moves facts in; it must never throw out what was there");
+        topic.Facts.Should().Contain(Durable("event"));
+        topic.Description.Should().Be("How the system is put together", "the topic's author chose that line");
+        topic.Kind.Should().Be(MemoryKind.Decision);
+    }
+
+    [Fact]
+    public async Task A_fact_already_in_the_topic_is_not_written_twice_but_still_leaves_the_instructions()
+    {
+        (await _memory.WriteAsync(
+            _workspace, Slug, "architecture", "How the system is put together", MemoryKind.Decision,
+            [Durable("event").ToUpperInvariant().TrimEnd('.')]))
+            .Succeeded.Should().BeTrue();
+
+        var path = WriteInstructions(
+            "## Architecture",
+            "",
+            "- " + Durable("event"),
+            "- " + Durable("audit"));
+
+        var plan = (await _compressor.PlanAsync(path, _workspace, Slug)).Value!;
+
+        var topic = plan.Topics.Single();
+        topic.Merges.Should().BeTrue();
+        topic.Present.Should().ContainSingle().Which.Should().Be(Durable("event"));
+        topic.Facts.Should().ContainSingle().Which.Should().Be(Durable("audit"));
+
+        (await _compressor.ApplyAsync(path, _workspace, Slug)).Succeeded.Should().BeTrue();
+
+        var stored = (await _memory.ListAsync(_workspace, Slug)).Value!.Single(t => t.Name == "architecture");
+        stored.Facts.Should().HaveCount(2, "a case or punctuation difference is the same fact");
+        File.ReadAllText(path).Should().NotContain("event store", "memory holds it, so it leaves the always-loaded file");
+    }
+
+    [Fact]
+    public async Task Merging_keeps_the_topics_prose_and_links()
+    {
+        (await _memory.WriteAsync(
+            _workspace, Slug, "architecture", "How the system is put together", MemoryKind.Decision,
+            ["The read model is rebuilt from the journal on every deploy, never migrated."]))
+            .Succeeded.Should().BeTrue();
+
+        var file = Path.Combine(_workspace, "projects", Slug, "memory", "architecture.md");
+        File.AppendAllLines(file, ["", "**Why:** a migration once lost a week of events.", "", "Related: [[deploys]]"]);
+
+        var path = WriteInstructions("## Architecture", "", "- " + Durable("event"), "- " + Durable("audit"));
+
+        (await _compressor.ApplyAsync(path, _workspace, Slug)).Succeeded.Should().BeTrue();
+
+        var text = File.ReadAllText(file);
+        text.Should().Contain("**Why:** a migration once lost a week of events.");
+        text.Should().Contain("Related: [[deploys]]");
+        text.IndexOf(Durable("audit"), StringComparison.Ordinal)
+            .Should().BeLessThan(text.IndexOf("Related:", StringComparison.Ordinal), "new facts sit with the others");
+    }
+
+    [Fact]
+    public async Task The_preview_says_what_compress_would_have_called_a_merged_topic()
+    {
+        (await _memory.WriteAsync(
+            _workspace, Slug, "architecture", "How the system is put together", MemoryKind.Decision,
+            ["The read model is rebuilt from the journal on every deploy, never migrated."]))
+            .Succeeded.Should().BeTrue();
+
+        var path = WriteInstructions("## Architecture", "", "- " + Durable("event"), "- " + Durable("audit"));
+
+        var topic = (await _compressor.PlanAsync(path, _workspace, Slug)).Value!.Topics.Single();
+
+        topic.Description.Should().Be("How the system is put together");
+        topic.Suggested.Should().NotBeNull("the derived line differs, and the preview shows it");
+        topic.Suggested!.Value.Kind.Should().Be(MemoryKind.Project);
+    }
 }
 
 /// <summary>A store that refuses every write, standing in for a full disk or a locked file.</summary>
@@ -450,12 +544,26 @@ internal abstract class StubMemoryService : IMemoryService
         string name, string description, IReadOnlyList<string> facts) =>
         throw new NotSupportedException();
 
+    /// <summary>
+    /// Empty, as the store these stand in for is before anything is written.
+    /// Compress asks so it can merge into a topic that exists.
+    /// </summary>
     public Task<OperationResult<IReadOnlyList<MemoryTopic>>> ListAsync(
         string workspaceRoot, string slug, CancellationToken ct = default) =>
-        throw new NotSupportedException();
+        Task.FromResult(OperationResult<IReadOnlyList<MemoryTopic>>.Ok([]));
 
     public Task<OperationResult<MemoryAudit>> AuditAsync(
         string workspaceRoot, string slug, int staleMonths = 6, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+
+    public Task<OperationResult<MemoryTopic>> AppendAsync(
+        string workspaceRoot, string slug, string name, IReadOnlyList<string> facts,
+        MemoryScope scope = MemoryScope.Project, CancellationToken ct = default) =>
+        throw new NotSupportedException();
+
+    public Task<OperationResult> DeleteAsync(
+        string workspaceRoot, string slug, string name,
+        MemoryScope scope = MemoryScope.Project, CancellationToken ct = default) =>
         throw new NotSupportedException();
 
     public Task<OperationResult> RebuildIndexAsync(

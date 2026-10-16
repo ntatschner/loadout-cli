@@ -98,6 +98,42 @@ public interface IMemoryService
         IReadOnlyList<string> facts);
 
     /// <summary>
+    /// Adds facts to a topic that already exists, leaving everything already
+    /// in it as it was: its description, its kind, its facts, and any prose or
+    /// links between them.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="WriteAsync"/> builds a topic from its fact list alone, so
+    /// using it to add to one would drop every line that is not a bullet. A
+    /// topic's <c>**Why:**</c> and its <c>[[links]]</c> are not bullets.
+    /// </remarks>
+    /// <param name="workspaceRoot">Root of the workspace to write into.</param>
+    /// <param name="slug">Project the topic belongs to.</param>
+    /// <param name="name">The topic, which must exist.</param>
+    /// <param name="facts">Facts to add, after its last bullet.</param>
+    /// <param name="scope">Which store the topic is in.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<MemoryTopic>> AppendAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        IReadOnlyList<string> facts,
+        MemoryScope scope = MemoryScope.Project,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes a topic and takes it out of the index. Topics linking to it are
+    /// left as they are: a link to a topic that does not exist marks something
+    /// worth writing later, and the audit points at it.
+    /// </summary>
+    Task<OperationResult> DeleteAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        MemoryScope scope = MemoryScope.Project,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Rewrites the index from the topics actually present, which is also how a
     /// missing or drifted index gets repaired.
     /// </summary>
@@ -814,6 +850,105 @@ internal sealed partial class MemoryService : IMemoryService
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<MemoryTopic>> AppendAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        IReadOnlyList<string> facts,
+        MemoryScope scope = MemoryScope.Project,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+
+        var safeName = Slugify(name);
+
+        if (DirectoryFor(workspaceRoot, slug, scope) is not { } directory
+            || Path.Combine(directory, safeName + ".md") is var path && !File.Exists(path))
+        {
+            return OperationResult<MemoryTopic>.Fail(
+                $"There is no topic '{safeName}' to add to.", ExitCode.InvalidArguments);
+        }
+
+        var existing = await ParseAsync(path, ct).ConfigureAwait(false);
+
+        if (existing.Failed)
+        {
+            return existing;
+        }
+
+        // The same refusals as a write: a credential is no more welcome added
+        // to a topic than written into a new one.
+        if (ValidateWrite(safeName, existing.Value!.Description, facts) is { Failed: true } refused)
+        {
+            return OperationResult<MemoryTopic>.Fail(refused.Error!, refused.ExitCode);
+        }
+
+        try
+        {
+            var lines = (await File.ReadAllTextAsync(path, ct).ConfigureAwait(false))
+                .ReplaceLineEndings("\n")
+                .Split('\n')
+                .ToList();
+
+            // After the last bullet, so the new facts sit with the others and
+            // ahead of a closing line such as "Related: [[...]]". A topic with
+            // no bullets takes them at the end.
+            var last = lines.FindLastIndex(line => line.StartsWith("- ", StringComparison.Ordinal));
+            var at = last >= 0 ? last + 1 : lines.Count;
+
+            if (last < 0 && lines.Count > 0 && lines[^1].Length == 0)
+            {
+                at = lines.Count - 1;
+            }
+
+            lines.InsertRange(at, facts.Select(fact => $"- {fact.Trim()}"));
+
+            await File.WriteAllTextAsync(path, string.Join('\n', lines), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<MemoryTopic>.Fail($"Could not write '{path}': {ex.Message}");
+        }
+
+        var rebuild = await RebuildIndexAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
+
+        if (rebuild.Failed)
+        {
+            return OperationResult<MemoryTopic>.Fail(rebuild.Error!, rebuild.ExitCode);
+        }
+
+        return await ParseAsync(path, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult> DeleteAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        MemoryScope scope = MemoryScope.Project,
+        CancellationToken ct = default)
+    {
+        var safeName = Slugify(name);
+
+        if (DirectoryFor(workspaceRoot, slug, scope) is not { } directory
+            || Path.Combine(directory, safeName + ".md") is var path && !File.Exists(path))
+        {
+            return OperationResult.Fail($"There is no topic '{safeName}' to delete.", ExitCode.InvalidArguments);
+        }
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult.Fail($"Could not delete '{path}': {ex.Message}");
+        }
+
+        return await RebuildIndexAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> RebuildIndexAsync(
         string workspaceRoot,
         string slug,
@@ -1207,7 +1342,7 @@ internal sealed partial class MemoryService : IMemoryService
     /// Reduces a fact to a comparison key: case and punctuation differences
     /// are not different facts.
     /// </summary>
-    private static string Normalise(string value) =>
+    internal static string Normalise(string value) =>
         NonComparable().Replace(value.ToLowerInvariant(), " ").Trim();
 
     /// <inheritdoc />

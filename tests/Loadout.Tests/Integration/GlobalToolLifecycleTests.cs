@@ -419,6 +419,16 @@ public sealed class GlobalToolLifecycleTests : IDisposable
         public OperationResult ValidateWrite(string name, string description, IReadOnlyList<string> facts) =>
             throw new NotSupportedException();
 
+        public Task<OperationResult<MemoryTopic>> AppendAsync(
+            string workspaceRoot, string slug, string name, IReadOnlyList<string> facts,
+            MemoryScope scope = MemoryScope.Project, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<OperationResult> DeleteAsync(
+            string workspaceRoot, string slug, string name,
+            MemoryScope scope = MemoryScope.Project, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
         public Task<OperationResult> RebuildIndexAsync(string workspaceRoot, string slug, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
