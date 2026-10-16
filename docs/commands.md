@@ -161,10 +161,10 @@ loadout starstats --agent claude --profile database -- --verbose
 Exit codes are stable and documented in
 [`ExitCode.cs`](../src/Loadout.Models/ExitCode.cs). One is worth knowing before
 you script against it: `loadout` with no arguments and nowhere to draw exits
-**11**, not 0. It's the documented way to open the launcher, so the arguments
-were fine — what was missing was a terminal. A script that reaches that has
-asked for the interactive launcher by mistake, and saying so beats succeeding
-quietly.
+**0**, having said on stderr that there's no terminal and to try `--help`.
+It used to exit 11. Nothing had gone wrong, though, and package validators,
+which run exactly that, read the 11 as a broken install. A command asked to do
+something only a person can, such as a manual team run, still exits 11.
 
 ## Editors
 

@@ -565,12 +565,15 @@ public static class Program
         {
             case LauncherEntry.NoTerminal:
                 // Printing usage is the honest alternative to hanging on a
-                // prompt nobody can answer.
+                // prompt nobody can answer. And it succeeds, because nothing
+                // failed: a package validator runs exactly this, and reading
+                // a non-zero code as a broken install held every winget
+                // release for a person to check by hand.
                 Console.Error.WriteLine(
                     "loadout was run with no arguments and no interactive terminal. "
                     + "Run 'loadout --help' for the available commands.");
 
-                return (int)ExitCode.TerminalRequired;
+                return (int)ExitCode.Success;
 
             case LauncherEntry.Setup:
                 // A machine that has never been configured gets the wizard

@@ -36,6 +36,12 @@ public enum ExitCode
     /// and exited perfectly. A validator did exactly that, and reported a
     /// healthy package as a missing file.
     /// </para>
+    /// <para>
+    /// No longer what <c>loadout</c> with no arguments returns: that now
+    /// succeeds, having said where to go instead, because a validator reads
+    /// this code as a failure too. It stays for commands that were asked to
+    /// do something only a person can, such as a manual team run.
+    /// </para>
     /// </remarks>
     TerminalRequired = 11,
 
