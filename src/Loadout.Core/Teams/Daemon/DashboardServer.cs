@@ -60,6 +60,14 @@ public sealed class DashboardServer : IDisposable
     /// is a 400 somebody notices, and a change routed as a read is a change
     /// that skipped the check.
     /// </remarks>
+    /// <summary>The port the daemon serves on unless the machine names another.</summary>
+    /// <remarks>
+    /// Chosen from the unassigned range above the registered ports, where
+    /// nothing common listens. It is fixed because an installed app window
+    /// is tied to the address it came from.
+    /// </remarks>
+    public const int DefaultPort = 47611;
+
     private static readonly string[] Reads = ["events", "documents", "diff", "stream", "spent", "outcomes"];
 
     private static readonly JsonSerializerOptions Json = new()
@@ -246,6 +254,16 @@ public sealed class DashboardServer : IDisposable
 
     /// <summary>The secret every request has to carry, made when the server starts.</summary>
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+
+    /// <summary>
+    /// Lets a browser in with a cookie rather than the token in its address.
+    /// Null where there is none, and never used off loopback: a credential
+    /// that lasts ninety days belongs on the one machine it was made for.
+    /// </summary>
+    public SignIn? SignIn { get; set; }
+
+    /// <summary>The port listened on, once started.</summary>
+    public int Port { get; private set; }
 
     /// <summary>Where to point a browser, token and all.</summary>
     public string Address { get; private set; } = string.Empty;
@@ -443,6 +461,7 @@ public sealed class DashboardServer : IDisposable
 
             Address = $"{prefix}?token={Token}";
             Beyond = !IsLoopback(where);
+            Port = chosen;
 
             return OperationResult.Ok();
         }
@@ -1001,16 +1020,118 @@ public sealed class DashboardServer : IDisposable
     {
         var given = request.QueryString["token"] ?? request.Headers["X-Loadout-Token"];
 
-        return given is not null
+        if (given is { Length: > 0 }
             && CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(given),
-                Encoding.UTF8.GetBytes(Token));
+                Encoding.UTF8.GetBytes(Token)))
+        {
+            return true;
+        }
+
+        // A page opened through a sign-in link carries no token, and sends
+        // an empty one, so the cookie is the fallback rather than the first
+        // thing asked.
+        return SignedIn(request) != CookieStanding.Refused;
     }
+
+    /// <summary>Whether a request carries a sign-in cookie that lets it in.</summary>
+    /// <remarks>
+    /// Cookies are kept per host, not per port, so a browser sends this one
+    /// to anything else listening on loopback as well, and anything else on
+    /// loopback can make a browser send requests here. The cookie only counts
+    /// when the request names this listener as its host and, where it says
+    /// where it came from, came from this listener's own page.
+    /// </remarks>
+    internal CookieStanding SignedIn(HttpListenerRequest request)
+    {
+        if (SignIn is null || Beyond || !From(request) || !Ours(request))
+        {
+            return CookieStanding.Refused;
+        }
+
+        return SignIn.Check(request.Cookies[SignIn.CookieName]?.Value);
+    }
+
+    /// <summary>Whether a request names this listener as its host, and as its origin when it gives one.</summary>
+    private bool Ours(HttpListenerRequest request)
+    {
+        var host = request.Headers["Host"];
+
+        if (host is null
+            || !(string.Equals(host, $"127.0.0.1:{Port.ToString(CultureInfo.InvariantCulture)}", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(host, $"localhost:{Port.ToString(CultureInfo.InvariantCulture)}", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var origin = request.Headers["Origin"];
+
+        return origin is null || string.Equals(origin, "http://" + host, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A link that signs a browser in to the dashboard at an address, or null
+    /// where that address is not on this machine.
+    /// </summary>
+    /// <param name="address">Where the dashboard is, as it was printed.</param>
+    /// <param name="signIn">The sign-in to mint the link's code with.</param>
+    public static string? SignInLink(string? address, SignIn? signIn)
+    {
+        if (signIn is null
+            || !Uri.TryCreate(address, UriKind.Absolute, out var where)
+            || !IsLoopback(where.Host.Trim('[', ']')))
+        {
+            return null;
+        }
+
+        return $"{where.Scheme}://{where.Authority}/signin?code={Uri.EscapeDataString(signIn.MintCode())}";
+    }
+
+    /// <summary>Exchanges a one-time code for the cookie, then sends the browser to the page.</summary>
+    private async Task SignInAsync(HttpListenerContext context)
+    {
+        var request = context.Request;
+
+        if (SignIn is null || Beyond || !From(request) || !Ours(request) || !SignIn.Redeem(request.QueryString["code"]))
+        {
+            await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                "This sign-in link has been used or has run out. Open the dashboard again with: loadout dashboard --open")
+                .ConfigureAwait(false);
+
+            return;
+        }
+
+        GiveCookie(context.Response);
+        context.Response.Headers["Cache-Control"] = "no-store";
+        context.Response.StatusCode = 303;
+        context.Response.Headers["Location"] = "/";
+        context.Response.Close();
+    }
+
+    private void GiveCookie(HttpListenerResponse response) =>
+        response.AppendHeader(
+            "Set-Cookie",
+            $"{SignIn.CookieName}={SignIn!.IssueCookie()}; Path=/; "
+            + $"Max-Age={((long)SignIn.CookieLife.TotalSeconds).ToString(CultureInfo.InvariantCulture)}; HttpOnly; SameSite=Strict");
 
     private async Task HandleAsync(HttpListenerContext context, CancellationToken ct)
     {
         var request = context.Request;
         var path = request.Url?.AbsolutePath ?? "/";
+
+        if (path == "/signin")
+        {
+            await SignInAsync(context).ConfigureAwait(false);
+
+            return;
+        }
+
+        // A window in daily use never runs out: a cookie a day old goes back
+        // fresh with whatever was asked for.
+        if (SignedIn(request) == CookieStanding.Renew)
+        {
+            GiveCookie(context.Response);
+        }
 
         // Setting the second credential, which is the one thing here that
         // this machine has to be sitting in front of.

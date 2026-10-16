@@ -203,6 +203,17 @@ public sealed class MachineTeams
     public string WebhookListen { get; set; } = "127.0.0.1";
 
     /// <summary>
+    /// The port the daemon serves the dashboard on, or null for the default.
+    /// </summary>
+    /// <remarks>
+    /// Fixed rather than chosen afresh on every start, because an installed
+    /// app window is tied to the address it was installed from, port and all.
+    /// A port that is taken is reported rather than swapped for another, so
+    /// this is the lasting fix when something else on the machine needs it.
+    /// </remarks>
+    public int? DashboardPort { get; set; }
+
+    /// <summary>
     /// Where a run's call for help is sent: slack, discord, teams, telegram,
     /// generic, or empty for nowhere.
     /// </summary>

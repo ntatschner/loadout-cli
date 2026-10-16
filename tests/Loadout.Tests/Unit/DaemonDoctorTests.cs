@@ -34,9 +34,11 @@ public sealed class DaemonDoctorTests : IDisposable
     private readonly IPlatformPaths _paths;
     private readonly IScheduleService _schedules;
 
+    private readonly FakeEnvironmentProvider _environment;
+
     public DaemonDoctorTests()
     {
-        var environment = new FakeEnvironmentProvider(
+        var environment = _environment = new FakeEnvironmentProvider(
             Path.Combine(_root, "home"),
             new Dictionary<string, string>
             {
@@ -185,6 +187,34 @@ public sealed class DaemonDoctorTests : IDisposable
         File.WriteAllText(path, "this is not json");
 
         DaemonNote.Read(_paths).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_dashboard_port_moved_off_the_default_is_said_with_what_it_does_to_an_installed_window()
+    {
+        var checks = await AskWithPortAsync(5050);
+
+        checks.Should().ContainSingle(c => c.Name == "Dashboard port")
+            .Which.Detail.Should().Contain("5050").And.Contain("47611").And.Contain("installed");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(47611)]
+    public async Task The_default_dashboard_port_is_not_mentioned(int? port)
+    {
+        (await AskWithPortAsync(port)).Should().NotContain(c => c.Name == "Dashboard port");
+    }
+
+    private async Task<IReadOnlyList<DiagnosticCheck>> AskWithPortAsync(int? port)
+    {
+        var configuration = new ConfigurationService(_paths, _environment, new YamlStore(new NoOpFilePermissions()));
+        var machine = (await configuration.LoadMachineAsync()).Value!;
+        machine.Teams.DashboardPort = port;
+        (await configuration.SaveMachineAsync(machine)).Succeeded.Should().BeTrue();
+
+        return await new DaemonDiagnosticContributor(_schedules, _paths, new FakeProcessInspector(), configuration)
+            .ContributeAsync();
     }
 
     private sealed class FakeProcessInspector : IProcessInspector

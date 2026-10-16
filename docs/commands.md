@@ -108,6 +108,7 @@
 | `loadout team remedies` | What a team has worked out how to fix, and whether it is trusted here |
 | `loadout team remedy show\|trust\|requests` | One remedy in full, trusting or untrusting it, and the remediations waiting on you |
 | `loadout dashboard` | Every run at once, live, on a page: the daemon's if one is serving, otherwise a new one here |
+| `loadout dashboard sign-out` | Sign every browser out of the dashboard on this machine, including in a daemon that is already running |
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |

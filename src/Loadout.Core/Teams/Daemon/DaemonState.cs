@@ -98,19 +98,70 @@ internal sealed class DaemonDiagnosticContributor : IDiagnosticContributor
     private readonly IScheduleService _schedules;
     private readonly IPlatformPaths _paths;
     private readonly IProcessInspector _processes;
+    private readonly Configuration.IConfigurationService? _configuration;
 
     public DaemonDiagnosticContributor(
         IScheduleService schedules,
         IPlatformPaths paths,
-        IProcessInspector processes)
+        IProcessInspector processes,
+        Configuration.IConfigurationService? configuration = null)
     {
         _schedules = schedules;
         _paths = paths;
         _processes = processes;
+        _configuration = configuration;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<DiagnosticCheck>> ContributeAsync(CancellationToken ct = default)
+    {
+        var checks = new List<DiagnosticCheck>(await DaemonAsync(ct).ConfigureAwait(false));
+
+        if (await PortAsync(ct).ConfigureAwait(false) is { } port)
+        {
+            checks.Add(port);
+        }
+
+        return checks;
+    }
+
+    /// <summary>Said when the dashboard's port has been moved off the default, and why that matters.</summary>
+    /// <remarks>
+    /// An installed app window is tied to the port it was installed from, so
+    /// one that stopped opening after this changed is explained here rather
+    /// than nowhere. Information rather than a warning: moving it is the fix
+    /// for a clash, not a fault.
+    /// </remarks>
+    private async Task<DiagnosticCheck?> PortAsync(CancellationToken ct)
+    {
+        if (_configuration is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var machine = await _configuration.LoadMachineAsync(ct).ConfigureAwait(false);
+
+            if (machine.Value?.Teams.DashboardPort is not { } port || port == DashboardServer.DefaultPort)
+            {
+                return null;
+            }
+
+            return DiagnosticCheck.Ok(
+                Category,
+                "Dashboard port",
+                $"The daemon serves the dashboard on {port}, set by dashboard-port, rather than {DashboardServer.DefaultPort}. "
+                + "An app window installed from another port will not open until it is installed again from this one.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            // Configuration that cannot be read is reported by its own check.
+            return null;
+        }
+    }
+
+    private async Task<IReadOnlyList<DiagnosticCheck>> DaemonAsync(CancellationToken ct)
     {
         var note = DaemonNote.Read(_paths);
         var running = note is not null && _processes.IsRunning(note.Pid, note.StartedAt);
