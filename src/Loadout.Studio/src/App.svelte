@@ -2,6 +2,20 @@
   import Home from './pages/Home.svelte';
   import Sessions from './pages/Sessions.svelte';
   import Memory from './pages/Memory.svelte';
+  import { about } from './lib/api.js';
+
+  const issues = 'https://github.com/ntatschner/loadout-cli/issues/new';
+
+  // The Studio bug form, filled in with what this daemon says it is. Until
+  // that is known, or where it cannot be asked, the form without them.
+  let report = $state(`${issues}?template=studio_bug.yml`);
+
+  $effect(() => {
+    about().then((said) => {
+      const query = new URLSearchParams({ template: 'studio_bug.yml', version: said.version, platform: said.platform });
+      report = `${issues}?${query}`;
+    }, () => {});
+  });
 
   // Routes live in the hash, so the daemon serves one page for all of them
   // and a reload or an installed app window opens where it was.
@@ -34,11 +48,11 @@
   <span class="brand">Loadout Studio</span>
   <a
     class="pill preview"
-    href="https://github.com/ntatschner/loadout-cli/issues"
+    href={report}
     target="_blank"
     rel="noreferrer noopener"
     title="Studio is a preview. Report a problem on GitHub."
-  >Preview</a>
+  >Preview<span class="visually-hidden">: report a problem</span></a>
   <nav aria-label="Studio">
     <ul>
       {#each pages as page (page.key)}
@@ -48,6 +62,7 @@
       {/each}
     </ul>
   </nav>
+  <a class="classic" href="/classic">Classic dashboard</a>
 </header>
 
 <main id="content" tabindex="-1">
@@ -107,6 +122,11 @@
 
   .preview {
     text-decoration: none;
+  }
+
+  .classic {
+    margin-left: auto;
+    font-size: var(--size-small);
   }
 
   main {

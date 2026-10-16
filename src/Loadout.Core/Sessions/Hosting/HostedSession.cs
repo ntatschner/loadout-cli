@@ -164,6 +164,9 @@ public sealed class HostedSession : IAsyncDisposable
         return OperationResult<HostedSession>.Ok(session);
     }
 
+    /// <summary>The process the session started, or 0 where the terminal could not say.</summary>
+    public int ProcessId => _terminal.ProcessId;
+
     /// <summary>Completes once the session has ended and every window has been told.</summary>
     public Task Completion => _pump;
 

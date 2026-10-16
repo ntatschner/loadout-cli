@@ -50,6 +50,7 @@ public sealed class HostedSessions : IAsyncDisposable
     private readonly Func<IPseudoTerminal> _terminals;
     private readonly Func<(string Command, IReadOnlyList<string> Prefix)?> _launcher;
     private readonly IChildLifetime? _lifetime;
+    private readonly IProcessTree? _tree;
     private readonly object _gate = new();
     private readonly List<HostedSession> _sessions = [];
     private bool _disposed;
@@ -57,14 +58,39 @@ public sealed class HostedSessions : IAsyncDisposable
     /// <param name="terminals">A new pseudo-terminal for each session.</param>
     /// <param name="launcher">How to start this launcher again, or null where it cannot say.</param>
     /// <param name="lifetime">Ties each session's process to the daemon's.</param>
+    /// <param name="tree">Measures what each session's processes hold, or null for nothing to measure with.</param>
     public HostedSessions(
         Func<IPseudoTerminal> terminals,
         Func<(string Command, IReadOnlyList<string> Prefix)?> launcher,
-        IChildLifetime? lifetime = null)
+        IChildLifetime? lifetime = null,
+        IProcessTree? tree = null)
     {
         _terminals = terminals;
         _launcher = launcher;
         _lifetime = lifetime;
+        _tree = tree;
+    }
+
+    /// <summary>
+    /// The resident memory of each running session's processes, the launch
+    /// and the agent it started, by session id; a session that could not be
+    /// measured is left out.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, long>> MemoryAsync(CancellationToken ct = default)
+    {
+        var running = All.Where(one => !one.HasEnded && one.ProcessId > 0).ToList();
+
+        if (_tree is null || running.Count == 0)
+        {
+            return new Dictionary<string, long>();
+        }
+
+        var table = await _tree.SnapshotAsync(ct).ConfigureAwait(false);
+        var measured = ProcessTrees.Resident(table, running.Select(one => one.ProcessId));
+
+        return running
+            .Where(one => measured.ContainsKey(one.ProcessId))
+            .ToDictionary(one => one.Id, one => measured[one.ProcessId], StringComparer.Ordinal);
     }
 
     /// <summary>

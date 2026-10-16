@@ -940,6 +940,9 @@ there is one account of what happened rather than three that can disagree.
 
   **Studio is a preview** of a fuller app, served beside this page at
   `/studio/`. `loadout dashboard --open --studio` signs you in and opens it.
+  `loadout config set dashboard studio` makes the daemon's address open
+  Studio rather than this page, which is still at `/classic`; set it back
+  with `loadout config set dashboard classic`.
   So far it does two things the classic page doesn't. It can start an agent
   session in the daemon and give you its terminal in the browser. The session
   is `loadout launch` run for you, so it gets exactly what it would in a

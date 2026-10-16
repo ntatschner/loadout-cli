@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { sessions, SignedOut } from '../lib/api.js';
+  import { size } from '../lib/format.js';
 
   /** @type {{ signedOut: () => void }} */
   let { signedOut } = $props();
@@ -8,6 +9,10 @@
   let list = $state(/** @type {any[] | null} */ (null));
 
   let running = $derived(list?.filter((one) => !one.ended).length ?? 0);
+  let memory = $derived(
+    list?.filter((one) => !one.ended && one.memory !== null).reduce((total, one) => total + one.memory, 0) ?? 0,
+  );
+  let measured = $derived(list?.some((one) => !one.ended && one.memory !== null) ?? false);
 
   async function refresh() {
     try {
@@ -36,6 +41,12 @@
       <p>Reading…</p>
     {:else}
       <p><strong>{running}</strong> running{list.length > running ? `, ${list.length - running} ended` : ''}</p>
+      {#if running > 0}
+        <p class="memory">
+          {measured ? `About ${size(memory)} of memory` : 'Memory not measured'}
+          <span class="hint">for the sessions and the agents they started</span>
+        </p>
+      {/if}
     {/if}
   </a>
 </div>
@@ -75,5 +86,15 @@
 
   p {
     margin: 0;
+  }
+
+  .memory {
+    margin-top: var(--space-2);
+  }
+
+  .hint {
+    display: block;
+    color: var(--colour-text-muted);
+    font-size: var(--size-small);
   }
 </style>

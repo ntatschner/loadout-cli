@@ -105,6 +105,58 @@ public sealed partial class DashboardStudioTests : IAsyncLifetime
         climbing.StatusCode.Should().NotBe(HttpStatusCode.OK);
     }
 
+    [StudioBuiltFact]
+    public async Task Where_studio_is_chosen_the_address_opens_it_with_what_it_carried()
+    {
+        _server.StudioFirst = _ => Task.FromResult(true);
+
+        using var bare = await _client.GetAsync(_root + "/");
+        using var printed = await _client.GetAsync(_root + "/?token=" + _server.Token);
+
+        bare.StatusCode.Should().Be(HttpStatusCode.Found);
+        bare.Headers.Location!.OriginalString.Should().Be("/studio/");
+        printed.Headers.Location!.OriginalString.Should().Be("/studio/?token=" + _server.Token);
+    }
+
+    [StudioBuiltFact]
+    public async Task Where_it_is_not_the_address_opens_the_classic_page_as_before()
+    {
+        _server.StudioFirst = _ => Task.FromResult(false);
+
+        using var bare = await _client.GetAsync(_root + "/");
+        using var signed = await _client.GetAsync(_root + "/?token=" + _server.Token);
+
+        bare.StatusCode.Should().Be(HttpStatusCode.Forbidden, "the classic page is behind the token, as it was");
+        signed.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await signed.Content.ReadAsStringAsync()).Should().NotContain("/studio/assets/");
+    }
+
+    [Fact]
+    public async Task The_classic_page_is_also_at_classic_behind_the_token()
+    {
+        _server.StudioFirst = _ => Task.FromResult(true);
+
+        using var stranger = await _client.GetAsync(_root + "/classic");
+        using var signed = await _client.GetAsync(_root + "/classic?token=" + _server.Token);
+
+        stranger.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        signed.StatusCode.Should().Be(HttpStatusCode.OK);
+        signed.Content.Headers.ContentType!.MediaType.Should().Be("text/html");
+    }
+
+    [Fact]
+    public async Task About_says_the_version_and_platform_a_report_is_filled_in_with()
+    {
+        using var stranger = await _client.GetAsync(_root + "/api/v1/about");
+        var said = System.Text.Json.JsonDocument.Parse(
+            await _client.GetStringAsync(_root + "/api/v1/about?token=" + _server.Token)).RootElement;
+
+        stranger.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        said.GetProperty("version").GetString().Should().MatchRegex("^[0-9]+[.][0-9]+[.][0-9]+")
+            .And.NotContain("+", "the commit it was built from is no business of the form");
+        said.GetProperty("platform").GetString().Should().NotBeNullOrWhiteSpace();
+    }
+
     [GeneratedRegex("src=\"(/studio/assets/[^\"]+[.]js)\"")]
     private static partial Regex ScriptPath();
 

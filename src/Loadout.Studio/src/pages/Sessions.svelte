@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { sessions, SignedOut } from '../lib/api.js';
+  import { size } from '../lib/format.js';
   import Terminal from '../lib/Terminal.svelte';
 
   /** @type {{ open: string | null, signedOut: () => void }} */
@@ -109,6 +110,9 @@
               <span class="pill" data-state={session.ended ? 'done' : 'running'}>
                 {session.ended ? `ended${session.exitCode === null ? '' : ` (${session.exitCode})`}` : 'running'}
               </span>
+              {#if !session.ended && session.memory !== null}
+                <span class="memory">about {size(session.memory)}</span>
+              {/if}
             </a>
             <button type="button" class="quiet" onclick={() => end(session)}>
               {session.ended ? 'Remove' : 'End'}<span class="visually-hidden"> {session.title}</span>
@@ -203,6 +207,11 @@
   .title {
     overflow-wrap: anywhere;
     font-weight: 600;
+  }
+
+  .memory {
+    color: var(--colour-text-muted);
+    font-size: var(--size-small);
   }
 
   .main {

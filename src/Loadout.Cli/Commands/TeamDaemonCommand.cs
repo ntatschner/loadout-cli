@@ -135,7 +135,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         _sessions = new Loadout.Core.Sessions.Hosting.HostedSessions(
             Loadout.Platform.PlatformServices.CreatePseudoTerminal,
             Loadout.Core.Agents.LauncherInvocation.Parts,
-            lifetime);
+            lifetime,
+            Loadout.Platform.PlatformServices.CreateProcessTree(launcher));
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;
@@ -424,6 +425,13 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // so the note says how many are running for 'daemon stop' to warn.
             server.Sessions = _sessions;
             _sessions.Changed += HostedChanged;
+
+            // Which page the address opens, read each time so setting it is
+            // seen at the next load rather than the next restart.
+            server.StudioFirst = async token => string.Equals(
+                (await _configuration.LoadMachineAsync(token).ConfigureAwait(false)).Value?.Teams.Dashboard,
+                "studio",
+                StringComparison.Ordinal);
 
             // And Studio's memory page: read through Core, saved by typing
             // 'memory replace'.

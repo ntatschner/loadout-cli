@@ -100,6 +100,22 @@ public static class PlatformServices
         throw new PlatformNotSupportedException(UnsupportedPlatformMessage);
     }
 
+    /// <summary>What measures a process and everything it started, on this platform.</summary>
+    public static IProcessTree CreateProcessTree(IProcessLauncher launcher)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return new WindowsProcessTree();
+        }
+
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            return new Unix.UnixProcessTree(launcher);
+        }
+
+        throw new PlatformNotSupportedException(UnsupportedPlatformMessage);
+    }
+
     /// <summary>Identifies the current machine, refusing anything outside the Tier-1 set.</summary>
     public static HostPlatform DetectHost(IEnvironmentProvider environment)
     {

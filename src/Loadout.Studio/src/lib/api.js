@@ -56,6 +56,9 @@ async function call(method, path, body) {
   return response.status === 204 ? null : response.json();
 }
 
+/** The version and platform, for a problem report to be filled in with. */
+export const about = () => call('GET', '/api/v1/about');
+
 export const sessions = {
   list: () => call('GET', '/api/v1/sessions'),
   start: (launch) => call('POST', '/api/v1/sessions', launch),

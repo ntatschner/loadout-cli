@@ -54,7 +54,10 @@ internal static class SessionsApi
         switch (parts)
         {
             case [] when method == "GET":
-                await JsonAsync(context, 200, sessions.All.Select(Shown).ToArray()).ConfigureAwait(false);
+                var memory = await sessions.MemoryAsync(ct).ConfigureAwait(false);
+                await JsonAsync(context, 200, sessions.All
+                    .Select(one => Shown(one, memory.TryGetValue(one.Id, out var bytes) ? bytes : null))
+                    .ToArray()).ConfigureAwait(false);
                 return;
 
             case [] when method == "POST":
@@ -149,8 +152,13 @@ internal static class SessionsApi
     private static string Address(HostedSession session) => $"{Root}/{Uri.EscapeDataString(session.Id)}";
 
     /// <summary>A session as the page reads it.</summary>
-    internal static object Shown(HostedSession session) => new
+    internal static object Shown(HostedSession session) => Shown(session, null);
+
+    /// <param name="session">The session.</param>
+    /// <param name="memory">What its processes hold resident, an estimate, or null where it was not measured.</param>
+    internal static object Shown(HostedSession session, long? memory) => new
     {
+        memory,
         id = session.Id,
         title = session.Title,
         startedAt = session.StartedAt,

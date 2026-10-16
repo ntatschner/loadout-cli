@@ -118,6 +118,13 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public Loadout.Core.Sessions.Hosting.HostedSessions? Sessions { get; set; }
 
+    /// <summary>
+    /// Whether this machine has chosen Studio as the page its address opens,
+    /// asked per request so a change is seen without a restart. Null keeps
+    /// classic there.
+    /// </summary>
+    public Func<CancellationToken, Task<bool>>? StudioFirst { get; set; }
+
     /// <summary>What Studio's memory page reads and saves, or null where nothing gave this server one.</summary>
     public IStudioMemory? Memory { get; set; }
 
@@ -1123,6 +1130,22 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // What the page says when somebody reports a problem with it: the
+        // version and the platform, for the form to be filled in with.
+        // Behind the same checks as the rest, though it holds nothing secret,
+        // so a page elsewhere cannot use it to learn what is installed here.
+        if (path == "/api/v1/about" && context.Request.HttpMethod == "GET")
+        {
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(new
+            {
+                version = Version(),
+                platform = $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription} "
+                    + System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant(),
+            }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
         if (Under(path, MemoryApi.Root) && Memory is not null)
         {
             await MemoryApi.HandleAsync(context, Memory, path, ct).ConfigureAwait(false);
@@ -1131,6 +1154,17 @@ public sealed class DashboardServer : IDisposable
         }
 
         await WriteAsync(context, 404, "text/plain; charset=utf-8", "There is nothing here.").ConfigureAwait(false);
+    }
+
+    /// <summary>This build's version, without the commit it was built from.</summary>
+    private static string Version()
+    {
+        var informational = typeof(DashboardServer).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion ?? "unknown";
+
+        return informational.Split('+')[0];
     }
 
     /// <summary>Exchanges a one-time code for the cookie, then sends the browser to the page.</summary>
@@ -1466,6 +1500,21 @@ public sealed class DashboardServer : IDisposable
         // What the page reads about this machine goes through the API, which
         // checks. Its address ends in a slash so the bundle's own paths
         // resolve beneath it.
+        // The address itself, sent on to Studio where this machine has chosen
+        // it, with whatever it carried: an address printed with its token
+        // still works. Ahead of the token for the same reason Studio's files
+        // are, and it tells the asker nothing but where the page is.
+        if (path is "/" or "/index.html" && request.HttpMethod == "GET" && StudioAssets.Built
+            && StudioFirst is { } studioFirst && await studioFirst(ct).ConfigureAwait(false))
+        {
+            context.Response.StatusCode = 302;
+            context.Response.Headers["Location"] = StudioAssets.Root + request.Url?.Query;
+            context.Response.Headers["Cache-Control"] = "no-store";
+            context.Response.Close();
+
+            return;
+        }
+
         if (path == "/studio" && request.HttpMethod == "GET")
         {
             context.Response.StatusCode = 301;
@@ -1506,7 +1555,9 @@ public sealed class DashboardServer : IDisposable
 
         Answered++;
 
-        if (path is "/" or "/index.html")
+        // /classic as well, so the classic page is still there for somebody
+        // whose address opens Studio.
+        if (path is "/" or "/index.html" or "/classic")
         {
             await WriteAsync(context, 200, "text/html; charset=utf-8", Page(Look, Motion, Colour))
                 .ConfigureAwait(false);

@@ -1,0 +1,64 @@
+name: Studio bug
+description: Something wrong in Loadout Studio, the preview app the daemon serves
+labels: [bug, studio]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying Studio while it is a preview. Opened from Studio's
+        preview badge, the version and platform below are already filled in.
+
+        If this is a security problem, please do not file it here. Use
+        [private reporting](https://github.com/ntatschner/loadout-cli/security/advisories/new)
+        on the Security tab instead.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead. Which page it was on helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: What you clicked or typed, in order.
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: Which one, and whether Studio was a tab or an installed app window.
+      placeholder: Edge 141, installed app window
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Loadout version
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+    validations:
+      required: false
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `loadout doctor`
+      description: |
+        Studio does not send anything about your machine to GitHub on its own,
+        so this is for you to paste if you are willing. It does not print
+        secret values. Redact anything you would rather not share.
+      render: shell
+    validations:
+      required: false
