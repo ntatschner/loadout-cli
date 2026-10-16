@@ -120,9 +120,18 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Tools.IToolNominationPass nominations,
         Loadout.Core.Ideas.IIdeaService ideas,
         Loadout.Core.Ideas.IIdeaDumps dumps,
-        TeamBin bin)
+        TeamBin bin,
+        IChildLifetime lifetime)
     {
         _bin = bin;
+
+        // Made here rather than registered: the daemon owns them and ends
+        // them when it stops, and the container, disposing synchronously,
+        // refuses a singleton that can only be disposed asynchronously.
+        _sessions = new Loadout.Core.Sessions.Hosting.HostedSessions(
+            Loadout.Platform.PlatformServices.CreatePseudoTerminal,
+            Loadout.Core.Agents.LauncherInvocation.Parts,
+            lifetime);
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;
@@ -407,6 +416,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // offered to have decided.
             server.Attach = new Attaching(_secrets, _time);
 
+            // Sessions hosted for Studio, which end when this daemon does.
+            server.Sessions = _sessions;
+
             _address = server.Address;
 
             foreach (var address in server.Reachable())
@@ -482,6 +494,9 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
         }
 
+        // After the listener, so no page can start one while the rest end.
+        await _sessions.DisposeAsync().ConfigureAwait(false);
+
         // Not waited for when the stop came from somewhere else. It is a read
         // of standard input waiting to see it close, and a read of a pipe on
         // Windows does not hear its cancellation: a daemon told to stop by
@@ -505,6 +520,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         return (int)ExitCode.Success;
     }
+
+    private readonly Loadout.Core.Sessions.Hosting.HostedSessions _sessions;
 
     /// <summary>The settings this daemon was started with, for a restart to use again.</summary>
     private Settings? _started;

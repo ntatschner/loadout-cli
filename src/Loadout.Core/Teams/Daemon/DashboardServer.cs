@@ -108,6 +108,16 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public Func<CancellationToken, Task<MachineSettings>>? Settings { get; set; }
 
+    /// <summary>
+    /// The sessions this server hosts for the browser, or null for none.
+    /// </summary>
+    /// <remarks>
+    /// Only the daemon's server has them. A session lives as long as whatever
+    /// hosts it, and a dashboard started in a terminal goes when that terminal
+    /// does.
+    /// </remarks>
+    public Loadout.Core.Sessions.Hosting.HostedSessions? Sessions { get; set; }
+
     /// <summary>Changing one, by running the command somebody would have typed.</summary>
     public Func<SettingsChange, CancellationToken, Task<OperationResult>>? Settle { get; set; }
 
@@ -1183,6 +1193,41 @@ public sealed class DashboardServer : IDisposable
             }
 
             await SpeechAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        // The sessions this daemon hosts for Studio. Above the guard that
+        // answers every other change with 405, and only from this machine:
+        // a hosted session is somebody's agent, and typing at it from across
+        // a network is not something the token or the cookie should grant.
+        if (path == SessionsApi.Root || path.StartsWith(SessionsApi.Root + "/", StringComparison.Ordinal))
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            if (Beyond || !From(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "Hosted sessions are only reachable from this machine.").ConfigureAwait(false);
+
+                return;
+            }
+
+            if (Sessions is null)
+            {
+                await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                    "This dashboard hosts no sessions. The daemon's does: loadout daemon").ConfigureAwait(false);
+
+                return;
+            }
+
+            await SessionsApi.HandleAsync(context, Sessions, path, ct).ConfigureAwait(false);
 
             return;
         }
@@ -3412,7 +3457,7 @@ public sealed class DashboardServer : IDisposable
         + "<rect width='16' height='16' rx='3' fill='#7a3b00'/>"
         + "<circle cx='8' cy='8' r='3' fill='#fff'/></svg>";
 
-    private static async Task WriteAsync(HttpListenerContext context, int status, string type, string body)
+    internal static async Task WriteAsync(HttpListenerContext context, int status, string type, string body)
     {
         var response = context.Response;
         var bytes = Encoding.UTF8.GetBytes(body);
