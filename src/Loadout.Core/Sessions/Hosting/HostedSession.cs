@@ -122,6 +122,12 @@ public sealed class HostedSession : IAsyncDisposable
     /// <param name="rows">Height to start at.</param>
     /// <param name="scrollback">Bytes of output kept for later windows.</param>
     /// <param name="queue">Frames a window may fall behind by.</param>
+    /// <param name="lifetime">
+    /// Ties the child to this process, so a daemon that is killed takes its
+    /// sessions with it at once. Without it they outlive the daemon until
+    /// they notice their console has gone, which took five seconds in the
+    /// spike and is up to the child.
+    /// </param>
     /// <param name="ct">Cancels the start.</param>
     public static async Task<OperationResult<HostedSession>> StartAsync(
         IPseudoTerminal terminal,
@@ -132,6 +138,7 @@ public sealed class HostedSession : IAsyncDisposable
         int rows,
         int scrollback = DefaultScrollback,
         int queue = DefaultQueue,
+        IChildLifetime? lifetime = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(terminal);
@@ -144,6 +151,11 @@ public sealed class HostedSession : IAsyncDisposable
             terminal.Dispose();
 
             return OperationResult<HostedSession>.Fail(started.Error ?? "The session could not be started.", started.ExitCode);
+        }
+
+        if (terminal.ProcessId > 0)
+        {
+            lifetime?.Adopt(terminal.ProcessId);
         }
 
         var session = new HostedSession(terminal, id, title, columns, rows, scrollback, queue);

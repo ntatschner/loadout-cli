@@ -186,6 +186,18 @@ public sealed class HostedSessionTests
     }
 
     [Fact]
+    public async Task The_child_is_tied_to_the_daemon_so_a_killed_daemon_takes_it_along()
+    {
+        var terminal = new ScriptedTerminal();
+        var lifetime = new RecordingLifetime();
+
+        var started = await HostedSession.StartAsync(terminal, Request, "s1", "stand-in", 80, 24, lifetime: lifetime);
+        await using var session = started.Value!;
+
+        lifetime.Adopted.Should().Equal(ScriptedTerminal.ChildId);
+    }
+
+    [Fact]
     public async Task A_pseudo_terminal_that_would_not_start_is_reported_and_closed()
     {
         var terminal = new ScriptedTerminal { Refuse = "no console" };
@@ -310,12 +322,27 @@ public sealed class HostedSessionTests
 
     private static byte[] Bytes(string text) => Encoding.UTF8.GetBytes(text);
 
+    private sealed class RecordingLifetime : IChildLifetime
+    {
+        public List<int> Adopted { get; } = [];
+
+        public bool IsEnforced => true;
+
+        public string Detail => "recorded";
+
+        public void Adopt(int processId) => Adopted.Add(processId);
+    }
+
     /// <summary>A pseudo-terminal whose output the test writes and whose input the test reads.</summary>
     private sealed class ScriptedTerminal : IPseudoTerminal
     {
         private readonly Channel<byte[]> _output = Channel.CreateUnbounded<byte[]>();
         private readonly TaskCompletionSource<int> _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly List<byte> _written = [];
+
+        public const int ChildId = 4242;
+
+        public int ProcessId { get; private set; }
 
         public string? Refuse { get; init; }
 
@@ -339,7 +366,14 @@ public sealed class HostedSessionTests
         }
 
         public Task<OperationResult> StartAsync(ProcessRequest request, int columns, int rows, CancellationToken ct = default) =>
-            Task.FromResult(Refuse is null ? OperationResult.Ok() : OperationResult.Fail(Refuse));
+            Task.FromResult(Refuse is null ? Started() : OperationResult.Fail(Refuse));
+
+        private OperationResult Started()
+        {
+            ProcessId = ChildId;
+
+            return OperationResult.Ok();
+        }
 
         public Task<OperationResult> WriteAsync(ReadOnlyMemory<byte> data, CancellationToken ct = default)
         {

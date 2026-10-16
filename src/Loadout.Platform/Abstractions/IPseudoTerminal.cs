@@ -19,6 +19,9 @@ namespace Loadout.Platform.Abstractions;
 /// </summary>
 public interface IPseudoTerminal : IDisposable
 {
+    /// <summary>The child's process id once it has started, and 0 before.</summary>
+    int ProcessId { get; }
+
     /// <summary>Allocates the pseudo-terminal and starts the child process in it.</summary>
     Task<OperationResult> StartAsync(ProcessRequest request, int columns, int rows, CancellationToken ct = default);
 

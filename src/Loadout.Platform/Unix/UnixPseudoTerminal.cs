@@ -27,6 +27,9 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
     private bool _windowSizeApplied;
 
     private int _child;
+
+    /// <inheritdoc />
+    public int ProcessId => _child;
     private int _exitCode;
     private bool _exited;
     private bool _disposed;
