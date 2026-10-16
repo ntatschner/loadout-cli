@@ -106,7 +106,7 @@ public sealed class TeamsScreenTests
     [InlineData(0, "s", "team status 20260916-1200-aaaa")]
     [InlineData(1, "Enter", "team log 20260916-1100-bbbb")]
     [InlineData(1, "s", "team status 20260916-1100-bbbb")]
-    [InlineData(0, "d", "team dashboard")]
+    [InlineData(0, "d", "dashboard")]
     public void A_key_hands_back_the_command_for_the_run_the_cursor_is_on(
         int row, string key, string expected)
     {

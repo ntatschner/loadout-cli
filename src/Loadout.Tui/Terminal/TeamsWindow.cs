@@ -194,7 +194,7 @@ internal sealed class TeamsWindow : Window
         // Save is chosen for being inert on a list, not for reading well. The
         // slot only has to be one nothing else raises.
         Hand(Key.S, Command.Save, () => Selected() is { } run ? $"team status {run.RunId}" : null);
-        Hand(Key.D, Command.Open, () => "team dashboard");
+        Hand(Key.D, Command.Open, () => "dashboard");
 
         // The one key here that changes anything. Everything else hands back
         // a command that prints; this one deletes the only copy of what a run

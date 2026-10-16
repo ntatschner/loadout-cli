@@ -33,7 +33,7 @@ public sealed class ServingCommandsContractTests
     /// what this exists to stop.
     /// </remarks>
     public static TheoryData<string> Serving =>
-        ["team dashboard", "mcp serve"];
+        ["dashboard", "team dashboard", "mcp serve"];
 
     [BuiltCliTheory]
     [MemberData(nameof(Serving))]

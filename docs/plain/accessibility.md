@@ -71,7 +71,7 @@ used.
 Type this and press Enter:
 
 ```sh
-loadout team dashboard --open
+loadout dashboard --open
 ```
 
 With the **screen-reader** or **low-vision** preset, you get a plainer page.

@@ -51,7 +51,7 @@ get `backup restore`.
 
 ### The dashboard: watch and steer team runs from your browser
 
-`loadout team dashboard` serves a page on this machine showing what every team
+`loadout dashboard` serves a page on this machine showing what every team
 run is doing, what's waiting for you and what it's spent. Runs that need you
 come first, under their own heading. It has five screens — List, Office, Graph,
 Timeline and Terminal — and every button on it runs the same command

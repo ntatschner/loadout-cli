@@ -65,6 +65,56 @@ public sealed class WindowsAutostart : IAutostart
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<string?>> CommandAsync(CancellationToken ct = default)
+    {
+        if (!File.Exists(ShortcutPath))
+        {
+            return OperationResult<string?>.Ok(null);
+        }
+
+        var powershell = _resolver.Resolve("powershell") ?? _resolver.Resolve("pwsh");
+
+        if (powershell is null)
+        {
+            return OperationResult<string?>.Fail(
+                "Neither powershell nor pwsh was found, so the login item cannot be read.");
+        }
+
+        var environment = new Dictionary<string, string>
+        {
+            ["LOADOUT_SHORTCUT_PATH"] = ShortcutPath,
+        };
+
+        // A shortcut is a binary file, and the shell object that wrote it is
+        // the reliable way to read it back. One field per line, so a path with
+        // a space in it cannot be mistaken for where the arguments start.
+        var script =
+            "$link = (New-Object -ComObject WScript.Shell).CreateShortcut($env:LOADOUT_SHORTCUT_PATH); "
+            + "[Console]::Out.WriteLine($link.TargetPath); "
+            + "[Console]::Out.WriteLine($link.Arguments)";
+
+        var result = await _processes.RunAsync(
+            new ProcessRequest(
+                powershell,
+                ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+                Environment: environment),
+            TimeSpan.FromSeconds(30),
+            ct).ConfigureAwait(false);
+
+        if (result.Failed || result.Value is null || !result.Value.Succeeded)
+        {
+            return OperationResult<string?>.Fail(
+                result.Error ?? $"The login item could not be read: {result.Value?.StandardError.Trim()}");
+        }
+
+        var lines = result.Value.StandardOutput.ReplaceLineEndings().Split(Environment.NewLine, StringSplitOptions.TrimEntries);
+        var target = lines.ElementAtOrDefault(0) ?? string.Empty;
+        var arguments = lines.ElementAtOrDefault(1) ?? string.Empty;
+
+        return OperationResult<string?>.Ok($"\"{target}\" {arguments}".TrimEnd());
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> InstallAsync(string command, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);

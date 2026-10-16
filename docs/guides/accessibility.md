@@ -137,7 +137,7 @@ no screen-reader mode, and Loadout says so at launch.
 ### 7. Open the dashboard
 
 ```sh
-loadout team dashboard
+loadout dashboard
 ```
 
 Under `screen-reader` or `low-vision`, or with colour set to none, you get the

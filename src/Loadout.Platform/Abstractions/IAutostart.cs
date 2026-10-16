@@ -27,6 +27,16 @@ public interface IAutostart
     OperationResult<bool> IsInstalled();
 
     /// <summary>
+    /// The command line the entry runs, or null when there is no entry.
+    /// </summary>
+    /// <remarks>
+    /// Read back from the entry itself, so an entry written by an older
+    /// launcher says what it actually runs rather than what this one would
+    /// write.
+    /// </remarks>
+    Task<OperationResult<string?>> CommandAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// Writes the entry, replacing any it already wrote.
     /// </summary>
     /// <param name="command">

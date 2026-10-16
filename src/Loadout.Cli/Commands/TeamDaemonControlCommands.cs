@@ -68,7 +68,7 @@ public abstract class DaemonControlCommand<TSettings> : AsyncCommand<TSettings>
 
         failure = output.Fail(
             "No daemon is running on this machine, so there is nothing to control. "
-            + "Start one with: loadout team daemon",
+            + "Start one with: loadout daemon",
             ExitCode.GeneralFailure);
 
         return null;
@@ -118,7 +118,7 @@ public sealed class DaemonStopSettings : GlobalSettings
 /// the turn and what was paid for it, which is why the default is to let them
 /// finish and why "now" is a word somebody has to type.
 /// </remarks>
-[Description("Stop the running team daemon, after the runs it started have finished.")]
+[Description("Stop the running daemon, after the runs it started have finished.")]
 [CommandMeta(CommandCategory.Start, Intent = "daemon stop shut down end quit kill background", Mutates = true)]
 public sealed class TeamDaemonStopCommand(
     IPlatformPaths paths, IProcessInspector processes, IAnsiConsole console, TimeProvider time)
@@ -164,7 +164,7 @@ public sealed class TeamDaemonStopCommand(
             ? $"[green]+[/] Stopped {Markup.Escape(Named(running))}."
             : $"[green]+[/] Asked {Markup.Escape(Named(running))} to stop. It is finishing the runs it started, "
               + "starts nothing new meanwhile, and stops when they end. "
-              + "'loadout team daemon stop --now' ends them at once.");
+              + "'loadout daemon stop --now' ends them at once.");
 
         return CommandOutput.Success();
     }
@@ -176,7 +176,7 @@ public sealed class TeamDaemonStopCommand(
 /// have finished, and this command knows neither. So this asks, watches for a
 /// while, and says what it saw.
 /// </remarks>
-[Description("Restart the running team daemon with the same settings, after the runs it started have finished.")]
+[Description("Restart the running daemon with the same settings, after the runs it started have finished.")]
 [CommandMeta(CommandCategory.Start, Intent = "daemon restart reload background", Mutates = true)]
 public sealed class TeamDaemonRestartCommand(
     IPlatformPaths paths, IProcessInspector processes, IAnsiConsole console, TimeProvider time)
@@ -235,13 +235,13 @@ public sealed class TeamDaemonRestartCommand(
 
         output.WriteLine(!gone
             ? $"[green]+[/] Asked {Markup.Escape(Named(running))} to restart. It is finishing the runs it started, "
-              + "and restarts with the same settings when they end. 'loadout team daemon restart --now' does not wait."
+              + "and restarts with the same settings when they end. 'loadout daemon restart --now' does not wait."
             : now is { } successor
                 ? $"[green]+[/] Restarted: the daemon is now process {successor.Pid}"
                   + (successor.Address is { Length: > 0 } address ? $", serving {Markup.Escape(address)}." : ".")
                 : $"[yellow]![/] {Markup.Escape(Named(running))} stopped, and no new daemon has appeared yet. "
                   + "Its window, or 'loadout doctor', will say whether one started; if not, start it with: "
-                  + "loadout team daemon");
+                  + "loadout daemon");
 
         return CommandOutput.Success();
     }
@@ -253,7 +253,7 @@ public sealed class TeamDaemonRestartCommand(
 /// and anything started from the page or a webhook still starts: those are a
 /// person asking now, which a hold on the clock is not meant to refuse.
 /// </remarks>
-[Description("Hold the team daemon's schedules: nothing fires until it is resumed. The dashboard stays up.")]
+[Description("Hold the daemon's schedules: nothing fires until it is resumed. The dashboard stays up.")]
 [CommandMeta(CommandCategory.Start, Intent = "daemon pause hold schedules suspend background", Mutates = true)]
 public sealed class TeamDaemonPauseCommand(
     IPlatformPaths paths, IProcessInspector processes, IAnsiConsole console, TimeProvider time)
@@ -297,7 +297,7 @@ public sealed class TeamDaemonPauseCommand(
         output.WriteLine(already
             ? $"{Markup.Escape(Named(running))} was already paused."
             : $"[green]+[/] Paused {Markup.Escape(Named(running))}: no schedule fires until "
-              + "'loadout team daemon resume'. The dashboard is still served and runs already going carry on. "
+              + "'loadout daemon resume'. The dashboard is still served and runs already going carry on. "
               + "The hold is kept if the daemon stops, so the next one starts paused too.");
 
         return CommandOutput.Success();
@@ -310,7 +310,7 @@ public sealed class TeamDaemonPauseCommand(
 /// one case where it acts with no daemon running: otherwise the next daemon
 /// would start held for a reason nobody remembers.
 /// </remarks>
-[Description("Let a paused team daemon's schedules fire again.")]
+[Description("Let a paused daemon's schedules fire again.")]
 [CommandMeta(CommandCategory.Start, Intent = "daemon resume continue unpause schedules background", Mutates = true)]
 public sealed class TeamDaemonResumeCommand(
     IPlatformPaths paths, IProcessInspector processes, IAnsiConsole console, TimeProvider time)

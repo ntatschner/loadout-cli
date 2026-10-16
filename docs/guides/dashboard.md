@@ -15,7 +15,7 @@ answer what it's waiting on, and stop it.
 ### 1. Start the dashboard
 
 ```sh
-loadout team dashboard
+loadout dashboard
 ```
 
 You should see the address it's serving on printed in the terminal. It's a
@@ -35,7 +35,7 @@ Copy the whole address, token included, into your browser. Or start it with
 `--open` to have it opened for you:
 
 ```sh
-loadout team dashboard --open
+loadout dashboard --open
 ```
 
 ![The dashboard's run list. A band of totals across the top, the Needs you rail, and the screens as a row of tabs. Then one run under "Needs you", whose card shows the question it is asking, one under "Running", and two under "Finished". Each card names its team and room and states its state as a word, with a glyph beside it.](../images/dashboard-list-rich.png)
@@ -51,7 +51,7 @@ Which page you get follows your accessibility profile. Under the
 plain page; otherwise the rich one. To choose for this start only:
 
 ```sh
-loadout team dashboard --view plain
+loadout dashboard --view plain
 ```
 
 ![The plain dashboard: the same four runs as a single list, each row giving the run's name, its state in words, and what it has cost.](../images/dashboard-list-plain.png)
@@ -256,7 +256,7 @@ while you have something typed in a box.
 For a screen in a corner, start it so nothing on the page can change a run:
 
 ```sh
-loadout team dashboard --watch-only
+loadout dashboard --watch-only
 ```
 
 The server refuses anything that would start or change a run, or change an

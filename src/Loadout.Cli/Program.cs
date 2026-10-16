@@ -58,10 +58,18 @@ public static class Program
         private readonly IConfigurator<CommandSettings> _inner;
         private readonly string _name;
 
-        internal Branch(IConfigurator<CommandSettings> inner, string name)
+        /// <summary>
+        /// False for an old name kept working, which parses like the new one
+        /// but is not offered anywhere: the palette and the reference list
+        /// each command once, by the name to type now.
+        /// </summary>
+        private readonly bool _recorded;
+
+        internal Branch(IConfigurator<CommandSettings> inner, string name, bool recorded = true)
         {
             _inner = inner;
             _name = name;
+            _recorded = recorded;
         }
 
         internal void SetDescription(string description) => _inner.SetDescription(description);
@@ -80,7 +88,10 @@ public static class Program
         {
             _inner.SetDescription(description);
 
-            Catalogue.RecordBranch(_name, description, category, intent);
+            if (_recorded)
+            {
+                Catalogue.RecordBranch(_name, description, category, intent);
+            }
         }
 
         /// <summary>
@@ -90,15 +101,58 @@ public static class Program
         internal void SetDefaultCommand<TCommand>()
             where TCommand : class, ICommandLimiter<CommandSettings>
         {
-            Catalogue.Record(_name, typeof(TCommand));
+            if (_recorded)
+            {
+                Catalogue.Record(_name, typeof(TCommand));
+            }
+
             _inner.SetDefaultCommand<TCommand>();
         }
 
         internal void AddCommand<TCommand>(string name)
             where TCommand : class, ICommandLimiter<CommandSettings>
         {
-            Catalogue.Record($"{_name} {name}", typeof(TCommand));
+            if (_recorded)
+            {
+                Catalogue.Record($"{_name} {name}", typeof(TCommand));
+            }
+
             _inner.AddCommand<TCommand>(name);
+        }
+
+        /// <summary>
+        /// An old name for a command that has moved, kept so that what was
+        /// already written down still runs.
+        /// </summary>
+        /// <param name="name">The old name, under this branch.</param>
+        /// <param name="now">What to type now, for the help line.</param>
+        internal void AddOldName<TCommand>(string name, string now)
+            where TCommand : class, ICommandLimiter<CommandSettings>
+        {
+            _inner.AddCommand<TCommand>(name)
+                .WithDescription($"The old name for 'loadout {now}', which still works.");
+        }
+
+        /// <summary>
+        /// An old name for a whole branch that has moved. It is configured by
+        /// the same action as the new one, so the two cannot drift apart, but
+        /// records nothing.
+        /// </summary>
+        internal void AddOldName(string name, string now, Action<Branch> configure)
+        {
+            ArgumentNullException.ThrowIfNull(configure);
+
+            _inner.AddBranch<CommandSettings>(
+                name,
+                branch =>
+                {
+                    var old = new Branch(branch, $"{_name} {name}", recorded: false);
+
+                    configure(old);
+
+                    // After the shared action, which describes the new name.
+                    branch.SetDescription($"The old name for 'loadout {now}', which still works.");
+                });
         }
 
         /// <summary>
@@ -117,7 +171,7 @@ public static class Program
 
             _inner.AddBranch<CommandSettings>(
                 name,
-                branch => configure(new Branch(branch, $"{_name} {name}")));
+                branch => configure(new Branch(branch, $"{_name} {name}", _recorded)));
         }
     }
 
@@ -765,7 +819,7 @@ public static class Program
                 remedy.AddCommand<TeamRemedyTrustCommand>("trust");
                 remedy.AddCommand<TeamRemedyRequestsCommand>("requests");
             });
-            team.AddCommand<TeamDashboardCommand>("dashboard");
+            team.AddOldName<TeamDashboardCommand>("dashboard", "dashboard");
 
             team.AddBranch("office", office =>
             {
@@ -773,22 +827,10 @@ public static class Program
                 office.AddCommand<TeamOfficeCheckCommand>("check");
             });
 
-            // A branch whose default starts it, so 'team daemon' means what it
-            // always did and the controls are daemon commands rather than team
-            // commands called daemon-stop.
-            team.AddBranch("daemon", daemon =>
-            {
-                daemon.SetDescription("Stay running: fire the scheduled team runs and serve the dashboard.");
-                daemon.SetDefaultCommand<TeamDaemonCommand>();
-                daemon.AddCommand<TeamDaemonStopCommand>("stop");
-                daemon.AddCommand<TeamDaemonRestartCommand>("restart");
-                daemon.AddCommand<TeamDaemonPauseCommand>("pause");
-                daemon.AddCommand<TeamDaemonResumeCommand>("resume");
-
-                // The word somebody reaches for after "pause" as often as
-                // "resume", so it answers too rather than being an error.
-                daemon.AddCommand<TeamDaemonResumeCommand>("continue");
-            });
+            // Where these lived before the daemon came to serve more than
+            // teams. Scheduled tasks, hooks, login entries and printed
+            // instructions all say 'team daemon', so the old names still run.
+            team.AddOldName("daemon", "daemon", Daemon);
 
             team.AddBranch("schedule", schedule =>
             {
@@ -812,12 +854,7 @@ public static class Program
                 attach.AddCommand<TeamAttachShowCommand>("show");
             });
 
-            team.AddBranch("autostart", autostart =>
-            {
-                autostart.AddCommand<TeamAutostartEnableCommand>("enable");
-                autostart.AddCommand<TeamAutostartDisableCommand>("disable");
-                autostart.AddCommand<TeamAutostartShowCommand>("show");
-            });
+            team.AddOldName("autostart", "daemon autostart", Autostart);
 
             team.AddBranch("notify", notify =>
             {
@@ -834,6 +871,17 @@ public static class Program
                 webhook.AddCommand<TeamWebhookShowCommand>("show");
             });
         });
+
+        // Top level rather than under 'team', because what they serve is not
+        // only about teams: memory, ideas and settings will be served from the
+        // same page.
+        //
+        // A command for now, and a group once it has a second command to hold:
+        // a branch with only a default hides that command's options from its
+        // help.
+        Top<TeamDashboardCommand>(config, "dashboard");
+
+        TopBranch(config, "daemon", Daemon);
 
         TopBranch(config, "spend", spend =>
         {
@@ -1075,5 +1123,45 @@ public static class Program
             secret.AddCommand<SecretTestCommand>("test");
             secret.AddCommand<SecretRemoveCommand>("remove");
         });
+    }
+
+    /// <summary>
+    /// The daemon's commands, under 'daemon' and under its old name.
+    /// </summary>
+    /// <remarks>
+    /// A branch whose default starts it, so 'daemon' on its own starts it and
+    /// the controls are daemon commands rather than commands called
+    /// daemon-stop.
+    /// </remarks>
+    private static void Daemon(Branch daemon)
+    {
+        // The command first. The catalogue keeps whichever entry for a path
+        // arrives first, and recorded as a bare branch 'daemon' lost the
+        // command's word that it changes something: the suite that runs every
+        // command ran it without --dry-run and started a real daemon.
+        daemon.SetDefaultCommand<TeamDaemonCommand>();
+        daemon.Describe(
+            "Stay running: fire the scheduled team runs and serve the dashboard.",
+            CommandCategory.Start,
+            "daemon resident service schedules fire background");
+        daemon.AddCommand<TeamDaemonStopCommand>("stop");
+        daemon.AddCommand<TeamDaemonRestartCommand>("restart");
+        daemon.AddCommand<TeamDaemonPauseCommand>("pause");
+        daemon.AddCommand<TeamDaemonResumeCommand>("resume");
+
+        // The word somebody reaches for after "pause" as often as
+        // "resume", so it answers too rather than being an error.
+        daemon.AddCommand<TeamDaemonResumeCommand>("continue");
+
+        daemon.AddBranch("autostart", Autostart);
+    }
+
+    /// <summary>Starting the daemon at login.</summary>
+    private static void Autostart(Branch autostart)
+    {
+        autostart.SetDescription("Whether the daemon starts when you log in.");
+        autostart.AddCommand<TeamAutostartEnableCommand>("enable");
+        autostart.AddCommand<TeamAutostartDisableCommand>("disable");
+        autostart.AddCommand<TeamAutostartShowCommand>("show");
     }
 }

@@ -49,7 +49,7 @@ The **dashboard** is a web page that shows what your team is doing. In a new
 terminal, type this and press Enter:
 
 ```sh
-loadout team dashboard --open
+loadout dashboard --open
 ```
 
 Your web browser opens. Only your own computer can see this page.

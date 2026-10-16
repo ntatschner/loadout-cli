@@ -11,7 +11,7 @@ namespace Loadout.Core.Teams.Daemon;
 /// <para>
 /// A daemon with no window has nowhere to print, and what it prints is the
 /// dashboard's address and every run it starts or finishes. So it writes here,
-/// beside its note, and <c>loadout team daemon</c> shows the file as it grows.
+/// beside its note, and <c>loadout daemon</c> shows the file as it grows.
 /// Closing that terminal closes the view and leaves the daemon alone, which is
 /// the point of doing it this way round.
 /// </para>
@@ -46,21 +46,30 @@ public static class DaemonLog
     /// Read from the arguments before anything is parsed, because everything
     /// the process writes has to go there - the dashboard's address, the runs
     /// it starts, and an exception nobody caught - and the console everything
-    /// writes through is made before any command runs. Only <c>team daemon</c>
+    /// writes through is made before any command runs. Only <c>daemon</c>
     /// is looked at, so the same flag on another command means nothing here.
     /// </remarks>
     public static string? Asked(IReadOnlyList<string> arguments)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
-        if (arguments.Count < 2
-            || !string.Equals(arguments[0], "team", StringComparison.Ordinal)
-            || !string.Equals(arguments[1], "daemon", StringComparison.Ordinal))
+        // 'daemon', or 'team daemon' as it was before it moved: a daemon
+        // started by an older launcher, or by a line written down then, still
+        // writes to the log it was told to.
+        var start = arguments.Count > 0 && string.Equals(arguments[0], "daemon", StringComparison.Ordinal)
+            ? 1
+            : arguments.Count > 1
+              && string.Equals(arguments[0], "team", StringComparison.Ordinal)
+              && string.Equals(arguments[1], "daemon", StringComparison.Ordinal)
+                ? 2
+                : -1;
+
+        if (start < 0)
         {
             return null;
         }
 
-        for (var i = 2; i < arguments.Count - 1; i++)
+        for (var i = start; i < arguments.Count - 1; i++)
         {
             if (string.Equals(arguments[i], Flag, StringComparison.Ordinal)
                 && arguments[i + 1] is { Length: > 0 } path)

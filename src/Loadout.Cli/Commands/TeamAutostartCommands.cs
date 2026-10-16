@@ -23,7 +23,7 @@ namespace Loadout.Cli.Commands;
 /// can always be undone by whoever set it.
 /// </para>
 /// </remarks>
-[Description("Start the team daemon when you log in.")]
+[Description("Start the daemon when you log in.")]
 [CommandMeta(CommandCategory.Integration,
     Intent = "autostart login startup daemon schedule boot", Mutates = true)]
 public sealed class TeamAutostartEnableCommand : AsyncCommand<GlobalSettings>
@@ -54,7 +54,7 @@ public sealed class TeamAutostartEnableCommand : AsyncCommand<GlobalSettings>
                 ExitCode.GeneralFailure);
         }
 
-        var command = $"{launcher} team daemon";
+        var command = $"{launcher} daemon";
 
         if (settings.DryRun)
         {
@@ -81,7 +81,7 @@ public sealed class TeamAutostartEnableCommand : AsyncCommand<GlobalSettings>
         // Said rather than done. Starting it here would be a second thing this
         // command does, and somebody running it to set up a machine they are
         // about to restart does not want a daemon starting now.
-        output.WriteLine("[dim]It is not running yet. Start it now with: loadout team daemon[/]");
+        output.WriteLine("[dim]It is not running yet. Start it now with: loadout daemon[/]");
 
         // Where the page is, which nothing used to say. The daemon prints its
         // address once, and at login it prints it into a window nobody is
@@ -90,16 +90,16 @@ public sealed class TeamAutostartEnableCommand : AsyncCommand<GlobalSettings>
         // both new every start, so there is nothing to write down either.
         output.WriteLine(
             "[dim]Its dashboard gets a fresh address every start. Ask where it is with: "
-            + "loadout team dashboard[/]");
+            + "loadout dashboard[/]");
 
-        output.WriteLine("[dim]Undo with: loadout team autostart disable[/]");
+        output.WriteLine("[dim]Undo with: loadout daemon autostart disable[/]");
 
         return CommandOutput.Success();
     }
 }
 
 /// <summary>Stops the daemon starting at login.</summary>
-[Description("Stop the team daemon starting when you log in.")]
+[Description("Stop the daemon starting when you log in.")]
 [CommandMeta(CommandCategory.Integration,
     Intent = "autostart disable remove login startup daemon", Mutates = true)]
 public sealed class TeamAutostartDisableCommand : AsyncCommand<GlobalSettings>
@@ -148,7 +148,7 @@ public sealed class TeamAutostartDisableCommand : AsyncCommand<GlobalSettings>
 }
 
 /// <summary>Whether the daemon starts at login.</summary>
-[Description("Say whether the team daemon starts when you log in.")]
+[Description("Say whether the daemon starts when you log in.")]
 [CommandMeta(CommandCategory.Integration, Intent = "autostart show status login startup daemon")]
 public sealed class TeamAutostartShowCommand : AsyncCommand<GlobalSettings>
 {
@@ -162,7 +162,7 @@ public sealed class TeamAutostartShowCommand : AsyncCommand<GlobalSettings>
     }
 
     /// <inheritdoc />
-    public override Task<int> ExecuteAsync(
+    public override async Task<int> ExecuteAsync(
         CommandContext context,
         GlobalSettings settings,
         CancellationToken cancellationToken)
@@ -174,14 +174,28 @@ public sealed class TeamAutostartShowCommand : AsyncCommand<GlobalSettings>
 
         if (installed.Failed)
         {
-            return Task.FromResult(output.Fail(installed));
+            return output.Fail(installed);
         }
+
+        // Not a failure when it cannot be read: whether the entry is there is
+        // the question asked, and that has been answered.
+        var command = installed.Value
+            ? await _autostart.CommandAsync(cancellationToken).ConfigureAwait(false)
+            : null;
+
+        bool? oldName = command is { Failed: false, Value: { } line } ? UsesOldName(line) : null;
 
         if (output.IsJson)
         {
-            output.WriteJson(new { enabled = installed.Value, entry = _autostart.Describe() });
+            output.WriteJson(new
+            {
+                enabled = installed.Value,
+                entry = _autostart.Describe(),
+                command = command is { Failed: false } ? command.Value : null,
+                oldName,
+            });
 
-            return Task.FromResult(CommandOutput.Success());
+            return CommandOutput.Success();
         }
 
         output.WriteLine(installed.Value
@@ -190,6 +204,37 @@ public sealed class TeamAutostartShowCommand : AsyncCommand<GlobalSettings>
 
         output.WriteLine($"     [dim]{Markup.Escape(_autostart.Describe())}[/]");
 
-        return Task.FromResult(CommandOutput.Success());
+        if (oldName == true)
+        {
+            // Said, and left alone. It still works, and rewriting somebody's
+            // login entry is a change they should ask for.
+            output.WriteLine(
+                "     [yellow]It starts the daemon by its old name, 'team daemon', which still works.[/] "
+                + "[dim]Rewrite it with: loadout daemon autostart enable[/]");
+        }
+
+        return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Whether a login entry's command line starts the daemon by the name it
+    /// had before it moved out from under 'team'.
+    /// </summary>
+    internal static bool UsesOldName(string command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        var words = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        for (var i = 0; i < words.Length - 1; i++)
+        {
+            if (string.Equals(words[i], "team", StringComparison.Ordinal)
+                && string.Equals(words[i + 1], "daemon", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
