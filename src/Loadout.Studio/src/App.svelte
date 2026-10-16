@@ -1,6 +1,7 @@
 <script>
   import Home from './pages/Home.svelte';
   import Sessions from './pages/Sessions.svelte';
+  import Memory from './pages/Memory.svelte';
 
   // Routes live in the hash, so the daemon serves one page for all of them
   // and a reload or an installed app window opens where it was.
@@ -17,12 +18,13 @@
   let route = $derived.by(() => {
     const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
 
-    return { page: parts[0] ?? 'home', id: parts[1] ?? null };
+    return { page: parts[0] ?? 'home', id: parts[1] ?? null, rest: parts.slice(1) };
   });
 
   const pages = [
     { key: 'home', label: 'Home' },
     { key: 'sessions', label: 'Sessions' },
+    { key: 'memory', label: 'Memory' },
   ];
 </script>
 
@@ -55,6 +57,13 @@
     <pre class="command">loadout dashboard --open --studio</pre>
   {:else if route.page === 'sessions'}
     <Sessions open={route.id} signedOut={() => (signedOut = true)} />
+  {:else if route.page === 'memory'}
+    <Memory
+      slug={route.rest[0] ?? null}
+      scope={route.rest[1] ?? null}
+      name={route.rest[2] ?? null}
+      signedOut={() => (signedOut = true)}
+    />
   {:else}
     <Home signedOut={() => (signedOut = true)} />
   {/if}

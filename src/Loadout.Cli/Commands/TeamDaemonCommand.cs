@@ -121,9 +121,13 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Ideas.IIdeaService ideas,
         Loadout.Core.Ideas.IIdeaDumps dumps,
         TeamBin bin,
-        IChildLifetime lifetime)
+        IChildLifetime lifetime,
+        Loadout.Core.Instructions.IMemoryService memory,
+        Loadout.Core.Instructions.IMemoryImporter importer)
     {
         _bin = bin;
+        _memory = memory;
+        _importer = importer;
 
         // Made here rather than registered: the daemon owns them and ends
         // them when it stops, and the container, disposing synchronously,
@@ -419,6 +423,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // Sessions hosted for Studio, which end when this daemon does.
             server.Sessions = _sessions;
 
+            // And Studio's memory page: read through Core, saved by typing
+            // 'memory replace'.
+            server.Memory = new DashboardMemory(_commands, _memory, _importer, _projects, _workspace, _time, output);
+
             _address = server.Address;
 
             foreach (var address in server.Reachable())
@@ -522,6 +530,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     }
 
     private readonly Loadout.Core.Sessions.Hosting.HostedSessions _sessions;
+    private readonly Loadout.Core.Instructions.IMemoryService _memory;
+    private readonly Loadout.Core.Instructions.IMemoryImporter _importer;
 
     /// <summary>The settings this daemon was started with, for a restart to use again.</summary>
     private Settings? _started;

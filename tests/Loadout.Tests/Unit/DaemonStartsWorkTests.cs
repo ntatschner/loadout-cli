@@ -195,7 +195,9 @@ public sealed class DaemonStartsWorkTests
             ideas: null!,
             dumps: null!,
             bin: null!,
-            lifetime: null!);
+            lifetime: null!,
+            memory: null!,
+            importer: null!);
 
     /// <summary>A nomination pass with nothing to file.</summary>
     private sealed class NothingNominated : Loadout.Core.Tools.IToolNominationPass

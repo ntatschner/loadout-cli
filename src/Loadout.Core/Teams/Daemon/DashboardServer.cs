@@ -118,6 +118,9 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public Loadout.Core.Sessions.Hosting.HostedSessions? Sessions { get; set; }
 
+    /// <summary>What Studio's memory page reads and saves, or null where nothing gave this server one.</summary>
+    public IStudioMemory? Memory { get; set; }
+
     /// <summary>Changing one, by running the command somebody would have typed.</summary>
     public Func<SettingsChange, CancellationToken, Task<OperationResult>>? Settle { get; set; }
 
@@ -1099,6 +1102,37 @@ public sealed class DashboardServer : IDisposable
             + (studio ? "&to=studio" : string.Empty);
     }
 
+    /// <summary>Hands a request under /api/v1 to the part of Studio's API it names.</summary>
+    private async Task StudioAsync(HttpListenerContext context, string path, CancellationToken ct)
+    {
+        static bool Under(string path, string root) =>
+            path == root || path.StartsWith(root + "/", StringComparison.Ordinal);
+
+        if (Under(path, SessionsApi.Root))
+        {
+            if (Sessions is null)
+            {
+                await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                    "This dashboard hosts no sessions. The daemon's does: loadout daemon").ConfigureAwait(false);
+
+                return;
+            }
+
+            await SessionsApi.HandleAsync(context, Sessions, path, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Under(path, MemoryApi.Root) && Memory is not null)
+        {
+            await MemoryApi.HandleAsync(context, Memory, path, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        await WriteAsync(context, 404, "text/plain; charset=utf-8", "There is nothing here.").ConfigureAwait(false);
+    }
+
     /// <summary>Exchanges a one-time code for the cookie, then sends the browser to the page.</summary>
     private async Task SignInAsync(HttpListenerContext context)
     {
@@ -1203,11 +1237,11 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
-        // The sessions this daemon hosts for Studio. Above the guard that
-        // answers every other change with 405, and only from this machine:
-        // a hosted session is somebody's agent, and typing at it from across
-        // a network is not something the token or the cookie should grant.
-        if (path == SessionsApi.Root || path.StartsWith(SessionsApi.Root + "/", StringComparison.Ordinal))
+        // Studio's API. Above the guard that answers every other change with
+        // 405, and only from this machine: a hosted session is somebody's
+        // agent, and typing at it or rewriting their memory from across a
+        // network is not something the token or the cookie should grant.
+        if (path.StartsWith("/api/v1/", StringComparison.Ordinal))
         {
             if (!Allowed(request))
             {
@@ -1225,15 +1259,7 @@ public sealed class DashboardServer : IDisposable
                 return;
             }
 
-            if (Sessions is null)
-            {
-                await WriteAsync(context, 404, "text/plain; charset=utf-8",
-                    "This dashboard hosts no sessions. The daemon's does: loadout daemon").ConfigureAwait(false);
-
-                return;
-            }
-
-            await SessionsApi.HandleAsync(context, Sessions, path, ct).ConfigureAwait(false);
+            await StudioAsync(context, path, ct).ConfigureAwait(false);
 
             return;
         }
