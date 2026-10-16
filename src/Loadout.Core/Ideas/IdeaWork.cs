@@ -17,6 +17,24 @@ public sealed record IdeaDestination(string? Project, string? NewProject, string
     public bool Unsettled => Project is null && NewProject is null;
 }
 
+/// <summary>Which agent and model a round will ask, and why.</summary>
+/// <param name="Agent">The agent, or null for the machine's default.</param>
+/// <param name="Model">The model, or null for the agent's own default.</param>
+/// <param name="FromLastRound">True when neither was asked for and the last round's were taken.</param>
+/// <param name="Failure">The latest round that went wrong, when there is one, for saying so.</param>
+public sealed record IdeaChoice(string? Agent, string? Model, bool FromLastRound, IdeaAttempt? Failure)
+{
+    /// <summary>
+    /// True when the failure was asked with a different agent or model than
+    /// this round will be, which is worth saying: the person may have meant to
+    /// try that one again.
+    /// </summary>
+    public bool FailedDifferently =>
+        Failure is { } failed
+        && (!string.Equals(failed.Agent, Agent ?? string.Empty, StringComparison.Ordinal)
+            || !string.Equals(failed.Model, Model ?? string.Empty, StringComparison.Ordinal));
+}
+
 /// <summary>
 /// What an idea's record says about where it stands and what the next round
 /// is for, and how an agent's answer is folded into it.
@@ -60,6 +78,82 @@ public static class IdeaWork
         ArgumentNullException.ThrowIfNull(record);
 
         return [.. record.Rounds.SelectMany(round => round.Questions).Where(q => q.Answer.Length == 0)];
+    }
+
+    /// <summary>
+    /// The latest round that went wrong, or null. A record written before the
+    /// agent and model were kept says only what went wrong, and is read as a
+    /// failure with neither named.
+    /// </summary>
+    public static IdeaAttempt? FailureOf(IdeaRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        return record.Failure
+            ?? (record.LastError.Length > 0 ? new IdeaAttempt { Error = record.LastError } : null);
+    }
+
+    /// <summary>Records a round that went wrong, replacing any earlier one.</summary>
+    public static void Failed(IdeaRecord record, IdeaAttempt attempt)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(attempt);
+
+        record.Failure = attempt;
+        record.LastError = string.Empty;
+    }
+
+    /// <summary>Forgets the latest failure. Nothing else about the idea changes.</summary>
+    public static void ClearFailure(IdeaRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        record.Failure = null;
+        record.LastError = string.Empty;
+    }
+
+    /// <summary>
+    /// The agent and model the next round asks, from what was asked for and
+    /// what the last round that came back used.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The last round that came back, not the last attempt. A failed round is
+    /// often a mistyped model, and taking it as the default would repeat the
+    /// typo on every round until somebody noticed. The failure is handed back
+    /// so the caller can say a different choice was tried and went wrong.
+    /// </para>
+    /// <para>
+    /// One rule for the command and the page, so refining the same idea from
+    /// each never quietly switches model, which would change both what a
+    /// round costs and how the plan is written.
+    /// </para>
+    /// <para>
+    /// A model belongs to an agent. Naming only a model keeps the last round's
+    /// agent; naming a different agent drops the last round's model, which
+    /// that agent may not know.
+    /// </para>
+    /// </remarks>
+    public static IdeaChoice Choose(IdeaRecord record, string? agent, string? model)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        var asked = agent is { Length: > 0 } ? agent : null;
+        var askedModel = model is { Length: > 0 } ? model : null;
+        var last = record.LastRound;
+        var lastAgent = last?.Agent is { Length: > 0 } a ? a : null;
+        var lastModel = last?.Model is { Length: > 0 } m ? m : null;
+
+        var chosenAgent = asked ?? lastAgent;
+
+        var chosenModel = askedModel
+            ?? (asked is null || string.Equals(asked, lastAgent, StringComparison.Ordinal) ? lastModel : null);
+
+        return new IdeaChoice(
+            chosenAgent,
+            chosenModel,
+            asked is null && askedModel is null && last is not null,
+            FailureOf(record));
     }
 
     /// <summary>
@@ -201,7 +295,7 @@ public static class IdeaWork
             record.Request = string.Empty;
         }
 
-        record.LastError = string.Empty;
+        ClearFailure(record);
     }
 
     private static string Letter(int index) =>

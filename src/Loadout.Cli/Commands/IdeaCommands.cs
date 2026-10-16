@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Loadout.Agents.Ideas;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Configuration;
 using Loadout.Core.Ideas;
 using Loadout.Core.Projects;
 using Loadout.Models;
@@ -257,6 +258,8 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
                     by = idea.DeclaredBy,
                     declared = idea.DeclaredUtc,
                     unanswered = idea.Unanswered,
+                    running = idea.Running,
+                    failure = IdeaView.Failure(idea.Failure),
                 }),
             });
 
@@ -277,7 +280,7 @@ public sealed class IdeaListCommand : AsyncCommand<IdeaListCommand.Settings>
             foreach (var idea in group)
             {
                 output.WriteLine(
-                    $"  {Markup.Escape(idea.Place.Id),-28} {IdeaView.Marked(idea.Stage, idea.Unanswered),-24} "
+                    $"  {Markup.Escape(idea.Place.Id),-28} {IdeaView.Marked(idea),-24} "
                     + Markup.Escape(idea.Title));
             }
         }
@@ -346,17 +349,20 @@ public sealed class IdeaRefineCommand : AsyncCommand<IdeaRefineCommand.Settings>
     private readonly IIdeaService _ideas;
     private readonly IIdeaRefiner _refiner;
     private readonly IProjectService _projects;
+    private readonly IConfigurationService _configuration;
     private readonly IAnsiConsole _console;
 
     public IdeaRefineCommand(
         IIdeaService ideas,
         IIdeaRefiner refiner,
         IProjectService projects,
+        IConfigurationService configuration,
         IAnsiConsole console)
     {
         _ideas = ideas;
         _refiner = refiner;
         _projects = projects;
+        _configuration = configuration;
         _console = console;
     }
 
@@ -381,6 +387,20 @@ public sealed class IdeaRefineCommand : AsyncCommand<IdeaRefineCommand.Settings>
         if (place.Failed)
         {
             return output.Fail(place);
+        }
+
+        // Said before anything is spent, by the same rule the refiner applies,
+        // so a change of agent or model is never one nobody saw. Only for an
+        // idea a round would run on: the rest are refused, and announcing an
+        // agent first would read as though one had started.
+        if (!output.IsJson
+            && (await _ideas.ReadAsync(place.Value!, cancellationToken).ConfigureAwait(false)) is { Succeeded: true } read
+            && IdeaWork.StageOf(read.Value!) is IdeaStage.Captured or IdeaStage.Ready)
+        {
+            var config = await _configuration.LoadConfigAsync(cancellationToken).ConfigureAwait(false);
+            var fallback = config.Succeeded ? config.Value!.DefaultAgent : "the default agent";
+
+            IdeaView.Choice(output, IdeaWork.Choose(read.Value!, settings.Agent, settings.Model), fallback);
         }
 
         if (!settings.DryRun)
@@ -420,6 +440,9 @@ public sealed class IdeaRefineCommand : AsyncCommand<IdeaRefineCommand.Settings>
                     arguments = outcome.Plan.Arguments,
                     directory = outcome.Plan.WorkingDirectory,
                     stage = IdeaView.Stage(outcome.Before),
+                    agent = outcome.Agent,
+                    model = outcome.Choice.Model,
+                    fromLastRound = outcome.Choice.FromLastRound,
                 });
 
                 return CommandOutput.Success();
@@ -825,6 +848,79 @@ public sealed class IdeaAcceptCommand : AsyncCommand<IdeaAcceptCommand.Settings>
             $"[green]+[/] {Markup.Escape(accepted.Value!.Task.Id)} is now a task on "
             + $"[bold]{Markup.Escape(accepted.Value.Project)}[/]. {Markup.Escape(reason)}");
         output.WriteLine($"[dim]  The plan is at {Markup.Escape(accepted.Value.PlanPath)} in the workspace.[/]");
+
+        return CommandOutput.Success();
+    }
+}
+
+/// <summary>Clears the record of an idea's latest failed round.</summary>
+/// <remarks>
+/// For an idea somebody has stopped refining. Only the next round that comes
+/// back clears a failure otherwise, so an abandoned idea would say its last
+/// round failed for good, with nothing to do about it but pay for another.
+/// </remarks>
+[Description("Clear the 'last round failed' marker on an idea, without running another round. Answers and the plan stay.")]
+[CommandMeta(CommandCategory.Workspace, Intent = "idea dismiss clear failed round error marker", Mutates = true)]
+public sealed class IdeaDismissCommand : AsyncCommand<IdeaSettings>
+{
+    private readonly IIdeaService _ideas;
+    private readonly IProjectService _projects;
+    private readonly IAnsiConsole _console;
+
+    public IdeaDismissCommand(IIdeaService ideas, IProjectService projects, IAnsiConsole console)
+    {
+        _ideas = ideas;
+        _projects = projects;
+        _console = console;
+    }
+
+    /// <inheritdoc />
+    public override async Task<int> ExecuteAsync(
+        CommandContext context,
+        IdeaSettings settings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var output = new CommandOutput(_console, settings);
+        var place = await settings.PlaceAsync(_ideas, _projects, cancellationToken).ConfigureAwait(false);
+
+        if (place.Failed)
+        {
+            return output.Fail(place);
+        }
+
+        if (settings.DryRun)
+        {
+            var read = await _ideas.ReadAsync(place.Value!, cancellationToken).ConfigureAwait(false);
+
+            if (read.Failed)
+            {
+                return output.Fail(read);
+            }
+
+            output.WriteLine(IdeaWork.FailureOf(read.Value!) is { } failed
+                ? $"Would clear the failed round on {Markup.Escape(place.Value!.Id)}: {Shown.Safely(failed.Error)}. Nothing was changed."
+                : $"{Markup.Escape(place.Value!.Id)} has no failed round to clear. Nothing was changed.");
+
+            return CommandOutput.Success();
+        }
+
+        var dismissed = await _ideas.DismissFailureAsync(place.Value!, cancellationToken).ConfigureAwait(false);
+
+        if (dismissed.Failed)
+        {
+            return output.Fail(dismissed);
+        }
+
+        if (output.IsJson)
+        {
+            output.WriteJson(IdeaView.Of(place.Value!, dismissed.Value!));
+
+            return CommandOutput.Success();
+        }
+
+        output.WriteLine($"[green]+[/] Cleared the failed round on {Markup.Escape(place.Value!.Id)}.");
 
         return CommandOutput.Success();
     }

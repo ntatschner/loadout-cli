@@ -738,6 +738,7 @@ public static class Program
             idea.AddCommand<IdeaDropCommand>("drop");
             idea.AddCommand<IdeaImproveCommand>("improve");
             idea.AddCommand<IdeaAcceptCommand>("accept");
+            idea.AddCommand<IdeaDismissCommand>("dismiss");
             idea.AddCommand<IdeaRemoveCommand>("remove");
             idea.AddBranch("dump", dump =>
             {

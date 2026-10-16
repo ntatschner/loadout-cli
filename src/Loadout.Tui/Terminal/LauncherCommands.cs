@@ -99,11 +99,14 @@ internal static class LauncherCommands
 
     internal const string IdeaRemove = "idea remove";
 
+    internal const string IdeaDismiss = "idea dismiss";
+
     /// <summary>Every one of them, for the test that checks they are real.</summary>
     internal static IReadOnlyList<string> All =>
     [
         Editor, Resume, Launch, Clone, NewProject, Instructions, Usage, Launches, ProjectContext, Remove,
         DumpAdd, DumpApply, IdeaList, DumpList,
         IdeaAdd, IdeaRefine, IdeaAnswer, IdeaChoose, IdeaKeep, IdeaDrop, IdeaImprove, IdeaAccept, IdeaRemove,
+        IdeaDismiss,
     ];
 }

@@ -133,7 +133,7 @@ public sealed class IdeaServiceTests : IDisposable
         recorded.Failed.Should().BeTrue();
         var record = (await _ideas.ReadAsync(place)).Value!;
         record.Plan.Should().BeNull();
-        record.LastError.Should().Contain("credential");
+        IdeaWork.FailureOf(record)!.Error.Should().Contain("credential");
     }
 
     [Fact]

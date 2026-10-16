@@ -45,7 +45,9 @@ internal sealed class TemporaryWorkspace : IDisposable
         Yaml = new YamlStore(permissions);
         Workspace = new WorkspaceManager(Paths, new FakeGit(_root), Yaml, TimeProvider.System);
         Tasks = new TaskService(Workspace, Yaml, TimeProvider.System);
-        Ideas = new IdeaService(Workspace, Tasks, Yaml, TimeProvider.System);
+        Processes = new FakeProcessInspector().MarkSelfLive();
+        Locks = new IdeaLocks(Paths, Processes);
+        Ideas = new IdeaService(Workspace, Tasks, Yaml, TimeProvider.System, Locks);
         Dumps = new IdeaDumps(Workspace, Tasks, Ideas, Yaml, TimeProvider.System);
 
         // A workspace with a projects directory is one that exists.
@@ -53,6 +55,11 @@ internal sealed class TemporaryWorkspace : IDisposable
     }
 
     public LinuxPaths Paths { get; }
+
+    /// <summary>Which processes count as running, for the ideas' round locks.</summary>
+    public FakeProcessInspector Processes { get; }
+
+    public IdeaLocks Locks { get; }
 
     public YamlStore Yaml { get; }
 

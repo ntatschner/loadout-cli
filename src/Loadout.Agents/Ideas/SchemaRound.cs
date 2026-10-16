@@ -10,12 +10,14 @@ namespace Loadout.Agents.Ideas;
 /// <param name="Warnings">Anything worth saying about how it was started.</param>
 /// <param name="CostUsd">What it cost, when the agent said.</param>
 /// <param name="Started">False for a dry run, where nothing was asked.</param>
+/// <param name="Agent">The agent started, by its configured name, the machine's default resolved.</param>
 internal sealed record SchemaRoundOutcome<T>(
     OperationResult<T> Answer,
     LaunchPlan Plan,
     IReadOnlyList<string> Warnings,
     decimal CostUsd,
-    bool Started);
+    bool Started,
+    string Agent);
 
 /// <summary>
 /// One question put to a fresh agent that must answer in a given shape: start
@@ -74,7 +76,7 @@ internal static class SchemaRound
         if (launch.Session is not { } session)
         {
             return OperationResult<SchemaRoundOutcome<T>>.Ok(new SchemaRoundOutcome<T>(
-                OperationResult<T>.Fail("Nothing was asked."), launch.Plan, launch.Warnings, 0, Started: false));
+                OperationResult<T>.Fail("Nothing was asked."), launch.Plan, launch.Warnings, 0, Started: false, launch.AgentName));
         }
 
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -118,7 +120,7 @@ internal static class SchemaRound
         await launch.CompleteAsync(exit, CancellationToken.None).ConfigureAwait(false);
 
         return OperationResult<SchemaRoundOutcome<T>>.Ok(
-            new SchemaRoundOutcome<T>(answer, launch.Plan, launch.Warnings, cost, Started: true));
+            new SchemaRoundOutcome<T>(answer, launch.Plan, launch.Warnings, cost, Started: true, launch.AgentName));
     }
 
     private static OperationResult<T> Answer<T>(

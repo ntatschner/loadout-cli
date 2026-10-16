@@ -1,6 +1,7 @@
 using Loadout.Cli.Infrastructure;
 using Loadout.Core.Ideas;
 using Loadout.Models.Ideas;
+using Loadout.Tui;
 using Spectre.Console;
 
 namespace Loadout.Cli.Commands;
@@ -32,9 +33,68 @@ internal static class IdeaView
         _ => "[dim]accepted[/]",
     };
 
+    /// <summary>
+    /// Where it stands in a list, a running round or a failed one first: a
+    /// failed round left showing its stage reads as one still in progress,
+    /// and a failure left showing while a new round runs reads as stuck.
+    /// </summary>
+    public static string Marked(IdeaSummary idea)
+    {
+        ArgumentNullException.ThrowIfNull(idea);
+
+        return idea.Running ? "[blue]round running[/]"
+            : idea.Failure is not null ? "[red]last round failed[/]"
+            : Marked(idea.Stage, idea.Unanswered);
+    }
+
+    /// <summary>An agent and model as a person reads them.</summary>
+    public static string Asked(string agent, string model) =>
+        model.Length > 0 ? $"{agent}, model {model}" : $"{agent} with its default model";
+
+    /// <summary>A failed round, as JSON, or null when there is none.</summary>
+    public static object? Failure(IdeaAttempt? failure) => failure is null ? null : new
+    {
+        when = failure.Utc == default ? (DateTimeOffset?)null : failure.Utc,
+        agent = failure.Agent.Length > 0 ? failure.Agent : null,
+        model = failure.Model.Length > 0 ? failure.Model : null,
+        error = failure.Error,
+    };
+
+    /// <summary>
+    /// Says which agent and model a round asks and why, and what went wrong
+    /// last time when that was something different.
+    /// </summary>
+    /// <param name="output">Where to say it.</param>
+    /// <param name="choice">What the rule chose.</param>
+    /// <param name="fallback">The machine's default agent, for when nothing named one.</param>
+    public static void Choice(CommandOutput output, IdeaChoice choice, string fallback)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(choice);
+
+        var asking = Asked(choice.Agent ?? fallback, choice.Model ?? string.Empty);
+
+        output.WriteLine(choice.FromLastRound
+            ? $"[dim]Asking {Markup.Escape(asking)}, as the last round did.[/]"
+            : $"[dim]Asking {Markup.Escape(asking)}.[/]");
+
+        if (choice.Failure is not { } failed)
+        {
+            return;
+        }
+
+        var tried = failed.Agent.Length > 0 ? $" with {Asked(failed.Agent, failed.Model)}" : string.Empty;
+
+        output.WriteLine(choice.FailedDifferently
+            ? $"[yellow]The latest attempt{Markup.Escape(tried)} went wrong, so this round does not repeat it:[/] "
+              + Shown.Safely(failed.Error)
+            : $"[yellow]The latest attempt{Markup.Escape(tried)} went wrong:[/] {Shown.Safely(failed.Error)}");
+    }
+
     public static object Of(IdeaPlace place, IdeaRecord record)
     {
         var stage = IdeaWork.StageOf(record);
+        var failure = IdeaWork.FailureOf(record);
 
         return new
         {
@@ -43,7 +103,14 @@ internal static class IdeaView
             stage = Stage(stage),
             ask = record.Ask,
             captured = record.CapturedUtc,
-            error = record.LastError.Length > 0 ? record.LastError : null,
+            error = failure?.Error,
+            failure = Failure(failure),
+            lastRound = record.LastRound is not { } last ? null : new
+            {
+                when = last.Utc,
+                agent = last.Agent.Length > 0 ? last.Agent : null,
+                model = last.Model.Length > 0 ? last.Model : null,
+            },
             questions = record.Rounds.SelectMany(round => round.Questions).Select(q => new
             {
                 id = q.Id,
@@ -112,9 +179,14 @@ internal static class IdeaView
             $"[bold]{Markup.Escape(place.Id)}[/] on {Markup.Escape(place.Where)}  {Marked(stage, IdeaWork.Unanswered(record).Count)}");
         output.WriteLine($"[dim]{Markup.Escape(record.Ask)}[/]");
 
-        if (record.LastError.Length > 0)
+        if (IdeaWork.FailureOf(record) is { } failed)
         {
-            output.WriteLine($"[yellow]The last round went wrong:[/] {Markup.Escape(record.LastError)}");
+            var tried = failed.Agent.Length > 0 ? $" ({Asked(failed.Agent, failed.Model)})" : string.Empty;
+
+            output.WriteLine(
+                $"[yellow]The last round went wrong{Markup.Escape(tried)}:[/] {Shown.Safely(failed.Error)}");
+            output.WriteLine(
+                $"[dim]Refine again, or clear this with: loadout idea dismiss {Markup.Escape(place.Id)}[/]");
         }
 
         var questions = record.Rounds.SelectMany(round => round.Questions).ToList();

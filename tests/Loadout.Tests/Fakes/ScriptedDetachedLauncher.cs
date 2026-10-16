@@ -56,7 +56,11 @@ public sealed class ScriptedDetachedLauncher(params string[] lines) : IDetachedL
             [],
             new PreflightResult([], new Dictionary<string, string>()),
             request.Purpose,
-            "claude",
+
+            // The agent asked for, or the default, as the real launcher
+            // resolves it: one that always said claude would let a test of
+            // which agent a round used pass whatever was asked.
+            request.AgentName is { Length: > 0 } asked ? asked : "claude",
             null,
             request.DryRun ? null : new HeadlessSession(Pipe, ClaudeHeadlessProtocol.Instance),
             (_, _) => Task.CompletedTask)));

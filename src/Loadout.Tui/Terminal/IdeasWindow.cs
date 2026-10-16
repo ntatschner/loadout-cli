@@ -111,6 +111,7 @@ internal sealed class IdeasWindow : Window
             ("d", "drop"),
             ("i", "improve"),
             ("y", "accept"),
+            ("x", "dismiss failure"),
             ("Del", "remove"),
             ("Esc", "close"),
         ])
@@ -137,6 +138,7 @@ internal sealed class IdeasWindow : Window
             list.OnKey(Key.D, Command.Cut, () => Take(Judge(IdeaVerdict.Drop)));
             list.OnKey(Key.I, Command.Paste, () => Take(Improve()));
             list.OnKey(Key.Y, Command.SaveAs, () => Take(Accept()));
+            list.OnKey(Key.X, Command.Undo, () => Take(Dismiss()));
             list.OnKey(Key.Delete, Command.DeleteCharRight, () => Take(Remove()));
         }
 
@@ -211,6 +213,12 @@ internal sealed class IdeasWindow : Window
             ? IdeaSteps.Accept(idea.Summary.Place, target)
             : null;
 
+    /// <remarks>Only when there is a failed round to clear, and none running.</remarks>
+    private IdeaStep? Dismiss() =>
+        Selected is { Summary: { Running: false, Failure: not null } summary }
+            ? IdeaSteps.Dismiss(summary.Place)
+            : null;
+
     private IdeaStep? Remove() =>
         Selected is { } idea
             && _prompts.Confirm(
@@ -238,7 +246,7 @@ internal sealed class IdeasWindow : Window
         ideas.Count == 0
             ? ["Nothing here yet. Press n to drop an idea in."]
             : ideas.Select(idea =>
-                $"{Shorten(idea.Summary.Place.Id, 28),-28} {Shorten(IdeaSteps.Stage(idea.Summary.Stage, idea.Summary.Unanswered), 16),-16} "
+                $"{Shorten(idea.Summary.Place.Id, 28),-28} {Shorten(IdeaSteps.Stage(idea.Summary), 17),-17} "
                 + $"{Shorten(idea.Summary.Place.Project ?? "workspace-wide", 16),-16} {idea.Summary.Title}");
 
     /// <summary>Three dots rather than the one character, for profiles that ask for ASCII only.</summary>

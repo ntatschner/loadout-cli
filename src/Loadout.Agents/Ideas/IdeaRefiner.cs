@@ -10,8 +10,11 @@ namespace Loadout.Agents.Ideas;
 
 /// <summary>What to run a round of refinement on, and how.</summary>
 /// <param name="Place">The idea.</param>
-/// <param name="AgentName">The agent to ask, or null for the machine's default.</param>
-/// <param name="Model">The model to ask for, or null for the agent's default.</param>
+/// <param name="AgentName">
+/// The agent to ask, or null for the one the last round that came back used,
+/// and the machine's default before there was one.
+/// </param>
+/// <param name="Model">The model to ask for, or null to choose as <see cref="IdeaWork.Choose"/> does.</param>
 /// <param name="DryRun">Say what would be started, and start nothing.</param>
 /// <param name="Watching">Told what the agent is doing while it works, or null.</param>
 public sealed record RefineRequest(
@@ -28,13 +31,17 @@ public sealed record RefineRequest(
 /// <param name="Plan">What was started, or would have been.</param>
 /// <param name="Warnings">Anything worth telling the person about how it was started.</param>
 /// <param name="CostUsd">What the round cost, when the agent said.</param>
+/// <param name="Choice">The agent and model asked for, and why.</param>
+/// <param name="Agent">The agent started, the machine's default resolved to its name.</param>
 public sealed record RefineOutcome(
     IdeaRecord Record,
     IdeaStage Before,
     IdeaStage After,
     LaunchPlan Plan,
     IReadOnlyList<string> Warnings,
-    decimal CostUsd);
+    decimal CostUsd,
+    IdeaChoice Choice,
+    string Agent);
 
 /// <summary>Runs one round of fleshing out an idea: asks an agent, and records its answer.</summary>
 public interface IIdeaRefiner
@@ -67,17 +74,20 @@ internal sealed class IdeaRefiner : IIdeaRefiner
     private readonly IProjectService _projects;
     private readonly IDetachedLauncher _launcher;
     private readonly IPlatformPaths _paths;
+    private readonly IIdeaLocks _locks;
 
     public IdeaRefiner(
         IIdeaService ideas,
         IProjectService projects,
         IDetachedLauncher launcher,
-        IPlatformPaths paths)
+        IPlatformPaths paths,
+        IIdeaLocks locks)
     {
         _ideas = ideas;
         _projects = projects;
         _launcher = launcher;
         _paths = paths;
+        _locks = locks;
     }
 
     /// <inheritdoc />
@@ -99,6 +109,26 @@ internal sealed class IdeaRefiner : IIdeaRefiner
         {
             return OperationResult<RefineOutcome>.Fail(reason, ExitCode.InvalidArguments);
         }
+
+        // Asked of a dry run too: one that said what it would start, when the
+        // real thing would be refused, would be describing something that
+        // cannot happen.
+        if (request.DryRun && _locks.Held(request.Place))
+        {
+            return OperationResult<RefineOutcome>.Fail(
+                $"A round on {request.Place.Id} is already running on this machine.", ExitCode.InvalidArguments);
+        }
+
+        var held = request.DryRun ? null : _locks.Take(request.Place);
+
+        if (held is { Failed: true })
+        {
+            return OperationResult<RefineOutcome>.Fail(held.Error!, held.ExitCode);
+        }
+
+        using var _ = held?.Value;
+
+        var choice = IdeaWork.Choose(record, request.AgentName, request.Model);
 
         var projects = await _projects.ListAsync(ct).ConfigureAwait(false);
 
@@ -125,8 +155,8 @@ internal sealed class IdeaRefiner : IIdeaRefiner
             new DetachedLaunchRequest(
                 directory,
                 $"Fleshing out the idea '{record.Id}'",
-                request.AgentName,
-                request.Model,
+                choice.Agent,
+                choice.Model,
                 request.DryRun),
             Allowed,
             IdeaSchema.Version1,
@@ -146,22 +176,35 @@ internal sealed class IdeaRefiner : IIdeaRefiner
         if (!round.Started)
         {
             return OperationResult<RefineOutcome>.Ok(
-                new RefineOutcome(record, before, before, round.Plan, round.Warnings, 0));
+                new RefineOutcome(record, before, before, round.Plan, round.Warnings, 0, choice, round.Agent));
         }
+
+        // The agent by the name it resolved to, so a round asked of the
+        // machine's default is repeated with that agent even after the
+        // default changes.
+        var attempt = new IdeaAttempt { Agent = round.Agent, Model = choice.Model ?? string.Empty };
 
         if (round.Answer.Failed)
         {
-            await _ideas.RecordFailureAsync(request.Place, round.Answer.Error!, CancellationToken.None).ConfigureAwait(false);
+            await _ideas.RecordFailureAsync(request.Place, round.Answer.Error!, CancellationToken.None, attempt)
+                .ConfigureAwait(false);
 
             return OperationResult<RefineOutcome>.Fail(round.Answer.Error!, ExitCode.GeneralFailure);
         }
 
-        var recorded = await _ideas.RecordReplyAsync(request.Place, round.Answer.Value!, CancellationToken.None)
+        var recorded = await _ideas.RecordReplyAsync(request.Place, round.Answer.Value!, CancellationToken.None, attempt)
             .ConfigureAwait(false);
 
         return recorded.Succeeded
             ? OperationResult<RefineOutcome>.Ok(new RefineOutcome(
-                recorded.Value!, before, IdeaWork.StageOf(recorded.Value!), round.Plan, round.Warnings, round.CostUsd))
+                recorded.Value!,
+                before,
+                IdeaWork.StageOf(recorded.Value!),
+                round.Plan,
+                round.Warnings,
+                round.CostUsd,
+                choice,
+                round.Agent))
             : OperationResult<RefineOutcome>.Fail(recorded.Error!, recorded.ExitCode);
     }
 

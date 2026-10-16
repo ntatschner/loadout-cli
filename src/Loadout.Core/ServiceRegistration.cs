@@ -168,6 +168,7 @@ public static class ServiceRegistration
         services.AddSingleton<Usage.ISpendNoticeStore, Usage.SpendNoticeStore>();
         services.AddSingleton<Tasks.ITaskService, Tasks.TaskService>();
         services.AddSingleton<Ideas.IIdeaService, Ideas.IdeaService>();
+        services.AddSingleton<Ideas.IIdeaLocks, Ideas.IdeaLocks>();
         services.AddSingleton<Ideas.IIdeaDumps, Ideas.IdeaDumps>();
         services.AddSingleton<Packs.IPackService, Packs.PackService>();
         services.AddSingleton<Manager.IInstalledPluginReader, Manager.InstalledPluginReader>();
