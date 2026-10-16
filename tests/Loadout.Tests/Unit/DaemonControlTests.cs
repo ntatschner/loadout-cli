@@ -215,9 +215,12 @@ public sealed class DaemonControlTests : IDisposable
         started.Should().NotBeNull("a restart has to start something, and in the background");
         launcher.Detached.Should().BeNull("a window of its own is one more window that ends it when closed");
 
-        var arguments = string.Join(' ', started!.Arguments);
+        started!.Arguments.Should().Contain("daemon")
+            .And.NotContain("team", "the daemon is started by its own name, not the old one under 'team'");
 
-        arguments.Should().Contain("team daemon")
+        var arguments = string.Join(' ', started.Arguments);
+
+        arguments.Should().Contain("daemon")
             .And.Contain("--after 4242", "the successor has to know which daemon to wait for")
             .And.Contain("--port 51999")
             .And.Contain("--listen 0.0.0.0")
@@ -275,7 +278,7 @@ public sealed class DaemonControlTests : IDisposable
 
         launcher.Detached.Should().BeNull();
         string.Join(' ', launcher.Background!.Arguments)
-            .Should().Contain("team daemon")
+            .Should().MatchRegex("(^| )daemon --").And.NotContain("team daemon")
             .And.Contain("--port 8080")
             .And.Contain($"--log {DaemonLog.PathFor(_paths)}")
             .And.NotContain("--foreground");

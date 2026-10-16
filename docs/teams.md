@@ -879,7 +879,7 @@ there is one account of what happened rather than three that can disagree.
 
 - `loadout team status` — where each node got to, what it is doing now, what it
   cost.
-- `loadout team dashboard` — a page on this machine, live, at a loopback address
+- `loadout dashboard` — a page on this machine, live, at a loopback address
   behind a token that changes every start. It watches and it acts: starting a
   team, answering a gate, holding a run, stopping one, renaming its room,
   opening a pull request, sending the lead a message and typing at a live node
@@ -888,17 +888,17 @@ there is one account of what happened rather than three that can disagree.
   have typed, so there is one behaviour rather than two that drift.
 
   That sentence was true of the daemon and not of this command until 20
-  September 2026. The page drew every one of those controls and `team dashboard`
+  September 2026. The page drew every one of those controls and `loadout dashboard`
   answered all of them with "this server only reads", which is worse than not
   drawing them.
 
-  A team started from `team dashboard` runs **inside that command**, so it stops
+  A team started from `loadout dashboard` runs **inside that command**, so it stops
   when the window does. The daemon is meant to stay up and its runs outlive the
   browser. The page cannot tell the two apart, so the server says which it is
   and the form writes it down above itself — and so does the terminal, when it
   starts.
 
-  `loadout team dashboard --watch-only` is the old behaviour, for a screen in a
+  `loadout dashboard --watch-only` is the old behaviour, for a screen in a
   corner: the server refuses anything that would change a run or start one, the
   page is told so, and it puts the controls away and hides the form rather than
   leaving buttons that do nothing.
@@ -1141,8 +1141,8 @@ you already keep in `config.yaml`:
   because those say how a thing is drawn and not whether to draw it.
 
 ```
-loadout team dashboard --view rich     # for this run only
-loadout team dashboard --view plain
+loadout dashboard --view rich     # for this run only
+loadout dashboard --view plain
 ```
 
 The flag wins over the profile, because somebody typing one means it now. It
@@ -1795,8 +1795,8 @@ nothing else. `--listen 0.0.0.0` puts it on whatever network you are on, so a
 phone on the sofa can answer a gate:
 
 ```sh
-loadout team dashboard --listen 0.0.0.0
-loadout team daemon --listen 0.0.0.0        # overrides teams.webhook_listen
+loadout dashboard --listen 0.0.0.0
+loadout daemon --listen 0.0.0.0        # overrides teams.webhook_listen
 ```
 
 It prints an address per way in rather than the wildcard, because `0.0.0.0` is
@@ -1870,7 +1870,7 @@ handful: pick an ending, an age, how many of the newest to keep, and it runs
 it goes. Nothing about which runs those are is decided in the browser — the
 page types the command, and the command is what refuses a live run.
 
-A watch-only dashboard draws none of this. `team dashboard --watch-only` serves
+A watch-only dashboard draws none of this. `loadout dashboard --watch-only` serves
 a page that cannot change anything, is told so, and puts the controls and both
 forms away rather than leaving buttons that do nothing.
 
@@ -2010,16 +2010,16 @@ take a run identifier and use the most recent one when you leave it out.
 ```bash
 loadout team schedule add docs-crew "check the docs against the code" --every 24h
 loadout team schedule add bug-hunt "look at what the suite is failing" --on commit
-loadout team daemon
+loadout daemon
 ```
 
-`loadout team daemon` starts the daemon in the background and then shows you
+`loadout daemon` starts the daemon in the background and then shows you
 what it says. Close the terminal, or press Ctrl+C, and you stop watching; the
 daemon carries on. It used to be the daemon itself, running in that terminal, and
 closing the window ended it. A console program ends with its window, and there is
 no refusing that, so now it has no window to end with. What it says is kept in
 `daemon.log` beside its note in Loadout's state folder, and typing
-`loadout team daemon` again shows you the one that is running rather than
+`loadout daemon` again shows you the one that is running rather than
 starting a second. Where nothing is watching — output going to a file or a
 script — it waits only until the daemon says where its dashboard is, prints
 that, and returns.
@@ -2037,9 +2037,9 @@ schedules and nothing firing them — the case a restarted machine looks exactly
 like. To stop that happening:
 
 ```sh
-loadout team autostart enable     # --dry-run first says which file it would write
-loadout team autostart show
-loadout team autostart disable
+loadout daemon autostart enable     # --dry-run first says which file it would write
+loadout daemon autostart show
+loadout daemon autostart disable
 ```
 
 Per user, never for the machine, so it needs no administrator rights and can
@@ -2058,11 +2058,11 @@ Loadout if the launcher moved.
 daemon is usually somewhere you are not looking:
 
 ```sh
-loadout team daemon pause      # no schedule fires; the page stays up
-loadout team daemon resume     # 'continue' works too
-loadout team daemon stop       # once the runs it started have finished
-loadout team daemon restart    # the same, then starts again with the same settings
-loadout team daemon stop --now # ends its runs at once, as Ctrl+C does with --foreground
+loadout daemon pause      # no schedule fires; the page stays up
+loadout daemon resume     # 'continue' works too
+loadout daemon stop       # once the runs it started have finished
+loadout daemon restart    # the same, then starts again with the same settings
+loadout daemon stop --now # ends its runs at once, as Ctrl+C does with --foreground
 ```
 
 A stop waits for the runs the daemon started — from a schedule, the page or a
@@ -2090,7 +2090,7 @@ only**, not on macOS or Linux, and not on a daemon started at login.
 
 **Finding the dashboard it serves.** The port and the token are both new at
 every start, and the daemon prints the address once — into its log, which at
-login is shown in a minimised window nobody is looking at. `loadout team dashboard`
+login is shown in a minimised window nobody is looking at. `loadout dashboard`
 gets it back: with a daemon serving, that command prints its address rather than
 starting a page of its own. Before that it started a second one, so enabling
 autostart and then logging in left you with a dashboard running, no way to reach
@@ -2122,7 +2122,7 @@ Off until you turn it on, and then off again for anything you have not named.
 ```sh
 loadout team webhook enable            # makes a token, prints it once
 loadout config set team-webhook-teams "docs-crew"
-loadout team daemon
+loadout daemon
 ```
 
 Two separate acts on purpose. The token says **who** may ask; the teams list

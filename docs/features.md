@@ -252,7 +252,7 @@ run may spend before it stops. Workers that may run together do, each in its own
 git worktree, and a branch that conflicts goes back to whoever wrote it.
 
 A run can be started by hand, on a schedule, or when the repository moves. Watch
-one with `team status`, in the launcher, or on a page `team dashboard` serves on
+one with `team status`, in the launcher, or on a page `loadout dashboard` serves on
 this machine. The page runs and writes teams as well as watching them, and every
 control on it types the command you would have typed.
 
@@ -299,11 +299,11 @@ What it takes goes to the bin rather than away: `loadout team bin` lists it,
 ## A dashboard for the runs
 
 ```sh
-loadout team dashboard --open
-loadout team dashboard --watch-only
+loadout dashboard --open
+loadout dashboard --watch-only
 ```
 
-`team dashboard` serves a page on this machine, at a loopback address behind a
+`loadout dashboard` serves a page on this machine, at a loopback address behind a
 token that changes every start. Runs are grouped by what they want from you —
 *Needs you* first, then *Running*, then *Finished* — because the run waiting on
 you is the one most easily missed further down a list. There are five screens:

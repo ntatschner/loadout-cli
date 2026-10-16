@@ -164,7 +164,7 @@ Sessions
 
 Teams
 ! Daemon  1 schedule(s) are written down and nothing is firing them. Start one 
-with: loadout team daemon
+with: loadout daemon
 
 Agents
 + Claude Code  2.1.280 (Claude Code) at C:\Users\example\.local\bin\claude.exe

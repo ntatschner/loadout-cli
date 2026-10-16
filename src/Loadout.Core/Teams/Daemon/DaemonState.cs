@@ -131,7 +131,7 @@ internal sealed class DaemonDiagnosticContributor : IDiagnosticContributor
                     // working one from outside: it is running, it serves the
                     // page, and nothing fires.
                     + (DaemonControl.Paused(_paths)
-                        ? ". Paused: no schedule fires until 'loadout team daemon resume'"
+                        ? ". Paused: no schedule fires until 'loadout daemon resume'"
                         : string.Empty)),
             ];
         }
@@ -163,7 +163,7 @@ internal sealed class DaemonDiagnosticContributor : IDiagnosticContributor
                 "Daemon",
                 $"{waiting} schedule(s) are written down and nothing is firing them"
                 + (note is null ? string.Empty : "; a daemon was running and is not any more")
-                + ". Start one with: loadout team daemon"),
+                + ". Start one with: loadout daemon"),
         ];
     }
 }

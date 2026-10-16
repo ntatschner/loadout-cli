@@ -102,6 +102,34 @@ public sealed class CommandParityTests
     }
 
     [Fact]
+    public void A_branch_that_runs_a_command_is_catalogued_as_that_command()
+    {
+        var catalogue = Catalogue();
+
+        // 'daemon' is a branch and starts the daemon when named on its own.
+        // Catalogued as a bare branch it lost the command's own description
+        // of itself, so it read as changing nothing, and the suite that runs
+        // every command ran it without --dry-run and started a real daemon.
+        var daemon = catalogue.Single(c => c.Path == "daemon");
+
+        daemon.Mutates.Should().BeTrue("starting the daemon changes what is running on this machine");
+        daemon.Category.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Old_names_kept_working_are_not_offered()
+    {
+        var paths = Catalogue().Select(e => e.Path).ToList();
+
+        // They still parse, so whatever was written down still runs, but the
+        // palette and the reference offer each command once, by its name now.
+        paths.Should().Contain(["dashboard", "daemon stop", "daemon autostart show"]);
+        paths.Should().NotContain(p => p.StartsWith("team daemon", StringComparison.Ordinal)
+            || p.StartsWith("team autostart", StringComparison.Ordinal)
+            || p == "team dashboard");
+    }
+
+    [Fact]
     public void Sub_commands_are_recorded_with_their_full_path()
     {
         var paths = Catalogue().Select(e => e.Path).ToList();

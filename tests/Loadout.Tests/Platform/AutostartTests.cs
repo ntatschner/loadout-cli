@@ -107,4 +107,38 @@ public sealed class AutostartTests
     {
         UnixAutostart.Words(command).Should().Equal(expected);
     }
+
+    [Fact]
+    public void A_desktop_entry_reads_back_as_the_line_it_was_written_with()
+    {
+        // What 'daemon autostart show' looks at to say an entry uses the old
+        // name, so it has to be the line written, not a reconstruction.
+        UnixAutostart.FromDesktop(UnixAutostart.Desktop(Spaced)).Should().Be(Spaced);
+    }
+
+    [Fact]
+    public void A_launch_agent_reads_back_with_a_spaced_path_still_one_word()
+    {
+        const string command = @"""/Applications/Loadout Beta/loadout"" daemon";
+
+        var read = UnixAutostart.FromPlist(UnixAutostart.Plist(command));
+
+        read.Should().Be(command);
+        UnixAutostart.Words(read).Should().Equal("/Applications/Loadout Beta/loadout", "daemon");
+    }
+
+    [Fact]
+    public void A_launch_agent_reads_back_unescaped()
+    {
+        const string command = "/home/a&b/<loadout> daemon";
+
+        UnixAutostart.FromPlist(UnixAutostart.Plist(command)).Should().Be(command);
+    }
+
+    [Fact]
+    public void Text_that_is_not_an_entry_reads_back_as_nothing()
+    {
+        UnixAutostart.FromDesktop("[Desktop Entry]").Should().BeEmpty();
+        UnixAutostart.FromPlist("<plist/>").Should().BeEmpty();
+    }
 }

@@ -37,7 +37,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </remarks>
 [Description("Stay running: fire the scheduled team runs and serve the dashboard.")]
-[CommandMeta(CommandCategory.Start, Intent = "team daemon resident service schedules fire background", Mutates = true)]
+[CommandMeta(CommandCategory.Start, Intent = "daemon resident service schedules fire background team", Mutates = true)]
 public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 {
     /// <summary>How often the schedules are looked at.</summary>
@@ -189,7 +189,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         /// it is one.
         /// </summary>
         /// <remarks>
-        /// Hidden because it is how <c>team daemon</c> starts the daemon it
+        /// Hidden because it is how <c>daemon</c> starts the daemon it
         /// then shows, not something anybody types. Read by <c>Program</c>
         /// before parsing as well, because by the time this is parsed the
         /// console has already been made.
@@ -431,15 +431,15 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         await WriteStatusAsync(server?.Address, cancellationToken).ConfigureAwait(false);
 
         output.WriteLine("[dim]Watching the schedules. " + (settings.Log is not null
-            ? "Running in the background: 'loadout team daemon stop' stops it.[/]"
+            ? "Running in the background: 'loadout daemon stop' stops it.[/]"
             : Console.IsInputRedirected
-                ? "It stops when whatever started it closes its input, or on 'loadout team daemon stop'.[/]"
-                : "Press Ctrl+C or run 'loadout team daemon stop' to stop.[/]"));
+                ? "It stops when whatever started it closes its input, or on 'loadout daemon stop'.[/]"
+                : "Press Ctrl+C or run 'loadout daemon stop' to stop.[/]"));
 
         if (DaemonControl.Paused(_paths))
         {
             output.WriteLine(
-                "[yellow]Paused:[/] no schedule fires until 'loadout team daemon resume'. "
+                "[yellow]Paused:[/] no schedule fires until 'loadout daemon resume'. "
                 + "It was held when the last daemon stopped, and a hold is kept until it is lifted.");
         }
 
@@ -474,7 +474,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         // Not waited for when the stop came from somewhere else. It is a read
         // of standard input waiting to see it close, and a read of a pipe on
         // Windows does not hear its cancellation: a daemon told to stop by
-        // 'team daemon stop' sat here, stopped in every other sense, until
+        // 'daemon stop' sat here, stopped in every other sense, until
         // whatever started it closed its input - which for a daemon started
         // with its input held open is never. The process ending takes it.
         await Task.WhenAny(ending, Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None))
@@ -525,7 +525,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         if (Loadout.Core.Agents.LauncherInvocation.Parts() is not ({ Length: > 0 } command, var prefix))
         {
             output.WriteLine("[red]Could not restart:[/] this launcher cannot say how it was started. "
-                + "Start the daemon again with: loadout team daemon");
+                + "Start the daemon again with: loadout daemon");
 
             return;
         }
@@ -553,7 +553,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         output.WriteLine(started.Succeeded
             ? Restarting
             : $"[red]Could not restart:[/] {Shown.Safely(started.Error ?? "the new daemon did not start")}. "
-              + "Start it again with: loadout team daemon");
+              + "Start it again with: loadout daemon");
     }
 
     /// <summary>
@@ -561,7 +561,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </summary>
     private List<string> Arguments(IReadOnlyList<string> prefix, Settings was, int port)
     {
-        var arguments = new List<string>(prefix) { "team", "daemon" };
+        var arguments = new List<string>(prefix) { "daemon" };
 
         if (was.NoDashboard)
         {
@@ -591,7 +591,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This is what <c>team daemon</c> does now. It used to be the daemon, in
+    /// This is what <c>daemon</c> does now. It used to be the daemon, in
     /// the terminal, and ended when the terminal was closed: a console program
     /// goes with the window it is attached to, and there is no refusing that.
     /// Now the daemon has no window to go with, and this terminal only shows
@@ -646,7 +646,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
             return output.Fail(
                 "This launcher cannot say how it was started, so it cannot start itself in the background. "
-                + "Run it in this terminal instead with: loadout team daemon --foreground",
+                + "Run it in this terminal instead with: loadout daemon --foreground",
                 ExitCode.GeneralFailure);
         }
 
@@ -676,7 +676,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             + $"and kept in {Markup.Escape(log)}.[/]");
         output.WriteLine(
             "[dim]Closing this terminal or pressing Ctrl+C stops showing it; the daemon keeps running. "
-            + "'loadout team daemon stop' stops it.[/]");
+            + "'loadout daemon stop' stops it.[/]");
 
         return await FollowAsync(log, from, daemon, output, ct).ConfigureAwait(false);
     }
@@ -751,7 +751,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
             output.WriteLine(
                 $"Stopped showing it. The daemon is still running as process {current.Pid}: "
-                + "'loadout team daemon' shows it again, 'loadout team daemon stop' stops it.");
+                + "'loadout daemon' shows it again, 'loadout daemon stop' stops it.");
 
             return CommandOutput.Success();
         }
@@ -784,7 +784,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                 }
 
                 output.WriteLine($"[dim]What it says is in {Markup.Escape(log)}. "
-                    + "'loadout team daemon stop' stops it.[/]");
+                    + "'loadout daemon stop' stops it.[/]");
 
                 return CommandOutput.Success();
             }
@@ -1059,7 +1059,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </summary>
     /// <remarks>
     /// The work is in <see cref="DashboardActions" />, because
-    /// <c>team dashboard</c> draws the same form and answered it with "this
+    /// <c>dashboard</c> draws the same form and answered it with "this
     /// server does not start runs".
     /// </remarks>
     internal Task<OperationResult> BeganAsync(
@@ -1082,7 +1082,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </summary>
     /// <remarks>
     /// The mapping itself is in <see cref="DashboardActions" />, because
-    /// <c>team dashboard</c> serves the same page and drew the same buttons
+    /// <c>dashboard</c> serves the same page and drew the same buttons
     /// while answering every one of them with "this server only reads".
     /// </remarks>
     private Task<OperationResult> ActedOnAsync(
@@ -1326,7 +1326,7 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             _held = held;
 
             output.WriteLine($"[dim]{_time.GetUtcNow().ToLocalTime():HH:mm}[/] " + (held
-                ? "Paused: no schedule fires until 'loadout team daemon resume'. The dashboard is still served, "
+                ? "Paused: no schedule fires until 'loadout daemon resume'. The dashboard is still served, "
                   + "and runs already going carry on."
                 : "Resumed: schedules fire again."));
         }

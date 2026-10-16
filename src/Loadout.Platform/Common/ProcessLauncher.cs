@@ -378,7 +378,7 @@ public sealed class ProcessLauncher : IProcessLauncher
 
         // Pipes of its own, closed here at once. Left alone, the child is
         // handed this process's output, and when that is a pipe - a script
-        // reading 'loadout team daemon', or the test suite - whatever reads it
+        // reading 'loadout daemon', or the test suite - whatever reads it
         // waits for the end of a stream the daemon holds open for as long as
         // it runs. The runtime opens everything else it owns close-on-exec,
         // so these three are all that could be passed on. Whatever the child

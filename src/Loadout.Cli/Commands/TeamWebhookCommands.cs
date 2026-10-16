@@ -112,7 +112,7 @@ public sealed class TeamWebhookEnableCommand : AsyncCommand<GlobalSettings>
         output.WriteBlankLine();
         output.WriteLine($"[dim]Listening on {Markup.Escape(Webhook.Listen(teams))} while the daemon runs. "
             + "Change it with: loadout config set team-webhook-listen[/]");
-        output.WriteLine("[dim]Then: loadout team daemon[/]");
+        output.WriteLine("[dim]Then: loadout daemon[/]");
 
         return CommandOutput.Success();
     }

@@ -105,13 +105,13 @@
 | `loadout team outbox` | The files a run delivered, resolved from the commits its nodes reported |
 | `loadout team remedies` | What a team has worked out how to fix, and whether it is trusted here |
 | `loadout team remedy show\|trust\|requests` | One remedy in full, trusting or untrusting it, and the remediations waiting on you |
-| `loadout team dashboard` | Every run at once, live, on a page: the daemon's if one is serving, otherwise a new one here |
+| `loadout dashboard` | Every run at once, live, on a page: the daemon's if one is serving, otherwise a new one here |
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
-| `loadout team daemon` | Stay running: fire the scheduled runs and serve the dashboard |
-| `loadout team daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
+| `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
+| `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
-| `loadout team autostart enable\|disable\|show` | Start the daemon when you log in, per user |
+| `loadout daemon autostart enable\|disable\|show` | Start the daemon when you log in, per user |
 | `loadout team gate` | Answer something a run stopped to ask |
 | `loadout team message` | Say something to a run's lead, read at its next round |
 | `loadout team halt` | Stop a run after its current round, hold it, or let it carry on |
@@ -128,6 +128,13 @@
 | `loadout pack list\|add\|approve\|update\|remove` | Sets of specialists, roles and teams fetched from a Git remote, approved per machine |
 | `loadout share candidates\|promote` | Find guidance that belongs to everybody, and move it deliberately |
 | `loadout spend refresh` | See and refresh where spending stands against your thresholds |
+
+**The dashboard and the daemon are top-level commands,** because what they serve
+is no longer only about teams. They used to live under `team`, and the old names
+(team dashboard, team daemon and team autostart) still work, so a scheduled task,
+a login entry or a line somebody wrote down keeps running.
+`loadout daemon autostart show` says when your login entry still uses the old
+name, and `loadout daemon autostart enable` rewrites it.
 
 **Every command that can change something accepts `--dry-run`,** and it always
 means the same thing: show what would happen and change nothing. Several

@@ -113,7 +113,7 @@ public sealed class DaemonDoctorTests : IDisposable
         checks.Should().ContainSingle()
             .Which.Severity.Should().Be(DiagnosticSeverity.Warning);
 
-        checks[0].Detail.Should().Contain("1 schedule(s)").And.Contain("loadout team daemon");
+        checks[0].Detail.Should().Contain("1 schedule(s)").And.Contain("loadout daemon");
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class DaemonDoctorTests : IDisposable
         var checks = await AskAsync(alive: true);
 
         checks.Should().ContainSingle()
-            .Which.Detail.Should().Contain("Paused").And.Contain("loadout team daemon resume");
+            .Which.Detail.Should().Contain("Paused").And.Contain("loadout daemon resume");
 
         DaemonControl.Resume(_paths);
 

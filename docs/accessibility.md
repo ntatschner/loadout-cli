@@ -115,7 +115,7 @@ play where you asked for less movement.
 
 ### The dashboard
 
-`loadout team dashboard` serves a page showing what the team runs are doing. It
+`loadout dashboard` serves a page showing what the team runs are doing. It
 was built to WCAG 2.2 AA from its first commit rather than fixed afterwards: a
 live region present from the first paint, every state written as a word and not
 only as a colour, real headings and lists, a skip link, focus outlines that

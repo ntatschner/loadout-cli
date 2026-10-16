@@ -202,7 +202,7 @@ public sealed class TeamScheduleAddCommand : AsyncCommand<TeamScheduleAddCommand
         }
 
         output.WriteLine(Markup.Escape(Describe(saved.Value!, _time.GetUtcNow())));
-        output.WriteLine("[dim]Nothing fires until the daemon is running:[/] loadout team daemon");
+        output.WriteLine("[dim]Nothing fires until the daemon is running:[/] loadout daemon");
 
         return CommandOutput.Success();
     }
@@ -312,7 +312,7 @@ public sealed class TeamScheduleListCommand : AsyncCommand<GlobalSettings>
         }
 
         output.WriteBlankLine();
-        output.WriteLine("[dim]Nothing fires until the daemon is running:[/] loadout team daemon");
+        output.WriteLine("[dim]Nothing fires until the daemon is running:[/] loadout daemon");
 
         return CommandOutput.Success();
     }

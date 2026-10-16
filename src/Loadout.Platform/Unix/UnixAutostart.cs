@@ -63,6 +63,26 @@ public sealed class UnixAutostart : IAutostart
     }
 
     /// <inheritdoc />
+    public async Task<OperationResult<string?>> CommandAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            if (!File.Exists(Path_))
+            {
+                return OperationResult<string?>.Ok(null);
+            }
+
+            var text = await File.ReadAllTextAsync(Path_, ct).ConfigureAwait(false);
+
+            return OperationResult<string?>.Ok(_macOS ? FromPlist(text) : FromDesktop(text));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<string?>.Fail($"Could not read '{Path_}': {ex.Message}");
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<OperationResult> InstallAsync(string command, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(command);
@@ -142,6 +162,35 @@ public sealed class UnixAutostart : IAutostart
         + "Terminal=false\n"
         + "X-GNOME-Autostart-enabled=true\n";
 
+    /// <summary>The command line a desktop entry runs, from its Exec line.</summary>
+    internal static string FromDesktop(string text) =>
+        text.ReplaceLineEndings().Split(Environment.NewLine)
+            .Select(line => line.Trim())
+            .FirstOrDefault(line => line.StartsWith("Exec=", StringComparison.Ordinal))?[5..]
+        ?? string.Empty;
+
+    /// <summary>
+    /// The command line a launch agent runs, from its program arguments, with
+    /// any word holding a space quoted as <see cref="Plist"/> was given it.
+    /// </summary>
+    internal static string FromPlist(string text)
+    {
+        var start = text.IndexOf("<array>", StringComparison.Ordinal);
+        var end = text.IndexOf("</array>", StringComparison.Ordinal);
+
+        if (start < 0 || end < start)
+        {
+            return string.Empty;
+        }
+
+        var words = System.Text.RegularExpressions.Regex
+            .Matches(text[start..end], "<string>(.*?)</string>")
+            .Select(match => Unescape(match.Groups[1].Value))
+            .Select(word => word.Contains(' ', StringComparison.Ordinal) ? $"\"{word}\"" : word);
+
+        return string.Join(' ', words);
+    }
+
     /// <summary>
     /// A command line as separate words, keeping quoted runs together.
     /// </summary>
@@ -185,6 +234,11 @@ public sealed class UnixAutostart : IAutostart
 
         return words;
     }
+
+    private static string Unescape(string text) =>
+        text.Replace("&lt;", "<", StringComparison.Ordinal)
+            .Replace("&gt;", ">", StringComparison.Ordinal)
+            .Replace("&amp;", "&", StringComparison.Ordinal);
 
     private static string Escape(string text) =>
         text.Replace("&", "&amp;", StringComparison.Ordinal)

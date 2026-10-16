@@ -26,7 +26,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// <para>
 /// In its own class because two commands serve the page. The daemon has always
-/// been able to act; <c>team dashboard</c> could not, so the page it serves
+/// been able to act; <c>dashboard</c> could not, so the page it serves
 /// drew "Hold it", "Stop it" and a box for messaging the lead and the server
 /// answered every one of them with "this server only reads". A page that offers
 /// a control it cannot honour is worse than one that does not offer it.
@@ -181,9 +181,9 @@ internal static partial class DashboardActions
 
             // The server room's. Not about a run at all, so the run is not
             // passed; the page asks before each, by what it will do.
-            "daemon-pause" => ("team daemon pause", []),
-            "daemon-resume" => ("team daemon resume", []),
-            "daemon-restart" => ("team daemon restart", []),
+            "daemon-pause" => ("daemon pause", []),
+            "daemon-resume" => ("daemon resume", []),
+            "daemon-restart" => ("daemon restart", []),
 
             "pause" => ("team halt", [action.Run, "--pause"]),
             "resume" => ("team halt", [action.Run, "--resume"]),

@@ -41,7 +41,7 @@ namespace Loadout.Cli.Commands;
 /// </para>
 /// </remarks>
 [Description("Show what the team runs are doing on a page: the one a daemon is already serving, or a new one on this machine. Every control on it runs the command you would have typed.")]
-[CommandMeta(CommandCategory.Start, Intent = "team dashboard web page browser watch runs live")]
+[CommandMeta(CommandCategory.Start, Intent = "dashboard web page browser watch runs live team")]
 public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Settings>
 {
     private readonly IRunJournal _journal;
@@ -233,7 +233,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
     /// </summary>
     /// <remarks>
     /// The daemon has no such caveat: it is meant to stay up, and a run it
-    /// starts outlives the browser that asked for it. A <c>team dashboard</c>
+    /// starts outlives the browser that asked for it. A <c>dashboard</c>
     /// is a window somebody closes, and the run is hosted by this process. It
     /// is said when the server starts rather than discovered when a run stops.
     /// </remarks>
@@ -332,7 +332,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
                 $"[dim]serving since {daemon.Since.ToLocalTime():HH:mm}, and it keeps going "
                 + "when this window closes.[/]");
             output.WriteLine(
-                "[dim]Serve a separate one here with: loadout team dashboard --port <port>[/]");
+                "[dim]Serve a separate one here with: loadout dashboard --port <port>[/]");
         }
 
         if (settings.Open && output.CanOpenAWindow)

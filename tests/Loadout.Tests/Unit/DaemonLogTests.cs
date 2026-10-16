@@ -45,6 +45,18 @@ public sealed class DaemonLogTests : IDisposable
     }
 
     [Fact]
+    public void The_daemon_is_read_for_its_log_under_its_new_name_as_well()
+    {
+        // What a daemon restarts itself with now. Missing it would send a
+        // background daemon's whole output to a console nobody has.
+        DaemonLog.Asked(["daemon", "--log", "/tmp/d.log"]).Should().Be("/tmp/d.log");
+        DaemonLog.Asked(["daemon", "--port", "80", "--log", "/tmp/d.log"]).Should().Be("/tmp/d.log");
+
+        DaemonLog.Asked(["daemon", "stop"]).Should().BeNull();
+        DaemonLog.Asked(["dashboard", "--log", "/tmp/d.log"]).Should().BeNull();
+    }
+
+    [Fact]
     public void What_is_written_is_shown_once_and_in_order()
     {
         using (var writer = DaemonLog.Open(Log))

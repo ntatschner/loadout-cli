@@ -228,7 +228,7 @@ public sealed class DashboardServer : IDisposable
     /// Whether a run started from this page stops when this server does.
     /// </summary>
     /// <remarks>
-    /// True for <c>team dashboard</c>, which hosts the run inside a command
+    /// True for <c>dashboard</c>, which hosts the run inside a command
     /// somebody is sitting in front of and will eventually close. False for
     /// the daemon, which is meant to stay up. The page says which, because it
     /// cannot tell and the difference is a run somebody loses.
@@ -258,7 +258,7 @@ public sealed class DashboardServer : IDisposable
     /// </summary>
     /// <remarks>
     /// Set by whatever can actually start a run through the parser. Null is the
-    /// ordinary case and the safe one: <c>team dashboard</c> sets nothing, so a
+    /// ordinary case and the safe one: <c>dashboard</c> sets nothing, so a
     /// dashboard somebody opened to watch a run cannot start one.
     /// </remarks>
     public Func<TriggerRequest, CancellationToken, Task<OperationResult>>? Trigger { get; set; }
@@ -268,7 +268,7 @@ public sealed class DashboardServer : IDisposable
     /// </summary>
     /// <remarks>
     /// Set by whatever can run a command through the parser. Null refuses
-    /// every one of them, which is what <c>team dashboard</c> does: a page
+    /// every one of them, which is what <c>dashboard</c> does: a page
     /// opened to watch a run must not be able to change it, and the daemon is
     /// the thing that can.
     /// </remarks>
