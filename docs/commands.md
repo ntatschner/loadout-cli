@@ -114,7 +114,7 @@
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
-| `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
+| `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules. If it is hosting sessions for Studio, which end when it stops, stop and restart say so and ask first; `--yes` doesn't ask |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
 | `loadout daemon autostart enable\|disable\|show` | Start the daemon when you log in, per user |
 | `loadout team gate` | Answer something a run stopped to ask |

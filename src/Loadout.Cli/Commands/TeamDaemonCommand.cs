@@ -420,8 +420,10 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // offered to have decided.
             server.Attach = new Attaching(_secrets, _time);
 
-            // Sessions hosted for Studio, which end when this daemon does.
+            // Sessions hosted for Studio, which end when this daemon does,
+            // so the note says how many are running for 'daemon stop' to warn.
             server.Sessions = _sessions;
+            _sessions.Changed += HostedChanged;
 
             // And Studio's memory page: read through Core, saved by typing
             // 'memory replace'.
@@ -502,7 +504,12 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
         }
 
-        // After the listener, so no page can start one while the rest end.
+        // After the listener, so no page can start one while the rest end,
+        // and with the note closed first, so ending them does not write it.
+        _sessions.Changed -= HostedChanged;
+        await _statusGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        _statusClosed = true;
+        _statusGate.Release();
         await _sessions.DisposeAsync().ConfigureAwait(false);
 
         // Not waited for when the stop came from somewhere else. It is a read
@@ -1552,8 +1559,23 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </remarks>
     private async Task WriteStatusAsync(string? address, CancellationToken ct)
     {
+        // One at a time, because a session ending writes this from whatever
+        // thread it ended on, and two writes at once can interleave.
+        await _statusGate.WaitAsync(ct).ConfigureAwait(false);
+
         try
         {
+            // Written again whenever a hosted session starts or ends, and
+            // never once the daemon has begun ending them: a note written
+            // after Forget would outlive the daemon.
+            if (_statusClosed)
+            {
+                return;
+            }
+
+            _since ??= _time.GetUtcNow();
+            _statusAddress = address;
+
             Directory.CreateDirectory(Path.GetDirectoryName(StatusPath)!);
 
             await File.WriteAllTextAsync(
@@ -1562,7 +1584,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                     _processes.CurrentProcessId,
                     _processes.CurrentProcessStartedAt,
                     address,
-                    _time.GetUtcNow())),
+                    _since.Value,
+                    _sessions.Running)),
                 ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1571,7 +1594,19 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // start because it could not write down that it had is worse than
             // one nothing can find.
         }
+        finally
+        {
+            _statusGate.Release();
+        }
     }
+
+    private readonly SemaphoreSlim _statusGate = new(1, 1);
+    private DateTimeOffset? _since;
+    private string? _statusAddress;
+    private bool _statusClosed;
+
+    /// <summary>Writes the note again with the current number of hosted sessions.</summary>
+    private void HostedChanged() => _ = WriteStatusAsync(_statusAddress, CancellationToken.None);
 
     private void Forget()
     {

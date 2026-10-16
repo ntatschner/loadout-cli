@@ -128,6 +128,38 @@ public sealed class HostedSessionsTests
         terminals.Should().HaveCount(3).And.OnlyContain(one => one.Disposed);
     }
 
+    [Fact]
+    public async Task It_says_when_one_starts_ends_or_is_removed_and_counts_those_still_running()
+    {
+        var terminals = new List<ScriptedTerminal>();
+        await using var sessions = new HostedSessions(() => Made(terminals), () => Launcher);
+        var changes = 0;
+        sessions.Changed += () => Interlocked.Increment(ref changes);
+
+        var first = (await sessions.StartAsync(new HostedLaunch("one"))).Value!;
+        var second = (await sessions.StartAsync(new HostedLaunch("two"))).Value!;
+
+        sessions.Running.Should().Be(2);
+        Volatile.Read(ref changes).Should().Be(2, "each start is a change");
+
+        terminals[0].Exit(0);
+        await first.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+
+        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (Volatile.Read(ref changes) < 3)
+        {
+            await Task.Delay(20, patience.Token);
+        }
+
+        sessions.Running.Should().Be(1, "one has ended by itself and is still listed");
+        sessions.All.Should().HaveCount(2);
+
+        await sessions.RemoveAsync(second.Id);
+
+        sessions.Running.Should().Be(0);
+        Volatile.Read(ref changes).Should().BeGreaterThanOrEqualTo(4, "a removal is a change");
+    }
+
     private static ScriptedTerminal Made(List<ScriptedTerminal> terminals)
     {
         var terminal = new ScriptedTerminal();

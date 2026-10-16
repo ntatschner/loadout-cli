@@ -164,6 +164,9 @@ public sealed class HostedSession : IAsyncDisposable
         return OperationResult<HostedSession>.Ok(session);
     }
 
+    /// <summary>Completes once the session has ended and every window has been told.</summary>
+    public Task Completion => _pump;
+
     /// <summary>
     /// A new window watching the session. It gets the scrollback first, then
     /// everything after it, and it holds the input until another window

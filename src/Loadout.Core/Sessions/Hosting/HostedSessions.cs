@@ -67,6 +67,24 @@ public sealed class HostedSessions : IAsyncDisposable
         _lifetime = lifetime;
     }
 
+    /// <summary>
+    /// Raised when a session starts, ends or is removed, for whatever says
+    /// how many are running. It may be raised on any thread.
+    /// </summary>
+    public event Action? Changed;
+
+    /// <summary>How many have not ended.</summary>
+    public int Running
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _sessions.Count(one => !one.HasEnded);
+            }
+        }
+    }
+
     /// <summary>Every session, oldest first, running or ended.</summary>
     public IReadOnlyList<HostedSession> All
     {
@@ -131,6 +149,7 @@ public sealed class HostedSessions : IAsyncDisposable
             if (!_disposed)
             {
                 _sessions.Add(started.Value!);
+                Watch(started.Value!);
 
                 return started;
             }
@@ -163,8 +182,21 @@ public sealed class HostedSessions : IAsyncDisposable
         }
 
         await found.DisposeAsync().ConfigureAwait(false);
+        Changed?.Invoke();
 
         return true;
+    }
+
+    /// <summary>Says so now, and again when the session ends by itself.</summary>
+    private void Watch(HostedSession session)
+    {
+        Changed?.Invoke();
+
+        _ = session.Completion.ContinueWith(
+            _ => Changed?.Invoke(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     /// <summary>
