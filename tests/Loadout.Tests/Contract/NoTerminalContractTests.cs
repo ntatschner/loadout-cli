@@ -16,32 +16,28 @@ namespace Loadout.Tests.Contract;
 /// caller meets: a pipe, a script, a CI job, or somebody's package validator.
 /// </para>
 /// <para>
-/// It used to report <c>InvalidArguments</c>, which was wrong twice over. The
-/// arguments were fine — running <c>loadout</c> with none is the documented way
-/// to open the launcher — and 2 is also <c>ERROR_FILE_NOT_FOUND</c>, so a
-/// validator decoding it as a Win32 code reported "the system cannot find the
-/// file specified" about a launcher that had started, printed and exited
-/// perfectly.
+/// It used to report <c>InvalidArguments</c>, then <c>TerminalRequired</c>.
+/// Both read as failures to a package validator, which runs the installed
+/// executable with no arguments and no terminal, and the first was also
+/// <c>ERROR_FILE_NOT_FOUND</c> to anything decoding it as a Win32 code. It now
+/// succeeds: nothing went wrong, and what to do instead is on stderr.
 /// </para>
 /// </remarks>
 [Collection(ContractCollection.Name)]
 public sealed class NoTerminalContractTests
 {
     [Fact]
-    public async Task No_arguments_and_no_terminal_says_a_terminal_is_what_is_missing()
+    public async Task No_arguments_and_no_terminal_succeeds_having_said_where_to_go()
     {
         using var loadout = new LoadoutProcess();
 
         var run = await loadout.RunAsync();
 
-        run.ExitCode.Should().Be(
-            (int)ExitCode.TerminalRequired,
-            "the arguments were fine and the terminal was not there");
-
-        // Specifically not 2. Anything reading an exit code as a Win32 one
-        // turns that into a missing file, which is a claim about the package
-        // rather than about the environment it was run in.
-        run.ExitCode.Should().NotBe((int)ExitCode.InvalidArguments);
+        // Nothing failed: it was asked for nothing it could do here, and said
+        // so. A package validator runs exactly this, and any non-zero code -
+        // 2, then 11 - held every winget release for a person to check by hand.
+        run.ExitCode.Should().Be((int)ExitCode.Success, "it was asked for nothing and said where to go instead");
+        run.StandardError.Should().Contain("no interactive terminal");
     }
 
     [Fact]
