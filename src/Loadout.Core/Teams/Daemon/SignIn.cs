@@ -38,8 +38,12 @@ public enum CookieStanding
 /// code at once, which is what signing out does.
 /// </para>
 /// <para>
-/// The key is read again whenever its file changes, so a sign-out run from a
-/// terminal reaches a daemon that is already running.
+/// The key is read from its file every time it is used, so a sign-out run
+/// from a terminal reaches a daemon that is already running. Thirty-two bytes
+/// read when a request arrives costs nothing worth saving, and the file's
+/// modified time cannot stand in for it: Windows stamps files from a clock
+/// that can tick as coarsely as every fifteen milliseconds, so a key replaced
+/// soon after it was read could look unchanged.
 /// </para>
 /// </remarks>
 public sealed class SignIn
@@ -65,7 +69,6 @@ public sealed class SignIn
     private readonly ConcurrentDictionary<string, DateTimeOffset> _spent = new(StringComparer.Ordinal);
     private readonly object _gate = new();
     private byte[]? _key;
-    private DateTime _keyWritten;
 
     /// <summary>Signs with the key in the file given, creating it the first time.</summary>
     /// <param name="keyFile">Where the key lives, in this machine's local state.</param>
@@ -195,24 +198,24 @@ public sealed class SignIn
     {
         lock (_gate)
         {
-            var written = File.Exists(_keyFile) ? File.GetLastWriteTimeUtc(_keyFile) : default;
+            byte[]? stored;
 
-            if (_key is not null && written == _keyWritten)
+            try
             {
+                stored = File.Exists(_keyFile) ? File.ReadAllBytes(_keyFile) : null;
+            }
+            catch (IOException) when (_key is not null)
+            {
+                // Caught mid-replace by a sign-out in another process. The
+                // key it is replacing is the right answer for this moment.
                 return _key;
             }
 
-            if (written != default)
+            if (stored is { Length: KeyLength })
             {
-                var stored = File.ReadAllBytes(_keyFile);
+                _key = stored;
 
-                if (stored.Length == KeyLength)
-                {
-                    _key = stored;
-                    _keyWritten = written;
-
-                    return _key;
-                }
+                return _key;
             }
 
             // None yet, or one that is not a key. Replacing a damaged one
@@ -232,7 +235,6 @@ public sealed class SignIn
         File.Move(temporary, _keyFile, overwrite: true);
 
         _key = key;
-        _keyWritten = File.GetLastWriteTimeUtc(_keyFile);
 
         return key;
     }

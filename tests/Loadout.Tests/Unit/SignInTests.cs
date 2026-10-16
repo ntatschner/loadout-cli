@@ -96,6 +96,23 @@ public sealed class SignInTests : IDisposable
     }
 
     [Fact]
+    public void A_sign_out_within_the_same_tick_of_the_file_clock_is_still_noticed()
+    {
+        // Windows stamps files from a clock that can tick as coarsely as
+        // every fifteen milliseconds, so a key replaced soon after it was
+        // read can carry the very same time. Pinned here, so it happens on
+        // every run rather than on a fast machine now and then.
+        var daemon = new SignIn(KeyFile, clock: _clock);
+        var cookie = daemon.IssueCookie();
+        var written = File.GetLastWriteTimeUtc(KeyFile);
+
+        new SignIn(KeyFile, clock: _clock).Rotate();
+        File.SetLastWriteTimeUtc(KeyFile, written);
+
+        daemon.Check(cookie).Should().Be(CookieStanding.Refused);
+    }
+
+    [Fact]
     public void A_code_works_once()
     {
         var signIn = new SignIn(KeyFile, clock: _clock);
