@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using Loadout.Cli.Infrastructure;
+using Loadout.Core.Teams.Daemon;
 using Loadout.Core.Updates;
 using Loadout.Models;
+using Loadout.Platform.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using Loadout.Tui;
@@ -23,11 +25,15 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
 {
     private readonly IUpdateService _updates;
     private readonly IAnsiConsole _console;
+    private readonly IPlatformPaths _paths;
+    private readonly IProcessInspector _processes;
 
-    public UpdateCommand(IUpdateService updates, IAnsiConsole console)
+    public UpdateCommand(IUpdateService updates, IAnsiConsole console, IPlatformPaths paths, IProcessInspector processes)
     {
         _updates = updates;
         _console = console;
+        _paths = paths;
+        _processes = processes;
     }
 
     public sealed class Settings : GlobalSettings
@@ -148,6 +154,32 @@ public sealed class UpdateCommand : AsyncCommand<UpdateCommand.Settings>
         output.WriteLine(
             $"[dim]The previous binary was kept at {Markup.Escape(applyResult.Value!)}[/]");
 
+        Daemon(output);
+
         return CommandOutput.Success();
+    }
+
+    /// <summary>
+    /// Says that a running daemon is still the old version, and what
+    /// restarting it ends.
+    /// </summary>
+    /// <remarks>
+    /// The update leaves it running, sessions and all, which is right: it is
+    /// not this command's to stop. But it goes on serving the old version
+    /// until somebody restarts it, and the restart ends whatever it hosts for
+    /// Studio, so both are said here rather than found out later.
+    /// </remarks>
+    private void Daemon(CommandOutput output)
+    {
+        if (DaemonNote.Live(_paths, _processes) is not { } running)
+        {
+            return;
+        }
+
+        output.WriteLine(running.Hosted > 0
+            ? $"[yellow]The daemon is still running the previous version,[/] with {running.Hosted} "
+              + $"session{(running.Hosted == 1 ? string.Empty : "s")} for Studio that "
+              + $"{(running.Hosted == 1 ? "ends" : "end")} when it restarts. Restart it when you are ready: loadout daemon restart"
+            : "[dim]The daemon is still running the previous version. Restart it with:[/] loadout daemon restart");
     }
 }
