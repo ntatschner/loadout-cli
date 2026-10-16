@@ -63,6 +63,8 @@ Take these in order:
    agent at once
 6. [Accessibility](accessibility.md), if you'd like Loadout to change how it
    shows or says things
+7. [Studio](studio.md), if you'd rather start and use a session in your web
+   browser
 
 If something goes wrong at any point, type `loadout doctor` and press Enter. It
 tells you what's missing.

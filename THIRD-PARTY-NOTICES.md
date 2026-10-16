@@ -4,7 +4,8 @@
 under a permissive licence compatible with shipping this project as open source.
 
 This file is checked rather than trusted: `build/licences.ps1` reads the licence
-of every restored package from its own `.nuspec` and fails the build on anything
+of every restored package from its own `.nuspec`, and every package in Studio's
+npm lock file from the licence recorded there, and fails the build on anything
 outside the allowlist. CI runs it on every change.
 
 ## Shipped in the binary
@@ -21,6 +22,10 @@ outside the allowlist. CI runs it on every change.
 | .NET runtime and base class libraries | MIT |
 | [Atkinson Hyperlegible Next](https://github.com/googlefonts/atkinson-hyperlegible-next) | OFL-1.1 |
 | [Atkinson Hyperlegible Mono](https://github.com/googlefonts/atkinson-hyperlegible-next-mono) | OFL-1.1 |
+| [Svelte](https://svelte.dev/) 5.57.1, compiled into Studio's page | MIT |
+| [xterm.js](https://xtermjs.org/) 5.5.0, with @xterm/addon-fit 0.10.0 and @xterm/addon-webgl 0.18.0, bundled into Studio's page as its terminal | MIT |
+| [Saira](https://github.com/Omnibus-Type/Saira) | OFL-1.1 |
+| [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | OFL-1.1 |
 
 ## The type the dashboard is set in
 
@@ -141,6 +146,76 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
+## The type Studio is set in
+
+Studio, the preview front end at `/studio/`, is set in Saira, with JetBrains
+Mono for anything you would type. They came with Studio's design system. Two
+woff2 files, cut down to Latin, are served from the binary as files, never
+fetched from anywhere: Studio's content security policy allows fonts from
+itself and nothing else.
+
+They are licensed under the SIL Open Font License, Version 1.1, the same
+licence reproduced in full above, on the same two conditions: the notice and
+the licence travel with every copy, and the fonts are never sold on their own.
+The licence texts as they came are in `design/studio/fonts/`.
+
+```text
+Copyright 2020 The Saira Project Authors
+(https://github.com/Omnibus-Type/Saira)
+
+Copyright 2020 The JetBrains Mono Project Authors
+(https://github.com/JetBrains/JetBrainsMono)
+```
+
+## Studio's terminal
+
+Studio's terminal is xterm.js, MIT licensed, drawn with its WebGL renderer. It
+was chosen for being small, permissively licensed and the terminal most
+browser-based tools already use, and the WebGL renderer for a stricter reason:
+xterm's default renderer writes style elements and style attributes, which
+Studio's content security policy refuses.
+
+Its licence, which travels with the bundle in the binary:
+
+```text
+Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
+Copyright (c) 2014-2016, SourceLair Private Company (https://www.sourcelair.com)
+Copyright (c) 2012-2013, Christopher Jeffrey (https://github.com/chjj/)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```
+
+## Svelte
+
+Studio is written in Svelte, which compiles it to plain JavaScript; the parts
+of its runtime the page uses are bundled into the binary with it. Its licence:
+
+```text
+Copyright (c) 2016-2025 [Svelte Contributors](https://github.com/sveltejs/svelte/graphs/contributors)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
 ## Build and test only
 
 These are not part of a release.
@@ -155,6 +230,24 @@ These are not part of a release.
 | Newtonsoft.Json | MIT |
 | [FluentAssertions](https://fluentassertions.com/) **7.2.2** | Apache-2.0 |
 | System.Configuration.ConfigurationManager, System.Security.Cryptography.ProtectedData | MIT |
+| [Vite](https://vite.dev/) and @sveltejs/vite-plugin-svelte, which build Studio's page | MIT |
+| [TypeScript](https://www.typescriptlang.org/) and svelte-check, which check it | Apache-2.0, MIT |
+| [Vitest](https://vitest.dev/), jsdom and @testing-library/svelte, which test its components | MIT |
+| [lightningcss](https://lightningcss.dev/), Vite's CSS minifier | MPL-2.0 |
+| @csstools/color-helpers, @csstools/css-syntax-patches-for-csstree, mdn-data and lru-cache, which jsdom uses | MIT-0, CC0-1.0, BlueOak-1.0.0 |
+
+### Why lightningcss and four of jsdom's are allowed
+
+MPL-2.0 is not on the allowlist, and lightningcss is reviewed rather than
+allowed. It runs only while Studio's page is built, and nothing of it ships. Its
+licence binds changes to its own files, not the CSS it produces.
+
+MIT-0, CC0-1.0 and BlueOak-1.0.0 are not on the allowlist either, though each
+asks for less than MIT does. Rather than widen the list for every package, the
+four packages are named in `build/licences.ps1` as test tools.
+
+Each review applies only while the package is a build or test dependency, and
+the licence check fails if one ever ships.
 
 ### Why FluentAssertions is pinned exactly
 

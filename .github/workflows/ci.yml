@@ -93,6 +93,41 @@ jobs:
         shell: pwsh
         run: ./build/licences.ps1 -Detailed
 
+  # Studio's page, checked and its components tested. The only job that needs
+  # Node: the page is built by hand and committed, so building and testing
+  # Loadout never does, and StudioBuildTests in the suite fails if the
+  # committed build is older than its sources.
+  studio:
+    name: Studio's page
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: changes
+    if: needs.changes.outputs.docs-only != 'true'
+
+    defaults:
+      run:
+        working-directory: studio
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+
+      # ci, not install: it refuses a lock file that disagrees with
+      # package.json, which is the npm equivalent of --locked-mode.
+      - name: Install exactly what the lock file names
+        run: npm ci
+
+      - name: Check the types
+        run: npm run check
+
+      - name: Test the components
+        run: npm test
+
   test:
     name: Test on ${{ matrix.name }}
     runs-on: ${{ matrix.os }}

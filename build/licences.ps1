@@ -135,8 +135,67 @@ foreach ($file in $assets) {
     }
 }
 
+# Studio's packages, from its npm lock file, which records each one's licence
+# as its package.json declares it. Those not marked dev are bundled into the
+# page and so ship in the binary; the rest only run while it is built.
+$reviewedNpm = @{
+    # Vite's CSS minifier, and its per-platform builds. MPL-2.0 is file-level:
+    # it binds changes to lightningcss's own files, not what it produces, and
+    # it runs only while the page is built. Nothing of it ships. If it ever
+    # stops being a dev dependency this entry stops applying.
+    'lightningcss' = 'MPL-2.0, build tool only'
+
+    # jsdom's, for Studio's component tests only. Each is more permissive
+    # than MIT (MIT without its attribution clause, a public-domain
+    # dedication, and the Blue Oak licence, which grants the same and adds a
+    # patent grant), so the allowlist is not widened for them; they are named
+    # here, as test tools, and stop applying if they ever ship.
+    '@csstools/color-helpers' = 'MIT-0, test tool only'
+    '@csstools/css-syntax-patches-for-csstree' = 'MIT-0, test tool only'
+    'mdn-data' = 'CC0-1.0, test tool only'
+    'lru-cache' = 'BlueOak-1.0.0, test tool only'
+}
+
+$lock = Join-Path $repositoryRoot 'studio/package-lock.json'
+$npmCount = 0
+
+if (Test-Path $lock) {
+    # As a hashtable, because the lock names the project itself with an
+    # empty key, which an object cannot hold.
+    $packages = (Get-Content $lock -Raw | ConvertFrom-Json -AsHashtable)['packages']
+
+    foreach ($entry in $packages.GetEnumerator()) {
+        if ($entry.Key -eq '') { continue }
+
+        $npmCount++
+        $name = $entry.Key -replace '^.*node_modules/', ''
+        $package = $entry.Value
+        $version = $package['version']
+        $licence = $package['license']
+        $dev = $package.ContainsKey('dev') -and $package['dev']
+
+        if ($licence -and ($allowed -contains $licence)) {
+            if ($Detailed) { Write-Host "  ok    npm $name $version  $licence" }
+            continue
+        }
+
+        $family = $name -replace '-(android|darwin|freebsd|linux|win32)-.*$', ''
+
+        if ($dev -and $reviewedNpm.ContainsKey($family)) {
+            if ($Detailed) { Write-Host "  ok    npm $name $version  $($reviewedNpm[$family]) (reviewed)" }
+            continue
+        }
+
+        $problems += if ($licence) {
+            "npm $name $version - licence '$licence' is not on the allowlist"
+        } else {
+            "npm $name $version - declares no licence"
+        }
+    }
+}
+
 Write-Host ''
-Write-Host "Checked $($seen.Count) package(s)."
+Write-Host "Checked $($seen.Count) NuGet package(s) and $npmCount npm package(s)."
 
 if ($problems.Count -gt 0) {
     Write-Host ''
@@ -147,7 +206,7 @@ if ($problems.Count -gt 0) {
     }
 
     Write-Host ''
-    Write-Host 'Either replace the dependency, or add it to $reviewed in this script with a note'
+    Write-Host 'Either replace the dependency, or add it to $reviewed (or $reviewedNpm) in this script with a note'
     Write-Host 'saying what its licence actually permits.'
 
     exit 1

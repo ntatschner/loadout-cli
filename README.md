@@ -64,6 +64,17 @@ most wants one.
 
 [Using the dashboard, step by step](docs/guides/dashboard.md)
 
+### Studio: start sessions and work in them from your browser (preview)
+
+Studio is a second front end, served by the daemon at `/studio/` beside the
+dashboard. Start a session from it, with the same launch sheet the terminal
+gives you, and type into its live terminal. It shows everything in flight on
+one page and lets you answer what's waiting on you. The session belongs to the
+daemon, so closing the tab ends nothing. It's a preview, so the dashboard stays
+the default; `loadout dashboard --open --studio` opens it signed in.
+
+[Using Studio, step by step](docs/guides/studio.md)
+
 ### Specialists and context: the right instructions, with the cost shown
 
 Loadout doesn't hand your agent one enormous prompt that's mostly irrelevant.
