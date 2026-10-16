@@ -1,0 +1,32 @@
+{
+  "name": "loadout-studio",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Loadout Studio, the app the Loadout daemon serves. Built into the launcher; nothing here is published.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/addon-webgl": "0.18.0",
+    "@xterm/xterm": "5.5.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@testing-library/svelte": "5.4.2",
+    "jsdom": "30.1.0",
+    "svelte": "5.57.1",
+    "svelte-check": "4.7.4",
+    "typescript": "6.0.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
+  }
+}

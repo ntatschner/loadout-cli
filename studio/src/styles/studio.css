@@ -1,0 +1,134 @@
+/*
+ * What the reference components set as style attributes, as classes instead.
+ * Studio's content security policy refuses every style attribute, so the
+ * fixed ones live here and the computed ones are set through the style
+ * object, which the policy allows.
+ */
+
+.ls-tube .board .bt { min-width: 0; }
+.ls-tube .hit { cursor: pointer; pointer-events: stroke; }
+.ls-strip .ls-badge.big { width: 34px; height: 34px; font-size: 16px; }
+.ls-strip .sigline { display: block; margin-top: 4px; }
+.ls-answers.flush { margin: 0; }
+.ls-status .ok.left { text-align: left; }
+
+.ls-urgent { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.ls-urgent > li { border-radius: var(--radius-chip); }
+
+/* ---------- Home's panels, and editing them in place ---------- */
+
+/* The halo holds the left column and the rest stack beside it, whatever order
+   they are in; below 1060px everything is one column, in the saved order. */
+.lens { grid-auto-flow: row dense; }
+.lens > .p-focus { grid-column: 1; grid-row: span 2; }
+.lens > .panel:not(.wide):not(.p-focus) { grid-column: 2; }
+@media (max-width: 1060px) { .lens > .p-focus, .lens > .panel:not(.wide):not(.p-focus) { grid-column: 1; grid-row: auto; } }
+.panel { min-width: 0; display: grid; gap: var(--space-3); align-content: start; }
+.mapview > .panel { gap: var(--space-2); }
+
+.editbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-5);
+  margin: 0 0 var(--space-6); padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-chip); background: var(--tint-picked-c);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.editbar p { margin: 0; flex: 1 1 260px; color: var(--ink-strong); }
+
+.panel.editing { padding: var(--space-3); border-radius: var(--radius-chip); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.panel.editing.over { box-shadow: inset 0 0 0 2px var(--accent); }
+.panel.dragging { opacity: .5; }
+.chrome { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+.chrome .grip { display: inline-flex; gap: var(--space-2); align-items: center; cursor: grab; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--accent-text); }
+.chrome .nudge { display: inline-flex; gap: 2px; }
+.chrome button { min-width: 36px; min-height: 36px; border: 0; border-radius: var(--radius-chip); background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); font: inherit; cursor: pointer; }
+.chrome button:hover:not(:disabled) { background: var(--tint-hover-c); }
+.chrome button:disabled { opacity: .4; cursor: default; }
+.chrome button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chrome .hidebtn { padding: 0 14px; margin-left: auto; }
+
+.halostyle { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: center; margin-bottom: var(--space-3); }
+.halostyle button { min-height: 36px; padding: 0 14px; border: 0; border-radius: var(--radius-pill); background: none; color: var(--ink); box-shadow: inset 0 0 0 1px var(--control-edge); font: inherit; cursor: pointer; }
+.halostyle button[aria-checked="true"] { background: var(--tint-picked-c); color: var(--ink-strong); box-shadow: inset 0 0 0 1px var(--accent); }
+.halostyle button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.undercore { display: grid; justify-items: center; margin-top: var(--space-2); }
+.calm.small { margin-top: var(--space-2); font-size: 13.5px; }
+
+/* ---------- the shell ---------- */
+
+.watchbanner {
+  display: grid; gap: var(--space-1); margin: 0 0 var(--space-6); padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-chip); background: var(--needs-wash); box-shadow: inset 3px 0 0 var(--needs);
+}
+.watchbanner p { margin: 0; color: var(--needs-text); }
+.offline { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border-radius: var(--radius-chip); background: var(--bad-wash); color: var(--bad-text); }
+
+/* ---------- Ambient ---------- */
+
+body.ambient-open { overflow: hidden; }
+.amb .stage.roomy { padding: 90px 0 70px; }
+.ambswitch { display: flex; justify-content: flex-end; margin-top: var(--space-3); }
+
+/* ---------- a session ---------- */
+
+.sesstitle { font-size: 26px !important; line-height: 30px !important; }
+.sessmain { display: grid; gap: var(--space-4); min-width: 0; }
+.sessaside { display: grid; gap: var(--space-5); align-content: start; min-width: 0; }
+.term .bar .grow { flex: 1 1 auto; }
+.term .bar .state { color: var(--muted); }
+.term .screen { min-height: 420px; padding: var(--space-2); background: var(--ground); }
+.term .takeover { margin-left: var(--space-2); min-height: 32px; padding: 0 12px; border: 0; border-radius: var(--radius-chip); background: none; color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent); font: inherit; cursor: pointer; }
+.term .takeover:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ---------- the launch sheet ---------- */
+
+.ls-dialog.wide { width: min(100% - 32px, 820px); }
+.taskfield { justify-items: stretch; }
+.sheetlab { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+.sheet .stack { display: grid; gap: var(--space-3); align-content: start; }
+
+/* ---------- settings ---------- */
+
+.settings { display: grid; gap: calc(var(--space-7) * var(--density)); max-width: 760px; }
+.settings section { display: grid; gap: var(--space-3); }
+.idlerow { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.idlerow input { width: 96px; min-height: 40px; padding: 0 10px; border: 0; border-radius: var(--radius-chip); background: none; color: var(--ink-strong); box-shadow: inset 0 0 0 1px var(--control-edge); font: inherit; }
+.idlerow input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.appear .seg .ls-cmd { margin-top: var(--space-2); }
+
+/* ---------- memory ---------- */
+
+.memory { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: var(--space-7); align-items: start; }
+@media (max-width: 860px) { .memory { grid-template-columns: minmax(0, 1fr); } }
+.memside, .memmain { display: grid; gap: var(--space-5); min-width: 0; }
+.store { display: grid; gap: var(--space-2); }
+.srow[aria-current="page"] { background: var(--tint-picked-c); box-shadow: inset 3px 0 0 var(--accent); }
+.topicname { margin: 0; font-size: 22px; font-weight: 300; color: var(--ink-strong); overflow-wrap: anywhere; }
+.editor textarea, .compare textarea {
+  width: 100%; box-sizing: border-box; min-height: 360px; padding: var(--space-3);
+  border: 0; border-radius: var(--radius-chip); background: none; color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--control-edge); font-family: var(--font-mono); font-size: 13px; line-height: 1.5; resize: vertical;
+}
+.editor textarea:focus-visible, .compare textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--space-3); }
+.compare label { display: grid; gap: var(--space-1); }
+
+/* ---------- signed out ---------- */
+
+.signedout { max-width: 640px; display: grid; gap: var(--space-4); align-content: start; padding-top: 12vh; }
+.signedout h1 { margin: 0; font-size: 30px; line-height: 34px; font-weight: 200; color: var(--ink-strong); }
+.signedout .mark { display: flex; gap: 10px; align-items: center; font-size: 12px; letter-spacing: .3em; color: var(--ink-soft); }
+.signedout .mark i { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 2px var(--accent); }
+
+/* The halo's words stay inside its smallest ring: a long title is cut to
+   three lines, and its answers sit under the halo with their commands. */
+.ls-halo-wrap .core .t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.ls-halo-wrap .core .ask { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.corecmds { justify-content: center; margin: var(--space-2) auto 0; max-width: 520px; }
+.signedout.page { padding-left: max(28px, env(safe-area-inset-left, 0px)); }
+
+/* The page takes focus after a route change, as a page load would, so the
+   next Tab starts from it; that is not something to draw a frame round. */
+#main:focus { outline: none; }
+
+/* Below the page head, so a notification never sits on its controls. */
+.ls-toasts { top: max(88px, env(safe-area-inset-top, 0px)); }
