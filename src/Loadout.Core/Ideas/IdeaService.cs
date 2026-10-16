@@ -23,6 +23,15 @@ public sealed record IdeaPlace(string? Project, string Id)
 }
 
 /// <summary>One idea, as a list shows it.</summary>
+/// <param name="Place">Which list it is on, and its id.</param>
+/// <param name="Title">Its task's title.</param>
+/// <param name="Stage">Where it stands, from its record.</param>
+/// <param name="State">Its task's state.</param>
+/// <param name="DeclaredBy">Who last declared the task.</param>
+/// <param name="DeclaredUtc">When.</param>
+/// <param name="Unanswered">How many of the agent's questions wait on an answer.</param>
+/// <param name="Failure">The latest round that went wrong, or null.</param>
+/// <param name="Running">True while a round on it is running on this machine.</param>
 public sealed record IdeaSummary(
     IdeaPlace Place,
     string Title,
@@ -30,7 +39,9 @@ public sealed record IdeaSummary(
     TaskState State,
     string DeclaredBy,
     DateTimeOffset DeclaredUtc,
-    int Unanswered);
+    int Unanswered,
+    IdeaAttempt? Failure = null,
+    bool Running = false);
 
 /// <summary>What accepting an idea did.</summary>
 /// <param name="Task">The task it became.</param>
@@ -99,17 +110,31 @@ public interface IIdeaService
         string? request = null,
         CancellationToken ct = default);
 
-    /// <summary>Folds an agent's answer into the record.</summary>
+    /// <summary>
+    /// Folds an agent's answer into the record, and remembers the agent and
+    /// model it came from as the next round's default.
+    /// </summary>
     Task<OperationResult<IdeaRecord>> RecordReplyAsync(
         IdeaPlace place,
         IdeaReply reply,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        IdeaAttempt? asked = null);
 
-    /// <summary>Notes that a round went wrong, so the next look at the idea says so.</summary>
+    /// <summary>
+    /// Notes that a round went wrong, and with which agent and model, so the
+    /// next look at the idea says so. Replaces any earlier failure.
+    /// </summary>
     Task<OperationResult<IdeaRecord>> RecordFailureAsync(
         IdeaPlace place,
         string error,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        IdeaAttempt? asked = null);
+
+    /// <summary>
+    /// Forgets the latest failure without running another round, for an idea
+    /// somebody has stopped refining. Answers and the plan stay as they are.
+    /// </summary>
+    Task<OperationResult<IdeaRecord>> DismissFailureAsync(IdeaPlace place, CancellationToken ct = default);
 
     /// <summary>
     /// Writes the plan out, and turns the idea into a task on the project it
@@ -137,13 +162,20 @@ internal sealed partial class IdeaService : IIdeaService
     private readonly ITaskService _tasks;
     private readonly YamlStore _yaml;
     private readonly TimeProvider _time;
+    private readonly IIdeaLocks _locks;
 
-    public IdeaService(IWorkspaceManager workspace, ITaskService tasks, YamlStore yaml, TimeProvider time)
+    public IdeaService(
+        IWorkspaceManager workspace,
+        ITaskService tasks,
+        YamlStore yaml,
+        TimeProvider time,
+        IIdeaLocks locks)
     {
         _workspace = workspace;
         _tasks = tasks;
         _yaml = yaml;
         _time = time;
+        _locks = locks;
     }
 
     private string RecordPath(IdeaPlace place) =>
@@ -276,7 +308,9 @@ internal sealed partial class IdeaService : IIdeaService
                     item.State,
                     item.DeclaredBy,
                     item.DeclaredUtc,
-                    record is null ? 0 : IdeaWork.Unanswered(record).Count));
+                    record is null ? 0 : IdeaWork.Unanswered(record).Count,
+                    record is null ? null : IdeaWork.FailureOf(record),
+                    _locks.Held(place)));
             }
         }
 
@@ -468,7 +502,8 @@ internal sealed partial class IdeaService : IIdeaService
     public async Task<OperationResult<IdeaRecord>> RecordReplyAsync(
         IdeaPlace place,
         IdeaReply reply,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IdeaAttempt? asked = null)
     {
         ArgumentNullException.ThrowIfNull(reply);
 
@@ -478,7 +513,7 @@ internal sealed partial class IdeaService : IIdeaService
         // plan with a hole cut in it would read as complete.
         if (Screened(JsonSerializer.Serialize(reply)) is { } refused)
         {
-            await RecordFailureAsync(place, refused, ct).ConfigureAwait(false);
+            await RecordFailureAsync(place, refused, ct, asked).ConfigureAwait(false);
 
             return OperationResult<IdeaRecord>.Fail(refused, ExitCode.PolicyViolation);
         }
@@ -490,7 +525,14 @@ internal sealed partial class IdeaService : IIdeaService
                 return "That idea has already been accepted.";
             }
 
-            IdeaWork.Merge(record, reply, _time.GetUtcNow());
+            var now = _time.GetUtcNow();
+
+            IdeaWork.Merge(record, reply, now);
+
+            if (asked is not null)
+            {
+                record.LastRound = new IdeaAttempt { Utc = now, Agent = asked.Agent, Model = asked.Model };
+            }
 
             return null;
         }, ct).ConfigureAwait(false);
@@ -500,10 +542,31 @@ internal sealed partial class IdeaService : IIdeaService
     public Task<OperationResult<IdeaRecord>> RecordFailureAsync(
         IdeaPlace place,
         string error,
-        CancellationToken ct = default) =>
+        CancellationToken ct = default,
+        IdeaAttempt? asked = null) =>
         ChangeAsync(place, null, record =>
         {
-            record.LastError = error;
+            IdeaWork.Failed(record, new IdeaAttempt
+            {
+                Utc = _time.GetUtcNow(),
+                Agent = asked?.Agent ?? string.Empty,
+                Model = asked?.Model ?? string.Empty,
+                Error = error,
+            });
+
+            return null;
+        }, ct);
+
+    /// <inheritdoc />
+    public Task<OperationResult<IdeaRecord>> DismissFailureAsync(IdeaPlace place, CancellationToken ct = default) =>
+        ChangeAsync(place, null, record =>
+        {
+            if (IdeaWork.FailureOf(record) is null)
+            {
+                return $"{place.Id} has no failed round to dismiss.";
+            }
+
+            IdeaWork.ClearFailure(record);
 
             return null;
         }, ct);

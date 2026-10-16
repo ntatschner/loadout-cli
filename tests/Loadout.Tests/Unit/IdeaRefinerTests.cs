@@ -25,7 +25,7 @@ public sealed class IdeaRefinerTests : IDisposable
     public void Dispose() => _space.Dispose();
 
     private IdeaRefiner Refiner(ScriptedDetachedLauncher launcher, string repository) =>
-        new(_space.Ideas, new FakeProjects("homelab", repository), launcher, _space.Paths);
+        new(_space.Ideas, new FakeProjects("homelab", repository), launcher, _space.Paths, _space.Locks);
 
     [Fact]
     public async Task A_first_round_records_the_agents_questions()
@@ -124,7 +124,8 @@ public sealed class IdeaRefinerTests : IDisposable
         refined.Failed.Should().BeTrue();
 
         var record = (await _space.Ideas.ReadAsync(place)).Value!;
-        record.LastError.Should().Contain("error");
+        IdeaWork.FailureOf(record)!.Error.Should().Contain("error");
+        record.Failure!.Agent.Should().Be("claude", "the failure says which agent it was asked of");
         IdeaWork.StageOf(record).Should().Be(IdeaStage.Captured);
     }
 
@@ -142,5 +143,105 @@ public sealed class IdeaRefinerTests : IDisposable
         Directory.Exists(Path.Combine(_space.Paths.Paths.State, "ideas", idea.Id)).Should().BeFalse(
             "a dry run does not even make the directory the agent would have started in");
         (await _space.Ideas.ReadAsync(place)).Value!.Rounds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_later_round_asks_the_agent_and_model_the_last_round_used()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Questions))
+            .Then(ScriptedDetachedLauncher.Result(APlan));
+        var refiner = Refiner(launcher, _space.Scratch("r"));
+
+        (await refiner.RefineAsync(new RefineRequest(place, "codex", "gpt-5"))).Succeeded.Should().BeTrue();
+        await _space.Ideas.AnswerAsync(place, "Q1", "private");
+
+        var second = await refiner.RefineAsync(new RefineRequest(place));
+
+        second.Succeeded.Should().BeTrue(second.Error);
+        launcher.Request!.AgentName.Should().Be("codex", "a later round should not quietly switch agent");
+        launcher.Request.Model.Should().Be("gpt-5");
+        second.Value!.Choice.FromLastRound.Should().BeTrue();
+        second.Value.Record.LastRound!.Model.Should().Be("gpt-5");
+    }
+
+    [Fact]
+    public async Task A_round_that_went_wrong_is_not_taken_as_the_next_default()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Questions))
+            .Then(ScriptedDetachedLauncher.Result(null, error: true))
+            .Then(ScriptedDetachedLauncher.Result(APlan));
+        var refiner = Refiner(launcher, _space.Scratch("r"));
+
+        (await refiner.RefineAsync(new RefineRequest(place, Model: "opus"))).Succeeded.Should().BeTrue();
+        await _space.Ideas.AnswerAsync(place, "Q1", "private");
+
+        // A mistyped model, as it would be typed.
+        (await refiner.RefineAsync(new RefineRequest(place, Model: "opsu"))).Failed.Should().BeTrue();
+
+        var failed = (await _space.Ideas.ReadAsync(place)).Value!.Failure!;
+        failed.Model.Should().Be("opsu");
+        failed.Agent.Should().Be("claude");
+
+        var third = await refiner.RefineAsync(new RefineRequest(place));
+
+        third.Succeeded.Should().BeTrue(third.Error);
+        launcher.Request!.Model.Should().Be("opus", "the typo should not repeat on every later round");
+        third.Value!.Choice.FailedDifferently.Should().BeTrue("the person is told the different choice went wrong");
+        IdeaWork.FailureOf(third.Value.Record).Should().BeNull("a round that came back clears the failure");
+    }
+
+    [Fact]
+    public async Task A_round_already_running_on_this_machine_is_not_started_twice()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Questions));
+        var refiner = Refiner(launcher, _space.Scratch("r"));
+
+        // Another process on this machine, still running, holding the idea.
+        var other = new FakeProcessInspector { CurrentProcessId = 999 };
+        _space.Processes.MarkLive(999, other.CurrentProcessStartedAt);
+        using var held = new IdeaLocks(_space.Paths, other).Take(place).Value!;
+
+        var refused = await refiner.RefineAsync(new RefineRequest(place));
+        var previewed = await refiner.RefineAsync(new RefineRequest(place, DryRun: true));
+
+        refused.Failed.Should().BeTrue();
+        refused.Error.Should().Contain("already running");
+        previewed.Failed.Should().BeTrue("a preview of a round that would be refused describes nothing real");
+        launcher.Started.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task A_lock_left_by_a_round_that_died_does_not_hold_the_idea()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(Questions));
+
+        // Taken by a process that is not running, and never let go.
+        new IdeaLocks(_space.Paths, new FakeProcessInspector { CurrentProcessId = 999 }).Take(place)
+            .Succeeded.Should().BeTrue();
+
+        var refined = await Refiner(launcher, _space.Scratch("r")).RefineAsync(new RefineRequest(place));
+
+        refined.Succeeded.Should().BeTrue(refined.Error);
+        _space.Locks.Held(place).Should().BeFalse("the round let it go when it ended");
+    }
+
+    [Fact]
+    public async Task The_idea_is_let_go_when_its_round_goes_wrong()
+    {
+        var idea = (await _space.Ideas.CaptureAsync(null, "A status page", "me")).Value!;
+        var place = new IdeaPlace(null, idea.Id);
+        var launcher = new ScriptedDetachedLauncher(ScriptedDetachedLauncher.Result(null, error: true));
+
+        (await Refiner(launcher, _space.Scratch("r")).RefineAsync(new RefineRequest(place))).Failed.Should().BeTrue();
+
+        _space.Locks.Held(place).Should().BeFalse();
     }
 }

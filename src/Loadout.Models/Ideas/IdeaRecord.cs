@@ -43,8 +43,41 @@ public sealed class IdeaRecord
     /// <summary>Where it went when it was accepted, or null while it is still an idea.</summary>
     public IdeaAcceptance? Accepted { get; set; }
 
-    /// <summary>What the agent made of the last round it was given, when that round went wrong.</summary>
+    /// <summary>
+    /// The agent and model of the last round that came back with an answer,
+    /// or null before there has been one. The next round asks the same,
+    /// unless told otherwise.
+    /// </summary>
+    public IdeaAttempt? LastRound { get; set; }
+
+    /// <summary>
+    /// The latest round that went wrong, or null when the last one did not.
+    /// Only the latest is kept, and the next round that comes back clears it,
+    /// as does dismissing it.
+    /// </summary>
+    public IdeaAttempt? Failure { get; set; }
+
+    /// <summary>
+    /// What went wrong, as launchers before the agent and model were recorded
+    /// wrote it. Read as a failure with neither named, and cleared whenever
+    /// <see cref="Failure"/> is written.
+    /// </summary>
     public string LastError { get; set; } = string.Empty;
+}
+
+/// <summary>A round of refinement, as it was asked for and how it ended.</summary>
+public sealed class IdeaAttempt
+{
+    public DateTimeOffset Utc { get; set; }
+
+    /// <summary>The agent asked, by its configured name, or empty when that is not known.</summary>
+    public string Agent { get; set; } = string.Empty;
+
+    /// <summary>The model asked for, or empty for the agent's own default.</summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>What went wrong, or empty when nothing did.</summary>
+    public string Error { get; set; } = string.Empty;
 }
 
 /// <summary>One round of clarifying questions.</summary>

@@ -73,6 +73,9 @@ internal static class IdeaSteps
         Pause: true,
         Select: null);
 
+    internal static IdeaStep Dismiss(IdeaPlace place) => new(
+        LauncherCommands.IdeaDismiss, [place.Id, .. List(place.Project)], Pause: false, place.Id);
+
     internal static IdeaStep Remove(IdeaPlace place) => new(
         LauncherCommands.IdeaRemove, [place.Id, .. List(place.Project)], Pause: false, Select: null);
 
@@ -113,10 +116,15 @@ internal static class IdeaSteps
         Say($"{place.Id} on {place.Where}: {Stage(stage, IdeaWork.Unanswered(record).Count)}");
         Say(record.Ask, 2);
 
-        if (record.LastError.Length > 0)
+        if (IdeaWork.FailureOf(record) is { } failed)
         {
+            var tried = failed.Agent.Length == 0 ? string.Empty
+                : failed.Model.Length > 0 ? $" ({failed.Agent}, model {failed.Model})"
+                : $" ({failed.Agent} with its default model)";
+
             lines.Add(string.Empty);
-            Say($"The last round went wrong: {record.LastError}");
+            Say($"The last round went wrong{tried}: {failed.Error}");
+            Say("Refine again with r, or clear this with x.", 2);
         }
 
         var questions = record.Rounds.SelectMany(round => round.Questions).ToList();
@@ -195,6 +203,15 @@ internal static class IdeaSteps
 
         return lines;
     }
+
+    /// <summary>
+    /// Where an idea stands in the list, a running or failed round first, as
+    /// <c>loadout idea list</c> puts it.
+    /// </summary>
+    internal static string Stage(IdeaSummary idea) =>
+        idea.Running ? "round running"
+        : idea.Failure is not null ? "last round failed"
+        : Stage(idea.Stage, idea.Unanswered);
 
     /// <summary>Where an idea stands, in the words the list shows.</summary>
     internal static string Stage(IdeaStage stage, int unanswered) => stage switch
