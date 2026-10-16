@@ -87,6 +87,7 @@ public static class ServiceRegistration
         services.AddSingleton<Voice.VoiceTranscripts>();
         services.AddSingleton<IMemoryImporter, MemoryImporter>();
         services.AddSingleton<Instructions.MemoryCompressor>();
+        services.AddSingleton<Instructions.IMemoryChanges, Instructions.MemoryChanges>();
         services.AddSingleton<IRepositoryAttribution, RepositoryAttribution>();
         services.AddSingleton<IProjectOverviewService, ProjectOverviewService>();
         services.AddSingleton<IDriftService, DriftService>();

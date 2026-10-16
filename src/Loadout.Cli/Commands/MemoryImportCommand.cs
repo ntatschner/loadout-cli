@@ -27,18 +27,18 @@ namespace Loadout.Cli.Commands;
 public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.Settings>
 {
     private readonly IMemoryImporter _importer;
-    private readonly IBackupService _backups;
+    private readonly IMemoryChanges _changes;
 
     public MemoryImportCommand(
         IMemoryImporter importer,
-        IBackupService backups,
+        IMemoryChanges changes,
         IProjectService projects,
         IWorkspaceManager workspace,
         IAnsiConsole console)
         : base(projects, workspace, console)
     {
         _importer = importer;
-        _backups = backups;
+        _changes = changes;
     }
 
     public sealed class Settings : MemorySettings
@@ -157,45 +157,33 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
             return CommandOutput.Success();
         }
 
-        var captured = await _backups.CaptureAsync(
-            "memory import",
-            project.Entry.Slug,
-            preview.Imported
-                .Select(topic => Path.Combine(
-                    Workspace.LocalPath, "projects", project.Entry.Slug, "memory",
-                    topic.Name + ".md"))
-                .ToList()).ConfigureAwait(false);
-
-        if (captured.Failed)
-        {
-            return output.Fail(
-                "The import was not started because a backup could not be taken: "
-                + captured.Error,
-                captured.ExitCode);
-        }
-
-        var applied = await _importer
-            .ImportAsync(Workspace.LocalPath, project.Entry.Slug, source, apply: true)
+        var changed = await _changes
+            .ImportAsync(Workspace.LocalPath, project.Entry.Slug, source)
             .ConfigureAwait(false);
 
-        if (applied.Failed)
+        if (changed.Failed)
         {
-            return output.Fail(applied);
+            return output.Fail(changed);
         }
+
+        var applied = changed.Value!.Value;
 
         if (output.IsJson)
         {
-            WriteJson(output, applied.Value!);
+            WriteJson(output, applied);
             return CommandOutput.Success();
         }
 
         output.WriteBlankLine();
         output.WriteLine(
-            $"[green]Imported[/] {applied.Value!.Imported.Count} topic(s), "
-            + $"{applied.Value.Facts} fact(s).");
+            $"[green]Imported[/] {applied.Imported.Count} topic(s), "
+            + $"{applied.Facts} fact(s).");
 
-        output.WriteLine(
-            $"[dim]Undo it with:[/] loadout backup restore {Markup.Escape(captured.Value!.Id)}");
+        if (changed.Value.Backup is { } backup)
+        {
+            output.WriteLine(
+                $"[dim]Undo it with:[/] loadout backup restore {Markup.Escape(backup.Id)}");
+        }
 
         output.WriteLine("[dim]The original was copied, not moved. Check the import, then remove "
             + "the old copy yourself so there is only one.[/]");
@@ -308,23 +296,8 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
 
         foreach (var (project, source, preview) in waiting)
         {
-            var captured = await _backups.CaptureAsync(
-                "memory import",
-                project.Entry.Slug,
-                preview.Imported
-                    .Select(topic => Path.Combine(
-                        Workspace.LocalPath, "projects", project.Entry.Slug, "memory",
-                        topic.Name + ".md"))
-                    .ToList()).ConfigureAwait(false);
-
-            if (captured.Failed)
-            {
-                failed.Add($"{project.Entry.Name}: no backup could be taken, so nothing was imported");
-                continue;
-            }
-
-            var applied = await _importer
-                .ImportAsync(Workspace.LocalPath, project.Entry.Slug, source, apply: true)
+            var applied = await _changes
+                .ImportAsync(Workspace.LocalPath, project.Entry.Slug, source)
                 .ConfigureAwait(false);
 
             if (applied.Failed)
@@ -333,14 +306,14 @@ public sealed class MemoryImportCommand : MemoryCommandBase<MemoryImportCommand.
                 continue;
             }
 
-            topics += applied.Value!.Imported.Count;
-            facts += applied.Value.Facts;
+            topics += applied.Value!.Value.Imported.Count;
+            facts += applied.Value.Value.Facts;
 
             if (!output.IsJson)
             {
                 output.WriteLine(
                     $"  [green]imported[/]  {Markup.Escape(project.Entry.Name)}  "
-                    + $"[dim]{applied.Value.Imported.Count} topic(s)[/]");
+                    + $"[dim]{applied.Value.Value.Imported.Count} topic(s)[/]");
             }
         }
 

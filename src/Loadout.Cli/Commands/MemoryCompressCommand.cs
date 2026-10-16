@@ -62,17 +62,20 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
     private readonly IProjectService _projects;
     private readonly IWorkspaceManager _workspace;
     private readonly MemoryCompressor _compressor;
+    private readonly IMemoryChanges _changes;
     private readonly IAnsiConsole _console;
 
     public MemoryCompressCommand(
         IProjectService projects,
         IWorkspaceManager workspace,
         MemoryCompressor compressor,
+        IMemoryChanges changes,
         IAnsiConsole console)
     {
         _projects = projects;
         _workspace = workspace;
         _compressor = compressor;
+        _changes = changes;
         _console = console;
     }
 
@@ -105,18 +108,39 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
             : Path.Combine(
                 _workspace.LocalPath, "projects", slug, "agents", agent, "instructions.md");
 
-        var planResult = settings.Apply
-            ? await _compressor
-                .ApplyAsync(source, _workspace.LocalPath, slug, settings.MinimumFacts)
-                .ConfigureAwait(false)
-            : await _compressor.PlanAsync(source, settings.MinimumFacts).ConfigureAwait(false);
+        // The preview reads the project's memory too, so it can say which
+        // topics would merge into ones already there before anything is
+        // written. The apply takes a backup first, of the instruction file as
+        // well as the topics.
+        Loadout.Models.Backups.BackupSet? backup = null;
+        CompressionPlan plan;
 
-        if (planResult.Failed)
+        if (settings.Apply)
         {
-            return output.Fail(planResult);
-        }
+            var changed = await _changes
+                .CompressAsync(source, _workspace.LocalPath, slug, settings.MinimumFacts)
+                .ConfigureAwait(false);
 
-        var plan = planResult.Value!;
+            if (changed.Failed)
+            {
+                return output.Fail(changed);
+            }
+
+            (plan, backup) = (changed.Value!.Value, changed.Value.Backup);
+        }
+        else
+        {
+            var planned = await _compressor
+                .PlanAsync(source, _workspace.LocalPath, slug, settings.MinimumFacts)
+                .ConfigureAwait(false);
+
+            if (planned.Failed)
+            {
+                return output.Fail(planned);
+            }
+
+            plan = planned.Value!;
+        }
 
         if (output.IsJson)
         {
@@ -135,7 +159,13 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
                     name = t.Name,
                     kind = t.Kind.ToString(),
                     facts = t.Facts.Count,
+                    merges = t.Merges,
+                    alreadyThere = t.Present.Count,
+                    suggested = t.Suggested is { } suggested
+                        ? new { description = suggested.Description, kind = suggested.Kind.ToString() }
+                        : null,
                 }),
+                backup = backup?.Id,
                 leftAlone = plan.Rejected.ToDictionary(r => r.Key.ToString(), r => r.Value),
                 withheld = plan.Withheld,
             });
@@ -163,9 +193,22 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
 
         foreach (var topic in plan.Topics)
         {
+            var already = topic.Present.Count > 0 ? $", {topic.Present.Count} already there" : string.Empty;
+
             output.WriteLine(
                 $"  [cyan]{topic.Name.EscapeMarkup()}[/] "
-                + $"[dim]{topic.Kind.ToString().ToLowerInvariant()}, {topic.Facts.Count} fact(s)[/]");
+                + (topic.Merges ? "[yellow]merge into existing[/] " : string.Empty)
+                + $"[dim]{topic.Kind.ToString().ToLowerInvariant()}, {topic.Facts.Count} fact(s){already}[/]");
+
+            // The topic keeps its own line and kind. What compress would have
+            // given a new topic is shown, so a merge that stretches the topic
+            // past its line is seen before it is applied.
+            if (topic.Suggested is { } suggested)
+            {
+                output.WriteLine(
+                    $"    [dim]keeps its description; compress would have said: "
+                    + $"{suggested.Description.EscapeMarkup()} ({suggested.Kind.ToString().ToLowerInvariant()})[/]");
+            }
         }
 
         output.WriteBlankLine();
@@ -180,6 +223,10 @@ public sealed class MemoryCompressCommand : AsyncCommand<MemoryCompressSettings>
         {
             output.WriteBlankLine();
             output.WriteLine("[dim]Nothing was changed. Re-run with --apply to move them.[/]");
+        }
+        else if (backup is not null)
+        {
+            output.WriteLine($"[dim]Undo it with:[/] loadout backup restore {Markup.Escape(backup.Id)}");
         }
 
         return CommandOutput.Success();

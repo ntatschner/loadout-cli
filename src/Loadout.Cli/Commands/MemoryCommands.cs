@@ -408,18 +408,18 @@ public sealed class MemoryWriteCommand : MemoryCommandBase<MemoryWriteCommand.Se
 public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Settings>
 {
     private readonly IMemoryService _memory;
-    private readonly IBackupService _backups;
+    private readonly IMemoryChanges _changes;
 
     public MemoryAuditCommand(
         IMemoryService memory,
-        IBackupService backups,
+        IMemoryChanges changes,
         IProjectService projects,
         IWorkspaceManager workspace,
         IAnsiConsole console)
         : base(projects, workspace, console)
     {
         _memory = memory;
-        _backups = backups;
+        _changes = changes;
     }
 
     public sealed class Settings : MemorySettings
@@ -559,22 +559,7 @@ public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Se
             return CommandOutput.Success();
         }
 
-        var captured = await _backups.CaptureAsync(
-            "memory clean",
-            slug,
-            _memory.CleanupPaths(Workspace.LocalPath, slug)).ConfigureAwait(false);
-
-        if (captured.Failed)
-        {
-            return output.Fail(
-                "The cleanup was not started because a backup could not be taken: "
-                + captured.Error,
-                captured.ExitCode);
-        }
-
-        var cleaned = await _memory
-            .CleanAsync(Workspace.LocalPath, slug, apply: true)
-            .ConfigureAwait(false);
+        var cleaned = await _changes.CleanAsync(Workspace.LocalPath, slug).ConfigureAwait(false);
 
         if (cleaned.Failed)
         {
@@ -582,9 +567,9 @@ public sealed class MemoryAuditCommand : MemoryCommandBase<MemoryAuditCommand.Se
         }
 
         output.WriteBlankLine();
-        output.WriteLine($"[green]Removed[/] {cleaned.Value!.Count} item(s).");
+        output.WriteLine($"[green]Removed[/] {cleaned.Value!.Value.Count} item(s).");
         output.WriteLine(
-            $"[dim]Undo it with:[/] loadout backup restore {Markup.Escape(captured.Value!.Id)}");
+            $"[dim]Undo it with:[/] loadout backup restore {Markup.Escape(cleaned.Value.Backup!.Id)}");
 
         return CommandOutput.Success();
     }

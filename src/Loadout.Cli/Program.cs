@@ -919,6 +919,7 @@ public static class Program
             memory.AddCommand<MemoryReindexCommand>("reindex");
             memory.AddCommand<MemoryImportCommand>("import");
             memory.AddCommand<MemoryCompressCommand>("compress");
+            memory.AddCommand<MemoryDeleteCommand>("delete");
         });
 
         TopBranch(config, "rules", rules =>

@@ -7,14 +7,34 @@ namespace Loadout.Core.Instructions;
 
 /// <summary>A group of facts bound for one memory topic.</summary>
 /// <param name="Name">Topic name, taken from the heading the facts sat under.</param>
-/// <param name="Description">One line saying where the topic came from.</param>
-/// <param name="Kind">Which sort of memory this is, inferred from the heading.</param>
-/// <param name="Facts">The lines themselves, verbatim.</param>
+/// <param name="Description">
+/// One line saying where the topic came from, or, when it merges into a topic
+/// that exists, that topic's own line.
+/// </param>
+/// <param name="Kind">Which sort of memory this is: inferred from the heading, or the existing topic's.</param>
+/// <param name="Facts">The lines that move, verbatim.</param>
+/// <param name="Merges">True when a topic of this name exists and the facts are added to it.</param>
+/// <param name="Suggested">
+/// The description and kind compress would have given a new topic, when they
+/// differ from the existing topic's, for the preview to show. Never written.
+/// </param>
+/// <param name="AlreadyThere">
+/// Lines the existing topic already holds, differing at most in case and
+/// punctuation. They leave the instruction file, because memory already has
+/// them, and are not written twice.
+/// </param>
 public sealed record CompressionTopic(
     string Name,
     string Description,
     MemoryKind Kind,
-    IReadOnlyList<string> Facts);
+    IReadOnlyList<string> Facts,
+    bool Merges = false,
+    (string Description, MemoryKind Kind)? Suggested = null,
+    IReadOnlyList<string>? AlreadyThere = null)
+{
+    /// <summary>Lines already in the topic, never null.</summary>
+    public IReadOnlyList<string> Present => AlreadyThere ?? [];
+}
 
 /// <summary>What compressing an instruction file would do, or did.</summary>
 /// <param name="SourcePath">The instruction file read.</param>
@@ -91,12 +111,27 @@ public sealed class MemoryCompressor
 
     public MemoryCompressor(IMemoryService memory) => _memory = memory;
 
-    /// <summary>Works out what would move, without writing anything.</summary>
+    /// <summary>
+    /// Works out what would move, without writing anything and without looking
+    /// at what memory already holds.
+    /// </summary>
     public Task<OperationResult<CompressionPlan>> PlanAsync(
         string sourcePath,
         int minimumFactsPerTopic = MinimumFactsPerTopic,
         CancellationToken ct = default) =>
         RunAsync(sourcePath, null, null, minimumFactsPerTopic, apply: false, ct);
+
+    /// <summary>
+    /// Works out what would move into a project's memory, marking the topics
+    /// that would merge into ones already there. Writes nothing.
+    /// </summary>
+    public Task<OperationResult<CompressionPlan>> PlanAsync(
+        string sourcePath,
+        string workspaceRoot,
+        string slug,
+        int minimumFactsPerTopic = MinimumFactsPerTopic,
+        CancellationToken ct = default) =>
+        RunAsync(sourcePath, workspaceRoot, slug, minimumFactsPerTopic, apply: false, ct);
 
     /// <summary>
     /// Writes the topics, verifies them, and only then shortens the source.
@@ -137,8 +172,25 @@ public sealed class MemoryCompressor
 
         var before = new FileInfo(sourcePath).Length;
 
+        // The project's own topics, which are the ones a heading's name can
+        // land on. Without them a compress into a name that exists replaced
+        // that topic whole, and everything it held before was gone.
+        IReadOnlyList<MemoryTopic> existing = [];
+
+        if (workspaceRoot is not null && slug is not null)
+        {
+            var listed = await _memory.ListAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
+
+            if (listed.Failed)
+            {
+                return OperationResult<CompressionPlan>.Fail(listed.Error!, listed.ExitCode);
+            }
+
+            existing = [.. listed.Value!.Where(topic => topic.Scope == MemoryScope.Project)];
+        }
+
         var (topics, taken, considered, rejected, withheld) =
-            Gather(lines, Path.GetFileNameWithoutExtension(sourcePath), minimumFactsPerTopic);
+            Gather(lines, Path.GetFileNameWithoutExtension(sourcePath), minimumFactsPerTopic, existing);
 
         // Removing the chosen lines is what shrinks the file, so the projected
         // size is measured from the text that would actually be left rather
@@ -154,7 +206,7 @@ public sealed class MemoryCompressor
             return OperationResult<CompressionPlan>.Ok(plan);
         }
 
-        var written = await WriteAndVerifyAsync(topics, workspaceRoot!, slug!, ct)
+        var written = await WriteAndVerifyAsync(topics, existing, workspaceRoot!, slug!, ct)
             .ConfigureAwait(false);
 
         if (written.Failed)
@@ -190,12 +242,25 @@ public sealed class MemoryCompressor
     /// </summary>
     private async Task<OperationResult> WriteAndVerifyAsync(
         IReadOnlyList<CompressionTopic> topics,
+        IReadOnlyList<MemoryTopic> existing,
         string workspaceRoot,
         string slug,
         CancellationToken ct)
     {
         foreach (var topic in topics)
         {
+            if (topic.Merges)
+            {
+                var merged = await MergeAsync(topic, existing, workspaceRoot, slug, ct).ConfigureAwait(false);
+
+                if (merged.Failed)
+                {
+                    return merged;
+                }
+
+                continue;
+            }
+
             // Compression is not the case the similarity check exists for. It
             // moves facts somebody already wrote, in bulk, from a preview they
             // have already seen and approved; every topic it creates is grouped
@@ -241,8 +306,58 @@ public sealed class MemoryCompressor
     }
 
     /// <summary>
+    /// Adds a topic's facts to the one of its name that exists, and reads the
+    /// whole of it back.
+    /// </summary>
+    /// <remarks>
+    /// Everything has to read back: the facts that moved, the ones that were
+    /// already there, and every fact the topic held before. The comparison is
+    /// after <see cref="MemoryService.Normalise"/>, which the audit already
+    /// trusts, because a line already there may differ in case or punctuation.
+    /// </remarks>
+    private async Task<OperationResult> MergeAsync(
+        CompressionTopic topic,
+        IReadOnlyList<MemoryTopic> existing,
+        string workspaceRoot,
+        string slug,
+        CancellationToken ct)
+    {
+        var before = existing.First(t => string.Equals(t.Name, topic.Name, StringComparison.OrdinalIgnoreCase));
+
+        IReadOnlyList<string> stored = before.Facts;
+
+        if (topic.Facts.Count > 0)
+        {
+            var appended = await _memory
+                .AppendAsync(workspaceRoot, slug, before.Name, topic.Facts, MemoryScope.Project, ct)
+                .ConfigureAwait(false);
+
+            if (appended.Failed)
+            {
+                return OperationResult.Fail(appended.Error!, appended.ExitCode);
+            }
+
+            stored = appended.Value!.Facts;
+        }
+
+        var held = stored.Select(MemoryService.Normalise).ToHashSet(StringComparer.Ordinal);
+
+        var missing = topic.Facts
+            .Concat(topic.Present)
+            .Concat(before.Facts)
+            .Where(fact => !held.Contains(MemoryService.Normalise(fact)))
+            .ToList();
+
+        return missing.Count == 0
+            ? OperationResult.Ok()
+            : OperationResult.Fail(
+                $"Memory topic '{topic.Name}' was added to but {missing.Count} fact(s) did not read back "
+                + "from it, so the instructions were left untouched.");
+    }
+
+    /// <summary>
     /// Walks the document, grouping durable list items under the heading they
-    /// appear beneath.
+    /// appear beneath, and settles which go to a topic that already exists.
     /// </summary>
     private static (
         List<CompressionTopic> Topics,
@@ -250,7 +365,7 @@ public sealed class MemoryCompressor
         int Considered,
         Dictionary<FactVerdict, int> Rejected,
         Dictionary<string, int> Withheld)
-        Gather(string[] lines, string fallbackName, int minimumFactsPerTopic)
+        Gather(string[] lines, string fallbackName, int minimumFactsPerTopic, IReadOnlyList<MemoryTopic> existing)
     {
         var groups = new List<(string Heading, List<(int Index, string Text)> Items)>();
         var rejected = new Dictionary<FactVerdict, int>();
@@ -331,11 +446,51 @@ public sealed class MemoryCompressor
                 continue;
             }
 
-            topics.Add(new CompressionTopic(
-                HeadingName.Unique(HeadingName.From(name), used),
-                $"Moved out of {fallbackName} so it is recalled rather than reread every session.",
-                KindFor(name),
-                items.Select(i => i.Text).ToList()));
+            var topicName = HeadingName.Unique(HeadingName.From(name), used);
+            var description = $"Moved out of {fallbackName} so it is recalled rather than reread every session.";
+            var kind = KindFor(name);
+
+            var there = existing.FirstOrDefault(t =>
+                string.Equals(t.Name, topicName, StringComparison.OrdinalIgnoreCase));
+
+            if (there is null)
+            {
+                topics.Add(new CompressionTopic(topicName, description, kind, items.Select(i => i.Text).ToList()));
+            }
+            else
+            {
+                // Merged, keeping the topic's own description and kind: its
+                // author chose that line on purpose, and a merge that adds
+                // facts should not quietly change what every session is told
+                // the topic is about. What compress would have said instead is
+                // kept for the preview when it differs.
+                var held = there.Facts.Select(MemoryService.Normalise).ToHashSet(StringComparer.Ordinal);
+                var moving = new List<string>();
+                var present = new List<string>();
+
+                foreach (var (_, text) in items)
+                {
+                    if (held.Add(MemoryService.Normalise(text)))
+                    {
+                        moving.Add(text);
+                    }
+                    else
+                    {
+                        present.Add(text);
+                    }
+                }
+
+                var differs = description != there.Description || kind != there.Kind;
+
+                topics.Add(new CompressionTopic(
+                    there.Name,
+                    there.Description,
+                    there.Kind,
+                    moving,
+                    Merges: true,
+                    Suggested: differs ? (description, kind) : null,
+                    AlreadyThere: present));
+            }
 
             foreach (var (index, _) in items)
             {

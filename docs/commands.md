@@ -51,7 +51,8 @@
 | `loadout memory find <query>` | Find the topics that answer a question, rather than reading the index |
 | `loadout memory write --separate` | Start a new topic even though existing ones cover similar ground |
 | `loadout memory write --scope user|machine` | Record a fact true of your work, or of this computer only |
-| `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory |
+| `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory. A heading whose name is already a topic merges into it, keeping that topic's description, kind and everything it held, and a fact it already holds is not written twice. `--apply` backs up the file and the topics first |
+| `loadout memory delete <topic> [project]` | Delete a topic after backing it up. Topics that link to it are named and left as they are; `--dry-run` shows both |
 | `loadout sessions` | List recent agent sessions across every agent, newest first |
 | `loadout launches [project]` | What this machine launched, and what each launch was given |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
