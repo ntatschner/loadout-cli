@@ -14,3 +14,7 @@ docs/plans/
 docs/specs/
 PLAN-*.md
 *.plan.md
+
+# Studio's packages, installed by npm ci in studio/. Its committed build is
+# under src/Loadout.Core/Teams/Daemon/Studio.
+studio/node_modules/

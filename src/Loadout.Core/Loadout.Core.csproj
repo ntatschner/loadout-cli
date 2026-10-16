@@ -36,6 +36,13 @@
          rather than an asset pack's. Unpacked into the office folder at start
          (OfficeArt.Unpack), where everything that reads a set finds it. -->
     <EmbeddedResource Include="Teams\Office\loadout-tech\*" LogicalName="office/loadout-tech/%(Filename)%(Extension)" />
+
+    <!-- Studio, the app the daemon serves at /studio/, built from studio/ by
+         'npm run build' and committed here, so building Loadout never needs
+         Node. StudioBuildTests fails when this is older than its source. The
+         directory part of each name is written with this machine's separator
+         and read back as a slash (StudioAssets.Index). -->
+    <EmbeddedResource Include="Teams\Daemon\Studio\**\*" LogicalName="studio/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Loadout.Tests" />
