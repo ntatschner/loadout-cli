@@ -108,6 +108,26 @@ public sealed class DashboardServer : IDisposable
     /// </remarks>
     public Func<CancellationToken, Task<MachineSettings>>? Settings { get; set; }
 
+    /// <summary>
+    /// The sessions this server hosts for the browser, or null for none.
+    /// </summary>
+    /// <remarks>
+    /// Only the daemon's server has them. A session lives as long as whatever
+    /// hosts it, and a dashboard started in a terminal goes when that terminal
+    /// does.
+    /// </remarks>
+    public Loadout.Core.Sessions.Hosting.HostedSessions? Sessions { get; set; }
+
+    /// <summary>
+    /// Whether this machine has chosen Studio as the page its address opens,
+    /// asked per request so a change is seen without a restart. Null keeps
+    /// classic there.
+    /// </summary>
+    public Func<CancellationToken, Task<bool>>? StudioFirst { get; set; }
+
+    /// <summary>What Studio's memory page reads and saves, or null where nothing gave this server one.</summary>
+    public IStudioMemory? Memory { get; set; }
+
     /// <summary>Changing one, by running the command somebody would have typed.</summary>
     public Func<SettingsChange, CancellationToken, Task<OperationResult>>? Settle { get; set; }
 
@@ -1075,7 +1095,8 @@ public sealed class DashboardServer : IDisposable
     /// </summary>
     /// <param name="address">Where the dashboard is, as it was printed.</param>
     /// <param name="signIn">The sign-in to mint the link's code with.</param>
-    public static string? SignInLink(string? address, SignIn? signIn)
+    /// <param name="studio">Whether the browser lands on Studio rather than the classic page.</param>
+    public static string? SignInLink(string? address, SignIn? signIn, bool studio = false)
     {
         if (signIn is null
             || !Uri.TryCreate(address, UriKind.Absolute, out var where)
@@ -1084,7 +1105,66 @@ public sealed class DashboardServer : IDisposable
             return null;
         }
 
-        return $"{where.Scheme}://{where.Authority}/signin?code={Uri.EscapeDataString(signIn.MintCode())}";
+        return $"{where.Scheme}://{where.Authority}/signin?code={Uri.EscapeDataString(signIn.MintCode())}"
+            + (studio ? "&to=studio" : string.Empty);
+    }
+
+    /// <summary>Hands a request under /api/v1 to the part of Studio's API it names.</summary>
+    private async Task StudioAsync(HttpListenerContext context, string path, CancellationToken ct)
+    {
+        static bool Under(string path, string root) =>
+            path == root || path.StartsWith(root + "/", StringComparison.Ordinal);
+
+        if (Under(path, SessionsApi.Root))
+        {
+            if (Sessions is null)
+            {
+                await WriteAsync(context, 404, "text/plain; charset=utf-8",
+                    "This dashboard hosts no sessions. The daemon's does: loadout daemon").ConfigureAwait(false);
+
+                return;
+            }
+
+            await SessionsApi.HandleAsync(context, Sessions, path, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        // What the page says when somebody reports a problem with it: the
+        // version and the platform, for the form to be filled in with.
+        // Behind the same checks as the rest, though it holds nothing secret,
+        // so a page elsewhere cannot use it to learn what is installed here.
+        if (path == "/api/v1/about" && context.Request.HttpMethod == "GET")
+        {
+            await WriteAsync(context, 200, "application/json; charset=utf-8", JsonSerializer.Serialize(new
+            {
+                version = Version(),
+                platform = $"{System.Runtime.InteropServices.RuntimeInformation.OSDescription} "
+                    + System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant(),
+            }, Json)).ConfigureAwait(false);
+
+            return;
+        }
+
+        if (Under(path, MemoryApi.Root) && Memory is not null)
+        {
+            await MemoryApi.HandleAsync(context, Memory, path, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        await WriteAsync(context, 404, "text/plain; charset=utf-8", "There is nothing here.").ConfigureAwait(false);
+    }
+
+    /// <summary>This build's version, without the commit it was built from.</summary>
+    private static string Version()
+    {
+        var informational = typeof(DashboardServer).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion ?? "unknown";
+
+        return informational.Split('+')[0];
     }
 
     /// <summary>Exchanges a one-time code for the cookie, then sends the browser to the page.</summary>
@@ -1104,7 +1184,11 @@ public sealed class DashboardServer : IDisposable
         GiveCookie(context.Response);
         context.Response.Headers["Cache-Control"] = "no-store";
         context.Response.StatusCode = 303;
-        context.Response.Headers["Location"] = "/";
+
+        // One of two fixed places, never an address taken from the link, so
+        // a sign-in link cannot be made into a way of sending somebody
+        // somewhere else.
+        context.Response.Headers["Location"] = request.QueryString["to"] == "studio" ? StudioAssets.Root : "/";
         context.Response.Close();
     }
 
@@ -1183,6 +1267,33 @@ public sealed class DashboardServer : IDisposable
             }
 
             await SpeechAsync(context, ct).ConfigureAwait(false);
+
+            return;
+        }
+
+        // Studio's API. Above the guard that answers every other change with
+        // 405, and only from this machine: a hosted session is somebody's
+        // agent, and typing at it or rewriting their memory from across a
+        // network is not something the token or the cookie should grant.
+        if (path.StartsWith("/api/v1/", StringComparison.Ordinal))
+        {
+            if (!Allowed(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "This dashboard needs the token it printed when it started.").ConfigureAwait(false);
+
+                return;
+            }
+
+            if (Beyond || !From(request))
+            {
+                await WriteAsync(context, 403, "text/plain; charset=utf-8",
+                    "Hosted sessions are only reachable from this machine.").ConfigureAwait(false);
+
+                return;
+            }
+
+            await StudioAsync(context, path, ct).ConfigureAwait(false);
 
             return;
         }
@@ -1381,6 +1492,45 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
+        // Studio, the app served beside the classic page, ahead of the token
+        // for the same reason the icon is. Its files are the same bytes for
+        // anybody, published with the source, and a browser fetches an app's
+        // manifest without its cookies: behind the token, Studio could never
+        // be installed, and a window signed out could not say how to sign in.
+        // What the page reads about this machine goes through the API, which
+        // checks. Its address ends in a slash so the bundle's own paths
+        // resolve beneath it.
+        // The address itself, sent on to Studio where this machine has chosen
+        // it, with whatever it carried: an address printed with its token
+        // still works. Ahead of the token for the same reason Studio's files
+        // are, and it tells the asker nothing but where the page is.
+        if (path is "/" or "/index.html" && request.HttpMethod == "GET" && StudioAssets.Built
+            && StudioFirst is { } studioFirst && await studioFirst(ct).ConfigureAwait(false))
+        {
+            context.Response.StatusCode = 302;
+            context.Response.Headers["Location"] = StudioAssets.Root + request.Url?.Query;
+            context.Response.Headers["Cache-Control"] = "no-store";
+            context.Response.Close();
+
+            return;
+        }
+
+        if (path == "/studio" && request.HttpMethod == "GET")
+        {
+            context.Response.StatusCode = 301;
+            context.Response.Headers["Location"] = StudioAssets.Root;
+            context.Response.Close();
+
+            return;
+        }
+
+        if (path.StartsWith(StudioAssets.Root, StringComparison.Ordinal) && request.HttpMethod == "GET")
+        {
+            await StudioAssets.ServeAsync(context, path).ConfigureAwait(false);
+
+            return;
+        }
+
         if (!Allowed(request))
         {
             // Said plainly rather than as a puzzle. Whoever sees this is
@@ -1405,7 +1555,9 @@ public sealed class DashboardServer : IDisposable
 
         Answered++;
 
-        if (path is "/" or "/index.html")
+        // /classic as well, so the classic page is still there for somebody
+        // whose address opens Studio.
+        if (path is "/" or "/index.html" or "/classic")
         {
             await WriteAsync(context, 200, "text/html; charset=utf-8", Page(Look, Motion, Colour))
                 .ConfigureAwait(false);
@@ -3412,7 +3564,7 @@ public sealed class DashboardServer : IDisposable
         + "<rect width='16' height='16' rx='3' fill='#7a3b00'/>"
         + "<circle cx='8' cy='8' r='3' fill='#fff'/></svg>";
 
-    private static async Task WriteAsync(HttpListenerContext context, int status, string type, string body)
+    internal static async Task WriteAsync(HttpListenerContext context, int status, string type, string body)
     {
         var response = context.Response;
         var bytes = Encoding.UTF8.GetBytes(body);

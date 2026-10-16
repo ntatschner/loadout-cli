@@ -4,7 +4,8 @@
 under a permissive licence compatible with shipping this project as open source.
 
 This file is checked rather than trusted: `build/licences.ps1` reads the licence
-of every restored package from its own `.nuspec` and fails the build on anything
+of every restored package from its own `.nuspec`, and every package in Studio's
+npm lock file from the licence recorded there, and fails the build on anything
 outside the allowlist. CI runs it on every change.
 
 ## Shipped in the binary
@@ -21,6 +22,8 @@ outside the allowlist. CI runs it on every change.
 | .NET runtime and base class libraries | MIT |
 | [Atkinson Hyperlegible Next](https://github.com/googlefonts/atkinson-hyperlegible-next) | OFL-1.1 |
 | [Atkinson Hyperlegible Mono](https://github.com/googlefonts/atkinson-hyperlegible-next-mono) | OFL-1.1 |
+| [Svelte](https://svelte.dev/), bundled into Studio's page | MIT |
+| [xterm.js](https://xtermjs.org/) and @xterm/addon-fit, bundled into Studio's page | MIT |
 
 ## The type the dashboard is set in
 
@@ -155,6 +158,16 @@ These are not part of a release.
 | Newtonsoft.Json | MIT |
 | [FluentAssertions](https://fluentassertions.com/) **7.2.2** | Apache-2.0 |
 | System.Configuration.ConfigurationManager, System.Security.Cryptography.ProtectedData | MIT |
+| [Vite](https://vite.dev/) and @sveltejs/vite-plugin-svelte, which build Studio's page | MIT |
+| [lightningcss](https://lightningcss.dev/), Vite's CSS minifier | MPL-2.0 |
+
+### Why lightningcss is allowed
+
+MPL-2.0 is not on the allowlist, and lightningcss is reviewed rather than
+allowed. It runs only while Studio's page is built, and nothing of it ships. Its
+licence binds changes to its own files, not the CSS it produces. The review
+applies only while it is a build-time dependency, and the licence check fails
+if it ever stops being one.
 
 ### Why FluentAssertions is pinned exactly
 

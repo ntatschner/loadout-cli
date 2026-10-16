@@ -14,3 +14,7 @@ docs/plans/
 docs/specs/
 PLAN-*.md
 *.plan.md
+
+# Studio's JavaScript build. The bundle is built into the launcher, not committed.
+src/Loadout.Studio/node_modules/
+src/Loadout.Studio/dist/

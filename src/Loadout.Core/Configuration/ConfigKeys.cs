@@ -448,6 +448,15 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: $"{Teams.Daemon.DashboardServer.DefaultPort}, the same every time, so an installed app window keeps finding it"),
 
+        new("dashboard",
+            "Which page the daemon's address opens: classic, or studio for the preview app",
+            (_, m) => m.Teams.Dashboard ?? string.Empty,
+            (_, m, v) => m.Teams.Dashboard = OneOf(v, "", "classic", "studio") is { Length: > 0 } chosen ? chosen : null,
+            true,
+            Sample: "studio",
+            Group: Groups.Machine,
+            WhenUnset: "classic. Studio is a preview, at /studio/ either way"),
+
         new("discovery-roots", "Comma-separated directories scanned for repositories",
             (_, m) => string.Join(", ", m.DiscoveryRoots),
             (_, m, v) => m.DiscoveryRoots = SplitDirectories(v),

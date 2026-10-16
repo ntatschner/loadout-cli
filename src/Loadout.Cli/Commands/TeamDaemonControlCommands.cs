@@ -97,6 +97,50 @@ public abstract class DaemonControlCommand<TSettings> : AsyncCommand<TSettings>
         return (false, DaemonNote.Live(Paths, Processes));
     }
 
+    /// <summary>
+    /// Says that stopping ends the sessions it hosts for Studio, and asks
+    /// first where somebody is there to answer.
+    /// </summary>
+    /// <remarks>
+    /// Asked rather than refused when nobody can answer, because a stop from
+    /// a script, a scheduled task or an update has always gone ahead, and a
+    /// browser tab left open is no reason for it not to. They are told, so
+    /// whoever reads the output later knows where the sessions went.
+    /// </remarks>
+    /// <returns>True to carry on.</returns>
+    protected bool Proceed(CommandOutput output, DaemonState running, DaemonStopSettings settings, string doing)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(running);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (running.Hosted <= 0)
+        {
+            return true;
+        }
+
+        var sessions = running.Hosted == 1 ? "1 session" : $"{running.Hosted} sessions";
+        var end = running.Hosted == 1 ? "ends" : "end";
+
+        output.WriteLine(
+            $"[yellow]It is hosting {sessions} for Studio,[/] which {end} when it stops. "
+            + "An agent's conversation can be picked up again afterwards with: loadout resume");
+
+        if (settings.Yes || settings.DryRun || !settings.AllowsPrompting)
+        {
+            return true;
+        }
+
+        if (Console.Confirm($"{doing} it anyway, ending {(running.Hosted == 1 ? "it" : "them")}?", false))
+        {
+            return true;
+        }
+
+        output.WriteLine("[dim]Nothing was stopped.[/]");
+
+        return false;
+    }
+
     protected static string Named(DaemonState running) =>
         $"the daemon (process {running.Pid}, since {running.Since.ToLocalTime():yyyy-MM-dd HH:mm})";
 }
@@ -109,6 +153,10 @@ public sealed class DaemonStopSettings : GlobalSettings
         "End the runs it started at once, as Ctrl+C does to one run with --foreground, "
         + "rather than waiting for them to finish.")]
     public bool Now { get; init; }
+
+    [CommandOption("--yes")]
+    [Description("Do not ask first when it is hosting sessions for Studio, which end when it stops.")]
+    public bool Yes { get; init; }
 }
 
 /// <summary>Stops the daemon.</summary>
@@ -137,6 +185,11 @@ public sealed class TeamDaemonStopCommand(
         if (Running(output, out var failure) is not { } running)
         {
             return failure;
+        }
+
+        if (!Proceed(output, running, settings, "Stop"))
+        {
+            return CommandOutput.Success();
         }
 
         if (settings.DryRun)
@@ -195,6 +248,11 @@ public sealed class TeamDaemonRestartCommand(
         if (Running(output, out var failure) is not { } running)
         {
             return failure;
+        }
+
+        if (!Proceed(output, running, settings, "Restart"))
+        {
+            return CommandOutput.Success();
         }
 
         if (settings.DryRun)

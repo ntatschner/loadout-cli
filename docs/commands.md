@@ -53,6 +53,8 @@
 | `loadout memory write --scope user|machine` | Record a fact true of your work, or of this computer only |
 | `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory. A heading whose name is already a topic merges into it, keeping that topic's description, kind and everything it held, and a fact it already holds is not written twice. `--apply` backs up the file and the topics first |
 | `loadout memory delete <topic> [project]` | Delete a topic after backing it up. Topics that link to it are named and left as they are; `--dry-run` shows both |
+| `loadout memory show <topic>` | Print a topic exactly as it is stored, with its version on stderr, ready to edit |
+| `loadout memory replace <topic> --file <path> --expect <version>` | Save an edited topic, prose and links included. If it changed since the version you edited, nothing is written and it exits 12, so nobody's change is lost. A credential is refused, and so is a changed description a session couldn't decide by |
 | `loadout sessions` | List recent agent sessions across every agent, newest first |
 | `loadout launches [project]` | What this machine launched, and what each launch was given |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |
@@ -112,7 +114,7 @@
 | `loadout team office check <set>` | Whether an office set's kit (with its rules) or tile scene can be used, and each thing wrong with it by name. A kit may lack parts: it lists which, and those are drawn in the built-in kit's shapes meanwhile |
 | `loadout team schedule add\|list\|remove` | Runs that should happen again and again on this machine |
 | `loadout daemon` | Stay running: fire the scheduled runs and serve the dashboard |
-| `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules |
+| `loadout daemon stop\|restart\|pause\|resume\|continue` | Control the running daemon from any shell: stop or restart it once its runs finish (`--now` does not wait), or hold and release its schedules. If it is hosting sessions for Studio, which end when it stops, stop and restart say so and ask first; `--yes` doesn't ask |
 | `loadout team webhook enable\|disable\|show` | Let something outside this machine start a run, or stop letting it |
 | `loadout daemon autostart enable\|disable\|show` | Start the daemon when you log in, per user |
 | `loadout team gate` | Answer something a run stopped to ask |

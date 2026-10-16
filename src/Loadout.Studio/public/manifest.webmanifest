@@ -1,0 +1,10 @@
+{
+  "name": "Loadout Studio",
+  "short_name": "Studio",
+  "start_url": "/studio/",
+  "scope": "/studio/",
+  "display": "standalone",
+  "background_color": "#14191f",
+  "theme_color": "#14191f",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

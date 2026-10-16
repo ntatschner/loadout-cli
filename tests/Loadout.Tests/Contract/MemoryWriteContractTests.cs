@@ -156,7 +156,7 @@ public sealed class MemoryWriteContractTests
     }
 
     /// <summary>Registers a repository so the write path can be reached.</summary>
-    private static async Task<string> Registered(LoadoutProcess loadout)
+    internal static async Task<string> Registered(LoadoutProcess loadout)
     {
         var repository = Path.Combine(loadout.Home, "a-repository");
 

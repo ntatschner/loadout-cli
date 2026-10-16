@@ -339,7 +339,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         {
             // A sign-in link rather than the address with its token, so what
             // lands in the browser's history works once and then never again.
-            var link = DashboardServer.SignInLink(daemon.Address, SignIn.ForMachine(_paths)) ?? daemon.Address!;
+            var link = DashboardServer.SignInLink(daemon.Address, SignIn.ForMachine(_paths), settings.Studio) ?? daemon.Address!;
 
             await _opener.OpenUrlAsync(link, ct).ConfigureAwait(false);
         }
@@ -362,6 +362,10 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
         [CommandOption("--open")]
         [Description("Open the page in a browser once it is listening.")]
         public bool Open { get; init; }
+
+        [CommandOption("--studio")]
+        [Description("With --open, open Studio, the preview app, rather than the classic page.")]
+        public bool Studio { get; init; }
 
         [CommandOption("--watch-only")]
         [Description(
@@ -569,7 +573,7 @@ public sealed class TeamDashboardCommand : AsyncCommand<TeamDashboardCommand.Set
             // Asked for, never assumed. A command that opened a browser
             // because it felt like it is one somebody runs once.
             await _opener.OpenUrlAsync(
-                (server.Beyond ? null : DashboardServer.SignInLink(server.Address, server.SignIn)) ?? server.Address,
+                (server.Beyond ? null : DashboardServer.SignInLink(server.Address, server.SignIn, settings.Studio)) ?? server.Address,
                 cancellationToken).ConfigureAwait(false);
         }
 

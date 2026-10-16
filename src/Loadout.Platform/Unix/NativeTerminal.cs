@@ -208,6 +208,12 @@ internal static partial class NativeTerminal
     [LibraryImport(Libc, EntryPoint = "ioctl", SetLastError = true)]
     internal static partial int Ioctl(int descriptor, ulong request, ref WindowSize size);
 
+    /// <summary>SIGHUP, the same number on Linux and macOS.</summary>
+    internal const int Hangup = 1;
+
+    [LibraryImport(Libc, EntryPoint = "kill", SetLastError = true)]
+    internal static partial int Kill(int process, int signal);
+
     [LibraryImport(Libc, EntryPoint = "close", SetLastError = true)]
     internal static partial int Close(int descriptor);
 
