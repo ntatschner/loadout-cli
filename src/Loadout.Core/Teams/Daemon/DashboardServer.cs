@@ -1085,7 +1085,8 @@ public sealed class DashboardServer : IDisposable
     /// </summary>
     /// <param name="address">Where the dashboard is, as it was printed.</param>
     /// <param name="signIn">The sign-in to mint the link's code with.</param>
-    public static string? SignInLink(string? address, SignIn? signIn)
+    /// <param name="studio">Whether the browser lands on Studio rather than the classic page.</param>
+    public static string? SignInLink(string? address, SignIn? signIn, bool studio = false)
     {
         if (signIn is null
             || !Uri.TryCreate(address, UriKind.Absolute, out var where)
@@ -1094,7 +1095,8 @@ public sealed class DashboardServer : IDisposable
             return null;
         }
 
-        return $"{where.Scheme}://{where.Authority}/signin?code={Uri.EscapeDataString(signIn.MintCode())}";
+        return $"{where.Scheme}://{where.Authority}/signin?code={Uri.EscapeDataString(signIn.MintCode())}"
+            + (studio ? "&to=studio" : string.Empty);
     }
 
     /// <summary>Exchanges a one-time code for the cookie, then sends the browser to the page.</summary>
@@ -1114,7 +1116,11 @@ public sealed class DashboardServer : IDisposable
         GiveCookie(context.Response);
         context.Response.Headers["Cache-Control"] = "no-store";
         context.Response.StatusCode = 303;
-        context.Response.Headers["Location"] = "/";
+
+        // One of two fixed places, never an address taken from the link, so
+        // a sign-in link cannot be made into a way of sending somebody
+        // somewhere else.
+        context.Response.Headers["Location"] = request.QueryString["to"] == "studio" ? StudioAssets.Root : "/";
         context.Response.Close();
     }
 
@@ -1422,6 +1428,30 @@ public sealed class DashboardServer : IDisposable
                 string.Equals(path, "/icon-needs", StringComparison.Ordinal)
                     ? NeedsSomebodyIcon
                     : IdleIcon).ConfigureAwait(false);
+
+            return;
+        }
+
+        // Studio, the app served beside the classic page, ahead of the token
+        // for the same reason the icon is. Its files are the same bytes for
+        // anybody, published with the source, and a browser fetches an app's
+        // manifest without its cookies: behind the token, Studio could never
+        // be installed, and a window signed out could not say how to sign in.
+        // What the page reads about this machine goes through the API, which
+        // checks. Its address ends in a slash so the bundle's own paths
+        // resolve beneath it.
+        if (path == "/studio" && request.HttpMethod == "GET")
+        {
+            context.Response.StatusCode = 301;
+            context.Response.Headers["Location"] = StudioAssets.Root;
+            context.Response.Close();
+
+            return;
+        }
+
+        if (path.StartsWith(StudioAssets.Root, StringComparison.Ordinal) && request.HttpMethod == "GET")
+        {
+            await StudioAssets.ServeAsync(context, path).ConfigureAwait(false);
 
             return;
         }

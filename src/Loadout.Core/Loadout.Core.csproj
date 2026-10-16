@@ -40,4 +40,45 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Loadout.Tests" />
   </ItemGroup>
+
+  <!-- Studio, the app the daemon serves, built from src/Loadout.Studio with
+       Node and embedded under studio/. StudioBuild is auto (build it where
+       Node is installed, leave it out where it is not), false (leave it out)
+       or required (fail without it, as a release does). Leaving it out costs
+       nothing but the page: /studio/ says it was not built in, and every
+       test of the API it calls runs without it. -->
+  <PropertyGroup>
+    <StudioRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\Loadout.Studio'))\</StudioRoot>
+    <StudioBuild Condition="'$(StudioBuild)' == ''">auto</StudioBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <StudioSource Include="$(StudioRoot)src\**\*;$(StudioRoot)public\**\*;$(StudioRoot)index.html;$(StudioRoot)vite.config.js;$(StudioRoot)package-lock.json" />
+  </ItemGroup>
+
+  <Target Name="StudioProbe" Condition="'$(StudioBuild)' != 'false'">
+    <Exec Command="node --version" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" EchoOff="true">
+      <Output TaskParameter="ExitCode" PropertyName="_StudioNodeExit" />
+    </Exec>
+    <Error Condition="'$(_StudioNodeExit)' != '0' And '$(StudioBuild)' == 'required'" Text="Studio has to be built into this build, and Node is not installed. Install Node 22.12 or later." />
+    <Message Condition="'$(_StudioNodeExit)' != '0'" Importance="high" Text="Node is not installed, so this build leaves Studio out. /studio/ will say so." />
+  </Target>
+
+  <Target Name="StudioInstall" Condition="'$(StudioBuild)' != 'false' And '$(_StudioNodeExit)' == '0' And !Exists('$(StudioRoot)node_modules\.package-lock.json')">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(StudioRoot)" />
+  </Target>
+
+  <Target Name="StudioBundle" Condition="'$(StudioBuild)' != 'false' And '$(_StudioNodeExit)' == '0'" Inputs="@(StudioSource)" Outputs="$(StudioRoot)dist\index.html">
+    <Exec Command="npm run build --silent" WorkingDirectory="$(StudioRoot)" />
+  </Target>
+
+  <Target Name="StudioEmbed" BeforeTargets="BeforeBuild" DependsOnTargets="StudioProbe;StudioInstall;StudioBundle" Condition="'$(StudioBuild)' != 'false'">
+    <!-- Through an item of its own, because metadata named bare inside a
+         target batches over the EmbeddedResource items already there and
+         adds nothing. -->
+    <ItemGroup Condition="'$(_StudioNodeExit)' == '0'">
+      <StudioFile Include="$(StudioRoot)dist\**\*" />
+      <EmbeddedResource Include="@(StudioFile)" LogicalName="studio/%(StudioFile.RecursiveDir)%(StudioFile.Filename)%(StudioFile.Extension)" />
+    </ItemGroup>
+  </Target>
 </Project>

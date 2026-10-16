@@ -1,0 +1,111 @@
+/* What every page shares. Colours, sizes and spacing come only from the
+   custom properties lib/theme.js writes from lib/tokens.json. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--colour-surface);
+  color: var(--colour-text);
+  font-family: var(--font-body);
+  font-size: var(--size-body);
+  line-height: var(--line-body);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+a {
+  color: var(--colour-accent-text);
+}
+
+:focus-visible {
+  outline: var(--focus-width) solid var(--colour-accent);
+  outline-offset: var(--focus-offset);
+}
+
+input {
+  font: inherit;
+  color: var(--colour-text);
+  background: var(--colour-surface);
+  border: 1px solid var(--colour-border);
+  border-radius: var(--radius-small);
+  padding: var(--space-2);
+  min-height: 2.5rem;
+}
+
+button {
+  font: inherit;
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-small);
+  border: 1px solid var(--colour-border);
+  background: var(--colour-surface);
+  color: var(--colour-text);
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--colour-accent);
+  border-color: var(--colour-accent);
+  color: var(--colour-on-accent);
+  font-weight: 600;
+}
+
+button.quiet {
+  background: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pill {
+  display: inline-block;
+  width: fit-content;
+  padding: 0 var(--space-2);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: var(--size-small);
+  color: var(--colour-text-muted);
+}
+
+.pill[data-state='running'] {
+  color: var(--colour-ok);
+}
+
+.pill.preview {
+  color: var(--colour-warn);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

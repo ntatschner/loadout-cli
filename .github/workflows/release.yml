@@ -30,6 +30,8 @@ on:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # Read by MSBuild as a property: every build here must carry Studio.
+  StudioBuild: required
 
 jobs:
   package:
@@ -80,6 +82,15 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+
+      # Studio, the app the daemon serves, is built with Node and embedded in
+      # the binary; StudioBuild=required above makes a build without it fail
+      # rather than ship a launcher whose /studio/ says it was left out.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/Loadout.Studio/package-lock.json
 
       - name: Resolve version
         id: version
@@ -246,6 +257,15 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+
+      # Studio, the app the daemon serves, is built with Node and embedded in
+      # the binary; StudioBuild=required above makes a build without it fail
+      # rather than ship a launcher whose /studio/ says it was left out.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/Loadout.Studio/package-lock.json
 
       - name: Resolve version
         id: version

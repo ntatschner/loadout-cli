@@ -937,6 +937,16 @@ there is one account of what happened rather than three that can disagree.
   page; another service on the machine can't borrow it. A dashboard listening
   beyond this machine issues no cookie and keeps the token, because a
   credential that lasts ninety days belongs on the one machine it was made for.
+
+  **Studio is a preview** of a fuller app, served beside this page at
+  `/studio/`. `loadout dashboard --open --studio` signs you in and opens it.
+  So far it does one thing the classic page doesn't: start an agent session in
+  the daemon and use its terminal in the browser. The session is
+  `loadout launch` run for you, so it gets exactly what it would in a terminal.
+  It keeps running when you close the window, and the next window picks up
+  where it was. It ends when the daemon stops. Sessions can only be reached
+  from this machine, even with the token. A launcher built without Node has
+  no Studio, and `/studio/` says so.
 - **Tools → Team runs…** in the launcher — the same, in the terminal UI. See
   [The launcher](launcher.md).
 

@@ -75,6 +75,32 @@ public sealed class DashboardSignInTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_link_for_studio_lands_on_studio()
+    {
+        var link = DashboardServer.SignInLink(_server.Address, _signIn, studio: true);
+        link.Should().EndWith("&to=studio");
+
+        using var response = await _client.GetAsync(link);
+
+        response.StatusCode.Should().Be(HttpStatusCode.SeeOther);
+        response.Headers.Location!.OriginalString.Should().Be("/studio/");
+    }
+
+    [Theory]
+    [InlineData("https://elsewhere.example/")]
+    [InlineData("//elsewhere.example/")]
+    [InlineData("classic")]
+    public async Task A_link_naming_anywhere_else_lands_on_the_classic_page(string to)
+    {
+        var link = DashboardServer.SignInLink(_server.Address, _signIn) + "&to=" + Uri.EscapeDataString(to);
+
+        using var response = await _client.GetAsync(link);
+
+        response.StatusCode.Should().Be(HttpStatusCode.SeeOther);
+        response.Headers.Location!.OriginalString.Should().Be("/");
+    }
+
+    [Fact]
     public async Task A_sign_in_link_works_once()
     {
         var link = DashboardServer.SignInLink(_server.Address, _signIn);
