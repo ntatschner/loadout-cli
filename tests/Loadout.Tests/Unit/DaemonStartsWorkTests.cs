@@ -194,7 +194,11 @@ public sealed class DaemonStartsWorkTests
             nominations: nominations!,
             ideas: null!,
             dumps: null!,
-            bin: null!);
+            bin: null!,
+            lifetime: null!,
+            memory: null!,
+            importer: null!,
+            sheet: null!);
 
     /// <summary>A nomination pass with nothing to file.</summary>
     private sealed class NothingNominated : Loadout.Core.Tools.IToolNominationPass

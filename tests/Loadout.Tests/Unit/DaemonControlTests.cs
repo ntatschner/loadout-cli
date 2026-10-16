@@ -490,7 +490,11 @@ public sealed class DaemonControlTests : IDisposable
             nominations: nominations!,
             ideas: null!,
             dumps: null!,
-            bin: null!);
+            bin: null!,
+            lifetime: null!,
+            memory: null!,
+            importer: null!,
+            sheet: null!);
 
     /// <summary>A nomination pass whose folders cannot be read.</summary>
     private sealed class ThrowingPass : Loadout.Core.Tools.IToolNominationPass
