@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Loadout.Core.Sessions;
 using Loadout.Models.Instructions;
 using Loadout.Models.Projects;
 using Loadout.Models.Tasks;
@@ -38,56 +39,6 @@ internal sealed record LaunchOptions(
     string? Worktree = null,
     bool IncludeHandoff = false,
     string? TaskId = null);
-
-/// <summary>A task the project has on record, as the sheet offers it.</summary>
-/// <param name="Id">What <c>--task-id</c> takes.</param>
-/// <param name="Title">What is shown, and what chooses specialists.</param>
-/// <param name="State">Doing, open or blocked; nothing finished is offered.</param>
-internal sealed record DeclaredTask(string Id, string Title, TaskState State);
-
-/// <summary>One thing that can be picked, and what picking it means.</summary>
-/// <param name="Label">What is shown.</param>
-/// <param name="Value">
-/// What reaches the launch, or null for "the default", which a launch spells
-/// as the absence of the option.
-/// </param>
-internal sealed record LaunchChoice(string Label, string? Value);
-
-/// <summary>
-/// What a project offers a launch to choose between, beyond agents and modes.
-/// </summary>
-/// <param name="Profiles">Context profiles the chosen agent can use, the default first.</param>
-/// <param name="Worktrees">Working trees of the repository, the main one first.</param>
-/// <param name="Declared">
-/// What this project has recorded itself as working on: doing, then open,
-/// then blocked, newest first within each.
-/// <para>
-/// The task line decides which specialists a session is given, and it was
-/// filled in twice in a hundred and twenty-two launches: a blank field asking
-/// for a sentence is answered by starting work instead. What a project has
-/// already declared is the one description of the work that exists before the
-/// sheet opens, so the sheet offers it rather than asking again.
-/// </para>
-/// </param>
-internal sealed record LaunchChoices(
-    IReadOnlyList<LaunchChoice> Profiles,
-    IReadOnlyList<LaunchChoice> Worktrees,
-    IReadOnlyList<DeclaredTask> Declared)
-{
-    /// <summary>A project with nothing to choose: one profile, one working tree.</summary>
-    internal static readonly LaunchChoices None = new(
-        [new LaunchChoice("default", null)],
-        [new LaunchChoice("main working tree", null)],
-        []);
-}
-
-/// <summary>What the preview is asked about: the launch as it stands.</summary>
-internal sealed record LaunchPreviewRequest(
-    ProjectResolution Project,
-    string Agent,
-    string? Profile,
-    string? Task,
-    string? Mode);
 
 /// <summary>
 /// Where the sheet gets what it shows.

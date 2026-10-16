@@ -71,6 +71,9 @@ public sealed class LauncherConfig
 
     /// <summary>How this person wants to be written to and asked.</summary>
     public AccessibilitySettings Accessibility { get; set; } = new();
+
+    /// <summary>How Studio looks and is laid out: see <see cref="StudioSettings"/>.</summary>
+    public StudioSettings Studio { get; set; } = new();
 }
 
 /// <summary>

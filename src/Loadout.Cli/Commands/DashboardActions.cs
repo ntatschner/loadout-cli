@@ -90,6 +90,13 @@ internal static partial class DashboardActions
 
             "webhook" => (change.Off ? "team webhook disable" : "team webhook enable", []),
 
+            // Studio's own settings, each a config key of the same name. The
+            // page only ever sends these names; anything else falls through
+            // to "no such setting" below.
+            "studio-halo" or "studio-layout-lens" or "studio-layout-map" or "studio-theme" or "studio-accent"
+                or "studio-density" or "studio-motion" or "studio-idle-after"
+                => ("config set", [change.What, change.Value ?? string.Empty]),
+
             "remedy" => ("team remedy trust", change.Off
                 ? [change.Value ?? string.Empty, "--revoke"]
                 : [change.Value ?? string.Empty]),

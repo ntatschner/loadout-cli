@@ -83,6 +83,7 @@ public static class ConfigKeys
         public const string Telemetry = "Usage reporting";
         public const string Machine = "This machine";
         public const string Accessibility = "Accessibility";
+        public const string Studio = "Studio";
 
         // Three sections rather than one. Twenty-seven settings under a single
         // heading do not fit a page at eighty by twenty-four, which is the
@@ -97,7 +98,7 @@ public static class ConfigKeys
         public static IReadOnlyList<string> InOrder =>
         [
             Workspace, Agents, Editor, Syncing, Secrets, Updates,
-            Statusline, Instructions, Accessibility, Writing, Display,
+            Statusline, Instructions, Accessibility, Writing, Display, Studio,
             Telemetry, Machine, General,
         ];
     }
@@ -448,6 +449,89 @@ public static class ConfigKeys
             Group: Groups.Machine,
             WhenUnset: $"{Teams.Daemon.DashboardServer.DefaultPort}, the same every time, so an installed app window keeps finding it"),
 
+        new("studio-halo",
+            "How Studio's Lens draws the work in focus: orbit or gyroscope",
+            (c, _) => c.Studio.Halo ?? string.Empty,
+            (c, _, v) => c.Studio.Halo = Optional(v, "orbit", "gyroscope"),
+            false,
+            Sample: "gyroscope",
+            Group: Groups.Studio,
+            WhenUnset: "orbit, a ring per stage"),
+
+        new("studio-layout-lens",
+            "How Studio's Lens is arranged, as Studio writes it: JSON naming its panels' order and which are hidden",
+            (c, _) => c.Studio.LayoutLens ?? string.Empty,
+            (c, _, v) => c.Studio.LayoutLens = Layout(v, StudioLayouts.Lens),
+            false,
+            Sample: """{"order":["needs","focus","all","start","signal"],"hidden":[]}""",
+            Group: Groups.Studio,
+            WhenUnset: "the layout as drawn: Needs you, Focus, Everything, Start a session, Signal"),
+
+        new("studio-layout-map",
+            "How Studio's Map is arranged, as Studio writes it: JSON naming its panels' order and which are hidden",
+            (c, _) => c.Studio.LayoutMap ?? string.Empty,
+            (c, _, v) => c.Studio.LayoutMap = Layout(v, StudioLayouts.Map),
+            false,
+            Sample: """{"order":["status","map","strip"],"hidden":[]}""",
+            Group: Groups.Studio,
+            WhenUnset: "the layout as drawn: Network status, the map, the picked line"),
+
+        new("studio-theme",
+            "Studio's theme: dark, light, hc-dark or hc-light",
+            (c, _) => c.Studio.Theme ?? string.Empty,
+            (c, _, v) => c.Studio.Theme = Optional(v, "dark", "light", "hc-dark", "hc-light"),
+            false,
+            Sample: "hc-dark",
+            Group: Groups.Studio,
+            WhenUnset: "follows the operating system's colour scheme and contrast"),
+
+        new("studio-accent",
+            "Studio's accent: cyan, ice, magenta or violet",
+            (c, _) => c.Studio.Accent ?? string.Empty,
+            (c, _, v) => c.Studio.Accent = Optional(v, "cyan", "ice", "magenta", "violet"),
+            false,
+            Sample: "violet",
+            Group: Groups.Studio,
+            WhenUnset: "cyan, the accent the design was drawn in"),
+
+        new("studio-density",
+            "How tightly Studio is spaced: compact, comfortable or roomy",
+            (c, _) => c.Studio.Density ?? string.Empty,
+            (c, _, v) => c.Studio.Density = Optional(v, "compact", "comfortable", "roomy"),
+            false,
+            Sample: "roomy",
+            Group: Groups.Studio,
+            WhenUnset: "comfortable, the spacing the design was drawn at"),
+
+        new("studio-motion",
+            "How much Studio moves: full, reduced or none. Your system's reduced motion always wins",
+            (c, _) => c.Studio.Motion ?? string.Empty,
+            (c, _, v) => c.Studio.Motion = Optional(v, "full", "reduced", "none"),
+            false,
+            Sample: "reduced",
+            Group: Groups.Studio,
+            WhenUnset: "full, lowered to reduced when your system asks for less"),
+
+        new("studio-idle-after",
+            "Minutes a working session is quiet before Studio reads it as idle",
+            (c, _) => c.Studio.IdleAfter is { } minutes
+                ? minutes.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : string.Empty,
+            (c, _, v) => c.Studio.IdleAfter = v.Trim().Length == 0 ? null : Minutes(v),
+            false,
+            Sample: "10",
+            Group: Groups.Studio,
+            WhenUnset: "10"),
+
+        new("dashboard",
+            "Which page the daemon's address opens: classic, or studio for the preview app",
+            (_, m) => m.Teams.Dashboard ?? string.Empty,
+            (_, m, v) => m.Teams.Dashboard = OneOf(v, "", "classic", "studio") is { Length: > 0 } chosen ? chosen : null,
+            true,
+            Sample: "studio",
+            Group: Groups.Machine,
+            WhenUnset: "classic. Studio is a preview, at /studio/ either way"),
+
         new("discovery-roots", "Comma-separated directories scanned for repositories",
             (_, m) => string.Join(", ", m.DiscoveryRoots),
             (_, m, v) => m.DiscoveryRoots = SplitDirectories(v),
@@ -755,6 +839,89 @@ public static class ConfigKeys
         }
 
         return string.Join(", ", pairs.Select(pair => string.Join("=", pair.Split('=', StringSplitOptions.TrimEntries))));
+    }
+
+    /// <summary>One of the values allowed, or null for an empty value, which unsets it.</summary>
+    private static string? Optional(string value, params string[] allowed) =>
+        value.Trim().Length == 0 ? null : OneOf(value, allowed);
+
+    /// <summary>A whole number of minutes from one to a day.</summary>
+    private static int Minutes(string value) =>
+        int.TryParse(value.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var minutes)
+        && minutes is >= 1 and <= 1440
+            ? minutes
+            : throw new FormatException($"'{value.Trim()}' is not a number of minutes from 1 to 1440.");
+
+    /// <summary>
+    /// A Studio layout, checked before it is kept: JSON whose "order" and
+    /// "hidden" name only this view's panels, each once. Null for an empty
+    /// value, which puts the layout back as drawn.
+    /// </summary>
+    /// <remarks>
+    /// Checked here rather than trusted to Studio, because the key can be set
+    /// by hand, and a layout naming a panel that does not exist would be one
+    /// Studio has to guess about every time it opens.
+    /// </remarks>
+    private static string? Layout(string value, IReadOnlyList<string> panels)
+    {
+        var trimmed = value.Trim();
+
+        if (trimmed.Length == 0)
+        {
+            return null;
+        }
+
+        System.Text.Json.JsonDocument document;
+
+        try
+        {
+            document = System.Text.Json.JsonDocument.Parse(trimmed);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            throw new FormatException("A layout is JSON, as Studio writes it: {\"order\":[...],\"hidden\":[...]}.");
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                throw new FormatException("A layout is a JSON object with \"order\" and \"hidden\".");
+            }
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.Name is not ("order" or "hidden"))
+                {
+                    throw new FormatException($"A layout has no '{property.Name}'. It takes \"order\" and \"hidden\".");
+                }
+
+                if (property.Value.ValueKind != System.Text.Json.JsonValueKind.Array)
+                {
+                    throw new FormatException($"A layout's \"{property.Name}\" is a list of panels.");
+                }
+
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+
+                foreach (var panel in property.Value.EnumerateArray())
+                {
+                    if (panel.ValueKind != System.Text.Json.JsonValueKind.String
+                        || panel.GetString() is not { } name
+                        || !panels.Contains(name, StringComparer.Ordinal))
+                    {
+                        throw new FormatException(
+                            $"A layout here names only these panels: {string.Join(", ", panels)}.");
+                    }
+
+                    if (!seen.Add(name))
+                    {
+                        throw new FormatException($"A layout names '{name}' twice in \"{property.Name}\".");
+                    }
+                }
+            }
+        }
+
+        return trimmed;
     }
 
     private static string OneOf(string value, params string[] allowed)
