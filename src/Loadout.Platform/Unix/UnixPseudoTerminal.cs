@@ -413,13 +413,25 @@ public sealed class UnixPseudoTerminal : IPseudoTerminal
             _disposed = true;
         }
 
+        // The hangup closing the master would send, sent first and directly,
+        // to the child's whole process group: it leads its own session, so
+        // its pid is the group's. Closing alone is not enough while a read is
+        // waiting on the master, which is all the time for a hosted session:
+        // the read holds the handle, so the close is put off until the read
+        // returns, and the read only returns once the child has gone - which
+        // it does only when the master closes. Every hosted session on Linux
+        // and macOS hung when it ended. Once the child has gone the slave
+        // closes, the read returns, and the close goes through.
+        //
+        // Only if it is still there afterwards is anything stronger warranted,
+        // and that is the caller's decision rather than this one's.
+        if (_child > 0 && TryReap() is null)
+        {
+            NativeTerminal.Kill(-_child, NativeTerminal.Hangup);
+        }
+
         _stream?.Dispose();
         _stream = null;
-
-        // Closing the master sends SIGHUP to the child's session, which is how
-        // a well-behaved program learns its terminal has gone. Only if it is
-        // still there afterwards is anything stronger warranted, and that is
-        // the caller's decision rather than this one's.
         _master?.Dispose();
         _master = null;
 

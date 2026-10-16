@@ -216,6 +216,38 @@ public sealed class PseudoTerminalTests
         exit.Value.Should().Be(0);
     }
 
+    /// <summary>
+    /// Disposing while a read is waiting ends the child and the read, rather
+    /// than waiting on each other for ever.
+    /// </summary>
+    /// <remarks>
+    /// The read holds the master's handle, so closing it is deferred until
+    /// the read returns, and the read only returns once the child has gone,
+    /// which it only does when the master closes. A hosted session's pump is
+    /// always in such a read, so every hosted session on Linux and macOS hung
+    /// when it ended, and the test host with it.
+    /// </remarks>
+    [UnixFact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task Disposing_while_a_read_is_waiting_ends_the_child_and_the_read()
+    {
+        var terminal = new UnixPseudoTerminal();
+
+        (await terminal.StartAsync(new ProcessRequest("/bin/sh", []), columns: 80, rows: 24))
+            .Succeeded.Should().BeTrue();
+
+        var buffer = new byte[4096];
+        var reading = terminal.ReadAsync(buffer);
+
+        // Give the read time to be waiting in the kernel, which is the case
+        // that hung.
+        await Task.Delay(500);
+
+        await Task.Run(terminal.Dispose).WaitAsync(TimeSpan.FromSeconds(10));
+        await reading.WaitAsync(TimeSpan.FromSeconds(10));
+        (await terminal.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10))).Succeeded.Should().BeTrue();
+    }
+
     [UnixFact]
     [UnsupportedOSPlatform("windows")]
     public async Task The_child_exit_code_is_reported_on_unix()
