@@ -1251,7 +1251,7 @@ public sealed class DashboardServer : IDisposable
             return;
         }
 
-        if (Under(path, CommandsApi.CommandsRoot) || Under(path, CommandsApi.JobsRoot))
+        if (Under(path, CommandsApi.CommandsRoot) || Under(path, CommandsApi.JobsRoot) || path == CommandsApi.ReadRoot)
         {
             if (Jobs is null)
             {

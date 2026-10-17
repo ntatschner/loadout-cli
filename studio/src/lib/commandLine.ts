@@ -98,6 +98,21 @@ function joined(name: string, value: string): string[] {
   return value.startsWith('-') ? [`${name}=${value}`] : [name, value];
 }
 
+/**
+ * Whether these words only read, by the daemon's own rule: the command
+ * reads, or is previewed with --dry-run, or is one that acts only when given
+ * a particular option and is not given it.
+ */
+export function readsWith(command: StudioCommand, words: string[]): boolean {
+  if (command.reach.effect === 'reads' || words.includes('--dry-run')) {
+    return true;
+  }
+
+  const acting = command.reach.changesOnlyWith ?? [];
+
+  return command.reach.effect === 'changes' && acting.length > 0 && !words.some((word) => acting.includes(word.split('=')[0]));
+}
+
 /** A word as a shell would need it quoted, matching the daemon's own quoting. */
 export function quoted(word: string): string {
   return /^[A-Za-z0-9\-_./:=@,+%]+$/.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`;

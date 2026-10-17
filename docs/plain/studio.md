@@ -37,7 +37,8 @@ If Studio ever says *This browser isn't signed in*, do step 2 again.
 ## Find your way round
 
 The icons down the left side are the pages. *Home* shows everything that's
-happening. *Sessions* shows your AI sessions. *Commands* lets you run anything
+happening. *Sessions* shows your AI sessions. *Projects* shows the folders of code Loadout
+knows about, and whether anything about them needs fixing. *Commands* lets you run anything
 Loadout can do: pick it, fill in the boxes, and press **Run**. It shows you the
 exact words it will type for you first.
 

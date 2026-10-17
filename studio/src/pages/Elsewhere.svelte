@@ -11,7 +11,6 @@
     teams: ['Teams', '$ loadout team runs', 'Teams and their runs, with the office.', true],
     context: ['Context', '$ loadout instructions explain', 'What a session reads before it starts, and what it costs in tokens.', false],
     spend: ['Spend', '$ loadout usage', 'Tokens used, by day, project and model.', false],
-    projects: ['Projects', '$ loadout project list', 'The projects Loadout knows on this machine.', false],
   };
 
   const shown = $derived(PAGES[page] ?? ['Not found', '$ loadout --help', "There's no page here.", false]);

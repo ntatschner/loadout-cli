@@ -214,6 +214,101 @@ public sealed class CommandJobs
                 ExitCode.PolicyViolation);
         }
 
+        var started = await LaunchAsync(path, words, ct).ConfigureAwait(false);
+
+        if (started.Failed)
+        {
+            return started;
+        }
+
+        var job = started.Value!;
+
+        _jobs[job.Id] = job;
+        _ran?.Invoke(path);
+        Forget();
+        Interlocked.Increment(ref _stamp);
+
+        _ = FollowAsync(job, announce: true);
+
+        return OperationResult<CommandJob>.Ok(job);
+    }
+
+    /// <summary>
+    /// Runs a command that only reads and waits for what it says, for a page
+    /// to show, without keeping it as a job.
+    /// </summary>
+    /// <remarks>
+    /// The pages read through the same commands somebody would type, so what
+    /// they show is what the terminal shows. These are not jobs: a page reading
+    /// its projects every time it opens would bury what somebody ran by hand,
+    /// and the daemon's terminal is not told about them either. Anything that
+    /// would change something is refused here whether or not the server only
+    /// watches; that goes through <see cref="StartAsync"/>, where it is seen.
+    /// </remarks>
+    public async Task<OperationResult<CommandJob>> ReadAsync(
+        string path, IReadOnlyList<string> words, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(words);
+
+        var command = _commands.Catalogue.FirstOrDefault(one => string.Equals(one.Path, path, StringComparison.Ordinal));
+
+        if (command is null)
+        {
+            return OperationResult<CommandJob>.Fail($"There is no command called 'loadout {path}'.", ExitCode.InvalidArguments);
+        }
+
+        if (Refusal(command, words, watchOnly: true) is { } refused)
+        {
+            return OperationResult<CommandJob>.Fail(
+                command.Reach.Effect is StudioEffect.Changes && !command.Reach.Reads(words)
+                    ? $"'loadout {path}' changes something, so a page cannot read with it. Run it as a job."
+                    : refused,
+                ExitCode.PolicyViolation);
+        }
+
+        if (!await _reading.WaitAsync(ReadFor, ct).ConfigureAwait(false))
+        {
+            return OperationResult<CommandJob>.Fail("Too many pages are reading at once. Try again in a moment.", ExitCode.PolicyViolation);
+        }
+
+        try
+        {
+            var started = await LaunchAsync(path, words, ct).ConfigureAwait(false);
+
+            if (started.Failed)
+            {
+                return started;
+            }
+
+            var job = started.Value!;
+            var following = FollowAsync(job, announce: false);
+
+            // A read that has not finished in time is stopped rather than left
+            // holding a slot: the page waiting on it has long since given up.
+            if (await Task.WhenAny(following, Task.Delay(ReadFor, ct)).ConfigureAwait(false) != following)
+            {
+                job.CancelAsked = true;
+                job.Process?.Kill();
+                await following.ConfigureAwait(false);
+            }
+
+            return OperationResult<CommandJob>.Ok(job);
+        }
+        finally
+        {
+            _reading.Release();
+        }
+    }
+
+    /// <summary>How long a page's read may take.</summary>
+    internal static readonly TimeSpan ReadFor = TimeSpan.FromMinutes(1);
+
+    private readonly SemaphoreSlim _reading = new(Running, Running);
+
+    /// <summary>Starts the child with --non-interactive and its input closed.</summary>
+    private async Task<OperationResult<CommandJob>> LaunchAsync(string path, IReadOnlyList<string> words, CancellationToken ct)
+    {
         // Never asked anything: a job has nobody at a prompt, and a question
         // it waits on would hold it open for good. Every command takes this.
         List<string> line = [.. path.Split(' '), .. words];
@@ -232,16 +327,10 @@ public sealed class CommandJobs
         }
 
         job.Process = started.Value!;
-        _jobs[job.Id] = job;
-        _ran?.Invoke(path);
-        Forget();
-        Interlocked.Increment(ref _stamp);
 
         // The child is never asked anything, so its input closes at once and a
         // prompt that slipped past --non-interactive reads the end of it.
         await job.Process.CloseInputAsync().ConfigureAwait(false);
-
-        _ = FollowAsync(job);
 
         return OperationResult<CommandJob>.Ok(job);
     }
@@ -285,9 +374,7 @@ public sealed class CommandJobs
             return $"'loadout {command.Path}' is a group of commands. Choose one of them.";
         }
 
-        var dryRun = words.Contains("--dry-run", StringComparer.Ordinal);
-
-        if (watchOnly && command.Reach.Effect != StudioEffect.Reads && !dryRun)
+        if (watchOnly && !command.Reach.Reads(words))
         {
             return $"This dashboard is only watching, so it cannot run 'loadout {command.Path}'. Run it in a terminal.";
         }
@@ -339,7 +426,7 @@ public sealed class CommandJobs
         return null;
     }
 
-    private async Task FollowAsync(CommandJob job)
+    private async Task FollowAsync(CommandJob job, bool announce)
     {
         var process = job.Process!;
 
@@ -361,7 +448,11 @@ public sealed class CommandJobs
         finally
         {
             job.EndedAt = _time.GetUtcNow();
-            Interlocked.Increment(ref _stamp);
+
+            if (announce)
+            {
+                Interlocked.Increment(ref _stamp);
+            }
 
             await process.DisposeAsync().ConfigureAwait(false);
         }
@@ -426,6 +517,7 @@ public sealed class CommandJobs
 /// <item><term>POST /api/v1/jobs</term><description><c>{"path", "words"}</c>: 202 with the job, or 400 or 403 with why not.</description></item>
 /// <item><term>GET /api/v1/jobs/{id}</term><description>One job with its output.</description></item>
 /// <item><term>DELETE /api/v1/jobs/{id}</term><description>Cancels it.</description></item>
+/// <item><term>POST /api/v1/read</term><description><c>{"path", "words"}</c> for a command that only reads: 200 with what it said, kept nowhere.</description></item>
 /// </list>
 /// </remarks>
 internal static class CommandsApi
@@ -433,6 +525,8 @@ internal static class CommandsApi
     public const string CommandsRoot = "/api/v1/commands";
 
     public const string JobsRoot = "/api/v1/jobs";
+
+    public const string ReadRoot = "/api/v1/read";
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -460,6 +554,31 @@ internal static class CommandsApi
             return;
         }
 
+        if (path == ReadRoot && method == "POST")
+        {
+            if (await AskedAsync(context, ct).ConfigureAwait(false) is not { Path: { Length: > 0 } reading } asked)
+            {
+                await DashboardServer.WriteAsync(context, 400, "text/plain; charset=utf-8",
+                    "The body should be JSON naming a 'path', with its 'words' after it.").ConfigureAwait(false);
+
+                return;
+            }
+
+            var read = await jobs.ReadAsync(reading, asked.Words ?? [], ct).ConfigureAwait(false);
+
+            if (read.Failed)
+            {
+                await DashboardServer.WriteAsync(context, read.ExitCode == ExitCode.PolicyViolation ? 403 : 400,
+                    "text/plain; charset=utf-8", read.Error!).ConfigureAwait(false);
+
+                return;
+            }
+
+            await JsonAsync(context, 200, Shown(read.Value!, withOutput: true)).ConfigureAwait(false);
+
+            return;
+        }
+
         if (path == JobsRoot && method == "GET")
         {
             await JsonAsync(context, 200, jobs.All.Select(job => Shown(job, withOutput: false))).ConfigureAwait(false);
@@ -469,16 +588,7 @@ internal static class CommandsApi
 
         if (path == JobsRoot && method == "POST")
         {
-            Asked? asked;
-
-            try
-            {
-                asked = await JsonSerializer.DeserializeAsync<Asked>(context.Request.InputStream, Json, ct).ConfigureAwait(false);
-            }
-            catch (JsonException)
-            {
-                asked = null;
-            }
+            var asked = await AskedAsync(context, ct).ConfigureAwait(false);
 
             if (asked?.Path is not { Length: > 0 } command)
             {
@@ -542,6 +652,18 @@ internal static class CommandsApi
 
         await DashboardServer.WriteAsync(context, 405, "text/plain; charset=utf-8",
             "Commands are read with GET; jobs are started with POST, read with GET and cancelled with DELETE.").ConfigureAwait(false);
+    }
+
+    private static async Task<Asked?> AskedAsync(HttpListenerContext context, CancellationToken ct)
+    {
+        try
+        {
+            return await JsonSerializer.DeserializeAsync<Asked>(context.Request.InputStream, Json, ct).ConfigureAwait(false);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     internal static object Shown(CommandJob job, bool withOutput)

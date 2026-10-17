@@ -355,7 +355,7 @@ export interface StudioCommand {
   category: string;
   example: string;
   runnable: boolean;
-  reach: { page: string; effect: Effect; reason: string | null };
+  reach: { page: string; effect: Effect; reason: string | null; changesOnlyWith: string[] | null };
   arguments: StudioArgument[];
   options: StudioOption[];
 }
@@ -383,7 +383,23 @@ export const commands = {
   job: (id: string) => call<Job>('GET', `/api/v1/jobs/${encodeURIComponent(id)}`),
   run: (path: string, words: string[]) => call<Job>('POST', '/api/v1/jobs', { path, words }),
   cancel: (id: string) => call<void>('DELETE', `/api/v1/jobs/${encodeURIComponent(id)}`),
+  /** Runs a command that only reads and waits for it, kept nowhere: how a page reads. */
+  read: (path: string, words: string[]) => call<Job>('POST', '/api/v1/read', { path, words }),
 };
+
+/**
+ * What a command that reads says with --json, parsed. A command that failed
+ * is thrown as a refusal carrying what it said on standard error.
+ */
+export async function readJson<T>(path: string, words: string[] = []): Promise<T> {
+  const read = await commands.read(path, [...words, '--json']);
+
+  if (read.state !== 'done') {
+    throw new Refused(read.error?.trim() || read.output?.trim() || `'loadout ${path}' ended with exit code ${read.exitCode}.`, 400);
+  }
+
+  return JSON.parse(read.output ?? 'null') as T;
+}
 
 /* ---------- live ---------- */
 

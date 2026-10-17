@@ -46,6 +46,9 @@ export class Studio {
   tasks = $state<api.TaskList[]>([]);
   /** The commands run from Studio while this daemon has been running, newest first. */
   jobs = $state<api.Job[]>([]);
+  /** Every command, with its options, read once when a page first needs it. */
+  catalogue = $state<api.StudioCommand[]>([]);
+  #catalogue: Promise<void> | null = null;
   signedOut = $state(false);
   /** Why the daemon could not be read, while it cannot. */
   offline = $state<string | null>(null);
@@ -242,6 +245,26 @@ export class Studio {
 
   async loadTasks(): Promise<void> {
     this.tasks = (await api.tasks.list()).lists;
+  }
+
+  /** Reads the command catalogue once, however many pages ask. */
+  loadCatalogue(): Promise<void> {
+    this.#catalogue ??= api.commands.catalogue().then(
+      (all) => {
+        this.catalogue = all;
+      },
+      (error) => {
+        this.#catalogue = null;
+        throw error;
+      },
+    );
+
+    return this.#catalogue;
+  }
+
+  /** One command from the catalogue, once it has been read. */
+  command(path: string): api.StudioCommand | null {
+    return this.catalogue.find((one) => one.path === path) ?? null;
   }
 
   /** Reads the jobs, and says when one that was running here has ended. */
