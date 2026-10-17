@@ -5,7 +5,7 @@
 :root { color-scheme: dark; }
 :root[data-theme="light"], :root[data-theme="hc-light"] { color-scheme: light; }
 html, body { min-height: 100%; }
-body { background: var(--ground); color: var(--ink); }
+body { margin: 0; background: var(--ground); color: var(--ink); }
 .skip { position: absolute; left: -999px; top: 8px; z-index: 50; padding: 8px 14px; background: var(--surface); color: var(--ink-strong); }
 .skip:focus { left: max(16px, env(safe-area-inset-left, 0px)); }
 #nav { position: fixed; left: 0; top: 0; bottom: 0; z-index: 40; }
@@ -78,20 +78,6 @@ body { background: var(--ground); color: var(--ink); }
 .back { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; margin-bottom: 8px; color: var(--ink-soft); font-size: 12.5px; letter-spacing: .2em; text-transform: uppercase; text-decoration: none; }
 .back:hover { color: var(--ink-strong); }
 .back:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.sess { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 24px 32px; align-items: start; }
-@media (max-width: 960px) { .sess { grid-template-columns: minmax(0, 1fr); } }
-.term { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: min(560px, 70vh); min-height: 320px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); }
-.term .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 14px; box-shadow: inset 0 -1px 0 var(--rule); font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
-.term .bar .live { color: var(--moving); }
-.term .out { margin: 0; padding: 12px 14px; overflow: auto; font-family: var(--font-mono); font-size: 13px; line-height: 20px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
-.term .out .me { color: var(--accent-text); }
-.term .out .dim { color: var(--muted); }
-.term .out .ask { color: var(--needs-text); }
-.term .out .ok { color: var(--good); }
-.term form { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; box-shadow: inset 0 1px 0 var(--rule); }
-.term form label { font-family: var(--font-mono); color: var(--accent-text); }
-.term input { flex: 1; min-width: 0; min-height: 40px; border: 0; background: transparent; color: var(--ink-strong); caret-color: var(--accent); font-family: var(--font-mono); font-size: 13px; outline: none; }
-.term form:focus-within { box-shadow: inset 0 1px 0 var(--rule), inset 0 0 0 2px var(--accent); }
 .facts { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; font-size: 13px; }
 .facts dt { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); align-self: center; }
 .facts dd { margin: 0; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-strong); overflow-wrap: anywhere; }

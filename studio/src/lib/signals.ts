@@ -46,6 +46,14 @@ export const SIGNAL_STATES: Record<string, [SignalFamily, string, string]> = {
   'not attempted': ['rest', 'open', 'dashed'],
   unknown: ['rest', 'unknown', 'flicker'],
   dropped: ['rest', 'dropped', 'strike'],
+  // A session's terminal (Terminal).
+  'needs approval': ['needs', 'needs', 'pulse'],
+  connecting: ['rest', 'open', 'dashed'],
+  reconnecting: ['rest', 'round', 'dashed'],
+  ended: ['good', 'done', 'settle'],
+  'exited with an error': ['bad', 'failed', 'hard'],
+  'only watching': ['rest', 'held', 'still'],
+  lost: ['bad', 'blocked', 'hard'],
 };
 
 export interface SignalOf {
@@ -70,6 +78,8 @@ export interface WorkLike {
   kind?: string;
   stage?: Stage;
   waiting?: boolean;
+  /** A session whose agent is asking to be allowed something. */
+  approval?: boolean;
   blocked?: boolean | string;
   failed?: boolean | string;
   held?: boolean;
@@ -82,7 +92,7 @@ export interface WorkLike {
  */
 export function wordFor(item: WorkLike, idleAfter = 10): string {
   if (item.waiting) {
-    return item.kind === 'team run' ? 'needs a decision' : 'waiting for you';
+    return item.kind === 'team run' ? 'needs a decision' : item.approval ? 'needs approval' : 'waiting for you';
   }
 
   if (item.blocked) {

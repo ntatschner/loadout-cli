@@ -84,6 +84,8 @@ export interface About {
   startsSessions: boolean;
   pseudoTerminal: string | null;
   attachPassphrase: boolean;
+  /** Whether the accessibility profile says a screen reader is in use. */
+  screenReader?: boolean;
 }
 
 export const about = () => call<About>('GET', '/api/v1/about');
@@ -134,6 +136,11 @@ export interface Session {
   taskId: string | null;
   command: string | null;
   lastOutputAt: string | null;
+  lastInputAt?: string | null;
+  /** What the agent's own hooks say it needs, until somebody types: never read off the screen. */
+  needs?: 'waiting' | 'approval' | null;
+  /** The agent's own id for the conversation, which 'loadout resume' takes. */
+  agentSession?: string | null;
   /** 'command' for a command that asks as it goes, 'launch' for an agent session. */
   kind?: 'launch' | 'command';
 }
@@ -160,6 +167,21 @@ export const sessions = {
   list: () => call<Session[]>('GET', '/api/v1/sessions'),
   start: (launch: Launch) => call<Session>('POST', '/api/v1/sessions', launch),
   end: (id: string) => call<void>('DELETE', `/api/v1/sessions/${encodeURIComponent(id)}`),
+  /**
+   * For a session this daemon does not host: whether an earlier daemon did,
+   * and the agent's conversation id it left, for 'loadout resume'.
+   */
+  async gone(id: string): Promise<{ lost: boolean; agentSession: string | null }> {
+    const response = await send('GET', `/api/v1/sessions/${encodeURIComponent(id)}`);
+
+    if (response.status !== 410) {
+      return { lost: false, agentSession: null };
+    }
+
+    const body = (await response.json()) as { agentSession?: string | null };
+
+    return { lost: true, agentSession: body.agentSession ?? null };
+  },
 };
 
 /** The WebSocket address of a session's terminal, on this page's own host. */

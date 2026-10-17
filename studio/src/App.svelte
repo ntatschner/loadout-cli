@@ -153,7 +153,11 @@
       {#await import('./pages/SessionView.svelte')}
         <p class="calm" role="status">Opening the terminal…</p>
       {:then view}
-        <view.default id={router.route.rest[0]} />
+        <!-- Made again for each session: one page's connection, terminal
+             and state must not carry over to the next. -->
+        {#key router.route.rest[0]}
+          <view.default id={router.route.rest[0]} />
+        {/key}
       {/await}
     {:else if router.route.page === 'settings'}
       <Settings rest={router.route.rest} />
