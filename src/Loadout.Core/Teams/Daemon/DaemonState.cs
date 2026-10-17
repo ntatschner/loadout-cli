@@ -10,11 +10,16 @@ namespace Loadout.Core.Teams.Daemon;
 /// <param name="StartedAt">When that process started, because identifiers are reused.</param>
 /// <param name="Address">The dashboard, token and all, or null when it serves none.</param>
 /// <param name="Since">When the daemon began watching.</param>
+/// <param name="Hosted">
+/// How many sessions it is hosting for Studio that have not ended. They end
+/// when it stops, so whatever stops it says so first.
+/// </param>
 public sealed record DaemonState(
     int Pid,
     DateTimeOffset StartedAt,
     string? Address,
-    DateTimeOffset Since);
+    DateTimeOffset Since,
+    int Hosted = 0);
 
 /// <summary>Reading and writing the daemon's own note about itself.</summary>
 /// <remarks>

@@ -1,0 +1,41 @@
+<!-- @dsCard group="Overlays" height=600 width=1100 subtitle="A projected panel: a line of light opens to full height over a dim" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dialog</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="stage" style="position: relative; height: 560px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--rule)">
+  <div id="page" style="padding: 24px 28px"><p class="lab">Sessions</p><div class="row" id="b"></div><p class="out" role="status" id="out"></p></div>
+</div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var stage = document.getElementById("stage"), page = document.getElementById("page"), out = document.getElementById("out"), b = document.getElementById("b");
+  function newSession() {
+    var c = document.createElement("div");
+    c.appendChild(S.StartRail({ value: "why is this postgres query so slow", action: "Deploy", command: function (t) { return "$ loadout starstats --task \"" + t + "\" --mode investigate"; }, onDeploy: function (t) { d.close(); out.textContent = "\u2713 Deployed in starstats: " + t; } }));
+    var d = S.Dialog({ title: "New session", why: "Pick the project and describe the task. The command below is what Deploy runs.", content: c, host: stage, contained: true, behind: page, initialFocus: "input" });
+    d.open();
+  }
+  function signOut() {
+    var d = S.Dialog({ title: "Sign out every browser?", why: "This replaces the signing key, so every browser signed in to Studio on this machine is signed out, this one too. You sign in again with loadout dashboard --open.", danger: true, role: "alertdialog", host: stage, contained: true, behind: page,
+      actions: [{ label: "Sign out every browser", kind: "danger", solid: true, glyph: "\u23fb", cmd: "$ loadout dashboard sign-out", onPress: function () { out.textContent = "\u2713 Every browser is signed out."; } }] });
+    d.open();
+  }
+  b.appendChild(S.HaloButton({ label: "Start a session\u2026", onPress: newSession }));
+  b.appendChild(S.HaloButton({ label: "Sign out every browser\u2026", kind: "danger", onPress: signOut }));
+})();
+</script>
+</body>
+</html>

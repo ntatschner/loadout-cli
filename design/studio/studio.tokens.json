@@ -1,0 +1,1155 @@
+{
+  "$description": "Loadout Studio tokens, W3C Design Tokens format (Community Group draft). Dark is the default value; every theme's value is under $extensions[\"studio.themes\"]. Accents rebind color.accent, color.accent-text and color.on-accent. Spacing is multiplied by a density.",
+  "$extensions": {
+    "studio.themes": [
+      {
+        "id": "dark",
+        "name": "Dark"
+      },
+      {
+        "id": "light",
+        "name": "Light"
+      },
+      {
+        "id": "hc-dark",
+        "name": "High contrast dark"
+      },
+      {
+        "id": "hc-light",
+        "name": "High contrast light"
+      }
+    ],
+    "studio.source": "https://claude.ai/artifact/JG7uPw4Pi5BkAXUtL9rre6"
+  },
+  "color": {
+    "ground": {
+      "$type": "color",
+      "$value": "#03070c",
+      "$description": "The page itself, behind everything. Text tokens are measured on it.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#03070c",
+          "light": "#f3f7fa",
+          "hc-dark": "#000000",
+          "hc-light": "#ffffff"
+        }
+      }
+    },
+    "surface": {
+      "$type": "color",
+      "$value": "#06101a",
+      "$description": "Panels that sit on the ground: dialogs, popovers, toasts, the palette, the widened side rail. In dark it is a shade above ground; in light it is white paper.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#06101a",
+          "light": "#ffffff",
+          "hc-dark": "#000000",
+          "hc-light": "#ffffff"
+        }
+      }
+    },
+    "surface-2": {
+      "$type": "color",
+      "$value": "#0a1824",
+      "$description": "A second step up: the list row being hovered, a code block, a picked option's well, a meter's track.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#0a1824",
+          "light": "#e8f0f5",
+          "hc-dark": "#0d0d0d",
+          "hc-light": "#f0f0f0"
+        }
+      }
+    },
+    "scrim": {
+      "$type": "color",
+      "$value": "#03070cb3",
+      "$description": "The dim laid over the page behind a dialog, the palette or the widened side rail. Decorative: the dialog itself carries the meaning.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#03070cb3",
+          "light": "#0f22304d",
+          "hc-dark": "#000000cc",
+          "hc-light": "#000000a6"
+        }
+      }
+    },
+    "ink-strong": {
+      "$type": "color",
+      "$value": "#ffffff",
+      "$description": "Titles, numbers and anything that must read first, on ground, surface and surface-2.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffffff",
+          "light": "#04101a",
+          "hc-dark": "#ffffff",
+          "hc-light": "#000000"
+        }
+      }
+    },
+    "ink": {
+      "$type": "color",
+      "$value": "#d9f3ff",
+      "$description": "Body text and button labels on ground, surface and surface-2.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#d9f3ff",
+          "light": "#0f2230",
+          "hc-dark": "#ffffff",
+          "hc-light": "#000000"
+        }
+      }
+    },
+    "ink-soft": {
+      "$type": "color",
+      "$value": "#cfe6f2",
+      "$description": "Section labels (the spaced capitals of a zone heading) on ground, surface and surface-2.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#cfe6f2",
+          "light": "#1d3a4c",
+          "hc-dark": "#f2f2f2",
+          "hc-light": "#141414"
+        }
+      }
+    },
+    "muted": {
+      "$type": "color",
+      "$value": "#9fc0d0",
+      "$description": "Secondary text: notes, facts under a name, the 'why' line under a dialog title. On ground, surface and surface-2.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#9fc0d0",
+          "light": "#3a5566",
+          "hc-dark": "#e0e0e0",
+          "hc-light": "#262626"
+        }
+      }
+    },
+    "subtle": {
+      "$type": "color",
+      "$value": "#8fb3c4",
+      "$description": "Commands (`$ loadout …`), placeholders and timestamps. Still 4.5:1 or better (7:1 in high contrast) on every ground, because a command is read, not decoration.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#8fb3c4",
+          "light": "#46606f",
+          "hc-dark": "#d4d4d4",
+          "hc-light": "#333333"
+        }
+      }
+    },
+    "rule": {
+      "$type": "color",
+      "$value": "#1b4352",
+      "$description": "Hairlines that only group things: the line after a zone heading, list separators. Decorative in dark and light; 3:1 or better in the high-contrast themes, where surfaces are set apart by borders.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#1b4352",
+          "light": "#b3c7d3",
+          "hc-dark": "#9a9a9a",
+          "hc-light": "#5c5c5c"
+        }
+      }
+    },
+    "control-edge": {
+      "$type": "color",
+      "$value": "#4d7f93",
+      "$description": "The edge of a control that has no fill: an input, a toggle track, a segmented control. 3:1 or better on every ground in every theme.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#4d7f93",
+          "light": "#6b8798",
+          "hc-dark": "#ffffff",
+          "hc-light": "#000000"
+        }
+      }
+    },
+    "focus": {
+      "$type": "color",
+      "$value": "#ffffff",
+      "$description": "The focus ring: a solid 2px outline, 2–4px off the control. 3:1 or better on every ground. White in dark, near-black in light, yellow and blue in high contrast.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffffff",
+          "light": "#04101a",
+          "hc-dark": "#ffff00",
+          "hc-light": "#0000cc"
+        }
+      }
+    },
+    "moving": {
+      "$type": "color",
+      "$value": "#80c8ff",
+      "$description": "Signal family Moving (working, running, doing, round running): the state glyph's ring, the orbiter, the meter fill. Also readable as text on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#80c8ff",
+          "light": "#0b5cad",
+          "hc-dark": "#a6d4ff",
+          "hc-light": "#0a3d91"
+        }
+      }
+    },
+    "needs": {
+      "$type": "color",
+      "$value": "#ffb547",
+      "$description": "Signal family Needs (needs a decision, waiting for you): the glyph ring, the glow on whatever is waiting, an amber halo button. As text on every ground too.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffb547",
+          "light": "#8a4a00",
+          "hc-dark": "#ffd27a",
+          "hc-light": "#6b3a00"
+        }
+      }
+    },
+    "needs-text": {
+      "$type": "color",
+      "$value": "#ffd79a",
+      "$description": "Text that belongs to a Needs item: the question asked, the age of the wait. On ground, surface, surface-2 and needs-wash.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffd79a",
+          "light": "#7a4100",
+          "hc-dark": "#ffe2a8",
+          "hc-light": "#5c3200"
+        }
+      }
+    },
+    "needs-wash": {
+      "$type": "color",
+      "$value": "#2a1d0a",
+      "$description": "The faint fill behind a card or toast that needs you. Never the only signal: the word, glyph and needs edge come with it.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#2a1d0a",
+          "light": "#fff1dc",
+          "hc-dark": "#000000",
+          "hc-light": "#ffffff"
+        }
+      }
+    },
+    "bad": {
+      "$type": "color",
+      "$value": "#ff8a8a",
+      "$description": "Signal family Bad (failed, last round failed, blocked, limited): glyph ring and edge. As text on every ground too.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ff8a8a",
+          "light": "#b3261e",
+          "hc-dark": "#ffb0a8",
+          "hc-light": "#8a0f1a"
+        }
+      }
+    },
+    "bad-text": {
+      "$type": "color",
+      "$value": "#ffc2c2",
+      "$description": "Text inside a problem toast or card. On ground, surface, surface-2 and bad-wash.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffc2c2",
+          "light": "#9c1f18",
+          "hc-dark": "#ffcdc8",
+          "hc-light": "#7a0d17"
+        }
+      }
+    },
+    "bad-wash": {
+      "$type": "color",
+      "$value": "#2a0e10",
+      "$description": "The faint fill behind a problem toast or card, always with the word, the glyph and the bad edge.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#2a0e10",
+          "light": "#fde8e6",
+          "hc-dark": "#000000",
+          "hc-light": "#ffffff"
+        }
+      }
+    },
+    "good": {
+      "$type": "color",
+      "$value": "#7fe0b8",
+      "$description": "Signal family Good (done, met, accepted). Done and failed differ by glyph and word, never by this colour alone.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#7fe0b8",
+          "light": "#1b6b4a",
+          "hc-dark": "#9ff0cc",
+          "hc-light": "#0b4d2e"
+        }
+      }
+    },
+    "rest": {
+      "$type": "color",
+      "$value": "#b4c4cf",
+      "$description": "Signal family Rest (idle, open, captured, shaping, held, stopped, not attempted, unknown, dropped).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#b4c4cf",
+          "light": "#4f5f6b",
+          "hc-dark": "#e0e6ea",
+          "hc-light": "#2f3a42"
+        }
+      }
+    },
+    "on-signal": {
+      "$type": "color",
+      "$value": "#03070c",
+      "$description": "Text or a glyph drawn on a solid signal fill (the small glyph discs in the Ambient signal strip). 4.5:1 or better on all five families (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#03070c",
+          "light": "#ffffff",
+          "hc-dark": "#000000",
+          "hc-light": "#ffffff"
+        }
+      }
+    },
+    "gauge": {
+      "$type": "color",
+      "$value": "#b9a4ff",
+      "$description": "The Gyroscope halo's spend ring and its legend dot. Always labelled 'Spend'; never a status.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#b9a4ff",
+          "light": "#5b3fb0",
+          "hc-dark": "#d2c4ff",
+          "hc-light": "#3d2380"
+        }
+      }
+    },
+    "shaping": {
+      "$type": "color",
+      "$value": "#c9b3ff",
+      "$description": "The Lens halo's Shaping ring and its mark. A stage colour on the halo only; as a state, shaping belongs to the Rest family. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#c9b3ff",
+          "light": "#5f43b2",
+          "hc-dark": "#ddd0ff",
+          "hc-light": "#3f2a8c"
+        }
+      }
+    },
+    "line-1": {
+      "$type": "color",
+      "$value": "#ff7a7a",
+      "$description": "Map line 1's identity colour: its track, stops, badge and train. Identity, never state: a line keeps its colour from Captured to Done, and state is its Signal. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ff7a7a",
+          "light": "#b42b2b",
+          "hc-dark": "#ff9c9c",
+          "hc-light": "#8f1a1a"
+        }
+      }
+    },
+    "line-2": {
+      "$type": "color",
+      "$value": "#4fc3ff",
+      "$description": "Map line 2's identity colour: its track, stops, badge and train. Identity, never state: a line keeps its colour from Captured to Done, and state is its Signal. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#4fc3ff",
+          "light": "#0a6aa1",
+          "hc-dark": "#7fd4ff",
+          "hc-light": "#064f7a"
+        }
+      }
+    },
+    "line-3": {
+      "$type": "color",
+      "$value": "#ffd166",
+      "$description": "Map line 3's identity colour: its track, stops, badge and train. Identity, never state: a line keeps its colour from Captured to Done, and state is its Signal. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffd166",
+          "light": "#7a5800",
+          "hc-dark": "#ffdf8a",
+          "hc-light": "#5c4200"
+        }
+      }
+    },
+    "line-4": {
+      "$type": "color",
+      "$value": "#b99bff",
+      "$description": "Map line 4's identity colour: its track, stops, badge and train. Identity, never state: a line keeps its colour from Captured to Done, and state is its Signal. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#b99bff",
+          "light": "#6243c4",
+          "hc-dark": "#cdb6ff",
+          "hc-light": "#45289a"
+        }
+      }
+    },
+    "line-5": {
+      "$type": "color",
+      "$value": "#5ee0a0",
+      "$description": "Map line 5's identity colour: its track, stops, badge and train. Identity, never state: a line keeps its colour from Captured to Done, and state is its Signal. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#5ee0a0",
+          "light": "#0f6e44",
+          "hc-dark": "#8ff0c0",
+          "hc-light": "#0b5434"
+        }
+      }
+    },
+    "line-6": {
+      "$type": "color",
+      "$value": "#ff8fd1",
+      "$description": "Map line 6's identity colour: its track, stops, badge and train. Identity, never state: a line keeps its colour from Captured to Done, and state is its Signal. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ff8fd1",
+          "light": "#a6246f",
+          "hc-dark": "#ffb0dd",
+          "hc-light": "#7d1a55"
+        }
+      }
+    },
+    "line-7": {
+      "$type": "color",
+      "$value": "#c8d2da",
+      "$description": "Map line 7's identity colour: its track, stops, badge and train. Identity, never state: a line keeps its colour from Captured to Done, and state is its Signal. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#c8d2da",
+          "light": "#55626c",
+          "hc-dark": "#e0e6ea",
+          "hc-light": "#3a454d"
+        }
+      }
+    },
+    "line-8": {
+      "$type": "color",
+      "$value": "#ffa94d",
+      "$description": "Map line 8's identity colour: its track, stops, badge and train. Identity, never state: a line keeps its colour from Captured to Done, and state is its Signal. 3:1 or better on every ground.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffa94d",
+          "light": "#9a4b06",
+          "hc-dark": "#ffc07a",
+          "hc-light": "#723604"
+        }
+      }
+    },
+    "on-line": {
+      "$type": "color",
+      "$value": "#03070c",
+      "$description": "The number on a train and on a line badge, on any line colour. 4.5:1 or better on all eight (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#03070c",
+          "light": "#ffffff",
+          "hc-dark": "#000000",
+          "hc-light": "#ffffff"
+        }
+      }
+    },
+    "accent": {
+      "$type": "color",
+      "$value": "{accent.cyan.fill}",
+      "$description": "The accent in use. Cyan unless the person picks Ice, Magenta or Violet (`data-accent` on <html>, which rebinds this to accent-<name>). Rings, strokes, tab fills and every accent glow read it. The accent never means a state: state is the five signal families.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "{accent.cyan.fill}",
+          "light": "{accent.cyan.fill}",
+          "hc-dark": "{accent.cyan.fill}",
+          "hc-light": "{accent.cyan.fill}"
+        }
+      }
+    },
+    "accent-text": {
+      "$type": "color",
+      "$value": "{accent.cyan.text}",
+      "$description": "The accent in use, as text. Rebinds with `data-accent`.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "{accent.cyan.text}",
+          "light": "{accent.cyan.text}",
+          "hc-dark": "{accent.cyan.text}",
+          "hc-light": "{accent.cyan.text}"
+        }
+      }
+    },
+    "on-accent": {
+      "$type": "color",
+      "$value": "{accent.cyan.on}",
+      "$description": "Text on a solid `accent` fill. Rebinds with `data-accent`.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "{accent.cyan.on}",
+          "light": "{accent.cyan.on}",
+          "hc-dark": "{accent.cyan.on}",
+          "hc-light": "{accent.cyan.on}"
+        }
+      }
+    }
+  },
+  "accent": {
+    "cyan": {
+      "fill": {
+        "$type": "color",
+        "$value": "#6fe3ff",
+        "$description": "Cyan accent fill: halo rings, the tab fill, the current page's bar, the line after a zone heading. 3:1 or better on every ground. Read through `accent`, never directly.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#6fe3ff",
+            "light": "#007a99",
+            "hc-dark": "#7ff0ff",
+            "hc-light": "#00566b"
+          }
+        }
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#6fe3ff",
+        "$description": "Cyan accent as text: zone numbers, links, the caret. 4.5:1 or better (7:1 in high contrast) on ground, surface and surface-2. Read through `accent-text`.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#6fe3ff",
+            "light": "#006580",
+            "hc-dark": "#9ff4ff",
+            "hc-light": "#00495c"
+          }
+        }
+      },
+      "on": {
+        "$type": "color",
+        "$value": "#03070c",
+        "$description": "Text on a solid Cyan accent fill (the WHAT SHOULD IT DO? tab). 4.5:1 or better (7:1 in high contrast). Read through `on-accent`.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#03070c",
+            "light": "#ffffff",
+            "hc-dark": "#000000",
+            "hc-light": "#ffffff"
+          }
+        }
+      }
+    },
+    "ice": {
+      "fill": {
+        "$type": "color",
+        "$value": "#e6f4ff",
+        "$description": "Ice accent fill: halo rings, the tab fill, the current page's bar, the line after a zone heading. 3:1 or better on every ground. Read through `accent`, never directly.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#e6f4ff",
+            "light": "#2c4252",
+            "hc-dark": "#ffffff",
+            "hc-light": "#1a2a36"
+          }
+        }
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#e6f4ff",
+        "$description": "Ice accent as text: zone numbers, links, the caret. 4.5:1 or better (7:1 in high contrast) on ground, surface and surface-2. Read through `accent-text`.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#e6f4ff",
+            "light": "#2c4252",
+            "hc-dark": "#ffffff",
+            "hc-light": "#1a2a36"
+          }
+        }
+      },
+      "on": {
+        "$type": "color",
+        "$value": "#03070c",
+        "$description": "Text on a solid Ice accent fill (the WHAT SHOULD IT DO? tab). 4.5:1 or better (7:1 in high contrast). Read through `on-accent`.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#03070c",
+            "light": "#ffffff",
+            "hc-dark": "#000000",
+            "hc-light": "#ffffff"
+          }
+        }
+      }
+    },
+    "magenta": {
+      "fill": {
+        "$type": "color",
+        "$value": "#ff8fd1",
+        "$description": "Magenta accent fill: halo rings, the tab fill, the current page's bar, the line after a zone heading. 3:1 or better on every ground. Read through `accent`, never directly.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#ff8fd1",
+            "light": "#a8237a",
+            "hc-dark": "#ffb3e1",
+            "hc-light": "#7a1458"
+          }
+        }
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#ff9fd8",
+        "$description": "Magenta accent as text: zone numbers, links, the caret. 4.5:1 or better (7:1 in high contrast) on ground, surface and surface-2. Read through `accent-text`.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#ff9fd8",
+            "light": "#951f6c",
+            "hc-dark": "#ffc2e8",
+            "hc-light": "#6b114d"
+          }
+        }
+      },
+      "on": {
+        "$type": "color",
+        "$value": "#1c0614",
+        "$description": "Text on a solid Magenta accent fill (the WHAT SHOULD IT DO? tab). 4.5:1 or better (7:1 in high contrast). Read through `on-accent`.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#1c0614",
+            "light": "#ffffff",
+            "hc-dark": "#000000",
+            "hc-light": "#ffffff"
+          }
+        }
+      }
+    },
+    "violet": {
+      "fill": {
+        "$type": "color",
+        "$value": "#c3a6ff",
+        "$description": "Violet accent fill: halo rings, the tab fill, the current page's bar, the line after a zone heading. 3:1 or better on every ground. Read through `accent`, never directly.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#c3a6ff",
+            "light": "#6a3fd0",
+            "hc-dark": "#d9c7ff",
+            "hc-light": "#4a239e"
+          }
+        }
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#cdb5ff",
+        "$description": "Violet accent as text: zone numbers, links, the caret. 4.5:1 or better (7:1 in high contrast) on ground, surface and surface-2. Read through `accent-text`.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#cdb5ff",
+            "light": "#5c33bd",
+            "hc-dark": "#e2d4ff",
+            "hc-light": "#40208a"
+          }
+        }
+      },
+      "on": {
+        "$type": "color",
+        "$value": "#120a24",
+        "$description": "Text on a solid Violet accent fill (the WHAT SHOULD IT DO? tab). 4.5:1 or better (7:1 in high contrast). Read through `on-accent`.",
+        "$extensions": {
+          "studio.themes": {
+            "dark": "#120a24",
+            "light": "#ffffff",
+            "hc-dark": "#000000",
+            "hc-light": "#ffffff"
+          }
+        }
+      }
+    }
+  },
+  "shadow": {
+    "shadow-float": {
+      "$type": "shadow",
+      "$value": "0 16px 36px -18px #000000cc",
+      "$description": "Lifts what floats over the page (toasts, popovers, dialogs, the palette) off it. A soft dark shadow in Dark and Light; none in high contrast, where a 2px edge does the job.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "0 16px 36px -18px #000000cc",
+          "light": "0 14px 30px -14px #0f22305c",
+          "hc-dark": "none",
+          "hc-light": "none"
+        },
+        "studio.css": true
+      }
+    }
+  },
+  "density": {
+    "density-compact": {
+      "$type": "number",
+      "$value": 0.8,
+      "$description": "Compact: more on the screen, for big monitors."
+    },
+    "density-comfortable": {
+      "$type": "number",
+      "$value": 1.0,
+      "$description": "Comfortable: the boards as designed."
+    },
+    "density-roomy": {
+      "$type": "number",
+      "$value": 1.25,
+      "$description": "Roomy: for touch, zoom and low vision."
+    },
+    "$description": "Set with data-density on <html>: compact, comfortable (default) or roomy."
+  },
+  "space": {
+    "space-1": {
+      "$type": "dimension",
+      "$value": "4px",
+      "$description": "Between a glyph and its word inside a chip."
+    },
+    "space-2": {
+      "$type": "dimension",
+      "$value": "8px",
+      "$description": "Between a title and the facts under it; between stacked toasts."
+    },
+    "space-3": {
+      "$type": "dimension",
+      "$value": "12px",
+      "$description": "Between a halo ring and its label; inside a list row."
+    },
+    "space-4": {
+      "$type": "dimension",
+      "$value": "16px",
+      "$description": "The page's side gutter at 320px; padding inside a popover."
+    },
+    "space-5": {
+      "$type": "dimension",
+      "$value": "20px",
+      "$description": "Padding inside a toast and a palette row."
+    },
+    "space-6": {
+      "$type": "dimension",
+      "$value": "24px",
+      "$description": "The start rail's left padding; padding inside a dialog."
+    },
+    "space-7": {
+      "$type": "dimension",
+      "$value": "32px",
+      "$description": "Between a zone and the next; the page's side gutter on desktop."
+    },
+    "space-8": {
+      "$type": "dimension",
+      "$value": "40px",
+      "$description": "Above a page's first zone; around the Lens halo."
+    },
+    "rail-width": {
+      "$type": "dimension",
+      "$value": "84px",
+      "$description": "The side rail, collapsed. Pages start this far in. Not multiplied by density."
+    },
+    "rail-width-open": {
+      "$type": "dimension",
+      "$value": "260px",
+      "$description": "The side rail, widened; it slides over the page, it never pushes it."
+    },
+    "control-sm": {
+      "$type": "dimension",
+      "$value": "36px",
+      "$description": "Small halo buttons and chips. Never below 24px at any density (WCAG 2.2 target size)."
+    },
+    "control": {
+      "$type": "dimension",
+      "$value": "44px",
+      "$description": "Halo buttons, list rows, toggles."
+    },
+    "control-lg": {
+      "$type": "dimension",
+      "$value": "60px",
+      "$description": "The start-a-session rail."
+    },
+    "$description": "One scale, multiplied by the density in use: Compact 0.8, Comfortable 1 (the default), Roomy 1.25. Components read calc(var(--space-n) * var(--density))."
+  },
+  "radius": {
+    "radius-none": {
+      "$type": "dimension",
+      "$value": "0",
+      "$description": "Panels, rails, the start rail, toasts, tabs: Studio is square. Shapes are carried by light, not corners."
+    },
+    "radius-chip": {
+      "$type": "dimension",
+      "$value": "5px",
+      "$description": "Signal marks and the small chips on a meter."
+    },
+    "radius-pill": {
+      "$type": "dimension",
+      "$value": "999px",
+      "$description": "Meter tracks and fills, the Lens/Map count pills."
+    },
+    "radius-round": {
+      "$type": "dimension",
+      "$value": "50%",
+      "$description": "Halo rings, glyph discs, orbiters: anything that is a ring."
+    }
+  },
+  "glow": {
+    "glow-sm": {
+      "$type": "dimension",
+      "$value": "10px",
+      "$description": "Blur of the glow on a glyph disc or the dot in a halo ring."
+    },
+    "glow-md": {
+      "$type": "dimension",
+      "$value": "14px",
+      "$description": "Blur of the glow round a halo ring and on a zone number."
+    },
+    "glow-lg": {
+      "$type": "dimension",
+      "$value": "22px",
+      "$description": "Blur of the glow on a hovered or focused halo ring, and the settle flash when something finishes."
+    },
+    "glow-strength": {
+      "$type": "string",
+      "$value": "55%",
+      "$description": "How much of the colour a glow carries in Dark."
+    },
+    "tint-hover": {
+      "$type": "string",
+      "$value": "6%",
+      "$description": "Accent mixed into the ground under a hovered row."
+    },
+    "tint-picked": {
+      "$type": "string",
+      "$value": "14%",
+      "$description": "Accent mixed into the ground at the start of a picked row's fade."
+    },
+    "tint-line": {
+      "$type": "string",
+      "$value": "35%",
+      "$description": "Accent mixed into a decorative hairline (the line after a zone heading)."
+    },
+    "$description": "Glow is light from the accent or a signal colour. It is on in Dark and off in Light and both high-contrast themes, where strokes and borders do the same job."
+  },
+  "duration": {
+    "dur-instant": {
+      "$type": "duration",
+      "$value": "180ms",
+      "$description": "Colour and text changes on hover."
+    },
+    "dur-quick": {
+      "$type": "duration",
+      "$value": "250ms",
+      "$description": "Row backgrounds, the rail widening."
+    },
+    "dur-base": {
+      "$type": "duration",
+      "$value": "350ms",
+      "$description": "A halo ring growing on hover, panels projecting in."
+    },
+    "dur-slow": {
+      "$type": "duration",
+      "$value": "500ms",
+      "$description": "A tether unfolding, the dim fading in."
+    },
+    "dur-travel": {
+      "$type": "duration",
+      "$value": "900ms",
+      "$description": "The Lens focus turning to a new item; a train between stops."
+    },
+    "dur-breathe": {
+      "$type": "duration",
+      "$value": "2400ms",
+      "$description": "One breath of a Moving glyph. Loops only under full motion."
+    },
+    "dur-toast-fold": {
+      "$type": "duration",
+      "$value": "6000ms",
+      "$description": "How long a toast stays open before folding to its small form."
+    },
+    "$description": "Motion is set to full, reduced or none in Settings, and the operating system's reduced-motion preference always wins. Under reduced, things fade instead of travelling and nothing loops; under none, nothing animates."
+  },
+  "easing": {
+    "ease-out": {
+      "$type": "cubicBezier",
+      "$value": [
+        0.22,
+        1.0,
+        0.36,
+        1.0
+      ],
+      "$description": "Almost everything: quick out, long settle."
+    },
+    "ease-travel": {
+      "$type": "cubicBezier",
+      "$value": [
+        0.65,
+        0.0,
+        0.35,
+        1.0
+      ],
+      "$description": "Travel along a path: a train, the focus turning."
+    }
+  },
+  "opacity": {
+    "recede": {
+      "$type": "number",
+      "$value": 0.72,
+      "$description": "What is less urgent recedes to this when something needs you, and an idle signal dims to it. Dark only: text there stays 4.5:1 or better. In Light and both high-contrast themes nothing fades (a fade would break contrast), so the rise alone carries urgency."
+    }
+  },
+  "font": {
+    "family": {
+      "sans": {
+        "$type": "fontFamily",
+        "$value": [
+          "Saira",
+          "system-ui",
+          "Segoe UI",
+          "sans-serif"
+        ]
+      },
+      "mono": {
+        "$type": "fontFamily",
+        "$value": [
+          "JetBrains Mono",
+          "ui-monospace",
+          "Cascadia Mono",
+          "Menlo",
+          "monospace"
+        ]
+      }
+    },
+    "face": {
+      "saira": {
+        "$type": "string",
+        "$value": "fonts/saira-latin-wght-normal.woff2",
+        "$description": "Saira, weights 100 900, normal. OFL-1.1; licence in fonts/."
+      },
+      "jetbrains-mono": {
+        "$type": "string",
+        "$value": "fonts/jetbrains-mono-latin-wght-normal.woff2",
+        "$description": "JetBrains Mono, weights 100 800, normal. OFL-1.1; licence in fonts/."
+      }
+    }
+  },
+  "typography": {
+    "display-xl": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "40px",
+        "fontWeight": 200,
+        "lineHeight": "44px",
+        "letterSpacing": "0"
+      },
+      "$description": "Big numbers: a toggle's state in Halo controls, a dialog's result count.",
+      "$extensions": {
+        "studio.group": "Display"
+      }
+    },
+    "display": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "30px",
+        "fontWeight": 200,
+        "lineHeight": "34px",
+        "letterSpacing": "0"
+      },
+      "$description": "A page title and the Ambient corner numbers. Thin on purpose: the glow carries weight in dark; in light and high contrast the ink does.",
+      "$extensions": {
+        "studio.group": "Display"
+      }
+    },
+    "title": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "21px",
+        "fontWeight": 300,
+        "lineHeight": "26px",
+        "letterSpacing": "0"
+      },
+      "$description": "The thing in focus on Lens, a dialog's title.",
+      "$extensions": {
+        "studio.group": "Display"
+      }
+    },
+    "ask": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "19px",
+        "fontWeight": 400,
+        "lineHeight": "25px",
+        "letterSpacing": "0"
+      },
+      "$description": "A question waiting for you, where it is answered.",
+      "$extensions": {
+        "studio.group": "Display"
+      }
+    },
+    "entry": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "20px",
+        "fontWeight": 300,
+        "lineHeight": "28px",
+        "letterSpacing": "0"
+      },
+      "$description": "Text typed into the start-a-session rail.",
+      "$extensions": {
+        "studio.group": "Text"
+      }
+    },
+    "body": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "15px",
+        "fontWeight": 400,
+        "lineHeight": "22px",
+        "letterSpacing": "0"
+      },
+      "$description": "Body copy, list titles, toast text.",
+      "$extensions": {
+        "studio.group": "Text"
+      }
+    },
+    "body-sm": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "13.5px",
+        "fontWeight": 400,
+        "lineHeight": "20px",
+        "letterSpacing": "0"
+      },
+      "$description": "The 'why' line under a heading, legends, options.",
+      "$extensions": {
+        "studio.group": "Text"
+      }
+    },
+    "small": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "12.5px",
+        "fontWeight": 400,
+        "lineHeight": "18px",
+        "letterSpacing": "0"
+      },
+      "$description": "Secondary facts under a name.",
+      "$extensions": {
+        "studio.group": "Text"
+      }
+    },
+    "label-zone": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "13px",
+        "fontWeight": 500,
+        "lineHeight": "18px",
+        "letterSpacing": ".24em"
+      },
+      "$description": "Zone headings: spaced capitals, ink-soft, followed by an accent hairline.",
+      "$extensions": {
+        "studio.group": "Labels",
+        "studio.textTransform": "uppercase"
+      }
+    },
+    "label-button": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "13.5px",
+        "fontWeight": 500,
+        "lineHeight": "18px",
+        "letterSpacing": ".22em"
+      },
+      "$description": "Halo buttons. Capitals, spaced.",
+      "$extensions": {
+        "studio.group": "Labels",
+        "studio.textTransform": "uppercase"
+      }
+    },
+    "label-button-sm": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "11.5px",
+        "fontWeight": 500,
+        "lineHeight": "16px",
+        "letterSpacing": ".22em"
+      },
+      "$description": "Small halo buttons.",
+      "$extensions": {
+        "studio.group": "Labels",
+        "studio.textTransform": "uppercase"
+      }
+    },
+    "label-tab": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "12px",
+        "fontWeight": 500,
+        "lineHeight": "16px",
+        "letterSpacing": ".2em"
+      },
+      "$description": "The accent tab over the start rail, field labels, tab buttons.",
+      "$extensions": {
+        "studio.group": "Labels",
+        "studio.textTransform": "uppercase"
+      }
+    },
+    "label-nav": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.sans}",
+        "fontSize": "12.5px",
+        "fontWeight": 500,
+        "lineHeight": "18px",
+        "letterSpacing": ".24em"
+      },
+      "$description": "Side-rail page names and the Lens/Map switch.",
+      "$extensions": {
+        "studio.group": "Labels",
+        "studio.textTransform": "uppercase"
+      }
+    },
+    "cmd": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "11.5px",
+        "fontWeight": 400,
+        "lineHeight": "16px",
+        "letterSpacing": "0"
+      },
+      "$description": "The command beside or under every action that changes something.",
+      "$extensions": {
+        "studio.group": "Mono"
+      }
+    },
+    "mono-meta": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "lineHeight": "16px",
+        "letterSpacing": "0"
+      },
+      "$description": "Times, ages and counts in feeds and meters.",
+      "$extensions": {
+        "studio.group": "Mono"
+      }
+    },
+    "mono-note": {
+      "$type": "typography",
+      "$value": {
+        "fontFamily": "{font.family.mono}",
+        "fontSize": "11px",
+        "fontWeight": 400,
+        "lineHeight": "15px",
+        "letterSpacing": "0"
+      },
+      "$description": "Live counts under a page name in the rail, units on a meter.",
+      "$extensions": {
+        "studio.group": "Mono"
+      }
+    }
+  }
+}

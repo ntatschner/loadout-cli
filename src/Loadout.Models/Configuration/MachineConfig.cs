@@ -214,6 +214,17 @@ public sealed class MachineTeams
     public int? DashboardPort { get; set; }
 
     /// <summary>
+    /// Which page the daemon's address opens: classic, or studio for the
+    /// preview app. Null is classic.
+    /// </summary>
+    /// <remarks>
+    /// Per machine, beside the port, because it is about what this machine's
+    /// daemon serves. The other page is always one step away: Studio at
+    /// /studio/, classic at /classic.
+    /// </remarks>
+    public string? Dashboard { get; set; }
+
+    /// <summary>
     /// Where a run's call for help is sent: slack, discord, teams, telegram,
     /// generic, or empty for nowhere.
     /// </summary>

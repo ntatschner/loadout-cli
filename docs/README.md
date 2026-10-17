@@ -15,6 +15,7 @@ should see.
 - [Adding a project](guides/adding-a-project.md) — register a repository, protect it, and every setting its `project.yaml` can carry
 - [Launching a session](guides/launching.md) — the launch sheet, the task, the mode, and a dry run
 - [Using the dashboard](guides/dashboard.md) — start it, open it, find your way round, answer a gate, stop a run
+- [Using Studio](guides/studio.md) — open it signed in, start a session and type into it, answer a question, make it look how you read best
 - [Running a team](guides/teams.md) — choose a team, say what done means, watch it, read what it delivered
 - [Setting up accessibility](guides/accessibility.md) — choose a preset, turn it on, and what has and hasn't been verified
 
@@ -27,6 +28,7 @@ step, and every term explained the first time it appears.
 - [Installing Loadout](plain/installing.md) — starting from opening a terminal
 - [Your first launch](plain/first-launch.md) — from setting up to your first session
 - [Watching a team](plain/watching-a-team.md) — what a team is, and how to start, watch and stop one
+- [Studio](plain/studio.md) — the browser page where you start a session and type to it
 - [Accessibility](plain/accessibility.md) — telling Loadout how you read
 
 ## Reference

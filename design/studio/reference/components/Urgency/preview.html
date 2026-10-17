@@ -1,0 +1,33 @@
+<!-- @dsCard group="Signals" height=300 subtitle="The most urgent thing rises; the rest recede" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Urgency</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="rows" style="display: grid; gap: 6px; max-width: 620px"></div>
+<div class="row" style="margin-top: 14px"><button type="button" class="ls-halo small needs" id="q"><span class="ring" aria-hidden="true"></span>A question arrives</button><button type="button" class="ls-halo small danger" id="p"><span class="ring" aria-hidden="true"></span>A round fails</button><button type="button" class="ls-halo small" id="c"><span class="ring" aria-hidden="true"></span>All answered</button></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var items = [["Release 0.66.0", "running"], ["why is this postgres query so slow", "working"], ["add a retry to the upload step", "working"], ["Run the launcher in a browser", "shaping"]];
+  var wrap = document.getElementById("rows");
+  var rows = items.map(function (it) { var r = document.createElement("div"); r.style.cssText = "display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; background: var(--surface)"; var b = document.createElement("span"); b.textContent = it[0]; r.appendChild(b); r.appendChild(S.Signal(it[1])); wrap.appendChild(r); return r; });
+  function set(i, word, level) { rows[i].replaceChild(S.Signal(word), rows[i].lastChild); S.applyUrgency(rows, i, level); }
+  document.getElementById("q").addEventListener("click", function () { set(2, "waiting for you", "needs"); });
+  document.getElementById("p").addEventListener("click", function () { set(0, "last round failed", "problem"); });
+  document.getElementById("c").addEventListener("click", function () { rows.forEach(function (r, i) { r.replaceChild(S.Signal(items[i][1]), r.lastChild); }); S.applyUrgency(rows, -1); });
+})();
+</script>
+</body>
+</html>

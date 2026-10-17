@@ -1,0 +1,28 @@
+<!-- @dsCard group="Actions" height=200 subtitle="The block form of a command, for things done only in a terminal" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Command</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<p class="lab">Done in a terminal</p><div id="a"></div><div id="b" style="margin-top: 14px"></div>
+<p class="lab" style="margin-top: 16px">Inline, under an action</p><code class="ls-cmd">$ loadout config set dashboard-port 47611</code>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("a").appendChild(S.Command({ why: "Agreeing to a shared tool's test run can only be done at a terminal.", command: "$ loadout tools verify <draft> --agree" }));
+  document.getElementById("b").appendChild(S.Command({ why: "Studio never shows a secret back. To see whether the passphrase is set:", command: "$ loadout team attach show" }));
+})();
+</script>
+</body>
+</html>

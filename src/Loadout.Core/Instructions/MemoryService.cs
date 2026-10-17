@@ -134,6 +134,56 @@ public interface IMemoryService
         CancellationToken ct = default);
 
     /// <summary>
+    /// A topic exactly as it is stored, with a version a later replacement
+    /// has to name.
+    /// </summary>
+    Task<OperationResult<MemoryTopicText>> ReadTextAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        MemoryScope scope = MemoryScope.Project,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Replaces a topic's whole text, provided nothing has changed it since
+    /// the version given was read.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For somebody editing a topic as a page, prose and links and all, where
+    /// <see cref="WriteAsync"/> would rebuild it from its bullets. If another
+    /// session wrote it, or a sync brought a newer copy, in the meantime, this
+    /// writes nothing and answers with what is there now, so the two can be
+    /// compared and merged by hand rather than one silently replacing the
+    /// other.
+    /// </para>
+    /// <para>
+    /// The same refusals as any write: never a credential, and a description
+    /// that has changed has to be one a session can decide by. An unchanged
+    /// one is left alone, so fixing a typo in a topic does not mean rewriting
+    /// a line somebody chose long ago. It cannot rename a topic or make a new
+    /// one; those go through the commands.
+    /// </para>
+    /// </remarks>
+    /// <param name="workspaceRoot">Root of the workspace to write into.</param>
+    /// <param name="slug">Project the topic belongs to.</param>
+    /// <param name="name">The topic, which must exist.</param>
+    /// <param name="scope">Which store it is in.</param>
+    /// <param name="text">The whole new text, frontmatter included.</param>
+    /// <param name="version">The version it was edited from, from <see cref="ReadTextAsync"/>.</param>
+    /// <param name="dryRun">Make every check and write nothing.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<OperationResult<MemoryReplacement>> ReplaceTextAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        MemoryScope scope,
+        string text,
+        string version,
+        bool dryRun = false,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Rewrites the index from the topics actually present, which is also how a
     /// missing or drifted index gets repaired.
     /// </summary>
@@ -179,6 +229,20 @@ public interface IMemoryService
 }
 
 /// <inheritdoc />
+/// <summary>A topic as it is stored.</summary>
+/// <param name="Topic">What it says, as a listing reads it.</param>
+/// <param name="Text">Every byte of it, frontmatter included.</param>
+/// <param name="Version">A hash of those bytes, which a replacement has to name.</param>
+public sealed record MemoryTopicText(MemoryTopic Topic, string Text, string Version);
+
+/// <summary>What a replacement did.</summary>
+/// <param name="Topic">The topic as it now stands: the new text, or what was found instead.</param>
+/// <param name="Conflicted">
+/// True when the topic had changed since it was read, nothing was written,
+/// and <paramref name="Topic"/> is what changed it.
+/// </param>
+public sealed record MemoryReplacement(MemoryTopicText Topic, bool Conflicted);
+
 internal sealed partial class MemoryService : IMemoryService
 {
     /// <summary>
@@ -346,6 +410,13 @@ internal sealed partial class MemoryService : IMemoryService
             return OperationResult<MemoryTopic>.Fail($"Could not read '{path}': {ex.Message}");
         }
 
+        return OperationResult<MemoryTopic>.Ok(
+            Parse(text, path, new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero)));
+    }
+
+    /// <summary>A topic from its text, without reading it from anywhere.</summary>
+    internal static MemoryTopic Parse(string text, string path, DateTimeOffset written)
+    {
         var description = string.Empty;
         var kind = MemoryKind.Project;
 
@@ -389,7 +460,7 @@ internal sealed partial class MemoryService : IMemoryService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        return OperationResult<MemoryTopic>.Ok(new MemoryTopic(
+        return new MemoryTopic(
             Path.GetFileNameWithoutExtension(path),
             path,
             description,
@@ -397,7 +468,7 @@ internal sealed partial class MemoryService : IMemoryService
             facts,
             links,
             Encoding.UTF8.GetByteCount(text),
-            new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero)));
+            written);
     }
 
     /// <summary>
@@ -947,6 +1018,164 @@ internal sealed partial class MemoryService : IMemoryService
 
         return await RebuildIndexAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
     }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<MemoryTopicText>> ReadTextAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        MemoryScope scope = MemoryScope.Project,
+        CancellationToken ct = default)
+    {
+        if (PathOf(workspaceRoot, slug, name, scope) is not { } path)
+        {
+            return OperationResult<MemoryTopicText>.Fail(
+                $"There is no topic '{Slugify(name)}'.", ExitCode.InvalidArguments);
+        }
+
+        return await ReadTextAsync(path, scope, ct).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<OperationResult<MemoryReplacement>> ReplaceTextAsync(
+        string workspaceRoot,
+        string slug,
+        string name,
+        MemoryScope scope,
+        string text,
+        string version,
+        bool dryRun = false,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var safeName = Slugify(name);
+
+        if (PathOf(workspaceRoot, slug, name, scope) is not { } path)
+        {
+            return OperationResult<MemoryReplacement>.Fail(
+                $"There is no topic '{safeName}' to replace.", ExitCode.InvalidArguments);
+        }
+
+        var current = await ReadTextAsync(path, scope, ct).ConfigureAwait(false);
+
+        if (current.Failed)
+        {
+            return OperationResult<MemoryReplacement>.Fail(current.Error!, current.ExitCode);
+        }
+
+        if (!string.Equals(current.Value!.Version, version, StringComparison.Ordinal))
+        {
+            return OperationResult<MemoryReplacement>.Ok(new MemoryReplacement(current.Value, Conflicted: true));
+        }
+
+        // Written with the line endings the workspace keeps, whatever the
+        // browser sent.
+        var written = text.ReplaceLineEndings("\n");
+
+        if (!Frontmatter().Match(written).Success)
+        {
+            return OperationResult<MemoryReplacement>.Fail(
+                "A topic starts with its frontmatter, between two '---' lines, naming its description.",
+                ExitCode.InvalidArguments);
+        }
+
+        if (NameIn(written) is { } named && !string.Equals(Slugify(named), safeName, StringComparison.Ordinal))
+        {
+            return OperationResult<MemoryReplacement>.Fail(
+                $"This would rename '{safeName}' to '{named}', which an edit cannot do. "
+                + "Put the name back, and rename it with git mv and 'loadout memory reindex'.",
+                ExitCode.InvalidArguments);
+        }
+
+        var replacing = Parse(written, path, _time.GetUtcNow());
+
+        // A credential anywhere in the text, in a fact or not, and the
+        // description judged only when it is new.
+        var refused = ValidateWrite(safeName, replacing.Description, [written]);
+
+        if (refused.Failed
+            && (refused.ExitCode == ExitCode.PolicyViolation
+                || !string.Equals(replacing.Description, current.Value.Topic.Description, StringComparison.Ordinal)))
+        {
+            return OperationResult<MemoryReplacement>.Fail(refused.Error!, refused.ExitCode);
+        }
+
+        if (dryRun)
+        {
+            var bytes = Encoding.UTF8.GetBytes(written);
+
+            return OperationResult<MemoryReplacement>.Ok(new MemoryReplacement(
+                new MemoryTopicText(
+                    replacing with { Scope = scope },
+                    written,
+                    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant()),
+                Conflicted: false));
+        }
+
+        try
+        {
+            await File.WriteAllTextAsync(path, written, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<MemoryReplacement>.Fail($"Could not write '{path}': {ex.Message}");
+        }
+
+        var rebuild = await RebuildIndexAsync(workspaceRoot, slug, ct).ConfigureAwait(false);
+
+        if (rebuild.Failed)
+        {
+            return OperationResult<MemoryReplacement>.Fail(rebuild.Error!, rebuild.ExitCode);
+        }
+
+        var saved = await ReadTextAsync(path, scope, ct).ConfigureAwait(false);
+
+        return saved.Succeeded
+            ? OperationResult<MemoryReplacement>.Ok(new MemoryReplacement(saved.Value!, Conflicted: false))
+            : OperationResult<MemoryReplacement>.Fail(saved.Error!, saved.ExitCode);
+    }
+
+    /// <summary>The file a topic is kept in, or null where there is none.</summary>
+    private string? PathOf(string workspaceRoot, string slug, string name, MemoryScope scope) =>
+        DirectoryFor(workspaceRoot, slug, scope) is { } directory
+        && Slugify(name) is { Length: > 0 } safeName
+        && Path.Combine(directory, safeName + ".md") is var path
+        && File.Exists(path)
+            ? path
+            : null;
+
+    private static async Task<OperationResult<MemoryTopicText>> ReadTextAsync(string path, MemoryScope scope, CancellationToken ct)
+    {
+        byte[] bytes;
+
+        try
+        {
+            bytes = await File.ReadAllBytesAsync(path, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return OperationResult<MemoryTopicText>.Fail($"Could not read '{path}': {ex.Message}");
+        }
+
+        var text = Encoding.UTF8.GetString(bytes);
+        var topic = Parse(text, path, new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero)) with { Scope = scope };
+
+        return OperationResult<MemoryTopicText>.Ok(new MemoryTopicText(
+            topic,
+            text,
+            Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant()));
+    }
+
+    /// <summary>The name a topic's frontmatter gives it, or null where it gives none.</summary>
+    private static string? NameIn(string text) =>
+        Frontmatter().Match(text) is { Success: true } match
+            ? match.Groups["front"].Value.Split('\n')
+                .Select(line => line.Trim())
+                .Where(line => line.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
+                .Select(line => Unquote(line["name:".Length..].Trim()))
+                .FirstOrDefault()
+            : null;
 
     /// <inheritdoc />
     public async Task<OperationResult> RebuildIndexAsync(

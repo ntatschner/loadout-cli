@@ -1,0 +1,29 @@
+<!-- @dsCard group="Inputs" height=250 subtitle="Rings as radios; the command below follows the pick" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ModePicker</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="m" style="max-width: 760px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("m").appendChild(S.ModePicker({ label: "Mode", selected: 1,
+    options: [{ name: "advise", desc: "Answer the question. Don't change the repository." }, { name: "investigate", desc: "Find out what's happening. The fix is a separate step." },
+      { name: "implement", desc: "Make the change and verify it. The default." }, { name: "review", desc: "Judge the change as written. Report, don't rewrite." }],
+    command: function (m) { return "$ loadout starstats --task \"why is this postgres query so slow\" --mode " + m; } }));
+})();
+</script>
+</body>
+</html>

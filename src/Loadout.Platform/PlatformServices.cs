@@ -77,6 +77,14 @@ public static class PlatformServices
         "Only Windows, Linux and macOS are supported.";
 
     /// <summary>
+    /// What hosts a session's terminal here, as doctor and Studio name it.
+    /// Named for what it actually uses: forkpty was abandoned because forking
+    /// a multi-threaded runtime leaves one live thread holding every lock the
+    /// others held.
+    /// </summary>
+    public static string PseudoTerminalName => OperatingSystem.IsWindows() ? "ConPTY" : "posix_spawn";
+
+    /// <summary>
     /// Creates a pseudo-terminal for this platform.
     /// <para>
     /// ConPTY on Windows, posix_spawn into a pty on Linux and macOS. The two
@@ -95,6 +103,22 @@ public static class PlatformServices
         if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
         {
             return new UnixPseudoTerminal();
+        }
+
+        throw new PlatformNotSupportedException(UnsupportedPlatformMessage);
+    }
+
+    /// <summary>What measures a process and everything it started, on this platform.</summary>
+    public static IProcessTree CreateProcessTree(IProcessLauncher launcher)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return new WindowsProcessTree();
+        }
+
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            return new Unix.UnixProcessTree(launcher);
         }
 
         throw new PlatformNotSupportedException(UnsupportedPlatformMessage);
@@ -344,12 +368,7 @@ public static class PlatformServices
                 PlatformCapability.NativeSecretStore,
                 secretAvailability.Error ?? "The native secret store is unavailable."));
 
-        // Named for what it actually uses. forkpty was abandoned because
-        // forking a multi-threaded runtime leaves one live thread holding every
-        // lock the others held.
-        statuses.Add(CapabilityStatus.Supported(
-            PlatformCapability.PseudoTerminal,
-            host.IsUnix ? "posix_spawn" : "ConPTY"));
+        statuses.Add(CapabilityStatus.Supported(PlatformCapability.PseudoTerminal, PseudoTerminalName));
 
         statuses.Add(OperatingSystem.IsMacOS()
             ? CapabilityStatus.Unsupported(

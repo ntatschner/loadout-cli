@@ -1,0 +1,37 @@
+<!-- @dsCard group="Actions" height=330 subtitle="A word beside a ring of light, with the command it runs" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HaloButton</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<p class="lab">Answer a run's question</p>
+<span class="asker">team run · release-crew · round 4 · waiting 6 min</span>
+<p class="ask">Push the tag v0.66.0 to origin?</p>
+<div class="ls-answers" id="gate"></div>
+<p class="out" role="status" id="out"></p>
+<p class="lab" style="margin-top: 18px">Kinds and sizes</p>
+<div class="row" id="kinds"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var gate = document.getElementById("gate"), out = document.getElementById("out"), kinds = document.getElementById("kinds");
+  gate.appendChild(S.HaloButton({ label: "Approve", kind: "needs", solid: true, size: "big", glyph: "\u2713", cmd: "$ loadout team gate --answer Approve", onPress: function () { out.textContent = "\u2713 You approved. The run carries on from here."; } }));
+  gate.appendChild(S.HaloButton({ label: "Refuse", size: "big", glyph: "\u2715", cmd: "$ loadout team gate --answer Refuse", onPress: function () { out.textContent = "\u2713 You refused. The run is told, and goes on without it."; } }));
+  gate.appendChild(S.HaloButton({ label: "Think again", glyph: "\u21bb", cmd: "$ loadout team gate --think-again", onPress: function () { out.textContent = "\u2713 None was chosen. The lead decides, or asks a better question."; } }));
+  [["Deploy", "", ""], ["Leave ambient", "", "small"], ["Overwrite it", "needs", "small"], ["Acknowledge", "danger", "small"]].forEach(function (k) { kinds.appendChild(S.HaloButton({ label: k[0], kind: k[1], size: k[2] })); });
+  kinds.appendChild(S.HaloButton({ label: "Pause", size: "small", disabledReason: "only watching: start Studio without --watch-only to act" }));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!-- @dsCard group="Signals" height=330 subtitle="Every state as a word, a glyph, a colour and a motion" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Signal</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="fams" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px 28px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var F = { moving: "Moving", needs: "Needs", bad: "Bad", good: "Good", rest: "Rest" }, g = {};
+  Object.keys(F).forEach(function (f) { var c = document.createElement("div"); c.innerHTML = '<p class="lab">' + F[f] + '</p>'; c.style.display = "grid"; c.style.gap = "8px"; c.style.alignContent = "start"; g[f] = c; document.getElementById("fams").appendChild(c); });
+  Object.keys(S.SIGNAL_STATES).forEach(function (w) { var s = S.signalOf(w); g[s.family].appendChild(S.Signal(w)); });
+})();
+</script>
+</body>
+</html>

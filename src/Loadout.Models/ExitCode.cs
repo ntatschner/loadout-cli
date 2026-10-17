@@ -46,6 +46,16 @@ public enum ExitCode
     TerminalRequired = 11,
 
     /// <summary>
+    /// What was to be changed has changed since it was read, so nothing was
+    /// written. Read it again and redo the change on what is there now.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="GitConflict"/>, which is two histories that will not
+    /// merge. This is one file somebody else wrote first.
+    /// </remarks>
+    ChangedSinceRead = 12,
+
+    /// <summary>
     /// Stopped at the keyboard. 128 plus SIGINT, which is what a shell reports
     /// for an interrupted program and what scripts already test for — a value
     /// of our own here would be a second convention for something that has one.

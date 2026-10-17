@@ -149,7 +149,25 @@ A **Plain view** button is early in the tab order on every page, and the change
 is announced in the page's live region. [Using the dashboard](dashboard.md)
 covers the rest.
 
-### 8. Turn on speech, only if you want it
+### 8. Studio, if you use it
+
+Studio, the preview front end at `/studio/`, doesn't read your accessibility
+profile yet. It has its own appearance settings instead, kept in Loadout's
+config so every browser shows it the same way:
+
+```sh
+loadout config set studio-theme hc-dark
+loadout config set studio-motion reduced
+loadout config set studio-density roomy
+```
+
+With no theme set, it follows your system's colour scheme and its contrast
+setting. Your system's reduced motion always wins over `studio-motion`. Every
+state on it is a word and a glyph as well as a colour, and every action can be
+reached from the keyboard, through the palette on **Ctrl K**.
+[Using Studio](studio.md) covers the rest.
+
+### 9. Turn on speech, only if you want it
 
 Speech is off by default, and **stays off even under the `screen-reader`
 preset**. To turn it on:
@@ -186,6 +204,10 @@ can't check it.
 | Dashboard speaking: the order in which it refuses | Tested against a stub, four mutations each failing its own test |
 | Speech through the Windows system voice | The route answers |
 | Speech through NVDA, or through `say` on macOS or speech-dispatcher on Linux | **Never heard** |
+| Studio at 320 pixels wide and at 200% zoom: Home, Sessions, Settings and Memory | No sideways scrolling |
+| Studio: a question answered from the keyboard alone, through the palette | Done in a browser |
+| Studio: its components' keyboard behaviour (tabs, radios, pickers, dialogs, the palette, the rail) | Tested, in jsdom |
+| Studio: axe-core, and text contrast in its four themes | **Not run** |
 | Any screen reader, used with any of this | **Not tested** |
 | A keyboard-only pass by a person | **Not recorded** |
 

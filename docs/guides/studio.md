@@ -1,0 +1,186 @@
+# Using Studio
+
+**At the end:** Studio open in your browser, a session started and typed into
+from it, a question from a team run answered, and Studio set up to look the way
+you read best.
+
+Studio is a second front end for Loadout, next to the classic dashboard. The
+classic page is for watching runs. Studio is where you start sessions, work in
+them, and see everything in flight at once. It's a preview: the classic
+dashboard stays the default, and both are served by the same daemon, at the
+same address, behind the same sign-in.
+
+## Before you start
+
+- Loadout installed and a project registered. See [your first run](first-run.md).
+- The daemon running, since it's what hosts Studio's sessions:
+  `loadout daemon`. A dashboard started with `loadout dashboard` serves Studio's
+  pages too, but can't host a session.
+- A browser on the same machine. Studio only answers this machine.
+
+## Steps
+
+### 1. Open Studio signed in
+
+```sh
+loadout dashboard --open --studio
+```
+
+You should see Studio's Home open in your browser. The command signs the
+browser in with a cookie that lasts 90 days, so after this the address alone
+works: `http://127.0.0.1:47611/studio/`, or whatever port the daemon is on.
+
+A browser that isn't signed in sees one page, telling it to run that command.
+There's no box to paste a token into, on purpose: the sign-in only ever comes
+from a terminal on this machine.
+
+To have the daemon's address open Studio rather than the classic page:
+
+```sh
+loadout config set dashboard studio
+```
+
+The classic page is still at `/classic` either way.
+
+### 2. Find your way round
+
+Down the left is the rail: Home, Sessions, Ideas, Teams, Memory, Context,
+Spend, Projects and Settings, each with a live count. Hover or tab onto it and
+it widens over the page without pushing it. Below 600px wide it becomes a
+**Pages** tab.
+
+**Ctrl K** (or **Cmd K**) opens the palette from anywhere. It has three groups:
+*Go to* a page, find what's *In flight*, and *Do* something. Every action shows
+the exact `loadout` command it runs, so you can always do the same thing from a
+terminal instead.
+
+### 3. Read Home
+
+Home shows everything in flight: team runs, the sessions the daemon is hosting,
+ideas being shaped and the tasks you're doing. It has two views, and **Lens**
+and **Map** switch between them.
+
+- **Lens** puts one piece of work in the halo, with *Needs you* beside it. A
+  failure that wants acknowledging comes first, then the oldest question. The
+  most urgent row lifts and the rest recede, and every state is a word and a
+  glyph as well as a colour.
+- **Map** draws every piece of work as a line through its stages, with *Needs
+  you* as the interchange each one passes through. Pick a line and it's drawn
+  straight below, with its checks, its last events and what you can do.
+
+**Edit layout** lets you rearrange either view in place. Drag a panel by its
+name or use its arrows, hide what you don't use, and **Add back** what you hid.
+The layout is kept in Loadout's config (`studio-layout-lens` and
+`studio-layout-map`), so it follows you to every browser.
+
+### 4. Answer a question
+
+When a team run stops to ask you something, it appears under *Needs you* with
+its answers. A notification appears top right as well, and you can answer from
+there. Each answer shows the command it runs:
+
+```sh
+loadout team gate <run> --gate <gate> --answer Approve --by dashboard
+```
+
+From the keyboard: **Ctrl K**, type a word from the answer, **Enter**.
+
+### 5. Start a session
+
+Press **N**, or **New session…** on the Sessions page. The sheet asks
+everything a launch asks:
+
+- the project
+- what you're about to do: *No task*, then the tasks the project has recorded
+  as doing, open or blocked, then *Other…* for a one-off
+- the mode
+- the agent
+- the profile and worktree, where there's more than one
+- the switches `--offline`, `--no-sync` and `--handoff`
+
+Under them, *This session would load* lists the specialists the session would
+get and why, with their cost against your instruction budget (12,000 tokens
+unless you've changed it). It's worked out by the same resolver as the
+terminal's launch sheet and `--dry-run`. The command at the bottom is the
+launch, and **Launch** runs it. **Quick session** starts one with no task and
+the defaults.
+
+You should see the session open with a live terminal. Type into it as you would
+any terminal.
+
+### 6. Leave and come back
+
+The session belongs to the daemon, not the tab. Close the tab, reload, or open
+the same session in a second window, and it's still there. Only one window
+types at a time; another shows **Type here instead**.
+
+Two things do end it: **End the session**, which asks first, and stopping or
+restarting the daemon, which ends every session it hosts. `loadout daemon stop`
+warns you when there are any.
+
+To carry a conversation on in a terminal instead:
+
+```sh
+loadout resume --last
+```
+
+### 7. Make it yours
+
+**Settings → Appearance** has four themes, four accents, three densities and
+three levels of motion. The themes are Dark, Light, High contrast dark and High
+contrast light; with no theme set, Studio follows your system's colour scheme
+and contrast. If your system asks for reduced motion, that always wins, whatever
+you choose here.
+
+They're kept in Loadout's config, not the browser:
+
+```sh
+loadout config set studio-theme hc-dark
+loadout config set studio-accent violet
+loadout config set studio-density roomy
+loadout config set studio-motion reduced
+loadout config set studio-halo gyroscope
+loadout config set studio-idle-after 20
+```
+
+The two things kept in the browser are the single-letter shortcuts (**A** for
+Ambient, **N** for a new session) and whether Ambient fills the screen. They're
+about the keyboard and screen in front of you, not about how you read.
+
+### 8. Ambient
+
+On Home, **A** or **Ambient** turns Studio into something for a spare screen:
+the key numbers, the halo on whatever most needs you, and everything else
+circling it. **Escape** or **Leave ambient** leaves it.
+
+## Watching only
+
+```sh
+loadout dashboard --watch-only
+```
+
+Studio still shows everything, but changes nothing. A banner says so, and every
+action shows the command to type in a terminal instead. Launching, typing into a
+session, ending one and changing a setting are all refused by the server as
+well as the page.
+
+## What it won't do
+
+- **Read a secret back, or make an agreement for you.** The team attach
+  passphrase and a tool's test agreement are set in a terminal. Settings shows
+  the commands, never a button.
+- **Reach another machine.** Studio answers loopback only, and checks that every
+  change comes from its own page.
+- **Write terminal output to the daemon's log.** What an agent prints stays in
+  the session.
+
+## If something goes wrong
+
+- **"This browser isn't signed in to Studio"** — run `loadout dashboard --open
+  --studio` again. Somebody may have signed every browser out
+  (`loadout dashboard sign-out`, or **Sign out every browser** in Settings).
+- **"Only the daemon hosts sessions"** — you opened Studio from
+  `loadout dashboard`. Start the daemon with `loadout daemon` and open its
+  address instead.
+- **A session has gone** — the daemon restarted. Sessions don't survive that;
+  `loadout resume --last` carries the conversation on in a terminal.

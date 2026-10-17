@@ -1,0 +1,30 @@
+<!-- @dsCard group="Overlays" height=420 subtitle="A light tether from the control, then the list unfolds from its end" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Picker</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div class="row" id="p" style="align-items: flex-start"></div><div style="margin-top: 14px"><code class="ls-cmd" id="cmd"></code></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var proj = "starstats", spec = "none";
+  function upd() { document.getElementById("cmd").textContent = "$ loadout " + proj + " --task \"why is this postgres query so slow\"" + (spec === "none" ? "" : " --specialist " + spec); }
+  document.getElementById("p").appendChild(S.Picker({ label: "Project", options: [{ name: "starstats", sub: "~/code/starstats \u00b7 2 running" }, { name: "loadout-cli", sub: "~/code/loadout-cli \u00b7 1 waiting on you" }, { name: "workspace", sub: "~/code \u00b7 nothing running" }], onPick: function (o) { proj = o.name; upd(); } }));
+  document.getElementById("p").appendChild(S.Picker({ label: "Specialist", options: [{ name: "none", sub: "the agent as it is" }, { name: "database.postgresql", sub: "needs function.database" }, { name: "function.performance", sub: "profiling and hot paths" }, { name: "function.debugging", sub: "reproduce, then fix" }], onPick: function (o) { spec = o.name; upd(); } }));
+  upd();
+})();
+</script>
+</body>
+</html>

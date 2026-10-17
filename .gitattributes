@@ -13,4 +13,5 @@
 *.ps1 text eol=crlf
 
 *.png binary
+*.woff2 binary
 *.pkg binary

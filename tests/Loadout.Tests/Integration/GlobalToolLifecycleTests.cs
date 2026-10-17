@@ -424,6 +424,16 @@ public sealed class GlobalToolLifecycleTests : IDisposable
             MemoryScope scope = MemoryScope.Project, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
+        public Task<OperationResult<MemoryTopicText>> ReadTextAsync(
+            string workspaceRoot, string slug, string name,
+            MemoryScope scope = MemoryScope.Project, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<OperationResult<MemoryReplacement>> ReplaceTextAsync(
+            string workspaceRoot, string slug, string name, MemoryScope scope, string text, string version,
+            bool dryRun = false, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
         public Task<OperationResult> DeleteAsync(
             string workspaceRoot, string slug, string name,
             MemoryScope scope = MemoryScope.Project, CancellationToken ct = default) =>

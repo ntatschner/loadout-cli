@@ -144,7 +144,11 @@ public sealed class TerminalLauncher : ILauncherTui
         _editors = editors;
         _sessions = sessions;
         _manager = manager;
+        _sheet = new LaunchSheet(workspace, compiler, instructions, git, tasks);
     }
+
+    /// <summary>What the launch sheet offers and would load, shared with Studio's.</summary>
+    private readonly LaunchSheet _sheet;
 
     /// <inheritdoc />
     public async Task<int> RunAsync(CancellationToken ct = default)
@@ -1433,144 +1437,21 @@ public sealed class TerminalLauncher : ILauncherTui
     }
 
     /// <summary>
-    /// The profiles the agent can use and the working trees the repository
-    /// has, for the sheet to offer.
+    /// The profiles the agent can use, the working trees the repository has,
+    /// and the tasks it has on record, for the sheet to offer.
     /// </summary>
-    private async Task<LaunchChoices> ChoicesAsync(
-        ProjectResolution project,
-        string agentName,
-        CancellationToken ct)
-    {
-        var profiles = LaunchChoices.None.Profiles;
-        var worktrees = LaunchChoices.None.Worktrees;
+    private Task<LaunchChoices> ChoicesAsync(ProjectResolution project, string agentName, CancellationToken ct) =>
+        _sheet.ChoicesAsync(project, agentName, ct);
 
-        var manifest = await _workspace.ReadProjectAsync(project.Entry.Slug, ct).ConfigureAwait(false);
+    /// <summary>What a launch as described would load, from the resolver the launch reads.</summary>
+    private Task<EffectiveInstructions?> PreviewAsync(LaunchPreviewRequest request, CancellationToken ct) =>
+        _sheet.PreviewAsync(request, ct);
 
-        if (manifest.Succeeded)
-        {
-            // The default profile is the absence of one, which is how the
-            // launch spells it; the rest go by name.
-            profiles = _compiler.ListProfiles(manifest.Value!, agentName)
-                .Select((name, index) => new LaunchChoice(
-                    manifest.Value!.Profiles.TryGetValue(name, out var profile)
-                        && !string.IsNullOrWhiteSpace(profile.Description)
-                        ? $"{name}  ({profile.Description})"
-                        : name,
-                    index == 0 ? null : name))
-                .ToList();
-        }
-
-        if (project.LocalPath is { Length: > 0 } path)
-        {
-            var listed = await _git.ListWorktreesAsync(path, ct).ConfigureAwait(false);
-
-            if (listed.Succeeded && listed.Value!.Count > 0)
-            {
-                // Named the way --worktree expects: by branch, or by directory
-                // where there is no branch. The primary is the main working
-                // tree, which a launch spells as no worktree at all.
-                worktrees = listed.Value
-                    .OrderByDescending(w => w.IsPrimary)
-                    .Select(w => new LaunchChoice(
-                        w.IsPrimary
-                            ? $"{w.Branch ?? Path.GetFileName(w.Path)}  (main working tree)"
-                            : w.Branch ?? Path.GetFileName(w.Path),
-                        w.IsPrimary ? null : w.Branch ?? Path.GetFileName(w.Path)))
-                    .ToList();
-            }
-        }
-
-        // What the project says it is working on, in the order somebody would
-        // pick from: being worked on first, then not started, then waiting.
-        // Finished and abandoned work is left out — it describes what a session
-        // is about to do, and those two no longer describe anything.
-        // Every one, not the first eight: the sheet's list scrolls, and a task
-        // left off it is one that can only be reached by typing its title.
-        var declared = new List<DeclaredTask>();
-        var tasks = await _tasks.ListAsync(project.Entry.Slug, ct).ConfigureAwait(false);
-
-        if (tasks.Succeeded)
-        {
-            declared = tasks.Value!
-                .Where(item => item.Kind == TaskKind.Task)
-                .Where(item => item.State is TaskState.Doing or TaskState.Open or TaskState.Blocked)
-                .OrderBy(item => item.State switch
-                {
-                    TaskState.Doing => 0,
-                    TaskState.Open => 1,
-                    _ => 2,
-                })
-                .ThenByDescending(item => item.DeclaredUtc)
-                .Where(item => !string.IsNullOrWhiteSpace(item.Title))
-                .Select(item => new DeclaredTask(item.Id, item.Title, item.State))
-                .ToList();
-        }
-
-        return new LaunchChoices(profiles, worktrees, declared);
-    }
-
-    /// <summary>
-    /// What a launch as described would load: the same question the launch
-    /// asks, put to the same resolver.
-    /// </summary>
-    private async Task<EffectiveInstructions?> PreviewAsync(
-        LaunchPreviewRequest request,
-        CancellationToken ct)
-    {
-        var manifest = await _workspace
-            .ReadProjectAsync(request.Project.Entry.Slug, ct)
-            .ConfigureAwait(false);
-
-        var tasks = await _tasks.ListAsync(request.Project.Entry.Slug, ct).ConfigureAwait(false);
-
-        var (task, mode, named) = PreviewedSession(
-            request, tasks.Succeeded && ProjectOnboardingTask.Pending(tasks.Value!));
-
-        var resolved = await _instructions.ResolveAsync(
-            new InstructionRequest(
-                manifest.Succeeded ? manifest.Value : null,
-                RepositoryPath: request.Project.LocalPath,
-                WorkspacePath: _workspace.LocalPath,
-                AgentName: request.Agent,
-                ProfileName: request.Profile,
-                Task: task,
-                Explicit: named,
-                Mode: mode),
-            ct).ConfigureAwait(false);
-
-        if (resolved.Failed)
-        {
-            throw new InvalidOperationException(resolved.Error);
-        }
-
-        return resolved.Value;
-    }
-
-    /// <summary>
-    /// The task, mode and named specialists the preview resolves for, which
-    /// are the ones the launch will use.
-    /// </summary>
-    /// <remarks>
-    /// The launch turns a session with no task of its own into the project's
-    /// onboarding when one is pending, so the preview has to as well, or the
-    /// sheet would describe a session that is not the one about to start.
-    /// </remarks>
+    /// <summary>The task, mode and named specialists the preview resolves for.</summary>
     internal static (string? Task, string? Mode, IReadOnlyList<string>? Named) PreviewedSession(
         LaunchPreviewRequest request,
-        bool onboardingPending)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (ProjectOnboardingTask.TurnFor(onboardingPending, request.Task, attended: true)
-            != OnboardingTurn.Onboard)
-        {
-            return (request.Task, request.Mode, null);
-        }
-
-        var (task, mode, named) = ProjectOnboardingTask.Onboarding(request.Mode, null);
-
-        return (task, mode, named);
-    }
+        bool onboardingPending) =>
+        LaunchSheet.PreviewedSession(request, onboardingPending);
 
     private async Task<int?> OpenShellAsync(string workingDirectory, CancellationToken ct)
     {

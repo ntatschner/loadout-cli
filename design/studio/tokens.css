@@ -1,0 +1,264 @@
+/* Loadout Studio — generated from tokens.json */
+:root, [data-theme="dark"] {
+  --ground: #03070c;
+  --surface: #06101a;
+  --surface-2: #0a1824;
+  --scrim: #03070cb3;
+  --ink-strong: #ffffff;
+  --ink: #d9f3ff;
+  --ink-soft: #cfe6f2;
+  --muted: #9fc0d0;
+  --subtle: #8fb3c4;
+  --rule: #1b4352;
+  --control-edge: #4d7f93;
+  --focus: #ffffff;
+  --moving: #80c8ff;
+  --needs: #ffb547;
+  --needs-text: #ffd79a;
+  --needs-wash: #2a1d0a;
+  --bad: #ff8a8a;
+  --bad-text: #ffc2c2;
+  --bad-wash: #2a0e10;
+  --good: #7fe0b8;
+  --rest: #b4c4cf;
+  --on-signal: #03070c;
+  --gauge: #b9a4ff;
+  --shaping: #c9b3ff;
+  --line-1: #ff7a7a;
+  --line-2: #4fc3ff;
+  --line-3: #ffd166;
+  --line-4: #b99bff;
+  --line-5: #5ee0a0;
+  --line-6: #ff8fd1;
+  --line-7: #c8d2da;
+  --line-8: #ffa94d;
+  --on-line: #03070c;
+  --accent-cyan: #6fe3ff;
+  --accent-cyan-text: #6fe3ff;
+  --on-accent-cyan: #03070c;
+  --accent-ice: #e6f4ff;
+  --accent-ice-text: #e6f4ff;
+  --on-accent-ice: #03070c;
+  --accent-magenta: #ff8fd1;
+  --accent-magenta-text: #ff9fd8;
+  --on-accent-magenta: #1c0614;
+  --accent-violet: #c3a6ff;
+  --accent-violet-text: #cdb5ff;
+  --on-accent-violet: #120a24;
+  --accent: var(--accent-cyan);
+  --accent-text: var(--accent-cyan-text);
+  --on-accent: var(--on-accent-cyan);
+  --shadow-float: 0 16px 36px -18px #000000cc;
+}
+[data-theme="light"] {
+  --shadow-float: 0 14px 30px -14px #0f22305c;
+  --ground: #f3f7fa;
+  --surface: #ffffff;
+  --surface-2: #e8f0f5;
+  --scrim: #0f22304d;
+  --ink-strong: #04101a;
+  --ink: #0f2230;
+  --ink-soft: #1d3a4c;
+  --muted: #3a5566;
+  --subtle: #46606f;
+  --rule: #b3c7d3;
+  --control-edge: #6b8798;
+  --focus: #04101a;
+  --moving: #0b5cad;
+  --needs: #8a4a00;
+  --needs-text: #7a4100;
+  --needs-wash: #fff1dc;
+  --bad: #b3261e;
+  --bad-text: #9c1f18;
+  --bad-wash: #fde8e6;
+  --good: #1b6b4a;
+  --rest: #4f5f6b;
+  --on-signal: #ffffff;
+  --gauge: #5b3fb0;
+  --shaping: #5f43b2;
+  --line-1: #b42b2b;
+  --line-2: #0a6aa1;
+  --line-3: #7a5800;
+  --line-4: #6243c4;
+  --line-5: #0f6e44;
+  --line-6: #a6246f;
+  --line-7: #55626c;
+  --line-8: #9a4b06;
+  --on-line: #ffffff;
+  --accent-cyan: #007a99;
+  --accent-cyan-text: #006580;
+  --on-accent-cyan: #ffffff;
+  --accent-ice: #2c4252;
+  --accent-ice-text: #2c4252;
+  --on-accent-ice: #ffffff;
+  --accent-magenta: #a8237a;
+  --accent-magenta-text: #951f6c;
+  --on-accent-magenta: #ffffff;
+  --accent-violet: #6a3fd0;
+  --accent-violet-text: #5c33bd;
+  --on-accent-violet: #ffffff;
+  --accent: var(--accent-cyan);
+  --accent-text: var(--accent-cyan-text);
+  --on-accent: var(--on-accent-cyan);
+}
+[data-theme="hc-dark"] {
+  --shadow-float: none;
+  --ground: #000000;
+  --surface: #000000;
+  --surface-2: #0d0d0d;
+  --scrim: #000000cc;
+  --ink-strong: #ffffff;
+  --ink: #ffffff;
+  --ink-soft: #f2f2f2;
+  --muted: #e0e0e0;
+  --subtle: #d4d4d4;
+  --rule: #9a9a9a;
+  --control-edge: #ffffff;
+  --focus: #ffff00;
+  --moving: #a6d4ff;
+  --needs: #ffd27a;
+  --needs-text: #ffe2a8;
+  --needs-wash: #000000;
+  --bad: #ffb0a8;
+  --bad-text: #ffcdc8;
+  --bad-wash: #000000;
+  --good: #9ff0cc;
+  --rest: #e0e6ea;
+  --on-signal: #000000;
+  --gauge: #d2c4ff;
+  --shaping: #ddd0ff;
+  --line-1: #ff9c9c;
+  --line-2: #7fd4ff;
+  --line-3: #ffdf8a;
+  --line-4: #cdb6ff;
+  --line-5: #8ff0c0;
+  --line-6: #ffb0dd;
+  --line-7: #e0e6ea;
+  --line-8: #ffc07a;
+  --on-line: #000000;
+  --accent-cyan: #7ff0ff;
+  --accent-cyan-text: #9ff4ff;
+  --on-accent-cyan: #000000;
+  --accent-ice: #ffffff;
+  --accent-ice-text: #ffffff;
+  --on-accent-ice: #000000;
+  --accent-magenta: #ffb3e1;
+  --accent-magenta-text: #ffc2e8;
+  --on-accent-magenta: #000000;
+  --accent-violet: #d9c7ff;
+  --accent-violet-text: #e2d4ff;
+  --on-accent-violet: #000000;
+  --accent: var(--accent-cyan);
+  --accent-text: var(--accent-cyan-text);
+  --on-accent: var(--on-accent-cyan);
+}
+[data-theme="hc-light"] {
+  --shadow-float: none;
+  --ground: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f0f0f0;
+  --scrim: #000000a6;
+  --ink-strong: #000000;
+  --ink: #000000;
+  --ink-soft: #141414;
+  --muted: #262626;
+  --subtle: #333333;
+  --rule: #5c5c5c;
+  --control-edge: #000000;
+  --focus: #0000cc;
+  --moving: #0a3d91;
+  --needs: #6b3a00;
+  --needs-text: #5c3200;
+  --needs-wash: #ffffff;
+  --bad: #8a0f1a;
+  --bad-text: #7a0d17;
+  --bad-wash: #ffffff;
+  --good: #0b4d2e;
+  --rest: #2f3a42;
+  --on-signal: #ffffff;
+  --gauge: #3d2380;
+  --shaping: #3f2a8c;
+  --line-1: #8f1a1a;
+  --line-2: #064f7a;
+  --line-3: #5c4200;
+  --line-4: #45289a;
+  --line-5: #0b5434;
+  --line-6: #7d1a55;
+  --line-7: #3a454d;
+  --line-8: #723604;
+  --on-line: #ffffff;
+  --accent-cyan: #00566b;
+  --accent-cyan-text: #00495c;
+  --on-accent-cyan: #ffffff;
+  --accent-ice: #1a2a36;
+  --accent-ice-text: #1a2a36;
+  --on-accent-ice: #ffffff;
+  --accent-magenta: #7a1458;
+  --accent-magenta-text: #6b114d;
+  --on-accent-magenta: #ffffff;
+  --accent-violet: #4a239e;
+  --accent-violet-text: #40208a;
+  --on-accent-violet: #ffffff;
+  --accent: var(--accent-cyan);
+  --accent-text: var(--accent-cyan-text);
+  --on-accent: var(--on-accent-cyan);
+}
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --rail-width: 84px;
+  --rail-width-open: 260px;
+  --control-sm: 36px;
+  --control: 44px;
+  --control-lg: 60px;
+  --radius-none: 0;
+  --radius-chip: 5px;
+  --radius-pill: 999px;
+  --radius-round: 50%;
+  --density-compact: 0.8;
+  --density-comfortable: 1;
+  --density-roomy: 1.25;
+  --glow-sm: 10px;
+  --glow-md: 14px;
+  --glow-lg: 22px;
+  --glow-strength: 55%;
+  --tint-hover: 6%;
+  --tint-picked: 14%;
+  --tint-line: 35%;
+  --dur-instant: 180ms;
+  --dur-quick: 250ms;
+  --dur-base: 350ms;
+  --dur-slow: 500ms;
+  --dur-travel: 900ms;
+  --dur-breathe: 2400ms;
+  --dur-toast-fold: 6000ms;
+  --ease-out: cubic-bezier(.22,1,.36,1);
+  --ease-travel: cubic-bezier(.65,0,.35,1);
+  --recede: 0.72;
+  --font-sans: "Saira", system-ui, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
+}
+.display-xl { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 40px; line-height: 44px; font-weight: 200; }
+.display { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 30px; line-height: 34px; font-weight: 200; }
+.title { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 21px; line-height: 26px; font-weight: 300; }
+.ask { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 19px; line-height: 25px; font-weight: 400; }
+.entry { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 20px; line-height: 28px; font-weight: 300; }
+.body { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 15px; line-height: 22px; font-weight: 400; }
+.body-sm { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 13.5px; line-height: 20px; font-weight: 400; }
+.small { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 12.5px; line-height: 18px; font-weight: 400; }
+.label-zone { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: .24em; }
+.label-button { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 13.5px; line-height: 18px; font-weight: 500; letter-spacing: .22em; }
+.label-button-sm { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 11.5px; line-height: 16px; font-weight: 500; letter-spacing: .22em; }
+.label-tab { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .2em; }
+.label-nav { font-family: "Saira", system-ui, "Segoe UI", sans-serif; font-size: 12.5px; line-height: 18px; font-weight: 500; letter-spacing: .24em; }
+.cmd { font-family: "JetBrains Mono", ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 11.5px; line-height: 16px; font-weight: 400; letter-spacing: 0; }
+.mono-meta { font-family: "JetBrains Mono", ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; }
+.mono-note { font-family: "JetBrains Mono", ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 11px; line-height: 15px; font-weight: 400; letter-spacing: 0; }
+@font-face { font-family: "Saira"; src: url("fonts/saira-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: swap; }

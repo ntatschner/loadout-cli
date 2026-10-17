@@ -919,6 +919,8 @@ public static class Program
             memory.AddCommand<MemoryFindCommand>("find");
             memory.AddCommand<MemoryReviewCommand>("review");
             memory.AddCommand<MemoryWriteCommand>("write");
+            memory.AddCommand<MemoryShowCommand>("show");
+            memory.AddCommand<MemoryReplaceCommand>("replace");
             memory.AddCommand<MemoryAuditCommand>("audit");
             memory.AddCommand<MemoryReindexCommand>("reindex");
             memory.AddCommand<MemoryImportCommand>("import");

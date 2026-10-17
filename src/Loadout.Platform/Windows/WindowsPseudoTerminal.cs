@@ -44,6 +44,9 @@ public sealed class WindowsPseudoTerminal : IPseudoTerminal
     private Task? _closing;
 
     private FileStream? _toChild;
+
+    /// <inheritdoc />
+    public int ProcessId { get; private set; }
     private FileStream? _fromChild;
 
     private bool _disposed;
@@ -169,6 +172,7 @@ public sealed class WindowsPseudoTerminal : IPseudoTerminal
             }
 
             _process = information.Process;
+            ProcessId = information.ProcessId;
             _thread = information.Thread;
         }
         finally

@@ -53,6 +53,7 @@
 | `loadout memory write --scope user|machine` | Record a fact true of your work, or of this computer only |
 | `loadout memory compress <project>` | Move durable facts out of always-loaded instructions into memory. A heading whose name is already a topic merges into it, keeping that topic's description, kind and everything it held, and a fact it already holds is not written twice. `--apply` backs up the file and the topics first |
 | `loadout memory delete <topic> [project]` | Delete a topic after backing it up. Topics that link to it are named and left as they are; `--dry-run` shows both |
+| `loadout memory replace <topic> --file <path> --expect <version>` | Replace a topic's whole text, as Studio's memory page saves it. `--expect` takes the version `loadout memory show` gave you, and it refuses with exit code 12 if the topic changed since |
 | `loadout sessions` | List recent agent sessions across every agent, newest first |
 | `loadout launches [project]` | What this machine launched, and what each launch was given |
 | `loadout resume [session]` | Reopen a previous session, with a picker when none is named |

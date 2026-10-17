@@ -120,9 +120,25 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         Loadout.Core.Tools.IToolNominationPass nominations,
         Loadout.Core.Ideas.IIdeaService ideas,
         Loadout.Core.Ideas.IIdeaDumps dumps,
-        TeamBin bin)
+        TeamBin bin,
+        IChildLifetime lifetime,
+        Loadout.Core.Instructions.IMemoryService memory,
+        Loadout.Core.Instructions.IMemoryImporter importer,
+        Loadout.Core.Sessions.LaunchSheet sheet)
     {
         _bin = bin;
+        _sheet = sheet;
+        _memory = memory;
+        _importer = importer;
+
+        // Made here rather than registered: the daemon owns them and ends
+        // them when it stops, and the container, disposing synchronously,
+        // refuses a singleton that can only be disposed asynchronously.
+        _sessions = new Loadout.Core.Sessions.Hosting.HostedSessions(
+            Loadout.Platform.PlatformServices.CreatePseudoTerminal,
+            Loadout.Core.Agents.LauncherInvocation.Parts,
+            lifetime,
+            Loadout.Platform.PlatformServices.CreateProcessTree(launcher));
         _ideas = ideas;
         _dumps = dumps;
         _launcher = launcher;
@@ -407,6 +423,30 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // offered to have decided.
             server.Attach = new Attaching(_secrets, _time);
 
+            // Sessions hosted for Studio, which end when this daemon does,
+            // so the note says how many are running for 'daemon stop' to warn.
+            server.Sessions = _sessions;
+            server.PseudoTerminal = Loadout.Platform.PlatformServices.PseudoTerminalName;
+            _sessions.Changed += HostedChanged;
+
+            // Which page the address opens, read each time so setting it is
+            // seen at the next load rather than the next restart.
+            server.StudioFirst = async token => string.Equals(
+                (await _configuration.LoadMachineAsync(token).ConfigureAwait(false)).Value?.Teams.Dashboard,
+                "studio",
+                StringComparison.Ordinal);
+
+            // And Studio's memory page: read through Core, saved by typing
+            // 'memory replace'.
+            server.Memory = new DashboardMemory(_commands, _memory, _importer, _projects, _workspace, _time, output);
+
+            // And the New session sheet, from the same source as the
+            // terminal launcher's, and Studio's own settings, read per
+            // request and changed through 'config set' like any other.
+            server.Launch = new DashboardLaunch(_projects, _workspace, _agents, _configuration, _sheet, _time);
+            server.StudioPreferences = async token => StudioPreferences.Read(
+                (await _configuration.LoadConfigAsync(token).ConfigureAwait(false)).Value?.Studio);
+
             _address = server.Address;
 
             foreach (var address in server.Reachable())
@@ -482,6 +522,14 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
         {
         }
 
+        // After the listener, so no page can start one while the rest end,
+        // and with the note closed first, so ending them does not write it.
+        _sessions.Changed -= HostedChanged;
+        await _statusGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        _statusClosed = true;
+        _statusGate.Release();
+        await _sessions.DisposeAsync().ConfigureAwait(false);
+
         // Not waited for when the stop came from somewhere else. It is a read
         // of standard input waiting to see it close, and a read of a pipe on
         // Windows does not hear its cancellation: a daemon told to stop by
@@ -505,6 +553,11 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
 
         return (int)ExitCode.Success;
     }
+
+    private readonly Loadout.Core.Sessions.Hosting.HostedSessions _sessions;
+    private readonly Loadout.Core.Instructions.IMemoryService _memory;
+    private readonly Loadout.Core.Sessions.LaunchSheet _sheet;
+    private readonly Loadout.Core.Instructions.IMemoryImporter _importer;
 
     /// <summary>The settings this daemon was started with, for a restart to use again.</summary>
     private Settings? _started;
@@ -1525,8 +1578,23 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
     /// </remarks>
     private async Task WriteStatusAsync(string? address, CancellationToken ct)
     {
+        // One at a time, because a session ending writes this from whatever
+        // thread it ended on, and two writes at once can interleave.
+        await _statusGate.WaitAsync(ct).ConfigureAwait(false);
+
         try
         {
+            // Written again whenever a hosted session starts or ends, and
+            // never once the daemon has begun ending them: a note written
+            // after Forget would outlive the daemon.
+            if (_statusClosed)
+            {
+                return;
+            }
+
+            _since ??= _time.GetUtcNow();
+            _statusAddress = address;
+
             Directory.CreateDirectory(Path.GetDirectoryName(StatusPath)!);
 
             await File.WriteAllTextAsync(
@@ -1535,7 +1603,8 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
                     _processes.CurrentProcessId,
                     _processes.CurrentProcessStartedAt,
                     address,
-                    _time.GetUtcNow())),
+                    _since.Value,
+                    _sessions.Running)),
                 ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1544,7 +1613,19 @@ public sealed class TeamDaemonCommand : AsyncCommand<TeamDaemonCommand.Settings>
             // start because it could not write down that it had is worse than
             // one nothing can find.
         }
+        finally
+        {
+            _statusGate.Release();
+        }
     }
+
+    private readonly SemaphoreSlim _statusGate = new(1, 1);
+    private DateTimeOffset? _since;
+    private string? _statusAddress;
+    private bool _statusClosed;
+
+    /// <summary>Writes the note again with the current number of hosted sessions.</summary>
+    private void HostedChanged() => _ = WriteStatusAsync(_statusAddress, CancellationToken.None);
 
     private void Forget()
     {
