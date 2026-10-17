@@ -167,7 +167,7 @@
     {:else if router.route.page === 'commands'}
       <Commands rest={router.route.rest} onlaunch={() => { router.go('sessions'); openLaunch(); }} />
     {:else}
-      <Elsewhere page={router.route.page} />
+      <Elsewhere />
     {/if}
   </main>
 
