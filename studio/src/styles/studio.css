@@ -188,6 +188,7 @@ body.ambient-open { overflow: hidden; }
   font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre;
 }
 .output.err { color: var(--bad-text); }
+.output.prose { white-space: pre-wrap; font-family: var(--font-sans); font-size: 14px; }
 .output:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---------- signed out ---------- */

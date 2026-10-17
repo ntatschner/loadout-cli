@@ -147,7 +147,21 @@ The two things kept in the browser are the single-letter shortcuts (**A** for
 Ambient, **N** for a new session) and whether Ambient fills the screen. They're
 about the keyboard and screen in front of you, not about how you read.
 
-### 8. Steer a team run
+### 8. See what a session will be told
+
+**Context** shows, for one project, what a session would load before it starts.
+Type the task in a sentence and choose a mode, and **Explain it** lists each
+specialist it would load and why, with the tokens they cost against your budget.
+Any specialist opens to show what it says and when it loads.
+
+The other sections cover the project's path-scoped rules and coding styles, its
+profiles, whether its documents still describe the repository, and whether the
+project departs from what its specialists ask. Each has its actions below it:
+splitting an oversized instruction file into rules, choosing a coding style,
+drafting or copying a specialist, finding where a type is declared, and writing a
+handoff for the next session.
+
+### 9. Steer a team run
 
 **Teams** lists the team runs on this machine, running ones first. Choose one to
 see where it stands: what it's waiting on, answered there with the command each
@@ -163,7 +177,7 @@ remedies, the bin, and where a run's call for help goes. Trusting a remedy and
 setting the attach passphrase show their commands only, since both are made in a
 terminal.
 
-### 9. Shape an idea
+### 10. Shape an idea
 
 **Ideas** lists every idea being shaped, by project, and marks the ones with
 questions waiting for you. Choose one and answer its questions in the page:
@@ -182,7 +196,7 @@ project.
 agent split them into ideas and tasks. Nothing is recorded until you apply the
 pieces.
 
-### 10. Look after your projects
+### 11. Look after your projects
 
 **Projects** lists the projects this machine knows. Choose one to see where it
 is, its branch, its agent and how often it's been launched, its working trees,
@@ -197,7 +211,7 @@ read again once it finishes.
 finding repositories and stray memory, and the workspace, where you can bring in
 what other machines saved and save and push what changed here.
 
-### 11. Run anything else from Commands
+### 12. Run anything else from Commands
 
 **Commands** lists every command Loadout has, folded by area. Choose one and
 Studio builds a form from the command's own options, so it can't offer one the
@@ -216,7 +230,7 @@ for the value at a masked prompt), the attach passphrase, trusting a tool or a
 remedy, `update`, and the commands that are themselves a server or a status
 line. Starting a session sends you to **Sessions**, where Studio hosts it.
 
-### 12. Ambient
+### 13. Ambient
 
 On Home, **A** or **Ambient** turns Studio into something for a spare screen:
 the key numbers, the halo on whatever most needs you, and everything else
