@@ -1,6 +1,6 @@
 # ModeSwitcher
 
-ModeSwitcher picks how the whole of Studio is laid out. Four modes, each a ring-drawn glyph and a word, and a light that travels to the one you pick and flares as it lands.
+ModeSwitcher picks how the whole of Studio is laid out. Five modes, each a ring-drawn glyph and a word, and a light that travels to the one you pick and flares as it lands.
 
 | Mode | What it is for |
 |---|---|
@@ -8,6 +8,7 @@ ModeSwitcher picks how the whole of Studio is laid out. Four modes, each a ring-
 | **Terminals** (Terminal Focus) | Sessions as tabs over one, two or four big terminals (TermDeck) |
 | **Teams** (Team Focus) | Every live run as a line on one board, each run and team opening beside it (RunBoard) |
 | **Minimal** | One quiet column of everything live (QuietList); open one and it is all there is (FocusFrame) |
+| **Pure** (Pure Focus) | Flat and sharp: list, view and actions in three panes over a command bar, every key shown (WorkDesk) |
 
 ## Behaviour
 

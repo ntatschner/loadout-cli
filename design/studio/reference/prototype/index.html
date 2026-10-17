@@ -194,6 +194,13 @@ body { background: var(--ground); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .tfocus .bpanel { animation: none !important; } }
 @media (max-width: 1099px) { .tfocus.open { grid-template-columns: minmax(0, 1fr); } .tfocus.open .bcol { display: none; } .tfocus .bpanel { position: static; max-height: none; } }
 .qrun { display: grid; gap: 22px; max-width: 980px; margin: 0 auto; }
+[data-mode="pure"] .page { padding-right: 14px; padding-left: calc(var(--rail-width) + 14px); padding-bottom: 14px; }
+@media (max-width: 599px) { [data-mode="pure"] .page { padding-left: 48px; padding-right: 10px; } }
+[data-mode="pure"] .page > .sample { display: none; }
+[data-mode="pure"] #modebar { backdrop-filter: none; background: var(--ground); }
+.deskwrap { height: calc(100vh - 92px); min-height: 480px; }
+[data-mode="pure"] .ls-toasts { top: auto; bottom: 64px; }
+.pview { display: grid; gap: 18px; align-content: start; }
 </style>
 
 <a class="skip" href="#main">Skip to the page</a>
@@ -590,6 +597,7 @@ body { background: var(--ground); color: var(--ink); }
       { glyph: "◐", label: "Mode: Terminals", sub: "Terminal Focus: sessions as tabs and panes", kind: "action", run: function () { setMode("terminals"); } },
       { glyph: "◐", label: "Mode: Teams", sub: "Team Focus: every live run on one board", kind: "action", run: function () { setMode("teams"); } },
       { glyph: "◐", label: "Mode: Minimal", sub: "one quiet column of what is live", kind: "action", run: function () { setMode("minimal"); } },
+      { glyph: "◐", label: "Mode: Pure Focus", sub: "list, view and actions; every key shown; effects off", kind: "action", run: function () { setMode("pure"); } },
       { glyph: "▶", label: "Start a team run…", sub: "opens Start a run · $ loadout team run <team> \"…\"", kind: "action", run: function () { go("teams"); setTimeout(function () { openSheet("run"); }, 60); } }];
     var t = line("t1");
     if (t.waiting) { acts.push({ glyph: "✓", label: "Yes: push the tag v0.66.0", sub: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer yes --by dashboard", need: true, kind: "action", run: function () { answerGate(true); TV++; render(); } }, { glyph: "✕", label: "No: don't push the tag v0.66.0", sub: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer no --by dashboard", kind: "action", run: function () { answerGate(false); TV++; render(); } }); }
@@ -881,7 +889,7 @@ body { background: var(--ground); color: var(--ink); }
     if (m === P.mode) { return; }
     if (FOCUS) { FOCUS.close(); FOCUS = null; }
     if (!fromSwitch && MB) { MB.switcher.set(m); }
-    S.morph(function () { P.mode = m; savePrefs(); applyMode(); DECK = null; lastTeams = ""; render(); });
+    S.morph(function () { P.mode = m; savePrefs(); applyMode(); DECK = null; if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; render(); });
     toasts.add({ level: "info", text: "Mode: " + S.MODES.filter(function (x) { return x.key === m; })[0].name, cmd: "kept in this browser · Ctrl Shift M cycles" });
   }
   function cycleMode() { var ks = S.MODES.map(function (x) { return x.key; }); setMode(ks[(ks.indexOf(P.mode) + 1) % ks.length]); }
@@ -993,6 +1001,100 @@ body { background: var(--ground); color: var(--ink); }
     FOCUS = S.FocusFrame({ title: r.goal, sub: r.team + " · " + r.project + " · round " + r.round, word: runWord(r), content: box, from: from, onClose: function () { FOCUS = null; } });
   }
 
+  /* Pure Focus: list, view and actions, a command bar, every key shown */
+  var PURE = null;
+  var SCOPES = { h: "all", s: "sessions", t: "runs", i: "ideas", k: "tasks", n: "needs" };
+  function pureGroups(scope) {
+    var needs = [], sessions = [], runs = [], ideas = [], tasks = [];
+    ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) {
+      var it = { id: l.id, kind: "session", title: l.title, meta: l.where + " · " + (l.agent === "codex" ? "codex" : "claude") + " · " + l.mode, word: l.stage === 4 ? "ended" : wordOf(l) };
+      (l.waiting ? needs : sessions).push(it);
+    });
+    TR.forEach(function (r) {
+      var w = runWord(r), it = { id: r.id, kind: "team run", title: r.goal, meta: r.team + " · " + r.project + " · round " + r.round, word: w };
+      (w === "waiting for you" ? needs : runs).push(it);
+    });
+    ST.lines.filter(function (l) { return l.kind === "idea"; }).forEach(function (l) { ideas.push({ id: l.id, kind: "idea", title: l.title, meta: l.where + " · " + l.note, word: wordOf(l) }); });
+    ST.lines.filter(function (l) { return l.kind === "task"; }).forEach(function (l) { tasks.push({ id: l.id, kind: "task", title: l.title, meta: l.where + " · " + (l.blocked || l.note), word: wordOf(l) }); });
+    var all = [{ key: "needs", name: "Needs you", items: needs }, { key: "sessions", name: "Sessions", items: sessions }, { key: "runs", name: "Team runs", items: runs }, { key: "ideas", name: "Ideas", items: ideas }, { key: "tasks", name: "Tasks", items: tasks }];
+    return scope && scope !== "all" ? all.filter(function (g) { return g.key === scope || (g.key === "needs" && scope !== "needs" && false); }) : all;
+  }
+  function pureItemRun(id) { return TR.filter(function (r) { return r.id === id; })[0]; }
+  function pureView(x) {
+    if (x.kind === "session") { var t = makeTerm(x.id); LIVE = { id: x.id, t: t }; return { el: t.el, term: t }; }
+    var box = el("div", { "class": "pview" });
+    if (x.kind === "team run") {
+      var r = pureItemRun(x.id), g = runGate(r);
+      if (r.said) { box.appendChild(el("p", { "class": "ls-said", text: "✓ " + r.said })); }
+      if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g))); }
+      box.appendChild(S.RunShape({ rounds: r.shape, next: r.ended ? null : "the next round", end: r.end || null }));
+      box.appendChild(S.DoneWhen(r.done));
+      box.appendChild(S.Crew({ nodes: r.crew }));
+      box.appendChild(el("p", { "class": "calm", style: "font-size: 13px" }, ["Its five depths are on its full page: ", el("a", { href: "#run-" + r.id, text: "open it" }), ", or type ", el("kbd", { "class": "ls-kbd", text: ":" }), " open."]));
+      return { el: box };
+    }
+    var l = line(x.id);
+    box.appendChild(el("dl", { "class": "ls-rules" }, [el("dt", { text: "What" }), el("dd", { text: l.kind }), el("dt", { text: "Where" }), el("dd", { text: l.where }), el("dt", { text: "Now" }), el("dd", { text: l.blocked || l.note })]));
+    (l.events || []).slice(0, 4).forEach(function (e) { box.appendChild(el("p", { "class": "calm", style: "margin: 6px 0 0; font-size: 13px" }, [el("span", { "class": "mono", style: "margin-right: 10px", text: e.t }), e.text])); });
+    return { el: box };
+  }
+  function pureActions(x) {
+    function from(list) { return list.map(function (a) { return { label: a.label, cmd: a.cmd, kind: a.kind === "danger" ? "danger" : (a.kind || ""), disabledReason: a.disabledReason, run: function () { var r = a.onPress ? a.onPress() : null; setTimeout(function () { render(); }, 30); return typeof r === "string" ? r : a.label; } }; }); }
+    if (x.kind === "session") {
+      var l = line(x.id);
+      if (l.stage === 4) { return [{ label: "Carry it on in a terminal", cmd: "$ loadout resume " + (l.id === "s2" ? "3f9c2a1e" : "7b21d0c4"), disabledReason: "terminal only: Studio shows the command" }]; }
+      return [{ label: l.waiting ? "Go to the question" : "Type into it", kind: l.waiting ? "needs" : "", cmd: "focuses its terminal · answered there", run: function () { if (LIVE && LIVE.t) { LIVE.t.focus(); } return "Focused the terminal. Ctrl+] leaves it."; } },
+        { label: "End the session", kind: "danger", cmd: "stops the agent in this terminal", run: function () { l.stage = 4; l.waiting = false; l.note = "ended by you"; addEvent(l, "ended", "You ended " + l.title); setTimeout(render, 30); return "Ended " + l.title; } }];
+    }
+    if (x.kind === "team run") {
+      var r = pureItemRun(x.id), g = runGate(r), out = [];
+      if (g) {
+        var opts = g.kind === "confirm" ? ["yes", "no"] : (g.kind === "brief" ? ["yes", "no"] : g.options || []);
+        opts.forEach(function (op) { out.push({ label: g.kind === "brief" ? (op === "yes" ? "Send the brief" : "Don't send it") : (op === "yes" ? "Yes" : op === "no" ? "No" : op), kind: "needs", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --answer " + S.shellQuote(op) + " --by dashboard", run: function () { g.onAnswer(op, {}); return "Answered: " + op; } }); });
+        if (g.kind === "question" || g.kind === "readings") { out.push({ label: "Think again", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --think-again --by dashboard", run: function () { g.onAnswer("Think again", {}); return "Sent back to the lead"; } }); }
+      }
+      return out.concat(from(runActs(r)));
+    }
+    return from(actionsFor(line(x.id)));
+  }
+  function pureCommands(q, picked) {
+    var rows = [];
+    if (picked) { pureActions(picked).forEach(function (a, i) { rows.push({ kind: "action", label: (i + 1) + "  " + a.label, cmd: a.disabledReason || a.cmd, run: function () { if (PURE) { setTimeout(function () { PURE.desk.select(picked.id, true); }, 0); } if (!a.disabledReason && a.run) { var said = a.run(); toasts.add({ level: "info", text: said || a.label, cmd: a.cmd || "" }); } } }); }); }
+    [["Everything", "all"], ["Needs you", "needs"], ["Sessions", "sessions"], ["Team runs", "runs"], ["Ideas", "ideas"], ["Tasks", "tasks"]].forEach(function (s) { rows.push({ kind: "go", label: s[0], cmd: "the list, scoped", run: function () { pureScope(s[1]); } }); });
+    pureGroups("all").forEach(function (g) { g.items.forEach(function (x) { rows.push({ kind: "go", label: x.title, cmd: x.kind + " · " + x.word, run: function () { if (PURE) { PURE.desk.select(x.id); } } }); }); });
+    if (picked && picked.kind === "team run") { rows.push({ kind: "go", label: "Open its full page", cmd: "the five depths", run: function () { setMode("default"); setTimeout(function () { go("run-" + picked.id); }, 60); } }); }
+    [["Start a session", "$ loadout <project> --task \"…\"", function () { openLaunch(); }], ["Start a team run", "$ loadout team run <team> \"<goal>\" --project <slug>", function () { openSheet("run"); }], ["Make a team", "$ loadout team new <name>", function () { openSheet("make"); }], ["Run one on a schedule", "$ loadout team schedule add <name> <team> \"<goal>\"", function () { openSheet("schedule"); }],
+      ["What the agents have cost", "$ loadout usage", null], ["The bin", "$ loadout team bin", function () { setMode("default"); setTimeout(function () { go("teams-bin"); }, 60); }], ["Carry the last session on", "$ loadout resume --last", null]].forEach(function (c) {
+      rows.push({ kind: "command", label: c[0], cmd: c[1], run: c[2] || function () { toasts.add({ level: "info", text: c[0] + ": opens its form, filled in", cmd: c[1] }); } });
+    });
+    q = q.toLowerCase();
+    return rows.filter(function (r) { return !q || (r.label + " " + (r.cmd || "") + " " + r.kind).toLowerCase().indexOf(q) >= 0; });
+  }
+  function pureScope(s) { P.pureScope = s; savePrefs(); if (PURE) { PURE.desk.refresh(pureGroups(s)); PURE.sig = ""; renderModebar(); } }
+  function renderPure(main, r) {
+    var sel = r.indexOf("session-") === 0 ? r.slice(8) : (r.indexOf("run-") === 0 ? r.slice(4) : null);
+    var scope = r === "sessions" ? "sessions" : (r === "teams" ? "runs" : (P.pureScope || "all"));
+    var wrap = el("div", { "class": "deskwrap" });
+    var d = S.WorkDesk({ groups: pureGroups(scope), selected: sel || P.pureSelected, view: pureView, actions: pureActions, commands: pureCommands, keys: P.keys,
+      goKeys: { h: "all", s: "sessions", t: "runs", i: "ideas", k: "tasks", n: "needs" }, onGo: function (where) { pureScope(where); toasts.add({ level: "info", text: "The list: " + { all: "everything", sessions: "sessions", runs: "team runs", ideas: "ideas", tasks: "tasks", needs: "what needs you" }[where], cmd: "G then a letter" }); },
+      onSelect: function (id) { P.pureSelected = id; savePrefs(); } });
+    wrap.appendChild(d.el); main.appendChild(wrap);
+    PURE = { route: r, desk: d, sig: pureSig() };
+  }
+  function pureSig() { return JSON.stringify(pureGroups(P.pureScope || "all").map(function (g) { return g.items.map(function (x) { return x.id + x.word; }); })) + TV; }
+  function refreshPure() {
+    var s = pureSig(); if (s === PURE.sig) { return; }
+    var before = PURE.desk.selected, word = null;
+    pureGroups("all").forEach(function (g) { g.items.forEach(function (x) { if (x.id === before) { word = x.word; } }); });
+    PURE.desk.refresh(pureGroups(PURE.route === "sessions" ? "sessions" : PURE.route === "teams" ? "runs" : (P.pureScope || "all")));
+    if (PURE.lastWord !== word) {
+      PURE.lastWord = word;
+      /* A session's terminal stays as it is, so nothing typed is lost: only its state and the actions change. */
+      if (LIVE && LIVE.id === before) { var l = line(before); if (l) { LIVE.t.setState(termState(l)); } PURE.desk.repaintActions(); } else { PURE.desk.repaintView(); }
+    }
+    PURE.sig = s;
+  }
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
@@ -1006,6 +1108,9 @@ body { background: var(--ground); color: var(--ink); }
   function teamsRoute(r) { return r === "teams" || r.indexOf("teams-") === 0 || r.indexOf("run-") === 0 || r.indexOf("team-") === 0; }
   function render() {
     var rr = route(), t1 = line("t1"), sig = rr + "|" + TV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "");
+    var pureRoute = P.mode === "pure" && (rr === "home" || rr === "sessions" || rr === "teams" || rr.indexOf("session-") === 0 || rr.indexOf("run-") === 0);
+    if (pureRoute && PURE && PURE.route === rr && document.getElementById("main").childNodes.length) { refreshPure(); renderNav(); renderAmbient(); return; }
+    if (!pureRoute && PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; }
     var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0);
     if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); renderNav(); renderAmbient(); return; }
     if (!deckRoute) { DECK = null; }
@@ -1017,7 +1122,8 @@ body { background: var(--ground); color: var(--ink); }
     if (!k && a && a.id === "home-task") { k = "home-task"; }
     renderNav();
     var main = document.getElementById("main"), r = route(); main.textContent = "";
-    if (P.mode === "terminals" && (r === "home" || r === "sessions" || r.indexOf("session-") === 0)) { renderDeck(main, r.indexOf("session-") === 0 ? r.slice(8) : null); }
+    if (P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0)) { renderPure(main, r); }
+    else if (P.mode === "terminals" && (r === "home" || r === "sessions" || r.indexOf("session-") === 0)) { renderDeck(main, r.indexOf("session-") === 0 ? r.slice(8) : null); }
     else if (P.mode === "teams" && (r === "home" || r === "teams" || r.indexOf("run-") === 0 || r.indexOf("team-") === 0)) { renderBoard(main, r); }
     else if (P.mode === "minimal" && r === "home") { renderQuiet(main); }
     else if (r === "home") { homeHead(main); if (ST.view === "map") { renderMap(main); } else { renderLens(main); } }

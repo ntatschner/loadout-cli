@@ -332,3 +332,28 @@ export declare function RunBoard(o: { runs: BoardRun[]; teams?: { name: string; 
 export declare function QuietList(o: { items: { id: string; kind?: string; title: string; word: string; where?: string; ask?: string }[]; onOpen?: (item: unknown, from: DOMRect) => void; label?: string }): HTMLElement;
 /** One thing, the whole screen, grown from the line it was opened from. Escape or Back gives the page back. */
 export declare function FocusFrame(o: { title: string; sub?: string; word?: string; content: Node; from?: DOMRect; closeLabel?: string; initialFocus?: string; host?: HTMLElement; onClose?: () => void }): { el: HTMLElement; close: () => void };
+
+/* ---------- Pure Focus ---------- */
+
+export interface DeskItem { id: string; kind?: string; title: string; meta?: string; word: string }
+export interface DeskAction { label: string; cmd?: string; kind?: "" | "needs" | "danger"; disabledReason?: string; run?: () => string | void }
+export interface BarRow { kind: "action" | "go" | "command" | string; label: string; cmd?: string; run?: () => void }
+/** The picked thing's actions, numbered 1 to 9 with their commands. A danger action asks for its key twice. */
+export declare function ActionPane(o: { actions: DeskAction[]; emptyText?: string; legend?: boolean }): { el: HTMLElement; run: (index: number) => void; disarm: () => void; readonly armed: boolean };
+/** A combobox for actions, places and loadout commands; each match shows what it runs. */
+export declare function CommandBar(o: { source: (query: string) => BarRow[]; onDone?: () => void; placeholder?: string }): { el: HTMLElement; input: HTMLInputElement; focus: () => void; readonly open: boolean };
+/** Every key in Pure Focus. A Dialog, or the body alone with inline: true. */
+export declare function KeyHelp(o?: { groups?: [string, [string[], string][]][]; inline?: boolean }): ReturnType<typeof Dialog> | HTMLElement;
+export declare const PURE_KEYS: [string, [string[], string][]][];
+/** Pure Focus: list, view and actions in three panes over a command bar. Keys: J K move, Enter opens, Esc back, 1-9 act, / filter, : command bar, G then a letter goes, F6 next pane, ? every key. */
+export declare function WorkDesk(o: {
+  groups: { key: string; name: string; items: DeskItem[] }[];
+  selected?: string; label?: string;
+  view: (item: DeskItem) => { el: HTMLElement } | null;
+  actions: (item: DeskItem) => DeskAction[];
+  commands?: (query: string, picked: DeskItem | null) => BarRow[];
+  goKeys?: Record<string, string>; onGo?: (where: string) => void;
+  /** false when Studio's single-letter shortcuts are off. */
+  keys?: boolean;
+  onSelect?: (id: string) => void; onShown?: (item: DeskItem, view: unknown) => void;
+}): { el: HTMLElement; select: (id: string, quiet?: boolean) => void; focusList: () => void; openView: () => void; closeView: () => void; refresh: (groups: unknown[]) => void; repaintView: () => void; repaintActions: () => void; readonly selected: string | null; destroy: () => void };

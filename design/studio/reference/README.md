@@ -73,6 +73,7 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
   - **Terminals** (Terminal Focus): sessions as tabs over one, two or four big terminals.
   - **Teams** (Team Focus): every live run as a line on one board, each run or team opening beside it.
   - **Minimal**: one quiet column of what is live; open one and it is the whole screen.
+  - **Pure** (Pure Focus): flat and sharp, for working. List, view and actions in three panes over a command bar. Every action is numbered and every key is printed beside what it does: J and K move, Enter opens, 1 to 9 act, / filters, : commands, G then a letter goes, F6 changes pane, ? lists every key. No glow and no loops; the only motion is a 120ms flash on what you ran.
 - The ModeBar is at the top of every mode, with whatever is waiting on you, so a focus mode never hides a question.
 - Changing mode is one animated step (`morph()`): the page sinks, the new layout rises, and the rail and the mode bar travel on their own. Under reduced motion it fades; under none it just changes.
 

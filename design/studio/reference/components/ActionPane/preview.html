@@ -1,0 +1,29 @@
+<!-- @dsCard group="Modes" height=560 width=520 subtitle="Every action numbered, with its command; a danger action asks for its key twice" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ActionPane</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="a" style="max-width: 320px; box-shadow: inset 0 0 0 1px var(--rule)"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.documentElement.setAttribute("data-mode", "pure");
+  var A = S.ActionPane({ actions: [{ label: "Leave them", kind: "needs", cmd: "$ loadout team gate <run> --gate g4 --answer \"Leave them\" --by dashboard" }, { label: "Fix them here", kind: "needs", cmd: "\u2026 --answer \"Fix them here\"" }, { label: "Think again", cmd: "\u2026 --think-again" }, { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt <run>" }, { label: "Open a pull request", disabledReason: "nothing is committed yet" }] });
+  document.getElementById("a").appendChild(A.el);
+  document.addEventListener("keydown", function (e) { if (/^[1-9]$/.test(e.key)) { A.run(parseInt(e.key, 10) - 1); } if (e.key === "Escape") { A.disarm(); } });
+})();
+</script>
+</body>
+</html>

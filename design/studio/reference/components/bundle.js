@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -1925,4 +1925,213 @@
   }
 
   Object.assign(NS, { MODES: MODES, morph: morph, ModeSwitcher: ModeSwitcher, ModeBar: ModeBar, SessionTabs: SessionTabs, TermDeck: TermDeck, MiniLine: MiniLine, RunBoard: RunBoard, QuietList: QuietList, FocusFrame: FocusFrame });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  function kbd() { return Array.prototype.map.call(arguments, function (k) { return h("kbd", { "class": "ls-kbd", text: k }); }); }
+  function uid(p) { return p + Math.random().toString(36).slice(2, 7); }
+  function ack(el) { if (!el) { return; } el.classList.remove("ls-ack"); void el.offsetWidth; el.classList.add("ls-ack"); }
+  function typingIn(t) { return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable); }
+
+  /* The fifth mode. */
+  if (NS.MODES && !NS.MODES.some(function (m) { return m.key === "pure"; })) {
+    NS.MODES.push({ key: "pure", name: "Pure", desc: "Pure Focus: list, view and actions in three panes, every key shown, effects off", icon: "M3 4h14v12H3z M8 4v12 M13 4v12" });
+  }
+
+  /* ActionPane: the picked thing's actions, numbered 1 to 9, each with its command. A danger action asks for its key a second time. */
+  function ActionPane(o) {
+    o = o || {};
+    var el = h("div", { "class": "ls-apane" }), said = h("p", { "class": "said", role: "status" }), armed = null, timer = null;
+    var btns = [];
+    function run(i) {
+      var a = (o.actions || [])[i], b = btns[i]; if (!a || !b) { return; }
+      if (a.disabledReason) { said.className = "said no"; said.textContent = a.label + ": " + a.disabledReason; return; }
+      if (a.kind === "danger" && armed !== i) {
+        disarm(); armed = i; b.classList.add("arming"); b.querySelector(".l").textContent = "Press " + (i + 1) + " again to " + a.label.toLowerCase();
+        said.className = "said no"; said.textContent = "Press " + (i + 1) + " again, or Escape to keep it.";
+        timer = setTimeout(disarm, 3000); return;
+      }
+      disarm(); ack(b);
+      var r = a.run ? a.run() : null;
+      said.className = "said"; said.textContent = "✓ " + (typeof r === "string" ? r : a.label);
+    }
+    function disarm() { if (armed === null) { return; } clearTimeout(timer); var b = btns[armed], a = o.actions[armed]; if (b) { b.classList.remove("arming"); b.querySelector(".l").textContent = a.label; } armed = null; if (said.className === "said no") { said.textContent = ""; } }
+    (o.actions || []).slice(0, 9).forEach(function (a, i) {
+      var b = h("button", { type: "button", "class": "act " + (a.kind || ""), "aria-keyshortcuts": String(i + 1), "aria-disabled": a.disabledReason ? "true" : null, onclick: function () { run(i); } }, kbd(String(i + 1)).concat([h("span", { "class": "l", text: a.label }), h("code", { text: a.disabledReason ? a.disabledReason : (a.cmd || "") })]));
+      btns.push(b); el.appendChild(b);
+    });
+    if (!btns.length) { el.appendChild(h("p", { "class": "empty", text: o.emptyText || "Nothing to do here." })); }
+    el.appendChild(said);
+    if (o.legend !== false) {
+      var keys = h("div", { "class": "keys", "aria-label": "Keys" });
+      [[["J", "K"], "move in the list"], [["Enter"], "open it"], [["1", "9"], "run an action"], [["/"], "filter the list"], [[":"], "the command bar"], [["G"], "then a letter: go"], [["F6"], "the next pane"], [["?"], "every key"]].forEach(function (r) { keys.appendChild(h("span", {}, r[0].length === 2 && r[0][0] === "1" ? [kbd("1")[0], "–", kbd("9")[0]] : kbd.apply(null, r[0]))); keys.appendChild(h("span", { text: r[1] })); });
+      el.appendChild(keys);
+    }
+    return { el: el, run: run, disarm: disarm, get armed() { return armed !== null; } };
+  }
+
+  /* CommandBar: type an action, a place or a loadout command; every match shows what it runs. */
+  function CommandBar(o) {
+    o = o || {};
+    var lid = uid("ls-cb-"), active = 0, rows = [];
+    var list = h("ul", { role: "listbox", id: lid, "aria-label": "Matches", hidden: true });
+    var input = h("input", { type: "text", role: "combobox", "aria-expanded": "false", "aria-controls": lid, "aria-autocomplete": "list", "aria-label": "Command bar", placeholder: o.placeholder || "Type an action, a place or a loadout command", autocomplete: "off", spellcheck: "false", "aria-keyshortcuts": ":" });
+    function paint() {
+      var q = input.value.trim();
+      rows = o.source ? o.source(q) : [];
+      list.textContent = ""; active = Math.min(active, Math.max(rows.length - 1, 0));
+      rows.slice(0, 40).forEach(function (r, i) {
+        list.appendChild(h("li", { role: "option", id: lid + "-" + i, "aria-selected": i === active ? "true" : "false", onmousedown: function (e) { e.preventDefault(); active = i; choose(); } }, [h("span", { "class": "k", text: r.kind || "" }), h("span", { "class": "l", text: r.label }), r.cmd ? h("code", { text: r.cmd }) : null]));
+      });
+      if (!rows.length) { list.appendChild(h("li", { role: "option", "class": "none", "aria-disabled": "true", text: q ? "Nothing matches “" + q + "”." : "Start typing." })); }
+      input.setAttribute("aria-activedescendant", rows.length ? lid + "-" + active : "");
+      var a = list.querySelector('[aria-selected="true"]'); if (a && a.scrollIntoView) { a.scrollIntoView({ block: "nearest" }); }
+    }
+    function openList() { list.hidden = false; input.setAttribute("aria-expanded", "true"); paint(); }
+    function closeList() { list.hidden = true; input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); }
+    function choose() { var r = rows[active]; if (!r) { return; } closeList(); input.value = ""; if (o.onDone) { o.onDone(); } if (r.run) { r.run(); } }
+    input.addEventListener("focus", openList);
+    input.addEventListener("blur", function () { setTimeout(closeList, 120); });
+    input.addEventListener("input", function () { active = 0; openList(); });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (rows.length) { active = (active + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length; paint(); } }
+      else if (e.key === "Enter") { e.preventDefault(); choose(); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); input.value = ""; closeList(); if (o.onDone) { o.onDone(); } }
+    });
+    var hints = h("span", { "class": "hints", "aria-hidden": "true" }, [h("span", {}, kbd(":").concat(["command"])), h("span", {}, kbd("?").concat(["keys"])), h("span", {}, kbd("G").concat(["go"])), h("span", {}, kbd("F6").concat(["panes"]))]);
+    var el = h("div", { "class": "ls-cmdbar" }, kbd(":").concat([input, list, hints]));
+    return { el: el, input: input, focus: function () { input.focus(); }, get open() { return !list.hidden; } };
+  }
+
+  /* KeyHelp: every key in Pure Focus, in a Dialog. */
+  var KEYS = [
+    ["Move", [[["J", "↓"], "next in the list"], [["K", "↑"], "previous"], [["Home"], "first"], [["End"], "last"], [["/"], "filter the list"]]],
+    ["Open and act", [[["Enter"], "open the picked one in the view"], [["Esc"], "back to the list"], [["1"], "to 9: run that action"], [["Ctrl", "]"], "leave a terminal"]]],
+    ["Go", [[["G", "H"], "Home: everything"], [["G", "S"], "sessions"], [["G", "T"], "team runs"], [["G", "I"], "ideas"], [["G", "K"], "tasks"], [["G", "N"], "what needs you"]]],
+    ["Everywhere", [[[":"], "the command bar"], [["F6"], "the next pane"], [["?"], "this list"], [["Ctrl", "Shift", "M"], "change mode"], [["Ctrl", "K"], "the palette"]]]
+  ];
+  function KeyHelp(o) {
+    o = o || {};
+    var body = h("div", { "class": "ls-keyhelp" }, (o.groups || KEYS).map(function (g) {
+      var dl = h("dl"); g[1].forEach(function (r) { dl.appendChild(h("dt", {}, kbd.apply(null, r[0]))); dl.appendChild(h("dd", { text: r[1] })); });
+      return h("section", {}, [h("h3", { text: g[0] }), dl]);
+    }));
+    if (o.inline) { return body; }
+    return NS.Dialog({ title: "Keys in Pure Focus", why: "Single keys work whenever you are not typing. In a terminal every key goes to the agent; Ctrl+] leaves it.", content: body, cancelLabel: "Close" });
+  }
+
+  /* WorkDesk: Pure Focus itself. */
+  function WorkDesk(o) {
+    o = o || {};
+    var groups = o.groups || [], selected = o.selected || null, viewing = false, filter = "", gPending = false, gTimer = null, AP = null;
+    var lid = uid("ls-wd-");
+    var fin = h("input", { type: "search", placeholder: "Filter", "aria-label": "Filter the list", autocomplete: "off", "aria-keyshortcuts": "/" });
+    var lb = h("ul", { role: "listbox", "class": "items", id: lid, tabindex: "0", "aria-label": o.label || "Everything live" });
+    var listPane = h("section", { "class": "list", "aria-label": "List" }, [h("div", { "class": "ph" }, [h("span", { text: "List" }), h("span", { "class": "grow" }), h("span", { "class": "hint", "aria-hidden": "true" }, kbd("J", "K").concat(["move"]))]), h("div", { "class": "lwrap" }, [h("div", { "class": "filter" }, kbd("/").concat([fin])), lb])]);
+    var vhead = h("div", { "class": "ph" }), vbody = h("div", { "class": "vbody", tabindex: "-1" });
+    var viewPane = h("section", { "class": "view", "aria-label": "View" }, [vhead, vbody]);
+    var actBody = h("div", { style: "display: grid; min-height: 0" });
+    var actPane = h("section", { "class": "acts", "aria-label": "Actions" }, [h("div", { "class": "ph" }, [h("span", { text: "Actions" }), h("span", { "class": "grow" }), h("span", { "class": "hint", "aria-hidden": "true" }, kbd("1").concat(["–"], kbd("9")))]), actBody]);
+    var CB = CommandBar({ source: function (q) { return o.commands ? o.commands(q, item(selected)) : []; }, onDone: function () { focusList(); } });
+    var bar = h("div", { "class": "cbar" }, [CB.el]);
+    var el = h("div", { "class": "ls-desk", role: "application", "aria-roledescription": "Pure Focus", "aria-label": "Pure Focus" }, [listPane, viewPane, actPane, bar]);
+    function all() { var out = []; groups.forEach(function (g) { g.items.forEach(function (x) { out.push(x); }); }); return out; }
+    function item(id) { return all().filter(function (x) { return x.id === id; })[0] || null; }
+    function visible() { var q = filter.toLowerCase(); return all().filter(function (x) { return !q || (x.title + " " + (x.meta || "")).toLowerCase().indexOf(q) >= 0; }); }
+    function paintList() {
+      lb.textContent = ""; var q = filter.toLowerCase(), seen = {};
+      groups.forEach(function (g) {
+        var xs = g.items.filter(function (x) { return !q || (x.title + " " + (x.meta || "")).toLowerCase().indexOf(q) >= 0; });
+        if (!xs.length) { return; }
+        lb.appendChild(h("li", { role: "presentation", "class": "gh " + (g.key === "needs" ? "needs" : "") }, [h("span", { text: g.name }), h("span", { text: String(xs.length) })]));
+        xs.forEach(function (x) {
+          var oid = lid + "-" + g.key + "-" + x.id, fam = NS.signalOf(x.word).family;
+          lb.appendChild(h("li", { role: "option", id: oid, "data-id": x.id, "class": fam, "aria-selected": x.id === selected && !seen[x.id] ? "true" : "false", onclick: function () { select(x.id); }, ondblclick: function () { select(x.id); openView(); } },
+            [NS.Signal(x.word), h("span", { "class": "t", text: x.title }), h("span", { "class": "x", text: x.meta || "" }), h("span", { "class": "w", text: x.word })]));
+          if (x.id === selected) { seen[x.id] = true; }
+        });
+      });
+      if (!lb.children.length) { lb.appendChild(h("li", { role: "presentation", "class": "none", text: filter ? "Nothing matches “" + filter + "”." : "Nothing is live." })); }
+      var cur = lb.querySelector('[aria-selected="true"]');
+      lb.setAttribute("aria-activedescendant", cur ? cur.id : "");
+      if (cur && cur.scrollIntoView) { cur.scrollIntoView({ block: "nearest" }); }
+    }
+    function paintView() {
+      var x = item(selected); vhead.textContent = ""; vbody.textContent = ""; vbody.className = "vbody";
+      var back = h("button", { type: "button", "class": "ls-halo small back", onclick: function () { closeView(); } }, [h("span", { "class": "ring", "aria-hidden": "true" }), "List"]);
+      if (!x) { vhead.appendChild(h("span", { text: "View" })); vbody.appendChild(h("p", { "class": "none", text: "Pick something in the list." })); return; }
+      vhead.appendChild(back);
+      vhead.appendChild(h("span", { "class": "vtitle" }, [h("b", { text: x.title }), h("span", { text: x.meta || "" })]));
+      vhead.appendChild(NS.Signal(x.word));
+      vhead.appendChild(h("span", { "class": "hint", "aria-hidden": "true" }, kbd("Esc").concat(["list"])));
+      var v = o.view ? o.view(x) : null;
+      if (v && v.el) { if (v.el.classList && v.el.classList.contains("ls-term")) { vbody.className = "vbody term"; } vbody.appendChild(v.el); }
+      paintActions(x);
+      if (o.onShown) { o.onShown(x, v); }
+    }
+    function paintActions(x) {
+      actBody.textContent = "";
+      AP = ActionPane({ actions: x && o.actions ? o.actions(x) : [], emptyText: x ? "Nothing to do with this one." : "Pick something in the list." });
+      actBody.appendChild(AP.el);
+    }
+    function select(id, quiet) {
+      if (!id) { return; }
+      selected = id; paintList(); paintView();
+      if (!quiet) { lb.focus({ preventScroll: true }); }
+      if (o.onSelect) { o.onSelect(id); }
+    }
+    function step(d) { var xs = visible(); if (!xs.length) { return; } var i = xs.map(function (x) { return x.id; }).indexOf(selected); var n = i < 0 ? 0 : Math.max(0, Math.min(xs.length - 1, i + d)); if (d === Infinity) { n = xs.length - 1; } if (d === -Infinity) { n = 0; } select(xs[n].id); }
+    function openView() { viewing = true; el.classList.add("viewing"); var t = vbody.querySelector(".ls-term .screen"); if (t) { t.focus(); } else { var f = vbody.querySelector("button, [href], input, textarea, [tabindex='0']"); (f || vbody).focus(); } }
+    function closeView() { viewing = false; el.classList.remove("viewing"); focusList(); }
+    function focusList() { lb.focus({ preventScroll: true }); }
+    function panes() { return [lb, vbody, actPane.querySelector("button") || actPane, CB.input]; }
+    function nextPane(d) { var p = panes(), a = document.activeElement, i = p.findIndex(function (x) { return x === a || (x.contains && x.contains(a)); }); var n = p[(i + d + p.length) % p.length]; if (n === vbody) { openView(); return; } if (n) { n.focus(); } }
+    fin.addEventListener("input", function () { filter = fin.value.trim(); var xs = visible(); if (xs.length && xs.map(function (x) { return x.id; }).indexOf(selected) < 0) { selected = xs[0].id; paintView(); } paintList(); });
+    fin.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); fin.value = ""; filter = ""; paintList(); focusList(); } else if (e.key === "Enter" || e.key === "ArrowDown") { e.preventDefault(); focusList(); } });
+    function onKey(e) {
+      if (!document.contains(el)) { return; }
+      var t = e.target;
+      if (e.key === "F6") { e.preventDefault(); nextPane(e.shiftKey ? -1 : 1); return; }
+      if (t && t.closest && (t.closest(".ls-term") || t.closest(".ls-dialog"))) { return; }
+      if (typingIn(t)) { return; }
+      if (e.ctrlKey || e.metaKey || e.altKey) { return; }
+      var k = e.key;
+      /* Studio's "Single-letter shortcuts" off: only Escape and the list's own arrows, Home, End and Enter still work. */
+      if (o.keys === false && !(k === "Escape" || (t === lb && /^(ArrowUp|ArrowDown|Home|End|Enter)$/.test(k)))) { return; }
+      if (gPending) {
+        gPending = false; clearTimeout(gTimer);
+        var where = (o.goKeys || {})[k.toLowerCase()]; if (where) { e.preventDefault(); if (o.onGo) { o.onGo(where); } }
+        return;
+      }
+      if (k === "Escape") { if (AP && AP.armed) { e.preventDefault(); AP.disarm(); return; } if (viewing || el.contains(t) && t !== lb) { e.preventDefault(); closeView(); } return; }
+      if (k === "j" || k === "J" || (k === "ArrowDown" && t === lb)) { e.preventDefault(); step(1); return; }
+      if (k === "k" || k === "K" || (k === "ArrowUp" && t === lb)) { e.preventDefault(); step(-1); return; }
+      if (t === lb && k === "Home") { e.preventDefault(); step(-Infinity); return; }
+      if (t === lb && k === "End") { e.preventDefault(); step(Infinity); return; }
+      if (k === "Enter" && t === lb) { e.preventDefault(); openView(); return; }
+      if (k === "/") { e.preventDefault(); fin.focus(); fin.select(); return; }
+      if (k === ":") { e.preventDefault(); CB.focus(); return; }
+      if (k === "?") { e.preventDefault(); KeyHelp().open(); return; }
+      if (k === "g" || k === "G") { e.preventDefault(); gPending = true; gTimer = setTimeout(function () { gPending = false; }, 1500); return; }
+      if (/^[1-9]$/.test(k) && AP) { e.preventDefault(); AP.run(parseInt(k, 10) - 1); }
+    }
+    document.addEventListener("keydown", onKey);
+    if (!selected) { var first = all()[0]; selected = first ? first.id : null; }
+    paintList(); paintView();
+    return { el: el, select: select, focusList: focusList, openView: openView, closeView: closeView, refresh: function (g) { groups = g; if (!item(selected)) { var f = all()[0]; selected = f ? f.id : null; paintView(); } paintList(); }, repaintView: paintView, repaintActions: function () { paintActions(item(selected)); }, get selected() { return selected; }, destroy: function () { document.removeEventListener("keydown", onKey); } };
+  }
+
+  Object.assign(NS, { WorkDesk: WorkDesk, ActionPane: ActionPane, CommandBar: CommandBar, KeyHelp: KeyHelp, PURE_KEYS: KEYS });
 })();
