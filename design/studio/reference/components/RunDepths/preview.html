@@ -1,0 +1,46 @@
+<!-- @dsCard group="Teams" height=900 width=1200 subtitle="Five depths of one run on keys 1 to 5: what it said, what it cost, the papers, what it changed, what it delivered" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RunDepths</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<p style="margin: 0 0 10px; font-size: 13.5px; color: var(--muted)">Press 1 to 5 anywhere on the page, or use the arrow keys on the tabs.</p>
+<div id="d"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var RUN = "20261017-1402-ab3f";
+  var D = S.RunDepths({ run: RUN,
+    said: { nodes: ["lead", "planner/1", "implementer/1", "reviewer/1", "verifier/1"], live: { "implementer/1": true },
+      journal: [["14:02", "started · iterating-project on loadout-cli · supervised", "", "run"], ["14:03", "the lead proposed 2 done-when; you changed one", "", "criteria"], ["14:05", "planner/1 briefed", "", "round 1"], ["14:09", "planner/1 reported: PLAN.md", "good", "report"],
+        ["14:10", "implementer/1 and reviewer/1 briefed", "", "round 2"], ["14:11", "implementer/1 called Edit", "", "node", false, 6], ["14:24", "implementer/1 reported: commit a4f21c9", "good", "report"], ["14:27", "reviewer/1 asked to run dotnet format; you said yes", "needs", "asked"],
+        ["14:31", "verifier/1 reported 2,843 passing, 2 flaky", "", "report"], ["14:33", "the lead asks whether to fix two flaky tests", "needs", "gate"]],
+      streams: { "implementer/1": [["14:11", "Read src/Loadout.Cli/Commands/UsageCommand.cs", "", "tool"], ["14:12", "I'll add the option to the settings and filter in Execute.", "", "said"], ["14:13", "Explore: find every caller of UsageReader", "", "sub-agent", true], ["14:15", "Edit src/Loadout.Cli/Commands/UsageCommand.cs", "", "tool"], ["14:19", "Bash dotnet test --filter Usage", "", "tool"], ["14:23", "14 passed, 0 failed", "good", "tool"]] },
+      say: { state: "locked", onUnlock: function (p) { return p === "loadout"; } } },
+    cost: { numbers: { rate: "$0.15 a minute", spent: 6.12, cap: 25, projected: 11.4, by: "round 5", byRound: [["Round 1", 4], ["Round 2", 21], ["Round 3", 9]], byNode: [["implementer/1", 13], ["verifier/1", 8], ["reviewer/1", 6], ["planner/1", 4], ["lead", 3]], wrong: [["Tool calls refused", 1], ["Reports not accepted", 0], ["Turns asked again", 0], ["Rounds that asked for nothing", 0], ["Branches that would not merge", 0]] },
+      exchanges: [[1, "lead", "opus", 4, 0, 0.88, "proposed criteria"], [1, "planner/1", "sonnet", 11, 0, 0.42, "done: PLAN.md"], [2, "implementer/1", "sonnet", 38, 1, 1.93, "done: commit a4f21c9"], [2, "reviewer/1", "sonnet", 9, 0, 0.51, "done: two notes"], [3, "verifier/1", "sonnet", 14, 0, 0.61, "done: 2,843 passing"]] },
+    papers: { summary: "Added --since to loadout usage, with a test and the suite green apart from two flaky tests that predate this run.", pairs: [
+      { node: "implementer/1", role: "role.implementer", brief: "Add --since <date> to loadout usage. Filter entries on or before the date. Add a test that fails without the option. Leave the existing tests alone.", instead: "Add --since <date> to loadout usage. Filter entries before the date. Update the tests to match.", report: "Added UsageSettings.Since and the filter in Execute. New test UsageSinceTests.Excludes_entries_on_or_before. Committed a4f21c9." },
+      { node: "reviewer/1", role: "role.reviewer", brief: "Review implementer/1's branch for the --since change. Do not commit or check anything out there.", report: "Two notes: the date parse should be invariant-culture; the help text should say inclusive or not." }] },
+    changed: { patches: [{ node: "implementer/1", branch: "team/20261017-1402-ab3f/implementer-1", base: "4e1d2a0", goal: "Add --since to loadout usage", files: [["src/Loadout.Cli/Commands/UsageCommand.cs", 18, 2], ["tests/Loadout.Tests/UsageSinceTests.cs", 41, 0]],
+      diff: [["@", "@@ src/Loadout.Cli/Commands/UsageCommand.cs"], [" ", "    [CommandOption(\"--json\")]"], ["+", "    [CommandOption(\"--since <DATE>\")]"], ["+", "    public DateOnly? Since { get; init; }"], [" ", ""], ["-", "    var entries = reader.Read();"], ["+", "    var entries = reader.Read().Where(e => settings.Since is null || e.Day > settings.Since);"]] },
+      { node: "planner/1", unmeasured: true }] },
+    delivered: { repository: "~/code/loadout-cli", files: [{ path: "src/Loadout.Cli/Commands/UsageCommand.cs", change: "changed", commit: "a4f21c9", node: "implementer/1", bytes: 6120 }, { path: "tests/Loadout.Tests/UsageSinceTests.cs", change: "added", commit: "a4f21c9", node: "implementer/1", bytes: 1830 }],
+      loose: [{ path: "PLAN.md", kind: "plan", bytes: 3790, node: "planner/1" }], picked: "loose:PLAN.md",
+      read: function (f) { return { text: f.path === "PLAN.md" ? "# Plan\n\n1. Add the option and a failing test\n2. Review, then run the whole suite\n" : "public sealed class UsageSinceTests\n{\n    // the new test\n}\n" }; } } });
+  document.getElementById("d").appendChild(D.el);
+})();
+</script>
+</body>
+</html>

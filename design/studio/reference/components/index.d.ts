@@ -191,3 +191,169 @@ export declare function SessionView(o: {
   facts?: [string, string][]; loaded?: [string, string][]; events?: [string, string][];
   actions?: HaloButtonOptions[]; details?: boolean;
 }): { el: HTMLElement; terminal: ReturnType<typeof Terminal> };
+
+/* ---------- Teams ---------- */
+
+export type GateKind = "question" | "confirm" | "permission" | "outward" | "merge" | "brief" | "readings" | "proposal" | "budget";
+export interface GateOptions {
+  kind?: GateKind; run?: string; gate?: string; node?: string; asked?: string;
+  question: string;
+  /** question and budget: the answers, exactly as the run wrote them. */
+  options?: string[];
+  /** The lead's recommendation (question, readings) or Loadout's first offer (budget). Permissions, merges and outward actions carry none. */
+  recommendation?: string;
+  /** "12 minutes left, then it goes back to the lead to think again". */
+  timer?: string;
+  /** readings: [criterion, how the lead reads it]. */
+  readings?: [string, string][];
+  /** brief: the lead's brief, editable before it goes out (manual runs only). */
+  brief?: string;
+  /** proposal: the lead's proposed criteria, one per line; held: the project's own, shown and held. */
+  proposal?: string[]; held?: string[];
+  compact?: boolean; disabledReason?: string;
+  onAnswer?: (answer: string, extra: { instead?: string | string[] | null }) => void;
+}
+/** A question a run stopped to ask, answered where it is shown. Each kind has its own answers and its own command. */
+export declare function Gate(o: GateOptions): HTMLElement;
+
+export interface RunSummary { id: string; goal: string; team: string; project?: string; posture?: string; word: string; round?: number; rounds?: number; elapsed?: string; spent?: number; cap?: number | null; uncapped?: boolean; projected?: number; rate?: string }
+/** The spend line: what it has spent, of what, and where it is projected to end. */
+export declare function Spend(r: RunSummary): HTMLElement;
+/** One run in a list, with what it asks answered in place. */
+export declare function RunCard(o: { run: RunSummary; href?: string; gate?: GateOptions; reasons?: { text: string; clears: string }[]; actions?: HaloButtonOptions[] }): HTMLElement;
+
+export type NeedReason = "asked" | "silent" | "quiet" | "budget" | "spent";
+/** Every reason a run wants you. Each clears itself; nothing is dismissed by hand. */
+export declare function NeedsYou(o: { items: { reason: NeedReason; run: string; goal: string; team?: string; href?: string; node?: string; quiet?: string; detail?: string; text?: string; clears?: string; gate?: GateOptions; actions?: HaloButtonOptions[] }[] }): HTMLElement;
+
+/** Rounds along the lead's line, each round's nodes hanging from it. Turns vertical below 620px of its own width. */
+export declare function RunShape(o: { rounds: { word: string; lead?: string; nodes?: [string, string][] }[]; next?: string; end?: { word: string; text?: string }; picked?: string; onPick?: (node: string) => void; label?: string }): HTMLElement;
+
+/** Who is on the run: state, what each is doing, turns, cost, refusals, and quiet against its own usual turn. */
+export declare function Crew(o: { nodes: { node: string; role: string; model?: string; word: string; doing?: string; quiet?: string; turns: number; cost: number; refused?: number }[]; picked?: string; onPick?: (node: string) => void; label?: string }): HTMLElement;
+
+/** Each criterion, how the lead read it, its verdict and the evidence; delivered refs are checked against what workers reported. */
+export declare function DoneWhen(o: { criteria: { text: string; verdict?: "met" | "unmet" | "not-attempted" | null; project?: boolean; meaning?: string; evidence?: string[]; delivered?: string[]; cited?: string[] }[]; by?: string; goal?: string }): HTMLElement;
+
+/** The numbers that change a decision: the rate and projection, where the time went, what went wrong. */
+export declare function RunNumbers(o: { rate: string; spent: number; cap?: number | null; projected?: number; by?: string; byRound?: [string, number][]; byNode?: [string, number][]; wrong?: [string, number][] }): HTMLElement;
+
+/** One journal line: [time, text, family?, kind?, sub-agent?, repeats?]. */
+export type JournalLine = [string, string, string?, string?, boolean?, number?];
+/** The five depths of a run, on keys 1 to 5. */
+export declare function RunDepths(o: {
+  run: string; selected?: number; node?: string; keys?: boolean; onSelect?: (i: number) => void;
+  said?: { journal: JournalLine[]; nodes?: string[]; streams?: Record<string, JournalLine[]>; live?: Record<string, boolean>; say?: Omit<SayToNodeOptions, "run" | "node"> };
+  cost?: { numbers?: Parameters<typeof RunNumbers>[0]; exchanges?: [number, string, string, number, number, number, string][] };
+  papers?: { summary?: string; pairs: { node: string; role?: string; brief: string; report?: string; instead?: string }[] };
+  changed?: { patches: Omit<PatchOptions, "run">[] };
+  /** The fifth depth: what it delivered (see Outbox). */
+  delivered?: Omit<Parameters<typeof Outbox>[0], "run">;
+}): { el: HTMLElement; select: (i: number) => void; showNode: (node: string) => void; unbind: () => void };
+export declare function Journal(lines: JournalLine[]): HTMLElement;
+export declare function Exchanges(rows: [number, string, string, number, number, number, string][]): HTMLElement;
+export declare function Papers(p: { summary?: string; pairs: { node: string; role?: string; brief: string; report?: string; instead?: string }[] }): HTMLElement;
+
+export interface PatchOptions { run: string; node: string; branch?: string; base?: string; goal?: string; files?: [string, number, number][]; diff?: [" " | "+" | "-" | "@", string][]; unmeasured?: boolean; pr?: boolean; disabledReason?: string; onPr?: (o: { draft: boolean; title: string }) => void }
+/** A node's patch, file summary first, with Open a pull request. */
+export declare function Patch(o: PatchOptions): HTMLElement;
+
+export interface SayToNodeOptions { run: string; node?: string; lead?: boolean; disabledReason?: string; state?: "unset" | "locked" | "open" | "ended"; minutesLeft?: number; onUnlock?: (passphrase: string) => boolean; onSend?: (message: string) => void }
+/** Typing at a live node, behind the second credential; or, with lead: true, a message to the lead for its next round. */
+export declare function SayToNode(o: SayToNodeOptions): HTMLElement;
+
+/** A team you can run, or a template to copy. */
+export declare function TeamCard(o: { name: string; description: string; nodes?: number; lead?: string; posture?: string; budget?: string; doneWhen?: number; origin?: string; template?: boolean; problems?: string[]; href?: string; onRun?: () => void; onCopy?: () => void }): HTMLElement;
+/** A team's nodes: the lead, and who each briefs. */
+export declare function TeamNodes(o: { nodes: { name: string; role: string; mode?: string; deliverable?: string; delegates?: string[]; instances?: number; worktree?: boolean }[] }): HTMLElement;
+/** Rows of [term, value, command?]. */
+export declare function TeamRules(o: { rows: [string, string, string?][] }): HTMLElement;
+/** How the roles have been doing: per role and model, dearest first, read when opened. Rows: [role, model, runs, total, average, taken %, refused a run]. */
+export declare function RoleRecord(o: { rows?: [string, string | null, number, number, number, number, number][]; read?: () => any[]; time?: [string, number, number, number, number][]; open?: boolean; refusedHigh?: number; note?: string; title?: string; delay?: number }): HTMLElement;
+
+export interface SheetTeam { name: string; description: string; nodes: number; lead: string; posture: string; budget?: string; doneWhen?: string[]; template?: boolean; problems?: string[] }
+/** Start a run, Make a team, or Run one on a schedule. el is the form; open() shows it as a sheet. */
+export declare function TeamSheet(o: { kind: "run" | "make" | "schedule"; teams: SheetTeam[]; projects: { name: string; path: string }[]; projectDoneWhen?: Record<string, string[]>; preset?: Record<string, string>; daemon?: boolean; watchOnly?: boolean; onSubmit?: (command: string, values: Record<string, unknown>) => void }): { el: HTMLElement; command: () => string; open: () => ReturnType<typeof Dialog> };
+/** Runs that start without you, and whether the daemon will fire them. */
+export declare function Schedules(o: { daemon: { running: boolean; paused?: boolean }; items: { name: string; team: string; goal: string; when: string; next?: string; autonomy?: string; usd?: string }[]; onRemove?: (name: string) => void; disabledReason?: string }): HTMLElement;
+/** A remedy: what it is, this machine's rule for its kind, whether this script is trusted, and the requests waiting on you. */
+export declare function Remedy(o: { team: string; name: string; kind: string; what: string; assumes: string; proves: string; revision: number; by?: string; rule: "trusted" | "ask" | "never"; trust: "trusted" | "not trusted" | "changed since trusted"; requests?: { id: string; node: string; run: string; problem: string; why: string; asked?: string }[]; onRead?: () => void; onApprove?: (id: string, reason: string) => void; onRefuse?: (id: string, reason: string) => void; disabledReason?: string }): HTMLElement;
+/** The bin: put things back, empty it for good, and clear out runs. */
+export declare function Bin(o: { keptDays?: number; entries: { kind: "run" | "team"; name: string; what?: string; removed: string; left: number; size?: string }[]; onRestore?: (e: unknown) => void; onEmpty?: () => void; onPrune?: (command: string) => void; disabledReason?: string }): HTMLElement;
+/** A value as a shell needs it. */
+export declare function shellQuote(value: string): string;
+
+/* ---------- Teams: what a run delivered ---------- */
+
+/** One file a run's commits touched, as `loadout team outbox --json` lists it. */
+export interface OutboxFile { path: string; change: "added" | "changed" | "removed"; commit: string; node: string; bytes?: number }
+/** One file a node reported that no commit carries. bytes is null when nothing is there now. */
+export interface OutboxAsset { path: string; kind: string; bytes: number | null; node: string; note?: string }
+/** What the viewer is given for a file: text (redacted), an image URL, or a diff for "The change". */
+export interface OutboxRead { text?: string; url?: string; width?: number; height?: number; binary?: boolean; diff?: [" " | "+" | "-" | "@", string][]; redacted?: number; truncated?: number; unchecked?: boolean }
+/** What a run delivered: a file tree by node and commit (or by folder) beside a viewer that previews Markdown, code, CSV, JSON and images, shows the change, and downloads. Reads only. */
+export declare function Outbox(o: {
+  run: string; repository: string | null; files: OutboxFile[]; loose?: OutboxAsset[]; missing?: string[];
+  by?: "node" | "folder"; picked?: string;
+  read?: (f: OutboxFile & OutboxAsset & { loose?: boolean }, mode: "file" | "change") => OutboxRead | Promise<OutboxRead>;
+  onPick?: (f: unknown) => void; onDownload?: (f: unknown) => void; onDownloadAll?: () => void; downloadAllReason?: string;
+}): HTMLElement;
+/** Markdown as nodes in Studio's type. Never HTML from the file; only http and https links are live. */
+export declare function Markdown(src: string): HTMLElement;
+/** Code with line numbers, in the terminal palette. */
+export declare function CodeView(text: string, lang?: string, limit?: number): HTMLElement;
+/** A CSV or TSV as a table, numbers right-aligned. */
+export declare function CsvTable(text: string, sep?: string): HTMLElement;
+export declare function fileKind(path: string): "markdown" | "csv" | "json" | "image" | "text" | "code" | "binary";
+
+/* ---------- Modes ---------- */
+
+export type StudioMode = "default" | "terminals" | "teams" | "minimal";
+export declare const MODES: { key: StudioMode; name: string; desc: string; icon: string }[];
+/** Run a change of layout as one animated step: a view transition where there is one, a rise-in otherwise, a fade under reduced motion, nothing under none. */
+export declare function morph(apply: () => void, o?: { noVT?: boolean; target?: HTMLElement }): ViewTransition | null;
+/** Four modes as radios, with a light that travels to the one picked. Arrow keys move; Ctrl+Shift+M (bound by the app) cycles. */
+export declare function ModeSwitcher(o: { mode: StudioMode; onChange?: (m: StudioMode) => void; compact?: boolean; vertical?: boolean; label?: string }): { el: HTMLElement; set: (m: StudioMode) => void; readonly mode: StudioMode };
+/** The bar at the top of every mode: the switcher, search, and whatever is waiting on you. */
+export declare function ModeBar(o: { mode: StudioMode; onMode?: (m: StudioMode) => void; compact?: boolean; onSearch?: () => void; waiting?: { label: string; [k: string]: unknown }[]; onWaiting?: (w: unknown) => void }): { el: HTMLElement; switcher: ReturnType<typeof ModeSwitcher> };
+
+export interface DeckSession { id: string; title: string; word: string; where?: string; agent?: string; unread?: boolean }
+/** Every session as a tab with its state, Ctrl+Alt+n on the first nine, and a new-output dot. */
+export declare function SessionTabs(o: { sessions: DeckSession[]; current?: string; controls?: string; onPick?: (id: string) => void; onMaximise?: (id: string) => void; onNew?: () => void; label?: string }): HTMLElement;
+/** Terminal Focus: tabs over one, two or four panes of Terminal, a find bar, and the keys. The deck makes no terminals itself: terminal(id) does. */
+export declare function TermDeck(o: { sessions: DeckSession[]; current?: string; layout?: 1 | 2 | 4; terminal: (id: string) => ReturnType<typeof Terminal>; onPick?: (id: string) => void; onLayout?: (n: number) => void; onNew?: () => void; onShown?: (ids: string[], terms: Record<string, ReturnType<typeof Terminal>>) => void }): { el: HTMLElement; pick: (id: string, focus?: boolean) => void; setLayout: (n: 1 | 2 | 4) => void; terminal: (id: string) => ReturnType<typeof Terminal> | undefined; update: (sessions: DeckSession[]) => void; readonly current: string; readonly layout: number };
+
+export interface BoardRun { id: string; goal: string; team: string; project?: string; word: string; round: number; rounds: { word: string; nodes?: [string, string][] }[]; spent?: number; cap?: number | null; projected?: number; gate?: GateOptions }
+/** A run's rounds as a small line, for a board row. Decoration: the row's words say the same. */
+export declare function MiniLine(rounds: BoardRun["rounds"], ended: boolean, running: boolean): HTMLElement;
+/** Team Focus: every run as a line, the one that needs you first, teams along the top. */
+export declare function RunBoard(o: { runs: BoardRun[]; teams?: { name: string; word?: string; fact?: string }[]; team?: string; picked?: string; onPick?: (id: string) => void; onTeam?: (name: string) => void; label?: string }): HTMLElement;
+/** Minimal: one column of what is live, what needs you first with its question. */
+export declare function QuietList(o: { items: { id: string; kind?: string; title: string; word: string; where?: string; ask?: string }[]; onOpen?: (item: unknown, from: DOMRect) => void; label?: string }): HTMLElement;
+/** One thing, the whole screen, grown from the line it was opened from. Escape or Back gives the page back. */
+export declare function FocusFrame(o: { title: string; sub?: string; word?: string; content: Node; from?: DOMRect; closeLabel?: string; initialFocus?: string; host?: HTMLElement; onClose?: () => void }): { el: HTMLElement; close: () => void };
+
+/* ---------- Pure Focus ---------- */
+
+export interface DeskItem { id: string; kind?: string; title: string; meta?: string; word: string }
+export interface DeskAction { label: string; cmd?: string; kind?: "" | "needs" | "danger"; disabledReason?: string; run?: () => string | void }
+export interface BarRow { kind: "action" | "go" | "command" | string; label: string; cmd?: string; run?: () => void }
+/** The picked thing's actions, numbered 1 to 9 with their commands. A danger action asks for its key twice. */
+export declare function ActionPane(o: { actions: DeskAction[]; emptyText?: string; legend?: boolean }): { el: HTMLElement; run: (index: number) => void; disarm: () => void; readonly armed: boolean };
+/** A combobox for actions, places and loadout commands; each match shows what it runs. */
+export declare function CommandBar(o: { source: (query: string) => BarRow[]; onDone?: () => void; placeholder?: string }): { el: HTMLElement; input: HTMLInputElement; focus: () => void; readonly open: boolean };
+/** Every key in Pure Focus. A Dialog, or the body alone with inline: true. */
+export declare function KeyHelp(o?: { groups?: [string, [string[], string][]][]; inline?: boolean }): ReturnType<typeof Dialog> | HTMLElement;
+export declare const PURE_KEYS: [string, [string[], string][]][];
+/** Pure Focus: list, view and actions in three panes over a command bar. Keys: J K move, Enter opens, Esc back, 1-9 act, / filter, : command bar, G then a letter goes, F6 next pane, ? every key. */
+export declare function WorkDesk(o: {
+  groups: { key: string; name: string; items: DeskItem[] }[];
+  selected?: string; label?: string;
+  view: (item: DeskItem) => { el: HTMLElement } | null;
+  actions: (item: DeskItem) => DeskAction[];
+  commands?: (query: string, picked: DeskItem | null) => BarRow[];
+  goKeys?: Record<string, string>; onGo?: (where: string) => void;
+  /** false when Studio's single-letter shortcuts are off. */
+  keys?: boolean;
+  onSelect?: (id: string) => void; onShown?: (item: DeskItem, view: unknown) => void;
+}): { el: HTMLElement; select: (id: string, quiet?: boolean) => void; focusList: () => void; openView: () => void; closeView: () => void; refresh: (groups: unknown[]) => void; repaintView: () => void; repaintActions: () => void; readonly selected: string | null; destroy: () => void };

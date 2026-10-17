@@ -149,10 +149,63 @@ body { background: var(--ground); color: var(--ink); }
 .strip div:not(:first-child) { font-size: 14px; color: var(--muted); }
 .strip .tm { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
 .placeholder { max-width: 640px; display: grid; gap: 14px; }
+/* Teams */
+.tsub { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: calc(-1 * var(--space-3) * var(--density)) 0 calc(var(--space-6) * var(--density)); }
+.tsub a { padding: 6px 0; font-size: 12.5px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); text-decoration: none; }
+.tsub a:hover { color: var(--ink-strong); }
+.tsub a[aria-current="page"] { color: var(--ink-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+.tsub a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tblock { margin-bottom: calc(var(--space-7) * var(--density)); }
+.tcards { display: grid; gap: 14px; max-width: 980px; }
+.tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+.crumb { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.crumb a { color: var(--accent-text); text-underline-offset: 3px; }
+.runhead .who { display: grid; gap: 4px; flex: 1 1 360px; min-width: 0; }
+.runhead h1 { overflow-wrap: anywhere; }
+.lede { max-width: 72ch; margin: 0 0 16px; font-size: 15px; color: var(--ink); }
+.problem { margin: 0 0 14px; color: var(--bad-text); font-size: 14px; }
+.runpage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 28px 36px; align-items: start; margin-bottom: calc(var(--space-7) * var(--density)); }
+.runpage .rmain, .runpage .rside { display: grid; gap: calc(var(--space-6) * var(--density)); min-width: 0; align-content: start; }
+#run-said { margin: -10px 0 16px; }
+@media (max-width: 1023px) { .runpage { grid-template-columns: minmax(0, 1fr); } }
+/* Modes */
+:root { --ls-focus-top: 57px; }
+#modebar { position: fixed; top: 0; left: var(--rail-width); right: 0; z-index: 35; padding: 0 max(28px, env(safe-area-inset-right, 0px)) 0 28px; background: color-mix(in srgb, var(--ground) 90%, transparent); backdrop-filter: blur(8px); box-shadow: inset 0 -1px 0 var(--rule); transition: left var(--dur-travel) var(--ease-travel); }
+.page { padding-top: 76px; }
+#nav .ls-railnav { view-transition-name: ls-rail; transition: transform var(--dur-travel) var(--ease-travel), width var(--dur-base) var(--ease-out), box-shadow var(--dur-base); }
+@media (max-width: 599px) { #modebar { left: 0; padding-left: 52px; padding-right: 12px; } [data-mode="minimal"] #modebar { padding-left: 12px; } [data-mode="minimal"] .page { padding-left: 16px; padding-right: 16px; } }
+.ls-toasts { top: 66px; }
+[data-mode="minimal"] #nav .ls-railnav, [data-mode="minimal"] #nav .ls-pagestab { transform: translateX(-120%); visibility: hidden; transition: transform var(--dur-travel) var(--ease-travel), visibility 0s var(--dur-travel); }
+[data-mode="minimal"] #modebar { left: 0; padding-left: max(28px, env(safe-area-inset-left, 0px)); background: transparent; backdrop-filter: none; box-shadow: none; }
+[data-mode="minimal"] .page { padding-left: max(28px, env(safe-area-inset-left, 0px)); }
+[data-mode="minimal"] .quietwrap { max-width: 760px; margin: 6vh auto 0; }
+[data-mode="terminals"] .page { padding-right: 14px; padding-left: calc(var(--rail-width) + 14px); padding-bottom: 14px; }
+@media (max-width: 599px) { [data-mode="terminals"] .page { padding-left: 12px; padding-right: 12px; } }
+[data-mode="terminals"] .page > .sample { display: none; }
+.deckwrap { height: calc(100vh - 92px); min-height: 460px; }
+.tfocus { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.tfocus.open { grid-template-columns: minmax(0, 1fr) minmax(420px, 48%); }
+.tfocus .bcol { min-width: 0; }
+.tfocus .bpanel { position: sticky; top: 70px; max-height: calc(100vh - 86px); overflow: auto; padding: 4px 18px 24px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule), var(--shadow-float); animation: lsPanelIn .5s var(--ease-travel) both; }
+.tfocus .bpanel .runpage { grid-template-columns: minmax(0, 1fr); }
+.tfocus .bpanel .pclose { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; padding: 8px 0; background: var(--surface); }
+@keyframes lsPanelIn { from { opacity: 0; transform: translateX(40px); } }
+[data-motion="reduced"] .tfocus .bpanel, [data-motion="none"] .tfocus .bpanel { animation: none; }
+@media (prefers-reduced-motion: reduce) { .tfocus .bpanel { animation: none !important; } }
+@media (max-width: 1099px) { .tfocus.open { grid-template-columns: minmax(0, 1fr); } .tfocus.open .bcol { display: none; } .tfocus .bpanel { position: static; max-height: none; } }
+.qrun { display: grid; gap: 22px; max-width: 980px; margin: 0 auto; }
+[data-mode="pure"] .page { padding-right: 14px; padding-left: calc(var(--rail-width) + 14px); padding-bottom: 14px; }
+@media (max-width: 599px) { [data-mode="pure"] .page { padding-left: 48px; padding-right: 10px; } }
+[data-mode="pure"] .page > .sample { display: none; }
+[data-mode="pure"] #modebar { backdrop-filter: none; background: var(--ground); }
+.deskwrap { height: calc(100vh - 92px); min-height: 480px; }
+[data-mode="pure"] .ls-toasts { top: auto; bottom: 64px; }
+.pview { display: grid; gap: 18px; align-content: start; }
 </style>
 
 <a class="skip" href="#main">Skip to the page</a>
 <div id="nav"></div>
+<div id="modebar"></div>
 <main id="main" class="page" tabindex="-1"></main>
 <div id="toasts"></div>
 <div id="amb" class="amb" hidden></div>
@@ -167,11 +220,12 @@ body { background: var(--ground); color: var(--ink); }
   var PREF_KEY = "studio-prototype-appearance";
   function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "null") || {}; } catch (e) { return {}; } }
   function savePrefs() { try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch (e) { /* storage blocked: the choice lasts this visit */ } }
-  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", keys: true }, loadPrefs());
+  var P = Object.assign({ theme: null, accent: "cyan", density: "comfortable", motion: "full", halo: "orbit", keys: true, mode: "default", deckLayout: 2 }, loadPrefs());
   var hostTheme = root.getAttribute("data-theme");
   function applyPrefs() {
     var t = P.theme || (hostTheme === "light" || hostTheme === "dark" ? hostTheme : S.preferredTheme());
     S.setTheme(t); S.setAccent(P.accent); S.setDensity(P.density); S.setMotion(P.motion);
+    root.setAttribute("data-mode", P.mode || "default");
   }
   applyPrefs();
   new MutationObserver(function () {
@@ -242,8 +296,8 @@ body { background: var(--ground); color: var(--ink); }
 
   /* ---------- actions: each one says the command it runs ---------- */
   function gateActs() {
-    return [{ label: "Approve", kind: "needs", solid: true, glyph: "✓", cmd: "$ loadout team gate --answer Approve", onPress: function () { answerGate(true); return "You approved: push the tag v0.66.0"; } },
-      { label: "Refuse", glyph: "✕", cmd: "$ loadout team gate --answer Refuse", onPress: function () { answerGate(false); return "You refused: push the tag v0.66.0"; } }];
+    return [{ label: "Yes, push it", kind: "needs", glyph: "✓", cmd: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer yes --by dashboard", onPress: function () { answerGate(true); TV++; return "You said yes: push the tag v0.66.0"; } },
+      { label: "No", glyph: "✕", cmd: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer no --by dashboard", onPress: function () { answerGate(false); TV++; return "You said no: push the tag v0.66.0"; } }];
   }
   function answerGate(yes) {
     var t = line("t1"); if (!t.waiting) { return; }
@@ -298,20 +352,21 @@ body { background: var(--ground); color: var(--ink); }
     context: ["Context", "$ loadout instructions explain", "What a session reads before it starts, and what it costs in tokens."], spend: ["Spend", "$ loadout usage", "Tokens used, by day, project and model."], projects: ["Projects", "$ loadout project list", "The projects Loadout knows on this machine."] };
   function route() { var h = (location.hash || "#home").slice(1); return h || "home"; }
   function go(r) { if (location.hash.slice(1) === r) { render(); } else { location.hash = r; } }
-  window.addEventListener("hashchange", function () { render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
+  window.addEventListener("hashchange", function () { if (FOCUS) { FOCUS.close(); FOCUS = null; } render(); var m = document.getElementById("main"); if (m) { m.focus({ preventScroll: true }); } window.scrollTo(0, 0); });
 
   /* ---------- the rail ---------- */
   function renderNav() {
-    var w = ST.lines.filter(function (l) { return l.waiting; }), r = route(), cur = r.indexOf("session") === 0 ? "sessions" : r;
+    var w = ST.lines.filter(function (l) { return l.waiting; }), r = route(), cur = r.indexOf("session") === 0 ? "sessions" : (teamsRoute(r) ? "teams" : r);
     var sw = w.filter(function (l) { return l.kind === "session"; }).length, tw = w.filter(function (l) { return l.kind === "team run"; }).length;
     var running = ST.lines.filter(function (l) { return l.kind === "session" && l.stage === 2 && !l.waiting; }).length;
     var facts = { home: [w.length ? w.length + " waiting on you" : "all calm", !!w.length], sessions: [sw ? sw + " waiting on you" : running + " running", !!sw], ideas: [ST.lines.filter(function (l) { return l.kind === "idea"; }).length + " being shaped", false],
-      teams: [tw ? tw + " waiting on you" : "1 running", !!tw], memory: ["12 topics", false], context: ["2,403 tokens", false], spend: [Math.round(ST.tokens / 600) + "% of threshold", false], projects: ["3 projects", false], settings: ["", false] };
+      teams: [teamsWaiting() ? teamsWaiting() + " waiting on you" : "all calm", !!teamsWaiting()], memory: ["12 topics", false], context: ["2,403 tokens", false], spend: [Math.round(ST.tokens / 600) + "% of threshold", false], projects: ["3 projects", false], settings: ["", false] };
     var nav = document.getElementById("nav"); nav.textContent = "";
     var rail = S.SideRail({ current: cur, onSearch: openPalette, pages: PAGES.map(function (p) { return { key: p[0], name: p[1], fact: facts[p[0]][0], need: facts[p[0]][1], href: "#" + p[0] }; }) });
     var foot = el("button", { type: "button", "class": "ls-rl ls-appearance", onclick: openAppearance, "data-k": "appearance" }, [svgIcon("M10 3a7 7 0 1 0 0 14a3.5 3.5 0 0 1 0-7a3.5 3.5 0 0 0 0-7z M10 3a7 7 0 0 1 0 14"), el("span", { "class": "n", text: "Appearance" }), el("span", { "class": "f", text: themeName() })]);
     rail.querySelector(".ls-railnav").appendChild(foot);
     nav.appendChild(rail);
+    renderModebar();
   }
   function svgIcon(d) { var ns = "http://www.w3.org/2000/svg", v = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path"); v.setAttribute("viewBox", "0 0 20 20"); v.setAttribute("aria-hidden", "true"); p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.6"); v.appendChild(p); return v; }
   function themeName() { return { dark: "Dark", light: "Light", "hc-dark": "High contrast dark", "hc-light": "High contrast light" }[root.getAttribute("data-theme")] + " · " + P.accent; }
@@ -440,6 +495,8 @@ body { background: var(--ground); color: var(--ink); }
   function term(id, cls, text) {
     (ST.term[id] = ST.term[id] || []).push([cls, text]);
     if (LIVE && LIVE.id === id) { LIVE.t.write(runsOf([cls, text])); }
+    var dt = DECK && DECK.deck.terminal(id); if (dt) { dt.write(runsOf([cls, text])); }
+    if (DECK && DECK.deck.current !== id) { ST.unread = ST.unread || {}; if (!ST.unread[id]) { ST.unread[id] = true; DECK.deck.update(deckSessions()); } }
   }
   function termState(l) { if (l.stage === 4) { return "ended"; } if (l.waiting) { return l.approval ? "approval" : "waiting"; } if (l.agent === "codex") { return (l.quiet || 0) >= 10 ? "idle" : "working"; } return (l.quiet || 0) >= 10 ? "idle" : "working"; }
   function renderSession(main, id) {
@@ -535,9 +592,15 @@ body { background: var(--ground); color: var(--ink); }
   function openPalette() {
     var go1 = PAGES.map(function (p) { return { glyph: "→", label: p[1], sub: "page", kind: "page", run: function () { go(p[0]); } }; });
     var flight = ST.lines.map(function (l) { return { glyph: l.waiting ? "!" : "▶", label: l.title, sub: l.where + " · " + wordOf(l), need: !!l.waiting, kind: "focus", run: function () { ST.focus = l.id; ST.view = "lens"; go("home"); } }; });
-    var acts = [{ glyph: "+", label: "Start a session…", sub: "opens New session · $ loadout <project> --task \"…\"", kind: "action", run: function () { go("sessions"); setTimeout(openLaunch, 60); } }];
+    var acts = [{ glyph: "+", label: "Start a session…", sub: "opens New session · $ loadout <project> --task \"…\"", kind: "action", run: function () { go("sessions"); setTimeout(openLaunch, 60); } },
+      { glyph: "◐", label: "Mode: Default", sub: "Studio as it is · Ctrl Shift M cycles", kind: "action", run: function () { setMode("default"); } },
+      { glyph: "◐", label: "Mode: Terminals", sub: "Terminal Focus: sessions as tabs and panes", kind: "action", run: function () { setMode("terminals"); } },
+      { glyph: "◐", label: "Mode: Teams", sub: "Team Focus: every live run on one board", kind: "action", run: function () { setMode("teams"); } },
+      { glyph: "◐", label: "Mode: Minimal", sub: "one quiet column of what is live", kind: "action", run: function () { setMode("minimal"); } },
+      { glyph: "◐", label: "Mode: Pure Focus", sub: "list, view and actions; every key shown; effects off", kind: "action", run: function () { setMode("pure"); } },
+      { glyph: "▶", label: "Start a team run…", sub: "opens Start a run · $ loadout team run <team> \"…\"", kind: "action", run: function () { go("teams"); setTimeout(function () { openSheet("run"); }, 60); } }];
     var t = line("t1");
-    if (t.waiting) { acts.push({ glyph: "✓", label: "Approve: push the tag v0.66.0", sub: "$ loadout team gate --answer Approve", need: true, kind: "action", run: function () { answerGate(true); } }, { glyph: "✕", label: "Refuse: push the tag v0.66.0", sub: "$ loadout team gate --answer Refuse", kind: "action", run: function () { answerGate(false); } }); }
+    if (t.waiting) { acts.push({ glyph: "✓", label: "Yes: push the tag v0.66.0", sub: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer yes --by dashboard", need: true, kind: "action", run: function () { answerGate(true); TV++; render(); } }, { glyph: "✕", label: "No: don't push the tag v0.66.0", sub: "$ loadout team gate 20261017-1314-9c0d --gate g3 --answer no --by dashboard", kind: "action", run: function () { answerGate(false); TV++; render(); } }); }
     if (t.stage === 2 && !t.held) { acts.push({ glyph: "‖", label: "Hold release-crew after this round", sub: "$ loadout team halt --pause", kind: "action", run: function () { t.held = true; render(); } }); }
     acts.push({ glyph: "↻", label: "Refine the browser launcher idea", sub: "$ loadout idea refine browser-launcher", kind: "action", run: refine },
       { glyph: "▶", label: "Mark upload-retries doing", sub: "$ loadout task declare upload-retries doing --project starstats", kind: "action", run: function () { var k = line("k1"); k.stage = 2; k.note = "doing"; render(); } },
@@ -566,23 +629,511 @@ body { background: var(--ground); color: var(--ink); }
   }
   function openAppearance() { S.Dialog({ title: "Appearance", why: "Every Studio screen follows these.", content: appearanceForm(), cancelLabel: "Done" }).open(); }
 
+  /* ---------- Teams: runs, the teams you can run, and the parts around them ---------- */
+  var TEAMLIB = [
+    { name: "iterating-project", description: "Plans, implements, reviews and verifies in rounds until the goal is met, the budget is spent, or two rounds make no progress", nodes: 5, lead: "lead", posture: "supervised", budget: "$25 a run", doneWhen: [], origin: "ships with Loadout",
+      tree: [{ name: "lead", role: "role.lead", mode: "plan", deliverable: "a decision each round, and the verdicts", delegates: ["planner", "implementer", "reviewer", "verifier"] }, { name: "planner", role: "role.planner", mode: "plan", deliverable: "PLAN.md" }, { name: "implementer", role: "role.implementer", mode: "implement", deliverable: "a commit on its own branch", instances: 3, worktree: true }, { name: "reviewer", role: "role.reviewer", mode: "review", deliverable: "notes on a branch" }, { name: "verifier", role: "role.verifier", mode: "verify", deliverable: "what it ran, and what passed" }] },
+    { name: "bug-hunt", description: "Reproduces a bug without a person watching, proves its cause, fixes the proven cause, and proves the fix holds", nodes: 5, lead: "lead", posture: "supervised", budget: "$15 a run", doneWhen: ["a test reproduces the bug: it fails without the fix and passes with it", "the full test suite passes with the fix in place"], origin: "ships with Loadout" },
+    { name: "release-crew", description: "Checks the tree is fit to release, writes the notes, and tags. The push is a gate unless the run is autonomous", nodes: 4, lead: "lead", posture: "supervised", budget: "$10 a run", doneWhen: [], origin: "ships with Loadout" },
+    { name: "docs-crew", description: "Finds where the documentation and the code disagree, fixes it in the voice the docs already have, and follows the changed pages as a new reader would", nodes: 4, lead: "lead", posture: "supervised", budget: "$20 a run", doneWhen: ["every changed page passes docs audit", "every changed claim was checked against the code"], origin: "ships with Loadout" },
+    { name: "dependency-sweep", description: "Updates dependencies one branch per bump, in parallel, each verified with the suite green before it is offered for merge", nodes: 4, lead: "lead", posture: "supervised", budget: "$20 a run", doneWhen: ["every updated dependency passes the suite on its own branch"], origin: "ships with Loadout" },
+    { name: "marketing-studio", description: "Turns a goal into a strategy, writes the pieces, and edits every claim against the facts. Nothing is sent, in any mode", nodes: 5, lead: "lead", posture: "supervised", budget: "$20 a run", doneWhen: [], origin: "ships with Loadout" },
+    { name: "quick-review", description: "One reviewer and one verifier, for a branch somebody else wrote", nodes: 3, lead: "lead", posture: "supervised", budget: "$5 a run", doneWhen: [], origin: "yours · loadout-cli", problems: ["it names role.critic, which this machine does not have"] },
+    { name: "product-company", description: "A shape to copy, not a team to run: an executive lead, department leads, and workers under each", nodes: 9, lead: "executive", posture: "", template: true, origin: "ships with Loadout" }
+  ];
+  var TPROJ = [{ name: "loadout-cli", path: "~/code/loadout-cli" }, { name: "starstats", path: "~/code/starstats" }];
+  var THELD = { "loadout-cli": ["the suite passes"] };
+  var TV = 0;
+  var TS = { depth: 0, node: null, scheds: [{ name: "nightly-docs", team: "docs-crew", goal: "check the docs against the code", when: "every 24h", next: "tonight 23:00", autonomy: "autonomous", usd: "10" }, { name: "on-commit-bugs", team: "bug-hunt", goal: "look at what the suite is failing", when: "on commit", autonomy: "supervised" }],
+    bin: [{ kind: "run", name: "20260917-1116-ed59", what: "iterating-project · tidy the launcher", removed: "17 Sep", left: 2, size: "1.2 MB" }, { kind: "run", name: "20261002-0930-41aa", what: "bug-hunt · find the flaky upload test", removed: "2 Oct", left: 15, size: "640 KB" }, { kind: "team", name: "old-review", what: "yours · for loadout-cli", removed: "9 Oct", left: 22 }] };
+  var SINCE_DIFF = [["@", "@@ src/Loadout.Cli/Commands/UsageCommand.cs"], [" ", "    [CommandOption(\"--json\")]"], ["+", "    [CommandOption(\"--since <DATE>\")]"], ["+", "    public DateOnly? Since { get; init; }"], [" ", ""], ["-", "    var entries = reader.Read();"], ["+", "    var entries = reader.Read().Where(e => settings.Since is null || e.Day > settings.Since);"]];
+  var SINCE_TEXT = {
+    "PLAN.md": "# Plan: --since for loadout usage\n\nThe goal, taken to mean: a `--since <date>` option that leaves out entries **on or before** the date.\n\n## Rounds\n\n1. implementer/1 adds the option and a failing test first\n2. reviewer/1 reads the branch; verifier/1 runs the whole suite\n3. the lead decides what to do about anything the suite says\n\n| Node | Hands back |\n| --- | --- |\n| implementer/1 | a commit on its own branch |\n| verifier/1 | what it ran, and what passed |\n\n> Leave the two flaky tests alone unless you are asked.\n\n```sh\nloadout usage --since 2026-01-01\n```\n",
+    "src/Loadout.Cli/Commands/UsageCommand.cs": "namespace Loadout.Cli.Commands;\n\n/// <summary>What the agents have cost, by day.</summary>\npublic sealed class UsageCommand : AsyncCommand<UsageCommand.Settings>\n{\n    public sealed class Settings : GlobalSettings\n    {\n        [CommandOption(\"--json\")]\n        public bool Json { get; init; }\n\n        [CommandOption(\"--since <DATE>\")]\n        public DateOnly? Since { get; init; }\n    }\n\n    // Entries on or before the date are left out.\n    var entries = reader.Read().Where(e => settings.Since is null || e.Day > settings.Since);\n}\n",
+    "tests/Loadout.Tests/UsageSinceTests.cs": "public sealed class UsageSinceTests\n{\n    [Fact]\n    public void Excludes_entries_on_or_before()\n    {\n        var shown = Run(\"--since\", \"2026-01-01\");\n        Assert.DoesNotContain(\"2026-01-01\", shown);\n    }\n}\n",
+    "tests/fixtures/usage.csv": "day,agent,tokens,cost\n2025-12-31,claude,18200,0.41\n2026-01-02,claude,9120,0.22\n2026-01-03,codex,4400,0.09\n"
+  };
+  var TR = [
+    { id: "20261017-1314-9c0d", line: "t1", goal: "Release 0.66.0", team: "release-crew", project: "loadout-cli", posture: "supervised", round: 3, elapsed: "48 min", spent: 3.10, cap: 10, projected: 4.6, rate: "$3.90 an hour",
+      shape: [{ word: "done", lead: "asked for the notes and the checks", nodes: [["writer/1", "done"], ["checker/1", "done"]] }, { word: "done", lead: "asked for the notes again, shorter", nodes: [["writer/1", "done"]] }, { word: "running", lead: "asks to push the tag", nodes: [["releaser/1", "running"]] }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "running", doing: "waiting on the push", turns: 3, cost: 1.4 }, { node: "writer/1", role: "role.writer", model: "sonnet", word: "done", doing: "wrote the release notes", turns: 5, cost: 0.9 }, { node: "checker/1", role: "role.verifier", model: "sonnet", word: "done", doing: "every test passes on main", turns: 3, cost: 0.5 }, { node: "releaser/1", role: "role.releaser", model: "sonnet", word: "running", doing: "tagged v0.66.0 locally", turns: 2, cost: 0.3 }],
+      done: { by: "set by you", criteria: [{ text: "Release notes match the changes", verdict: "met", meaning: "every merged pull request since 0.65.0 has a line", evidence: ["checker/1 compared 23 entries"] }, { text: "Every test passes on main", verdict: "met", meaning: "the whole suite on a fresh clone of main", evidence: ["checker/1: 2,843 passed"] }, { text: "The tag is pushed", verdict: "not-attempted", meaning: "v0.66.0 exists on origin" }] } },
+    { id: "20261017-1402-ab3f", goal: "Add --since to loadout usage", team: "iterating-project", project: "loadout-cli", posture: "supervised", round: 3, elapsed: "41 min", spent: 6.12, cap: 25, projected: 11.4, rate: "$0.15 a minute", waiting: true,
+      gate: { kind: "question", gate: "g4", node: "lead", asked: "asked 6 min ago", question: "The suite has two flaky tests unrelated to --since. Fix them in this run, or leave them?", options: ["Leave them", "Fix them here"], recommendation: "Leave them", timer: "12 minutes left, then it goes back to the lead to think again" },
+      shape: [{ word: "done", lead: "proposed 2 done-when; you changed one", nodes: [["planner/1", "done"]] }, { word: "done", lead: "asked for an implementer and a reviewer", nodes: [["implementer/1", "done"], ["reviewer/1", "done"]] }, { word: "waiting for you", lead: "asks whether to fix two flaky tests", nodes: [["verifier/1", "done"]] }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "waiting for you", doing: "asked whether to fix two flaky tests", turns: 3, cost: 2.31 }, { node: "planner/1", role: "role.planner", model: "sonnet", word: "done", doing: "wrote PLAN.md", turns: 3, cost: 0.42 }, { node: "implementer/1", role: "role.implementer", model: "sonnet", word: "done", doing: "committed a4f21c9", turns: 9, cost: 1.93 }, { node: "reviewer/1", role: "role.reviewer", model: "sonnet", word: "done", doing: "two notes on the branch", turns: 3, cost: 0.51 }, { node: "verifier/1", role: "role.verifier", model: "sonnet", word: "done", doing: "2,843 passing, 2 flaky", turns: 4, cost: 0.61, refused: 1 }],
+      done: { by: "proposed by the lead, agreed by you", goal: "a --since option on loadout usage that filters by date", criteria: [{ text: "the suite passes", project: true, verdict: null, meaning: "the whole suite, on a fresh clone" }, { text: "loadout usage --since 2026-01-01 prints only entries after that date", verdict: null, meaning: "entries on or before the date are left out" }, { text: "a test fails without the option and passes with it", verdict: null, meaning: "a new test in tests/Loadout.Tests for --since" }] },
+      rich: true },
+    { id: "20261017-1311-77e0", goal: "Make the docs true", team: "docs-crew", project: "loadout-cli", posture: "supervised", round: 2, elapsed: "18 min", spent: 14.9, cap: 20, projected: 26.3, rate: "$0.83 a minute", quietNode: "docs-auditor/1", quietFor: "9 min (it usually takes 3)",
+      shape: [{ word: "done", lead: "asked for an auditor", nodes: [["docs-auditor/1", "done"]] }, { word: "running", lead: "asked for a writer and the auditor again", nodes: [["writer/1", "running"], ["docs-auditor/1", "quiet"]] }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "idle", doing: "waiting for its nodes", turns: 2, cost: 3.2 }, { node: "writer/1", role: "role.writer", model: "sonnet", word: "running", doing: "rewriting docs/commands.md", turns: 6, cost: 5.1 }, { node: "docs-auditor/1", role: "role.auditor", model: "haiku", word: "quiet", doing: "reading docs/teams.md", quiet: "9 min, three times its usual 3", turns: 4, cost: 6.6, refused: 3 }],
+      done: { by: "the team's own", criteria: [{ text: "every changed page passes docs audit", verdict: null, meaning: "loadout docs audit reports nothing on the changed pages" }, { text: "every changed claim was checked against the code", verdict: null, meaning: "each changed sentence cites the file it describes" }, { text: "the suite passes", project: true, verdict: null }] } },
+    { id: "20261017-1520-3a7b", goal: "Tidy the launcher's help text", team: "iterating-project", project: "loadout-cli", posture: "manual", round: 2, elapsed: "9 min", spent: 1.04, cap: 25, projected: 4.2, rate: "$0.12 a minute", waiting: true,
+      gate: { kind: "brief", gate: "g2", node: "implementer/1", asked: "manual run", question: "The lead wants to brief implementer/1:", brief: "Rewrite every help line in src/Loadout.Cli/Launcher so it starts with a verb. Update the snapshot tests to match." },
+      shape: [{ word: "done", lead: "asked for a plan", nodes: [["planner/1", "done"]] }, { word: "waiting for you", lead: "wants to brief implementer/1" }],
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "waiting for you", doing: "a brief for implementer/1", turns: 2, cost: 0.71 }, { node: "planner/1", role: "role.planner", model: "sonnet", word: "done", doing: "wrote PLAN.md", turns: 2, cost: 0.33 }],
+      done: { by: "set by you", criteria: [{ text: "every help line starts with a verb", verdict: null }] } },
+    { id: "20261016-2300-0b9a", goal: "Check the docs against the code", team: "docs-crew", project: "loadout-cli", posture: "autonomous", round: 4, elapsed: "52 min", spent: 9.4, cap: 20, ended: "done", from: "nightly-docs",
+      shape: [{ word: "done", lead: "asked for an auditor", nodes: [["docs-auditor/1", "done"]] }, { word: "done", lead: "asked for two writers", nodes: [["writer/1", "done"], ["writer/2", "done"]] }, { word: "done", lead: "asked the auditor again", nodes: [["docs-auditor/1", "done"]] }, { word: "done", lead: "merged both branches", nodes: [] }], end: { word: "done", text: "The lead said done: 3 of 3 met" },
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "done", doing: "said done", turns: 4, cost: 2.9 }, { node: "writer/1", role: "role.writer", model: "sonnet", word: "done", doing: "fixed 6 pages", turns: 7, cost: 3.1 }, { node: "writer/2", role: "role.writer", model: "sonnet", word: "done", doing: "fixed 3 pages", turns: 5, cost: 2.2 }, { node: "docs-auditor/1", role: "role.auditor", model: "haiku", word: "done", doing: "nothing left to report", turns: 6, cost: 1.2 }],
+      done: { by: "the team's own; nobody was asked", criteria: [{ text: "every changed page passes docs audit", verdict: "met", meaning: "loadout docs audit reports nothing on the changed pages", evidence: ["docs-auditor/1: 9 pages, 0 findings"] }, { text: "every changed claim was checked against the code", verdict: "met", evidence: ["writer/1 and writer/2 cited a file for each"] }, { text: "the suite passes", project: true, verdict: "met", evidence: ["the run did not change code"] }] } },
+    { id: "20261017-0950-5c1e", goal: "Find why the upload hangs on retry", team: "bug-hunt", project: "starstats", posture: "supervised", round: 3, elapsed: "1 h 12 min", spent: 7.85, cap: 15, ended: "stopped",
+      shape: [{ word: "done", lead: "asked for a reproducer", nodes: [["reproducer/1", "done"]] }, { word: "done", lead: "asked for nothing", nodes: [] }, { word: "done", lead: "asked for nothing again", nodes: [] }], end: { word: "stopped", text: "Stopped: two rounds without progress" },
+      crew: [{ node: "lead", role: "role.lead", model: "opus", word: "stopped", doing: "took two rounds without asking", turns: 3, cost: 4.1 }, { node: "reproducer/1", role: "role.reproducer", model: "sonnet", word: "done", doing: "could not make it hang", turns: 11, cost: 3.75, refused: 12 }],
+      done: { by: "the team's own", criteria: [{ text: "a test reproduces the bug: it fails without the fix and passes with it", verdict: "unmet", meaning: "a test in tests/Upload that hangs on the third retry" }, { text: "the full test suite passes with the fix in place", verdict: "not-attempted" }] } }
+  ];
+  function tline(r) { return r.line ? line(r.line) : null; }
+  function runWord(r) {
+    var l = tline(r);
+    if (l) { if (l.waiting) { return "waiting for you"; } if (l.stage === 4) { return "done"; } return l.held ? "held after this round" : "running"; }
+    if (r.ended) { return r.ended; } if (r.waiting) { return "waiting for you"; } return r.held ? "held after this round" : "running";
+  }
+  function runGate(r) {
+    var l = tline(r);
+    if (l) { return l.waiting ? { kind: "confirm", gate: "g3", node: "the run", asked: "asked " + Math.max(1, ST.clock - (l.askedAt || ST.clock)) + " min ago", question: "Push the tag v0.66.0 to origin?", onAnswer: function (a) { setTimeout(function () { answerGate(a === "yes"); TV++; render(); }, 900); } } : null; }
+    if (!r.waiting || !r.gate) { return null; }
+    return Object.assign({}, r.gate, { onAnswer: function (a, x) { setTimeout(function () { answerRun(r, a, x); }, 900); } });
+  }
+  function answerRun(r, a, x) {
+    r.waiting = false; r.gate = null; TV++;
+    if (r.id === "20261017-1402-ab3f") {
+      r.round = 4; r.shape[2].word = "done"; r.shape.push({ word: "running", lead: a === "Think again" ? "thinking again about the flaky tests" : (a === "Leave them" ? "left the flaky tests; asked the verifier again" : "asked an implementer to fix the flaky tests"), nodes: [[a === "Fix them here" ? "implementer/2" : "verifier/1", "running"]] });
+      r.crew[0].word = "running"; r.crew[0].doing = a === "Think again" ? "deciding about the flaky tests itself" : "reading verifier/1's report"; r.said = a === "Think again" ? "Sent back: the lead decides itself, or asks a better question." : "You answered: " + a + ". The run carries on in round 4.";
+    } else if (r.gate === null && r.posture === "manual") {
+      r.round = 2; r.shape[1] = { word: "running", lead: a === "yes" ? "briefed implementer/1" + (x && x.instead ? " with your brief" : "") : "was told the brief was not sent", nodes: a === "yes" ? [["implementer/1", "running"]] : [] };
+      r.crew[0].word = "running"; r.crew[0].doing = a === "yes" ? "waiting on implementer/1" : "rethinking the brief"; if (a === "yes") { r.crew.push({ node: "implementer/1", role: "role.implementer", model: "sonnet", word: "running", doing: "reading the brief", turns: 0, cost: 0 }); }
+      r.said = a === "yes" ? (x && x.instead ? "Sent your brief instead of the lead's. The journal keeps both." : "Sent the lead's brief.") : "Not sent. The lead is told.";
+    }
+    toasts.add({ level: "info", text: r.goal + ": answered", cmd: "" });
+    render();
+    var s = document.getElementById("run-said"); if (s) { s.focus(); }
+  }
+  function runReasons(r) {
+    var out = [];
+    if (r.quietNode && !r.ended) { out.push({ reason: "quiet", node: r.quietNode, quiet: r.quietFor }); }
+    if (!r.ended && r.cap && r.projected > r.cap) { out.push({ reason: "budget", detail: money(r.projected) + " of " + money(r.cap) }); }
+    return out;
+  }
+  function money(n) { return "$" + Number(n).toFixed(2); }
+  function runSummary(r) { return { id: r.id, goal: r.goal, team: r.team, project: r.project, posture: r.posture, word: runWord(r), round: r.round, elapsed: r.elapsed, spent: r.spent, cap: r.cap, projected: r.ended ? null : r.projected, rate: r.ended ? null : r.rate }; }
+  function runActs(r) {
+    var w = runWord(r);
+    if (w === "done" || w === "stopped" || w === "failed") {
+      return [{ label: "Run it again", cmd: "fills Start a run from it · starts nothing", onPress: function () { openSheet("run", { team: r.team, goal: r.goal, project: r.project, autonomy: r.posture === "supervised" ? "" : r.posture }); } },
+        { label: "Pick it up where it stopped", cmd: "$ loadout team resume " + r.id, onPress: function () { r.ended = null; r.round += 1; r.shape.push({ word: "running", lead: "picked up where it stopped", nodes: [] }); delete r.end; TV++; toasts.add({ level: "info", text: r.goal + ": picked up again", cmd: "$ loadout team resume " + r.id }); render(); } },
+        { label: "Forget it", cmd: "$ loadout team runs remove " + r.id, onPress: function () { S.Dialog({ title: "Forget \u201c" + r.goal + "\u201d?", why: "It goes to the bin for 30 days. Its branches are not touched.", actions: [{ label: "Forget it", kind: "needs", cmd: "$ loadout team runs remove " + r.id, onPress: function () { TR = TR.filter(function (x) { return x !== r; }); TS.bin.unshift({ kind: "run", name: r.id, what: r.team + " \u00b7 " + r.goal, removed: "today", left: 30 }); TV++; go("teams"); } }] }).open(); } }];
+    }
+    var l = tline(r), held = l ? l.held : r.held;
+    return [held ? { label: "Let it carry on", cmd: "$ loadout team halt " + r.id + " --resume", onPress: function () { if (l) { l.held = false; } r.held = false; TV++; render(); } }
+      : { label: "Hold after this round", cmd: "$ loadout team halt " + r.id + " --pause", onPress: function () { if (l) { l.held = true; } r.held = true; TV++; render(); } },
+      { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt " + r.id, onPress: function () { S.Dialog({ danger: true, title: "Stop \u201c" + r.goal + "\u201d after this round?", why: "It stops when the turn it is in comes back. Nothing is killed mid-turn, and you can pick it up again later.", actions: [{ label: "Stop it", kind: "danger", cmd: "$ loadout team halt " + r.id, onPress: function () { r.ended = "stopped"; r.waiting = false; r.end = { word: "stopped", text: "Stopped by you" }; TV++; render(); } }] }).open(); } }];
+  }
+  function openSheet(kind, preset) {
+    S.TeamSheet({ kind: kind, teams: TEAMLIB, projects: TPROJ, projectDoneWhen: THELD, daemon: true, preset: preset || {}, onSubmit: function (c, v) {
+      if (kind === "run") { var id = "20261017-" + (1600 + TR.length) + "-n" + TR.length + "ew"; TR.unshift({ id: id, goal: v.goal.trim(), team: v.team, project: v.project, posture: v.autonomy || "supervised", round: 1, elapsed: "just now", spent: 0, cap: v.usd && v.usd !== "none" ? +v.usd : 25, projected: 0, rate: "$0.00 a minute", shape: [{ word: "running", lead: "reading the goal", nodes: [] }], crew: [{ node: "lead", role: "role.lead", model: "opus", word: "running", doing: "reading the goal", turns: 0, cost: 0 }], done: { by: "set by you", criteria: v.done.split("\n").filter(function (s) { return s.trim(); }).map(function (s) { return { text: s.trim(), verdict: null }; }) } }); TV++; toasts.add({ level: "info", text: v.team + " started: " + v.goal.trim(), cmd: c }); setTimeout(function () { go("run-" + id); }, 60); }
+      if (kind === "make") { TEAMLIB.splice(TEAMLIB.length - 1, 0, { name: v.name, description: "Your team, written from " + (v.from || "an empty file") + ". Its nodes are in its file.", nodes: v.from ? (TEAMLIB.filter(function (t) { return t.name === v.from; })[0] || {}).nodes : 0, lead: "lead", posture: "supervised", origin: v.forProject ? "yours · " + v.project : "yours" }); TV++; toasts.add({ level: "info", text: "Wrote " + v.name, cmd: c }); setTimeout(function () { go("team-" + v.name); }, 60); }
+      if (kind === "schedule") { TS.scheds.push({ name: v.name, team: v.team, goal: v.goal.trim(), when: v.when === "at" ? "at " + v.at : v.when === "on" ? "on commit" : "every " + v.every, autonomy: v.autonomy || "supervised", usd: v.usd }); TV++; toasts.add({ level: "info", text: "Scheduled " + v.name, cmd: c }); render(); }
+    } }).open();
+  }
+  function teamsWaiting() { return TR.filter(function (r) { return runWord(r) === "waiting for you"; }).length; }
+  function subnav(cur) {
+    return el("nav", { "class": "tsub", "aria-label": "Teams" }, [["teams", "Runs and teams"], ["teams-remedies", "Remedies"], ["teams-bin", "The bin"]].map(function (x) { return el("a", { href: "#" + x[0], "aria-current": cur === x[0] ? "page" : null, text: x[1] }); }));
+  }
+  function renderTeams(main) {
+    var w = teamsWaiting(), running = TR.filter(function (r) { var x = runWord(r); return x !== "done" && x !== "stopped" && x !== "failed"; });
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Teams" }), el("span", { "class": "fact" + (w ? " need" : ""), text: running.length + " running \u00b7 " + (w ? w + " waiting on you" : "none waiting on you") })]), el("span", { "class": "grow" }),
+      halo({ label: "Start a run", solid: true, size: "small", glyph: "\u25b6", cmd: "opens the sheet · starts nothing yet", onPress: function () { openSheet("run"); } }, "t-start"),
+      halo({ label: "Make a team", size: "small", cmd: "opens the sheet", onPress: function () { openSheet("make"); } }, "t-make"),
+      halo({ label: "Run one on a schedule", size: "small", cmd: "opens the sheet", onPress: function () { openSheet("schedule"); } }, "t-sched")]));
+    main.appendChild(subnav("teams"));
+    var needs = [];
+    TR.forEach(function (r) {
+      var g = runGate(r), base = { run: r.id, team: r.team, goal: r.goal, href: "#run-" + r.id };
+      if (g) { needs.push(Object.assign({ reason: "asked", gate: g }, base)); }
+      runReasons(r).forEach(function (x) { needs.push(Object.assign({}, base, x, { actions: x.reason === "quiet" ? [{ label: "Look at what it is doing", cmd: "opens its stream · changes nothing", onPress: function () { TS.depth = 0; TS.node = r.quietNode; go("run-" + r.id); } }] : [{ label: "Change what it may spend", cmd: "$ loadout team budget " + r.id + " --usd <figure or none>", onPress: function () { budgetDialog(r); } }] })); });
+    });
+    main.appendChild(el("div", { "class": "tblock" }, [S.NeedsYou({ items: needs })]));
+    var rz = el("section", { "class": "tblock", "aria-labelledby": "z-running" }, [zone("", "Running", "z-running")]), rl = el("div", { "class": "tcards" });
+    running.filter(function (r) { return runWord(r) !== "waiting for you"; }).forEach(function (r) { rl.appendChild(S.RunCard({ href: "#run-" + r.id, run: runSummary(r), actions: runActs(r) })); });
+    running.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { rl.appendChild(S.RunCard({ href: "#run-" + r.id, run: runSummary(r), reasons: [{ text: "It is waiting for you: the question is under Needs you.", clears: "you answer it" }] })); });
+    if (!rl.childNodes.length) { rl.appendChild(el("p", { "class": "calm", text: "Nothing is running." })); }
+    rz.appendChild(rl); main.appendChild(rz);
+    var ended = TR.filter(function (r) { var x = runWord(r); return x === "done" || x === "stopped" || x === "failed"; });
+    var ez = el("section", { "class": "tblock", "aria-labelledby": "z-ended" }, [zone("", "Ended", "z-ended")]), el2 = el("div", { "class": "tcards" });
+    ended.forEach(function (r) { el2.appendChild(S.RunCard({ href: "#run-" + r.id, run: runSummary(r), actions: runActs(r) })); });
+    ez.appendChild(el2); ez.appendChild(el("p", { "class": "calm small", style: "margin-top: 10px; font-size: 12.5px" }, ["The same as ", el("code", { "class": "ls-cmd", text: "$ loadout team runs" }), ". Clearing out old runs is in ", el("a", { href: "#teams-bin", text: "the bin" }), "."]));
+    main.appendChild(ez);
+    var tz = el("section", { "class": "tblock", "aria-labelledby": "z-lib" }, [zone("", "Teams you can run", "z-lib")]), tg = el("div", { "class": "tgrid" });
+    TEAMLIB.forEach(function (t) { tg.appendChild(S.TeamCard(Object.assign({}, t, { href: "#team-" + t.name, doneWhen: (t.doneWhen || []).length, onRun: function () { openSheet("run", { team: t.name }); }, onCopy: function () { openSheet("make", { from: t.name }); } }))); });
+    tz.appendChild(tg); tz.appendChild(el("p", { "class": "calm", style: "margin-top: 10px; font-size: 12.5px" }, ["From ", el("code", { "class": "ls-cmd", text: "$ loadout team list" }), "."])); main.appendChild(tz);
+    var sz = el("section", { "class": "tblock", "aria-labelledby": "z-sched" }, [zone("", "On a schedule", "z-sched"), S.Schedules({ daemon: { running: true }, items: TS.scheds, onRemove: function (n) { TS.scheds = TS.scheds.filter(function (s) { return s.name !== n; }); TV++; } })]);
+    main.appendChild(sz);
+  }
+  function budgetDialog(r) {
+    var v = "", line = el("code", { "class": "ls-cmdline", text: "$ loadout team budget " + r.id + " --usd \u2026" });
+    var inp = el("input", { "class": "ls-text", id: "bud-" + r.id, placeholder: "30, or none", autocomplete: "off", oninput: function () { v = inp.value.trim(); line.textContent = "$ loadout team budget " + r.id + " --usd " + (v || "\u2026"); } });
+    S.Dialog({ title: "Change what it may spend", why: "From its next round on. It has spent " + money(r.spent) + " of " + money(r.cap) + " and is projected to reach " + money(r.projected) + ".", content: el("div", { style: "display: grid; gap: 12px" }, [el("div", { "class": "ls-field" }, [el("label", { "class": "lab", "for": inp.id, text: "In US dollars, or none for no cap" }), inp]), line]),
+      actions: [{ label: "Change it", kind: "needs", cmd: "runs the command above", onPress: function () { if (!/^(none|\d+(\.\d+)?)$/i.test(v) || /^0+(\.0+)?$/.test(v)) { inp.focus(); return true; } r.cap = /none/i.test(v) ? null : +v; TV++; toasts.add({ level: "info", text: r.goal + ": budget now " + (r.cap ? money(r.cap) : "no cap"), cmd: "$ loadout team budget " + r.id + " --usd " + v }); render(); } }] }).open();
+  }
+  var DEPTHS = null;
+  function sinceDepths(r) {
+    return { run: r.id, selected: TS.depth, node: TS.node, onSelect: function (i) { TS.depth = i; },
+      said: { nodes: r.crew.map(function (c) { return c.node; }), live: {}, say: { state: "locked", onUnlock: function (p) { return p === "loadout"; } },
+        journal: [["14:02", "started \u00b7 iterating-project on loadout-cli \u00b7 supervised", "", "run"], ["14:03", "the lead proposed 2 done-when; you changed one", "", "criteria"], ["14:05", "planner/1 briefed", "", "round 1"], ["14:09", "planner/1 reported: PLAN.md", "good", "report"], ["14:10", "implementer/1 and reviewer/1 briefed", "", "round 2"], ["14:11", "implementer/1 called Edit", "", "node", false, 6], ["14:24", "implementer/1 reported: commit a4f21c9", "good", "report"], ["14:27", "reviewer/1 asked to run dotnet format; you said yes", "needs", "asked"], ["14:31", "verifier/1 reported 2,843 passing, 2 flaky", "", "report"], ["14:33", "the lead asks whether to fix two flaky tests", "needs", "gate"]],
+        streams: { "implementer/1": [["14:11", "Read src/Loadout.Cli/Commands/UsageCommand.cs", "", "tool"], ["14:12", "I'll add the option to the settings and filter in Execute.", "", "said"], ["14:13", "Explore: find every caller of UsageReader", "", "sub-agent", true], ["14:15", "Edit src/Loadout.Cli/Commands/UsageCommand.cs", "", "tool"], ["14:19", "Bash dotnet test --filter Usage", "", "tool"], ["14:23", "14 passed, 0 failed", "good", "tool"], ["14:24", "Committed a4f21c9.", "", "said"]] } },
+      cost: { numbers: { rate: r.rate, spent: r.spent, cap: r.cap, projected: r.projected, by: "round 5", byRound: [["Round 1", 4], ["Round 2", 21], ["Round 3", 9]], byNode: [["implementer/1", 13], ["verifier/1", 8], ["reviewer/1", 6], ["planner/1", 4], ["lead", 3]], wrong: [["Tool calls refused", 1], ["Reports not accepted", 0], ["Turns asked again", 0], ["Rounds that asked for nothing", 0], ["Branches that would not merge", 0]] },
+        exchanges: [[1, "lead", "opus", 4, 0, 0.88, "proposed criteria"], [1, "planner/1", "sonnet", 11, 0, 0.42, "done: PLAN.md"], [2, "implementer/1", "sonnet", 38, 0, 1.93, "done: commit a4f21c9"], [2, "reviewer/1", "sonnet", 9, 0, 0.51, "done: two notes"], [3, "verifier/1", "sonnet", 14, 1, 0.61, "done: 2,843 passing"], [3, "lead", "opus", 6, 0, 1.43, "asks: the flaky tests"]] },
+      papers: { summary: "Round 3 of 4 or so. The option and its test are in a4f21c9; the suite is green apart from two flaky tests that predate this run.", pairs: [
+        { node: "planner/1", role: "role.planner", brief: "Plan --since for loadout usage: which files, which tests, in what order.", report: "PLAN.md: the option in UsageCommand, a failing test first, then the whole suite." },
+        { node: "implementer/1", role: "role.implementer", brief: "Add --since <date> to loadout usage. Filter entries on or before the date. Add a test that fails without the option. Leave the existing tests alone.", report: "Added UsageSettings.Since and the filter in Execute. New test UsageSinceTests.Excludes_entries_on_or_before. Committed a4f21c9." },
+        { node: "reviewer/1", role: "role.reviewer", brief: "Review implementer/1's branch for the --since change. Do not commit or check anything out there.", report: "Two notes: the date parse should be invariant-culture; the help text should say inclusive or not." },
+        { node: "verifier/1", role: "role.verifier", brief: "Run the whole suite on implementer/1's branch, on a fresh clone.", report: "2,843 passed. Two failed and passed on a second run: UploadTests.Retries and DaemonTests.Restart." }] },
+      changed: { patches: [{ node: "implementer/1", branch: "team/20261017-1402-ab3f/implementer-1", base: "4e1d2a0", goal: r.goal, files: [["src/Loadout.Cli/Commands/UsageCommand.cs", 18, 2], ["tests/Loadout.Tests/UsageSinceTests.cs", 41, 0], ["tests/fixtures/usage.csv", 4, 0]], diff: SINCE_DIFF }, { node: "planner/1", unmeasured: true }] },
+      delivered: { repository: "~/code/loadout-cli", missing: [],
+        files: [{ path: "src/Loadout.Cli/Commands/UsageCommand.cs", change: "changed", commit: "a4f21c9", node: "implementer/1", bytes: 6120 }, { path: "tests/Loadout.Tests/UsageSinceTests.cs", change: "added", commit: "a4f21c9", node: "implementer/1", bytes: 1830 }, { path: "tests/fixtures/usage.csv", change: "added", commit: "a4f21c9", node: "implementer/1", bytes: 112 }],
+        loose: [{ path: "PLAN.md", kind: "plan", bytes: 3790, node: "planner/1", note: "the plan for rounds 2 and 3" }],
+        read: function (f, mode) { if (mode === "change") { return { diff: /\.cs$/.test(f.path) ? SINCE_DIFF : [["@", "@@ " + f.path], ["+", (SINCE_TEXT[f.path] || "").split("\n")[0]]] }; } return new Promise(function (ok) { setTimeout(function () { ok({ text: SINCE_TEXT[f.path] || "" }); }, 150); }); },
+        downloadAllReason: "the prototype has no files to archive; in Studio the daemon builds the .zip",
+        onDownload: function (f) { saveFile(f.path.split("/").pop(), SINCE_TEXT[f.path] || ""); } } };
+  }
+  /* The prototype hands a file over through the viewer's downloads capability; the viewer confirms each one. */
+  function saveFile(name, text) {
+    var ext = (name.split(".").pop() || "").toLowerCase();
+    if (["md", "csv", "txt", "json"].indexOf(ext) < 0) { toasts.add({ level: "info", text: "In Studio this saves " + name + ". The prototype can only hand over Markdown, CSV and text files.", cmd: "" }); return; }
+    var use = window.claude && window.claude.use ? window.claude.use("downloads") : Promise.resolve(null);
+    use.then(function (d) {
+      if (!d) { toasts.add({ level: "info", text: "Saving files isn't available in this view.", cmd: "" }); return; }
+      return d.save({ filename: name, data: text }).catch(function (e) { if (e && e.code !== "declined") { toasts.add({ level: "info", text: name + " was not saved.", cmd: "" }); } });
+    });
+  }
+  function plainDepths(r) {
+    return { run: r.id, selected: TS.depth, onSelect: function (i) { TS.depth = i; },
+      said: { nodes: r.crew.map(function (c) { return c.node; }), journal: r.shape.map(function (s, i) { return ["", "round " + (i + 1) + ": " + s.lead, "", "round " + (i + 1)]; }) },
+      cost: { numbers: { rate: r.rate || "\u2014", spent: r.spent, cap: r.cap, projected: r.projected || r.spent, byRound: r.shape.map(function (s, i) { return ["Round " + (i + 1), 4 + i * 3]; }), byNode: r.crew.map(function (c) { return [c.node, c.turns * 2]; }), wrong: [["Tool calls refused", r.crew.reduce(function (a, c) { return a + (c.refused || 0); }, 0)], ["Reports not accepted", 0], ["Turns asked again", 0], ["Rounds that asked for nothing", r.team === "bug-hunt" ? 2 : 0], ["Branches that would not merge", 0]] } },
+      papers: { pairs: [] }, changed: { patches: [] }, delivered: { repository: "~/code/" + r.project, files: [], loose: [] } };
+  }
+  function renderRun(main, id) {
+    var r = TR.filter(function (x) { return x.id === id; })[0];
+    if (!r) { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "No run called " + id })])); main.appendChild(el("p", {}, [el("a", { href: "#teams", text: "Back to Teams" })])); return; }
+    var w = runWord(r);
+    main.appendChild(el("p", { "class": "crumb" }, [el("a", { href: "#teams", text: "Teams" }), " / ", r.team]));
+    main.appendChild(el("div", { "class": "head runhead" }, [el("div", { "class": "who" }, [el("h1", { text: r.goal }), el("span", { "class": "fact", text: [r.team, r.project, r.posture, "round " + r.round, r.elapsed, r.id, r.from ? "fired by " + r.from : null].filter(Boolean).join(" \u00b7 ") })]), S.Signal(w, { big: true })]));
+    if (r.said) { main.appendChild(el("p", { "class": "ls-said", id: "run-said", tabindex: "-1", role: "status", text: "\u2713 " + r.said })); }
+    var g = runGate(r);
+    if (g) { main.appendChild(el("div", { "class": "tblock" }, [S.Gate(Object.assign({ run: r.id }, g))])); }
+    var grid = el("div", { "class": "runpage" });
+    var left = el("div", { "class": "rmain" }), right = el("aside", { "class": "rside", "aria-label": "Spend and what you can do" });
+    left.appendChild(el("section", { "aria-labelledby": "z-shape" }, [zone("", "Its shape", "z-shape"), S.RunShape({ rounds: r.shape, next: r.ended ? null : (w === "waiting for you" ? "starts when you answer" : "starts when this round's nodes report"), end: r.end || (r.ended ? { word: r.ended, text: r.ended === "done" ? "The lead said done" : "Stopped" } : null), picked: TS.node, onPick: function (n) { TS.node = n; TS.depth = 0; if (DEPTHS) { DEPTHS.showNode(n); var d = document.getElementById("z-depths"); if (d && d.scrollIntoView) { d.scrollIntoView({ block: "start" }); } } } })]));
+    left.appendChild(el("section", { "aria-labelledby": "z-done" }, [zone("", "Done when", "z-done"), S.DoneWhen(r.done)]));
+    left.appendChild(el("section", { "aria-labelledby": "z-crew" }, [zone("", "Who is on it", "z-crew"), S.Crew({ nodes: r.crew, picked: TS.node, onPick: function (n) { TS.node = n; if (DEPTHS) { DEPTHS.showNode(n); } } })]));
+    right.appendChild(el("section", { "aria-labelledby": "z-spend" }, [zone("", "Spend", "z-spend"), S.Spend(runSummary(r)), w !== "done" && w !== "stopped" ? halo({ label: "Change what it may spend", size: "small", cmd: "$ loadout team budget " + r.id + " --usd <figure or none>", onPress: function () { budgetDialog(r); } }, "r-budget") : null]));
+    if (w !== "done" && w !== "stopped" && w !== "failed") { right.appendChild(S.SayToNode({ run: r.id, lead: true, onSend: function (m) { toasts.add({ level: "info", text: "Sent to the lead of " + r.goal, cmd: "$ loadout team message " + r.id + " --message " + S.shellQuote(m) }); } })); }
+    right.appendChild(el("section", { "aria-labelledby": "z-do" }, [zone("", "Do", "z-do"), el("div", { "class": "ls-answers", style: "margin: 0; flex-direction: column; gap: 12px" }, runActs(r).map(function (a) { return halo(Object.assign({ size: "small" }, a), "r-" + a.label); }))]));
+    grid.appendChild(left); grid.appendChild(right); main.appendChild(grid);
+    var dz = el("section", { "class": "tblock", "aria-labelledby": "z-depths" }, [zone("", "Five depths", "z-depths")]);
+    if (DEPTHS) { DEPTHS.unbind(); }
+    DEPTHS = S.RunDepths(r.rich ? sinceDepths(r) : plainDepths(r));
+    dz.appendChild(DEPTHS.el); main.appendChild(dz);
+    main.appendChild(el("p", { "class": "calm", style: "margin-top: 14px; font-size: 12.5px" }, ["From ", el("code", { "class": "ls-cmd", text: "$ loadout team status " + r.id }), " and the run's journal."]));
+  }
+  function renderTeam(main, name) {
+    var t = TEAMLIB.filter(function (x) { return x.name === name; })[0];
+    if (!t) { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "No team called " + name })])); return; }
+    var mine = /^yours/.test(t.origin || "");
+    main.appendChild(el("p", { "class": "crumb" }, [el("a", { href: "#teams", text: "Teams" }), " / teams you can run"]));
+    main.appendChild(el("div", { "class": "head runhead" }, [el("div", { "class": "who" }, [el("h1", { text: t.name }), el("span", { "class": "fact", text: t.origin || "" })])]));
+    main.appendChild(el("p", { "class": "lede", text: t.description }));
+    (t.problems || []).forEach(function (p) { main.appendChild(el("p", { "class": "problem" }, [S.Signal("blocked"), " Can't run here: " + p])); });
+    var acts = t.template ? [{ label: "Make a team from it", solid: true, cmd: "$ loadout team new <name> --from " + t.name, onPress: function () { openSheet("make", { from: t.name }); } }]
+      : [{ label: "Run it", solid: true, glyph: "\u25b6", cmd: "opens Start a run · starts nothing yet", disabledReason: (t.problems || []).length ? "can't run here until that is fixed" : null, onPress: function () { openSheet("run", { team: t.name }); } },
+        { label: "Run it on a schedule", cmd: "opens the sheet", onPress: function () { openSheet("schedule", { team: t.name }); } },
+        { label: "Make a team from it", cmd: "$ loadout team new <name> --from " + t.name, onPress: function () { openSheet("make", { from: t.name }); } },
+        { label: "Where its file is", cmd: "$ loadout team edit " + t.name + " --path-only", onPress: function () { toasts.add({ level: "info", text: t.name + ": " + (mine ? "~/workspace/projects/loadout-cli/teams/" : "the library: ") + t.name + ".yaml", cmd: "$ loadout team edit " + t.name + " --path-only" }); } }];
+    if (mine) { acts.push({ label: "Remove it", kind: "danger", cmd: "$ loadout team remove " + t.name + " --yes", onPress: function () { S.Dialog({ danger: true, title: "Remove " + t.name + "?", why: "Its file goes to the bin for 30 days, and team restore puts it back.", actions: [{ label: "Remove it", kind: "danger", cmd: "$ loadout team remove " + t.name + " --yes", onPress: function () { TEAMLIB = TEAMLIB.filter(function (x) { return x !== t; }); TS.bin.unshift({ kind: "team", name: t.name, what: t.origin, removed: "today", left: 30 }); TV++; go("teams"); } }] }).open(); } }); }
+    main.appendChild(el("div", { "class": "ls-answers tblock", style: "margin-top: 0" }, acts.map(function (a) { return halo(Object.assign({ size: "small" }, a), "tm-" + a.label); })));
+    var grid = el("div", { "class": "runpage" }), left = el("div", { "class": "rmain" }), right = el("div", { "class": "rside" });
+    var tree = t.tree || [{ name: t.lead || "lead", role: "role.lead", mode: "plan", deliverable: "a decision each round", delegates: ["worker"] }, { name: "worker", role: "role.implementer", mode: "implement", deliverable: "its report" }];
+    left.appendChild(el("section", { "aria-labelledby": "z-nodes" }, [zone("", "Its nodes", "z-nodes"), S.TeamNodes({ nodes: tree })]));
+    if (!t.template) {
+      left.appendChild(el("section", { "aria-labelledby": "z-rules" }, [zone("", "What a run of it follows", "z-rules"), S.TeamRules({ rows: [["Posture", t.posture + ": " + { supervised: "it goes on, and holds at the gates the team names", manual: "it asks you at every step", autonomous: "it holds for nothing, within its budget" }[t.posture]],
+        ["Budget", (t.budget || "none set") + " \u00b7 40 turns a node \u00b7 4 hours", "A run's own --usd comes first, then this, then $ loadout config set team-budget"], ["Stops when", "the lead says done, the budget is spent, two rounds make no progress, or you"],
+        ["Gates", t.name === "release-crew" ? "the push, unless the run is autonomous" : "every merge \u00b7 anything outward is asked"], ["Done when", (t.doneWhen || []).length ? t.doneWhen.join("; ") : "none of its own: the lead proposes some, and you agree them"], ["Held as well", "the suite passes (loadout-cli's own)"]] })]));
+    }
+    var runs = TR.filter(function (r) { return r.team === t.name; });
+    right.appendChild(el("section", { "aria-labelledby": "z-truns" }, [zone("", "Its runs here", "z-truns")].concat(runs.length ? runs.map(function (r) { return S.RunCard({ href: "#run-" + r.id, run: runSummary(r) }); }) : [el("p", { "class": "calm", text: "It has not run on this machine." })])));
+    grid.appendChild(left); grid.appendChild(right); main.appendChild(grid);
+    if (!t.template) { main.appendChild(el("div", { "class": "tblock" }, [S.RoleRecord({ title: "How its roles have been doing", rows: [["role.implementer", "sonnet", 14, 31.2, 2.23, 86, 2], ["role.lead", "opus", 14, 28.9, 2.06, 100, 0], ["role.reviewer", "sonnet", 12, 7.1, 0.59, 92, 0], ["role.verifier", "sonnet", 11, 6.4, 0.58, 73, 14], ["role.planner", null, 3, 1.4, 0.47, 100, 0]], time: [["implementer/1", 4, 11, 2, 0], ["verifier/1", 2, 5, 1, 3], ["reviewer/1", 5, 1, 2, 0]] })])); }
+    main.appendChild(el("p", { "class": "calm", style: "margin-top: 14px; font-size: 12.5px" }, ["From ", el("code", { "class": "ls-cmd", text: "$ loadout team show " + t.name }), "."]));
+  }
+  function renderRemedies(main) {
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "Remedies" }), el("span", { "class": "fact need", text: "1 waiting on you" })])]));
+    main.appendChild(subnav("teams-remedies"));
+    main.appendChild(el("p", { "class": "lede", text: "Scripts a team has worked out to fix something, kept with a record of what each does. One may run with nobody watching only when this machine's rule for its kind allows it and you have trusted that exact script. Neither key is an agent's." }));
+    main.appendChild(el("p", { "class": "calm", style: "font-size: 13px; margin-bottom: 16px" }, ["This machine's rules: disk ask \u00b7 service trusted \u00b7 network never. ", el("code", { "class": "ls-cmd", text: "$ loadout config set team-remediation \"disk=ask, service=trusted, network=never\"" })]));
+    var list = el("div", { "class": "tcards" });
+    list.appendChild(S.Remedy({ team: "system-watch", name: "clear-build-cache", kind: "disk", what: "Deletes build output older than fourteen days from D:\\builds.", assumes: "The build box, PowerShell 7, D:\\builds exists, nothing is mid-build.", proves: "Free space before and after, and a build still succeeds afterwards.", revision: 2, by: "20260920-1200-abcd", rule: "ask", trust: "changed since trusted",
+      requests: [{ id: "r1", node: "remediator/1", run: "20261017-0610-9e2f", asked: "asked 3 min ago", problem: "D: is at 97% and the nightly build will fail.", why: "this machine asks about every disk remedy, trusted or not" }], onRead: function () { toasts.add({ level: "info", text: "clear-build-cache.ps1, revision 2", cmd: "$ loadout team remedy show clear-build-cache --team system-watch --script" }); } }));
+    list.appendChild(S.Remedy({ team: "system-watch", name: "restart-indexer", kind: "service", what: "Restarts the search indexer service.", assumes: "Windows, the service is named WSearch.", proves: "The service is running and answering afterwards.", revision: 1, rule: "trusted", trust: "trusted" }));
+    main.appendChild(list);
+  }
+  function renderBin(main) {
+    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: "The bin" }), el("span", { "class": "fact", text: TS.bin.length + " waiting to go for good" })])]));
+    main.appendChild(subnav("teams-bin"));
+    main.appendChild(el("div", { style: "max-width: 900px" }, [S.Bin({ keptDays: 30, entries: TS.bin, onRestore: function (e) { TS.bin = TS.bin.filter(function (x) { return x !== e; }); TV++; }, onEmpty: function () { TS.bin = []; TV++; } })]));
+  }
+
+  /* ---------- Modes: Default, Terminal Focus, Team Focus and Minimal, kept in this browser ---------- */
+  var MB = null, MBSIG = "", DECK = null, FOCUS = null;
+  function applyMode() { root.setAttribute("data-mode", P.mode || "default"); }
+  function setMode(m, fromSwitch) {
+    if (m === P.mode) { return; }
+    if (FOCUS) { FOCUS.close(); FOCUS = null; }
+    if (!fromSwitch && MB) { MB.switcher.set(m); }
+    S.morph(function () { P.mode = m; savePrefs(); applyMode(); DECK = null; if (PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; } lastTeams = ""; render(); });
+    toasts.add({ level: "info", text: "Mode: " + S.MODES.filter(function (x) { return x.key === m; })[0].name, cmd: "kept in this browser · Ctrl Shift M cycles" });
+  }
+  function cycleMode() { var ks = S.MODES.map(function (x) { return x.key; }); setMode(ks[(ks.indexOf(P.mode) + 1) % ks.length]); }
+  function waitingNow() {
+    var out = [];
+    ST.lines.filter(function (l) { return l.kind === "session" && l.waiting; }).forEach(function (l) { out.push({ kind: "session", id: l.id, at: l.askedAt || 0, label: l.title + " needs approval" }); });
+    TR.filter(function (r) { return runWord(r) === "waiting for you"; }).forEach(function (r) { var g = runGate(r); out.push({ kind: "run", id: r.id, at: r.line ? (tline(r).askedAt || 0) : -1, label: g ? g.question : r.goal }); });
+    return out.sort(function (a, b) { return a.at - b.at; });
+  }
+  function goWaiting(w) {
+    if (P.mode === "minimal") { openQuiet(w.kind === "session" ? { id: w.id, kind: "session" } : { id: w.id, kind: "team run" }); return; }
+    if (w.kind === "session") { if (P.mode === "terminals") { if (route() !== "home" && route() !== "sessions") { go("home"); } setTimeout(function () { if (DECK) { DECK.deck.pick(w.id); } }, 80); } else { go("session-" + w.id); } return; }
+    go("run-" + w.id);
+  }
+  function renderModebar() {
+    var w = waitingNow(), compact = window.innerWidth < 600, sig = w.map(function (x) { return x.label; }).join("|") + "|" + compact;
+    if (MB && sig === MBSIG) { if (MB.switcher.mode !== (P.mode || "default")) { MB.switcher.set(P.mode); } return; }
+    MBSIG = sig;
+    var host = document.getElementById("modebar"); host.textContent = "";
+    MB = S.ModeBar({ mode: P.mode || "default", compact: compact, onMode: function (m) { setMode(m, true); }, onSearch: openPalette, waiting: w, onWaiting: goWaiting });
+    host.appendChild(MB.el);
+  }
+
+  /* Terminal Focus */
+  function sessionInput(l, v) {
+    (ST.term[l.id] = ST.term[l.id] || []).push(["me", "› " + v]);
+    if (l.waiting && l.approval && /^(1|y|yes)$/i.test(v)) { answerSession(l.id, true); return; }
+    if (l.waiting && l.approval && /^(2|n|no)$/i.test(v)) { answerSession(l.id, false); return; }
+    term(l.id, "dim", "  sent to the session");
+  }
+  function makeTerm(id) {
+    var l = line(id);
+    return S.Terminal({ title: l.title, project: l.where, agent: l.agent, sessionId: l.id === "s2" ? "3f9c2a1e" : "7b21d0c4", state: termState(l), fit: window.innerWidth < 600, lines: (ST.term[l.id] || []).map(runsOf), onInput: function (v) { sessionInput(l, v); } });
+  }
+  function deckSessions() {
+    return ST.lines.filter(function (l) { return l.kind === "session"; }).map(function (l) { return { id: l.id, title: l.title, word: l.stage === 4 ? "ended" : wordOf(l), where: l.where, agent: l.agent === "codex" ? "codex" : "claude", unread: !!(ST.unread && ST.unread[l.id]) }; });
+  }
+  function renderDeck(main, focusId) {
+    ST.unread = ST.unread || {};
+    var sess = deckSessions(), first = focusId || P.deckCurrent || (sess[0] || {}).id;
+    if (!sess.some(function (s) { return s.id === first; })) { first = (sess[0] || {}).id; }
+    var wrap = el("div", { "class": "deckwrap" });
+    var d = S.TermDeck({ sessions: sess, current: first, layout: P.deckLayout || 2, terminal: makeTerm,
+      onPick: function (id) { P.deckCurrent = id; savePrefs(); if (ST.unread[id]) { ST.unread[id] = false; d.update(deckSessions()); } },
+      onLayout: function (n) { P.deckLayout = n; savePrefs(); },
+      onNew: function () { openLaunch(); } });
+    wrap.appendChild(d.el); main.appendChild(wrap);
+    DECK = { route: route(), deck: d, states: {} };
+    sess.forEach(function (s) { var l = line(s.id); DECK.states[s.id] = termState(l); });
+  }
+  function refreshDeck() {
+    DECK.deck.update(deckSessions());
+    ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) { var st = termState(l), t = DECK.deck.terminal(l.id); if (t && DECK.states[l.id] !== st) { t.setState(st); } DECK.states[l.id] = st; });
+  }
+
+  /* Team Focus */
+  function boardRuns() {
+    return TR.map(function (r) { var g = runGate(r); return { id: r.id, goal: r.goal, team: r.team, project: r.project, word: runWord(r), round: r.round, rounds: r.shape, spent: r.spent, cap: r.cap, projected: r.ended ? null : r.projected, gate: g }; });
+  }
+  function boardTeams() {
+    return TEAMLIB.filter(function (t) { return !t.template; }).map(function (t) {
+      var mine = TR.filter(function (r) { return r.team === t.name; }), live = mine.filter(function (r) { var w = runWord(r); return w !== "done" && w !== "stopped" && w !== "failed"; });
+      var word = live.some(function (r) { return runWord(r) === "waiting for you"; }) ? "waiting for you" : live.length ? "running" : "idle";
+      return { name: t.name, word: word, fact: live.length ? live.length + (live.length === 1 ? " live" : " live") : "none live" };
+    });
+  }
+  function renderBoard(main, r) {
+    var run = r.indexOf("run-") === 0 ? r.slice(4) : null, team = r.indexOf("team-") === 0 ? r.slice(5) : null;
+    var w = teamsWaiting(), live = TR.filter(function (x) { var y = runWord(x); return y !== "done" && y !== "stopped" && y !== "failed"; }).length;
+    var grid = el("div", { "class": "tfocus" + (run || team ? " open" : "") });
+    var left = el("div", { "class": "bcol" }, [el("div", { "class": "head", style: "margin-bottom: 14px" }, [el("div", {}, [el("h1", { text: "Teams" }), el("span", { "class": "fact" + (w ? " need" : ""), text: live + " live · " + (w ? w + " waiting on you" : "none waiting on you") })]), el("span", { "class": "grow" }),
+      halo({ label: "Start a run", solid: true, size: "small", glyph: "▶", cmd: "opens the sheet · starts nothing yet", onPress: function () { openSheet("run"); } }, "tf-start")]),
+      S.RunBoard({ runs: boardRuns(), teams: boardTeams(), picked: run, team: team, onPick: function (id) { go("run-" + id); }, onTeam: function (n) { go("team-" + n); } })]);
+    grid.appendChild(left);
+    if (run || team) {
+      var panel = el("aside", { "class": "bpanel", "aria-label": run ? "The run" : "The team" });
+      panel.appendChild(el("div", { "class": "pclose" }, [halo({ label: "Close", size: "small", onPress: function () { go("teams"); } }, "tf-close")]));
+      if (run) { renderRun(panel, run); } else { renderTeam(panel, team); }
+      grid.appendChild(panel);
+    }
+    main.appendChild(grid);
+  }
+
+  /* Minimal */
+  function quietItems() {
+    var out = [];
+    ST.lines.filter(function (l) { return l.kind === "session" && l.stage !== 4; }).forEach(function (l) { out.push({ id: l.id, kind: "session", title: l.title, word: wordOf(l), where: l.where, ask: l.waiting ? "Asks for approval. Answer it in the terminal." : "" }); });
+    TR.filter(function (r) { var w = runWord(r); return w !== "done" && w !== "stopped" && w !== "failed"; }).forEach(function (r) { var g = runGate(r); out.push({ id: r.id, kind: "team run", title: r.goal, word: runWord(r), where: r.team, ask: g ? g.question : "" }); });
+    return out;
+  }
+  function renderQuiet(main) {
+    main.appendChild(el("div", { "class": "quietwrap" }, [S.QuietList({ items: quietItems(), onOpen: function (x, from) { openQuiet(x, from); } })]));
+  }
+  function openQuiet(x, from) {
+    if (FOCUS) { FOCUS.close(); FOCUS = null; }
+    if (x.kind === "session") {
+      var l = line(x.id), t = makeTerm(x.id);
+      LIVE = { id: x.id, t: t };
+      FOCUS = S.FocusFrame({ title: l.title, sub: l.where + " · " + (l.agent === "codex" ? "Codex" : "Claude Code"), word: wordOf(l), content: t.el, from: from, onClose: function () { LIVE = null; FOCUS = null; } });
+      setTimeout(function () { t.focus(); }, 560);
+      return;
+    }
+    var r = TR.filter(function (y) { return y.id === x.id; })[0]; if (!r) { return; }
+    var g = runGate(r), box = el("div", { "class": "qrun" });
+    if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g, { onAnswer: function (a, ex) { g.onAnswer(a, ex); setTimeout(function () { if (FOCUS) { FOCUS.close(); } }, 1200); } }))); }
+    box.appendChild(S.RunShape({ rounds: r.shape, next: r.ended ? null : "the next round", end: r.end || null }));
+    box.appendChild(S.DoneWhen(r.done));
+    box.appendChild(el("p", { "class": "calm", style: "font-size: 13px" }, ["Everything else about it is on its page: ", el("a", { href: "#run-" + r.id, text: "open it in full" }), "."]));
+    FOCUS = S.FocusFrame({ title: r.goal, sub: r.team + " · " + r.project + " · round " + r.round, word: runWord(r), content: box, from: from, onClose: function () { FOCUS = null; } });
+  }
+
+  /* Pure Focus: list, view and actions, a command bar, every key shown */
+  var PURE = null;
+  var SCOPES = { h: "all", s: "sessions", t: "runs", i: "ideas", k: "tasks", n: "needs" };
+  function pureGroups(scope) {
+    var needs = [], sessions = [], runs = [], ideas = [], tasks = [];
+    ST.lines.filter(function (l) { return l.kind === "session"; }).forEach(function (l) {
+      var it = { id: l.id, kind: "session", title: l.title, meta: l.where + " · " + (l.agent === "codex" ? "codex" : "claude") + " · " + l.mode, word: l.stage === 4 ? "ended" : wordOf(l) };
+      (l.waiting ? needs : sessions).push(it);
+    });
+    TR.forEach(function (r) {
+      var w = runWord(r), it = { id: r.id, kind: "team run", title: r.goal, meta: r.team + " · " + r.project + " · round " + r.round, word: w };
+      (w === "waiting for you" ? needs : runs).push(it);
+    });
+    ST.lines.filter(function (l) { return l.kind === "idea"; }).forEach(function (l) { ideas.push({ id: l.id, kind: "idea", title: l.title, meta: l.where + " · " + l.note, word: wordOf(l) }); });
+    ST.lines.filter(function (l) { return l.kind === "task"; }).forEach(function (l) { tasks.push({ id: l.id, kind: "task", title: l.title, meta: l.where + " · " + (l.blocked || l.note), word: wordOf(l) }); });
+    var all = [{ key: "needs", name: "Needs you", items: needs }, { key: "sessions", name: "Sessions", items: sessions }, { key: "runs", name: "Team runs", items: runs }, { key: "ideas", name: "Ideas", items: ideas }, { key: "tasks", name: "Tasks", items: tasks }];
+    return scope && scope !== "all" ? all.filter(function (g) { return g.key === scope || (g.key === "needs" && scope !== "needs" && false); }) : all;
+  }
+  function pureItemRun(id) { return TR.filter(function (r) { return r.id === id; })[0]; }
+  function pureView(x) {
+    if (x.kind === "session") { var t = makeTerm(x.id); LIVE = { id: x.id, t: t }; return { el: t.el, term: t }; }
+    var box = el("div", { "class": "pview" });
+    if (x.kind === "team run") {
+      var r = pureItemRun(x.id), g = runGate(r);
+      if (r.said) { box.appendChild(el("p", { "class": "ls-said", text: "✓ " + r.said })); }
+      if (g) { box.appendChild(S.Gate(Object.assign({ run: r.id }, g))); }
+      box.appendChild(S.RunShape({ rounds: r.shape, next: r.ended ? null : "the next round", end: r.end || null }));
+      box.appendChild(S.DoneWhen(r.done));
+      box.appendChild(S.Crew({ nodes: r.crew }));
+      box.appendChild(el("p", { "class": "calm", style: "font-size: 13px" }, ["Its five depths are on its full page: ", el("a", { href: "#run-" + r.id, text: "open it" }), ", or type ", el("kbd", { "class": "ls-kbd", text: ":" }), " open."]));
+      return { el: box };
+    }
+    var l = line(x.id);
+    box.appendChild(el("dl", { "class": "ls-rules" }, [el("dt", { text: "What" }), el("dd", { text: l.kind }), el("dt", { text: "Where" }), el("dd", { text: l.where }), el("dt", { text: "Now" }), el("dd", { text: l.blocked || l.note })]));
+    (l.events || []).slice(0, 4).forEach(function (e) { box.appendChild(el("p", { "class": "calm", style: "margin: 6px 0 0; font-size: 13px" }, [el("span", { "class": "mono", style: "margin-right: 10px", text: e.t }), e.text])); });
+    return { el: box };
+  }
+  function pureActions(x) {
+    function from(list) { return list.map(function (a) { return { label: a.label, cmd: a.cmd, kind: a.kind === "danger" ? "danger" : (a.kind || ""), disabledReason: a.disabledReason, run: function () { var r = a.onPress ? a.onPress() : null; setTimeout(function () { render(); }, 30); return typeof r === "string" ? r : a.label; } }; }); }
+    if (x.kind === "session") {
+      var l = line(x.id);
+      if (l.stage === 4) { return [{ label: "Carry it on in a terminal", cmd: "$ loadout resume " + (l.id === "s2" ? "3f9c2a1e" : "7b21d0c4"), disabledReason: "terminal only: Studio shows the command" }]; }
+      return [{ label: l.waiting ? "Go to the question" : "Type into it", kind: l.waiting ? "needs" : "", cmd: "focuses its terminal · answered there", run: function () { if (LIVE && LIVE.t) { LIVE.t.focus(); } return "Focused the terminal. Ctrl+] leaves it."; } },
+        { label: "End the session", kind: "danger", cmd: "stops the agent in this terminal", run: function () { l.stage = 4; l.waiting = false; l.note = "ended by you"; addEvent(l, "ended", "You ended " + l.title); setTimeout(render, 30); return "Ended " + l.title; } }];
+    }
+    if (x.kind === "team run") {
+      var r = pureItemRun(x.id), g = runGate(r), out = [];
+      if (g) {
+        var opts = g.kind === "confirm" ? ["yes", "no"] : (g.kind === "brief" ? ["yes", "no"] : g.options || []);
+        opts.forEach(function (op) { out.push({ label: g.kind === "brief" ? (op === "yes" ? "Send the brief" : "Don't send it") : (op === "yes" ? "Yes" : op === "no" ? "No" : op), kind: "needs", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --answer " + S.shellQuote(op) + " --by dashboard", run: function () { g.onAnswer(op, {}); return "Answered: " + op; } }); });
+        if (g.kind === "question" || g.kind === "readings") { out.push({ label: "Think again", cmd: "$ loadout team gate " + r.id + " --gate " + g.gate + " --think-again --by dashboard", run: function () { g.onAnswer("Think again", {}); return "Sent back to the lead"; } }); }
+      }
+      return out.concat(from(runActs(r)));
+    }
+    return from(actionsFor(line(x.id)));
+  }
+  function pureCommands(q, picked) {
+    var rows = [];
+    if (picked) { pureActions(picked).forEach(function (a, i) { rows.push({ kind: "action", label: (i + 1) + "  " + a.label, cmd: a.disabledReason || a.cmd, run: function () { if (PURE) { setTimeout(function () { PURE.desk.select(picked.id, true); }, 0); } if (!a.disabledReason && a.run) { var said = a.run(); toasts.add({ level: "info", text: said || a.label, cmd: a.cmd || "" }); } } }); }); }
+    [["Everything", "all"], ["Needs you", "needs"], ["Sessions", "sessions"], ["Team runs", "runs"], ["Ideas", "ideas"], ["Tasks", "tasks"]].forEach(function (s) { rows.push({ kind: "go", label: s[0], cmd: "the list, scoped", run: function () { pureScope(s[1]); } }); });
+    pureGroups("all").forEach(function (g) { g.items.forEach(function (x) { rows.push({ kind: "go", label: x.title, cmd: x.kind + " · " + x.word, run: function () { if (PURE) { PURE.desk.select(x.id); } } }); }); });
+    if (picked && picked.kind === "team run") { rows.push({ kind: "go", label: "Open its full page", cmd: "the five depths", run: function () { setMode("default"); setTimeout(function () { go("run-" + picked.id); }, 60); } }); }
+    [["Start a session", "$ loadout <project> --task \"…\"", function () { openLaunch(); }], ["Start a team run", "$ loadout team run <team> \"<goal>\" --project <slug>", function () { openSheet("run"); }], ["Make a team", "$ loadout team new <name>", function () { openSheet("make"); }], ["Run one on a schedule", "$ loadout team schedule add <name> <team> \"<goal>\"", function () { openSheet("schedule"); }],
+      ["What the agents have cost", "$ loadout usage", null], ["The bin", "$ loadout team bin", function () { setMode("default"); setTimeout(function () { go("teams-bin"); }, 60); }], ["Carry the last session on", "$ loadout resume --last", null]].forEach(function (c) {
+      rows.push({ kind: "command", label: c[0], cmd: c[1], run: c[2] || function () { toasts.add({ level: "info", text: c[0] + ": opens its form, filled in", cmd: c[1] }); } });
+    });
+    q = q.toLowerCase();
+    return rows.filter(function (r) { return !q || (r.label + " " + (r.cmd || "") + " " + r.kind).toLowerCase().indexOf(q) >= 0; });
+  }
+  function pureScope(s) { P.pureScope = s; savePrefs(); if (PURE) { PURE.desk.refresh(pureGroups(s)); PURE.sig = ""; renderModebar(); } }
+  function renderPure(main, r) {
+    var sel = r.indexOf("session-") === 0 ? r.slice(8) : (r.indexOf("run-") === 0 ? r.slice(4) : null);
+    var scope = r === "sessions" ? "sessions" : (r === "teams" ? "runs" : (P.pureScope || "all"));
+    var wrap = el("div", { "class": "deskwrap" });
+    var d = S.WorkDesk({ groups: pureGroups(scope), selected: sel || P.pureSelected, view: pureView, actions: pureActions, commands: pureCommands, keys: P.keys,
+      goKeys: { h: "all", s: "sessions", t: "runs", i: "ideas", k: "tasks", n: "needs" }, onGo: function (where) { pureScope(where); toasts.add({ level: "info", text: "The list: " + { all: "everything", sessions: "sessions", runs: "team runs", ideas: "ideas", tasks: "tasks", needs: "what needs you" }[where], cmd: "G then a letter" }); },
+      onSelect: function (id) { P.pureSelected = id; savePrefs(); } });
+    wrap.appendChild(d.el); main.appendChild(wrap);
+    PURE = { route: r, desk: d, sig: pureSig() };
+  }
+  function pureSig() { return JSON.stringify(pureGroups(P.pureScope || "all").map(function (g) { return g.items.map(function (x) { return x.id + x.word; }); })) + TV; }
+  function refreshPure() {
+    var s = pureSig(); if (s === PURE.sig) { return; }
+    var before = PURE.desk.selected, word = null;
+    pureGroups("all").forEach(function (g) { g.items.forEach(function (x) { if (x.id === before) { word = x.word; } }); });
+    PURE.desk.refresh(pureGroups(PURE.route === "sessions" ? "sessions" : PURE.route === "teams" ? "runs" : (P.pureScope || "all")));
+    if (PURE.lastWord !== word) {
+      PURE.lastWord = word;
+      /* A session's terminal stays as it is, so nothing typed is lost: only its state and the actions change. */
+      if (LIVE && LIVE.id === before) { var l = line(before); if (l) { LIVE.t.setState(termState(l)); } PURE.desk.repaintActions(); } else { PURE.desk.repaintView(); }
+    }
+    PURE.sig = s;
+  }
+
   /* ---------- placeholder pages ---------- */
   function renderElsewhere(main, r) {
     if (r === "settings") { main.appendChild(el("div", { "class": "head" }, [el("h1", { text: "Settings" })])); main.appendChild(el("section", { "class": "placeholder", "aria-labelledby": "z-app" }, [zone("", "Appearance", "z-app"), appearanceForm()])); return; }
     var e = ELSEWHERE[r] || ["Not found", "$ loadout --help", "This page doesn't exist."];
     main.appendChild(el("div", { "class": "head" }, [el("h1", { text: e[0] })]));
-    main.appendChild(el("div", { "class": "placeholder" }, [el("p", { "class": "calm", text: e[2] + " This page isn't part of the prototype; Home and Sessions are." }), S.Command({ why: "Until then, in a terminal:", command: e[1] })]));
+    main.appendChild(el("div", { "class": "placeholder" }, [el("p", { "class": "calm", text: e[2] + " This page isn't part of the prototype; Home, Sessions and Teams are." }), S.Command({ why: "Until then, in a terminal:", command: e[1] })]));
   }
 
   /* ---------- render, keeping focus where it was ---------- */
+  var lastTeams = "";
+  function teamsRoute(r) { return r === "teams" || r.indexOf("teams-") === 0 || r.indexOf("run-") === 0 || r.indexOf("team-") === 0; }
   function render() {
+    var rr = route(), t1 = line("t1"), sig = rr + "|" + TV + "|" + (t1 ? [t1.waiting, t1.stage, t1.held].join(",") : "");
+    var pureRoute = P.mode === "pure" && (rr === "home" || rr === "sessions" || rr === "teams" || rr.indexOf("session-") === 0 || rr.indexOf("run-") === 0);
+    if (pureRoute && PURE && PURE.route === rr && document.getElementById("main").childNodes.length) { refreshPure(); renderNav(); renderAmbient(); return; }
+    if (!pureRoute && PURE) { PURE.desk.destroy(); PURE = null; LIVE = null; }
+    var deckRoute = P.mode === "terminals" && (rr === "home" || rr === "sessions" || rr.indexOf("session-") === 0);
+    if (deckRoute && DECK && DECK.route === rr && document.getElementById("main").childNodes.length) { refreshDeck(); renderNav(); renderAmbient(); return; }
+    if (!deckRoute) { DECK = null; }
+    var steady = teamsRoute(rr) || (P.mode === "teams" && rr === "home") || (P.mode === "minimal" && rr === "home" && FOCUS);
+    if (steady && sig === lastTeams && document.getElementById("main").childNodes.length) { renderNav(); renderAmbient(); return; }
+    lastTeams = steady ? sig : "";
+    if (!teamsRoute(rr) && DEPTHS) { DEPTHS.unbind(); DEPTHS = null; }
     var a = document.activeElement, k = a && a.getAttribute && a.getAttribute("data-k"), caret = a && a.selectionStart;
     if (!k && a && a.id === "home-task") { k = "home-task"; }
     renderNav();
     var main = document.getElementById("main"), r = route(); main.textContent = "";
-    if (r === "home") { homeHead(main); if (ST.view === "map") { renderMap(main); } else { renderLens(main); } }
+    if (P.mode === "pure" && (r === "home" || r === "sessions" || r === "teams" || r.indexOf("session-") === 0 || r.indexOf("run-") === 0)) { renderPure(main, r); }
+    else if (P.mode === "terminals" && (r === "home" || r === "sessions" || r.indexOf("session-") === 0)) { renderDeck(main, r.indexOf("session-") === 0 ? r.slice(8) : null); }
+    else if (P.mode === "teams" && (r === "home" || r === "teams" || r.indexOf("run-") === 0 || r.indexOf("team-") === 0)) { renderBoard(main, r); }
+    else if (P.mode === "minimal" && r === "home") { renderQuiet(main); }
+    else if (r === "home") { homeHead(main); if (ST.view === "map") { renderMap(main); } else { renderLens(main); } }
     else if (r === "sessions") { renderSessions(main); }
     else if (r.indexOf("session-") === 0) { renderSession(main, r.slice(8)); }
+    else if (r === "teams") { renderTeams(main); }
+    else if (r === "teams-remedies") { renderRemedies(main); }
+    else if (r === "teams-bin") { renderBin(main); }
+    else if (r.indexOf("run-") === 0) { renderRun(main, r.slice(4)); }
+    else if (r.indexOf("team-") === 0) { renderTeam(main, r.slice(5)); }
     else { renderElsewhere(main, r); }
     main.appendChild(el("p", { "class": "sample", text: "Example data and scripted agents: this prototype doesn't talk to Loadout. Every command shown is the real one." }));
     if (k) { var n = k === "home-task" ? document.getElementById("home-task") : document.querySelector('[data-k="' + CSS.escape(k) + '"]'); if (n) { n.focus({ preventScroll: true }); if (caret !== undefined && n.setSelectionRange && caret !== null) { try { n.setSelectionRange(caret, caret); } catch (e) { /* not a text field */ } } } }
@@ -619,6 +1170,7 @@ body { background: var(--ground); color: var(--ink); }
   /* ---------- keys ---------- */
   window.addEventListener("keydown", function (e) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); openPalette(); return; }
+    if (e.ctrlKey && e.shiftKey && (e.key === "m" || e.key === "M")) { e.preventDefault(); cycleMode(); return; }
     if (e.key === "Escape" && ST.ambient) { setAmbient(false); return; }
     var t = e.target && e.target.tagName, typing = t === "INPUT" || t === "TEXTAREA" || (e.target && e.target.isContentEditable);
     if (typing || e.ctrlKey || e.metaKey || e.altKey || !P.keys || document.querySelector(".ls-dialog")) { return; }
@@ -630,6 +1182,5 @@ body { background: var(--ground); color: var(--ink); }
   render();
 })();
 </script>
-
 </body>
 </html>

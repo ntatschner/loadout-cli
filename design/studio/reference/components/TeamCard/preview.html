@@ -1,0 +1,37 @@
+<!-- @dsCard group="Teams" height=560 width=1200 subtitle="A team you can run, one that can't run here, and a template to copy" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TeamCard</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="t" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 16px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var RUN = "20261017-1402-ab3f";
+  var TEAMS = [
+    { name: "iterating-project", description: "Plans, implements, reviews and verifies in rounds until the goal is met", nodes: 5, lead: "lead", posture: "supervised", budget: "$25 a run", doneWhen: [] },
+    { name: "bug-hunt", description: "Reproduces a bug, proves its cause, fixes it, and proves the fix holds", nodes: 5, lead: "lead", posture: "supervised", budget: "$15 a run", doneWhen: ["a test reproduces the bug: it fails without the fix and passes with it", "the full test suite passes with the fix in place"] },
+    { name: "docs-crew", description: "Finds where the docs and the code disagree, and fixes it in the docs' own voice", nodes: 4, lead: "lead", posture: "supervised", budget: "$20 a run", doneWhen: ["every changed page passes docs audit", "every changed claim was checked against the code"] },
+    { name: "release-crew", description: "Checks the tree is fit to release, writes the notes, and tags", nodes: 4, lead: "lead", posture: "supervised", budget: "$10 a run", doneWhen: [], problems: ["it needs gh, and gh is not signed in"] },
+    { name: "product-company", description: "An executive lead, department leads, and workers under each", nodes: 9, lead: "executive", posture: "", template: true }
+  ];
+  var PROJECTS = [{ name: "loadout-cli", path: "~/code/loadout-cli" }, { name: "starstats", path: "~/code/starstats" }];
+  var HELD = { "loadout-cli": ["the suite passes"] };
+  var t = document.getElementById("t");
+  TEAMS.slice(0, 5).forEach(function (x) { t.appendChild(S.TeamCard(Object.assign({ href: "#", doneWhen: (x.doneWhen || []).length, budget: x.budget }, x))); });
+})();
+</script>
+</body>
+</html>

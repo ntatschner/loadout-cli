@@ -1,0 +1,29 @@
+<!-- @dsCard group="Teams" height=760 width=1100 subtitle="A remedy, this machine's rule for its kind, its trust, and a request waiting on you" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Remedy</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="r" style="display: grid; gap: 18px; max-width: 860px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var r = document.getElementById("r");
+  r.appendChild(S.Remedy({ team: "system-watch", name: "clear-build-cache", kind: "disk", what: "Deletes build output older than fourteen days from D:\\builds.", assumes: "The build box, PowerShell 7, D:\\builds exists, nothing is mid-build.", proves: "Free space before and after, and a build still succeeds afterwards.", revision: 2, by: "20260920-1200-abcd", rule: "ask", trust: "changed since trusted",
+    requests: [{ id: "r1", node: "remediator/1", run: "20261017-0610-9e2f", asked: "asked 3 min ago", problem: "D: is at 97% and the nightly build will fail.", why: "this machine asks about every disk remedy, trusted or not" }] }));
+  r.appendChild(S.Remedy({ team: "system-watch", name: "restart-indexer", kind: "service", what: "Restarts the search indexer service.", assumes: "Windows, the service is named WSearch.", proves: "The service is running and answering afterwards.", revision: 1, rule: "trusted", trust: "trusted" }));
+})();
+</script>
+</body>
+</html>

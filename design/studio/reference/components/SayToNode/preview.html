@@ -1,0 +1,30 @@
+<!-- @dsCard group="Teams" height=640 width=1100 subtitle="Typing at a live node, behind the second credential: unset, locked, unlocked and ended" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SayToNode</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div style="display: grid; gap: 18px; max-width: 760px" id="s"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var s = document.getElementById("s"), RUN = "20261017-1402-ab3f";
+  [["Locked (the passphrase here is \u201cloadout\u201d)", { state: "locked", onUnlock: function (p) { return p === "loadout"; } }], ["Unlocked", { state: "open", minutesLeft: 24 }], ["No passphrase set on this machine", { state: "unset" }], ["The node has finished", { state: "ended" }]].forEach(function (x) {
+    s.appendChild(Object.assign(document.createElement("p"), { className: "lab", textContent: x[0] }));
+    s.appendChild(S.SayToNode(Object.assign({ run: RUN, node: "implementer/1" }, x[1])));
+  });
+})();
+</script>
+</body>
+</html>

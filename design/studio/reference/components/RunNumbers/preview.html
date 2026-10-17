@@ -1,0 +1,28 @@
+<!-- @dsCard group="Teams" height=520 width=1200 subtitle="The numbers that change a decision: the rate and projection, where the time went, what went wrong" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RunNumbers</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="n"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("n").appendChild(S.RunNumbers({ rate: "$0.83 a minute", spent: 14.9, cap: 20, projected: 26.3, by: "round 4",
+    byRound: [["Round 1", 4], ["Round 2", 14]], byNode: [["docs-auditor/1", 9], ["writer/1", 6], ["lead", 3]],
+    wrong: [["Tool calls refused", 3], ["Reports not accepted", 1], ["Turns asked again", 0], ["Rounds that asked for nothing", 0], ["Branches that would not merge", 0]] }));
+})();
+</script>
+</body>
+</html>

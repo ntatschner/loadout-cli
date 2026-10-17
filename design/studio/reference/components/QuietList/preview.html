@@ -1,0 +1,32 @@
+<!-- @dsCard group="Modes" height=620 width=1000 subtitle="Minimal: one column of what is live, what needs you first with its question" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>QuietList</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="q"></div><p class="out" role="status" id="out"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("q").appendChild(S.QuietList({ items: [
+    { id: "t1", kind: "team run", title: "Release 0.66.0", word: "waiting for you", where: "release-crew", ask: "Push the tag v0.66.0 to origin?" },
+    { id: "s2", kind: "session", title: "add a retry to the upload step", word: "needs approval", where: "loadout-cli", ask: "Asks for approval. Answer it in the terminal." },
+    { id: "s1", kind: "session", title: "why is this postgres query so slow", word: "working", where: "starstats" },
+    { id: "r1", kind: "team run", title: "Make the docs true", word: "running", where: "docs-crew" },
+    { id: "s3", kind: "session", title: "tidy the deploy script", word: "idle", where: "starstats" }],
+    onOpen: function (x) { document.getElementById("out").textContent = "Opens " + x.title + " as the whole screen"; } }));
+})();
+</script>
+</body>
+</html>
