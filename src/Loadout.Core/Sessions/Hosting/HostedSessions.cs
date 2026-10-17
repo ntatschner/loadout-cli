@@ -72,6 +72,7 @@ public sealed class HostedSessions : IAsyncDisposable
     private readonly Func<(string Command, IReadOnlyList<string> Prefix)?> _launcher;
     private readonly IChildLifetime? _lifetime;
     private readonly IProcessTree? _tree;
+    private readonly string? _signals;
     private readonly object _gate = new();
     private readonly List<HostedSession> _sessions = [];
     private readonly Dictionary<string, HostedLaunch> _launches = new(StringComparer.Ordinal);
@@ -81,17 +82,45 @@ public sealed class HostedSessions : IAsyncDisposable
     /// <param name="launcher">How to start this launcher again, or null where it cannot say.</param>
     /// <param name="lifetime">Ties each session's process to the daemon's.</param>
     /// <param name="tree">Measures what each session's processes hold, or null for nothing to measure with.</param>
+    /// <param name="signals">
+    /// Where agents' hooks report a session waiting (<see cref="SessionSignals"/>),
+    /// or null where nothing reads them, and no session is told where to write.
+    /// </param>
     public HostedSessions(
         Func<IPseudoTerminal> terminals,
         Func<(string Command, IReadOnlyList<string> Prefix)?> launcher,
         IChildLifetime? lifetime = null,
-        IProcessTree? tree = null)
+        IProcessTree? tree = null,
+        string? signals = null)
     {
         _terminals = terminals;
         _launcher = launcher;
         _lifetime = lifetime;
         _tree = tree;
+        _signals = signals;
     }
+
+    /// <summary>
+    /// What a running session needs, as its agent's hooks said and nobody has
+    /// answered since (<c>waiting</c> or <c>approval</c>), and the agent's own
+    /// id for its conversation; both null where nothing was said.
+    /// </summary>
+    public (string? Needs, string? AgentSession) SignalOf(HostedSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        var signal = _signals is null ? null : SessionSignals.Read(_signals, session.Id);
+
+        return (SessionSignals.Needs(signal, session.LastInputAt, session.HasEnded), signal?.AgentSession);
+    }
+
+    /// <summary>
+    /// The agent's conversation id for a session this daemon does not host,
+    /// left by one an earlier daemon did, or null. A daemon that stops ends
+    /// its sessions, and this is how the page can still offer to resume one.
+    /// </summary>
+    public string? LostAgentSession(string id) =>
+        _signals is null || Find(id) is not null ? null : SessionSignals.Read(_signals, id)?.AgentSession;
 
     /// <summary>
     /// The resident memory of each running session's processes, the launch
@@ -176,10 +205,18 @@ public sealed class HostedSessions : IAsyncDisposable
             : launch.Agent is { Length: > 0 } agent ? $"{launch.Project} ({agent})"
             : launch.Project;
 
+        var id = Convert.ToHexString(RandomNumberGenerator.GetBytes(4)).ToLowerInvariant();
+
+        // The session's own id, inherited by the launch and the agent it
+        // starts, so the agent's hooks know which signal file is theirs.
+        var environment = _signals is null
+            ? null
+            : new Dictionary<string, string>(StringComparer.Ordinal) { [SessionSignals.Variable] = id };
+
         var started = await HostedSession.StartAsync(
             _terminals(),
-            new ProcessRequest(command, arguments.Value!),
-            Convert.ToHexString(RandomNumberGenerator.GetBytes(4)).ToLowerInvariant(),
+            new ProcessRequest(command, arguments.Value!, Environment: environment),
+            id,
             title,
             Math.Clamp(launch.Columns, 20, 500),
             Math.Clamp(launch.Rows, 5, 200),
@@ -234,6 +271,12 @@ public sealed class HostedSessions : IAsyncDisposable
         }
 
         await found.DisposeAsync().ConfigureAwait(false);
+
+        if (_signals is not null)
+        {
+            SessionSignals.Remove(_signals, found.Id);
+        }
+
         Changed?.Invoke();
 
         return true;

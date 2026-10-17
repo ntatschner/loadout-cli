@@ -230,6 +230,7 @@ public interface IAgentLauncher
 public sealed class AgentLauncher : IAgentLauncher
 {
     private readonly IProjectService _projects;
+    private readonly IEnvironmentProvider? _environment;
     private readonly IWorkspaceManager _workspace;
     private readonly IConfigurationService _configuration;
     private readonly IAgentRegistry _agents;
@@ -288,8 +289,10 @@ public sealed class AgentLauncher : IAgentLauncher
         Core.Statusline.ILoadedSpecialistStore loaded,
         Core.Sessions.IRuntimeReaper? reaper = null,
         Core.Tasks.ITaskService? tasks = null,
-        Core.Sessions.IHeadlessTranscripts? transcripts = null)
+        Core.Sessions.IHeadlessTranscripts? transcripts = null,
+        IEnvironmentProvider? environment = null)
     {
+        _environment = environment;
         _tasks = tasks;
         _transcripts = transcripts;
         _reaper = reaper;
@@ -879,7 +882,14 @@ public sealed class AgentLauncher : IAgentLauncher
             // Only for a person's session. A headless one is given its
             // messages through its own protocol, and a resumed one is carrying
             // on from where it stopped, not starting anew.
-            headless is null && request.ResumeSessionId is null ? request.OpeningPrompt : null);
+            headless is null && request.ResumeSessionId is null ? request.OpeningPrompt : null,
+
+            // Set by the daemon on a session it hosts for Studio, and only
+            // meaningful for a person's session: a node is nobody's to answer.
+            headless is null && _environment?.GetVariable(Core.Sessions.Hosting.SessionSignals.Variable) is { } hosted
+                && Core.Sessions.Hosting.SessionSignals.IsSessionId(hosted)
+                ? hosted
+                : null);
 
         var invocationResult = await adapter.BuildInvocationAsync(context, ct).ConfigureAwait(false);
         if (invocationResult.Failed)
