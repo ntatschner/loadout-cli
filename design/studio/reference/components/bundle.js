@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}]} */
+/* @ds-bundle: {"format": 4, "namespace": "LoadoutStudio", "components": [{"name": "HaloButton"}, {"name": "StartRail"}, {"name": "Command"}, {"name": "Switch"}, {"name": "Tabs"}, {"name": "ModePicker"}, {"name": "Signal"}, {"name": "EventMark"}, {"name": "Urgency"}, {"name": "Meter"}, {"name": "Toasts"}, {"name": "SideRail"}, {"name": "Dialog"}, {"name": "Picker"}, {"name": "CommandPalette"}, {"name": "Halo"}, {"name": "TubeMap"}, {"name": "LineStrip"}, {"name": "NetworkStatus"}, {"name": "Terminal"}, {"name": "SessionView"}, {"name": "Gate"}, {"name": "RunCard"}, {"name": "NeedsYou"}, {"name": "RunShape"}, {"name": "Crew"}, {"name": "DoneWhen"}, {"name": "RunNumbers"}, {"name": "RunDepths"}, {"name": "Patch"}, {"name": "SayToNode"}, {"name": "TeamCard"}, {"name": "TeamNodes"}, {"name": "TeamRules"}, {"name": "RoleRecord"}, {"name": "TeamSheet"}, {"name": "Schedules"}, {"name": "Remedy"}, {"name": "Bin"}, {"name": "Outbox"}, {"name": "ModeSwitcher"}, {"name": "ModeBar"}, {"name": "SessionTabs"}, {"name": "TermDeck"}, {"name": "RunBoard"}, {"name": "QuietList"}, {"name": "FocusFrame"}, {"name": "WorkDesk"}, {"name": "ActionPane"}, {"name": "CommandBar"}, {"name": "KeyHelp"}, {"name": "ActionDrawer"}, {"name": "TerminalOnly"}, {"name": "HealthList"}, {"name": "IdeaStages"}, {"name": "QuestionSet"}, {"name": "PlanLayer"}, {"name": "NoteDump"}, {"name": "ProjectTile"}, {"name": "TaskBoard"}, {"name": "LoadStack"}, {"name": "ConfigList"}, {"name": "StoreList"}, {"name": "TopicEditor"}, {"name": "TokenSplit"}, {"name": "SpendBars"}]} */
 /* Loadout Studio — plain JavaScript, no framework, no imports, no network.
    Components are CSS classes plus small helpers, written to port line for line to Svelte. */
 (function () {
@@ -2134,4 +2134,570 @@
   }
 
   Object.assign(NS, { WorkDesk: WorkDesk, ActionPane: ActionPane, CommandBar: CommandBar, KeyHelp: KeyHelp, PURE_KEYS: KEYS });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  function svg(d, cls) { var v = document.createElementNS(SVGNS, "svg"), p = document.createElementNS(SVGNS, "path"); v.setAttribute("viewBox", "0 0 20 20"); v.setAttribute("aria-hidden", "true"); if (cls) { v.setAttribute("class", cls); } p.setAttribute("d", d); p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.8"); p.setAttribute("stroke-linecap", "round"); p.setAttribute("stroke-linejoin", "round"); v.appendChild(p); return v; }
+  function uid(p) { return p + Math.random().toString(36).slice(2, 7); }
+  function q(v) { v = String(v); if (/^<[^<>\s]+>$/.test(v)) { return v; } return v === "" || /[\s"'$`\\|&;<>()*?!#~]/.test(v) ? "\"" + v.replace(/(["\\$`])/g, "\\$1") + "\"" : v; }
+  /* A disabled button says why in place of its command, and is never the solid one. */
+  function halo(o) { return NS.HaloButton(o.disabledReason ? Object.assign({}, o, { cmd: null, solid: false }) : o); }
+  function tag(text, kind, glyph) { return h("span", { "class": "ls-tag" + (kind ? " " + kind : "") }, [glyph ? svg(glyph) : null, text]); }
+  function num(n) { n = Number(n) || 0; function f(x, u) { return x.toFixed(1).replace(/\.0$/, "") + u; } return n >= 1e9 ? f(n / 1e9, "B") : n >= 1e6 ? f(n / 1e6, "M") : n >= 1e3 ? f(n / 1e3, "k") : String(Math.round(n)); }
+  function said(el, text) { el.textContent = text ? "\u2713 " + text : ""; }
+  var G = { lock: "M6 9V6.5a4 4 0 0 1 8 0V9 M5 9h10v8H5z", error: "M6 6 L14 14 M14 6 L6 14", warning: "M10 4 V11.5 M10 15 V15.2", info: "M10 9 V14.5 M10 5.6 V5.8", ok: "M5 10.5 L8.5 14 L15 6.5", fix: "M12.5 3.5a3.5 3.5 0 0 0-3.3 4.6L3.5 13.8l2.7 2.7 5.7-5.7a3.5 3.5 0 0 0 4.6-3.3l-2 2-2-.5-.5-2z", chev: "M7 4 L13 10 L7 16", term: "M3 4h14v12H3z M6 8l3 2-3 2 M10.5 12.5h3.5" };
+  var EFFECT = { reads: ["reads only", ""], changes: ["changes something", "accent"], session: ["starts a session", "needs"], terminal: ["terminal only", ""] };
+
+  /* ActionDrawer: one loadout command as a closed drawer. Opened, it is the command's form, the exact line it will run, and its button. */
+  function lineOf(path, fields, values, extra) {
+    var words = [], ordered = (fields || []).filter(function (f) { return f.name.slice(0, 2) !== "--"; }).concat((fields || []).filter(function (f) { return f.name.slice(0, 2) === "--"; }));
+    ordered.forEach(function (f) {
+      var v = values[f.name];
+      if (f.kind === "flag") { if (v) { words.push(f.name); } return; }
+      if (v === undefined || v === null || v === "") { return; }
+      if (f.name.slice(0, 2) === "--") { if (f.joined) { words.push(f.name + "=" + v); } else { words.push(f.name, v); } } else { words.push(v); }
+    });
+    return "$ loadout " + [path].concat(words.concat(extra || []).map(function (w) { return /^--[\w-]+(=|$)/.test(w) && w.indexOf("=") < 0 ? w : (/^--[\w-]+=/.test(w) ? w.split("=")[0] + "=" + q(w.slice(w.indexOf("=") + 1)) : q(w)); })).join(" ");
+  }
+  function ActionDrawer(o) {
+    o = o || {};
+    var values = {}, fields = o.fields || [], open = !!o.open, bid = uid("ls-dr-");
+    fields.forEach(function (f) { values[f.name] = f.value !== undefined ? f.value : (f.kind === "flag" ? false : ""); });
+    var effect = o.effect || "changes", ew = EFFECT[effect] || EFFECT.changes;
+    function reads() {
+      if (effect === "reads") { return true; }
+      if (effect !== "changes" || !o.changesOnlyWith) { return false; }
+      return !o.changesOnlyWith.some(function (n) { return !!values[n]; });
+    }
+    var el = h("section", { "class": "ls-drawer", "data-open": open ? "true" : "false", "data-effect": effect });
+    var top = h("button", { type: "button", "class": "top", "aria-expanded": open ? "true" : "false", "aria-controls": bid, onclick: function () { set(!open); } },
+      [svg(G.chev, "chev"), h("span", { "class": "t", text: o.title || o.path }), h("code", { text: "loadout " + o.path }), tag(ew[0], ew[1], effect === "terminal" ? G.lock : null)]);
+    var body = h("div", { "class": "body", id: bid, role: "group", "aria-label": o.title || o.path });
+    el.appendChild(top); el.appendChild(body);
+    function set(v) { open = v; el.setAttribute("data-open", v ? "true" : "false"); top.setAttribute("aria-expanded", v ? "true" : "false"); if (v && o.onOpen) { o.onOpen(); } }
+    if (o.why) { body.appendChild(h("p", { "class": "why", text: o.why })); }
+    if (effect === "terminal") {
+      body.appendChild(TerminalOnly({ title: "Studio does not run this", why: "It " + (o.reason || "is only ever done in a terminal") + ".", command: o.command || "$ loadout " + o.path, bare: true }));
+      return { el: el, open: function () { set(true); }, close: function () { set(false); } };
+    }
+    var line = h("code", { "class": "ls-cmdline", "aria-live": "polite" }), acts = h("div", { "class": "ls-answers" }), out = h("p", { "class": "ls-said", role: "status" });
+    if (fields.length) {
+      var box = h("div", { "class": "fields" });
+      fields.forEach(function (f) {
+        var id = uid("ls-fd-"), lab = [f.label || f.name, " ", f.name.slice(0, 2) === "--" && f.kind !== "flag" ? h("code", { text: f.name }) : null];
+        if (f.kind === "flag") {
+          var cb = h("input", { type: "checkbox", id: id, disabled: f.fixed ? true : null, onchange: function () { values[f.name] = cb.checked; paint(); } }); cb.checked = !!values[f.name];
+          box.appendChild(h("label", { "class": "flag" + (f.wide ? " wide" : ""), "for": id }, [cb, h("span", { text: f.label || f.name }), h("code", { text: f.name })])); return;
+        }
+        var inp;
+        if (f.kind === "choice") { inp = h("select", { "class": "ls-text", id: id, disabled: f.fixed ? true : null, onchange: function () { values[f.name] = inp.value; paint(); } }, (f.options || []).map(function (op) { return h("option", { value: op, text: op === "" ? "(none)" : op }); })); inp.value = values[f.name]; }
+        else { inp = h(f.lines ? "textarea" : "input", { "class": "ls-text", id: id, rows: f.lines || null, placeholder: f.placeholder || null, autocomplete: "off", spellcheck: "false", readonly: f.fixed ? true : null, oninput: function () { values[f.name] = inp.value; paint(); } }); inp.value = values[f.name]; }
+        box.appendChild(h("div", { "class": "ls-field" + (f.wide || f.lines ? " wide" : "") }, [h("label", { "class": "lab", "for": id }, lab), inp, f.hint ? h("span", { "class": "hint", text: f.hint }) : null]));
+      });
+      body.appendChild(box);
+    }
+    body.appendChild(line); body.appendChild(acts); body.appendChild(out);
+    if (o.note) { body.appendChild(h("p", { "class": "note", text: o.note })); }
+    function missing() { var m = fields.filter(function (f) { return f.required && !values[f.name]; })[0]; return m ? "say " + (m.label || m.name).toLowerCase() + " first" : null; }
+    function run(preview) {
+      var l = lineOf(o.path, fields, values, preview ? ["--dry-run"] : []);
+      var r = o.onRun ? o.onRun(Object.assign({}, values), { preview: !!preview, line: l, reads: preview || reads() }) : null;
+      said(out, typeof r === "string" ? r : (preview ? "Previewed: nothing changed" : "Ran it"));
+    }
+    function paint() {
+      line.textContent = lineOf(o.path, fields, values);
+      acts.textContent = "";
+      var dis = missing() || null, r = reads();
+      if (effect === "session") {
+        acts.appendChild(halo({ label: o.label || "Open it in a terminal", size: "small", glyph: "\u25b8", cmd: "opens a terminal here, hosted by the daemon", disabledReason: o.disabledReason || dis, onPress: function () { run(false); } }));
+        return;
+      }
+      if (!r && o.dryRun) { acts.appendChild(halo({ label: "Preview", size: "small", cmd: "adds --dry-run \u00b7 changes nothing", disabledReason: dis, onPress: function () { run(true); } })); }
+      acts.appendChild(halo({ label: o.label || "Run", size: "small", solid: !r, kind: o.danger ? "danger" : "", cmd: r ? "reads only" : "changes something", disabledReason: (r ? null : o.disabledReason) || dis, onPress: function () { run(false); } }));
+    }
+    paint();
+    return { el: el, open: function () { set(true); }, close: function () { set(false); }, values: values, line: function () { return lineOf(o.path, fields, values); } };
+  }
+  function ActionDrawers(groups) {
+    var box = h("div", { "class": "ls-drawers" });
+    groups.forEach(function (g) { if (g.name) { box.appendChild(h("h4", { "class": "gh", text: g.name })); } g.items.forEach(function (d) { box.appendChild((d.el ? d : ActionDrawer(d)).el); }); });
+    return box;
+  }
+
+  /* TerminalOnly: something only ever done where you type. The command and why, and a copy, never a button that does it. */
+  function TerminalOnly(o) {
+    o = o || {};
+    var out = h("p", { "class": "ls-said", role: "status" });
+    var el = h("div", { "class": "ls-tonly" }, [
+      h("div", { "class": "top" }, [h("b", { text: o.title || "Done in a terminal" }), tag("terminal only", "", G.lock)]),
+      o.why ? h("p", { "class": "why", text: o.why }) : null,
+      h("div", { "class": "line" }, [h("code", { text: o.command || "" }), halo({ label: "Copy", size: "small", cmd: "copies the line \u00b7 runs nothing", onPress: function () { try { navigator.clipboard.writeText((o.command || "").replace(/^\$ /, "")); said(out, "Copied. Paste it in a terminal."); } catch (e) { said(out, "Select the line to copy it."); } } })]),
+      o.fact ? h("p", { "class": "fact", text: o.fact }) : null, out]);
+    return el;
+  }
+
+  /* HealthList: findings, worst first, each with its severity as a word and a glyph; what can be put right says so. */
+  var SEV = { error: 0, bad: 0, warning: 1, warn: 1, info: 2, ok: 3, pass: 3 };
+  function sevOf(s) { s = String(s || "info").toLowerCase(); return s === "bad" ? "error" : s === "warn" ? "warning" : s === "pass" ? "ok" : (SEV[s] === undefined ? "info" : s); }
+  function HealthList(o) {
+    o = o || {};
+    var f = (o.findings || []).slice().sort(function (a, b) { return SEV[sevOf(a.severity)] - SEV[sevOf(b.severity)]; });
+    var bad = f.filter(function (x) { return sevOf(x.severity) === "error"; }).length, warn = f.filter(function (x) { return sevOf(x.severity) === "warning"; }).length, fix = f.filter(function (x) { return x.fixable; }).length;
+    var el = h("div", { "class": "ls-health" });
+    if (o.verdict !== undefined || f.length) {
+      var parts = [];
+      if (o.verdict) { parts.push(h("span", {}, ["The audit says ", h("b", { text: String(o.verdict).toLowerCase() }), ". "])); }
+      if (bad || warn) { parts.push((bad ? bad + " error" + (bad === 1 ? "" : "s") : "") + (bad && warn ? " and " : "") + (warn ? warn + " warning" + (warn === 1 ? "" : "s") : "") + (fix ? "; " + fix + " can be put right." : ".")); }
+      el.appendChild(h("p", { "class": "sum" }, parts));
+    }
+    if (!f.length) { el.appendChild(h("p", { "class": "none", text: "\u2713 " + (o.noneText || "Nothing to put right.") })); }
+    else {
+      el.appendChild(h("ul", {}, f.map(function (x) {
+        var s = sevOf(x.severity);
+        return h("li", { "class": s }, [svg(G[s] || G.info, "g"), h("span", { "class": "n" }, [h("span", { text: s === "ok" ? "fine" : s }), x.name || ""]), x.detail ? h("span", { "class": "d", text: x.detail }) : null, x.fixable ? tag("can be put right", "accent", G.fix) : null]);
+      })));
+    }
+    if (o.from) { el.appendChild(h("p", { "class": "ls-from" }, ["From ", h("code", { text: o.from }), "."])); }
+    return el;
+  }
+
+  /* IdeaStages: the five stages an idea passes through, with where it is now and why. */
+  var STAGES = ["Captured", "Answering", "Ready", "Proposed", "Accepted"];
+  function IdeaStages(o) {
+    o = o || {};
+    var at = Math.max(0, STAGES.map(function (s) { return s.toLowerCase(); }).indexOf(String(o.stage || "captured").toLowerCase()));
+    var fam = NS.signalOf ? NS.signalOf(o.word || "").family : "";
+    var ol = h("ol", { "class": "ls-istages", "aria-label": "Where it stands" }, STAGES.map(function (s, i) {
+      var now = i === at;
+      return h("li", { "class": (i < at ? "past" : "") + (now ? " now " + (fam === "needs" ? "needs" : fam === "bad" ? "bad" : "") : ""), "aria-current": now ? "step" : null, "aria-label": s }, [h("span", { "class": "dot", "aria-hidden": "true" }), h("span", { "class": "nm", text: s }), now && o.word ? h("span", { "class": "w", text: o.word }) : null]);
+    }));
+    /* On a phone the five names do not fit: the dots stay, and one line says where it is. */
+    return h("div", { "class": "ls-istages-wrap" }, [ol, h("p", { "class": "cap", "aria-hidden": "true" }, ["Stage " + (at + 1) + " of 5: ", h("b", { text: STAGES[at] }), o.word ? " \u00b7 " + o.word : ""])]);
+  }
+
+  /* QuestionSet: the questions an agent asked about an idea, answered here, then sent together, with or without another round. */
+  function QuestionSet(o) {
+    o = o || {};
+    var qs = o.questions || [], drafts = {}, editing = {}, where = o.where || [], id = o.id || "<id>";
+    var el = h("div", { "class": "ls-qset" }), list = h("div", { "class": "qs", style: "display: grid; gap: 10px" }), send = h("div", { "class": "send" }), out = h("p", { "class": "ls-said", role: "status" });
+    el.appendChild(list); el.appendChild(send);
+    function changed() { return qs.filter(function (x) { var d = (drafts[x.id] || "").trim(); return d && d !== (x.answer || ""); }); }
+    function answerLine(x) { return lineOf("idea answer", [], {}, [id, x.id, "--answer=" + drafts[x.id].trim()].concat(where)); }
+    function paintSend() {
+      send.textContent = "";
+      var c = changed(), n = c.length, dis = o.disabledReason || (n ? null : "answer a question first");
+      send.appendChild(h("p", { "class": "count", text: n ? n + " answer" + (n === 1 ? "" : "s") + " ready to send." : "Answer what you can. Nothing is sent until you press a button." }));
+      var row = h("div", { "class": "ls-answers" });
+      row.appendChild(halo({ label: "Send answers and refine", kind: "needs", solid: true, glyph: "\u2713", cmd: n + " \u00d7 loadout idea answer, then " + lineOf("idea refine", [], {}, [id].concat(where)), disabledReason: dis, onPress: function () { go(true); } }));
+      row.appendChild(halo({ label: "Only save the answers", cmd: n + " \u00d7 loadout idea answer", disabledReason: dis, onPress: function () { go(false); } }));
+      send.appendChild(row);
+      if (n) { var d = h("details", {}, [h("summary", { text: "The commands, one per answer" })]); c.forEach(function (x) { d.appendChild(h("code", { text: answerLine(x) })); }); send.appendChild(d); }
+      send.appendChild(out);
+    }
+    function go(refine) {
+      var c = changed(), lines = c.map(answerLine);
+      if (o.onSend) { o.onSend(c.map(function (x) { return { question: x.id, answer: drafts[x.id].trim(), line: answerLine(x) }; }), refine, lines); }
+      c.forEach(function (x) { x.answer = drafts[x.id].trim(); delete drafts[x.id]; editing[x.id] = false; });
+      paint(); said(out, c.length + " answer" + (c.length === 1 ? "" : "s") + " saved" + (refine ? ". The next round has started: it runs on the daemon, and a toast says when it ends." : "."));
+    }
+    function paintQ(x, i) {
+      var answered = x.answer && !editing[x.id], dr = (drafts[x.id] || "").trim(), cls = "q" + (answered ? " answered" : dr ? " drafted" : "");
+      var qid = uid("ls-qq-"), card = h("section", { "class": cls, "aria-labelledby": qid });
+      card.appendChild(h("span", { "class": "who", text: [x.id, answered ? "answered" : dr ? "your answer, not sent yet" : "the agent asks"].join(" \u00b7 ") }));
+      if (answered) {
+        card.appendChild(h("p", { "class": "qt", id: qid, text: x.question }));
+        card.appendChild(h("p", { "class": "was" }, ["You answered: ", h("b", { text: x.answer }), h("button", { type: "button", onclick: function () { editing[x.id] = true; drafts[x.id] = x.answer; repaint(i); }, text: "Change it" })]));
+        return card;
+      }
+      var fs = h("fieldset", {}, [h("legend", { id: qid, text: x.question })]);
+      if (x.why) { fs.appendChild(h("p", { "class": "why", text: x.why })); }
+      var name = uid("ls-qo-"), opts = h("div", { "class": "opts" });
+      (x.options || []).forEach(function (op) {
+        var r = h("input", { type: "radio", name: name, value: op, onchange: function () { drafts[x.id] = op; own.value = ""; paintSend(); card.className = "q drafted"; } });
+        r.checked = drafts[x.id] === op;
+        opts.appendChild(h("label", { "class": "opt" }, [r, op, x.recommendation === op ? h("span", { "class": "rec", text: "recommended" }) : null]));
+      });
+      fs.appendChild(opts);
+      if (x.recommendation && (x.options || []).indexOf(x.recommendation) < 0) { fs.appendChild(h("p", { "class": "why", text: "Recommended: " + x.recommendation })); }
+      var oid = uid("ls-qw-"), own = h("textarea", { "class": "ls-text", id: oid, rows: 2, placeholder: "Or say it in your own words", oninput: function () { drafts[x.id] = own.value; Array.prototype.forEach.call(opts.querySelectorAll("input"), function (r) { r.checked = r.value === own.value; }); card.className = own.value.trim() ? "q drafted" : "q"; paintSend(); } });
+      if (drafts[x.id] && (x.options || []).indexOf(drafts[x.id]) < 0) { own.value = drafts[x.id]; }
+      fs.appendChild(h("div", { "class": "own" }, [h("label", { "for": oid, text: "Or in your own words" }), own]));
+      card.appendChild(fs);
+      return card;
+    }
+    function repaint(i) { var old = list.children[i], nu = paintQ(qs[i], i); list.replaceChild(nu, old); paintSend(); var f = nu.querySelector("input, textarea"); if (f) { f.focus(); } }
+    function paint() { list.textContent = ""; qs.forEach(function (x, i) { list.appendChild(paintQ(x, i)); }); paintSend(); }
+    paint();
+    return { el: el, get changed() { return changed(); } };
+  }
+
+  /* PlanLayer: one layer of an idea's plan. Its options side by side with what is for and against each; choose one, keep or drop the layer, or ask for it to be reworked. An addition is drawn the same way, without options. */
+  function PlanLayer(o) {
+    o = o || {};
+    var L = o.layer || o.addition || {}, add = !!o.addition, id = o.idea || "<id>", where = o.where || [], dis = o.disabledReason || null, lock = !!o.accepted;
+    var verdict = String(L.verdict || "Undecided");
+    var el = h("section", { "class": "ls-layer" + (add ? " addition" : "") + (verdict === "Drop" ? " dropped" : ""), "aria-label": (add ? "Addition " : "Layer ") + L.id + ": " + (L.name || L.title) });
+    var out = h("p", { "class": "ls-said", role: "status" });
+    var vk = { Keep: "good", Drop: "", Improve: "needs", Undecided: "" }[verdict];
+    el.appendChild(h("div", { "class": "lh" }, [h("span", { "class": "id", text: L.id }), h("h4", { text: L.name || L.title }), tag("verdict: " + verdict.toLowerCase(), vk)]));
+    if (add) { el.appendChild(h("p", { "class": "why", text: L.why || "" })); }
+    else if (L.purpose) { el.appendChild(h("p", { "class": "purpose", text: L.purpose })); }
+    if (!add) {
+      var grid = h("div", { "class": "opts" });
+      (L.options || []).forEach(function (op) {
+        var chosen = L.chosen === op.id, card = h("article", { "class": "card" + (chosen ? " chosen" : ""), "aria-label": op.title + (chosen ? ", chosen" : "") });
+        card.appendChild(h("div", { "class": "ct" }, [h("span", { "class": "id", text: op.id }), h("b", { text: op.title }), op.recommended ? tag("recommended", "accent") : null, chosen ? tag("chosen", "good", G.ok) : null]));
+        if (op.detail) { card.appendChild(h("p", { text: op.detail })); }
+        var pc = (op.pros || []).map(function (p) { return h("li", { "class": "pro" }, [h("i", { "aria-hidden": "true", text: "+" }), h("span", {}, [h("span", { "class": "ls-vh", text: "For: " }), p])]); })
+          .concat((op.cons || []).map(function (p) { return h("li", { "class": "con" }, [h("i", { "aria-hidden": "true", text: "\u2212" }), h("span", {}, [h("span", { "class": "ls-vh", text: "Against: " }), p])]); }));
+        if (pc.length) { card.appendChild(h("ul", {}, pc)); }
+        if (!chosen && !lock) { card.appendChild(halo({ label: "Choose this", size: "small", cmd: lineOf("idea choose", [], {}, [id, L.id, op.id].concat(where)), disabledReason: dis, onPress: function () { if (o.onChoose) { o.onChoose(op.id); } } })); }
+        grid.appendChild(card);
+      });
+      el.appendChild(grid);
+    }
+    if (!lock) {
+      var acts = h("div", { "class": "acts" }), req = "", rw = h("div", { "class": "rework" }), ta = h("textarea", { "class": "ls-text", rows: 2, placeholder: "What should change, in a sentence", "aria-label": "What should change about " + L.id });
+      acts.appendChild(halo({ label: "Keep it", size: "small", glyph: "\u2713", cmd: lineOf("idea keep", [], {}, [id, L.id].concat(where)), disabledReason: dis || (verdict === "Keep" ? "kept already" : null), onPress: function () { if (o.onVerdict) { o.onVerdict("Keep"); } said(out, "Kept " + L.id); } }));
+      acts.appendChild(halo({ label: "Drop it", size: "small", glyph: "\u2715", cmd: lineOf("idea drop", [], {}, [id, L.id].concat(where)), disabledReason: dis || (verdict === "Drop" ? "dropped already" : null), onPress: function () { if (o.onVerdict) { o.onVerdict("Drop"); } said(out, "Dropped " + L.id); } }));
+      acts.appendChild(halo({ label: "Ask for it to be reworked", size: "small", glyph: "\u21bb", cmd: "says what should change, then sends it", disabledReason: dis, onPress: function () { rw.classList.toggle("on"); if (rw.classList.contains("on")) { ta.focus(); } } }));
+      var send = h("div", {});
+      function paintRw() { send.textContent = ""; send.appendChild(halo({ label: "Send it back", size: "small", kind: "needs", cmd: lineOf("idea improve", [], {}, [id, L.id, "--request=" + (req || "<what should change>")].concat(where)), disabledReason: req ? dis : "say what should change", onPress: function () { if (o.onImprove) { o.onImprove(req); } rw.classList.remove("on"); said(out, "Sent " + L.id + " back to be reworked"); } })); }
+      ta.addEventListener("input", function () { req = ta.value.trim(); paintRw(); });
+      paintRw(); rw.appendChild(ta); rw.appendChild(send);
+      el.appendChild(acts); el.appendChild(rw);
+    }
+    el.appendChild(out);
+    return el;
+  }
+
+  /* NoteDump: notes pasted from elsewhere, split by an agent into ideas and tasks; tick the pieces to record. */
+  function NoteDump(o) {
+    o = o || {};
+    var d = o.dump || {}, picked = {}, out = h("p", { "class": "ls-said", role: "status" });
+    (d.items || []).forEach(function (it) { if (!it.recorded) { picked[it.number] = true; } });
+    var el = h("section", { "class": "ls-dump", "aria-label": "Notes " + d.id });
+    el.appendChild(h("div", { "class": "dh" }, [h("b", { text: d.source || d.id }), h("span", { text: d.id + " \u00b7 " + (d.captured || "") + (d.split ? " \u00b7 split " + d.split : " \u00b7 not split yet") })]));
+    var ol = h("ol", {});
+    (d.items || []).forEach(function (it) {
+      var cb = h("input", { type: "checkbox", disabled: it.recorded ? true : null, onchange: function () { picked[it.number] = cb.checked; paint(); } }); cb.checked = !!picked[it.number];
+      ol.appendChild(h("li", { "class": it.recorded ? "recorded" : "" }, [h("label", {}, [cb, h("span", { "class": "no", text: String(it.number) }), h("span", { "class": "t", text: it.title }), it.excerpt ? h("span", { "class": "x", text: it.excerpt }) : null, tag(it.recorded ? it.kind + " \u00b7 recorded" : it.kind, it.recorded ? "good" : "")])]));
+    });
+    el.appendChild(ol);
+    var acts = h("div", { "class": "acts" }); el.appendChild(acts); el.appendChild(out);
+    function only() { return Object.keys(picked).filter(function (k) { return picked[k]; }).sort(function (a, b) { return a - b; }); }
+    function paint() {
+      acts.textContent = ""; var ks = only(), all = (d.items || []).filter(function (i) { return !i.recorded; }).length;
+      acts.appendChild(halo({ label: ks.length ? "Record " + ks.length + (ks.length === all ? ", all of them" : "") : "Record them", size: "small", solid: true, cmd: lineOf("idea dump apply", [], {}, [d.id].concat(ks.length && ks.length < all ? ["--only", ks.join(",")] : [])), disabledReason: o.disabledReason || (ks.length ? null : "tick a piece first"), onPress: function () { if (o.onApply) { o.onApply(ks); } said(out, "Recorded " + ks.length); } }));
+      acts.appendChild(halo({ label: "Split it again", size: "small", glyph: "\u21bb", cmd: lineOf("idea dump split", [], {}, [d.id]), disabledReason: o.disabledReason, onPress: function () { if (o.onSplit) { o.onSplit(); } said(out, "Splitting again: an agent reads it once more"); } }));
+      acts.appendChild(halo({ label: "Read it whole", size: "small", cmd: lineOf("idea dump show", [], {}, [d.id]) + " \u00b7 reads only", onPress: function () { if (o.onShow) { o.onShow(); } } }));
+    }
+    paint();
+    return el;
+  }
+
+  /* ProjectTile: one project as a tile on the Projects wall. */
+  function ProjectTile(o) {
+    o = o || {};
+    var p = o.project || {}, away = p.available === false;
+    if (o.place) { return h("a", { "class": "ls-ptile place", href: o.href || "#" }, [h("span", { "class": "nm", text: " " + o.place }), o.sub ? h("span", { "class": "slug", text: o.sub }) : null]); }
+    var facts = [];
+    if (away) { facts.push(tag("not on this machine", "")); }
+    else if (p.branch) { facts.push(tag(p.branch + (p.clean === false ? " \u00b7 uncommitted" : " \u00b7 clean"), p.clean === false ? "needs" : "")); }
+    facts.push(tag(p.defaultAgent || "claude"));
+    var counts = [];
+    if (o.doing !== undefined) { counts.push(h("span", {}, [h("b", { text: String(o.doing) }), " doing"])); }
+    if (o.blocked) { counts.push(h("span", { "class": "needs" }, [h("b", { text: String(o.blocked) }), " blocked"])); }
+    if (o.findings !== undefined) { counts.push(h("span", { "class": o.findings ? "needs" : "" }, o.findings ? [h("b", { text: String(o.findings) }), " to put right"] : ["\u2713 healthy"])); }
+    if (o.ideas) { counts.push(h("span", {}, [h("b", { text: String(o.ideas) }), " idea" + (o.ideas === 1 ? "" : "s")])); }
+    return h("a", { "class": "ls-ptile" + (away ? " away" : ""), href: o.href || "#", "aria-current": o.picked ? "page" : null }, [
+      h("span", { "class": "nm" }, [p.name || p.id, p.pinned ? h("span", { "class": "pin", text: "pinned" }) : null]),
+      h("span", { "class": "slug", text: p.id + (away ? "" : " \u00b7 " + (p.path || "")) }),
+      h("span", { "class": "facts" }, facts), counts.length ? h("span", { "class": "counts" }, counts) : null]);
+  }
+
+  /* TaskBoard: a project's tasks by where they stand, each moved on with the command that says so. */
+  var NEXT = { open: ["doing", "blocked", "dropped"], doing: ["done", "blocked", "open"], blocked: ["doing", "dropped"], done: ["open"], dropped: ["open"] };
+  var MOVE = { doing: "Start it", done: "Mark it done", blocked: "It is blocked", dropped: "Drop it", open: "Reopen it" };
+  function TaskBoard(o) {
+    o = o || {};
+    var tasks = o.tasks || [], where = o.where || [], el = h("div", { "class": "ls-tboard" });
+    function card(t) {
+      var s = h("p", { "class": "said", role: "status" }), moves = h("div", { "class": "moves" });
+      (NEXT[t.state] || []).forEach(function (n) { moves.appendChild(halo({ label: MOVE[n], size: "small", kind: n === "dropped" ? "danger" : "", cmd: lineOf("task declare", [], {}, [t.id, n].concat(where)), disabledReason: o.disabledReason, onPress: function () { var was = t.state; t.state = n; if (o.onDeclare) { o.onDeclare(t, n, was); } paint(); } })); });
+      return h("article", { "class": "task " + t.state, "aria-label": t.title + ", " + t.state }, [h("span", { "class": "tt", text: t.title }), h("span", { "class": "tx", text: [t.id, t.kind, t.declaredBy, t.declared].filter(Boolean).join(" \u00b7 ") }), t.note ? h("p", { "class": "note", text: t.note }) : null, moves, s]);
+    }
+    function paint() {
+      el.textContent = "";
+      var cols = h("div", { "class": "cols" });
+      [["open", "Open"], ["doing", "Doing"], ["blocked", "Blocked"]].forEach(function (c) {
+        var ts = tasks.filter(function (t) { return t.state === c[0]; }), sid = uid("ls-tc-");
+        var col = h("section", { "class": "col", "aria-labelledby": sid }, [h("h4", { id: sid }, [NS.Signal ? NS.Signal(c[0]) : null, c[1], h("span", { "class": "n", text: String(ts.length) })])]);
+        if (!ts.length) { col.appendChild(h("p", { "class": "empty", text: { open: "Nothing waiting to start.", doing: "Nothing under way.", blocked: "Nothing blocked." }[c[0]] })); }
+        ts.forEach(function (t) { col.appendChild(card(t)); });
+        cols.appendChild(col);
+      });
+      el.appendChild(cols);
+      var closed = tasks.filter(function (t) { return t.state === "done" || t.state === "dropped"; });
+      if (closed.length) {
+        var dn = closed.filter(function (t) { return t.state === "done"; }).length, dr = closed.length - dn, grid = h("div", { "class": "grid" });
+        closed.forEach(function (t) { grid.appendChild(card(t)); });
+        el.appendChild(h("details", { "class": "closed" }, [h("summary", { text: dn + " done, " + dr + " dropped" }), grid]));
+      }
+      if (o.from) { el.appendChild(h("p", { "class": "ls-from" }, ["The same as ", h("code", { text: o.from }), "."])); }
+    }
+    paint();
+    return { el: el, set: function (ts) { tasks = ts; paint(); } };
+  }
+
+  /* LoadStack: what a session would start with, as one bar of its specialists against the token budget, with why each is there and what was left out. */
+  function LoadStack(o) {
+    o = o || {};
+    var sel = (o.selected || []).slice().sort(function (a, b) { return (b.always ? 1 : 0) - (a.always ? 1 : 0) || b.estimatedTokens - a.estimatedTokens; });
+    var used = o.estimatedTokens !== undefined ? o.estimatedTokens : sel.reduce(function (s, x) { return s + x.estimatedTokens; }, 0), budget = o.tokenBudget || 0, max = Math.max(used, budget) || 1;
+    var over = budget && used > budget, near = !over && o.nearBudget;
+    var el = h("div", { "class": "ls-load" });
+    el.appendChild(h("p", { "class": "big" + (over ? " over" : "") }, [h("b", { text: used.toLocaleString("en-GB") }), h("span", { text: "tokens every session starts with" }), budget ? h("span", { "class": "w", text: over ? "\u00b7 " + (used - budget).toLocaleString("en-GB") + " over the budget of " + budget.toLocaleString("en-GB") : near ? "\u00b7 near the budget of " + budget.toLocaleString("en-GB") : "\u00b7 within the budget of " + budget.toLocaleString("en-GB") }) : null]));
+    var bar = h("div", { "class": "bar", role: "group", "aria-label": "Loaded specialists, by tokens" }), rows = h("ol", { "aria-label": "Loaded" }), segs = [], lis = [];
+    function lit(i, on) { if (segs[i]) { segs[i].classList.toggle("lit", on); } if (lis[i]) { lis[i].classList.toggle("lit", on); } }
+    sel.forEach(function (x, i) {
+      var w = (x.estimatedTokens / max) * 100;
+      var s = h("button", { type: "button", "class": "seg" + (x.always ? " always" : ""), style: "flex: 0 0 calc(" + w.toFixed(3) + "% - 2px)", "aria-label": x.title + ", " + x.estimatedTokens + " tokens", onmouseenter: function () { lit(i, true); }, onmouseleave: function () { lit(i, false); }, onfocus: function () { lit(i, true); }, onblur: function () { lit(i, false); }, onclick: function () { if (o.onPick) { o.onPick(x.id); } } });
+      segs.push(s); bar.appendChild(s);
+      var t = o.href ? h("a", { "class": "t", href: o.href(x.id), text: x.title }) : h("span", { "class": "t", text: x.title });
+      var li = h("li", { "class": x.always ? "always" : "", onmouseenter: function () { lit(i, true); }, onmouseleave: function () { lit(i, false); } }, [h("span", { "class": "sw", "aria-hidden": "true" }), t, h("span", { "class": "n", text: x.estimatedTokens.toLocaleString("en-GB") }), h("span", { "class": "r", text: [x.id, x.always ? "always loaded" : null, x.reason].filter(Boolean).join(" \u00b7 ") })]);
+      lis.push(li); rows.appendChild(li);
+    });
+    if (budget) { bar.appendChild(h("span", { "class": "mark", style: "left: calc(" + (budget / max * 100).toFixed(3) + "% - 1px)", "aria-hidden": "true" })); }
+    if (over) { bar.appendChild(h("span", { "class": "over", style: "left: " + (budget / max * 100).toFixed(3) + "%; right: 0", "aria-hidden": "true" })); }
+    el.appendChild(bar);
+    if (budget) { el.appendChild(h("div", { "class": "scale", "aria-hidden": "true" }, [h("span", { "class": "start", style: "left: 0", text: "0" }), h("span", { "class": over ? "" : "end", style: "left: " + (budget / max * 100).toFixed(3) + "%", text: "budget " + num(budget) }), over ? h("span", { "class": "end", style: "left: 100%", text: num(used) }) : null])); }
+    el.appendChild(h("div", { "class": "legend", "aria-hidden": "true" }, [h("span", {}, [h("i", {}), "loaded for this task"]), h("span", {}, [h("i", { "class": "always" }), "always loaded"]), budget ? h("span", {}, [h("i", { "class": "mk" }), "the budget"]) : null]));
+    el.appendChild(rows);
+    var om = o.omitted || [];
+    if (om.length) { el.appendChild(h("details", {}, [h("summary", { text: om.length + " considered and left out" }), h("ul", {}, om.map(function (x) { return h("li", {}, [h("b", { text: x.id }), x.reason]); }))])); }
+    if (o.conflicts) { el.appendChild(h("p", { "class": "ls-from", text: o.conflicts + " overlap" + (o.conflicts === 1 ? "" : "s") + " settled; the narrower one wins." })); }
+    return el;
+  }
+
+  Object.assign(NS, { ActionDrawer: ActionDrawer, ActionDrawers: ActionDrawers, TerminalOnly: TerminalOnly, HealthList: HealthList, IdeaStages: IdeaStages, QuestionSet: QuestionSet, PlanLayer: PlanLayer, NoteDump: NoteDump, ProjectTile: ProjectTile, TaskBoard: TaskBoard, LoadStack: LoadStack, commandLine: lineOf, TASK_NEXT: NEXT, TASK_MOVE: MOVE, tokens: num });
+})();
+
+(function () {
+  "use strict";
+  var NS = window.LoadoutStudio = window.LoadoutStudio || {};
+  function h(tag, attrs, kids) {
+    var el = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      var v = attrs[k];
+      if (v === null || v === undefined || v === false) { return; }
+      if (k === "text") { el.textContent = v; } else if (k === "class") { el.className = v; } else if (k.slice(0, 2) === "on") { el.addEventListener(k.slice(2), v); } else { el.setAttribute(k, v === true ? "" : v); }
+    });
+    (kids || []).forEach(function (c) { if (c) { el.appendChild(typeof c === "string" ? document.createTextNode(c) : c); } });
+    return el;
+  }
+  function uid(p) { return p + Math.random().toString(36).slice(2, 7); }
+  /* A disabled button says why in place of its command, and is never the solid one. */
+  function halo(o) { return NS.HaloButton(o.disabledReason ? Object.assign({}, o, { cmd: null, solid: false }) : o); }
+  function tag(text, kind) { return h("span", { "class": "ls-tag" + (kind ? " " + kind : ""), text: text }); }
+  function line(path, words) { return NS.commandLine(path, [], {}, words); }
+  function said(el, text) { el.textContent = text ? "✓ " + text : ""; }
+  function num(n) { return NS.tokens(n); }
+  function pct(f) { return Math.round((Number(f) || 0) * 100) + "%"; }
+
+  /* ConfigList: every setting loadout config knows, in its groups, found by name or what it does, and changed where it is shown. */
+  function ConfigList(o) {
+    o = o || {};
+    var groups = o.groups || [], drafts = {}, query = "", out = h("p", { "class": "ls-said", role: "status" });
+    var el = h("div", { "class": "ls-config" }), sid = uid("ls-cf-");
+    var input = h("input", { "class": "ls-text", id: sid, type: "search", placeholder: "Find a setting by name or what it does", autocomplete: "off", spellcheck: "false", oninput: function () { query = input.value.trim().toLowerCase(); paint(); } });
+    var count = h("span", { "class": "n", "aria-live": "polite" });
+    el.appendChild(h("div", { "class": "find" }, [h("label", { "class": "ls-vh", "for": sid, text: "Find a setting" }), input, count]));
+    var list = h("div", { style: "display: grid; gap: 6px" }); el.appendChild(list); el.appendChild(out);
+    if (o.from !== false) { el.appendChild(h("p", { "class": "ls-from" }, ["The same as ", h("code", { text: "$ loadout config list" }), ". Empty clears a setting back to its default."])); }
+    var openGroups = {}; if (groups[0]) { openGroups[groups[0].group] = true; }
+    function match(s) { return !query || (s.name + " " + s.description).toLowerCase().indexOf(query) >= 0; }
+    function row(s) {
+      var has = Object.prototype.hasOwnProperty.call(drafts, s.name), d = has ? drafts[s.name] : s.value, changed = has && d !== s.value;
+      var r = h("div", { "class": "crow" + (changed ? " changed" : ""), role: "group", "aria-label": s.name });
+      var desc = [s.description];
+      if (!s.value && s.whenUnset) { desc.push(h("span", { "class": "u", text: " Unset, it uses " + s.whenUnset + "." })); }
+      r.appendChild(h("div", {}, [h("div", { "class": "k" }, [h("code", { text: s.name }), s.machineLocal ? tag("this machine only") : null, s.value && !s.flag ? tag("set", "accent") : null]), h("p", { "class": "d" }, desc)]));
+      var ctl = h("div", { "class": "ctl" }), ex = h("p", { "class": "ex", "aria-live": "polite" });
+      if (s.flag) {
+        ctl.appendChild(NS.Switch({ label: s.name, sub: null, checked: d === "true", onChange: function (on) { drafts[s.name] = on ? "true" : "false"; paint(s.name); } }));
+      } else {
+        var iid = uid("ls-cv-"), inp = h("input", { "class": "ls-text", id: iid, value: d || "", placeholder: s.whenUnset ? "default: " + s.whenUnset : "unset", autocomplete: "off", spellcheck: "false", "aria-label": s.name, oninput: function () { drafts[s.name] = inp.value; mark(); } });
+        inp.value = d || "";
+        ctl.appendChild(inp);
+      }
+      var acts = h("div", { "class": "acts" }); ctl.appendChild(acts);
+      function mark() {
+        var v = drafts[s.name], ch = v !== undefined && v !== s.value;
+        r.classList.toggle("changed", ch); acts.textContent = "";
+        if (ch) {
+          acts.appendChild(halo({ label: "Set it", kind: "", solid: true, size: "small", cmd: line("config set", [s.name, v]), disabledReason: o.disabledReason, onPress: function () { var res = o.onSet ? o.onSet(s.name, v) : null; s.value = v; delete drafts[s.name]; paint(); said(out, typeof res === "string" ? res : "Set " + s.name + (v === "" ? " back to its default" : " to " + v)); } }));
+          acts.appendChild(halo({ label: "Put it back", size: "small", cmd: "changes nothing", onPress: function () { delete drafts[s.name]; paint(s.name); } }));
+        } else if (s.value && !s.flag) {
+          acts.appendChild(halo({ label: "Clear it", size: "small", cmd: line("config set", [s.name, ""]), disabledReason: o.disabledReason, onPress: function () { if (o.onSet) { o.onSet(s.name, ""); } s.value = ""; paint(); said(out, "Cleared " + s.name + ": it uses its default again"); } }));
+        }
+        acts.appendChild(h("button", { type: "button", "class": "xb", text: "Explain it", "aria-label": "Explain " + s.name + ": " + line("config get", [s.name, "--explain"]), title: line("config get", [s.name, "--explain"]), onclick: function () { ex.textContent = o.onExplain ? o.onExplain(s) : line("config get", [s.name, "--explain"]); } }));
+      }
+      mark();
+      r.appendChild(ctl); r.appendChild(ex);
+      return r;
+    }
+    function paint(focusName) {
+      list.textContent = ""; var shown = 0, total = 0;
+      groups.forEach(function (g) {
+        var ss = g.settings.filter(match); total += g.settings.length; shown += ss.length;
+        if (!ss.length) { return; }
+        var setN = g.settings.filter(function (s) { return s.value; }).length;
+        var d = h("details", { "class": "grp", open: query || openGroups[g.group] ? true : null, ontoggle: function () { if (!query) { openGroups[g.group] = d.open; } } }, [h("summary", {}, [h("h3", { text: g.group }), h("span", { "class": "n", text: query ? ss.length + " of " + g.settings.length : String(g.settings.length) }), setN ? h("span", { "class": "set", text: setN + " set" }) : null])]);
+        var rows = h("div", { "class": "rows" }); ss.forEach(function (s) { rows.appendChild(row(s)); }); d.appendChild(rows); list.appendChild(d);
+      });
+      if (!shown) { list.appendChild(h("p", { "class": "none", text: "No setting matches “" + query + "”." })); }
+      count.textContent = query ? shown + " of " + total + " settings" : total + " settings";
+      if (focusName) { var f = list.querySelector('[aria-label="' + focusName + '"] .ls-switch, [aria-label="' + focusName + '"] input'); if (f) { f.focus(); } }
+    }
+    paint();
+    return { el: el, find: function (q) { input.value = q; query = q.toLowerCase(); paint(); } };
+  }
+
+  /* StoreList: what a project remembers, in its three stores, and what the agent recorded outside the workspace. */
+  function StoreList(o) {
+    o = o || {};
+    var el = h("nav", { "class": "ls-stores", "aria-label": "Topics" }), pk = o.picked || {};
+    (o.stores || []).forEach(function (s) {
+      var sid = uid("ls-st-"), sec = h("section", { "aria-labelledby": sid }, [h("h3", { id: sid }, [s.label, s.readOnly ? tag("read-only here") : null]), s.hint ? h("p", { "class": "hint", text: s.hint }) : null]);
+      if (!(s.topics || []).length) { sec.appendChild(h("p", { "class": "empty", text: "Nothing recorded." })); }
+      else { sec.appendChild(h("ul", {}, s.topics.map(function (t) { var cur = pk.store === s.key && pk.name === t.name; return h("li", {}, [h("a", { href: o.href ? o.href(s.key, t.name) : "#", "aria-current": cur ? "page" : null }, [h("span", { "class": "t", text: t.name }), h("span", { "class": "x", text: t.description || "" }), t.facts !== undefined ? h("span", { "class": "n", text: t.facts + " fact" + (t.facts === 1 ? "" : "s") }) : null])]); }))); }
+      el.appendChild(sec);
+    });
+    var a = o.agent;
+    if (a) {
+      var aid = uid("ls-ag-"), box = h("section", { "class": "agent", "aria-labelledby": aid }, [h("h3", { id: aid, text: "Recorded by the agent, outside the workspace" }), h("p", { text: "Shown, never written from here. Bring it in with:" }), h("code", { text: "$ " + a.command })]);
+      if (a.error) { box.appendChild(h("p", { "class": "needs", text: a.error })); }
+      else {
+        var n = (a.wouldImport || []).length, dr = (a.drifted || []).length;
+        box.appendChild(h("p", { text: n + " topic" + (n === 1 ? "" : "s") + " would come in." + (dr ? "" : "") }));
+        if (dr) { box.appendChild(h("p", { "class": "needs", text: dr + " differ" + (dr === 1 ? "s" : "") + " from the workspace's copy: " + a.drifted.join(", ") + "." })); }
+      }
+      el.appendChild(box);
+    }
+    return el;
+  }
+
+  /* TopicEditor: one memory topic, read and edited in place. A save carries the version it was read at; if somebody changed it meanwhile, theirs is shown beside your edit and nothing is overwritten. */
+  function TopicEditor(o) {
+    o = o || {};
+    var topic = Object.assign({}, o.topic || {}), draft = topic.text || "", theirs = null, out = h("p", { "class": "ls-said", role: "status" });
+    var el = h("section", { "class": "ls-topic", "aria-label": "Topic " + (topic.name || "") });
+    function scopeWords() { return topic.scope && topic.scope !== "project" ? ["--scope", topic.scope] : []; }
+    function replaceLine(version) { return line("memory replace", [topic.name, "--project", o.project || "<slug>"].concat(scopeWords(), ["--file", "<path>", "--expect", version || topic.version])); }
+    function head() {
+      var tags = h("div", { "class": "tags" }, [tag(o.storeLabel || topic.scope || "project"), topic.kind ? tag(topic.kind) : null, topic.written ? tag("written " + topic.written) : null, topic.version ? tag("version " + String(topic.version).slice(0, 8)) : null]);
+      return h("div", { "class": "th" }, [h("h2", { text: topic.name }), topic.description ? h("p", { text: topic.description }) : null, tags]);
+    }
+    function lines(t) { return String(t || "").replace(/\n$/, "").split("\n"); }
+    function paint() {
+      el.textContent = ""; el.appendChild(head());
+      if (theirs) { return paintClash(); }
+      var tid = uid("ls-tt-"), ta = h("textarea", { "class": "ls-text", id: tid, rows: 14, spellcheck: "true", readonly: o.editable ? null : true, oninput: function () { draft = ta.value; meta(); acts(); } });
+      ta.value = draft;
+      el.appendChild(h("label", { "class": "ls-vh", "for": tid, text: "The topic's text" })); el.appendChild(ta);
+      var m = h("div", { "class": "meta" }); el.appendChild(m);
+      function meta() { var dirty = draft !== topic.text; m.textContent = ""; m.appendChild(h("span", { text: lines(draft).length + " lines · " + draft.length + " characters" })); m.appendChild(h("span", { "class": dirty ? "dirty" : "", text: dirty ? "edited, not saved" : "as stored" })); }
+      meta();
+      var row = h("div", { "class": "ls-answers" }); el.appendChild(row);
+      function acts() {
+        row.textContent = ""; if (!o.editable) { return; }
+        var dirty = draft !== topic.text;
+        row.appendChild(halo({ label: "Save", solid: true, size: "small", cmd: replaceLine(), disabledReason: dirty ? null : "nothing changed yet", onPress: save }));
+        if (dirty) { row.appendChild(halo({ label: "Discard changes", size: "small", cmd: "changes nothing", onPress: function () { draft = topic.text; paint(); } })); }
+      }
+      acts();
+      if (!o.editable) { el.appendChild(h("div", { "class": "ro" }, [h("p", { text: o.readOnlyReason || "This topic is read-only here." }), NS.Command({ why: "Edit it in a terminal:", command: replaceLine() })])); }
+      el.appendChild(out);
+    }
+    function save() {
+      var r = o.onSave ? o.onSave(draft, topic.version) : { saved: Object.assign({}, topic, { text: draft }) };
+      if (r && r.changed) { theirs = r.changed; paint(); var f = el.querySelector(".two textarea"); if (f) { f.focus(); } return; }
+      topic = Object.assign({}, topic, r && r.saved ? r.saved : { text: draft }); draft = topic.text; paint();
+      said(out, "Saved " + topic.name + ". It is in the workspace; loadout workspace save commits it.");
+      if (o.onSaved) { o.onSaved(topic); }
+    }
+    function paintClash() {
+      el.appendChild(h("div", { "class": "clash", role: "alert" }, [h("b", { text: "Somebody else changed this topic while you were editing" }), h("p", { text: "Nothing was saved. On the left is what is on disk now; on the right is your edit. Merge what you want into yours, then keep it, or take theirs and lose your edit." })]));
+      var mine = lines(draft), disk = lines(theirs.text), only = disk.filter(function (l) { return mine.indexOf(l) < 0; }).length, yours = mine.filter(function (l) { return disk.indexOf(l) < 0; }).length;
+      el.appendChild(h("p", { "class": "diffsum", text: only + " line" + (only === 1 ? "" : "s") + " only on disk, marked −; " + yours + " only in your edit." }));
+      var pre = h("pre", { "class": "disk", tabindex: "0", "aria-label": "On disk now, read-only" }, disk.map(function (l) { var o2 = mine.indexOf(l) < 0; return h("span", { "class": o2 ? "only" : "" }, [h("i", { "aria-hidden": "true", text: o2 ? "−" : "" }), o2 ? h("span", { "class": "ls-vh", text: "only on disk: " }) : null, l || " "]); }));
+      var yid = uid("ls-ty-"), ta = h("textarea", { "class": "ls-text", id: yid, rows: 14, oninput: function () { draft = ta.value; } });
+      ta.value = draft;
+      el.appendChild(h("div", { "class": "two" }, [h("div", {}, [h("p", { "class": "lab" }, ["On disk now ", h("span", { text: "version " + String(theirs.version).slice(0, 8) + (theirs.written ? " · " + theirs.written : "") })]), pre]), h("div", {}, [h("label", { "class": "lab", "for": yid }, ["Your edit ", h("span", { text: "from version " + String(topic.version).slice(0, 8) })]), ta])]));
+      var row = h("div", { "class": "ls-answers" });
+      row.appendChild(halo({ label: "Keep my edit, then save", kind: "needs", solid: true, size: "small", cmd: replaceLine(theirs.version), onPress: function () { topic = Object.assign({}, theirs); theirs = null; save(); } }));
+      row.appendChild(halo({ label: "Take theirs", size: "small", cmd: "drops your edit · changes nothing", onPress: function () { topic = Object.assign({}, theirs); draft = topic.text; theirs = null; paint(); said(out, "Took theirs. Your edit is gone."); } }));
+      el.appendChild(row); el.appendChild(out);
+    }
+    paint();
+    return { el: el, get draft() { return draft; }, get dirty() { return draft !== topic.text; } };
+  }
+
+  /* TokenSplit: what the agents spent over a period, billed as input, and what the cache saved, with how it splits. */
+  function TokenSplit(o) {
+    o = o || {};
+    var t = o.totals || {}, el = h("div", { "class": "ls-split" });
+    el.appendChild(h("p", { "class": "hero" }, [h("b", { text: num(t.billedInputEquivalent) }), h("span", { text: "tokens billed as input" }), h("span", { "class": "saved", text: "✓ the cache saved " + pct(t.savedFraction) })]));
+    var parts = [["input", "Input", t.input], ["cache", "Read from the cache", t.cacheRead], ["output", "Output", t.output], ["thinking", "Thinking", t.thinking]], sum = parts.reduce(function (s, p) { return s + (p[2] || 0); }, 0) || 1;
+    el.appendChild(h("div", { "class": "bar", role: "img", "aria-label": parts.map(function (p) { return p[1] + " " + num(p[2]); }).join(", ") }, parts.map(function (p) { return h("span", { "class": "k-" + p[0], style: "flex: 0 0 calc(" + ((p[2] || 0) / sum * 100).toFixed(3) + "% - 2px)" }); })));
+    el.appendChild(h("dl", {}, parts.map(function (p) {
+      var extra = p[0] === "cache" ? " · " + pct(t.cacheHitFraction) + " of input" : "";
+      return h("div", {}, [h("i", { "class": "k-" + p[0], "aria-hidden": "true" }), h("dt", { text: p[1] }), h("dd", {}, [num(p[2]), extra ? h("span", { text: extra }) : null])]);
+    })));
+    if (o.since) { el.appendChild(h("p", { "class": "since" + (o.complete === false ? " needs" : "") }, ["Since " + o.since + (o.complete === false ? " · some transcripts could not be read, so these are a floor" : "") + ". From ", h("code", { "class": "ls-cmd", text: o.from || "$ loadout usage" }), "."])); }
+    return el;
+  }
+
+  /* SpendBars: tokens by project, model or agent as bars, the twenty largest; by day as columns, read with the arrow keys. */
+  function SpendBars(o) {
+    o = o || {};
+    var g = (o.groups || []).slice(), el = h("div", { "class": "ls-bars" }), fmt = o.format || num, unit = o.unit || "tokens";
+    if (o.by === "day") {
+      var max = Math.max.apply(null, g.map(function (x) { return x.value; }).concat([1])), cur = g.length - 1;
+      var cols = h("div", { "class": "cols", tabindex: "0", role: "group", "aria-roledescription": "column chart", "aria-label": (o.label || "Tokens by day") + ". Left and right arrows read each day." });
+      var readout = h("p", { "class": "readout", "aria-live": "polite" });
+      var cs = g.map(function (x, i) { var c = h("div", { "class": "c", onmouseenter: function () { pick(i); } }, [h("span", { style: "height: " + Math.max(1, x.value / max * 100).toFixed(2) + "%" })]); cols.appendChild(c); return c; });
+      function pick(i) { cur = Math.max(0, Math.min(g.length - 1, i)); cs.forEach(function (c, j) { c.classList.toggle("cur", j === cur); }); var x = g[cur]; readout.textContent = ""; if (x) { readout.appendChild(h("span", {}, [h("b", { text: x.name }), " · " + fmt(x.value) + " " + unit])); } }
+      cols.addEventListener("keydown", function (e) { if (e.key === "ArrowLeft") { pick(cur - 1); e.preventDefault(); } else if (e.key === "ArrowRight") { pick(cur + 1); e.preventDefault(); } else if (e.key === "Home") { pick(0); e.preventDefault(); } else if (e.key === "End") { pick(g.length - 1); e.preventDefault(); } });
+      el.appendChild(readout); el.appendChild(cols);
+      var step = Math.max(1, Math.ceil(g.length / 6));
+      el.appendChild(h("div", { "class": "axis", "aria-hidden": "true" }, g.map(function (x, i) { return h("span", { text: i % step === 0 ? x.name : "" }); })));
+      el.appendChild(h("p", { "class": "keys", text: "Hover a day, or focus the chart and use the arrow keys." }));
+      pick(cur);
+    } else {
+      g.sort(function (a, b) { return b.value - a.value; });
+      var limit = o.limit || 20, shown = g.slice(0, limit), top = shown[0] ? shown[0].value : 1;
+      el.appendChild(h("ol", { "class": "rows", "aria-label": o.label || "Tokens by " + (o.by || "project") }, shown.map(function (x) {
+        return h("li", { "class": x.registered === false ? "away" : "" }, [h("span", { "class": "nm", title: x.name }, [h("span", { text: x.name }), x.registered === false ? tag("not a project") : null]), h("span", { "class": "track", "aria-hidden": "true" }, [h("span", { "class": "fill", style: "width: " + Math.max(0.5, x.value / top * 100).toFixed(2) + "%" })]), h("span", { "class": "v", text: fmt(x.value) })]);
+      })));
+      if (g.length > limit) { el.appendChild(h("p", { "class": "left", text: "The " + (g.length - limit) + " smallest are left out here." })); }
+    }
+    return el;
+  }
+
+  Object.assign(NS, { ConfigList: ConfigList, StoreList: StoreList, TopicEditor: TopicEditor, TokenSplit: TokenSplit, SpendBars: SpendBars });
 })();

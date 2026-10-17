@@ -1,0 +1,29 @@
+<!-- @dsCard group="Pages" height=900 width=1100 subtitle="A topic edited in place; a clash shows theirs beside yours, and nothing is overwritten" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TopicEditor</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<p class="lab">Press Save to see a clash</p><div id="t" style="max-width: 1040px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var T = { name: "release-process", scope: "project", description: "How a release is cut, tagged and published", kind: "procedure", written: "16 Oct", version: "a41f9c2e77", text: "Releases are cut from main.\nRun the suite with --configuration Release first.\nTag as v<major>.<minor>.<patch>; the tag push publishes.\nThe changelog is written from the merged pull requests.\n" };
+  var THEIRS = { name: "release-process", scope: "project", description: T.description, kind: "procedure", written: "17 Oct 14:02", version: "c90d13ab42", text: "Releases are cut from main.\nRun the suite with --configuration Release first.\nTag as v<major>.<minor>.<patch>; the tag push publishes.\nNuGet publishing needs the NUGET_KEY secret.\nThe changelog is written from the merged pull requests.\n" };
+  var first = true;
+  document.getElementById("t").appendChild(S.TopicEditor({ project: "loadout-cli", topic: T, storeLabel: "This project", editable: true, onSave: function (text, version) { if (first) { first = false; return { changed: THEIRS }; } return { saved: Object.assign({}, THEIRS, { text: text, version: "e5b7020d19" }) }; } }).el);
+})();
+</script>
+</body>
+</html>

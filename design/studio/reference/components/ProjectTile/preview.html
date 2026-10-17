@@ -1,0 +1,30 @@
+<!-- @dsCard group="Pages" height=380 width=1000 subtitle="The Projects wall: each project at a glance, and the ways to add one" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ProjectTile</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="w" class="ls-pwall" style="max-width: 980px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var w = document.getElementById("w");
+  w.appendChild(S.ProjectTile({ project: { id: "loadout-cli", name: "Loadout CLI", available: true, path: "~/src/loadout-cli", defaultAgent: "claude", pinned: true, branch: "main", clean: false }, picked: true, doing: 2, blocked: 1, findings: 2, ideas: 1 }));
+  w.appendChild(S.ProjectTile({ project: { id: "starstats", name: "StarStats", available: true, path: "~/src/starstats", defaultAgent: "codex", branch: "feature/bucket", clean: true }, doing: 1, findings: 0 }));
+  w.appendChild(S.ProjectTile({ project: { id: "home-lab", name: "Home lab", available: false, defaultAgent: "claude" } }));
+  w.appendChild(S.ProjectTile({ place: "Add a repository you have", sub: "loadout project add" }));
+})();
+</script>
+</body>
+</html>

@@ -357,3 +357,81 @@ export declare function WorkDesk(o: {
   keys?: boolean;
   onSelect?: (id: string) => void; onShown?: (item: DeskItem, view: unknown) => void;
 }): { el: HTMLElement; select: (id: string, quiet?: boolean) => void; focusList: () => void; openView: () => void; closeView: () => void; refresh: (groups: unknown[]) => void; repaintView: () => void; repaintActions: () => void; readonly selected: string | null; destroy: () => void };
+
+/* ---------- The pages (stage 8) ---------- */
+
+export type Effect = "reads" | "changes" | "session" | "terminal";
+export interface DrawerField {
+  /** "--project" for an option, a bare name ("id", "topic") for an argument. Arguments are written in field order, before options. */
+  name: string; label?: string; value?: string | boolean;
+  kind?: "text" | "flag" | "choice"; options?: string[]; lines?: number; placeholder?: string; hint?: string;
+  /** Shown, not changeable: the project the page is about. */
+  fixed?: boolean; required?: boolean; wide?: boolean;
+  /** Write the option as --name=value, for prose that may start with a dash. */
+  joined?: boolean;
+}
+/** One loadout command as a closed drawer: title, `loadout <path>` and its effect. Opened, it is the command's form, the exact line, a Preview (--dry-run) when it has one, and its button. */
+export declare function ActionDrawer(o: {
+  path: string; title?: string; why?: string; note?: string; effect?: Effect;
+  /** Changes only when one of these is given (backup restore: ["--apply"]); otherwise it reads. */
+  changesOnlyWith?: string[]; dryRun?: boolean; fields?: DrawerField[]; label?: string; danger?: boolean; open?: boolean;
+  /** For effect "terminal": why Studio does not run it, completing "It …". */
+  reason?: string; command?: string;
+  disabledReason?: string;
+  onRun?: (values: Record<string, string | boolean>, info: { preview: boolean; line: string; reads: boolean }) => string | void;
+  onOpen?: () => void;
+}): { el: HTMLElement; open: () => void; close: () => void; values: Record<string, string | boolean>; line: () => string };
+/** Drawers in named groups. */
+export declare function ActionDrawers(groups: { name?: string; items: (Parameters<typeof ActionDrawer>[0] | ReturnType<typeof ActionDrawer>)[] }[]): HTMLElement;
+/** What is only ever done in a terminal: the command, why, and Copy. Never a button that does it. */
+export declare function TerminalOnly(o: { title?: string; why?: string; command: string; fact?: string }): HTMLElement;
+export interface Finding { name?: string; severity?: "error" | "warning" | "info" | "ok" | string; detail?: string; fixable?: boolean }
+/** Findings, worst first, each with its severity as a word and a glyph. */
+export declare function HealthList(o: { findings: Finding[]; verdict?: string; from?: string; noneText?: string }): HTMLElement;
+/** Captured, Answering, Ready, Proposed, Accepted: where an idea stands, with its state word under the stage it is at. */
+export declare function IdeaStages(o: { stage: string; word?: string }): HTMLElement;
+export interface IdeaQuestion { id: string; question: string; why?: string; options?: string[]; recommendation?: string | null; answer?: string | null }
+/** The questions an agent asked, answered in the page: an option or your own words. Sent together, with or without another round. */
+export declare function QuestionSet(o: { id: string; where: string[]; questions: IdeaQuestion[]; disabledReason?: string; onSend?: (answers: { question: string; answer: string; line: string }[], refine: boolean, lines: string[]) => void }): { el: HTMLElement; readonly changed: IdeaQuestion[] };
+export interface IdeaOption { id: string; title: string; detail?: string; pros?: string[]; cons?: string[]; recommended?: boolean }
+/** One layer of the plan, its options side by side; or an addition. Choose, keep, drop, or ask for it to be reworked. */
+export declare function PlanLayer(o: {
+  idea: string; where: string[]; accepted?: boolean; disabledReason?: string;
+  layer?: { id: string; name: string; purpose?: string; chosen?: string | null; verdict?: string; options: IdeaOption[] };
+  addition?: { id: string; title: string; why?: string; verdict?: string };
+  onChoose?: (option: string) => void; onVerdict?: (verdict: "Keep" | "Drop") => void; onImprove?: (request: string) => void;
+}): HTMLElement;
+/** Notes from elsewhere, split into ideas and tasks; tick the pieces to record. */
+export declare function NoteDump(o: { dump: { id: string; source?: string; captured?: string; split?: string | null; items: { number: number; title: string; excerpt?: string; kind: string; recorded?: boolean }[] }; disabledReason?: string; onApply?: (numbers: string[]) => void; onSplit?: () => void; onShow?: () => void }): HTMLElement;
+/** One project on the Projects wall; or, with place, a way to add one. */
+export declare function ProjectTile(o: { project?: { id: string; name: string; available?: boolean; path?: string; defaultAgent?: string; pinned?: boolean; branch?: string | null; clean?: boolean | null }; href?: string; picked?: boolean; doing?: number; blocked?: number; findings?: number; ideas?: number; place?: string; sub?: string }): HTMLElement;
+export interface Task { id: string; title: string; state: "open" | "doing" | "blocked" | "done" | "dropped"; kind?: string; declaredBy?: string; declared?: string; note?: string | null }
+/** Open, Doing and Blocked side by side; done and dropped folded away. Each task moves on with `loadout task declare`. */
+export declare function TaskBoard(o: { tasks: Task[]; where: string[]; from?: string; disabledReason?: string; onDeclare?: (task: Task, state: string, was: string) => void }): { el: HTMLElement; set: (tasks: Task[]) => void };
+/** What a session would start with: one bar of its specialists against the token budget, why each is there, and what was left out. */
+export declare function LoadStack(o: {
+  selected: { id: string; title: string; reason?: string; estimatedTokens: number; always?: boolean }[];
+  omitted?: { id: string; reason: string }[]; conflicts?: number;
+  estimatedTokens?: number; tokenBudget?: number; nearBudget?: boolean;
+  href?: (id: string) => string; onPick?: (id: string) => void;
+}): HTMLElement;
+/** Builds "$ loadout <path> …" the way the drawers do. */
+export declare function commandLine(path: string, fields: DrawerField[], values: Record<string, string | boolean>, extra?: string[]): string;
+export declare const TASK_NEXT: Record<string, string[]>;
+export declare const TASK_MOVE: Record<string, string>;
+/** 1.2k, 3.4M, 1.1B. */
+export declare function tokens(n: number): string;
+
+export interface ConfigSetting { name: string; value: string; description: string; machineLocal: boolean; flag: boolean; whenUnset: string | null }
+/** Every setting `loadout config` knows, in its groups: found by name or what it does, and changed where it is shown with `loadout config set`. */
+export declare function ConfigList(o: { groups: { group: string; settings: ConfigSetting[] }[]; disabledReason?: string; from?: boolean; onSet?: (name: string, value: string) => string | void; onExplain?: (setting: ConfigSetting) => string }): { el: HTMLElement; find: (query: string) => void };
+/** A project's memory by store (This project, Your work, This machine only), and what the agent recorded outside the workspace. */
+export declare function StoreList(o: { stores: { key: string; label: string; hint?: string; readOnly?: boolean; topics: { name: string; description?: string; facts?: number }[] }[]; picked?: { store: string; name: string }; href?: (store: string, name: string) => string; agent?: { command: string; wouldImport?: string[]; drifted?: string[]; error?: string } | null }): HTMLElement;
+export interface MemoryTopic { name: string; scope: string; description?: string; kind?: string; written?: string; version: string; text: string }
+/** One topic, read and edited in place. A save carries the version it was read at; a topic changed meanwhile is shown beside your edit. */
+export declare function TopicEditor(o: { project: string; topic: MemoryTopic; storeLabel?: string; editable: boolean; readOnlyReason?: string; onSave?: (text: string, version: string) => { saved: MemoryTopic } | { changed: MemoryTopic }; onSaved?: (topic: MemoryTopic) => void }): { el: HTMLElement; readonly draft: string; readonly dirty: boolean };
+export interface UsageTotals { input: number; output: number; thinking: number; cacheRead: number; total: number; billedInputEquivalent: number; savedFraction: number; cacheHitFraction: number }
+/** What the agents spent, billed as input, what the cache saved, and how it splits. */
+export declare function TokenSplit(o: { totals: UsageTotals; since?: string; complete?: boolean; from?: string }): HTMLElement;
+/** Tokens by project, model or agent as bars (the twenty largest); by day as columns read with the arrow keys. */
+export declare function SpendBars(o: { groups: { name: string; value: number; registered?: boolean }[]; by: "project" | "day" | "model" | "agent"; limit?: number; label?: string; unit?: string; format?: (n: number) => string }): HTMLElement;

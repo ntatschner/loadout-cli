@@ -1,0 +1,35 @@
+<!-- @dsCard group="Pages" height=700 width=1000 subtitle="Every setting, found by what it does, changed where it is shown" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ConfigList</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="c" style="max-width: 940px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var GROUPS = [
+    { group: "Launching", settings: [
+      { name: "default-agent", value: "", description: "The agent a launch uses when none is named.", machineLocal: false, flag: false, whenUnset: "claude" },
+      { name: "token-budget", value: "8000", description: "The tokens a session's instructions should stay under.", machineLocal: false, flag: false, whenUnset: "6000" },
+      { name: "launch-in-new-window", value: "true", description: "Open each launch in a new terminal window.", machineLocal: true, flag: true, whenUnset: null } ] },
+    { group: "Studio", settings: [
+      { name: "studio-idle-after", value: "", description: "Minutes before a quiet session reads idle.", machineLocal: false, flag: false, whenUnset: "10" },
+      { name: "studio-theme", value: "dark", description: "Studio's theme.", machineLocal: false, flag: false, whenUnset: "follow the system" } ] }
+  ];
+  document.getElementById("c").appendChild(S.ConfigList({ groups: GROUPS, onExplain: function (s) { return s.name + " = " + (s.value || "(unset)") + "\n" + s.description + (s.whenUnset ? "\nUnset, it uses " + s.whenUnset + "." : ""); } }).el);
+})();
+</script>
+</body>
+</html>

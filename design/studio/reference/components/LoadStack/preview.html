@@ -1,0 +1,33 @@
+<!-- @dsCard group="Pages" height=640 width=1000 subtitle="What a session starts with: one bar of specialists against the token budget" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LoadStack</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="l" style="max-width: 900px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("l").appendChild(S.LoadStack({ estimatedTokens: 9400, tokenBudget: 8000, conflicts: 1, href: function (id) { return "#context/loadout-cli/specialist/" + id; },
+    selected: [
+      { id: "foundation", title: "Foundation", reason: "every session", estimatedTokens: 1200, always: true },
+      { id: "csharp", title: "C# and .NET", reason: "the repository is C#", estimatedTokens: 3100 },
+      { id: "testing", title: "Testing", reason: "the task says tests", estimatedTokens: 2400 },
+      { id: "cli-design", title: "Command-line design", reason: "the task names a command", estimatedTokens: 1700 },
+      { id: "voice", title: "Your writing voice", reason: "every session", estimatedTokens: 1000, always: true } ],
+    omitted: [{ id: "svelte", reason: "no Svelte files are touched" }, { id: "security", reason: "below the confidence it needs" }] }));
+})();
+</script>
+</body>
+</html>
