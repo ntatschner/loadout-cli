@@ -37,7 +37,8 @@ If Studio ever says *This browser isn't signed in*, do step 2 again.
 ## Find your way round
 
 The icons down the left side are the pages. *Home* shows everything that's
-happening. *Sessions* shows your AI sessions. *Teams* shows groups of AI agents working
+happening. *Sessions* shows your AI sessions. *Context* shows the notes an AI will be given before it starts, and how big they
+are. *Teams* shows groups of AI agents working
 together, and lets you answer when they stop to ask you something. *Ideas* is
 where you answer an AI's questions about
 something you want to build, and pick from its plan. *Projects* shows the
