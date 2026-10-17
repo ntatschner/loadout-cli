@@ -1,0 +1,41 @@
+<!-- @dsCard group="Teams" height=720 width=1100 subtitle="Every reason a run wants you, each saying what clears it" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NeedsYou</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="n" style="max-width: 860px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var RUN = "20261017-1402-ab3f";
+  var TEAMS = [
+    { name: "iterating-project", description: "Plans, implements, reviews and verifies in rounds until the goal is met", nodes: 5, lead: "lead", posture: "supervised", budget: "$25 a run", doneWhen: [] },
+    { name: "bug-hunt", description: "Reproduces a bug, proves its cause, fixes it, and proves the fix holds", nodes: 5, lead: "lead", posture: "supervised", budget: "$15 a run", doneWhen: ["a test reproduces the bug: it fails without the fix and passes with it", "the full test suite passes with the fix in place"] },
+    { name: "docs-crew", description: "Finds where the docs and the code disagree, and fixes it in the docs' own voice", nodes: 4, lead: "lead", posture: "supervised", budget: "$20 a run", doneWhen: ["every changed page passes docs audit", "every changed claim was checked against the code"] },
+    { name: "release-crew", description: "Checks the tree is fit to release, writes the notes, and tags", nodes: 4, lead: "lead", posture: "supervised", budget: "$10 a run", doneWhen: [], problems: ["it needs gh, and gh is not signed in"] },
+    { name: "product-company", description: "An executive lead, department leads, and workers under each", nodes: 9, lead: "executive", posture: "", template: true }
+  ];
+  var PROJECTS = [{ name: "loadout-cli", path: "~/code/loadout-cli" }, { name: "starstats", path: "~/code/starstats" }];
+  var HELD = { "loadout-cli": ["the suite passes"] };
+  document.getElementById("n").appendChild(S.NeedsYou({ items: [
+    { reason: "asked", run: RUN, team: "iterating-project", goal: "Add --since to loadout usage", href: "#", gate: { kind: "question", gate: "g4", node: "lead", asked: "asked 6 min ago", question: "The suite has two flaky tests unrelated to --since. Fix them in this run, or leave them?", options: ["Leave them", "Fix them here"], recommendation: "Leave them" } },
+    { reason: "quiet", run: "20261017-1311-77e0", team: "docs-crew", goal: "Make the docs true", href: "#", node: "docs-auditor/1", quiet: "9 min (it usually takes 3)", actions: [{ label: "Look at what it is doing", cmd: "opens its stream · changes nothing" }] },
+    { reason: "budget", run: "20261017-1311-77e0", team: "docs-crew", goal: "Make the docs true", href: "#", detail: "$26.30 of $20.00", actions: [{ label: "Change what it may spend", cmd: "$ loadout team budget 20261017-1311-77e0 --usd <figure or none>" }] },
+    { reason: "silent", run: "20261017-0950-5c1e", team: "bug-hunt", goal: "Find why the upload hangs on retry", href: "#", actions: [{ label: "Say something to the lead", cmd: "$ loadout team message 20261017-0950-5c1e --message \"\u2026\"" }] }
+  ] }));
+})();
+</script>
+</body>
+</html>

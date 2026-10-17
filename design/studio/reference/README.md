@@ -4,7 +4,7 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 
 1. **Work moves, and you can see it move.** Things travel between stages, rings breathe while something works, and the thing that most needs you rises while the rest recede.
 2. **Answer where you see it.** Anything waiting for you can be answered where it is shown. You never have to open a detail view to unblock something.
-3. **Every action shows its command.** Anything that changes something shows the exact `loadout` command it runs, in `cmd` style, beside or under the control (`$ loadout team gate --answer Approve`). Two things never get a button, only the command to run in a terminal: reading a secret back, and agreements that must be made in a terminal (`$ loadout tools verify <draft> --agree`).
+3. **Every action shows its command.** Anything that changes something shows the exact `loadout` command it runs, in `cmd` style, beside or under the control (`$ loadout team gate <run> --answer yes`). Two things never get a button, only the command to run in a terminal: reading or setting a secret (`$ loadout team attach set --passphrase "…"`), and agreements that must be made in a terminal (`$ loadout tools verify <draft> --agree`, `$ loadout team remedy trust <remedy>`).
 4. **A state is a word, a glyph, a colour and a motion.** All four, every time. Colour repeats the state; it never carries it alone.
 5. **Four themes, all measured.** Dark, Light, High contrast dark and High contrast light are designed and checked separately. None is a filter over another.
 
@@ -39,10 +39,10 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 | Family | Token | States | Motion (full) |
 |---|---|---|---|
 | Moving | `moving` | working, running, doing, round running | breathe; spin for a round |
-| Needs | `needs`, `needs-text`, `needs-wash` | needs a decision, waiting for you, needs approval | pulse, then a glow that stays |
-| Bad | `bad`, `bad-text`, `bad-wash` | failed, last round failed, blocked, limited, exited with an error, lost | none: a hard edge |
-| Good | `good` | done, met, accepted, ended | one settle flash, then still |
-| Rest | `rest` | idle, open, captured, shaping, held, stopped, not attempted, unknown, dropped, connecting, reconnecting, only watching | dim (Dark only), dashed or struck through; never a loop |
+| Needs | `needs`, `needs-text`, `needs-wash` | needs a decision, waiting for you, needs approval, quiet, projected over, changed since trusted | pulse, then a glow that stays |
+| Bad | `bad`, `bad-text`, `bad-wash` | failed, last round failed, blocked, limited, exited with an error, lost, unmet | none: a hard edge |
+| Good | `good` | done, met, accepted, ended, trusted | one settle flash, then still |
+| Rest | `rest` | idle, open, captured, shaping, held, stopped, not attempted, unknown, dropped, connecting, reconnecting, only watching, no verdict, not trusted, scheduled | dim (Dark only), dashed or struck through; never a loop |
 
 - `good` and `bad` are close in lightness, so they are always told apart by glyph and word (a check against a cross), never by colour alone. `moving` sits near the Cyan accent for the same reason: a Moving thing always shows its play glyph and its word.
 - Fill washes (`needs-wash`, `bad-wash`) only ever sit under their text colour and a 3px edge in the family colour.
@@ -56,6 +56,15 @@ Loadout Studio is the design system for Studio: the app Loadout serves on this m
 - The live terminal has its own sixteen ANSI colours per theme, `term-black` to `term-bright-white`, on `term-bg`, with `term-fg` text, a `term-cursor` that follows the accent, and `term-selection`. Their hues are Studio's: red is `bad`, green `good`, yellow `needs`, blue `moving`, magenta `shaping`. `term-cyan` stays cyan whatever the accent, because agents use it as a colour.
 - Every terminal text colour is 4.5:1 or better on `term-bg` and `term-selection` (7:1 in high contrast). Build the terminal on xterm.js with `minimumContrastRatio` 4.5 (7 in high contrast), so an agent's own 24-bit colours are lifted to the same floor.
 - Studio never types into a session for you, and never puts an agent's choices on buttons. It is told that a session is waiting (from the agent's own hooks), not what the choices are, so the question is answered in the terminal.
+
+### Teams
+
+- A team run is shown by what it is for, its state, its round and its spend. What it asks is answered where it is shown: on the Teams page under **Needs you**, on its card and on its page, with a Gate. Each kind of question has its own answers: the lead's question (its options, the recommended one solid, and Think again), the lead's readings of the done-when, a brief in a manual run (in a box you can change before it goes), the lead's proposed done-when (in a box), a confirmation or a permission (yes or no), and its budget (raise it, take the cap off, or a figure).
+- **Needs you** holds every reason a run wants you, and each clears itself: it asked something, the lead took a round without asking for anything, a node is quiet for three times its own usual turn, or its budget is spent or projected to be. Nothing is dismissed by hand.
+- A run's page draws its rounds as the lead's line with the nodes each round briefed hanging from it (RunShape), then Done when, Who is on it, and **five depths** on keys 1 to 5: What it said, What it cost, The papers, What it changed and What it delivered.
+- **What it delivered** is the Outbox: the run's files in a tree beside a viewer that previews Markdown, code, CSV, JSON and images, shows each file's change, and downloads one file or all of them as a .zip. It only reads, so it needs no command, but each file shows the terminal line that reads it.
+- Saying something to the lead (`team message`) needs only Studio's sign-in. Typing at a live node (`team say`) needs a second credential: the passphrase, swapped for a 30-minute grant held only by the page. Setting or clearing that passphrase, and trusting a remedy, happen in a terminal.
+- Projected spend past a budget is said in words with a Needs edge, never in colour alone. Stopping is "after this round": nothing is killed mid-turn.
 
 ### Light and glow
 

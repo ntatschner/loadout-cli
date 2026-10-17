@@ -1,0 +1,50 @@
+<!-- @dsCard group="Teams" height=900 width=1100 subtitle="Every kind of question a run asks, answered where it is shown, each with its command" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gate</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div class="row" id="kinds" style="gap: 6px 10px; margin-bottom: 14px" role="group" aria-label="Kind of question"></div>
+<div id="g" style="max-width: 860px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var RUN = "20261017-1402-ab3f";
+  var TEAMS = [
+    { name: "iterating-project", description: "Plans, implements, reviews and verifies in rounds until the goal is met", nodes: 5, lead: "lead", posture: "supervised", budget: "$25 a run", doneWhen: [] },
+    { name: "bug-hunt", description: "Reproduces a bug, proves its cause, fixes it, and proves the fix holds", nodes: 5, lead: "lead", posture: "supervised", budget: "$15 a run", doneWhen: ["a test reproduces the bug: it fails without the fix and passes with it", "the full test suite passes with the fix in place"] },
+    { name: "docs-crew", description: "Finds where the docs and the code disagree, and fixes it in the docs' own voice", nodes: 4, lead: "lead", posture: "supervised", budget: "$20 a run", doneWhen: ["every changed page passes docs audit", "every changed claim was checked against the code"] },
+    { name: "release-crew", description: "Checks the tree is fit to release, writes the notes, and tags", nodes: 4, lead: "lead", posture: "supervised", budget: "$10 a run", doneWhen: [], problems: ["it needs gh, and gh is not signed in"] },
+    { name: "product-company", description: "An executive lead, department leads, and workers under each", nodes: 9, lead: "executive", posture: "", template: true }
+  ];
+  var PROJECTS = [{ name: "loadout-cli", path: "~/code/loadout-cli" }, { name: "starstats", path: "~/code/starstats" }];
+  var HELD = { "loadout-cli": ["the suite passes"] };
+  var K = {
+    question: { kind: "question", run: RUN, gate: "g4", node: "lead", asked: "asked 6 min ago", question: "The suite has two flaky tests unrelated to --since. Fix them in this run, or leave them?", options: ["Leave them", "Fix them here"], recommendation: "Leave them", timer: "12 minutes left, then it goes back to the lead to think again" },
+    readings: { kind: "readings", run: RUN, gate: "g1", node: "lead", asked: "asked 1 min ago", question: "Before any worker starts: is this how you mean the done-when? The lead is saying how it reads each one, not proposing new ones.", readings: [["the suite passes", "the whole suite, on a fresh clone"], ["a test fails without the option and passes with it", "a new test in tests/Loadout.Tests for --since"]] },
+    brief: { kind: "brief", run: RUN, gate: "g2", node: "implementer/1", asked: "manual run", question: "The lead wants to brief implementer/1:", brief: "Add --since <date> to loadout usage. Filter entries before the date. Update the tests to match." },
+    proposal: { kind: "proposal", run: RUN, gate: "g0", node: "lead", question: "What this run will be judged on. The lead proposed these; change them if they are not what you meant.", proposal: ["loadout usage --since 2026-01-01 prints only entries after that date", "a test fails without the option and passes with it"], held: ["the suite passes"] },
+    permission: { kind: "permission", run: RUN, gate: "g5", node: "implementer/1", asked: "asked 2 min ago", question: "implementer/1 wants to run: dotnet format --verify-no-changes" },
+    outward: { kind: "outward", run: "20261016-0900-c1d2", gate: "g9", node: "releaser/1", asked: "asked 4 min ago", question: "Push the tag v0.66.0 to origin?" },
+    budget: { kind: "budget", run: RUN, gate: "g7", node: "the run", question: "The run has spent $24.10 of its $25.00 budget. Give it more", options: ["Raise it to $38", "Raise it to $50", "Take the cap off"], recommendation: "Raise it to $38" }
+  };
+  var NAMES = { question: "The lead's question", readings: "Readings", brief: "A brief (manual)", proposal: "Proposed done-when", permission: "Permission", outward: "Outward action", budget: "Budget" };
+  var g = document.getElementById("g"), row = document.getElementById("kinds");
+  function show(k) { g.textContent = ""; g.appendChild(S.Gate(K[k])); }
+  Object.keys(K).forEach(function (k) { row.appendChild(S.HaloButton({ label: NAMES[k], size: "small", onPress: function () { show(k); } })); });
+  show("question");
+})();
+</script>
+</body>
+</html>

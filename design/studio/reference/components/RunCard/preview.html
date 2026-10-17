@@ -1,0 +1,43 @@
+<!-- @dsCard group="Teams" height=760 width=1100 subtitle="One run in a list: its state, its spend and its projection, and what it asks answered in place" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RunCard</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="c" style="display: grid; gap: 16px; max-width: 860px"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var RUN = "20261017-1402-ab3f";
+  var TEAMS = [
+    { name: "iterating-project", description: "Plans, implements, reviews and verifies in rounds until the goal is met", nodes: 5, lead: "lead", posture: "supervised", budget: "$25 a run", doneWhen: [] },
+    { name: "bug-hunt", description: "Reproduces a bug, proves its cause, fixes it, and proves the fix holds", nodes: 5, lead: "lead", posture: "supervised", budget: "$15 a run", doneWhen: ["a test reproduces the bug: it fails without the fix and passes with it", "the full test suite passes with the fix in place"] },
+    { name: "docs-crew", description: "Finds where the docs and the code disagree, and fixes it in the docs' own voice", nodes: 4, lead: "lead", posture: "supervised", budget: "$20 a run", doneWhen: ["every changed page passes docs audit", "every changed claim was checked against the code"] },
+    { name: "release-crew", description: "Checks the tree is fit to release, writes the notes, and tags", nodes: 4, lead: "lead", posture: "supervised", budget: "$10 a run", doneWhen: [], problems: ["it needs gh, and gh is not signed in"] },
+    { name: "product-company", description: "An executive lead, department leads, and workers under each", nodes: 9, lead: "executive", posture: "", template: true }
+  ];
+  var PROJECTS = [{ name: "loadout-cli", path: "~/code/loadout-cli" }, { name: "starstats", path: "~/code/starstats" }];
+  var HELD = { "loadout-cli": ["the suite passes"] };
+  var c = document.getElementById("c");
+  c.appendChild(S.RunCard({ href: "#", run: { id: RUN, goal: "Add --since to loadout usage", team: "iterating-project", project: "loadout-cli", posture: "supervised", word: "waiting for you", round: 3, elapsed: "41 min", spent: 6.12, cap: 25, projected: 11.4, rate: "$0.15 a minute" },
+    gate: { kind: "question", gate: "g4", node: "lead", asked: "asked 6 min ago", question: "The suite has two flaky tests unrelated to --since. Fix them in this run, or leave them?", options: ["Leave them", "Fix them here"], recommendation: "Leave them", timer: "12 minutes left, then it goes back to the lead to think again" } }));
+  c.appendChild(S.RunCard({ href: "#", run: { id: "20261017-1311-77e0", goal: "Make the docs true", team: "docs-crew", project: "loadout-cli", posture: "supervised", word: "running", round: 2, elapsed: "18 min", spent: 14.9, cap: 20, projected: 26.3, rate: "$0.83 a minute" },
+    reasons: [{ text: "It is projected to overrun its budget: $26.30 of $20.00.", clears: "it slows, finishes, or you stop it" }],
+    actions: [{ label: "Hold after this round", cmd: "$ loadout team halt 20261017-1311-77e0 --pause" }, { label: "Stop after this round", kind: "danger", cmd: "$ loadout team halt 20261017-1311-77e0" }] }));
+  c.appendChild(S.RunCard({ href: "#", run: { id: "20261016-2300-0b9a", goal: "Check the docs against the code", team: "docs-crew", project: "loadout-cli", posture: "autonomous", word: "done", round: 4, elapsed: "52 min", spent: 9.4, cap: 20 },
+    actions: [{ label: "Run it again", cmd: "fills Start a run from it · starts nothing" }, { label: "Forget it", cmd: "$ loadout team runs remove 20261016-2300-0b9a" }] }));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!-- @dsCard group="Teams" height=420 width=1100 subtitle="Who is on the run: state, what each is doing, turns, cost, refusals and quiet" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crew</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div id="c" style="max-width: 980px"></div><p class="out" role="status" id="out"></p>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  document.getElementById("c").appendChild(S.Crew({ picked: "implementer/2", onPick: function (n) { document.getElementById("out").textContent = "Showing " + n + "'s own stream"; }, nodes: [
+    { node: "lead", role: "role.lead", model: "opus", word: "waiting for you", doing: "asked whether to fix two flaky tests", turns: 3, cost: 2.31 },
+    { node: "implementer/2", role: "role.implementer", model: "sonnet", word: "running", doing: "running dotnet test --filter Usage", turns: 7, cost: 1.12 },
+    { node: "verifier/1", role: "role.verifier", model: "sonnet", word: "done", doing: "reported: 2,843 passing, 2 flaky", turns: 4, cost: 0.61 },
+    { node: "docs-auditor/1", role: "role.auditor", model: "haiku", word: "quiet", doing: "reading docs/commands.md", quiet: "9 min, three times its usual 3", turns: 2, cost: 0.08, refused: 3 }
+  ] }));
+})();
+</script>
+</body>
+</html>
