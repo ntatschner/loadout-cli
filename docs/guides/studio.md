@@ -147,7 +147,23 @@ The two things kept in the browser are the single-letter shortcuts (**A** for
 Ambient, **N** for a new session) and whether Ambient fills the screen. They're
 about the keyboard and screen in front of you, not about how you read.
 
-### 8. See what it's costing
+### 8. Keep what a project remembers
+
+**Memory** lists what each project remembers, by store: this project's, yours
+across every project, and this machine's, which is read-only here. Choose a
+topic to read it as stored and edit it in place. A save carries the version you
+read, so if somebody else changed it meanwhile you see theirs beside yours and
+choose, rather than one overwriting the other.
+
+With no topic chosen, the page finds the topics that answer a question, shows
+what the memory audit makes of the project, and offers recording a fact,
+cleaning up what the audit found, bringing in what the agent recorded outside
+the workspace, moving durable facts out of always-loaded instructions, and
+rebuilding the index. Cleaning, importing and compressing only report what they
+would do until you tick `--apply`. A project topic can be deleted too; a backup
+is taken first.
+
+### 9. See what it's costing
 
 **Spend** reads the agents' own transcripts and shows what they've used in
 tokens: what was billed as input once the cache had done its work, what was
@@ -159,7 +175,7 @@ Below that are the sessions running now, what was launched this week and how
 many tokens each started with, the recent sessions, what launched agents reported
 about themselves when the receiver was running, and a summary of this machine.
 
-### 9. See what a session will be told
+### 10. See what a session will be told
 
 **Context** shows, for one project, what a session would load before it starts.
 Type the task in a sentence and choose a mode, and **Explain it** lists each
@@ -173,7 +189,7 @@ splitting an oversized instruction file into rules, choosing a coding style,
 drafting or copying a specialist, finding where a type is declared, and writing a
 handoff for the next session.
 
-### 10. Steer a team run
+### 11. Steer a team run
 
 **Teams** lists the team runs on this machine, running ones first. Choose one to
 see where it stands: what it's waiting on, answered there with the command each
@@ -189,7 +205,7 @@ remedies, the bin, and where a run's call for help goes. Trusting a remedy and
 setting the attach passphrase show their commands only, since both are made in a
 terminal.
 
-### 11. Shape an idea
+### 12. Shape an idea
 
 **Ideas** lists every idea being shaped, by project, and marks the ones with
 questions waiting for you. Choose one and answer its questions in the page:
@@ -208,7 +224,7 @@ project.
 agent split them into ideas and tasks. Nothing is recorded until you apply the
 pieces.
 
-### 12. Look after your projects
+### 13. Look after your projects
 
 **Projects** lists the projects this machine knows. Choose one to see where it
 is, its branch, its agent and how often it's been launched, its working trees,
@@ -223,7 +239,7 @@ read again once it finishes.
 finding repositories and stray memory, and the workspace, where you can bring in
 what other machines saved and save and push what changed here.
 
-### 13. Run anything else from Commands
+### 14. Run anything else from Commands
 
 **Commands** lists every command Loadout has, folded by area. Choose one and
 Studio builds a form from the command's own options, so it can't offer one the
@@ -242,7 +258,7 @@ for the value at a masked prompt), the attach passphrase, trusting a tool or a
 remedy, `update`, and the commands that are themselves a server or a status
 line. Starting a session sends you to **Sessions**, where Studio hosts it.
 
-### 14. Ambient
+### 15. Ambient
 
 On Home, **A** or **Ambient** turns Studio into something for a spare screen:
 the key numbers, the halo on whatever most needs you, and everything else

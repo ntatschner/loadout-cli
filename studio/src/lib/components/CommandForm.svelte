@@ -135,7 +135,7 @@
 
     {#snippet option(one: StudioOption)}
       {#if one.kind === 'flag'}
-        <label class="chk"><input type="checkbox" bind:checked={values[one.name]} /> <span><code class="ls-cmd">{one.name}</code> {one.description}</span></label>
+        <label class="chk"><input type="checkbox" id={id(one.name)} bind:checked={values[one.name]} /> <span><code class="ls-cmd">{one.name}</code> {one.description}</span></label>
       {:else if one.choices.length}
         <label class="fld" for={id(one.name)}>
           <span class="lab"><code class="ls-cmd">{one.name}</code>{one.required ? '' : ' (optional)'}</span>
