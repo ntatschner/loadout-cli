@@ -6,7 +6,8 @@ import { quoted } from './commands';
 import { codeTokens, diffLines, fileKind, inline, markdown, parseCsv } from './files';
 import { sheetCommand, sheetProblem, sheetValues, type SheetTeam } from './teamSheet';
 import { depthKey, gateButtons, gateKind, pruneCommand, pruneSentence, type GateAsk } from './teams';
-import { nodeWord } from './teamsData';
+import { boardRunsOf, boardTeamsOf, nodeWord } from './teamsData';
+import type { Run } from './api';
 
 const ask = (over: Partial<GateAsk>): GateAsk => ({ kind: 'question', run: '20261017-1402-ab3f', gate: 'g1', question: 'Which way?', ...over });
 const cmds = (asked: GateAsk, typed?: string, figure?: string, reason?: string) => gateButtons(asked, typed, figure, reason).map((one) => one.cmd);
@@ -211,5 +212,25 @@ describe('nodeWord', () => {
     expect(nodeWord('blocked', 'between turns', true)).toBe('waiting for you');
     expect(nodeWord('blocked', 'between turns', false)).toBe('blocked');
     expect(nodeWord('working', 'working')).toBe('working');
+  });
+});
+
+describe('Team Focus’s board', () => {
+  const run = (id: string, team: string, running: boolean, waitingForYou = false) => ({ id, team, running, waitingForYou }) as unknown as Run;
+
+  it('shows every live run and only the newest few that ended', () => {
+    const runs = [run('e1', 'a', false), run('l1', 'a', true), run('e2', 'b', false), run('e3', 'b', false), run('l2', 'b', true)];
+
+    expect(boardRunsOf(runs, 2).map((one) => one.id)).toEqual(['l1', 'l2', 'e1', 'e2']);
+  });
+
+  it('marks a team waiting for you where a live run of it is, and running where one goes', () => {
+    const runs = [run('l1', 'a', true, true), run('l2', 'b', true), run('e1', 'c', false, true)];
+
+    expect(boardTeamsOf(['a', 'b', 'c'], runs)).toEqual([
+      { name: 'a', word: 'waiting for you', fact: '1 live' },
+      { name: 'b', word: 'running', fact: '1 live' },
+      { name: 'c', word: 'idle', fact: 'none live' },
+    ]);
   });
 });

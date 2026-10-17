@@ -13,6 +13,7 @@
   import NeedsYou from '../lib/components/NeedsYou.svelte';
   import Picker from '../lib/components/Picker.svelte';
   import Remedy from '../lib/components/Remedy.svelte';
+  import RunBoard from '../lib/components/RunBoard.svelte';
   import RunCard from '../lib/components/RunCard.svelte';
   import Schedules from '../lib/components/Schedules.svelte';
   import TeamCard from '../lib/components/TeamCard.svelte';
@@ -25,7 +26,7 @@
   import { studio } from '../lib/state.svelte';
   import { sheetPath, sheetWords, type SheetKind, type SheetTeam, type SheetValues } from '../lib/teamSheet';
   import { answerGate, carryOn, forget, hold, pickUp, runLines, stop } from '../lib/teamsAct';
-  import { gateOf, needsOf, summaryOf } from '../lib/teamsData';
+  import { boardOf, boardRunsOf, boardTeamsOf, gateOf, needsOf, summaryOf } from '../lib/teamsData';
   import type { Act, Prune } from '../lib/teams';
 
   let { rest }: { rest: string[] } = $props();
@@ -322,10 +323,51 @@
     { key: 'wiring', label: 'Calls for help and the webhook' },
   ];
 
+  /* ---------- Team Focus: the board, with a run or a team beside it ---------- */
+
+  const focus = $derived(studio.mode === 'teams' && (!place || place === 'team'));
+  const gateFor = (run: Run, gate: Run['gates'][number]) => ({ ...gateOf(run, gate), disabledReason: watch, onanswer: (send: Parameters<typeof answerGate>[2]) => answerGate(run.id, gate.id, send) });
+  const board = $derived(boardRunsOf(studio.runs).map((run) => boardOf(run, gateFor)));
+  const boardTeams = $derived(boardTeamsOf((teams ?? []).filter((team) => !team.template).map((team) => team.name), studio.runs));
+  const liveCount = $derived(running.length);
+  const waitingCount = $derived(studio.runs.filter((run) => run.waitingForYou).length);
+
   const when = (one: NonNullable<typeof schedules>[number]) => (one.at ? `at ${one.at}` : one.on ? `on ${one.on}` : one.every ? `every ${one.every.replace(/^0?(\d+):00:00$/, '$1h').replace(/^00:(\d+):00$/, '$1m')}` : '');
 </script>
 
-{#if runId}
+{#if focus}
+  <div class="tfocus" class:open={!!(runId || teamName)}>
+    <div class="bcol">
+      <div class="head">
+        <div>
+          <h1>Teams</h1>
+          <span class="fact" class:need={waitingCount > 0}>{liveCount} live · {waitingCount ? `${waitingCount} waiting on you` : 'none waiting on you'}</span>
+        </div>
+        <HaloButton label="Start a run" solid size="small" glyph="▶" cmd="opens the sheet · starts nothing yet" onpress={() => (sheet = { kind: 'run', preset: {} })} />
+      </div>
+      {#if problem}<p class="offline" role="alert">{problem}</p>{/if}
+      <RunBoard
+        runs={board}
+        teams={boardTeams}
+        picked={runId}
+        team={teamName}
+        onpick={(id) => router.go('teams', id)}
+        onteam={(name) => router.go('teams', '+team', name)}
+      />
+      <p class="calm small">Remedies, the bin, shared tools and the webhook are on the Teams page in Default.</p>
+    </div>
+    {#if runId || teamName}
+      <aside class="bpanel" aria-label={runId ? 'The run' : 'The team'}>
+        <div class="pclose"><HaloButton label="Close" size="small" cmd="back to the board" onpress={() => router.go('teams')} /></div>
+        {#if runId}
+          {#key runId}<TeamRun id={runId} onagain={again} />{/key}
+        {:else if teamName}
+          {#key teamName}<TeamPage name={teamName} onsheet={(kind, preset) => (sheet = { kind, preset })} />{/key}
+        {/if}
+      </aside>
+    {/if}
+  </div>
+{:else if runId}
   <TeamRun id={runId} onagain={again} />
 {:else if teamName}
   <TeamPage name={teamName} onsheet={(kind, preset) => (sheet = { kind, preset })} />

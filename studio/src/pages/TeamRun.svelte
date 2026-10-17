@@ -24,7 +24,7 @@
   import { router } from '../lib/router.svelte';
   import { studio } from '../lib/state.svelte';
   import { answerGate, carryOn, forget, hold, pickUp, runLines, setBudget, stop, tellLead } from '../lib/teamsAct';
-  import { crewOf, duration, gateOf, runWord, shapeOf, summaryOf } from '../lib/teamsData';
+  import { criteriaOf, crewOf, duration, gateOf, runWord, shapeOf, summaryOf } from '../lib/teamsData';
   import { money, type JournalLine } from '../lib/teams';
 
   let { id, onagain = undefined }: { id: string; onagain?: (run: Run) => void } = $props();
@@ -54,17 +54,7 @@
     });
   });
 
-  const criteria = $derived(
-    (outcomes ?? []).map((one) => ({
-      text: one.criterion,
-      verdict: (one.met ? 'met' : one.verdict === 'unmet' || one.verdict === 'not-met' ? 'unmet' : one.verdict === 'not-attempted' ? 'not-attempted' : null) as 'met' | 'unmet' | 'not-attempted' | null,
-      project: one.source === 'project',
-      meaning: one.reading,
-      evidence: one.because ? [one.because] : [],
-      delivered: one.delivered.map((item) => `${item.kind} by ${item.node}`),
-      cited: one.unfound,
-    })),
-  );
+  const criteria = $derived(criteriaOf(outcomes ?? []));
 
   /* ---------- What it said: the journal live, or one node's stream ---------- */
 

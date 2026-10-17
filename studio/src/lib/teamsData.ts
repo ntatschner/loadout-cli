@@ -2,8 +2,9 @@
 // components draw: its state word, its summary, the reasons it wants you,
 // its question as a Gate, its shape and its crew. Nothing here asks the
 // daemon anything; the pages read and these only translate.
-import type { Run, RunGate } from './api';
+import type { Outcome, Run, RunGate } from './api';
 import { gateKind, type GateShown, type NeedItem, type RunSummary } from './teams';
+import type { BoardRun, BoardTeam } from './modes';
 
 /** A run's state, as one of Studio's words. */
 export function runWord(run: Run): string {
@@ -206,5 +207,57 @@ export function crewOf(run: Run, quietFor: (node: string) => string | null = () 
     turns: node.turns ?? 0,
     cost: node.cost ?? 0,
     refused: node.denials ?? 0,
+  }));
+}
+
+/** A run as a row of Team Focus's board: its goal, its rounds as a small line, its state, its spend, and its first question. */
+export function boardOf(run: Run, gateFor: (run: Run, gate: RunGate) => GateShown): BoardRun {
+  const summary = summaryOf(run);
+
+  return {
+    id: run.id,
+    goal: run.goal,
+    team: run.team,
+    project: run.project,
+    word: summary.word,
+    round: run.rounds,
+    rounds: shapeOf(run).rounds.map((round) => ({ word: round.word, nodes: round.nodes })),
+    spent: summary.spent,
+    cap: summary.cap,
+    projected: summary.projected,
+    gate: run.gates.length ? gateFor(run, run.gates[0]) : null,
+  };
+}
+
+/** The teams along the top of the board: waiting for you where any live run of it is, running where any is going. */
+export function boardTeamsOf(names: string[], runs: Run[]): BoardTeam[] {
+  return names.map((name) => {
+    const live = runs.filter((run) => run.team === name && run.running);
+
+    return {
+      name,
+      word: live.some((run) => run.waitingForYou) ? 'waiting for you' : live.length ? 'running' : 'idle',
+      fact: live.length ? `${live.length} live` : 'none live',
+    };
+  });
+}
+
+/** The runs a board shows: every live one, and the newest few that ended, so an old history does not bury what is going. */
+export function boardRunsOf(runs: Run[], endedShown = 8): Run[] {
+  const ended = runs.filter((run) => !run.running).slice(0, endedShown);
+
+  return [...runs.filter((run) => run.running), ...ended];
+}
+
+/** A run's done-when as DoneWhen draws it, from the outcomes the daemon read. */
+export function criteriaOf(outcomes: Outcome[]) {
+  return outcomes.map((one) => ({
+    text: one.criterion,
+    verdict: (one.met ? 'met' : one.verdict === 'unmet' || one.verdict === 'not-met' ? 'unmet' : one.verdict === 'not-attempted' ? 'not-attempted' : null) as 'met' | 'unmet' | 'not-attempted' | null,
+    project: one.source === 'project',
+    meaning: one.reading,
+    evidence: one.because ? [one.because] : [],
+    delivered: one.delivered.map((item) => `${item.kind} by ${item.node}`),
+    cited: one.unfound,
   }));
 }
