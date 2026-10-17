@@ -258,6 +258,7 @@
     <p class="calm small">From <code class="ls-cmd">loadout doctor</code>.</p>
     <div class="acts">
       <CommandAction path="doctor" title="Put right what can be put right" preset={{ '--fix': true, '--yes': true }} label="Put it right" />
+      <CommandAction path="setup" title="Set the launcher up on this machine again" />
       <CommandAction path="desktop" title="The desktop entry for the launcher" />
       <CommandAction path="commands" title="Everything Loadout can do, as the terminal lists it" label="List them" />
     </div>

@@ -161,7 +161,11 @@
   <div class="head">
     <div>
       <h1 class="sesstitle">{line.title}</h1>
-      <span class="fact">{session.project ?? ''} · {session.agent ?? 'agent'} · {session.mode ?? 'mode by the task'} · {line.mins ?? 0} min</span>
+      {#if session.kind === 'command'}
+        <span class="fact">a command that asks as it goes · {line.mins ?? 0} min</span>
+      {:else}
+        <span class="fact">{session.project ?? ''} · {session.agent ?? 'agent'} · {session.mode ?? 'mode by the task'} · {line.mins ?? 0} min</span>
+      {/if}
     </div>
     <Signal word={wordFor(line, studio.idleAfter)} big />
   </div>
@@ -192,10 +196,12 @@
     </div>
     <aside class="sessaside" aria-label="About this session">
       <dl class="facts">
-        <dt>Project</dt><dd>{session.project ?? 'not known'}</dd>
-        <dt>Agent</dt><dd>{session.agent ?? 'the project’s default'}</dd>
-        <dt>Mode</dt><dd>{session.mode ?? 'chosen by the task'}</dd>
-        <dt>Task</dt><dd>{session.taskId ?? session.task ?? 'none'}</dd>
+        {#if session.kind !== 'command'}
+          <dt>Project</dt><dd>{session.project ?? 'not known'}</dd>
+          <dt>Agent</dt><dd>{session.agent ?? 'the project’s default'}</dd>
+          <dt>Mode</dt><dd>{session.mode ?? 'chosen by the task'}</dd>
+          <dt>Task</dt><dd>{session.taskId ?? session.task ?? 'none'}</dd>
+        {/if}
         <dt>Running</dt><dd>{line.mins ?? 0} min</dd>
         <dt>Quiet</dt><dd>{line.quiet ?? 0} min</dd>
         <dt>Memory</dt><dd>{megabytes(session.memory)}</dd>
@@ -203,7 +209,9 @@
         <dt>Drawn with</dt><dd>{renderer || '…'}</dd>
       </dl>
       {#if session.command}<Command why="Started with:" command={`$ ${session.command}`} />{/if}
-      <Command why="Carry this conversation on in a terminal instead:" command={command.resumeLast()} />
+      {#if session.kind !== 'command'}
+        <Command why="Carry this conversation on in a terminal instead:" command={command.resumeLast()} />
+      {/if}
       {#if !session.ended}
         <HaloButton
           label="End the session"

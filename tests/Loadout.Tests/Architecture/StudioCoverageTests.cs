@@ -29,13 +29,6 @@ public sealed partial class StudioCoverageTests
     /// </summary>
     private static readonly string[] NotYetOnAPage =
     [
-        "memory review",
-        "project onboard",
-        "resume",
-        "setup",
-        "start",
-        "voice guide draft",
-        "voice learn",
     ];
 
     /// <summary>The pages a command can be placed on: Studio's router's, and the Commands page.</summary>

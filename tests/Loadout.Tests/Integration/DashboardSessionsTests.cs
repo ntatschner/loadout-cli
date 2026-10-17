@@ -199,6 +199,35 @@ public sealed class DashboardSessionsTests : IAsyncLifetime
         one.StatusCode.Should().Be(HttpStatusCode.MethodNotAllowed);
     }
 
+    [Fact]
+    public async Task A_command_that_asks_as_it_goes_opens_in_a_terminal_as_its_own_words()
+    {
+        using var started = await _client.PostAsJsonAsync(_root + SessionsApi.Root,
+            new { command = "voice learn", words = new[] { "--transcripts", "--project", "starstats" } });
+
+        started.StatusCode.Should().Be(HttpStatusCode.Created, await started.Content.ReadAsStringAsync());
+
+        var shown = await started.Content.ReadFromJsonAsync<JsonElement>();
+
+        shown.GetProperty("title").GetString().Should().Be("loadout voice learn");
+        shown.GetProperty("kind").GetString().Should().Be("command", "the page shows no agent, mode or conversation to carry on for one");
+        _terminals.Should().ContainSingle().Which.Request!.Arguments.Should()
+            .Equal("voice", "learn", "--transcripts", "--project", "starstats");
+    }
+
+    [Theory]
+    [InlineData("memory find")]
+    [InlineData("launch")]
+    [InlineData("no such thing")]
+    public async Task Only_a_command_the_coverage_list_says_asks_as_it_goes_is_opened_this_way(string command)
+    {
+        using var started = await _client.PostAsJsonAsync(_root + SessionsApi.Root, new { command, words = Array.Empty<string>() });
+
+        started.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "anything else is a job, where what it says is kept and a watch-only page can read it");
+        _terminals.Should().BeEmpty();
+    }
+
     private async Task<string> StartAsync()
     {
         using var started = await _client.PostAsJsonAsync(_root + SessionsApi.Root, new { project = "starstats" });

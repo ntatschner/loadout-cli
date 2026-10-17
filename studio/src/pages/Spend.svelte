@@ -211,7 +211,10 @@
     {:else if sessions}
       <p class="calm">No sessions found.</p>
     {/if}
-    <p class="calm small">From <code class="ls-cmd">loadout sessions --limit 12</code>. Resume one from a terminal with <code class="ls-cmd">loadout resume</code>.</p>
+    <p class="calm small">From <code class="ls-cmd">loadout sessions --limit 12</code>.</p>
+    <div class="acts">
+      <CommandAction path="resume" title="Resume a session in a terminal here" />
+    </div>
   </section>
 
   <section aria-labelledby="sp-reported">

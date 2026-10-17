@@ -4,7 +4,10 @@ using Loadout.Platform.Abstractions;
 
 namespace Loadout.Core.Sessions.Hosting;
 
-/// <summary>What somebody asked a hosted session to be: a launch of an agent against a project.</summary>
+/// <summary>
+/// What somebody asked a hosted session to be: a launch of an agent against a
+/// project, or one of the commands that ask as they go.
+/// </summary>
 /// <param name="Project">Project slug, alias or name, as 'loadout launch' takes it.</param>
 /// <param name="Agent">The agent to launch, or null for the project's own.</param>
 /// <param name="Task">What the session is for, which chooses the specialists.</param>
@@ -17,6 +20,12 @@ namespace Loadout.Core.Sessions.Hosting;
 /// <param name="Offline">Do not reach the network.</param>
 /// <param name="NoSync">Do not synchronise the workspace first.</param>
 /// <param name="Handoff">Append the most recent handoff to the context.</param>
+/// <param name="Command">
+/// A command to run in the terminal instead of a launch, such as 'setup' or
+/// 'voice learn', with <paramref name="Words"/> after it. Which commands may
+/// be run this way is the caller's to decide; the launch fields are unused.
+/// </param>
+/// <param name="Words">Everything after the command's name.</param>
 public sealed record HostedLaunch(
     string Project,
     string? Agent = null,
@@ -29,7 +38,9 @@ public sealed record HostedLaunch(
     string? Worktree = null,
     bool Offline = false,
     bool NoSync = false,
-    bool Handoff = false);
+    bool Handoff = false,
+    string? Command = null,
+    IReadOnlyList<string>? Words = null);
 
 /// <summary>
 /// The sessions the daemon is hosting for the browser, and the one way of
@@ -161,7 +172,9 @@ public sealed class HostedSessions : IAsyncDisposable
             return OperationResult<HostedSession>.Fail(arguments.Error!);
         }
 
-        var title = launch.Agent is { Length: > 0 } agent ? $"{launch.Project} ({agent})" : launch.Project;
+        var title = launch.Command is { Length: > 0 } asked ? $"loadout {asked}"
+            : launch.Agent is { Length: > 0 } agent ? $"{launch.Project} ({agent})"
+            : launch.Project;
 
         var started = await HostedSession.StartAsync(
             _terminals(),
@@ -251,6 +264,20 @@ public sealed class HostedSessions : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(prefix);
         ArgumentNullException.ThrowIfNull(launch);
+
+        if (launch.Command is { Length: > 0 } command)
+        {
+            // Passed as words, never through a shell, so nothing in them is
+            // interpreted; a control character is still nothing a form types.
+            var words = launch.Words ?? [];
+
+            if (command.Any(char.IsControl) || command.StartsWith('-') || words.Any(word => word.Any(char.IsControl)))
+            {
+                return OperationResult<IReadOnlyList<string>>.Fail("A session's command cannot hold control characters.");
+            }
+
+            return OperationResult<IReadOnlyList<string>>.Ok([.. prefix, .. command.Split(' ', StringSplitOptions.RemoveEmptyEntries), .. words]);
+        }
 
         var project = launch.Project?.Trim() ?? string.Empty;
 

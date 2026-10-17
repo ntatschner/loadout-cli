@@ -370,7 +370,7 @@ public sealed class CommandJobs
                 return $"'loadout {command.Path}' {command.Reach.Reason}. Run it in a terminal.";
 
             case StudioEffect.Session:
-                return $"'loadout {command.Path}' starts an agent session. Start it from Sessions, where Studio hosts it.";
+                return $"'loadout {command.Path}' asks as it goes, so Studio opens it in a terminal of its own rather than running it as a job.";
         }
 
         if (!command.Runnable)
