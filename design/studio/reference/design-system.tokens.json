@@ -359,6 +359,196 @@
     "usage": "The number on a train and on a line badge, on any line colour. 4.5:1 or better on all eight (7:1 in high contrast)."
    },
    {
+    "name": "term-bg",
+    "value": {
+     "dark": "#06101a",
+     "light": "#ffffff",
+     "hc-dark": "#000000",
+     "hc-light": "#ffffff"
+    },
+    "usage": "The terminal's ground. The same as `surface` in Dark and Light, and `ground` in high contrast, so the terminal sits in Studio rather than on a slab of its own."
+   },
+   {
+    "name": "term-fg",
+    "value": {
+     "dark": "#d9f3ff",
+     "light": "#0f2230",
+     "hc-dark": "#ffffff",
+     "hc-light": "#000000"
+    },
+    "usage": "Default terminal text. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-selection",
+    "value": {
+     "dark": "#123442",
+     "light": "#ddeff6",
+     "hc-dark": "#002a3c",
+     "hc-light": "#e2ebff"
+    },
+    "usage": "Selected text's background. Every terminal text colour stays 4.5:1 or better on it (7:1 in high contrast)."
+   },
+   {
+    "name": "term-black",
+    "value": {
+     "dark": "#1b2b38",
+     "light": "#0f2230",
+     "hc-dark": "#1a1a1a",
+     "hc-light": "#000000"
+    },
+    "usage": "ANSI black. In Dark and High contrast dark it is a background (term-fg reads on it); in the light themes it is text. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-red",
+    "value": {
+     "dark": "#ff8a8a",
+     "light": "#b3261e",
+     "hc-dark": "#ffb0a8",
+     "hc-light": "#8a0f1a"
+    },
+    "usage": "ANSI red: errors and removed lines. The same hue as `bad`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-green",
+    "value": {
+     "dark": "#7fe0b8",
+     "light": "#1b6b4a",
+     "hc-dark": "#9ff0cc",
+     "hc-light": "#0b4d2e"
+    },
+    "usage": "ANSI green: success and added lines. The same hue as `good`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-yellow",
+    "value": {
+     "dark": "#ffb547",
+     "light": "#8a4a00",
+     "hc-dark": "#ffd27a",
+     "hc-light": "#6b3a00"
+    },
+    "usage": "ANSI yellow: warnings. The same hue as `needs`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-blue",
+    "value": {
+     "dark": "#80c8ff",
+     "light": "#0b5cad",
+     "hc-dark": "#a6d4ff",
+     "hc-light": "#0a3d91"
+    },
+    "usage": "ANSI blue: paths and links. The same hue as `moving`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-magenta",
+    "value": {
+     "dark": "#c9b3ff",
+     "light": "#5f43b2",
+     "hc-dark": "#ddd0ff",
+     "hc-light": "#3f2a8c"
+    },
+    "usage": "ANSI magenta. The same hue as `shaping`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-cyan",
+    "value": {
+     "dark": "#6fe3ff",
+     "light": "#00708c",
+     "hc-dark": "#9ff4ff",
+     "hc-light": "#00495c"
+    },
+    "usage": "ANSI cyan. Studio's cyan, fixed: it does not follow the accent, because agents use it as a colour, not as Studio's accent. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-white",
+    "value": {
+     "dark": "#cfe6f2",
+     "light": "#55626c",
+     "hc-dark": "#f2f2f2",
+     "hc-light": "#262626"
+    },
+    "usage": "ANSI white. In the light themes a dark grey, so it reads on white. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-bright-black",
+    "value": {
+     "dark": "#8fb3c4",
+     "light": "#46606f",
+     "hc-dark": "#d4d4d4",
+     "hc-light": "#333333"
+    },
+    "usage": "ANSI bright black, the bold or emphasised form of term-black. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-bright-red",
+    "value": {
+     "dark": "#ffb0b0",
+     "light": "#9c1f18",
+     "hc-dark": "#ffcdc8",
+     "hc-light": "#7a0d17"
+    },
+    "usage": "ANSI bright red, the bold or emphasised form of term-red. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-bright-green",
+    "value": {
+     "dark": "#a6f0d0",
+     "light": "#0f5c3d",
+     "hc-dark": "#c2f7de",
+     "hc-light": "#083d24"
+    },
+    "usage": "ANSI bright green, the bold or emphasised form of term-green. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-bright-yellow",
+    "value": {
+     "dark": "#ffd79a",
+     "light": "#6e3b00",
+     "hc-dark": "#ffe2a8",
+     "hc-light": "#5c3200"
+    },
+    "usage": "ANSI bright yellow, the bold or emphasised form of term-yellow. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-bright-blue",
+    "value": {
+     "dark": "#a6d4ff",
+     "light": "#094b8f",
+     "hc-dark": "#c8e4ff",
+     "hc-light": "#082f70"
+    },
+    "usage": "ANSI bright blue, the bold or emphasised form of term-blue. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-bright-magenta",
+    "value": {
+     "dark": "#ddd0ff",
+     "light": "#4a2f99",
+     "hc-dark": "#ebe3ff",
+     "hc-light": "#33206f"
+    },
+    "usage": "ANSI bright magenta, the bold or emphasised form of term-magenta. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-bright-cyan",
+    "value": {
+     "dark": "#9ff4ff",
+     "light": "#005a70",
+     "hc-dark": "#c4f9ff",
+     "hc-light": "#003a49"
+    },
+    "usage": "ANSI bright cyan, the bold or emphasised form of term-cyan. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
+    "name": "term-bright-white",
+    "value": {
+     "dark": "#ffffff",
+     "light": "#2c3a44",
+     "hc-dark": "#ffffff",
+     "hc-light": "#000000"
+    },
+    "usage": "ANSI bright white, the bold or emphasised form of term-white. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast)."
+   },
+   {
     "name": "accent-cyan",
     "value": {
      "dark": "#6fe3ff",
@@ -507,6 +697,16 @@
      "hc-light": "{on-accent-cyan}"
     },
     "usage": "Text on a solid `accent` fill. Rebinds with `data-accent`."
+   },
+   {
+    "name": "term-cursor",
+    "value": {
+     "dark": "{accent}",
+     "light": "{accent}",
+     "hc-dark": "{accent}",
+     "hc-light": "{accent}"
+    },
+    "usage": "The terminal's cursor: the accent in use, a block when the terminal has focus and an outline when it doesn't. The character under a block cursor is drawn in term-bg."
    }
   ]
  },

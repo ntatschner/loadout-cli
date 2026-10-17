@@ -451,6 +451,253 @@
         }
       }
     },
+    "term-bg": {
+      "$type": "color",
+      "$value": "#06101a",
+      "$description": "The terminal's ground. The same as `surface` in Dark and Light, and `ground` in high contrast, so the terminal sits in Studio rather than on a slab of its own.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#06101a",
+          "light": "#ffffff",
+          "hc-dark": "#000000",
+          "hc-light": "#ffffff"
+        }
+      }
+    },
+    "term-fg": {
+      "$type": "color",
+      "$value": "#d9f3ff",
+      "$description": "Default terminal text. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#d9f3ff",
+          "light": "#0f2230",
+          "hc-dark": "#ffffff",
+          "hc-light": "#000000"
+        }
+      }
+    },
+    "term-selection": {
+      "$type": "color",
+      "$value": "#123442",
+      "$description": "Selected text's background. Every terminal text colour stays 4.5:1 or better on it (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#123442",
+          "light": "#ddeff6",
+          "hc-dark": "#002a3c",
+          "hc-light": "#e2ebff"
+        }
+      }
+    },
+    "term-black": {
+      "$type": "color",
+      "$value": "#1b2b38",
+      "$description": "ANSI black. In Dark and High contrast dark it is a background (term-fg reads on it); in the light themes it is text. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#1b2b38",
+          "light": "#0f2230",
+          "hc-dark": "#1a1a1a",
+          "hc-light": "#000000"
+        }
+      }
+    },
+    "term-red": {
+      "$type": "color",
+      "$value": "#ff8a8a",
+      "$description": "ANSI red: errors and removed lines. The same hue as `bad`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ff8a8a",
+          "light": "#b3261e",
+          "hc-dark": "#ffb0a8",
+          "hc-light": "#8a0f1a"
+        }
+      }
+    },
+    "term-green": {
+      "$type": "color",
+      "$value": "#7fe0b8",
+      "$description": "ANSI green: success and added lines. The same hue as `good`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#7fe0b8",
+          "light": "#1b6b4a",
+          "hc-dark": "#9ff0cc",
+          "hc-light": "#0b4d2e"
+        }
+      }
+    },
+    "term-yellow": {
+      "$type": "color",
+      "$value": "#ffb547",
+      "$description": "ANSI yellow: warnings. The same hue as `needs`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffb547",
+          "light": "#8a4a00",
+          "hc-dark": "#ffd27a",
+          "hc-light": "#6b3a00"
+        }
+      }
+    },
+    "term-blue": {
+      "$type": "color",
+      "$value": "#80c8ff",
+      "$description": "ANSI blue: paths and links. The same hue as `moving`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#80c8ff",
+          "light": "#0b5cad",
+          "hc-dark": "#a6d4ff",
+          "hc-light": "#0a3d91"
+        }
+      }
+    },
+    "term-magenta": {
+      "$type": "color",
+      "$value": "#c9b3ff",
+      "$description": "ANSI magenta. The same hue as `shaping`. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#c9b3ff",
+          "light": "#5f43b2",
+          "hc-dark": "#ddd0ff",
+          "hc-light": "#3f2a8c"
+        }
+      }
+    },
+    "term-cyan": {
+      "$type": "color",
+      "$value": "#6fe3ff",
+      "$description": "ANSI cyan. Studio's cyan, fixed: it does not follow the accent, because agents use it as a colour, not as Studio's accent. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#6fe3ff",
+          "light": "#00708c",
+          "hc-dark": "#9ff4ff",
+          "hc-light": "#00495c"
+        }
+      }
+    },
+    "term-white": {
+      "$type": "color",
+      "$value": "#cfe6f2",
+      "$description": "ANSI white. In the light themes a dark grey, so it reads on white. Text colours are 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#cfe6f2",
+          "light": "#55626c",
+          "hc-dark": "#f2f2f2",
+          "hc-light": "#262626"
+        }
+      }
+    },
+    "term-bright-black": {
+      "$type": "color",
+      "$value": "#8fb3c4",
+      "$description": "ANSI bright black, the bold or emphasised form of term-black. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#8fb3c4",
+          "light": "#46606f",
+          "hc-dark": "#d4d4d4",
+          "hc-light": "#333333"
+        }
+      }
+    },
+    "term-bright-red": {
+      "$type": "color",
+      "$value": "#ffb0b0",
+      "$description": "ANSI bright red, the bold or emphasised form of term-red. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffb0b0",
+          "light": "#9c1f18",
+          "hc-dark": "#ffcdc8",
+          "hc-light": "#7a0d17"
+        }
+      }
+    },
+    "term-bright-green": {
+      "$type": "color",
+      "$value": "#a6f0d0",
+      "$description": "ANSI bright green, the bold or emphasised form of term-green. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#a6f0d0",
+          "light": "#0f5c3d",
+          "hc-dark": "#c2f7de",
+          "hc-light": "#083d24"
+        }
+      }
+    },
+    "term-bright-yellow": {
+      "$type": "color",
+      "$value": "#ffd79a",
+      "$description": "ANSI bright yellow, the bold or emphasised form of term-yellow. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffd79a",
+          "light": "#6e3b00",
+          "hc-dark": "#ffe2a8",
+          "hc-light": "#5c3200"
+        }
+      }
+    },
+    "term-bright-blue": {
+      "$type": "color",
+      "$value": "#a6d4ff",
+      "$description": "ANSI bright blue, the bold or emphasised form of term-blue. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#a6d4ff",
+          "light": "#094b8f",
+          "hc-dark": "#c8e4ff",
+          "hc-light": "#082f70"
+        }
+      }
+    },
+    "term-bright-magenta": {
+      "$type": "color",
+      "$value": "#ddd0ff",
+      "$description": "ANSI bright magenta, the bold or emphasised form of term-magenta. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ddd0ff",
+          "light": "#4a2f99",
+          "hc-dark": "#ebe3ff",
+          "hc-light": "#33206f"
+        }
+      }
+    },
+    "term-bright-cyan": {
+      "$type": "color",
+      "$value": "#9ff4ff",
+      "$description": "ANSI bright cyan, the bold or emphasised form of term-cyan. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#9ff4ff",
+          "light": "#005a70",
+          "hc-dark": "#c4f9ff",
+          "hc-light": "#003a49"
+        }
+      }
+    },
+    "term-bright-white": {
+      "$type": "color",
+      "$value": "#ffffff",
+      "$description": "ANSI bright white, the bold or emphasised form of term-white. 4.5:1 or better on term-bg and term-selection (7:1 in high contrast).",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "#ffffff",
+          "light": "#2c3a44",
+          "hc-dark": "#ffffff",
+          "hc-light": "#000000"
+        }
+      }
+    },
     "accent": {
       "$type": "color",
       "$value": "{accent.cyan.fill}",
@@ -487,6 +734,19 @@
           "light": "{accent.cyan.on}",
           "hc-dark": "{accent.cyan.on}",
           "hc-light": "{accent.cyan.on}"
+        }
+      }
+    },
+    "term-cursor": {
+      "$type": "color",
+      "$value": "{color.accent}",
+      "$description": "The terminal's cursor: the accent in use, a block when the terminal has focus and an outline when it doesn't. The character under a block cursor is drawn in term-bg.",
+      "$extensions": {
+        "studio.themes": {
+          "dark": "{color.accent}",
+          "light": "{color.accent}",
+          "hc-dark": "{color.accent}",
+          "hc-light": "{color.accent}"
         }
       }
     }

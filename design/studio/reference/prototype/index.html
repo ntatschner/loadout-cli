@@ -197,7 +197,8 @@ body { background: var(--ground); color: var(--ink); }
         checks: [["Release notes match the changes", "met"], ["Every test passes on main", "met"], ["The tag is pushed", "not attempted"]],
         workers: [["lead", "coordinating"], ["writer/1", "writing the release notes"], ["checker/1", "waiting on writer/1"]], events: [{ stage: 2, kind: "started", t: "13:14", text: "release-crew started round 1" }] },
       { id: "s1", code: "2", kind: "session", title: "why is this postgres query so slow", stage: 2, where: "starstats", agent: "claude", mode: "investigate", note: "investigate · Claude Code", quiet: 0, mins: 12, tok: [18204, 6120], events: [] },
-      { id: "s2", code: "3", kind: "session", title: "add a retry to the upload step", stage: 2, where: "loadout-cli", agent: "codex", mode: "implement", note: "implement · Codex", quiet: 3, mins: 21, tok: [9120, 3880], events: [] },
+      { id: "s2", code: "3", kind: "session", title: "add a retry to the upload step", stage: 2, where: "loadout-cli", agent: "claude", mode: "implement", note: "implement · Claude Code", quiet: 3, mins: 21, tok: [9120, 3880], events: [] },
+      { id: "s3", code: "7", kind: "session", title: "tidy the deploy script", stage: 2, where: "starstats", agent: "codex", mode: "implement", note: "implement · Codex · reports working or idle only", quiet: 12, mins: 34, tok: [6020, 2210], events: [] },
       { id: "i1", code: "1", kind: "idea", title: "Run the launcher in a browser", stage: 1, where: "loadout-cli", ref: "browser-launcher", note: "round 2 back · 3 questions answered", quiet: 40, events: [] },
       { id: "k2", code: "6", kind: "task", title: "Move uploads to the new bucket", stage: 2, where: "starstats", ref: "new-bucket", blocked: "waiting on access to the new bucket", note: "blocked", quiet: 95, events: [{ stage: 2, kind: "blocked", t: "12:37", text: "Marked blocked: waiting on access to the new bucket" }] },
       { id: "k1", code: "5", kind: "task", title: "Retry the upload with backoff", stage: 0, where: "starstats", ref: "upload-retries", note: "declared yesterday", quiet: 0, events: [] }
@@ -210,9 +211,10 @@ body { background: var(--ground); color: var(--ink); }
       ["", "● Reading src/Stats/Queries/DailyTotals.sql"], ["", "● Running EXPLAIN ANALYZE on the daily totals query"], ["dim", "  Seq Scan on events  (rows=1,840,211)"], ["dim", "  Filter: created_at >= now() - interval '1 day'"],
       ["", "● The filter on created_at has no index, so every row is read."], ["", "● Looking for an index on events.created_at in db/migrations"], ["dim", "  none found"],
       ["ok", "● Found it: add an index on events (created_at). Investigate mode doesn't change the repository; the fix is a separate session."], ["end"]],
-    s2: [["me", "› loadout loadout-cli --agent codex --task \"add a retry to the upload step\" --mode implement"], ["dim", "  loaded foundation, implement mode, language.csharp, framework.dotnet · 1,456 tokens"],
-      ["", "● Reading src/Upload/Uploader.cs"], ["", "● Adding a retry with backoff around the upload call"], ["", "● Running the upload tests: 14 passed"],
-      ["", "● Regenerating the dashboard screenshot for the docs"], ["ask", "? Overwrite docs/images/dashboard-office.png? [y/n]"], ["wait"],
+    s2: [["me", "› loadout loadout-cli --task \"add a retry to the upload step\" --mode implement"], ["dim", "  loaded foundation, implement mode, language.csharp, framework.dotnet · 1,456 tokens"],
+      ["", "● Read src/Upload/Uploader.cs"], ["", "● Edit src/Upload/Uploader.cs"], ["bad", "  - await client.PutAsync(target, body, ct);"], ["ok", "  + await Retry.WithBackoff(() => client.PutAsync(target, body, ct), attempts: 3, ct);"],
+      ["", "● Run dotnet test tests/Loadout.Tests --filter Upload"], ["ok", "  Passed! 14 passed, 0 failed"], ["", "● Regenerating the dashboard screenshot for the docs"],
+      ["ask", "? Overwrite docs/images/dashboard-office.png?"], ["dim", "  1 Yes   2 No      (the agent's own choices: answer them here)"], ["wait"],
       ["", "● Committing on the session branch"], ["ok", "● Done. The upload retries three times with backoff; tests pass."], ["end"]]
   };
 
@@ -234,7 +236,7 @@ body { background: var(--ground); color: var(--ink); }
     ST.feed.unshift({ t: hhmm(ST.clock), text: text, fam: S.signalOf(S.wordFor(l)).family, glyph: { asked: "?", failed: "✕", blocked: "‖", ended: "✓", answered: "✓" }[kind] || "↻" });
     ST.feed = ST.feed.slice(0, 8);
   }
-  function wordOf(l) { if (l.held && !l.waiting) { return "held after this round"; } return S.wordFor(l); }
+  function wordOf(l) { if (l.held && !l.waiting) { return "held after this round"; } if (l.waiting && l.approval) { return "needs approval"; } return S.wordFor(l); }
   function factsOf(l) { return l.blocked ? l.blocked : (l.note || ""); }
   function waitingLines() { return S.rankUrgent(ST.lines.map(function (l) { return Object.assign({ problem: !!l.failed }, l); })); }
 
@@ -250,16 +252,18 @@ body { background: var(--ground); color: var(--ink); }
     addEvent(t, yes ? "answered" : "answered", yes ? "You approved the push; release-crew finished" : "You refused the push; release-crew carries on");
     ST.clock += 1; render();
   }
+  var sessionToast = {};
   function answerSession(id, yes) {
     var l = line(id); if (!l || !l.waiting) { return; }
-    l.waiting = false; l.ask = ""; l.stage = 2; l.note = (l.mode || "") + " · " + (l.agent === "codex" ? "Codex" : "Claude Code");
-    term(id, "me", "› " + (yes ? "y" : "n")); term(id, "dim", yes ? "  overwriting docs/images/dashboard-office.png" : "  keeping the old screenshot");
-    addEvent(l, "answered", "You answered: " + (yes ? "overwrite it" : "keep the old one"));
+    l.waiting = false; l.approval = false; l.ask = ""; l.stage = 2; l.note = (l.mode || "") + " · Claude Code";
+    term(id, "dim", yes ? "  overwriting docs/images/dashboard-office.png" : "  keeping the old screenshot");
+    addEvent(l, "answered", "You answered in the terminal: " + (yes ? "overwrite it" : "keep the old one"));
+    if (sessionToast[id]) { toasts.settle(sessionToast[id], "Answered in the terminal: " + l.title); delete sessionToast[id]; }
     render();
   }
+  /* Studio is told that a session is waiting, not what the choices are, so the only action is to go to the question. */
   function sessionAnswers(l) {
-    return [{ label: "Overwrite it", kind: "needs", cmd: "typed into the session", onPress: function () { answerSession(l.id, true); return "You answered: overwrite it"; } },
-      { label: "Keep the old one", cmd: "typed into the session", onPress: function () { answerSession(l.id, false); return "You answered: keep the old one"; } }];
+    return [{ label: "Go to the question", kind: "needs", cmd: "opens the session · answered in its terminal", onPress: function () { go("session-" + l.id); setTimeout(function () { var sc = document.querySelector(".ls-term .screen"); if (sc) { sc.focus(); } }, 80); return "Opened " + l.title; } }];
   }
   function refine() { var i = line("i1"); i.failed = ""; i.stage = 2; i.note = "round 3 running again · Codex"; addEvent(i, "round", "You asked for round 3 again"); render(); }
   function actionsFor(l) {
@@ -431,33 +435,33 @@ body { background: var(--ground); color: var(--ink); }
     two.appendChild(el("section", { "aria-labelledby": "z-rec" }, [zone("", "Recent", "z-rec"), rec, el("p", { "class": "calm", style: "margin: 12px 0 0; font-size: 13.5px" }, ["Reopen one in a terminal: ", el("code", { "class": "ls-cmd", text: "$ loadout resume --last" })])]));
     main.appendChild(two);
   }
+  var LIVE = null, RUNCLS = { me: "fg-cyan", dim: "fg-bright-black", ask: "fg-yellow bold", ok: "fg-green", bad: "fg-red", "": "" };
+  function runsOf(t) { var m = /^(● )(\w+)( .*)?$/.exec(t[1]); return m && t[0] === "" ? [[m[1], "fg-green"], [m[2], "bold"], [m[3] || "", "fg-blue"]] : [[t[1], RUNCLS[t[0]] || ""]]; }
   function term(id, cls, text) {
     (ST.term[id] = ST.term[id] || []).push([cls, text]);
-    var out = document.getElementById("term-out");
-    if (out && out.getAttribute("data-id") === id) { out.appendChild(el("span", { "class": cls, text: text + "\n" })); out.scrollTop = out.scrollHeight; }
+    if (LIVE && LIVE.id === id) { LIVE.t.write(runsOf([cls, text])); }
   }
+  function termState(l) { if (l.stage === 4) { return "ended"; } if (l.waiting) { return l.approval ? "approval" : "waiting"; } if (l.agent === "codex") { return (l.quiet || 0) >= 10 ? "idle" : "working"; } return (l.quiet || 0) >= 10 ? "idle" : "working"; }
   function renderSession(main, id) {
-    var l = line(id);
+    var l = line(id); LIVE = null;
     if (!l) { main.appendChild(el("p", { "class": "calm", text: "That session has ended or isn't in view." })); return; }
     main.appendChild(key(el("a", { "class": "back", href: "#sessions" }, [el("span", { "aria-hidden": "true", text: "←" }), "Sessions"]), "back"));
-    main.appendChild(el("div", { "class": "head" }, [el("div", {}, [el("h1", { text: l.title, style: "font-size: 26px; line-height: 30px" }), el("span", { "class": "fact", text: l.where + " · " + (l.agent === "codex" ? "Codex" : "Claude Code") + " · " + l.mode + " · " + (l.mins || 0) + " min" })]), S.Signal(wordOf(l), { big: true })]));
-    var g = el("div", { "class": "sess" });
-    var left = el("div", { style: "display: grid; gap: 14px; min-width: 0" });
-    if (l.waiting) { left.appendChild(el("div", { "class": "waitcard" }, [el("span", { "class": "w", text: "asks before overwriting · answer here or type it below" }), el("p", { "class": "q", text: l.ask }), el("div", { "class": "ls-answers", style: "margin: 0" }, sessionAnswers(l).map(function (a) { return halo(Object.assign({ size: "small" }, a), "sa-" + a.label); }))])); }
-    var out = el("pre", { "class": "out", id: "term-out", "data-id": l.id, tabindex: "0", "aria-label": "Session output", "aria-live": "polite" });
-    (ST.term[l.id] || []).forEach(function (t) { out.appendChild(el("span", { "class": t[0], text: t[1] + "\n" })); });
-    var input = el("input", { id: "term-in", "data-k": "term-in", autocomplete: "off", placeholder: l.stage === 4 ? "This session has ended" : "Type to the agent, Enter to send", disabled: l.stage === 4 ? true : null });
-    var form = el("form", { onsubmit: function (e) { e.preventDefault(); var v = input.value.trim(); if (!v) { return; } input.value = "";
-      if (l.waiting && /^(y|yes)$/i.test(v)) { answerSession(l.id, true); return; } if (l.waiting && /^(n|no)$/i.test(v)) { answerSession(l.id, false); return; }
-      term(l.id, "me", "› " + v); term(l.id, "dim", "  sent to the session"); } }, [el("label", { "for": "term-in", text: "›", title: "Type to the agent" }), input]);
-    left.appendChild(el("div", { "class": "term" }, [el("div", { "class": "bar" }, [el("span", { "class": l.stage === 4 ? "" : "live", text: l.stage === 4 ? "■ ended" : "● live" }), l.where + " · " + (l.agent === "codex" ? "codex" : "claude")]), out, form]));
-    g.appendChild(left);
-    var facts = el("dl", { "class": "facts" }, [].concat.apply([], [["Project", l.where], ["Agent", l.agent === "codex" ? "Codex" : "Claude Code"], ["Mode", l.mode], ["Running", (l.mins || 0) + " min"], ["Quiet", (l.quiet || 0) + " min"],
-      ["Tokens", l.tok ? "in " + l.tok[0].toLocaleString("en-GB") + " · out " + l.tok[1].toLocaleString("en-GB") : "counting"]].map(function (f) { return [el("dt", { text: f[0] }), el("dd", { text: f[1] })]; })));
-    g.appendChild(el("aside", { style: "display: grid; gap: 18px; align-content: start; min-width: 0", "aria-label": "About this session" }, [facts,
-      S.Command({ why: "Carry this conversation on in a terminal instead:", command: "$ loadout resume --last" })]));
-    main.appendChild(g);
-    setTimeout(function () { out.scrollTop = out.scrollHeight; }, 0);
+    var agent = l.agent === "codex" ? "Codex" : "Claude Code";
+    var V = S.SessionView({ line: { title: l.title, where: l.where, agent: agent, mode: l.mode, time: (l.mins || 0) + " min" },
+      terminal: { project: l.where, agent: l.agent, sessionId: l.id === "s2" ? "3f9c2a1e" : "7b21d0c4", state: termState(l), fit: window.innerWidth < 600, lines: (ST.term[l.id] || []).map(runsOf),
+        onInput: function (v) {
+          (ST.term[l.id] = ST.term[l.id] || []).push(["me", "› " + v]);
+          if (l.waiting && l.approval && /^(1|y|yes)$/i.test(v)) { answerSession(l.id, true); return; }
+          if (l.waiting && l.approval && /^(2|n|no)$/i.test(v)) { answerSession(l.id, false); return; }
+          term(l.id, "dim", "  sent to the session"); } },
+      facts: [["Project", l.where], ["Agent", agent], ["Mode", l.mode], ["Running", (l.mins || 0) + " min"], ["Quiet", (l.quiet || 0) + " min"], ["Tokens", l.tok ? "in " + l.tok[0].toLocaleString("en-GB") + " · out " + l.tok[1].toLocaleString("en-GB") : "counting"]].concat(l.agent === "codex" ? [["Waiting", "not reported by Codex"]] : []),
+      loaded: (PROJECTS[l.where] || PROJECTS.workspace).loads.concat([["mode", l.mode]]),
+      events: (l.events || []).map(function (e) { return [e.t, e.text]; }),
+      actions: [{ label: "End the session", kind: "danger", cmd: "stops the agent in this terminal", onPress: function () { l.stage = 4; l.waiting = false; l.note = "ended by you"; addEvent(l, "ended", "You ended " + l.title); render(); } }] });
+    var sc = V.el.querySelector(".screen"); if (sc) { sc.setAttribute("data-k", "term-screen"); }
+    V.el.style.height = "calc(100vh - 150px)"; V.el.style.minHeight = "520px";
+    main.appendChild(V.el);
+    LIVE = { id: l.id, t: V.terminal };
   }
 
   /* ---------- the launch sheet ---------- */
@@ -601,12 +605,13 @@ body { background: var(--ground); color: var(--ink); }
       var q = TERM[id] || ST.script[id];
       if (l.waiting) { return; }
       var nx = q.shift(); if (!nx) { return; }
-      if (nx[0] === "wait") { l.waiting = true; l.askedAt = ST.clock; l.ask = "Overwrite docs/images/dashboard-office.png?"; l.note = "asks before overwriting"; addEvent(l, "asked", l.where + ": Codex asks to overwrite a screenshot");
-        toasts.add({ level: "needs", text: l.title + " asks: overwrite docs/images/dashboard-office.png?", cmd: "Codex · " + l.where, actions: sessionAnswers(l) }); render(); return; }
+      if (nx[0] === "wait") { l.waiting = true; l.approval = true; l.askedAt = ST.clock; l.ask = "Asks for approval to overwrite docs/images/dashboard-office.png. Answer it in the terminal."; l.note = "needs approval"; addEvent(l, "asked", l.title + " asks for approval");
+        sessionToast[id] = toasts.add({ level: "needs", text: l.title + " needs approval", cmd: "Claude Code · " + l.where + " · answer it in the terminal", actions: sessionAnswers(l) }); render(); return; }
       if (nx[0] === "end") { l.stage = 4; l.note = "ended · " + (l.mins || 0) + " min"; addEvent(l, "ended", l.title + " ended"); toasts.add({ level: "done", text: l.title + " ended", cmd: "" }); render(); return; }
       term(id, nx[0], nx[1]);
     });
   }
+  ST.term.s3 = [["me", "› loadout starstats --agent codex --task \"tidy the deploy script\" --mode implement"], ["dim", "  loaded foundation, implement mode · 1,120 tokens"], ["", "● Read deploy/deploy.sh"]];
   ["s1", "s2"].forEach(function (id) { ST.term[id] = []; for (var i = 0; i < 3; i++) { var x = TERM[id].shift(); ST.term[id].push(x); } });
   setInterval(step, 7000);
   setInterval(typeTick, 1600);

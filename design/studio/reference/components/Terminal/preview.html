@@ -1,0 +1,44 @@
+<!-- @dsCard group="Sessions" height=660 width=1120 subtitle="The live terminal in Studio's palette, with every state it can be in" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Terminal</title>
+<style>
+  body { margin: 0; padding: 20px 24px; background: var(--ground); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+  .lab { margin: 0 0 8px; font-size: 12px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft); }
+  .ask { margin: 2px 0 0; font-size: 19px; color: var(--needs-text); }
+  .asker { font-family: var(--font-mono); font-size: 11.5px; color: var(--needs-text); }
+  .out { margin: 10px 0 0; font-size: 14px; color: var(--good); min-height: 20px; }
+  
+</style>
+</head>
+<body class="ls">
+<div class="row" id="states" style="gap: 6px 18px; margin-bottom: 14px"></div>
+<div id="t" style="height: 520px; display: grid"></div>
+<script>
+(function () {
+  var S = window.LoadoutStudio;
+  var OUT = [
+    [["› ", "fg-cyan"], ["loadout loadout-cli --task-id upload-retries --mode implement", ""]],
+    [["  loaded foundation, implement mode, language.csharp, framework.dotnet · 1,456 tokens", "fg-bright-black"]],
+    [["● ", "fg-green"], ["Read ", "bold"], ["src/Upload/Uploader.cs", "fg-blue"]],
+    [["● ", "fg-green"], ["Edit ", "bold"], ["src/Upload/Uploader.cs", "fg-blue"]],
+    [["  - await client.PutAsync(target, body, ct);", "fg-red"]],
+    [["  + await Retry.WithBackoff(() => client.PutAsync(target, body, ct), attempts: 3, ct);", "fg-green"]],
+    [["● ", "fg-green"], ["Run ", "bold"], ["dotnet test tests/Loadout.Tests --filter Upload", "fg-bright-black"]],
+    [["  warning CS8618: Non-nullable field '_policy' is uninitialized.", "fg-yellow"]],
+    [["  Passed! ", "fg-bright-green bold"], ["14 passed, 0 failed", "fg-green"]],
+    [["● ", "fg-magenta"], ["The upload retries three times with backoff. Tests pass.", "fg-bright-white"]]
+  ];
+  var T = S.Terminal({ title: "add a retry to the upload step", project: "loadout-cli", agent: "claude", sessionId: "3f9c2a1e", state: "working", lines: OUT.slice(0, 4), onRetry: function () { T.setState("working"); } });
+  document.getElementById("t").appendChild(T.el);
+  var i = 4; var timer = setInterval(function () { if (i < OUT.length && T.state === "working") { T.write(OUT[i++]); } }, 1400);
+  var W = { connecting: "Connecting", working: "Working", idle: "Idle", unknown: "Unknown", waiting: "Waiting for you", approval: "Needs approval", ended: "Ended", error: "Exited with an error", reconnecting: "Reconnecting", watch: "Only watching", lost: "Lost" };
+  var row = document.getElementById("states");
+  S.TERMINAL_STATES.forEach(function (s) { row.appendChild(S.HaloButton({ label: W[s], size: "small", onPress: function () { T.setState(s, { code: 1 }); } })); });
+})();
+</script>
+</body>
+</html>

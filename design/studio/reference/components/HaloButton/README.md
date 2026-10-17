@@ -12,7 +12,7 @@ HaloButton is Studio's button: a word in spaced capitals beside a ring of light,
 ## What you provide
 
 - `label`, written in sentence case; the style sets the capitals.
-- `cmd`: the exact command the press runs (`$ loadout team gate --answer Approve`). Every button that changes something shows one. When an answer is typed into a running session rather than run as a command, say so: `typed into the session`.
+- `cmd`: the exact command the press runs (`$ loadout team gate --answer Approve`). Every button that changes something shows one. Where nothing in Loadout changes, say what does happen instead ("opens here · changes nothing", "stops the agent in this terminal"). Studio never types into a session for you: a question in a session is answered in its terminal (see Terminal).
 - `glyph` (optional): one character in the ring for answers (✓, ✕, ↻) or option numbers (1, 2).
 - `disabledReason` instead of disabling silently: the ring goes grey and the reason is written where the command would be.
 - `onPress`.
