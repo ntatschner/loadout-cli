@@ -35,7 +35,6 @@ public sealed partial class StudioCoverageTests
         "checkpoint list",
         "checkpoint remove",
         "checkpoint restore",
-        "code",
         "commands",
         "config edit",
         "config get",
@@ -56,7 +55,6 @@ public sealed partial class StudioCoverageTests
         "docs find",
         "docs refresh",
         "doctor",
-        "drift",
         "handoff",
         "idea accept",
         "idea add",
@@ -85,7 +83,6 @@ public sealed partial class StudioCoverageTests
         "instructions stats",
         "instructions validate",
         "launches",
-        "list",
         "mcp add",
         "mcp list",
         "mcp remove",
@@ -106,23 +103,8 @@ public sealed partial class StudioCoverageTests
         "pack remove",
         "pack update",
         "profile list",
-        "project add",
-        "project clone",
-        "project context",
-        "project discover",
-        "project link",
-        "project list",
-        "project new",
         "project onboard",
-        "project open",
-        "project proposal",
-        "project relocate",
-        "project remove",
-        "project show",
-        "project survey",
-        "project worktrees",
         "protect",
-        "repo check",
         "resume",
         "rules audit",
         "rules budget",
@@ -203,10 +185,6 @@ public sealed partial class StudioCoverageTests
         "voice render",
         "voice runs",
         "voice show",
-        "workspace open",
-        "workspace save",
-        "workspace status",
-        "workspace sync",
     ];
 
     /// <summary>The pages a command can be placed on: Studio's router's, and the Commands page.</summary>
@@ -292,7 +270,14 @@ public sealed partial class StudioCoverageTests
 
         foreach (var (path, reach) in StudioCoverage.Reach.Where(one => one.Value.Page != StudioCoverage.CommandsPage))
         {
-            Regex.IsMatch(sources, "loadout " + Regex.Escape(path) + "(?![a-z-])").Should().BeTrue(
+            // Shown as its line, or named as the command a form or a read runs:
+            // <CommandAction path="..."> and readJson('...') both show the line.
+            var escaped = Regex.Escape(path);
+            var shown = Regex.IsMatch(sources, "loadout " + escaped + "(?![a-z-])")
+                || Regex.IsMatch(sources, "path=\"" + escaped + "\"")
+                || Regex.IsMatch(sources, "readJson(<[^>]*>)?\\('" + escaped + "'");
+
+            shown.Should().BeTrue(
                 $"'{path}' is placed on the {reach.Page} page, so Studio has to show 'loadout {path}' somewhere");
         }
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StudioCommand, StudioOption } from './api';
-import { lineFor, problemWith, quoted, wordsFor } from './commandLine';
+import { lineFor, problemWith, quoted, readsWith, wordsFor } from './commandLine';
 
 function option(name: string, kind: StudioOption['kind'], more: Partial<StudioOption> = {}): StudioOption {
   return { name, short: null, kind, valueName: null, description: '', required: false, global: false, choices: [], ...more };
@@ -12,7 +12,7 @@ const show: StudioCommand = {
   category: 'Memory',
   example: '',
   runnable: true,
-  reach: { page: 'commands', effect: 'reads', reason: null },
+  reach: { page: 'commands', effect: 'reads', reason: null, changesOnlyWith: null },
   arguments: [{ name: 'TOPIC', position: 0, required: true, many: false, description: '' }],
   options: [option('--project', 'value'), option('--json', 'flag', { global: true }), option('--scope', 'value', { choices: ['project', 'user'] })],
 };
@@ -75,5 +75,20 @@ describe('the line shown', () => {
 
   it('is the command and its words after the prompt', () => {
     expect(lineFor('memory show', ['build-quirks', '--project', 'my project'])).toBe("$ loadout memory show build-quirks --project 'my project'");
+  });
+});
+
+describe('whether a form only reads', () => {
+  const drift: StudioCommand = { ...show, path: 'drift', reach: { page: 'commands', effect: 'changes', reason: null, changesOnlyWith: ['--fix'] } };
+  const remove: StudioCommand = { ...show, path: 'memory delete', reach: { page: 'commands', effect: 'changes', reason: null, changesOnlyWith: null } };
+
+  it('reads when the command acts only with an option it is not given, as the daemon decides', () => {
+    expect(readsWith(drift, [])).toBe(true);
+    expect(readsWith(drift, ['--fix'])).toBe(false);
+  });
+
+  it('reads for a preview of anything that changes something, and not otherwise', () => {
+    expect(readsWith(remove, ['old'])).toBe(false);
+    expect(readsWith(remove, ['old', '--dry-run'])).toBe(true);
   });
 });

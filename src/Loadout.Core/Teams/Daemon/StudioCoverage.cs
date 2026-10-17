@@ -20,7 +20,37 @@ public enum StudioEffect
 /// <param name="Page">The Studio page that does it, or <c>commands</c> for the Commands page alone.</param>
 /// <param name="Effect">What running it does.</param>
 /// <param name="Reason">For a terminal-only command, why, worded to follow its name.</param>
-public sealed record StudioReach(string Page, StudioEffect Effect, string? Reason = null);
+/// <param name="ChangesOnlyWith">
+/// For a command that changes something, the options without which it only
+/// reports what it would do, as 'drift' does until it is given '--fix'.
+/// Empty for one that always changes something.
+/// </param>
+public sealed record StudioReach(
+    string Page,
+    StudioEffect Effect,
+    string? Reason = null,
+    IReadOnlyList<string>? ChangesOnlyWith = null)
+{
+    /// <summary>Whether these words make the command only read.</summary>
+    /// <remarks>
+    /// A preview with <c>--dry-run</c> reads, and so does a command run
+    /// without the option that makes it act. Each option is matched by name,
+    /// given bare or with its value joined by '='.
+    /// </remarks>
+    public bool Reads(IReadOnlyList<string> words)
+    {
+        ArgumentNullException.ThrowIfNull(words);
+
+        if (Effect == StudioEffect.Reads || words.Contains("--dry-run", StringComparer.Ordinal))
+        {
+            return true;
+        }
+
+        return Effect == StudioEffect.Changes
+            && ChangesOnlyWith is { Count: > 0 } acting
+            && !words.Any(word => acting.Contains(word.Split('=', 2)[0], StringComparer.Ordinal));
+    }
+}
 
 /// <summary>
 /// Every command Loadout has, and where Studio reaches it.
@@ -53,12 +83,14 @@ public static class StudioCoverage
 
     private static StudioReach Terminal(string reason) => new(CommandsPage, StudioEffect.TerminalOnly, reason);
 
+    private static StudioReach ChangesWith(params string[] options) => new(CommandsPage, StudioEffect.Changes, ChangesOnlyWith: options);
+
     /// <summary>Every command path, and how Studio reaches it.</summary>
     public static IReadOnlyDictionary<string, StudioReach> Reach { get; } = new Dictionary<string, StudioReach>(StringComparer.Ordinal)
     {
         ["setup"] = new("commands", StudioEffect.Changes),
         ["start"] = new("commands", StudioEffect.Session),
-        ["doctor"] = new("commands", StudioEffect.Changes),
+        ["doctor"] = ChangesWith("--fix"),
         ["status"] = new("commands", StudioEffect.Reads),
         ["launch"] = new("sessions", StudioEffect.Session),
         ["here"] = Terminal("launches the agent for the directory a terminal is in, and a page has no current directory"),
@@ -69,9 +101,9 @@ public static class StudioCoverage
         ["update"] = Terminal("replaces the program serving this page; run it in a terminal, then loadout daemon restart"),
         ["migrate"] = new("commands", StudioEffect.Changes),
         ["backup list"] = new("commands", StudioEffect.Reads),
-        ["backup restore"] = new("commands", StudioEffect.Changes),
+        ["backup restore"] = ChangesWith("--apply"),
         ["share candidates"] = new("commands", StudioEffect.Reads),
-        ["share promote"] = new("commands", StudioEffect.Changes),
+        ["share promote"] = ChangesWith("--apply"),
         ["pack list"] = new("commands", StudioEffect.Reads),
         ["pack add"] = new("commands", StudioEffect.Changes),
         ["pack approve"] = new("commands", StudioEffect.Changes),
@@ -129,7 +161,7 @@ public static class StudioCoverage
         ["team capabilities"] = new("commands", StudioEffect.Reads),
         ["team remedy show"] = new("commands", StudioEffect.Reads),
         ["team remedy trust"] = Terminal("is a standing agreement for a script to run unattended, made in a terminal on purpose"),
-        ["team remedy requests"] = new("commands", StudioEffect.Changes),
+        ["team remedy requests"] = ChangesWith("--approve", "--refuse"),
         ["team office check"] = new("commands", StudioEffect.Reads),
         ["team schedule add"] = new("commands", StudioEffect.Changes),
         ["team schedule list"] = new("commands", StudioEffect.Reads),
@@ -165,7 +197,7 @@ public static class StudioCoverage
         ["spend refresh"] = new("commands", StudioEffect.Changes),
         ["checkpoint create"] = new("commands", StudioEffect.Changes),
         ["checkpoint list"] = new("commands", StudioEffect.Reads),
-        ["checkpoint restore"] = new("commands", StudioEffect.Changes),
+        ["checkpoint restore"] = ChangesWith("--apply"),
         ["checkpoint remove"] = new("commands", StudioEffect.Changes),
         ["memory list"] = new("commands", StudioEffect.Reads),
         ["memory find"] = new("commands", StudioEffect.Reads),
@@ -173,15 +205,15 @@ public static class StudioCoverage
         ["memory write"] = new("commands", StudioEffect.Changes),
         ["memory show"] = new("commands", StudioEffect.Reads),
         ["memory replace"] = new("memory", StudioEffect.Changes),
-        ["memory audit"] = new("commands", StudioEffect.Changes),
+        ["memory audit"] = ChangesWith("--apply"),
         ["memory reindex"] = new("commands", StudioEffect.Changes),
-        ["memory import"] = new("commands", StudioEffect.Changes),
-        ["memory compress"] = new("commands", StudioEffect.Changes),
+        ["memory import"] = ChangesWith("--apply"),
+        ["memory compress"] = ChangesWith("--apply"),
         ["memory delete"] = new("commands", StudioEffect.Changes),
         ["rules list"] = new("commands", StudioEffect.Reads),
         ["rules budget"] = new("commands", StudioEffect.Reads),
         ["rules audit"] = new("commands", StudioEffect.Reads),
-        ["rules split"] = new("commands", StudioEffect.Changes),
+        ["rules split"] = ChangesWith("--apply"),
         ["config list"] = new("commands", StudioEffect.Reads),
         ["config get"] = new("commands", StudioEffect.Reads),
         ["config set"] = new("commands", StudioEffect.Changes),
@@ -190,8 +222,8 @@ public static class StudioCoverage
         ["mcp add"] = new("commands", StudioEffect.Changes),
         ["mcp remove"] = new("commands", StudioEffect.Changes),
         ["mcp serve"] = Terminal("is the MCP server, speaking a protocol on standard input and output to an agent"),
-        ["drift"] = new("commands", StudioEffect.Changes),
-        ["code"] = new("commands", StudioEffect.Changes),
+        ["drift"] = new("projects", StudioEffect.Changes, ChangesOnlyWith: ["--fix"]),
+        ["code"] = new("projects", StudioEffect.Changes),
         ["commands"] = new("commands", StudioEffect.Reads),
         ["sessions"] = new("commands", StudioEffect.Reads),
         ["running"] = new("commands", StudioEffect.Reads),
@@ -230,28 +262,28 @@ public static class StudioCoverage
         ["statusline install"] = Terminal("changes the agent's own settings file to call the status line, which belongs in the terminal the agent runs in"),
         ["statusline uninstall"] = Terminal("changes the agent's own settings file, which belongs in the terminal the agent runs in"),
         ["statusline show"] = Terminal("renders the agent's status line, which the agent runs itself"),
-        ["repo check"] = new("commands", StudioEffect.Reads),
+        ["repo check"] = new("projects", StudioEffect.Reads),
         ["profile list"] = new("commands", StudioEffect.Reads),
-        ["list"] = new("commands", StudioEffect.Reads),
-        ["project list"] = new("commands", StudioEffect.Reads),
-        ["project new"] = new("commands", StudioEffect.Changes),
-        ["project add"] = new("commands", StudioEffect.Changes),
-        ["project remove"] = new("commands", StudioEffect.Changes),
-        ["project discover"] = new("commands", StudioEffect.Reads),
-        ["project open"] = new("commands", StudioEffect.Changes),
-        ["project worktrees"] = new("commands", StudioEffect.Reads),
-        ["project clone"] = new("commands", StudioEffect.Changes),
-        ["project relocate"] = new("commands", StudioEffect.Changes),
-        ["project show"] = new("commands", StudioEffect.Reads),
-        ["project survey"] = new("commands", StudioEffect.Changes),
-        ["project link"] = new("commands", StudioEffect.Changes),
-        ["project context"] = new("commands", StudioEffect.Changes),
+        ["list"] = new("projects", StudioEffect.Reads),
+        ["project list"] = new("projects", StudioEffect.Reads),
+        ["project new"] = new("projects", StudioEffect.Changes),
+        ["project add"] = new("projects", StudioEffect.Changes),
+        ["project remove"] = new("projects", StudioEffect.Changes),
+        ["project discover"] = new("projects", StudioEffect.Reads),
+        ["project open"] = new("projects", StudioEffect.Changes),
+        ["project worktrees"] = new("projects", StudioEffect.Reads),
+        ["project clone"] = new("projects", StudioEffect.Changes),
+        ["project relocate"] = new("projects", StudioEffect.Changes),
+        ["project show"] = new("projects", StudioEffect.Reads),
+        ["project survey"] = new("projects", StudioEffect.Changes, ChangesOnlyWith: ["--apply"]),
+        ["project link"] = new("projects", StudioEffect.Changes),
+        ["project context"] = new("projects", StudioEffect.Changes),
         ["project onboard"] = new("commands", StudioEffect.Session),
-        ["project proposal"] = new("commands", StudioEffect.Changes),
-        ["workspace status"] = new("commands", StudioEffect.Reads),
-        ["workspace sync"] = new("commands", StudioEffect.Changes),
-        ["workspace save"] = new("commands", StudioEffect.Changes),
-        ["workspace open"] = new("commands", StudioEffect.Changes),
+        ["project proposal"] = new("projects", StudioEffect.Changes, ChangesOnlyWith: ["--apply", "--discard"]),
+        ["workspace status"] = new("projects", StudioEffect.Reads),
+        ["workspace sync"] = new("projects", StudioEffect.Changes),
+        ["workspace save"] = new("projects", StudioEffect.Changes),
+        ["workspace open"] = new("projects", StudioEffect.Changes),
         ["secret set"] = Terminal("asks for the value at a masked prompt, so the secret never sits in a page or a command line"),
         ["secret test"] = new("commands", StudioEffect.Reads),
         ["secret remove"] = new("commands", StudioEffect.Changes),

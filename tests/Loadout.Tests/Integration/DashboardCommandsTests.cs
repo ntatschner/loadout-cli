@@ -162,6 +162,37 @@ public sealed class DashboardCommandsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_page_reads_through_a_command_that_reads_and_nothing_is_kept_or_announced()
+    {
+        _commands.Next = new StubProcessLauncher.StubPipedProcess("{\"projects\":[]}\n", exitCode: 0);
+
+        var (status, text) = await SendAsync(HttpMethod.Post, "/api/v1/read", "{\"path\":\"memory find\",\"words\":[\"build\"]}");
+
+        status.Should().Be(HttpStatusCode.OK, text);
+
+        var read = JsonDocument.Parse(text).RootElement;
+
+        read.GetProperty("state").GetString().Should().Be("done", "the answer waits for the command to end");
+        read.GetProperty("output").GetString().Should().Contain("{\"projects\":[]}");
+
+        var (_, list) = await SendAsync(HttpMethod.Get, "/api/v1/jobs");
+
+        JsonDocument.Parse(list).RootElement.GetArrayLength().Should().Be(0, "a page's own reads would bury what somebody ran");
+        _ran.Should().BeEmpty();
+        _server.Jobs!.Stamp.Should().Be(0, "nothing changed that the event stream should announce");
+    }
+
+    [Fact]
+    public async Task A_page_cannot_read_with_a_command_that_changes_something_even_when_it_could_run_it()
+    {
+        var (status, text) = await SendAsync(HttpMethod.Post, "/api/v1/read", "{\"path\":\"memory delete\",\"words\":[\"old\"]}");
+
+        status.Should().Be(HttpStatusCode.Forbidden);
+        text.Should().Contain("changes something");
+        _commands.Started.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task A_page_from_elsewhere_cannot_start_a_job()
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, _root + "/api/v1/jobs")

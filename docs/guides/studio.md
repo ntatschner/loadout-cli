@@ -147,7 +147,22 @@ The two things kept in the browser are the single-letter shortcuts (**A** for
 Ambient, **N** for a new session) and whether Ambient fills the screen. They're
 about the keyboard and screen in front of you, not about how you read.
 
-### 8. Run anything else from Commands
+### 8. Look after your projects
+
+**Projects** lists the projects this machine knows. Choose one to see where it
+is, its branch, its agent and how often it's been launched, its working trees,
+and its health: where it has drifted from what was recorded, and whether any AI
+tooling files are tracked in the repository. Below that is everything you can do
+to it, each folded until you open it: open it in the editor or its folder, change
+what every session gets, put right the drift that can be put right, relocate it,
+link it, or stop knowing it. Each shows the command it runs, and what's shown is
+read again once it finishes.
+
+**More** has the rest: adding a repository you have, making a new project,
+finding repositories and stray memory, and the workspace, where you can bring in
+what other machines saved and save and push what changed here.
+
+### 9. Run anything else from Commands
 
 **Commands** lists every command Loadout has, folded by area. Choose one and
 Studio builds a form from the command's own options, so it can't offer one the
@@ -166,7 +181,7 @@ for the value at a masked prompt), the attach passphrase, trusting a tool or a
 remedy, `update`, and the commands that are themselves a server or a status
 line. Starting a session sends you to **Sessions**, where Studio hosts it.
 
-### 9. Ambient
+### 10. Ambient
 
 On Home, **A** or **Ambient** turns Studio into something for a spare screen:
 the key numbers, the halo on whatever most needs you, and everything else

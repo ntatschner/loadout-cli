@@ -89,6 +89,28 @@ public sealed class StudioCommandsTests
     }
 
     [Fact]
+    public void A_command_that_acts_only_with_a_flag_reads_without_it()
+    {
+        var drift = Named("drift");
+
+        drift.Reach.Reads([]).Should().BeTrue("drift only reports until it is given --fix");
+        drift.Reach.Reads(["--fix"]).Should().BeFalse();
+        drift.Reach.Reads(["--fix", "--yes"]).Should().BeFalse();
+
+        CommandJobs.Refusal(drift, [], watchOnly: true).Should().BeNull();
+        CommandJobs.Refusal(drift, ["--fix"], watchOnly: true).Should().Contain("only watching");
+    }
+
+    [Fact]
+    public void A_command_that_always_acts_never_reads_without_a_preview()
+    {
+        var delete = Named("memory delete").Reach;
+
+        delete.Reads(["old"]).Should().BeFalse();
+        delete.Reads(["old", "--dry-run"]).Should().BeTrue();
+    }
+
+    [Fact]
     public void An_option_the_command_does_not_have_is_refused()
     {
         CommandJobs.Refusal(Named("memory show"), ["topic", "--yes"], watchOnly: false).Should().Contain("no option '--yes'");
