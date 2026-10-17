@@ -1,6 +1,7 @@
 // The command palette's three groups: Go to a page, find what is In flight,
 // and Do something, every action carrying the command it runs.
 import { actionsFor } from './actions';
+import { MODES } from './modes';
 import type { PaletteGroup, PaletteRow } from './palette';
 import type { Studio } from './state.svelte';
 import { wordFor } from './signals';
@@ -58,6 +59,18 @@ export function paletteGroups(
         });
       }
     }
+  }
+
+  // The modes are this browser's own, so they are offered even while Studio only watches.
+  for (const mode of MODES) {
+    doing.push({
+      key: `do-mode-${mode.key}`,
+      glyph: '◐',
+      label: `Mode: ${mode.name}`,
+      sub: `${mode.desc} · Ctrl Shift M cycles`,
+      kind: 'action',
+      run: () => studio.setMode(mode.key),
+    });
   }
 
   doing.push(

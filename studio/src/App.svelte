@@ -30,6 +30,9 @@
   import { THEME_NAMES, type Theme } from './lib/studio';
   import { reportLink } from './lib/report';
   import type { RailPage } from './lib/types';
+  import ModeBar from './lib/components/ModeBar.svelte';
+  import Quiet from './pages/Quiet.svelte';
+  import { isModeKey, type Waiting } from './lib/modes';
 
   let palette = $state(false);
   let appearance = $state(false);
@@ -38,6 +41,8 @@
   let launchTask = $state('');
 
   onMount(() => {
+    // The mode is this browser's own, so the layout is right before the prefs are read.
+    document.documentElement.setAttribute('data-mode', studio.mode);
     void studio.start();
 
     return () => studio.stop();
@@ -75,6 +80,48 @@
     launching = true;
   }
 
+  // What is waiting on you, sessions and team runs together, for the ModeBar.
+  const modeWaiting: Waiting[] = $derived(
+    studio.waiting
+      .filter((line) => line.kind === 'session' || line.kind === 'team run')
+      .map((line) => ({
+        kind: line.kind === 'session' ? ('session' as const) : ('run' as const),
+        id: line.ref,
+        label: line.kind === 'session' ? `${line.title} ${line.approval ? 'needs approval' : 'is waiting for you'}` : (line.ask ?? line.title),
+        at: line.askedAt ?? 0,
+      })),
+  );
+
+  /** The oldest question, wherever the current mode shows it, so no focus mode ever hides one. */
+  function goWaiting(waiting: Waiting) {
+    if (studio.mode === 'minimal') {
+      router.go('home');
+      studio.focusing = { kind: waiting.kind === 'session' ? 'session' : 'team run', id: waiting.id };
+    } else if (waiting.kind === 'session') {
+      router.go('session', waiting.id);
+    } else {
+      router.go('teams', waiting.id);
+    }
+  }
+
+  // Ctrl+Shift+M, caught before anything on the page, a terminal included,
+  // can take it: a terminal would otherwise send it to its session.
+  function modeKey(event: KeyboardEvent) {
+    if (isModeKey(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      studio.cycleMode();
+    }
+  }
+
+  // Which page each mode draws for a route: the deck for Home and the
+  // sessions in Terminals, the board for Home in Teams, the quiet column for
+  // Home in Minimal. Everything else is the page it always was.
+  const page = $derived(router.route.page);
+  const deck = $derived(studio.mode === 'terminals' && (page === 'home' || page === 'sessions' || page === 'session'));
+  const board = $derived(studio.mode === 'teams' && page === 'home');
+  const quiet = $derived(studio.mode === 'minimal' && page === 'home');
+
   function keys(event: KeyboardEvent) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
@@ -111,7 +158,7 @@
   );
 </script>
 
-<svelte:window onkeydown={keys} />
+<svelte:window onkeydown={keys} onkeydowncapture={modeKey} />
 
 {#if studio.signedOut}
   <SignedOut />
@@ -130,6 +177,10 @@
     {/snippet}
   </SideRail>
 
+  <div id="modebar">
+    <ModeBar mode={studio.mode} onmode={(mode) => studio.setMode(mode as typeof studio.mode)} onsearch={() => (palette = true)} waiting={modeWaiting} onwaiting={goWaiting} />
+  </div>
+
   <main id="main" class="page" tabindex="-1">
     {#if studio.watchOnly}
       <div class="watchbanner" role="note">
@@ -143,6 +194,18 @@
 
     {#if !studio.loaded}
       <p class="calm" role="status">Reading what the daemon knows…</p>
+    {:else if deck}
+      <!-- One deck for Home, Sessions and a session's page, so moving
+           between them keeps its panes and their connections. -->
+      {#await import('./pages/TerminalFocus.svelte')}
+        <p class="calm" role="status">Opening the terminals…</p>
+      {:then view}
+        <view.default id={page === 'session' ? (router.route.rest[0] ?? null) : null} onlaunch={() => openLaunch()} />
+      {/await}
+    {:else if board}
+      <Teams rest={[]} />
+    {:else if quiet}
+      <Quiet />
     {:else if router.route.page === 'home'}
       <Home onambient={() => (ambient = true)} onlaunch={openLaunch} />
     {:else if router.route.page === 'sessions'}

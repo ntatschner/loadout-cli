@@ -7,6 +7,7 @@ import { clockOf, linesOf, type Work } from './lines';
 import type { SignalFamily } from './signals';
 import { setAccent, setDensity, setMotion, setTheme, preferredTheme } from './studio';
 import { toasts } from './toasts.svelte';
+import { isMode, morph, nextMode, type StudioMode } from './modes';
 
 export interface FeedEntry {
   t: string;
@@ -17,6 +18,24 @@ export interface FeedEntry {
 
 const LOCAL_KEYS = 'studio-keys';
 const LOCAL_FULLSCREEN = 'studio-ambient-fullscreen';
+const LOCAL_MODE = 'studio-mode';
+
+/** A string this browser keeps, or the fallback where none is kept or storage is refused. */
+function readText(key: string, fallback: string): string {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeText(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Storage refused: the choice lasts this visit.
+  }
+}
 
 function readLocal(key: string, fallback: boolean): boolean {
   try {
@@ -55,6 +74,13 @@ export class Studio {
   now = $state(Date.now());
   keys = $state(readLocal(LOCAL_KEYS, true));
   fullscreen = $state(readLocal(LOCAL_FULLSCREEN, false));
+  /**
+   * The mode, kept in this browser rather than Loadout's config, so a phone
+   * can stay Minimal while a desktop stays in Terminals.
+   */
+  /** Something the ModeBar asked Minimal to open: Minimal's Home reads it and clears it. */
+  focusing = $state<{ kind: 'session' | 'team run'; id: string } | null>(null);
+  mode = $state<StudioMode>(((value) => (isMode(value) ? value : 'default'))(readText(LOCAL_MODE, 'default')));
   loaded = $state(false);
   /** What happened while this page was open, newest first. */
   feed = $state<FeedEntry[]>([]);
@@ -138,13 +164,15 @@ export class Studio {
     this.applyPrefs();
   }
 
-  /** Theme, accent, density and motion as attributes on <html>; no theme set follows the system. */
+  /** Theme, accent, density, motion and mode as attributes on <html>; no theme set follows the system. */
   applyPrefs(): void {
     const prefs = this.prefs;
     setTheme(prefs?.theme || preferredTheme());
     setAccent(prefs?.accent ?? 'cyan');
     setDensity(prefs?.density ?? 'comfortable');
     setMotion(prefs?.motion ?? 'full');
+    // The mode is this browser's own, so it is set however the prefs read.
+    document.documentElement.setAttribute('data-mode', this.mode);
   }
 
   async loadRuns(): Promise<void> {
@@ -348,6 +376,33 @@ export class Studio {
   setKeys(on: boolean): void {
     this.keys = on;
     writeLocal(LOCAL_KEYS, on);
+  }
+
+  /** Changes mode as one animated step, and keeps it in this browser. */
+  setMode(mode: StudioMode): void {
+    if (mode === this.mode) {
+      return;
+    }
+
+    morph(() => {
+      this.mode = mode;
+      document.documentElement.setAttribute('data-mode', mode);
+      writeText(LOCAL_MODE, mode);
+    });
+  }
+
+  /** Ctrl+Shift+M. */
+  cycleMode(): void {
+    this.setMode(nextMode(this.mode));
+  }
+
+  /** Something this browser keeps for a page: a layout, the last session. */
+  kept(key: string, fallback: string): string {
+    return readText(key, fallback);
+  }
+
+  keep(key: string, value: string): void {
+    writeText(key, value);
   }
 
   setFullscreen(on: boolean): void {
